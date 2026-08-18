@@ -191,6 +191,7 @@ const envpicker = document.getElementById('envpicker');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
+const viewextra = document.getElementById('viewextra');  // the open view's own mode switch, right of the view row
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
@@ -2635,10 +2636,18 @@ function viewNotes(view) {
 // The TOP-LEVEL state of the info pane for a view: its name as the title, the question it answers
 // beneath, then a note if the view is empty. This is what the pane shows when nothing is selected —
 // selecting an element replaces it with that element's detail, as before.
+// A view's question, which is fixed for every view but Features: that one has two axes, and the
+// question the reader is looking at depends on which is on. The axis switch used to carry its own
+// answer inline beside it ("What can each role do?"), which put view questions in two places; this is
+// the one place they live.
+function viewQuestion(view) {
+  if (view === 'usecases' && HAS_CAPABILITIES && ucGroupBy() === 'actor') return 'What can each role do?';
+  return VIEW_Q[view] || '';
+}
 function viewIntroHtml(view) {
   const notes = viewNotes(view);
   return `<div class="pane-title"><h2>${esc(VIEW_LABEL[view] || view)}</h2></div>`
-    + (VIEW_Q[view] ? `<p class="viewq">${esc(VIEW_Q[view])}</p>` : '')
+    + (viewQuestion(view) ? `<p class="viewq">${esc(viewQuestion(view))}</p>` : '')
     + (notes.length ? `<div class="viewnotes">${notes.map((t) => `<span class="vnote">${esc(t)}</span>`).join('')}</div>` : '');
 }
 // Build the one legend. The change badges join it as a section in diff mode, so there is still exactly
@@ -5371,14 +5380,23 @@ function renderOverview() {
       + `<span class="feat-count">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span>`
       + '</button>';
   }).join('');
-  const sw = HAS_CAPABILITIES ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
-    + `<span class="uc-seg"><button type="button" data-gb="capability"${byCapability ? ' class="on"' : ''}>Feature</button>`
-    + `<button type="button" data-gb="actor"${byCapability ? '' : ' class="on"'}>Actor</button></span>`
-    + `<span class="uc-groupby-why">${byCapability ? 'What can this product do?' : 'What can each role do?'}</span></div>` : '';
-  diagram.innerHTML = `<div class="usecases-wrap">${sw}<div class="feat-grid">`
+  // The axis switch lives in the header's view row (#viewextra), not in the page: it is a mode, and a
+  // mode belongs beside the view it modifies rather than on a strip of its own above the content. Its
+  // answer ("What can each role do?") is not printed here either — viewQuestion puts it in the info
+  // pane, the one place every view's question lives.
+  viewextra.innerHTML = HAS_CAPABILITIES
+    ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
+      + `<span class="uc-seg"><button type="button" data-gb="capability"${byCapability ? ' class="on"' : ''}>Feature</button>`
+      + `<button type="button" data-gb="actor"${byCapability ? '' : ' class="on"'}>Actor</button></span></div>`
+    : '';
+  diagram.innerHTML = '<div class="usecases-wrap"><div class="feat-grid">'
     + (cards || '<p class="empty">No features recorded.</p>') + '</div></div>';
-  diagram.querySelectorAll('.uc-seg button').forEach((b) => {
-    b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderOverview(); });
+  viewextra.querySelectorAll('.uc-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      UC_GROUP_BY = b.getAttribute('data-gb');
+      renderOverview();
+      showViewIntro({ kind: 'usecases' });   // the axis changed the view's question, which the pane holds
+    });
   });
   diagram.querySelectorAll('.feat-card').forEach((b) => {
     const key = b.getAttribute('data-key');
@@ -6176,6 +6194,9 @@ async function render(sArg, transient) {
   // diagram would otherwise still be floating over the table you switched to.
   const fp = document.getElementById('flowpicker');
   if (fp) fp.hidden = true;
+  // Same reason, for the header's mode slot: the switch belongs to ONE view, so it must not survive a
+  // move to another. Re-filled by that view's own renderer (renderOverview) when it runs.
+  viewextra.innerHTML = '';
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.

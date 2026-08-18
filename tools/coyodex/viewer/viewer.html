@@ -98,10 +98,17 @@
              Each view declares its group with `data-group`, so the grouping lives beside the button
              it groups and there is no second table to keep in step. -->
         <div id="stageheadrow">
-          <button id="searchbtn" title="Search the map (press /)" aria-label="Search">&#128269;</button>
           <span id="groupsw"></span>
-          <button id="legendbtn" type="button" aria-pressed="true"
-                  title="Show or hide the legend — what the shapes and colours mean">?</button>
+          <!-- The two UTILITIES sit together at the right end. They used to bracket the group row, and
+               the search button on the left pushed the groups 42px in — so the group row, the sub row
+               and the switch below them each started at a different x and the three read as unrelated
+               strips instead of one header. Rows start at the same edge now; the utilities are what
+               moves. -->
+          <span id="stageheadutil">
+            <button id="searchbtn" title="Search the map (press /)" aria-label="Search">&#128269;</button>
+            <button id="legendbtn" type="button" aria-pressed="true"
+                    title="Show or hide the legend — what the shapes and colours mean">?</button>
+          </span>
         </div>
         <!-- The open group's views. ALWAYS rendered, even for a one-view group (Glossary), which draws
              an empty strip: a row that comes and goes would shunt the diagram up and down on every
@@ -139,6 +146,12 @@
                  `component` machinery are kept dormant so the tab can be restored by re-adding this button.
                  Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
           </span>
+          <!-- A slot at the RIGHT end of the view row for the open view's own mode switch (today: the
+               Features axis). It rode its own third strip under this one, in the same solid style the
+               GROUP row owns — so the least important control on screen shouted as loudly as the most
+               important, and read as a third level of tabs rather than as a mode. Here it costs no
+               strip, sits on the row of the view it belongs to, and is styled to match that row. -->
+          <span id="viewextra"></span>
         </div>
         <div class="hint"><span id="crumb"></span></div>
       </div>

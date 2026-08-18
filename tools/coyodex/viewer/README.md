@@ -62,7 +62,10 @@ Chrome that orients a first-time reader, so the map is readable without knowing 
   in step; the group row is built at boot and **drops any group whose every view this map gated off**.
   A group holding one view (Glossary) draws no sub tabs, but the strip keeps its height, so switching
   never shunts the diagram up and down. Neither row may shrink its buttons: they wrap to a second line
-  instead. (The flat row of eleven tabs did not fit — at a 1280px window the last tab had zero visible
+  instead. Both rows start at the same left edge, with the search and legend buttons pushed to the far
+  right, and a view's own **mode switch** (today: the Features axis) rides the RIGHT end of the view
+  row rather than a third strip of its own — it is quieter than either row of tabs, because a mode is
+  not a destination. (The flat row of eleven tabs did not fit — at a 1280px window the last tab had zero visible
   width and could not be clicked at all.)
 - **View caption** — the info pane's top-level state (what it shows when nothing is selected): the
   view's name as the title, and under it the question that view answers. The Happy Path additionally

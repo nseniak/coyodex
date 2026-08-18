@@ -548,3 +548,47 @@ def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     assert "known ? names.map((nm, i) =>" in body and "[[OTHER, 'Other', null]]" in body
     assert "{ kind: 'usecase', uc: li.getAttribute('data-uc'), act: oneActor }" in js
     assert "const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');" in js
+
+
+def test_a_mode_switch_is_the_quietest_control_in_the_header() -> None:
+    """Three stacked bars of segments read as three levels of tabs, and the bottom one is not a tab:
+    the Features axis is a MODE. In its own strip it wore the same solid indigo as the GROUP row, so
+    the least important control on screen shouted as loudly as the one deciding which fifth of the map
+    you are in. It rides the view row now, right-aligned, in that row's own weight. The quieting is
+    scoped to `#viewextra`: the flow picker reuses `.uc-seg` in a card floating over the diagram,
+    where a solid active state is correct."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    quiet = css[css.index("#viewextra .uc-seg button.on {"):]
+    quiet = quiet[: quiet.index("}")]
+    assert "#6366f1" not in quiet, "the mode switch must not borrow the group row's solid indigo"
+    assert "#e0e7ff" in quiet
+    loud = css[css.index("\n.uc-seg button.on {"):]
+    assert "#6366f1" in loud[: loud.index("}")], "the floating flow picker keeps the loud style"
+
+
+def test_every_header_row_starts_at_the_same_edge() -> None:
+    """The search button sat before the group row and pushed it 42px in, so the group row, the view row
+    and the switch each began at a different x and the three read as unrelated strips. Measured after:
+    15px and 14px, the 1px being the group control's own border. The utilities are what moves."""
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    head = html[html.index('<div id="stageheadrow">'): html.index('<div id="stagesubrow">')]
+    assert head.index('id="groupsw"') < head.index('id="searchbtn"'), "nothing may precede the group row"
+    assert 'id="stageheadutil"' in head
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    util = css[css.index("#stageheadutil {"): css.index("}", css.index("#stageheadutil {"))]
+    assert "margin-left: auto" in util
+
+
+def test_a_views_mode_switch_never_survives_a_move_to_another_view() -> None:
+    """The switch belongs to ONE view. Left in the header it would float above a view it does not act
+    on — the same failure the floating flow picker had, and it is cleared in the same place, before the
+    HTML-tab early returns. Its answer moved to the info pane, so a view's question has one home."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    render = js[js.index("  const fp = document.getElementById('flowpicker');"):]
+    assert "viewextra.innerHTML = '';" in render[:600]
+    over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    assert "viewextra.innerHTML = HAS_CAPABILITIES" in over
+    assert "uc-groupby-why" not in js, "the axis answer belongs to the info pane, not beside the switch"
+    assert "function viewQuestion(view) {" in js
+    assert "ucGroupBy() === 'actor') return 'What can each role do?'" in js
+    assert "viewQuestion(view) ? `<p class=\"viewq\">" in js
