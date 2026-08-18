@@ -367,7 +367,9 @@ def test_the_pinned_index_sticks_to_the_wrappers_top_border() -> None:
     bar (only where there IS one) and negative side margins take it full-bleed, so nothing scrolls
     past above or beside it. Measured in the browser: gap 0, bar width == wrapper width."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert ".usecases-wrap:has(> .tab-index) { padding-top: 0; }" in css
+    # The padding-drop is now shared with every other wrap that holds a sticky line — see
+    # test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding for why they all need it.
+    assert ".usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .glossary-wrap { padding-top: 0; }" in css
     bar = css[css.index(".usecases-wrap .tab-index {"):]
     bar = bar[:bar.index("}")]
     assert "position: sticky" in bar and "top: 0" in bar
@@ -660,3 +662,21 @@ def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
     assert '<section class="sys-kindsec" id="${kid}">' in js
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert ".usecases-wrap .sys-kindsec { scroll-margin-top: calc(var(--tab-index-h) + 8px); }" in css
+
+
+def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> None:
+    """A scroll container's top padding is not part of the scrollport: a sticky `top: 0` child pins to
+    the PADDING box, so the padding stays open as a transparent strip that rows scroll visibly through
+    ABOVE the pinned line. Measured on the Run commands page — column headers pinned 16px down with a
+    table cell painted above them — and the same on Tests and on the Glossary tab. Every wrap holding a
+    sticky line drops the padding; the breathing room becomes a MARGIN on the first child, which scrolls
+    away like content instead of holding the gap open forever. Verified after: every page still rests
+    16px down, every sticky line pins at 0, and the topmost thing while scrolled is the sticky line."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    # `.usecases-wrap.system-wrap`, not `.system-wrap`: the base class sets `padding` as a SHORTHAND
+    # later in the file, and at equal specificity that shorthand puts the 16px back.
+    assert ".usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .glossary-wrap { padding-top: 0; }" in css
+    assert ".system-wrap > :first-child, .glossary-wrap > :first-child { margin-top: 16px; }" in css
+    assert ".system-wrap > .tab-index:first-child { margin-top: 0; }" in css   # the bar carries its own
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "glossary-wrap\" style=\"padding-top" not in js, "an inline top padding reopens the strip"

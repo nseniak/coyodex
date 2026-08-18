@@ -5136,7 +5136,9 @@ function renderGlossary() {
   const rows = (GRAPH.glossary || []).map((g) =>
     `<tr data-term="${esc(g.term)}"><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${srcCell(g.source || '')}</td></tr>`
   ).join('');
-  diagram.innerHTML = '<div class="glossary-wrap" style="padding-top:20px">'
+  // No inline padding-top: it would pin the table's sticky column headers 20px down with terms
+  // scrolling through the gap above them. The stylesheet gives the first child a margin instead.
+  diagram.innerHTML = '<div class="glossary-wrap">'
     + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
     + `<tbody>${rows}</tbody></table></div>`;
 }
