@@ -346,9 +346,16 @@ def test_the_section_index_is_ONE_component_used_by_every_card_list_tab() -> Non
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "function tabIndexHtml(secs)" in js and "function bindTabIndex(wrap)" in js
     assert "function bindSysIndex" not in js and "sys-index" not in js   # the private copy is gone
-    for fn in ("renderSystem", "renderUseCases", "renderRules"):
+    for fn in ("renderUseCases", "renderRules"):
         body = js[js.index(f"function {fn}("):js.index("\nfunction ", js.index(f"function {fn}(") + 10)]
         assert "tabIndexHtml(" in body and "bindTabIndex(" in body, fn
+    # The System tab splits the pair across its two levels: the entry-point page indexes its KINDS
+    # (built with the collection, in systemSections) and the page that renders it binds the bar. Its
+    # cards need no index — they ARE the index of that tab.
+    built = js[js.index("function systemSections() {"): js.index("\nfunction firstSentence(")]
+    assert "tabIndexHtml(kindSecs)" in built
+    shown = js[js.index("function renderSystemSection(sysId) {"):]
+    assert "bindTabIndex(" in shown[: shown.index("\n}")]
     # One section indexes nothing — no bar rather than a bar with one chip.
     assert "if (!secs || secs.length < 2) return '';" in js
 
@@ -592,3 +599,25 @@ def test_a_views_mode_switch_never_survives_a_move_to_another_view() -> None:
     assert "function viewQuestion(view) {" in js
     assert "ucGroupBy() === 'actor') return 'What can each role do?'" in js
     assert "viewQuestion(view) ? `<p class=\"viewq\">" in js
+
+
+def test_the_system_tab_is_cards_over_one_builder() -> None:
+    """It used to stack every collection on one scrolling page under a chip bar: on a real map that is
+    664 entry points, 43 commands, 48 config keys, 32 types and 8 notes in a single scroll, and the
+    chip bar was the only thing that said what was down there. Now it is the same card level the
+    Features tab uses, with one collection per card. Cards and drill read ONE builder, so a card can
+    never name a section the drill does not render, and the counts on the cards cannot drift from what
+    opens. The bands exist because this tab holds three different kinds of thing, and are drawn only
+    when there is more than one to tell apart."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function systemSections() {" in js
+    for fn in ("renderSystem", "renderSystemSection"):
+        body = js[js.index(f"function {fn}("): js.index("\nfunction ", js.index(f"function {fn}(") + 10)] \
+            if f"\nfunction " in js[js.index(f"function {fn}("):] else js[js.index(f"function {fn}("):]
+        assert "systemSections()" in body, fn
+    assert 'class="feat-card" data-sys=' in js          # the same card component as the Features tab
+    assert "go({ kind: 'sysSection', sys:" in js
+    assert "const head = live.length > 1 ?" in js       # one band draws no label
+    # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
+    assert "if (s.kind === 'sysSection') return [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
+    assert "'gid', 'sys'];" in js                        # …and its key survives a right-pane navigation

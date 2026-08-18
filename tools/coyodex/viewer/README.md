@@ -165,8 +165,14 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   diagram: each term with its meaning and a link to its code home (the term's bare `where` anchor,
   opened in the editor / on GitHub exactly like a node's source ⌘-click). A term with no single code
   home shows no link.
-- **System** *(when the map records any operational fact)* — the reference tables the diagram doesn't
-  hold, as a stack of small tables: **entry points** (grouped by kind, each linking to its owning
+- **System** *(when the map records any operational fact)* — the reference collections no diagram
+  holds, as the same **cards** the Features tab uses: one card per collection, saying what it answers
+  and how big it is, drilling to that one collection. The cards sit in three bands, because the tab
+  holds three different kinds of thing: **the running system** (entry points, run commands, config,
+  security, observability, the deliberately-unmodelled types), **notes about the code** (each authored
+  section, previewed by its own opening line), and **about this map** (map completeness, and the
+  maintenance records answering this tool's own checks). The entry-point page carries its own pinned
+  index, one chip per kind. The collections behind the cards are: **entry points** (grouped by kind, each linking to its owning
   component), **run commands**, **deployment**, **observability**, **security**, **config**, the
   deliberately-**unmodelled types**, and any freeform **extras**. Every `path:line` cell opens in the
   code viewer, like a glossary source link.

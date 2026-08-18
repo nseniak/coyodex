@@ -1949,9 +1949,9 @@ def test_the_security_table_links_every_site_not_a_joined_string() -> None:
     ONE anchor — so the cell showed the LAST file's name and its button carried the joined string,
     opening the code viewer on a path that does not exist. Every access rule on two real maps has
     several sites (44 of 44, 47 of 47), so the link was broken on every row of both."""
-    sysfn = _js_function("renderSystem")
+    sysfn = _js_function("systemSections")   # the tables moved here when System became cards
     sec = sysfn[sysfn.index("'Security & auth'"):]
-    sec = sec[:sec.index("parts.push", 10)]
+    sec = sec[:sec.index("sec('system'", 10)]   # …up to the next collection
     assert "srcListCell(r.source)" in sec
     assert "{ src: r.source }" not in sec
     split = _js_function("srcListCell")
@@ -1968,9 +1968,9 @@ def test_the_security_table_has_no_column_that_is_always_empty() -> None:
     m = make_checkable_model()
     m.rules[0].access = True
     assert [r["who"] for r in auth_surface_rows(m)] == [""]     # the reason the column went
-    sysfn = _js_function("renderSystem")
+    sysfn = _js_function("systemSections")   # the tables moved here when System became cards
     sec = sysfn[sysfn.index("'Security & auth'"):]
-    sec = sec[:sec.index("parts.push", 10)]
+    sec = sec[:sec.index("sec('system'", 10)]   # …up to the next collection
     assert "Who can reach" not in sec
     assert "r.surface + ' — ' + r.who" in sec                   # …but a legacy row keeps its who
 

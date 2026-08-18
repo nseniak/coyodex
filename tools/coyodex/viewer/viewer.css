@@ -156,6 +156,11 @@ body.vresizing #stage { pointer-events: none; }
 /* The FEATURES overview: one card per capability, the whole product readable on one screen. A grid of
    equal cards rather than a list, because the cards are peers to be scanned, not steps to be read in
    order. Each card is a <button>, so it is keyboard-reachable like every other drill in the viewer. */
+/* A band heading over one grid of cards. The System tab holds three different kinds of thing (the
+   running system, notes about the code, facts about the map) and an unlabelled grid of seventeen cards
+   would claim they were all the same. Drawn only when there is more than one band to tell apart. */
+.sys-band { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+            color: #6b7280; margin: 16px 14px 0; }
 .feat-grid { display: grid; gap: 10px; padding: 12px 14px 4px;
              grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .feat-card { display: flex; flex-direction: column; gap: 5px; text-align: left; font: inherit;

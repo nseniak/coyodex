@@ -2473,7 +2473,7 @@ const VIEW_Q = {
   context: 'What does it rely on from the outside world?',
   data: 'What is stored, where, and who reads and writes it?',
   deployment: 'What runs as its own process, and how do those talk to each other?',
-  system: 'The operational facts no diagram holds — how to run it, watch it, secure it, configure it.',
+  system: 'The operational facts no diagram holds: how to run it, watch it, secure it, configure it.',
   glossary: 'What do this project’s words mean?',
   tests: 'What is covered by tests, and what is not?',
   rules: 'What does this product DECIDE, and where is each decision enforced?',
@@ -3399,7 +3399,7 @@ const tabLast = {};
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
 const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
-                      'bkid', 'cap', 'act', 'gid'];
+                      'bkid', 'cap', 'act', 'gid', 'sys'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
@@ -3411,7 +3411,8 @@ function stateKey(s) {
     + (s.cap ? ':' + s.cap : '')   // one FEATURE's use cases ('-' = the ones assigned to none)
     + (s.act ? ':' + s.act : '')   // …or one ACTOR's, the overview's other axis
     + (s.bkid ? ':' + s.bkid : '')  // bucketfold drills are keyed by their BKF id
-    + (s.gid ? ':' + s.gid : '');   // …and a deployment container card by its group id
+    + (s.gid ? ':' + s.gid : '')   // …and a deployment container card by its group id
+    + (s.sys ? ':' + s.sys : '');  // one System collection, the drill out of its cards
 }
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
 // scroll offset, or the file browser showing. Restored on back/forward so returning to a point reopens
@@ -4871,6 +4872,7 @@ function bindFor(s) {
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules') return kind;
+  if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'usecases' || kind === 'capability' || kind === 'actor' || kind === 'usecase') return 'usecases';  // a feature's or an actor's use cases, and a use case's flow, live under the Features tab
@@ -4889,6 +4891,7 @@ function stateTitle(s) {
   if (s.kind === 'rule') return ruleCrumbTitle(s.br);
   if (s.kind === 'glossary') return 'Glossary';
   if (s.kind === 'system') return 'System';
+  if (s.kind === 'sysSection') { const f = systemSections().find((x) => x.id === s.sys); return f ? f.title : 'System'; }
   if (s.kind === 'data') return 'Storage';  // user-facing label; internal kind stays `data`
   if (s.kind === 'tests') return 'Tests';
   if (s.kind === 'usecases') return 'Features';  // user-facing label; internal kind stays `usecases`
@@ -4929,6 +4932,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside them
   if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
   if (s.kind === 'hp') return [{ kind: 'hp' }];
+  if (s.kind === 'sysSection') return [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap }];  // one feature's use cases
   if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];        // …or one actor's
@@ -5476,60 +5480,43 @@ function variantsCell(variants) {
     return `${env} · ${g}`;
   }).join('<br>');
 }
-// The System tab: the operational / reference collections the diagram doesn't hold (run commands, entry
-// points, deployment, observability, security, config, non-entity types, freeform extras). A stack of
-// titled tables rendered straight into #diagram, led by a pinned section index (scroll-spy + click-to-jump,
-// see bindSysIndex) so you see all sections at once and know which one you're in. Entry points are grouped
-// by kind and link to their owning component; source cells open the code viewer.
-function renderSystem() {
+// The System tab: the operational / reference collections no diagram holds. Two levels, the same card
+// principle the Features tab uses. Level 1 is one CARD per collection — what it answers and how big it
+// is — in three bands, because the tab really holds three different kinds of thing: facts about the
+// running system, notes somebody wrote about the code, and facts about the MAP itself. Level 2 is that
+// one collection. It used to be every collection stacked on one scrolling page under a chip bar: on a
+// real map that is 664 entry points, 43 commands, 48 config keys, 32 types and 8 notes in a single
+// scroll, where the chip bar was the only thing that said what was down there.
+// Entry points are grouped by kind and link to their owning component; source cells open the code viewer.
+
+// What each fixed collection answers, in the reader's terms. The map has no purpose field for these —
+// they are the tab's own furniture, so the words live here beside the sections they label, exactly as
+// VIEW_Q holds a view's question.
+const SYS_BLURB = {
+  'Entry points': 'Every way something can start this system, and what it starts.',
+  'Run commands': 'How to run it, build it, test it and check it.',
+  'Config & environments': 'The settings it reads, their defaults, and which are per-environment or secret.',
+  'Security & auth': 'Which surfaces are guarded, and the code that enforces each one.',
+  'Observability': 'What it emits, where you look at it, and what alerts on it.',
+  'Types deliberately not modelled': 'What the map left out of the domain model on purpose, and why.',
+  'Map completeness': 'How much of this map is finished, as numbers rather than a wall of warnings.',
+  'Map maintenance records': "Lines answering this tool's own checks. Nothing here describes your system.",
+};
+// Build every System section once: id, title, the band it belongs to, a blurb, a size, and its HTML.
+// ONE builder for both levels, so the cards can never name a section the drill does not render.
+function systemSections() {
   const G = GRAPH;
   const nodeName = (id) => (G.nodes && G.nodes[id] ? G.nodes[id].name : id);
-  const secs = [];  // {id, title} per rendered section — drives the pinned index
+  const out = [];
   const usedIds = new Set();
-  // Wrap a section body in a titled, id'd `<section>` and register it for the index. '' body -> omitted.
-  const sec = (title, inner) => {
-    if (!inner) return '';
+  const sec = (band, title, inner, count, blurb) => {
+    if (!inner) return;
     let id = 'sys-' + String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const base = id || 'sys-section';
-    for (let n = 2; usedIds.has(id); n++) id = base + '-' + n;  // dedupe (e.g. an extra named like a table)
+    for (let n = 2; usedIds.has(id); n++) id = base + '-' + n;  // dedupe (e.g. a note named like a table)
     usedIds.add(id);
-    secs.push({ id, title });
-    return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}</h3>${inner}</section>`;
+    out.push({ id, title, band, count: count || '', blurb: blurb || SYS_BLURB[title] || '', html: inner });
   };
-  const parts = [];
-  // Map completeness — NUMBERS, not a wall of advisories. Two of these deliberately do not warn
-  // anywhere: trace debt (the target is every use case traced; the shortfall is reported rather than
-  // redefined as acceptable) and off-spine use cases inside a CORE capability (the give-up of moving
-  // the spine check to capability altitude, kept visible so it stays a trade, not a silent loss).
-  const C = COMPLETENESS || {};
-  let completeness = '';
-  if (Object.keys(C).length) {
-    const tile = (k, v, of, sub, tone) => {
-      const pct = of ? Math.round(100 * v / of) : 0;
-      return `<div class="sys-tile${tone ? ' sys-' + tone : ''}"><div class="sys-k">${esc(k)}</div>`
-        + `<div class="sys-v">${v}${of ? `<span class="sys-of"> / ${of}</span>` : ''}</div>`
-        + (of ? `<div class="sys-bar"><i style="width:${pct}%"></i></div>` : '')
-        + (sub ? `<div class="sys-s">${esc(sub)}</div>` : '') + '</div>';
-    };
-    const tiles = [
-      tile('Use cases traced', C.use_cases_traced || 0, C.use_cases || 0,
-           (C.use_cases_untraced || 0) ? `${C.use_cases_untraced} untraced — trace debt` : 'no debt',
-           (C.use_cases_untraced || 0) ? 'warn' : 'ok'),
-      HAS_CAPABILITIES ? tile('Capabilities traced',
-           (C.capabilities || 0) - (C.capabilities_untraced || 0), C.capabilities || 0,
-           (C.capabilities_untraced || 0) ? 'a whole capability was never walked' : 'all reached',
-           (C.capabilities_untraced || 0) ? 'warn' : 'ok') : '',
-      tile('External surfaces unclaimed', C.entry_points_unclaimed_external || 0,
-           C.entry_points_external || 0, 'no use case reaches them',
-           (C.entry_points_unclaimed_external || 0) ? 'warn' : 'ok'),
-      tile('Self-started unclaimed', C.entry_points_unclaimed_self || 0, 0,
-           'crons / workers / boot hooks — often a record, not a use case',
-           (C.entry_points_unclaimed_self || 0) ? 'warn' : 'ok'),
-      HAS_CAPABILITIES ? tile('Off-spine in a core capability', C.off_spine_in_core_capabilities || 0, 0,
-           'reported, not warned — the capability-level check does not see these', '') : '',
-    ].join('');
-    completeness = `<div class="sys-tiles">${tiles}</div>`;
-  }
   // Entry points — grouped by CANONICAL kind (the server folds alias spellings: `http` and
   // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
   // tag, and the self-starting kinds are listed first so "what runs with no user?" clusters at the
@@ -5548,6 +5535,7 @@ function renderSystem() {
     const kindAct = (k) => (byKind[k].some((e) => e.activation === 'self') ? 'self' : 'external');
     order.sort((a, b) => (kindAct(a) === 'self' ? 0 : 1) - (kindAct(b) === 'self' ? 0 : 1));
     let inner = '';
+    const kindSecs = [];
     for (const k of order) {
       const act = kindAct(k);
       const rows = byKind[k].map((e) => {
@@ -5560,24 +5548,32 @@ function renderSystem() {
         return `<tr><td>${mdInline(e.trigger || '')}${cad}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
       }).join('');
       const tag = act === 'self' ? '<span class="sys-kind-tag sys-kind-tag--self">auto-run</span>' : '';
-      inner += `<h4 class="sys-subhead">${esc(k)}${tag}</h4>`
+      // One KIND is a section of this page, so the pinned index indexes kinds here. On the old stacked
+      // page the index had to spend its chips on the collections themselves, and no map with 19 kinds
+      // could reach one without scrolling past the other eighteen.
+      const kid = 'sysk-' + k.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      kindSecs.push({ id: kid, title: `${k} (${byKind[k].length})` });
+      inner += `<section id="${kid}"><h4 class="sys-subhead">${esc(k)}${tag}</h4>`
         + '<table class="glossary"><thead><tr><th>Trigger</th><th>Component</th><th>Source</th></tr></thead>'
-        + `<tbody>${rows}</tbody></table>`;
+        + `<tbody>${rows}</tbody></table></section>`;
     }
-    parts.push(sec('Entry points', inner));
+    sec('system', 'Entry points', tabIndexHtml(kindSecs) + inner,
+        `${eps.length} across ${order.length} kind${order.length > 1 ? 's' : ''}`);
   }
-  parts.push(sec('Run commands', refTable(G.run_commands, [
+  const many = (rows, word) => ((rows || []).length ? `${rows.length} ${word}` : '');
+  sec('system', 'Run commands', refTable(G.run_commands, [
     { head: 'Action', get: (r) => r.action }, { head: 'Command', get: (r) => r.command },
-    { head: 'Source', get: (r) => ({ src: r.source }) }])));
+    { head: 'Source', get: (r) => ({ src: r.source }) }]), many(G.run_commands, 'commands'));
   // NO "Deployment & topology" and NO "Messaging" tables here. Both restated, less completely, what a
   // diagram now draws: every deployment row's Unit/Runs on/Exposed as/Config source/Variants is the
   // pane of its box on the Deployment view (a process box, or — for an infrastructure unit that hosts
-  // no code — the dependency box standing in for it), and every channel is a Data-tab card with the
+  // no code — the dependency box standing in for it), and every channel is a Storage-tab card with the
   // same fields, its broker implied by the pane it sits in. This tab is for facts NO diagram holds;
   // duplicating a table here just gave each fact two homes that could drift.
-  parts.push(sec('Config & environments', refTable(G.config, [
+  sec('system', 'Config & environments', refTable(G.config, [
     { head: 'Key', get: (r) => r.key }, { head: 'Purpose', get: (r) => r.purpose },
-    { head: 'Default', get: (r) => r.default }, { head: 'Per-env / secret?', get: (r) => r.per_env }])));
+    { head: 'Default', get: (r) => r.default },
+    { head: 'Per-env / secret?', get: (r) => r.per_env }]), many(G.config, 'keys'));
   // The auth surface — DERIVED from the `access` business rules (an `access` rule IS a security
   // surface; the server folds them and any legacy `security[]` row into one row list).
   //
@@ -5590,41 +5586,113 @@ function renderSystem() {
   // that does not exist ("Not tracked in this commit"). Measured on two real maps: 44 of 44 and 47
   // of 47 access rules have several sites, so the link was broken on every row. Each site is now its
   // own link, exactly as the markdown view splits them.
-  parts.push(sec('Security & auth', refTable(G.security, [
+  sec('system', 'Security & auth', refTable(G.security, [
     { head: 'Surface', get: (r) => (r.who || '').trim() ? r.surface + ' — ' + r.who : r.surface },
     { head: 'Enforced at', get: (r) => ({ html: srcListCell(r.source) }) },
-    { head: 'Risk', get: (r) => r.risk }])));
-  parts.push(sec('Observability', refTable(G.observability, [
+    { head: 'Risk', get: (r) => r.risk }]), many(G.security, 'surfaces'));
+  sec('system', 'Observability', refTable(G.observability, [
     { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
-    { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));
-  parts.push(sec('Types deliberately not modelled', refTable(G.non_entity_types, [
+    { head: 'Where viewed', get: (r) => r.where_viewed },
+    { head: 'Alerts', get: (r) => r.alerts }]), many(G.observability, 'signals'));
+  sec('system', 'Types deliberately not modelled', refTable(G.non_entity_types, [
     { head: 'Type', get: (r) => r.name }, { head: 'Source', get: (r) => ({ src: r.source }) },
-    { head: 'Why', get: (r) => r.why }])));
+    { head: 'Why', get: (r) => r.why }]), many(G.non_entity_types, 'types'));
   // Authored sections split by what they are FOR (server-decided, `records.HEADINGS`): a note about
-  // the code reads in the flow; a line that exists to answer one of this tool's own checks is the
-  // map's build record and folds away at the bottom. Nothing is dropped — the records stay readable,
-  // and stay machine-read — but a reader reaches the facts about their system first.
+  // the code is a card in its own band; a line that exists to answer one of this tool's own checks is
+  // the map's build record and folds into ONE card at the end. Nothing is dropped — the records stay
+  // readable, and stay machine-read — but a reader reaches the facts about their system first.
   const extras = (G.extras || []).filter((x) => x && x.heading);
   for (const x of extras.filter((x) => !x.maintenance)) {
-    parts.push(sec(x.heading, `<div class="sys-extra">${mdRefs(x.body || '', x.refs)}</div>`));
+    // A note has no count and no authored purpose, so its card previews its own opening instead.
+    sec('notes', x.heading, `<div class="sys-extra">${mdRefs(x.body || '', x.refs)}</div>`, '',
+        firstSentence(x.body || ''));
   }
-  if (completeness) parts.push(sec('Map completeness', completeness));
+  const C = COMPLETENESS || {};
+  if (Object.keys(C).length) {
+    // Map completeness — NUMBERS, not a wall of advisories. Two of these deliberately do not warn
+    // anywhere: trace debt (the target is every use case traced; the shortfall is reported rather than
+    // redefined as acceptable) and off-spine use cases inside a CORE capability (the give-up of moving
+    // the spine check to capability altitude, kept visible so it stays a trade, not a silent loss).
+    const tile = (k, v, of, sub, tone) => {
+      const pct = of ? Math.round(100 * v / of) : 0;
+      return `<div class="sys-tile${tone ? ' sys-' + tone : ''}"><div class="sys-k">${esc(k)}</div>`
+        + `<div class="sys-v">${v}${of ? `<span class="sys-of"> / ${of}</span>` : ''}</div>`
+        + (of ? `<div class="sys-bar"><i style="width:${pct}%"></i></div>` : '')
+        + (sub ? `<div class="sys-s">${esc(sub)}</div>` : '') + '</div>';
+    };
+    const tiles = [
+      tile('Use cases traced', C.use_cases_traced || 0, C.use_cases || 0,
+           (C.use_cases_untraced || 0) ? `${C.use_cases_untraced} untraced — trace debt` : 'no debt',
+           (C.use_cases_untraced || 0) ? 'warn' : 'ok'),
+      HAS_CAPABILITIES ? tile('Features traced',
+           (C.capabilities || 0) - (C.capabilities_untraced || 0), C.capabilities || 0,
+           (C.capabilities_untraced || 0) ? 'a whole feature was never walked' : 'all reached',
+           (C.capabilities_untraced || 0) ? 'warn' : 'ok') : '',
+      tile('External surfaces unclaimed', C.entry_points_unclaimed_external || 0,
+           C.entry_points_external || 0, 'no use case reaches them',
+           (C.entry_points_unclaimed_external || 0) ? 'warn' : 'ok'),
+      tile('Self-started unclaimed', C.entry_points_unclaimed_self || 0, 0,
+           'crons / workers / boot hooks — often a record, not a use case',
+           (C.entry_points_unclaimed_self || 0) ? 'warn' : 'ok'),
+      HAS_CAPABILITIES ? tile('Off-spine in a core feature', C.off_spine_in_core_capabilities || 0, 0,
+           'reported, not warned — the feature-level check does not see these', '') : '',
+    ].join('');
+    sec('map', 'Map completeness', `<div class="sys-tiles">${tiles}</div>`);
+  }
   const record = extras.filter((x) => x.maintenance);
-  const recordHtml = record.length
-    ? sec('Map maintenance records', '<details class="sys-record"><summary>'
-        + `${record.length} section${record.length > 1 ? 's' : ''} answering this tool's own checks`
-        + ' — each line records an element and why a finding about it was judged correct as it '
-        + 'stands. Nothing here describes the system being mapped.</summary>'
-        + record.map((x) => `<h4 class="sys-subhead">${esc(x.heading)}</h4>`
-            + `<div class="sys-extra">${mdRefs(x.body || '', x.refs)}</div>`).join('')
-        + '</details>')
-    : '';
-  const body = parts.filter(Boolean).join('') + recordHtml;
-  const nav = secs.length
-    ? tabIndexHtml(secs)
-    : '';
-  diagram.innerHTML = `<div class="usecases-wrap system-wrap">${body ? nav + body : '<p class="empty">No system facts recorded.</p>'}</div>`;
-  // A System-tab entry-point Component link navigates to that component AND selects the exact entry
+  if (record.length) {
+    sec('map', 'Map maintenance records',
+        record.map((x) => `<h4 class="sys-subhead">${esc(x.heading)}</h4>`
+          + `<div class="sys-extra">${mdRefs(x.body || '', x.refs)}</div>`).join(''),
+        `${record.length} section${record.length > 1 ? 's' : ''}`);
+  }
+  return out;
+}
+// A note's own opening line, as its card's blurb. Cut at the first sentence end so a card previews a
+// whole thought rather than a fixed number of characters ending mid-word.
+function firstSentence(body) {
+  const flat = String(body).replace(/\s+/g, ' ').replace(/^[-*#>\s]+/, '').trim();
+  const cut = flat.search(/\.\s/);
+  const one = cut > 0 ? flat.slice(0, cut + 1) : flat;
+  return one.length > 150 ? one.slice(0, 149).replace(/\s\S*$/, '') + '…' : one;
+}
+const SYS_BANDS = [
+  ['system', 'The running system'],
+  ['notes', 'Notes about the code'],
+  ['map', 'About this map'],
+];
+// Level 1 — the cards. The same component as the Features overview, so the viewer's two card levels
+// look and behave alike; the BANDS are the one addition, because this tab really does hold three
+// different kinds of thing and an unlabelled grid of seventeen would claim they were all the same.
+function renderSystem() {
+  const all = systemSections();
+  const live = SYS_BANDS.filter(([b]) => all.some((s) => s.band === b));
+  const bands = live.map(([band, title]) => {
+    const cards = all.filter((s) => s.band === band).map((s) =>
+      `<button type="button" class="feat-card" data-sys="${esc(s.id)}">`
+      + `<span class="feat-head"><span class="feat-name">${esc(s.title)}</span></span>`
+      + (s.blurb ? `<span class="feat-purpose">${esc(s.blurb)}</span>` : '')
+      + (s.count ? `<span class="feat-count">${esc(s.count)}</span>` : '')
+      + '</button>').join('');
+    // With only one band there is nothing to tell it apart from, so its label would be noise.
+    const head = live.length > 1 ? `<h3 class="sys-band">${esc(title)}</h3>` : '';
+    return head + `<div class="feat-grid">${cards}</div>`;
+  }).join('');
+  diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
+    + (bands || '<p class="empty">No system facts recorded.</p>') + '</div>';
+  diagram.querySelectorAll('.feat-card').forEach((b) =>
+    b.addEventListener('click', () => go({ kind: 'sysSection', sys: b.getAttribute('data-sys') })));
+}
+// Level 2 — one collection. Its own title heads it, since the crumb is the only other thing naming it.
+function renderSystemSection(sysId) {
+  const found = systemSections().find((s) => s.id === sysId);
+  if (!found) { renderSystem(); return; }
+  diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
+    + `<section class="uc-group"><h3 class="uc-actor">${esc(found.title)}`
+    + (found.count ? `<span class="uc-actor-wants">${esc(found.count)}</span>` : '') + '</h3>'
+    + (found.blurb ? `<p class="uc-wants">${esc(found.blurb)}</p>` : '')
+    + found.html + '</section></div>';
+  // A System entry-point Component link navigates to that component AND selects the exact entry
   // point in its "Triggered by" pane list (same as a search hit).
   diagram.querySelectorAll('.sys-node').forEach((btn) => {
     btn.addEventListener('click', () => selectEntryPoint(
@@ -6213,8 +6281,14 @@ async function render(sArg, transient) {
     renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap });
     mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); return;
   }
-  // The System tab is a set of operational reference tables (HTML), not a mermaid diagram — same shape.
+  // The System tab is HTML, not a mermaid diagram — same shape as Glossary. Its landing level is the
+  // collection cards; one collection is the drill out of them, and keeps the TAB's question, as one
+  // rule's page does: the collection's own name and blurb head the page itself.
   if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
+  if (s.kind === 'sysSection') {
+    renderSystemSection(s.sys); mainScene = null; showViewIntro({ kind: 'system' }); renderChrome(s);
+    restoreTextScroll(s); return;
+  }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
   if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
