@@ -115,11 +115,47 @@ body.vresizing #stage { pointer-events: none; }
 #stagehead { flex: 0 0 auto; z-index: 6; }
 #stageheadrow { display: flex; align-items: center; gap: 8px; background: #fff; padding: 8px 14px;
                 border-bottom: 1px solid #e5e7eb; }
-#viewsw { display: inline-flex; border: 1px solid #c7d2fe; border-radius: 6px; overflow: hidden; }
-#viewsw button { font: inherit; font-size: 12px; padding: 4px 10px; border: 0; background: transparent;
-                 color: #4338ca; border-radius: 0; cursor: pointer; }
+/* Neither row may ever SQUEEZE its buttons. Both used to be one nowrap flex row with `overflow:hidden`,
+   so a pane too narrow for every tab silently amputated the last ones: measured at a 1280px window the
+   Tests tab had ZERO visible width and could not be clicked at all, and Glossary was cut mid-word. A
+   hidden tab is a view the reader cannot reach and has no way to discover. So buttons keep their natural
+   width (`flex: 0 0 auto` + `nowrap`) and the ROW wraps to a second line instead. Grouping alone does not
+   make this rule redundant: a very narrow pane can still overflow a four-view sub row. */
+/* Row 1 — the GROUPS: a solid segmented control, the loudest thing in the head. `overflow:hidden` is
+   kept only to clip the children's square corners inside the rounded border. */
+#groupsw { display: inline-flex; flex-wrap: wrap; border: 1px solid #c7d2fe; border-radius: 6px;
+           overflow: hidden; }
+#groupsw button { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 12px; border: 0;
+                  background: transparent; color: #4338ca; border-radius: 0; cursor: pointer;
+                  flex: 0 0 auto; white-space: nowrap; }
+#groupsw button:hover { background: #eef2ff; }
+#groupsw button.active { background: #6366f1; color: #fff; }
+/* Row 2 — the open group's VIEWS: deliberately quieter than row 1 (loose chips, no box, a tinted pill
+   for the active one), so the two rows read as a hierarchy rather than as two competing tab bars. */
+#stagesubrow { display: flex; align-items: center; gap: 8px; background: #fbfbfe; padding: 5px 14px;
+               border-bottom: 1px solid #e5e7eb; min-height: 31px; }
+#viewsw { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+#viewsw button { font: inherit; font-size: 12px; padding: 3px 9px; border: 0; background: transparent;
+                 color: #4338ca; border-radius: 5px; cursor: pointer;
+                 flex: 0 0 auto; white-space: nowrap; }
 #viewsw button:hover { background: #eef2ff; }
-#viewsw button.active { background: #6366f1; color: #fff; }
+#viewsw button.active { background: #e0e7ff; color: #3730a3; font-weight: 600; }
+/* The FEATURES overview: one card per capability, the whole product readable on one screen. A grid of
+   equal cards rather than a list, because the cards are peers to be scanned, not steps to be read in
+   order. Each card is a <button>, so it is keyboard-reachable like every other drill in the viewer. */
+.feat-grid { display: grid; gap: 10px; padding: 12px 14px 4px;
+             grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.feat-card { display: flex; flex-direction: column; gap: 5px; text-align: left; font: inherit;
+             padding: 12px 14px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;
+             cursor: pointer; }
+.feat-card:hover { border-color: #c7d2fe; background: #f8f9ff; box-shadow: 0 2px 10px rgba(80,70,229,.07); }
+.feat-head { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.feat-name { font-weight: 650; font-size: 14px; color: #111; }
+.feat-purpose { color: #4b5563; font-size: 13px; line-height: 1.45; }
+.feat-count { color: #6b7280; font-size: 12px; }
+.feat-all { margin: 8px 14px 16px; font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer;
+            border: 1px solid #c7d2fe; border-radius: 6px; background: #fff; color: #4338ca; }
+.feat-all:hover { background: #eef2ff; }
 /* Deployment environment picker (variants) — sits atop the deployment info panel. */
 /* The picker floats over the diagram at bottom-left, mirroring #legend at bottom-right. */
 #envpicker { position: absolute; left: 12px; bottom: 12px; z-index: 5; background: #fff;

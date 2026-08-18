@@ -59,7 +59,7 @@ let HAS_DATA;        // gates the Data tab (any physical store present in data_v
 let DATA_VIEW;       // the store-centric Data-view payload (GRAPH.data_view)
 let MERMAID_CHANNELS; // per-broker async flowchart source, keyed by broker dep id
 let HAS_TESTS;       // gates the Tests tab (a test-completeness table or honesty note present)
-let HAS_RULES;       // gates the Business logic tab (the map states at least one T7 rule)
+let HAS_RULES;       // gates the Business rules tab (the map states at least one T7 rule)
 let RULES_VIEW;      // the T7 payload (GRAPH.rules_view) — blocks, rules, and the two inversions.
                      // EVERYTHING derived (a site's components, a rule's steps/entities/sweep state)
                      // is computed server-side by the one Python implementation; re-deriving any of
@@ -190,6 +190,7 @@ const legendbtn = document.getElementById('legendbtn');
 const envpicker = document.getElementById('envpicker');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
+const groupsw = document.getElementById('groupsw');
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
@@ -1380,7 +1381,7 @@ function persistedInHtml(id) {
   if (st.notes) parts.push(`<span class="dv-tag">${esc(st.notes)}</span>`);
   if (!parts.length) return '';
   let dd = parts.join(' ');
-  if (HAS_DATA) dd += ` <a href="#" class="dv-seelink" data-store="${esc(st.dep)}" data-entity="${esc(id)}">See in Data view →</a>`;
+  if (HAS_DATA) dd += ` <a href="#" class="dv-seelink" data-store="${esc(st.dep)}" data-entity="${esc(id)}">See in Storage →</a>`;
   return `<dt>Persisted in</dt><dd class="dv-panerow">${dd}</dd>`;
 }
 function accessRowsHtml(id) {
@@ -2234,7 +2235,7 @@ function bindFlowStepInfo(host, uc, i) {
     const wn = whereNode(st.where);
     openInCodeViewer(wn.file, wn.line);
   });
-  // The "Decides" rows deep-link to the rule's own page under the Business logic tab.
+  // The "Decides" rows deep-link to the rule's own page under the Business rules tab.
   host.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
@@ -2442,10 +2443,30 @@ function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a 
 // --- view captions, the map legend, and empty-state notes -------------------------
 // The question each view answers, shown in the info pane's top-level state. Keyed by the top-level view
 // id (topView), so a drilled card keeps its tab's caption.
+// The five GROUPS of the view switcher's top row. Eleven flat tabs did not fit — at a 1280px window
+// the last tab had zero visible width and could not be clicked — and the old flat row already carried
+// this grouping implicitly, as an altitude ORDER nobody could see. (An earlier attempt to show it as
+// separators inside the one row was removed as invisible; making it a real row is the same idea with
+// a mechanism behind it.) Each entry is [group id, label, the question the group answers]. MEMBERSHIP
+// is NOT here: every view button carries its own `data-group`, so the grouping lives beside the button
+// it groups and there is no second list to keep in step.
+const VIEW_GROUPS = [
+  ['product', 'Product', 'What does it do for the people who use it?'],
+  ['data', 'Data', 'What does it know about, and where does that live?'],
+  ['code', 'Code', 'How is the code arranged, what does it pull in, and how well is it tested?'],
+  ['ops', 'Operations', 'What runs, and how do you run, watch, secure and configure it?'],
+  ['glossary', 'Glossary', 'What do this project\u2019s words mean?'],
+];
+const GROUP_OF_VIEW = {};   // view id -> its group id, filled from the buttons at boot (one source)
+const GROUP_LABEL = {};     // group id -> its label, from VIEW_GROUPS
+// Which view each group was left on, so returning to a group reopens where you were rather than
+// resetting to its first view. The per-VIEW memory (tabLast) is untouched and still restores that
+// view's own drill, selection and camera; this only decides WHICH view a group tab opens.
+const groupLast = {};
 const VIEW_LABEL = {};   // view id -> its tab label, filled from the buttons at boot (one source)
 const VIEW_Q = {
   hp: 'What does this system do, end to end?',
-  usecases: 'Who uses it, and what does each of them get done?',
+  usecases: 'What can this product do, feature by feature?',
   container: 'How is the code organised, and what depends on what?',
   domain: 'What things does this system know about, and how do they relate?',
   context: 'What does it rely on from the outside world?',
@@ -3365,6 +3386,11 @@ function textScroller() {
 // tab you are ALREADY on ignores this and resets to the overview (see goTab/resetTab).
 const tabLast = {};
 
+// Every field `stateKey` distinguishes states by. Anything added here is automatically carried by
+// pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
+// silently dropped a field every time the two lists were maintained by hand.
+const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
+                      'bkid', 'cap', 'act', 'gid'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
@@ -3373,7 +3399,10 @@ function stateKey(s) {
     + (s.entity ? '#' + s.entity : '')  // store→store / row jump actually re-renders (not a no-op)
     + (s.blk ? ':' + s.blk : '')    // Business-logic cross-links focus a BLOCK pane — same reason
     + (s.br ? '#' + s.br : '')      // …and a rule row inside it
-    + (s.bkid ? ':' + s.bkid : '');  // bucketfold drills are keyed by their BKF id
+    + (s.cap ? ':' + s.cap : '')   // one FEATURE's use cases ('-' = the ones assigned to none)
+    + (s.act ? ':' + s.act : '')   // …or one ACTOR's, the overview's other axis
+    + (s.bkid ? ':' + s.bkid : '')  // bucketfold drills are keyed by their BKF id
+    + (s.gid ? ':' + s.gid : '');   // …and a deployment container card by its group id
 }
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
 // scroll offset, or the file browser showing. Restored on back/forward so returning to a point reopens
@@ -3445,11 +3474,14 @@ function pushContentPoint(content) {
   const c = history[hi];
   history = history.slice(0, hi + 1);
   // EVERY field `stateKey` reads has to survive, or opening a file from a focused pane silently
-  // drops back to that tab's overview. `store`/`entity` were already missing when this list was
-  // written by hand; `blk`/`br` are the same shape one view over.
-  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd,
-                 unit: c.unit, store: c.store, entity: c.entity, blk: c.blk, br: c.br,
-                 bkid: c.bkid, sels: c.sels, flow: c.flow, scroll: c.scroll, content });
+  // drops back to that tab's overview — WORSE than a plain reset, because the crumb keeps naming the
+  // level you were on while the pane renders the level above it, and `tabLast` then remembers the
+  // corrupted point. This hand-written list has now dropped a field three times (`store`/`entity`,
+  // then `blk`/`br`, then `cap`/`act`), so it is derived from stateKey's own field list instead of
+  // retyped: STATE_FIELDS is the single place a new state field has to be declared.
+  const kept = { kind: c.kind, sels: c.sels, flow: c.flow, scroll: c.scroll, content };
+  for (const f of STATE_FIELDS) if (c[f] !== undefined) kept[f] = c[f];
+  history.push(kept);
   hi = history.length - 1;
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
@@ -3477,6 +3509,22 @@ function goTab(view) {
 // camera for the overview so it re-fits instead of reopening at an old zoom. A tab click never animates,
 // so a reset from a drill-down cuts straight to the overview (instant); already sitting on the overview,
 // go() would no-op, so re-render in place after stripping this entry's camera/selection/pane.
+// A GROUP tab click. Opens the view the group was last left on, or its first still-visible view. Never
+// a no-op: clicking the group you are already in re-opens that same view, which resetTab turns into a
+// zoom-back-out to its overview — the same gesture the sub tabs already have.
+function goGroup(gid) {
+  const views = groupViews(gid);
+  if (!views.length) return;
+  const want = views.indexOf(groupLast[gid]) >= 0 ? groupLast[gid] : views[0];
+  goTab(want);
+}
+// The still-visible views of a group, in tab order. Reads the live buttons rather than a stored list,
+// so a view hidden because THIS map has no such content can never be opened by its group.
+function groupViews(gid) {
+  return [...viewsw.querySelectorAll('button[data-view]')]
+    .filter((b) => b.dataset.group === gid && b.style.display !== 'none')
+    .map((b) => b.dataset.view);
+}
 function resetTab(view) {
   const root = { kind: view };
   delete vpByView[stateKey(root)];
@@ -4468,7 +4516,7 @@ function bindEntityBoxLinks() {
     const store = ENTITY_STORE_LINKS[id];
     const extras = el.querySelectorAll('g.methods-group > g.label');
     if (HAS_DATA && store && extras[store.i])
-      linkifyBoxRow(extras[store.i], store.text, 'See in Data view',
+      linkifyBoxRow(extras[store.i], store.text, 'See in Storage',
         () => go({ kind: 'data', store: store.dep, entity: id }));
   }
 }
@@ -4816,8 +4864,8 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
-  if (kind === 'rule') return 'rules';  // one rule's page lives under the Business logic list, as a flow does under Use Cases
+  if (kind === 'usecases' || kind === 'capability' || kind === 'actor' || kind === 'usecase') return 'usecases';  // a feature's or an actor's use cases, and a use case's flow, live under the Features tab
+  if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup') return 'deployment';  // a process/container card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
   if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
@@ -4828,13 +4876,18 @@ function stateTitle(s) {
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
-  if (s.kind === 'rules') return 'Business logic';
+  if (s.kind === 'rules') return 'Rules';  // the view lists RULES; "business logic" named a code layer, not the content
   if (s.kind === 'rule') return ruleCrumbTitle(s.br);
   if (s.kind === 'glossary') return 'Glossary';
   if (s.kind === 'system') return 'System';
-  if (s.kind === 'data') return 'Data';
+  if (s.kind === 'data') return 'Storage';  // user-facing label; internal kind stays `data`
   if (s.kind === 'tests') return 'Tests';
-  if (s.kind === 'usecases') return 'Use Cases';
+  if (s.kind === 'usecases') return 'Features';  // user-facing label; internal kind stays `usecases`
+  if (s.kind === 'capability') {
+    if (s.cap === '-') return 'Not assigned to a feature';
+    return GRAPH.nodes[s.cap] ? GRAPH.nodes[s.cap].name : s.cap;
+  }
+  if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
   if (s.kind === 'deploymentUnit') return s.unit;
@@ -4868,7 +4921,26 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
   if (s.kind === 'hp') return [{ kind: 'hp' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
-  if (s.kind === 'usecase') return [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];  // a use case's flow, under the Use Cases catalog
+  if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap }];  // one feature's use cases
+  if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];        // …or one actor's
+  // A use case sits UNDER the card it was listed on, so the trail reads Features › that card › the use
+  // case — the same overview → group → member shape Subsystems and Entities already use. WHICH card is
+  // not fixed: the overview has two axes, and a use case belongs to exactly one group on each. So the
+  // middle crumb follows the axis the overview is currently on. Naming the feature while the reader
+  // came through an actor put a card they never opened in the trail, and clicking it landed them on a
+  // screen they had never seen. A use case in no feature still gets its crumb — the "not assigned"
+  // card is a real level, and without it that one drill was the only one no breadcrumb could undo.
+  if (s.kind === 'usecase') {
+    // `s.act` is the list the reader actually came through, set when the row was opened from an
+    // actor's list. Falling back to a lookup only for a use case reached some other way (search, a
+    // Happy Path step) while the actor axis happens to be on.
+    const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');
+    const mid = ucGroupBy() === 'actor'
+      ? (act ? { kind: 'actor', act } : null)
+      : (HAS_CAPABILITIES ? { kind: 'capability', cap: CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-' } : null);
+    return mid ? [{ kind: 'usecases' }, mid, { kind: 'usecase', uc: s.uc }]
+               : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
+  }
   if (s.kind === 'deployment') return [{ kind: 'deployment' }];
   if (s.kind === 'deploymentGroup') return [{ kind: 'deployment' }, { kind: 'deploymentGroup', gid: s.gid }];
   if (s.kind === 'deploymentUnit') {
@@ -4912,7 +4984,25 @@ function renderChrome(s) {
   syncEnvPicker(s);
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
-  viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
+  // Light the open GROUP, and show only its views in the sub row. `hidden` (not display) so it composes
+  // with the per-map gating, which owns `style.display` — a view this map has no content for stays gone
+  // whichever group is open, and cannot come back when its group opens.
+  // A state whose top view has no BUTTON has no group either (the dormant flat Components map is one).
+  // Left alone that emptied the whole switcher at once — no group lit AND every sub tab hidden — so the
+  // reader lost both rows. Keep the rows as they were instead: a stale group beats no rows at all.
+  const tg = GROUP_OF_VIEW[tv];
+  if (tg) {
+    groupLast[tg] = tv;
+    groupsw.querySelectorAll('button[data-group]').forEach((b) => b.classList.toggle('active', b.dataset.group === tg));
+    // A group holding ONE view (Glossary) draws no sub tabs at all: a lone chip repeating the group name
+    // above it says nothing. The strip still renders at its normal height (#stagesubrow min-height), so
+    // opening that group does not shunt the diagram up and back down again.
+    const lone = groupViews(tg).length < 2;
+    viewsw.querySelectorAll('button[data-view]').forEach((b) => {
+      b.hidden = lone || b.dataset.group !== tg;
+      b.classList.toggle('active', b.dataset.view === tv);
+    });
+  }
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it.
@@ -5065,6 +5155,51 @@ function roleKindOf(n) {
   return (k === 'human' || k === 'service') ? k : 'human';
 }
 
+// Which actor group a use case is listed under, by the SAME keying actorGroups() uses. Derived from
+// that function rather than from the node's own Actor field: an actor this map never declared as a
+// role is grouped under "Other", and a crumb built from the raw field would point at a group the list
+// never draws.
+function actorGroupOf(ucId) {
+  const g = actorGroups().find((x) => x.ucs.some((n) => n.id === ucId));
+  return g ? g.actor : '';
+}
+// The catalog's ACTOR axis, the twin of capabilityGroups(). Lifted out of renderUseCases when the
+// Features overview started drawing actor CARDS as well: one grouping, two readers.
+function actorGroups() {
+  // Group by ACTOR: one group per ROLE, in first-appearance order, keeping the model's (importance)
+  // order within each. A use case may name several INTERCHANGEABLE actors — either of them can start
+  // it — and it is listed under EVERY one of them. Two earlier shapes were both worse. Filing it under
+  // the first actor hid it from the other, who can genuinely do it. Giving the pair a group of its own
+  // read as a third actor: on a real map that drew "Organization admin (30)" beside "Organization
+  // admin and Team member (1)", and the second card looked like a bug. The cost is that the group
+  // sizes now OVERLAP and no longer sum to the use-case count — which is honest, because the question
+  // a group answers is "what can this role do", and the shared one is part of both answers.
+  // "Other" means what it says: an actor this map never declared as a role, or none at all.
+  const groups = [];               // [{actor, roles:[role], ucs:[node]}]
+  const byActor = {};
+  const OTHER = '\x00other';
+  for (const n of UC_NODES) {
+    // `actors` is the structured list; the `Actor` field is the readable rendering of that same list
+    // (and the only form a graph built before `actors` existed carries).
+    const names = (n.actors && n.actors.length ? n.actors : [((n.fields && n.fields.Actor) || '')])
+      .map((s) => String(s).trim()).filter(Boolean);
+    // One undeclared name sends the WHOLE use case to Other, as before: a half-known pair has no
+    // honest per-role home, and splitting it would file it under one role and drop the other.
+    const roles = names.map((nm) => ROLE_BY_NAME[nm.toLowerCase()]);
+    const known = names.length && roles.every(Boolean);
+    const entries = known ? names.map((nm, i) => [nm.toLowerCase(), roles[i].name || nm, roles[i]])
+                          : [[OTHER, 'Other', null]];
+    for (const [key, title, role] of entries) {
+      if (!byActor[key]) {
+        byActor[key] = { actor: title, roles: role ? [role] : [], ucs: [] };
+        groups.push(byActor[key]);
+      }
+      byActor[key].ucs.push(n);
+    }
+  }
+  return groups;
+}
+
 function capabilityGroups() {
   // Capability order is the model's (importance), and membership rides `parent` — the same channel a
   // component uses for its subsystem — so no second lookup table travels beside the nodes.
@@ -5084,34 +5219,13 @@ function capabilityGroups() {
   return groups.filter((g) => g.ucs.length);
 }
 
-function renderUseCases() {
-  // Group by ACTOR, keeping model (importance) order within a group and first-appearance order of the
-  // actors. A use case may name several INTERCHANGEABLE actors (either can start it) — that pair is a
-  // group of its own, headed by both names, not a use case filed under one of them and hidden from the
-  // other. It used to land in the "Other" bucket: the group key was the joined display string, which
-  // matched no single role, so the catalog quietly lost it. "Other" now means what it says — an actor
-  // this map never declared as a role, or none at all.
-  const groups = [];               // [{actor, roles:[role], ucs:[node]}]
-  const byActor = {};
-  const OTHER = '\x00other';
-  for (const n of UC_NODES) {
-    // `actors` is the structured list; the `Actor` field is the readable rendering of that same list
-    // (and the only form a graph built before `actors` existed carries).
-    const names = (n.actors && n.actors.length ? n.actors : [((n.fields && n.fields.Actor) || '')])
-      .map((s) => String(s).trim()).filter(Boolean);
-    const roles = names.map((nm) => ROLE_BY_NAME[nm.toLowerCase()]);
-    const known = names.length && roles.every(Boolean);
-    const key = known ? names.map((s) => s.toLowerCase()).join('\x00') : OTHER;
-    if (!byActor[key]) {
-      // The header text is the `Actor` FIELD, which is already the readable rendering of this same list
-      // ("Team member and Organization admin"), so the conjunction is spelled in one place — the view
-      // builder — instead of once per view.
-      const title = ((n.fields && n.fields.Actor) || '').trim() || names.join(', ');
-      byActor[key] = { actor: known ? title : 'Other', roles: known ? roles : [], ucs: [] };
-      groups.push(byActor[key]);
-    }
-    byActor[key].ucs.push(n);
-  }
+// The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says which
+// card — `{cap:<id>}` a feature, `{cap:'-'}` the use cases assigned to no feature, `{actor:<name>}` a
+// role — and `null` lists every use case, which is what a map recording no features falls back to.
+// One function for every case, so the row markup, the Happy-Path pill, the diff badge and the flow
+// click exist once and cannot drift between the lists.
+function renderUseCases(sel) {
+  const groups = actorGroups();
   const kindBadge = (kind) => {
     const k = (kind || '').trim().toLowerCase();
     if (k !== 'human' && k !== 'service') return '';
@@ -5125,8 +5239,15 @@ function renderUseCases() {
     return `<button type="button" class="uc-hp-pill" data-uc="${esc(uc)}"`
       + ' title="On the Happy Path — click to jump there">Happy Path</button>';
   };
-  const byCapability = ucGroupBy() === 'capability';
-  const shown = byCapability ? capabilityGroups() : groups;
+  // Which card's use cases this is. A feature's list is by definition grouped by capability and by
+  // exactly one of them; an actor's list likewise. `sel` null = the whole flat catalog, which only a
+  // map with no features ever renders.
+  const one = sel && sel.cap ? sel.cap : null;
+  const oneActor = sel && sel.actor ? sel.actor : null;
+  const byCapability = one ? true : (oneActor ? false : ucGroupBy() === 'capability');
+  const shown = one ? capabilityGroups().filter((g) => (one === '-' ? !g.cap : (g.cap && g.cap.id === one)))
+             : oneActor ? groups.filter((g) => g.actor === oneActor)
+             : (byCapability ? capabilityGroups() : groups);
   // The pinned index: one chip per group, in render order, whichever axis is grouping — so flipping
   // Group by rebuilds it with the other axis's names. Ids are positional because a group's identity is
   // an actor NAME or a capability id, and only one of those is an id at all.
@@ -5161,9 +5282,14 @@ function renderUseCases() {
     }).join('');
     const secId = 'ucsec-' + gi;
     if (byCapability) {
-      const title = g.cap ? g.cap.name : 'Not assigned to a capability';
+      const title = g.cap ? g.cap.name : 'Not assigned to a feature';  // the same words as its card and its crumb
       secs.push({ id: secId, title });
       const lab = g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '';
+      // On ONE feature's page the heading is the only thing naming it, so it carries the feature's own
+      // purpose. On the full list the purpose belongs to the cards one level up, and repeating it on
+      // every heading would bury the use cases the list exists to show.
+      const purpose = (one && g.cap && g.cap.fields && g.cap.fields.Purpose)
+        ? `<p class="uc-wants">${mdInline(g.cap.fields.Purpose)}</p>` : '';
       // A plain section, exactly like the actor grouping's: no twisty, nothing to fold. `platform`
       // capabilities used to start collapsed so the background use cases would not bury the product
       // ones — but a section that hides itself is a second thing to learn on a screen whose whole job
@@ -5171,6 +5297,7 @@ function renderUseCases() {
       return `<section class="uc-group" id="${secId}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
         + `<h3 class="uc-actor">${esc(title)}${lab}`
         + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span></h3>`
+        + purpose
         + `<ul class="uc-list">${rows}</ul></section>`;
     }
     secs.push({ id: secId, title: g.actor });
@@ -5178,18 +5305,20 @@ function renderUseCases() {
       + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}</h3>${wants}`
       + `<ul class="uc-list">${rows}</ul></section>`;
   }).join('');
-  const sw = HAS_CAPABILITIES ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
-    + `<span class="uc-seg"><button type="button" data-gb="capability"${byCapability ? ' class="on"' : ''}>Capability</button>`
-    + `<button type="button" data-gb="actor"${byCapability ? '' : ' class="on"'}>Actor</button></span>`
-    + `<span class="uc-groupby-why">${byCapability ? 'What does this product do?' : 'What can each role do?'}</span></div>` : '';
-  diagram.innerHTML = `<div class="usecases-wrap">${tabIndexHtml(secs)}${sw}`
+  // No Group-by switch here. It belongs to the OVERVIEW, which is the level that HAS two axes; on a
+  // list already scoped to one card, an axis switch either does nothing or silently changes which card
+  // you are looking at. (This list used to be reachable as a flat "all use cases" page carrying the
+  // switch, which then restated the overview's own card names twice over — see renderOverview.)
+  diagram.innerHTML = `<div class="usecases-wrap">${tabIndexHtml(secs)}`
     + (sections || '<p class="empty">No use cases recorded.</p>') + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
-  diagram.querySelectorAll('.uc-seg button').forEach((b) => {
-    b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderUseCases(); });
-  });
   // A row opens the use case's flow — the SAME detail a Happy Path step drills into (one home).
-  const openUc = (li) => go({ kind: 'usecase', uc: li.getAttribute('data-uc') });
+  // Carry the actor whose list this is. A use case named by two roles now appears under BOTH, so
+  // recomputing its group from the use case alone would name whichever one comes first and could send
+  // the reader back to a list they never opened — the very defect the crumb fix removed.
+  const openUc = (li) => go(oneActor
+    ? { kind: 'usecase', uc: li.getAttribute('data-uc'), act: oneActor }
+    : { kind: 'usecase', uc: li.getAttribute('data-uc') });
   diagram.querySelectorAll('.uc-row').forEach((li) => {
     li.addEventListener('click', (ev) => { if (!ev.target.closest('.uc-hp-pill')) openUc(li); });
     li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.target.closest('.uc-hp-pill')) openUc(li); });
@@ -5200,7 +5329,64 @@ function renderUseCases() {
   });
 }
 
-// The PINNED SECTION INDEX shared by every card-list tab (System, Use Cases, Business logic): a row
+// The FEATURES overview: the whole product as a grid of cards, on ONE axis at a time.
+//   Feature -> one card per capability   Actor -> one card per role
+// Each card drills to its own use cases. This is the level the flat catalog was missing: 41 rows answer
+// "what can each person do" but nobody could read the product off them. Making the cards a LEVEL rather
+// than a second tab follows the house pattern (Subsystems, Entities and the Happy Path all drill
+// overview -> group -> member with a breadcrumb), so a use case has exactly one home.
+//
+// The axis switch lives HERE and only here. It used to sit on a flat "show all use cases" page one
+// level down, which was the only way to reach the actor axis at all — and that page then restated the
+// eight card names in its chip bar AND again in every section heading, immediately after you had read
+// them as cards. Actors make a poor thing to READ as an overview (on one real map a single actor holds
+// 31 of the 41 use cases) but a perfectly good thing to CLICK, which is all a card has to be.
+// Only reachable when the map records capabilities; without them the tab keeps its flat list.
+function renderOverview() {
+  const byCapability = ucGroupBy() === 'capability';
+  const cards = (byCapability ? capabilityGroups() : actorGroups()).map((g) => {
+    const cap = byCapability;
+    const key = cap ? (g.cap ? g.cap.id : '-') : g.actor;
+    const name = cap ? (g.cap ? g.cap.name : 'Not assigned to a feature') : g.actor;
+    // A feature says what it covers; an actor says what they want. Both are the map's own words for
+    // "why this card exists", so the card reads the same either way.
+    const blurb = cap ? ((g.cap && g.cap.fields && g.cap.fields.Purpose) || '')
+                      : ((g.roles || []).length === 1 ? (g.roles[0].wants || '') : '');
+    const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
+    const kind = (!cap && kinds.size === 1) ? [...kinds][0] : '';
+    const tag = cap
+      ? (g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '')
+      : ((kind === 'human' || kind === 'service') ? `<span class="uc-kind uc-kind-${kind}">${esc(kind)}</span>` : '');
+    // In diff mode a card carries its members' change: without it, dropping the use cases one level
+    // down would hide every "changed" badge behind a click.
+    const changed = (mode === 'diff' && hasDiff() && g.ucs.some((n) => usecaseDiffState(n.id)))
+      ? '<span class="badge modified">changed</span>' : '';
+    // The actor's line is labelled "Wants:" exactly as the list's actor sections label it — without it
+    // the sentence reads as a description of the role rather than of what the role is after. A feature's
+    // line needs no label: the card's name and the sentence are the same kind of thing.
+    const lbl = cap ? '' : '<span class="uc-wants-lbl">Wants:</span> ';
+    return `<button type="button" class="feat-card" data-key="${esc(key)}">`
+      + `<span class="feat-head"><span class="feat-name">${esc(name)}</span>${tag}${changed}</span>`
+      + (blurb ? `<span class="feat-purpose">${lbl}${mdInline(blurb)}</span>` : '')
+      + `<span class="feat-count">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span>`
+      + '</button>';
+  }).join('');
+  const sw = HAS_CAPABILITIES ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
+    + `<span class="uc-seg"><button type="button" data-gb="capability"${byCapability ? ' class="on"' : ''}>Feature</button>`
+    + `<button type="button" data-gb="actor"${byCapability ? '' : ' class="on"'}>Actor</button></span>`
+    + `<span class="uc-groupby-why">${byCapability ? 'What can this product do?' : 'What can each role do?'}</span></div>` : '';
+  diagram.innerHTML = `<div class="usecases-wrap">${sw}<div class="feat-grid">`
+    + (cards || '<p class="empty">No features recorded.</p>') + '</div></div>';
+  diagram.querySelectorAll('.uc-seg button').forEach((b) => {
+    b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderOverview(); });
+  });
+  diagram.querySelectorAll('.feat-card').forEach((b) => {
+    const key = b.getAttribute('data-key');
+    b.addEventListener('click', () => go(byCapability ? { kind: 'capability', cap: key } : { kind: 'actor', act: key }));
+  });
+}
+
+// The PINNED SECTION INDEX shared by every card-list tab (System, Use Cases, Business rules): a row
 // of chips naming each section, click to jump, and the chip of the section you are in lights up as you
 // scroll. Built for the System tab, where a dozen unlabelled tables were unnavigable; the same problem
 // arrives the moment any of these lists has more categories than fit on a screen.
@@ -5690,7 +5876,7 @@ function renderTests() {
   }));
 }
 
-// The Business logic tab (T7): the decisions this product makes, read the way the Use Cases catalog is
+// The Business rules tab (T7): the decisions this product makes, read the way the Use Cases catalog is
 // read — TWO LEVELS, not one. Level 1 is a LIST of decision areas, each holding its rules as one-line
 // rows; level 2 is a rule's OWN page: where it is enforced, at which flow steps, on which entities.
 // The rail-and-panes shape this replaced put every rule's full detail inline, so an area with a dozen
@@ -5994,15 +6180,25 @@ async function render(sArg, transient) {
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
   if (s.kind === 'glossary') { renderGlossary(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
-  // The Use Cases tab is an actor-grouped HTML catalog, not a mermaid diagram — same shape as Glossary.
-  if (s.kind === 'usecases') { renderUseCases(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
+  // The Features tab is an HTML catalog, not a mermaid diagram — same shape as Glossary. Its landing
+  // level is the feature cards; a map that records no features keeps the flat use-case list instead.
+  if (s.kind === 'usecases') {
+    if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();
+    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return;
+  }
+  // One feature's use cases — the drill out of those cards ('*' = all of them). The right pane keeps the
+  // TAB's question, as one rule's page does: the feature's own name and purpose head the list itself.
+  if (s.kind === 'capability' || s.kind === 'actor') {
+    renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap });
+    mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); return;
+  }
   // The System tab is a set of operational reference tables (HTML), not a mermaid diagram — same shape.
   if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
   if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
   if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
-  // The Business logic tab is the block rail + rule panes (HTML) — the same shape as Data.
+  // The Business rules tab is the block rail + rule panes (HTML) — the same shape as Data.
   if (s.kind === 'rules') {
     const jumped = renderRules(s);   // true when it scrolled to a named decision area
     mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s, jumped); return;
@@ -6382,6 +6578,12 @@ function selectTargetFor(id) {
   if (!n) return null;
   const parentKind = (k) => { const p = n.parent; return p && GRAPH.nodes[p] ? GRAPH.nodes[p].kind === k : false; };
   switch (n.kind) {
+    // A feature is not DRAWN as a box anywhere — it groups behaviour — so there is nothing to select.
+    // Its home is its own card's list, one level inside the Features tab. Without this case it fell to
+    // the `default` below and opened Dependencies, which is a confident wrong answer to a search hit
+    // the index itself labels a feature.
+    case 'capability':
+      return { state: { kind: 'capability', cap: id }, selectId: null };
     case 'component': {
       // Open the component INSIDE its parent subsystem's card (the zoomed-in neighbourhood), where it's
       // drawn as a member box. A default subsystem is injected when a map has none, so this parent is
@@ -7731,7 +7933,7 @@ const sbMeta = document.getElementById('sbmeta');
 
 const SB_KIND_LABEL = { usecase: 'use case', subsystem: 'subsystem', component: 'component',
                         subdomain: 'subdomain', entity: 'entity', process: 'process',
-                        block: 'decision area', rule: 'business rule' };
+                        block: 'decision area', rule: 'business rule', capability: 'feature' };
 const sbElemLabel = (n) => (n.kind === 'dep' ? ((n.fields && n.fields.Kind) || 'dependency') : (SB_KIND_LABEL[n.kind] || n.kind));
 // A per-kind nudge so a same-quality name match on a behaviour/structure element outranks a raw path hit.
 const SB_TYPE_BONUS = { usecase: 45, subsystem: 40, component: 35, entity: 35, subdomain: 30, dep: 30,
@@ -8188,7 +8390,10 @@ initServerMode();  // probe for `coyodex serve`; on success reveal + wire the fi
 
 // The intro's title IS the tab's label — read it off the button so the two can never disagree. Read
 // BEFORE the legend is built: its section headings name views from the same map.
-viewsw.querySelectorAll('button[data-view]').forEach((b) => { VIEW_LABEL[b.dataset.view] = b.textContent.trim(); });
+viewsw.querySelectorAll('button[data-view]').forEach((b) => {
+  VIEW_LABEL[b.dataset.view] = b.textContent.trim();
+  GROUP_OF_VIEW[b.dataset.view] = b.dataset.group;
+});
 buildLegend();  // one legend, built once; syncLegend decides where it shows
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
@@ -8203,6 +8408,22 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'rules' && !HAS_RULES) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => goTab(b.dataset.view));
 });
+// Build the GROUP row, now that the per-map gating above has decided which views this map has at all.
+// A group whose every view is gated off is dropped entirely — a small map never shows a group tab that
+// opens onto nothing. Built from VIEW_GROUPS in its declared order, so the row reads top-down like the
+// flat row it replaces.
+for (const [gid, label, question] of VIEW_GROUPS) {
+  GROUP_LABEL[gid] = label;
+  const views = groupViews(gid);
+  if (!views.length) continue;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.dataset.group = gid;
+  b.textContent = label;
+  b.title = question;   // the group's own question, where a view's lives in the info pane (VIEW_Q)
+  b.addEventListener('click', () => goGroup(gid));
+  groupsw.appendChild(b);
+}
 navback.addEventListener('click', back);
 navfwd.addEventListener('click', fwd);
 zoomin.addEventListener('click', () => { if (mainPz) { mainPz.zoomIn(); updateZoomLevel(); } });

@@ -90,39 +90,55 @@
            it. Absolutely positioned (like #legend/#drillhint) so it stays put while the diagram itself
            pans/zooms underneath — #diagram still fills the whole #stage box regardless. -->
       <div id="stagehead">
+        <!-- TWO rows, because eleven flat tabs did not fit: at a 1280px window the last of them had
+             ZERO visible width and could not be clicked. Row 1 (#groupsw) is the five GROUPS, built at
+             boot from VIEW_GROUPS; row 2 (#stagesubrow) is the open group's views. The groups are the
+             old altitude order made explicit — what it does · what it knows · what it is made of ·
+             what runs · its words — so the two rows together still read as the reading path.
+             Each view declares its group with `data-group`, so the grouping lives beside the button
+             it groups and there is no second table to keep in step. -->
         <div id="stageheadrow">
           <button id="searchbtn" title="Search the map (press /)" aria-label="Search">&#128269;</button>
+          <span id="groupsw"></span>
+          <button id="legendbtn" type="button" aria-pressed="true"
+                  title="Show or hide the legend — what the shapes and colours mean">?</button>
+        </div>
+        <!-- The open group's views. ALWAYS rendered, even for a one-view group (Glossary), which draws
+             an empty strip: a row that comes and goes would shunt the diagram up and down on every
+             tab click. Each view's caption lives in the info pane's top-level state (see VIEW_Q). -->
+        <div id="stagesubrow">
           <span id="viewsw">
-            <!-- Ordered by ALTITUDE, so the row itself suggests a reading path: what it does ->
-                 how it is built -> what runs -> reference. The order carries that on its own; an
-                 earlier attempt to add group separators was removed as invisible and useless.
-                 Each view's caption lives in the info pane's top-level state (see VIEW_Q). -->
-            <button data-view="hp">Happy Path</button>  <!-- the landing view; internal kind stays `hp` -->
-            <button data-view="usecases">Use Cases</button>  <!-- actor-grouped catalog (hidden when no use cases) -->
-            <!-- Business logic sits with the BEHAVIOURAL tabs, not the reference ones: what the
-                 product decides is read straight after what it does, and long before how it is
-                 built. -->
-            <button data-view="rules">Business logic</button>  <!-- T7: the decisions this product makes (hidden when the map states none) -->
-            <!-- Entities before Subsystems: the behavioural tabs are followed by WHAT the system is about
-                 (its domain model) and only then by the machine that implements it. -->
-            <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
-            <button data-view="container">Subsystems</button>
-            <button data-view="context">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
-            <button data-view="data">Data</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores) -->
-            <button data-view="deployment">Deployment</button>  <!-- processes/threads ↔ subsystems (hidden when no deployment[] units) -->
-            <button data-view="system">System</button>  <!-- operational reference tables: run/observability/security/config/entry-points (hidden when empty) -->
-            <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
-            <button data-view="tests">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
+            <!-- PRODUCT — what it does for a user. -->
+            <button data-view="hp" data-group="product">Happy Path</button>  <!-- the landing view; internal kind stays `hp` -->
+            <button data-view="usecases" data-group="product">Features</button>  <!-- internal kind stays `usecases`; lands on the feature cards, which drill to one feature's use cases (hidden when no use cases) -->
+            <!-- The Rules view is a PRODUCT view, not a reference one: what the product decides is read
+                 straight after what it does, and long before how it is built. -->
+            <button data-view="rules" data-group="product">Rules</button>  <!-- T7: the decisions this product makes (hidden when the map states none) -->
+
+            <!-- DATA — what it knows, and where that lives. -->
+            <button data-view="domain" data-group="data">Entities</button>  <!-- internal kind stays `domain`; label only -->
+            <button data-view="data" data-group="data">Storage</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores). Labelled "Storage", not "Data": beside "Entities" the word "Data" said nothing about WHICH of the two held the stores. Internal kind stays `data`. -->
+
+            <!-- CODE — how the code is arranged, what it pulls in, and how well it is tested. Tests sits
+                 here rather than under Operations: its rows are map ELEMENTS scored for coverage, so it
+                 reports on the code, not on running the service. -->
+            <button data-view="container" data-group="code">Subsystems</button>
+            <button data-view="context" data-group="code">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
+            <button data-view="tests" data-group="code">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
+
+            <!-- OPERATIONS — what runs, and the commands to run / watch / secure / configure it. -->
+            <button data-view="deployment" data-group="ops">Deployment</button>  <!-- processes/threads ↔ subsystems (hidden when no deployment[] units) -->
+            <button data-view="system" data-group="ops">System</button>  <!-- operational reference tables: run/observability/security/config/entry-points (hidden when empty) -->
+
+            <!-- GLOSSARY — the project's own words. Its own group, with one view: it answers a question
+                 none of the other four asks, and filing it under any of them would hide it. -->
+            <button data-view="glossary" data-group="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
 
             <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
                  landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
                  `component` machinery are kept dormant so the tab can be restored by re-adding this button.
                  Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
           </span>
-          <!-- Reopens the map legend (the single vocabulary key). Distinct from the header's `?`, which
-               opens the navigation guide — this one is about what the SHAPES mean, not the gestures. -->
-          <button id="legendbtn" type="button" aria-pressed="true"
-                  title="Show or hide the legend — what the shapes and colours mean">?</button>
         </div>
         <div class="hint"><span id="crumb"></span></div>
       </div>
@@ -160,7 +176,7 @@
        file selects the matching component/subsystem AND shows the file in the code viewer. -->
   <aside id="tree">
     <div id="treehead">
-      <button id="treecodebtn" type="button" title="Show the code view">&#60;/&#62; Code</button>
+      <button id="treecodebtn" type="button" title="Show the source">&#60;/&#62; Source</button>
       <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
       <button id="treepin" type="button" title="Pin the file browser beside the code">&#128204;</button>
     </div>

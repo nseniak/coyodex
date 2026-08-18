@@ -29,20 +29,34 @@ coyodex helps you recover from this situation and oversee your agent's work movi
 
 *The viewer: one part of a project's domain model, the selected box explained in plain language, and the code it is grounded in.*
 
-The viewer presents a set of tabs. Each tab is a different diagram of the same project, and each one
-answers one question:
+The viewer presents its views in five groups. Each view is a different diagram of the same project,
+and each one answers one question:
+
+**Product** — what it does for the people who use it
 
 - **Happy Path** — What does this system do, end to end?
-- **Use Cases** — Who uses it, and what does each of them get done?
-- **Business logic** — What does this product DECIDE, and where is each decision enforced?
+- **Features** — What can this product do, feature by feature?
+- **Rules** — What does this product DECIDE, and where is each decision enforced?
+
+**Data** — what it knows about, and where that lives
+
 - **Entities** — What things does this system know about, and how do they relate?
+- **Storage** — What is stored, where, and who reads and writes it?
+
+**Code** — how the code is arranged, what it pulls in, and how well it is tested
+
 - **Subsystems** — How is the code organised, and what depends on what?
 - **Dependencies** — What does it rely on from the outside world?
-- **Data** — What is stored, where, and who reads and writes it?
+- **Tests** — What is covered by tests, and what is not?
+
+**Operations** — what runs, and how you run it
+
 - **Deployment** — What runs as its own process, and how do those talk to each other?
 - **System** — The operational facts no diagram holds: how to run it, watch it, secure it, configure it.
+
+**Glossary**
+
 - **Glossary** — What do this project's words mean?
-- **Tests** — What is covered by tests, and what is not?
 
 ## Why not just ask my agent to diagram the code?
 

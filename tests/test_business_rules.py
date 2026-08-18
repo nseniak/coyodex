@@ -1918,13 +1918,14 @@ def test_an_enforced_at_pill_selects_and_frames_the_step_in_the_flow() -> None:
     assert "if (pendingFrameStep)" in VIEWER_JS      # the one-shot, applied after flowInit
 
 
-def test_the_readme_lists_the_business_logic_tab_in_tab_order() -> None:
+def test_the_readme_lists_the_business_rules_tab_in_tab_order() -> None:
     """The tab list is the product's advertised surface — a tab missing from it does not exist for
-    a reader, and one listed out of order contradicts the bar they are looking at."""
+    a reader, and one listed out of order contradicts the bar they are looking at. The README lists
+    the views under their group headings, so it must also agree with the group they sit in."""
     lines = [l for l in (REPO / "README.md").read_text(encoding="utf-8").splitlines()
              if l.startswith("- **")]
     labels = [l.split("**")[1] for l in lines]
-    assert labels[:3] == ["Happy Path", "Use Cases", "Business logic"], labels
+    assert labels[:3] == ["Happy Path", "Features", "Rules"], labels
 
 
 def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
@@ -1935,7 +1936,7 @@ def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
     assert "HAS_RULES = !!b.hasBusinessRules" in VIEWER_JS               # applyBundle
     assert "'tests', 'rules'" in VIEWER_JS                              # TEXT_VIEWS
     assert "kind === 'rules'" in VIEWER_JS                              # topView
-    assert "if (s.kind === 'rules') return 'Business logic'" in VIEWER_JS  # stateTitle
+    assert "if (s.kind === 'rules') return 'Rules'" in VIEWER_JS  # stateTitle
     assert "if (s.kind === 'rules') return [{ kind: 'rules' }]" in VIEWER_JS  # VIEW_Q trail
     assert "rules: 'What does this product DECIDE" in VIEWER_JS         # the view's question
     assert "if (s.kind === 'rules') {\n    const jumped = renderRules(s);" in VIEWER_JS   # render
@@ -2133,13 +2134,18 @@ def test_a_rule_whose_area_the_map_never_declared_still_appears() -> None:
 
 
 def test_same_tab_navigation_carries_the_pane_keys() -> None:
-    """`stateKey` and `pushContentPoint` are two hand-written lists of the same fields. A key in
-    one and not the other is a navigation that silently no-ops, or a pane that silently resets."""
+    """`stateKey` and `pushContentPoint` used to be two hand-written lists of the same fields, and a
+    key in one and not the other is a navigation that silently no-ops, or a pane that silently
+    resets. The hand-written pair dropped a field three times running, so `pushContentPoint` now
+    copies whatever `STATE_FIELDS` declares and `stateKey` is checked against that one list."""
     key = VIEWER_JS[VIEWER_JS.index("function stateKey(s)"):VIEWER_JS.index("function snapContent")]
+    decl = VIEWER_JS[VIEWER_JS.index("const STATE_FIELDS = ["):]
+    decl = decl[: decl.index("]")]
     push = VIEWER_JS[VIEWER_JS.index("function pushContentPoint"):VIEWER_JS.index("function go(state")]
+    assert "for (const f of STATE_FIELDS)" in push
     for field in ("store", "entity", "blk", "br"):
         assert f"s.{field}" in key, field
-        assert f"{field}: c.{field}" in push, field
+        assert f"'{field}'" in decl, field
 
 
 def test_the_flow_step_pane_uses_a_new_class_and_keys_by_container() -> None:

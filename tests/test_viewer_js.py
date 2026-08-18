@@ -11,6 +11,7 @@ Conventions: top-level test functions, no classes/fixtures.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -411,3 +412,139 @@ def test_an_explicit_jump_beats_a_remembered_scroll_position() -> None:
     rules = js[js.index("function renderRules(s)"):js.index("\nfunction ", js.index("function renderRules(s)") + 10)]
     assert "card.scrollIntoView({ block: 'start' }); return true;" in rules
     assert "const jumped = renderRules(s);" in js
+
+
+def test_no_tab_row_can_ever_clip_a_tab_out_of_reach() -> None:
+    """Both tab rows were one nowrap flex row with `overflow:hidden`, so a pane too narrow for every
+    tab silently amputated the last ones. Measured in the browser at a 1280px window: the Tests tab
+    had ZERO visible width and could not be clicked, and Glossary was cut mid-word. A hidden tab is a
+    view the reader cannot reach and has no way to discover, so buttons keep their natural width and
+    the row wraps instead. Grouping does not retire this rule — a very narrow pane can still overflow
+    a four-view sub row."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    for row in ("#groupsw", "#viewsw"):
+        rule = css[css.index(f"\n{row} {{") : css.index("}", css.index(f"\n{row} {{"))]
+        assert "flex-wrap: wrap" in rule, row
+        btn = css[css.index(f"\n{row} button {{") : css.index("}", css.index(f"\n{row} button {{"))]
+        assert "flex: 0 0 auto" in btn and "white-space: nowrap" in btn, row
+
+
+def test_every_view_declares_its_group_and_every_group_is_declared_once() -> None:
+    """The grouping lives on the button it groups (`data-group`), so there is no second membership
+    list to keep in step with the buttons. A view with no group would vanish from every row: its
+    group tab would never light and its sub tab would never be shown."""
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    buttons = re.findall(r'<button data-view="([a-z]+)" data-group="([a-z]+)">', html)
+    views = re.findall(r'<button data-view="([a-z]+)"', html)
+    assert len(buttons) == len(views), "a view button is missing its data-group"
+    start = js.index("const VIEW_GROUPS = [")
+    table = js[start : js.index("\n];", start)]
+    declared = set(re.findall(r"\['([a-z]+)', '", table))
+    assert {g for _, g in buttons} <= declared, "a button names a group VIEW_GROUPS does not declare"
+    assert declared == {g for _, g in buttons}, "VIEW_GROUPS declares a group no view belongs to"
+
+
+def test_an_empty_group_never_reaches_the_row_and_a_lone_view_draws_no_sub_tab() -> None:
+    """Two ways the two-row switcher could lie. A group whose every view is gated off by THIS map's
+    content would open onto nothing, so it is not built at all. And a group holding one view draws no
+    sub tabs, because a lone chip repeating the group name above it says nothing — the strip still
+    renders at full height, so opening that group does not shunt the diagram up and back down."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    boot = js[js.index("for (const [gid, label, question] of VIEW_GROUPS) {"):]
+    assert "if (!views.length) continue;" in boot[: boot.index("\n}")]
+    assert "const lone = groupViews(tg).length < 2;" in js
+    assert "b.hidden = lone || b.dataset.group !== tg;" in js
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    sub = css[css.index("#stagesubrow {"): css.index("}", css.index("#stagesubrow {"))]
+    assert "min-height" in sub, "an empty sub row must still reserve its height"
+
+
+def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
+    """The overview cards are built from the map's capabilities. A map that records none would land on
+    an empty screen, so that tab falls back to the flat use-case list it has always shown. The list is
+    ONE function for every case — a feature's use cases, an actor's, or all of them — so the row
+    markup, the Happy-Path pill, the diff badge and the flow click cannot drift between them."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();" in js
+    assert "function renderUseCases(sel) {" in js
+    assert "renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap });" in js
+    # In diff mode a card carries its members' change, or dropping the use cases one level down would
+    # hide every "changed" badge behind a click.
+    feat = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    assert "g.ucs.some((n) => usecaseDiffState(n.id))" in feat
+
+
+def test_the_axis_switch_lives_on_the_overview_and_nowhere_else() -> None:
+    """Both axes (feature / actor) are properties of the OVERVIEW, which is the level that has two ways
+    to cut the same use cases. On a list already scoped to one card an axis switch either does nothing
+    or silently swaps which card you are reading. It used to live on a flat "all use cases" page that
+    was the only route to the actor axis, and that page restated the overview's card names in a chip
+    bar AND again in every section heading, right after you had read them as cards. Both axes draw
+    cards from ONE grouping function each, shared with the list that drills out of them."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    assert "uc-groupby" in over and "capabilityGroups()" in over and "actorGroups()" in over
+    lst = js[js.index("function renderUseCases(sel) {"): js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
+    assert "uc-groupby" not in lst, "the list level must not carry an axis switch"
+    assert "feat-all" not in js, "the flat all-use-cases page is gone"
+    # Two axes, two states, both filed under the same tab so the crumb reads Features > the card.
+    assert "if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }]" in js
+    assert "kind === 'actor'" in js[js.index("function topView(kind) {"):]
+
+
+def test_every_state_field_survives_a_right_pane_navigation() -> None:
+    """`pushContentPoint` rebuilds the current state field by field so opening a file keeps the screen
+    you are on. Maintained by hand it dropped a field three times running (`store`/`entity`, then
+    `blk`/`br`, then `cap`/`act`), and the failure is silent and sticky: the crumb keeps naming the
+    level you were on while the pane renders the level ABOVE it, back/forward preserves the corrupted
+    point, and the tab remembers it. So the list is derived from what `stateKey` actually reads."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    key = js[js.index("function stateKey(s) {"): js.index("\n}", js.index("function stateKey(s) {"))]
+    read = set(re.findall(r"s\.([a-zA-Z]+)", key)) - {"kind"}
+    decl = js[js.index("const STATE_FIELDS = ["):]
+    declared = set(re.findall(r"'([a-zA-Z]+)'", decl[: decl.index("]")]))
+    assert read == declared, f"stateKey reads {read - declared}, STATE_FIELDS declares {declared - read}"
+    push = js[js.index("function pushContentPoint(content) {"): js.index("\n}", js.index("function pushContentPoint(content) {"))]
+    assert "for (const f of STATE_FIELDS)" in push
+
+
+def test_a_use_cases_crumb_names_the_card_it_was_listed_on() -> None:
+    """The overview has two axes, so a use case belongs to one group on each. Naming its FEATURE while
+    the reader arrived through an ACTOR put a card they never opened in the trail, and clicking that
+    crumb navigated them to a screen they had never seen. The middle crumb follows the axis the
+    overview is on. A use case in no feature still gets one, or that drill is the only one in the
+    viewer no breadcrumb can undo."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    anc = js[js.index("if (s.kind === 'usecase') {"):]
+    anc = anc[: anc.index("\n  }")]
+    assert "ucGroupBy() === 'actor'" in anc and "actorGroupOf(s.uc)" in anc
+    assert "CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-'" in anc
+    assert "function actorGroupOf(ucId) {" in js and "actorGroups().find(" in js
+
+
+def test_a_feature_found_by_search_opens_the_features_tab() -> None:
+    """A feature is drawn as no box anywhere, so `selectTargetFor` had nothing to select and fell to
+    its `default`, opening Dependencies — a confident wrong answer to a hit the index itself labels a
+    feature. Its home is its own card's list."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "case 'capability':" in js
+    assert "return { state: { kind: 'capability', cap: id }, selectId: null };" in js
+    assert "capability: 'feature'" in js
+
+
+def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
+    """Either named role can start it, so both cards must show it. Filing it under the first hid it
+    from the other; giving the pair its own group drew a third card that read as a bug ("Organization
+    admin (30)" beside "Organization admin and Team member (1)"). The group sizes therefore overlap
+    and no longer sum to the use-case count, which is honest for the question a group answers.
+    The crumb has to survive that: the row carries the actor whose list it was opened from, or a
+    recomputed group could send the reader back to a list they never opened."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    body = js[js.index("function actorGroups() {"): js.index("\nfunction ", js.index("function actorGroups() {") + 10)]
+    assert "for (const [key, title, role] of entries)" in body, "a use case must file under EVERY actor"
+    assert "byActor[key].ucs.push(n)" in body
+    # One undeclared name still sends the whole use case to Other: a half-known pair has no per-role home.
+    assert "known ? names.map((nm, i) =>" in body and "[[OTHER, 'Other', null]]" in body
+    assert "{ kind: 'usecase', uc: li.getAttribute('data-uc'), act: oneActor }" in js
+    assert "const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');" in js

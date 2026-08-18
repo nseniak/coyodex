@@ -55,10 +55,18 @@ removable with the ✕). highlight.js is lazy-loaded from a pinned + SRI CDN on 
 
 Chrome that orients a first-time reader, so the map is readable without knowing its conventions:
 
+- **View switcher** (two rows, top of the graph pane) — the five **groups** on top (Product · Data ·
+  Code · Operations · Glossary), the open group's **views** below. The groups are the old flat row's
+  altitude order made visible: what it does · what it knows · what it is made of · what runs · its
+  words. Membership is declared on each view button (`data-group`), so there is no second list to keep
+  in step; the group row is built at boot and **drops any group whose every view this map gated off**.
+  A group holding one view (Glossary) draws no sub tabs, but the strip keeps its height, so switching
+  never shunts the diagram up and down. Neither row may shrink its buttons: they wrap to a second line
+  instead. (The flat row of eleven tabs did not fit — at a 1280px window the last tab had zero visible
+  width and could not be clicked at all.)
 - **View caption** — the info pane's top-level state (what it shows when nothing is selected): the
   view's name as the title, and under it the question that view answers. The Happy Path additionally
-  keeps the system's own description, since it is the view that tells the whole story. The tabs are ordered by altitude — what it does · how it's built · what runs ·
-  reference — so the row itself suggests a reading path.
+  keeps the system's own description, since it is the view that tells the whole story.
 - **Emptiness note** — a quiet chip under the caption saying why a view looks bare when it does ("no
   infrastructure is used by 2+ processes"). A lane a rule found nothing for looks identical to one
   nobody recorded anything for; the note says which. Deliberately NOT coverage counts — "N of M
@@ -124,13 +132,22 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     the diagram already draws them; clicking one message opens that step's own pane (its action, why, and
     note), each element link locating that element in its home view (its subsystem card, entity card, …).
     Navigate back with the breadcrumb (Happy Path › *this step*) or the **◀ ▶** arrows.
+- **Features** *(when the map records capabilities)* — the product on one screen, in three levels.
+  Level 1 is one **card per capability**: its name, its `core`/`supporting`/`platform` label, what it
+  covers, and how many use cases sit under it. Clicking a card drills to level 2, that feature's use
+  cases (the catalog rows, headed by the feature's own purpose); clicking a row drills to level 3, that
+  use case's flow — the same flow a Happy Path step drills into, so a use case has one home. A **Show
+  all N use cases** button opens the full catalog, which is also the only level carrying the
+  **Group by Capability / Actor** switch: actors do not partition the catalog (a use case may name two)
+  and they divide it very unevenly, so they re-group a list rather than heading an overview. A map that
+  records no capabilities skips level 1 and keeps the flat catalog it always had.
 - **Entities** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
   relations (composition/aggregation/inheritance/association). Click a class for its fields +
   `file:line`; click a relation for its kind + cardinality. Two things a box says are links: a field
   whose **type is another entity** (`Role[] roles`) — click the type to select that entity, wherever
-  it is drawn — and the **store line** (`🛢 orders(MongoDB)`), which opens the Data tab on that
-  store's pane with this entity's row flashed (the same jump as the info pane's "See in Data view"). When the model groups entities into
+  it is drawn — and the **store line** (`🛢 orders(MongoDB)`), which opens the **Storage** tab on that
+  store's pane with this entity's row flashed (the same jump as the info pane's "See in Storage"). When the model groups entities into
   **subdomains**, the Entities view drills exactly like Subsystems (in place, back/forward history):
   - It leads with a **Subdomains overview** — one box per subdomain, with `SD→SD` arrows derived from
     the crossing entity relations (count-labelled).
