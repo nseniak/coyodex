@@ -701,3 +701,38 @@ def test_write_prints_the_numbers_a_note_will_cite(tmp_path: Path):
     assert "of which 1 had been CONFIRMED" in out, (
         "a superseded claim that was CONFIRMED is a settled verdict the build overrode, and the "
         "note must be able to say how many:\n" + out)
+
+
+def test_lint_expect_refuses_when_a_named_batch_has_no_verdicts_file(tmp_path, capsys):
+    """A missing file is the one failure a reader cannot spot by eye, because nothing is there.
+
+    `grounding lint` lints the files that happen to exist. One live run printed
+    `VERDICTS OK — 18 file(s) well-formed` while a nineteenth was seconds from landing; four
+    verdict-consuming commands then ran against the incomplete set and were redone.
+    """
+    v = tmp_path / "verdicts-security-1.json"
+    v.write_text(json.dumps({"grounding": [
+        {"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1", "skeptic": "security-1"}]}),
+        encoding="utf-8")
+
+    assert main(["lint", "--verdicts", str(v), "--expect", "security-1"]) == 0
+    assert main(["lint", "--verdicts", str(v), "--expect", "security-1,cadence"]) == 1
+    err = capsys.readouterr().err
+    assert "VERDICTS INCOMPLETE" in err and "cadence" in err, err
+    assert "grounding write" in err, "it must name what not to run yet"
+
+
+def test_report_lists_the_claims_added_since_the_pin(tmp_path):
+    """`write` printed how MANY were added after the pin and nothing could say WHICH.
+
+    A build hand-diffed `audit --json` against the worklist in python to find them, then
+    hand-edited the pinned worklist file itself to extend it — against the rule that the pin is
+    not re-derived. Listing them is the read half of that job, and the half that needed no script.
+    """
+    pinned = ["C1 calls C2"]
+    rows = [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1"}]
+    out = G.format_report(pinned, rows, live_claims=["C1 calls C2", "C3 reads E1"])
+    assert "ADDED SINCE THE PIN (1)" in out, out
+    assert "C3 reads E1" in out.split("ADDED SINCE THE PIN")[1], out
+    # Nothing added -> no section, so a clean run does not grow a heading that says zero.
+    assert "ADDED SINCE THE PIN" not in G.format_report(pinned, rows, live_claims=pinned)

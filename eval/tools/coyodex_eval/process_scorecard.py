@@ -31,7 +31,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from coyodex_eval.transcript import (ToolCall, Turn, bash_commands, grouping_is_consistent,
@@ -265,9 +265,24 @@ def _invokes(command: str, subcommand: str) -> bool:
 #: only understood `>` redirects reported that mee6 produced no reconcile file at all.
 def _python_write(blob: str, needle: str) -> bool:
     esc = re.escape(needle)
-    return bool(re.search(r"open\s*\(\s*[^)]*" + esc + r"[^)]*['\"][wa]", blob)
-                or re.search(r"json\.dump\s*\([^)]*" + esc, blob)
-                or re.search(esc + r"[^)\n]*\)\s*\.write_text", blob))
+    if (re.search(r"open\s*\(\s*[^)]*" + esc + r"[^)]*['\"][wa]", blob)
+            or re.search(r"json\.dump\s*\([^)]*" + esc, blob)
+            or re.search(esc + r"[^)\n]*\)\s*\.write_text", blob)):
+        return True
+    # A FOURTH shape, and the one two measured builds actually used: the path is bound to a
+    # variable first and the write goes through the variable —
+    #     p='.coyodex/build-fragments/extras.json'; d=json.load(open(p))
+    #     ...
+    #     json.dump(d, open(p,'w'), indent=2)
+    # `_VAR_BOUND_WRITE` below catches `p = Path(<art>)` … `p.write_text(...)`, which is a
+    # different idiom, so neither pattern saw this one. It cost assertion 27 twenty-one rows on
+    # one build and six on the build before it, and left assertion 28 reporting a denominator of
+    # 2 about a run that hand-wrote eleven extras records.
+    for m in re.finditer(r"(\w+)\s*=\s*['\"][^'\"\n]*" + esc + r"[^'\"\n]*['\"]", blob):
+        var = re.escape(m.group(1))
+        if re.search(r"open\s*\(\s*" + var + r"\s*,\s*['\"][wa]", blob[m.end():]):
+            return True
+    return False
 
 
 def _writes_path(call: ToolCall, needle: str) -> bool:
@@ -1376,6 +1391,11 @@ class ScoreContext:
     #: The advisory TEXTS the committed map produces, for assertions that ask what KIND of advisory
     #: shipped rather than how many. Empty when no map was given or it could not be read.
     map_warning_lines: tuple[str, ...] = ()
+    #: Every `lint-fragment` invocation a SUB-AGENT ran, as (agent label, command). The scorecard
+    #: is a lead-transcript instrument, and this is the one thing it must know that the lead's
+    #: transcript cannot show: whether an agent narrowed its own self-check. Empty when the
+    #: `<session>/subagents/` directory is absent — a different harness, or no fan-out.
+    agent_lint_calls: tuple[tuple[str, str], ...] = ()
     #: The map's ACCESS SURFACE — `access: true` business rules, which the T7 fold made the single
     #: home for auth. Read from the model rather than matched out of advisory prose, so these two
     #: assertions do not break when an advisory is reworded. None when no map was given.
@@ -1401,6 +1421,59 @@ class ScoreContext:
         if self.load_error:
             return f"--map was given but FAILED TO LOAD ({self.load_error}), so {subject} is unknown"
         return f"no map given, so {subject} is unknown"
+
+
+def read_agent_lint_calls(session: Path) -> tuple[tuple[str, str], ...]:
+    """Every `lint-fragment` command a sub-agent ran, with the agent's label.
+
+    Reuses `cost.subagent_dir` rather than re-deriving the path: that helper already carries the
+    reason the directory sits beside the session file and not inside it, and two spellings of one
+    convention is how a reader ends up measuring nothing."""
+    from coyodex_eval.cost import subagent_dir
+    d = subagent_dir(session)
+    if not d.is_dir():
+        return ()
+    out: list[tuple[str, str]] = []
+    for f in sorted(d.glob("agent-*.jsonl")):
+        meta = f.with_suffix("").with_suffix(".meta.json")
+        meta = f.parent / (f.stem + ".meta.json")
+        label = f.stem
+        try:
+            label = json.loads(meta.read_text(encoding="utf-8")).get("description") or label
+        except (OSError, ValueError):
+            pass
+        try:
+            body = f.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in body.splitlines():
+            if "lint-fragment" not in line:
+                continue
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            content = (rec.get("message") or {}).get("content")
+            for block in content if isinstance(content, list) else []:
+                if not (isinstance(block, dict) and block.get("type") == "tool_use"):
+                    continue
+                if block.get("name") != "Bash":
+                    continue
+                cmd = str((block.get("input") or {}).get("command", ""))
+                for m in re.finditer(r"lint-fragment", cmd):
+                    seg = re.split(r"\n|;|&&", cmd[m.start():])[0]
+                    # An INVOCATION, not a mention. One agent ran
+                    # `grep -rln "lint-fragment" . --include="*.py" | head` while looking for the
+                    # source, and counting that as a narrowed self-check inflated the tally by one
+                    # in both halves — the shape this whole assertion exists to measure honestly.
+                    before = cmd[max(0, m.start() - 80):m.start()]
+                    if not re.search(r"coyodex(?:-eval)?[\s/\\]*$|\bcoyodex\s+$", before.strip() + " "):
+                        if "coyodex" not in before:
+                            continue
+                    if re.search(r"\b(grep|egrep|rg|ag)\b[^\n;&|]*$", before):
+                        continue
+                    out.append((str(label), seg))
+    return tuple(out)
 
 
 def read_score_context(map_path: str | Path | None) -> ScoreContext:
@@ -1615,11 +1688,13 @@ def assert_21_final_assemble_digest_is_clean(turns: Sequence[Turn]) -> Assertion
     Only the FINAL assemble counts: an unhealed count mid-build is expected and drains as the trace
     lands. `of == 0` when the run never assembled."""
     last: tuple[int, str] | None = None
+    last_cmd: str | None = None
     results = results_by_tool_use_id(turns)
     for turn in turns:
         for call in turn.calls_named("Bash"):
             if _invokes(call.command, "assemble"):
                 last = (turn.index, results.get(call.id, ""))
+                last_cmd = call.command
     if last is None:
         return Assertion(21, "final assemble digest is clean", 0, 0)
     idx, out = last
@@ -1628,12 +1703,50 @@ def assert_21_final_assemble_digest_is_clean(turns: Sequence[Turn]) -> Assertion
     # through `| tail -2`, or captured no result at all — and `assemble.py` documents a live build
     # reading this very output with `| tail -4`. A scorecard may under-credit, never over-credit.
     if not _ASSEMBLE_DIGEST.search(out):
+        # `n/a` and "the build filtered it away" are different facts and must not print the same.
+        # A live run showed `21  n/a  0/0  the final assemble's digest line was not captured`
+        # about an assemble piped through `grep -E "ERROR|FAILED|Assembled"` — the digest existed
+        # and the build discarded it. Read as "no opportunity", that is the exact class assertion
+        # 37 exists to catch, reported as a clean absence. The filter is visible in the command,
+        # so say which of the two happened.
+        cmd = last_cmd or ""
+        narrowed = bool(_GREP_FILTER.search(cmd) or _PAGERS.search(cmd))
         return Assertion(21, "final assemble digest is clean", 0, 0, (),
-                         "the final assemble's digest line was not captured — nothing to read")
+                         ("the final assemble's output was NARROWED (filtered or paged), so the "
+                          "digest was produced and discarded — this is not 'no opportunity'"
+                          if narrowed else
+                          "the final assemble's digest line was not captured — nothing to read"))
     unhealed = re.search(r"UNHEALED[^\n]*?(\d+)", out)
     n = int(unhealed.group(1)) if unhealed else 0
     ev = [] if not n else [Evidence(idx, {"unhealed_at_final_assemble": str(n)})]
     return Assertion(21, "final assemble digest is clean", 0 if n else 1, 1, evidence=tuple(ev))
+
+
+def assert_40_no_subagent_narrowed_its_own_lint(turns: Sequence[Turn],
+                                                ctx: ScoreContext) -> Assertion:
+    """40 — no sub-agent piped its own `lint-fragment` output through `head` or `tail`.
+
+    `lint-fragment` is the self-check every contract tells an agent to run "until clean", and the
+    only reader of its output is the agent itself. Narrowing it is therefore invisible to the lead
+    and to every other assertion here: this is the one measurement that needs the per-agent files.
+
+    On the measured build 8 of 22 sub-agent invocations were piped — `head -60` four times,
+    `head -20`, `head -5`, `tail -20`, and one more. The verdict now leads the output, so `head`
+    keeps it; what a narrow window still costs is the PROBLEM LIST, which is the middle of a
+    failing lint. An agent that reads `head -5` sees `LINT FAILED — 6 problem(s)` and two of the
+    six rows, and fixes two.
+
+    `of == 0` when the `<session>/subagents/` directory is absent: a different harness, or a build
+    with no fan-out, is not a build that narrowed anything."""
+    good: list[Evidence] = []
+    bad: list[Evidence] = []
+    for label, seg in ctx.agent_lint_calls:
+        (bad if re.search(r"\|\s*(head|tail)\b", seg) else good).append(
+            Evidence(0, {"agent": label, "command": seg[:120]}))
+    return Assertion(40, "no sub-agent narrowed its own lint-fragment output",
+                     len(good), len(good) + len(bad), tuple(bad),
+                     "" if ctx.agent_lint_calls else
+                     "no per-agent transcripts beside the session file — nothing to read")
 
 
 #: Assertion 22's title. It names the HARVEST rather than `preindex` because that is what the rule
@@ -2670,6 +2783,7 @@ ASSERTIONS = (
     assert_37_gate_filter_did_not_grow,
     assert_38_written_json_is_read,
     assert_39_security_theme_is_fed,
+    assert_40_no_subagent_narrowed_its_own_lint,
 )
 
 
@@ -2687,7 +2801,8 @@ def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
                   assert_24_no_inert_recorded_exception,
                   assert_32_every_access_rule_states_its_risk,
                   assert_33_access_granularity_is_recorded,
-                  assert_39_security_theme_is_fed}
+                  assert_39_security_theme_is_fed,
+                  assert_40_no_subagent_narrowed_its_own_lint}
     assertions = tuple(fn(turns, ctx) if fn in _needs_ctx else fn(turns)  # type: ignore[operator]
                        for fn in ASSERTIONS)
     return Scorecard(transcript=transcript, turns=len(turns), assertions=assertions,
@@ -2708,9 +2823,12 @@ def score_transcript(path: Path | str, *, label: str = "",
     turns = read_turns(p)
     if to_turn is not None:
         turns = tuple(t for t in turns if t.index <= to_turn)
+    ctx = read_score_context(map_path)
+    # The per-agent files are keyed off the TRANSCRIPT path, not the map, so they are attached
+    # here rather than inside `read_score_context`.
+    ctx = replace(ctx, agent_lint_calls=read_agent_lint_calls(p))
     return score_turns(turns, transcript=str(p), label=label or p.stem,
-                       grouping_consistent=grouping_is_consistent(p),
-                       ctx=read_score_context(map_path))
+                       grouping_consistent=grouping_is_consistent(p), ctx=ctx)
 
 
 # --- the diff --------------------------------------------------------------------------

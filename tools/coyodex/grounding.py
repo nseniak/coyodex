@@ -362,6 +362,21 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
             raw_notes = row.get("notes")
             for n in (raw_notes if isinstance(raw_notes, list) else [])[:2]:
                 out.append(f"      {str(n)[:160]}")
+    # ADDED SINCE THE PIN — the claims the SHIPPED map carries that the pinned worklist never
+    # held. `write` prints how MANY ("37 added since the pin") and nothing could say WHICH, so a
+    # build hand-diffed `audit --json` against the worklist in python, then hand-edited the pinned
+    # file itself to extend it — against the rule that the pin is not re-derived. Listing them
+    # here is the read half of that job, and it is the half that needed no hand script.
+    if live is not None:
+        pinned = set(worklist_claims)
+        added = [c for c in dict.fromkeys(live_claims or []) if c not in pinned]
+        if added:
+            out.append(f"\nADDED SINCE THE PIN ({len(added)}) — in the shipped map, never in the "
+                       f"pinned worklist, so no skeptic saw them. Challenge them, or say in the "
+                       f"note why they were not re-challenged; `claims_challenged` counts the pin "
+                       f"and will keep reading as full coverage either way:")
+            for c in added:
+                out.append(f"  * {c}")
     out.append(f"\nconfirmed: {len(buckets['confirmed'])} of {len(worklist_claims)} claim(s)")
     # The trailer half of the both-ends rule above: a `| tail -N` reader gets this even when the
     # section itself scrolled off the top. Only printed when it is non-zero, so a clean run does
@@ -493,6 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     if helped is not None:
         return helped
     worklist_path = out_path = map_path = agent_dir = None
+    expect: list[str] = []
     verdicts: list[str] = []
     note = ""
     note_file: str | None = None
@@ -540,6 +556,9 @@ def main(argv: list[str] | None = None) -> int:
                 note_file = rest[i]
             else:
                 note = rest[i]
+        elif a == "--expect":
+            i += 1
+            expect += [x for x in rest[i].split(",") if x.strip()] if i < len(rest) else []
         else:
             return subverb_help.usage_error(USAGE, verb, f"unknown option(s): {a}")
         i += 1
@@ -549,6 +568,22 @@ def main(argv: list[str] | None = None) -> int:
         if not verdicts:
             print("ERROR: grounding lint needs at least one --verdicts <file>", file=sys.stderr)
             return 2
+        # `--expect` NAMES THE BATCHES THAT MUST HAVE LANDED. Without it this command lints the
+        # files that happen to exist and cannot see a batch that produced none, so a fan-out whose
+        # last skeptic was still writing linted clean: one live run printed
+        # `VERDICTS OK — 18 file(s) well-formed` while a nineteenth was seconds from landing, and
+        # five verdict-consuming commands then ran against the incomplete set and were redone.
+        # A missing file is the one failure a reader cannot spot by eye, because nothing is there.
+        if expect:
+            have = {Path(v).stem.replace("verdicts-", "") for v in verdicts}
+            missing = [b for b in (x.strip() for x in expect) if b and b not in have]
+            if missing:
+                print(f"VERDICTS INCOMPLETE — {len(missing)} expected batch(es) have no verdicts "
+                      f"file: {', '.join(missing)}", file=sys.stderr)
+                print("The fan-out has not finished, or an agent returned without writing. Do NOT "
+                      "run anchor-drift, apply-drift or grounding write yet: each consumes the "
+                      "verdict set and would have to be redone.", file=sys.stderr)
+                return 1
         lint = lint_verdicts(verdicts, Path(agent_dir) if agent_dir else None)
         problems = lint.problems
         for n in lint.notes:

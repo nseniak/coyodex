@@ -82,11 +82,19 @@ def test_the_heading_must_be_one_a_check_actually_reads():
 
 
 def test_every_known_heading_is_accepted():
+    """One line per heading, in that family's OWN grammar.
+
+    This used to send `UC1: a stated reason` to every heading. For 'Audit exceptions' that keys
+    nothing — the family's shape is `<check-name> <id>, <id>: <why>` — and the command wrote it
+    anyway, which is the defect `test_record_refuses_a_line_that_keys_to_nothing` now holds. A
+    generic line here would have to be accepted by a command that must refuse it.
+    """
+    per_heading = {"Audit exceptions": "read-before-create HP1: a stated reason"}
     with tempfile.TemporaryDirectory() as tmp:
         for heading in KNOWN_HEADINGS:
             frag = make_fragment(tmp)
-            assert main(["--map", str(frag), "--heading", heading,
-                         "--line", "UC1: a stated reason"]) == 0, heading
+            line = per_heading.get(heading, "UC1: a stated reason")
+            assert main(["--map", str(frag), "--heading", heading, "--line", line]) == 0, heading
 
 
 def test_a_key_with_no_why_is_refused():
@@ -131,7 +139,7 @@ def test_a_missing_extras_fragment_is_seeded_and_the_record_lands(capsys):
     with tempfile.TemporaryDirectory() as td:
         target = Path(td) / "extras.json"
         assert main(["--map", str(target), "--heading", "Audit exceptions",
-                     "--line", "HP5: seeded out of band by the demo"]) == 0
+                     "--line", "read-never-created HP5: seeded out of band by the demo"]) == 0
         assert "seeded" in capsys.readouterr().out
         doc = json.loads(target.read_text())
         assert doc["extras"][0]["heading"] == "Audit exceptions"
@@ -217,3 +225,28 @@ def test_remove_refuses_to_combine_with_a_write():
         p.write_text('{"extras": []}', encoding="utf-8")
         assert main(["--map", str(p), "--heading", "Sweep debt",
                      "--remove", "a.py:1", "--line", "b.py:2: two"]) == 2
+
+
+def test_record_refuses_a_line_that_keys_to_nothing(tmp_path):
+    """A line that adjudicates nothing silences nothing, silently.
+
+    `record` checked the heading and that the line carried a `:` with a why, and stopped there. A
+    live build wrote `read-before-create HP2, read-before-create HP3: …` — the check name repeated
+    inside the comma list, where the family's grammar is the name ONCE then bare ids — and the
+    line keyed zero ids. Unrecorded advisories went 1 to 9, and three extra `finalize` + `render`
+    rounds were spent finding the shape by trial. `malformed_records` already knew the family's
+    vocabulary; nothing asked it before writing.
+    """
+    frag = tmp_path / "extras.json"
+    frag.write_text(json.dumps({"extras": []}), encoding="utf-8")
+    before = frag.read_text(encoding="utf-8")
+
+    code = main(["--map", str(frag), "--heading", "Audit exceptions",
+                 "--line", "read-before-create HP2, read-before-create HP3: each reads its own"])
+    assert code == 1, "a line that keys nothing must be refused"
+    assert frag.read_text(encoding="utf-8") == before, "the refusal must write nothing"
+
+    # The documented shape — the check name once, then bare ids — still works.
+    assert main(["--map", str(frag), "--heading", "Audit exceptions",
+                 "--line", "read-before-create HP2, HP3: each reads its own"]) == 0
+    assert "HP3" in frag.read_text(encoding="utf-8")

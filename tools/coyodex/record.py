@@ -257,6 +257,28 @@ def main(argv: list[str] | None = None) -> int:
             any_changed = any_changed or changed
     if not any_changed:
         return 1 if replace else 0
+    # SHAPE-CHECK BEFORE WRITING: a line that keys to nothing silences nothing, silently.
+    #
+    # This command checked the heading and that the line carried a `:` with a why, and stopped
+    # there. A live build wrote `read-before-create HP2, read-before-create HP3, …` — the check
+    # name repeated inside the comma list, where the family's grammar is the name ONCE then bare
+    # ids — and the line keyed zero ids. Unrecorded advisories went 1 to 9, and three extra
+    # `finalize` + `render` rounds were spent finding the shape by trial. `malformed_records`
+    # already knows every family's key vocabulary and was already used by the validator; asking it
+    # here turns those three rounds into one refusal.
+    from coyodex.records import malformed_records
+    # Only the lines THIS call added. A fragment may already carry a record written before the
+    # check existed, and refusing to write a good line because an old one is malformed would make
+    # the command unusable on exactly the maps that need it most.
+    added = {ln.strip() for ln in lines}
+    bad = [b for b in malformed_records(m, canonical) if b.strip() in added]
+    if bad and not remove:
+        for b in bad:
+            print(f"ERROR: {b}", file=sys.stderr)
+        print(f"REFUSED: the line(s) above adjudicate nothing under '{canonical}', so recording "
+              f"them would silence no finding while reading as though it had. Nothing was "
+              f"written.", file=sys.stderr)
+        return 1
     # ONE write for the whole batch. Writing per line would leave the file half-updated if a later
     # line failed, and would rewrite the fragment N times for N records.
     path.write_text(dump_preserving(m, present), encoding="utf-8")

@@ -631,7 +631,7 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # `--json` written and never opened while its contents were re-derived by hand to a different
     # answer. The fourth reads the MAP: the audit's `security` theme going empty after auth surfaces
     # moved into rules, which left 200 access claims triaged as ordinary ones for two builds.
-    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25, *range(26, 40)], ids
+    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25, *range(26, 41)], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -2417,3 +2417,63 @@ def test_38_still_flags_a_json_nobody_opened():
              make_bash_turn(2, "coyodex validate /repo/.coyodex/project-map.json"))
     a = P.score_turns(turns).by_id()[38]
     assert (a.observed, a.of, a.score) == (0, 1, 0.0)
+
+
+# --- retro 2026-08-18: findings 2, 17 and 18 -----------------------------------------
+
+def test_a_var_bound_path_written_through_open_is_a_hand_write():
+    """The fourth write shape, and the one two measured builds actually used.
+
+    `p='.coyodex/build-fragments/extras.json'; json.dump(d, open(p,'w'))` binds the path to a
+    variable and writes through it. The literal-path patterns miss it, and `_VAR_BOUND_WRITE`
+    catches only the `Path(...)` + `.write_text()` idiom. Assertion 27 lost 21 rows on one build
+    and 6 on the one before it; assertion 28 reported a denominator of 2 about a run that
+    hand-wrote eleven extras records.
+    """
+    blob = ("python3 - <<'PY'\n"
+            "import json\n"
+            "p='.coyodex/build-fragments/extras.json'; d=json.load(open(p))\n"
+            "d['extras'].append({'heading':'Sweep debt','body':'x'})\n"
+            "json.dump(d, open(p,'w'), indent=2)\n"
+            "PY")
+    assert P._python_write(blob, "build-fragments/") is True
+    # A read-only script through the same idiom is NOT a write.
+    read_only = ("p='.coyodex/build-fragments/extras.json'\n"
+                 "import json; print(json.load(open(p))['extras'][0]['heading'])")
+    assert P._python_write(read_only, "build-fragments/") is False
+
+
+def _turns_with_assemble(cmd: str, result: str):
+    return (make_turn(1, make_bash(cmd, "u1"), results=(("u1", result),)),)
+
+
+def test_assertion_21_says_when_the_digest_was_filtered_away():
+    """`n/a` and "the build filtered it away" are different facts.
+
+    A live run printed `21  n/a  0/0  the final assemble's digest line was not captured` about an
+    assemble piped through `grep -E "ERROR|FAILED|Assembled"`. The digest existed and the build
+    discarded it, which is the class assertion 37 exists to catch, reported as a clean absence.
+    """
+    narrowed = P.assert_21_final_assemble_digest_is_clean(_turns_with_assemble(
+        'coyodex assemble f.json --out .coyodex 2>&1 | grep -E "ERROR|Assembled"', "Assembled 3"))
+    assert narrowed.of == 0 and "NARROWED" in (narrowed.note or ""), narrowed
+
+    plain = P.assert_21_final_assemble_digest_is_clean(_turns_with_assemble(
+        "coyodex assemble f.json --out .coyodex", "Assembled 3 fragment(s)"))
+    assert plain.of == 0 and "NARROWED" not in (plain.note or ""), plain
+
+
+def test_assertion_40_counts_only_real_lint_invocations():
+    """An agent that greps for the STRING `lint-fragment` did not run a self-check.
+
+    One agent ran `grep -rln "lint-fragment" . --include="*.py" | head` while looking for the
+    source. Counting that as a narrowed self-check inflated both halves of the tally by one.
+    """
+    ctx = P.ScoreContext(agent_lint_calls=(
+        ("A1", "coyodex lint-fragment --repo . A1.json"),
+        ("A3", "coyodex lint-fragment --repo . A3.json 2>&1 | head -60"),
+    ))
+    a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
+    assert (a.observed, a.of) == (1, 2), a
+    empty = P.assert_40_no_subagent_narrowed_its_own_lint((), P.ScoreContext())
+    assert empty.of == 0 and "no per-agent transcripts" in (empty.note or ""), empty
