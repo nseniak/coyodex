@@ -1309,6 +1309,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   starting points, not facts. Exit criterion: `coyodex validate` emits no balance warning that is
   neither fixed nor justified. This step is not part of the per-write validate → audit → render
   invariant; maintenance re-surfaces imbalance for free through validate's always-on warnings.
+  `finalize` now runs `balance` itself as an INFORMATIONAL leg and records what it found, so a
+  skipped Phase 3.5 and a passed one no longer read the same in the report. That leg is a trace,
+  not a substitute: it never gates, and it does not reconcile a finding for you.
 - **T7 Business logic (fan out, one agent per block — after the trace, it needs the flows to sweep
   against).** The map has a home for DATA (entities), SEQUENCE (flows), STATES (lifecycles) and
   STRUCTURE (components, edges) — and none for the DECISION the code makes, which is exactly the
@@ -1527,6 +1530,27 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     --note '319 of 1,608 challenged: ranked top-down, stopped at the theme budget' --out …
   ```
 
+  **Pass the note with `--note-file <path>`, not inline, on any re-run.** The record is re-measured
+  after every late fix, and each re-run had to re-supply the whole note: one build retyped ~1,900
+  characters three times through the shell, mutating it between pastes, and a note carrying a quote
+  or a backtick would not have survived at all. `--keep-note` reuses the note already in `--out`
+  when nothing about it changed.
+
+  **Then quote the `NOTE FACTS` block `write` prints, rather than remembering a number.** It states
+  the verdict rows, the distinct skeptic labels, the confirmed / refuted / unverifiable / tied
+  split, and how many superseded claims had been CONFIRMED — each one a settled verdict the build
+  overrode. A note is free prose in a permanent record and in the commit message, and nothing
+  checks it: one said "Eighteen fresh-context skeptics" about a build that dispatched 17 and
+  produced 20 labels, and "Four superseded claims had been CONFIRMED" where the true count was 11,
+  leaving seven overrides undisclosed. Both numbers were on screen when the note was written.
+
+  **`coyodex grounding report` lists what `write` only counts.** Its `ADDED SINCE THE PIN` section
+  names the claims the shipped map carries that the pinned worklist never held, and
+  `REFUTED BUT NOT SUPERSEDED` names refuted claims the map still carries verbatim — the count
+  appears on the report's first line AND its last, so neither a `head` nor a `tail` can lose it.
+  Read both before writing the note: a build that read neither shipped two refuted claims and
+  hand-diffed the post-pin set in python to find what the section would have listed.
+
   `claims_total` keeps the full 1,608 and `claims_challenged` says 319, so the unchallenged
   remainder is visible in the record itself rather than in prose. The `--note` is required (the
   counts say how many, never why those), and passing `--partial` on a pass that turns out to be
@@ -1571,8 +1595,17 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   ```
   coyodex grounding lint --verdicts .coyodex/verify/verdicts-a.json \
                          --verdicts .coyodex/verify/verdicts-b.json … \
+                         --expect security-1,security-2,rule-1,…      # every batch you dispatched
                          --agent-transcripts <the session's subagents/ dir>
   ```
+
+  **`--expect` NAMES THE BATCHES, and it is the half that makes this a barrier.** Without it the
+  command lints the files that HAPPEN TO EXIST and cannot see a batch that produced none, so a
+  fan-out with one skeptic still writing lints clean: a build read `VERDICTS OK — 18 file(s)
+  well-formed` while a nineteenth was seconds from landing, then ran `anchor-drift`,
+  `fix apply-drift`, `assemble` and `grounding report` against the incomplete set and redid all
+  four. A missing file is the one failure nobody spots by eye, because nothing is there. List the
+  batch ids you dispatched; the command refuses until every one has a file.
 
   Note the shape: **`--verdicts` REPEATS, one flag per file** — it does not take a list, so a bare
   glob after one flag is an error. Run it the moment the barrier closes, not at `grounding write`:

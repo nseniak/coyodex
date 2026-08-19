@@ -1186,3 +1186,30 @@ def test_the_retro_method_carries_the_four_habits_that_produced_its_own_correcti
     assert "state the per-agent read COVERAGE as a fraction" in text
     assert "is a draft until a second signal agrees with it" in text, (
         "the hand-rolled-scan rule is the most common way a retro publishes something false")
+
+
+def test_the_build_method_names_every_capability_shipped_for_it():
+    """A capability the method never names is unreachable, however well it is tested.
+
+    This file's docstring already records the shape: `coyodex reconcile` shipped fully working and
+    fully tested and ran ZERO times across four measured builds, while every one of them hand-wrote
+    the file it generates. Check (b) tests one direction — a flag the method names is accepted.
+    This is the other direction, for the capabilities added because a build could not do without
+    them, and it is the direction that bites.
+    """
+    method = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
+    for phrase, why in (
+        ("--expect", "grounding lint cannot see a batch that produced no file without it"),
+        ("ADDED SINCE THE PIN", "the post-pin claims were hand-diffed in python for want of this"),
+        ("REFUTED BUT NOT SUPERSEDED", "two refuted claims shipped in a map because nobody read it"),
+        ("NOTE FACTS", "a note said 'Eighteen skeptics' of a build that dispatched 17"),
+        ("--note-file", "a ~1,900-character note was retyped inline three times"),
+    ):
+        assert phrase in method, f"method.md never names `{phrase}` — {why}"
+
+    contracts = [p for p in (REPO_ROOT / "method" / "templates").glob("*-contract.md")
+                 if "lint-fragment" in p.read_text(encoding="utf-8")]
+    assert contracts, "no contract tells an agent to self-check — the fixture is wrong"
+    for p in contracts:
+        assert "anchor drift" in p.read_text(encoding="utf-8"), (
+            f"{p.name} tells an agent to lint and never says the verdict now carries a drift count")

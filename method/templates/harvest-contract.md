@@ -108,6 +108,13 @@ lead; nothing above this line goes into an agent prompt.
 > `assemble`. Pass `--expect «N»` with the component budget this slice was dispatched with: it is
 > advisory, and it puts the over/undershoot in front of the agent that can explain it — otherwise
 > nobody sees it until the lead's granularity advisory fires after assembly.
+> **With `--repo`, the verdict line ends with an anchor-drift count when any of your anchors point
+> at a line that cannot be acting** — an import, a comment, a `def`, a blank line. Read the FIRST
+> line: `LINT OK — 0 problems, 3 advisory warning(s) (3 anchor drift)`. Those rows are advisory and
+> never fail the lint, and they are the defect this self-check was blind to until now: six
+> fragments once passed clean and produced 86 drifted anchors at the lead's `validate`, costing
+> fifty turns of repair after their authors were gone. Anchor the operative statement — the call,
+> the write, the enforce line itself — or set `no_call_site`.
 > If the lint prints `warning:` lines (advisory), either FIX them or **repeat them verbatim in your
 > reply with one line of justification each** — never silently shrug an advisory off; the lead must
 > not rediscover a warning your own lint already showed you.

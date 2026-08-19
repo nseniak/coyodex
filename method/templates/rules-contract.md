@@ -139,6 +139,13 @@ $CX lint-fragment --repo «REPO» --ids $MAP \
 Fix every problem until it exits clean. If it prints `warning:` lines, either fix them or repeat them
 verbatim in your reply with one line of justification each.
 
+**With `--repo`, the verdict line ends with an anchor drift count when a `where` points at a line
+that cannot be acting** — an import, a comment, a `def`, a blank line. Read the FIRST line:
+`LINT OK — 0 problems, 3 advisory warning(s) (3 anchor drift)`. Those rows are advisory and never
+fail the lint, and they are the defect this self-check was blind to until now: six fragments once
+passed clean and produced 86 drifted anchors at the lead's `validate`, costing fifty turns of
+repair after their authors were gone. Anchor the enforce line itself, or set `no_call_site`.
+
 Return only: the fragment path, your block id «BLOCK», the rule count, each rule's `name` on one
 line, and anything you looked for and could NOT find a decision behind (that absence is itself worth
 knowing). **Never inline the fragment in your reply.**

@@ -160,6 +160,14 @@ lead; nothing above this line goes into an agent prompt.
 > «COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «REPO» --ids «LEGEND» «your-fragment».json
 > ```
 >
+>
+> **With `--repo`, the verdict line ends with an anchor-drift count when any of your `where`s point
+> at a line that cannot be acting** — an import, a comment, a `def`, a blank line. Read the FIRST
+> line: `LINT OK — 0 problems, 3 advisory warning(s) (3 anchor drift)`. The drift rows are advisory
+> and never fail the lint, and they are the defect this self-check was blind to until now: six
+> fragments once passed clean and produced 86 drifted anchors at the lead's `validate`, costing
+> fifty turns of repair after their authors were gone. Anchor the operative statement — the call,
+> the write, the enforce line itself — or set `no_call_site`.
 > Fix every row it reports until it exits clean — this catches schema, anchor-format, extra-key and
 > invented-id errors in YOUR context, in parallel, so nothing bounces back from the lead. `--ids`
 > makes a plausible-but-invented element id die in your own turn. If the lint prints `warning:` lines,
