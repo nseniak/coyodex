@@ -18,7 +18,8 @@ from pathlib import Path
 
 from coyodex.audit_model import (apply_anchor_corrections, resolve_claim, rule_site_claim,
                                  store_claim)
-from coyodex.grounding import element_checks, format_element_checks, main
+from coyodex.grounding import (element_checks, format_element_checks, main,
+                               surviving_refutations)
 from coyodex.model import FORMAT, load_model
 
 
@@ -320,3 +321,84 @@ if __name__ == "__main__":     # pragma: no cover
     import sys
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# --- surviving refutations: the gate ---------------------------------------------
+
+def make_edge_map(where: str = "a.py:3") -> dict:
+    m = make_map()
+    m["edges"] = [{"src": "C1", "verb": "calls", "dst": "C1", "why": "loops", "where": where}]
+    return m
+
+
+def test_a_refuted_claim_the_map_still_makes_is_reported():
+    m = load_model(json.dumps(make_edge_map()))
+    out = surviving_refutations(m, [make_vote("C1 calls C1", False)])
+    assert len(out) == 1
+    assert out[0].claim == "C1 calls C1" and out[0].refuted_by == 1
+
+
+def test_a_refuted_claim_the_reconcile_removed_is_not_reported():
+    """The discrimination the gate rests on. Reconciling a refutation changes or drops the row, so
+    the pinned claim stops resolving. Reporting it anyway would fire forever on finished work."""
+    m = load_model(json.dumps(make_edge_map()))
+    assert surviving_refutations(m, [make_vote("C1 persists E1", False)]) == []
+
+
+def test_a_majority_confirmed_claim_is_not_a_survivor():
+    """Reuses `_verdict_bucket`, so the gate and the record cannot disagree about one claim."""
+    m = load_model(json.dumps(make_edge_map()))
+    votes = [make_vote("C1 calls C1", True), make_vote("C1 calls C1", True),
+             make_vote("C1 calls C1", False)]
+    assert surviving_refutations(m, votes) == []
+
+
+def test_a_tie_is_not_treated_as_a_refutation():
+    """A tie is unsettled, not disproved. Blocking on it would make the gate decide a question the
+    code did not answer."""
+    m = load_model(json.dumps(make_edge_map()))
+    votes = [make_vote("C1 calls C1", True), make_vote("C1 calls C1", False)]
+    assert surviving_refutations(m, votes) == []
+
+
+def test_the_survivor_carries_the_skeptic_s_own_reason():
+    """The operator has to act on it, and the reason is the only thing that says how."""
+    m = load_model(json.dumps(make_edge_map()))
+    row = {"claim": "C1 calls C1", "grounded": False, "evidence": "a.py:3",
+           "note": "a.py:3 is an import, and C1 never calls itself"}
+    assert "never calls itself" in surviving_refutations(m, [row])[0].note
+
+
+def test_the_cli_exits_one_on_a_survivor_and_zero_without(capsys):
+    m = make_edge_map()
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(m), encoding="utf-8")
+        bad = Path(td) / "bad.json"
+        bad.write_text(json.dumps({"grounding": [make_vote("C1 calls C1", False)]}),
+                       encoding="utf-8")
+        good = Path(td) / "good.json"
+        good.write_text(json.dumps({"grounding": [make_vote("C1 calls C1", True)]}),
+                        encoding="utf-8")
+        assert main(["refutations", "--map", str(mp), "--verdicts", str(bad)]) == 1
+        assert "still in this map" in capsys.readouterr().out
+        assert main(["refutations", "--map", str(mp), "--verdicts", str(good)]) == 0
+
+
+def test_the_gate_needs_no_pinned_worklist():
+    """It walks the verdicts against the LIVE map on purpose, so `finalize` can run it with the
+    files a build already has, at a point where a captured worklist may be several reconciles old."""
+    m = make_edge_map()
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(m), encoding="utf-8")
+        vp = Path(td) / "v.json"
+        vp.write_text(json.dumps({"grounding": [make_vote("C1 calls C1", True)]}), encoding="utf-8")
+        assert main(["refutations", "--map", str(mp), "--verdicts", str(vp)]) == 0   # no --worklist
+
+
+def test_the_gate_refuses_without_a_map():
+    with tempfile.TemporaryDirectory() as td:
+        vp = Path(td) / "v.json"
+        vp.write_text(json.dumps({"grounding": []}), encoding="utf-8")
+        assert main(["refutations", "--verdicts", str(vp)]) == 2

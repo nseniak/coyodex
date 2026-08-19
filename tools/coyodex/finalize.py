@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """`coyodex finalize` — the pre-commit read: one command, one verdict, one durable record.
 
-It runs `validate` (`--check-sources --check-coverage`), `audit`, and both `anchor-drift` passes, and
-writes `.coyodex/finalize-report.{json,md}`. It adds no check of its own; every finding here is one
-those commands already produce.
+It runs `validate` (`--check-sources --check-coverage`), `audit`, both `anchor-drift` passes and —
+when it is given verdicts — `grounding refutations`, and writes `.coyodex/finalize-report.{json,md}`.
+It adds no check of its own; every finding here is one those commands already produce.
 
 **It compares nothing against a previous map, deliberately.** An earlier version of this command did,
 and that was wrong for the build: in real use a map EVOLVES INCREMENTALLY alongside the code, so a
@@ -109,6 +109,9 @@ def _run_leg(name: str, argv: list[str]) -> tuple[int, str, str]:
             elif name == "balance":
                 from coyodex import balance
                 code = balance.main(argv)
+            elif name == "grounding":
+                from coyodex import grounding
+                code = grounding.main(argv)
         except SystemExit as e:                       # a subcommand that argues with its own args
             # `sys.exit("msg")` carries a STRING, so int() would raise inside the handler.
             code = e.code if isinstance(e.code, int) else (0 if e.code is None else 2)
@@ -311,6 +314,52 @@ def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path]) -> Leg:
                      + (f" · {coverage}" if coverage else "")))
 
 
+def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
+    """`grounding refutations` — does the shipped map still assert what its own skeptics disproved?
+
+    BLOCKING, unlike anchor drift, and the difference is whether a remedy exists. A drifted anchor
+    can be one `fix apply-drift` cannot apply, so gating on it is a false failure with no way out.
+    A surviving refutation always has one: correct the claim or drop the row, which is what the
+    build contract already requires of every refutation. Until this leg existed nothing looked: a
+    live map shipped two refuted edges while this very report said 0 blocking and never used the
+    word "refuted", because `validate` reads shape, `audit` reads the map against itself, and the
+    `grounding` record reduces the pass to four numbers in which a refutation that was reconciled
+    and one that was ignored are the same integer."""
+    argv = ["refutations", "--map", str(map_path), "--json"]
+    for v in verdicts:
+        argv += ["--verdicts", str(v)]
+    code, out, err = _run_leg("grounding", argv)
+    try:
+        payload = json.loads(out)
+    except ValueError:
+        return Leg("grounding refutations", FAILED,
+                   note=f"it did not return JSON (exit {code}): {(err or out).strip()[:200]}")
+    surviving = list(payload.get("surviving_refutations") or [])
+    stated = list(payload.get("stated_but_unchallenged") or [])
+    blocking = [f"{s['claim']} — REFUTED by {s['refuted_by']} skeptic(s) and still in the map, "
+                f"unchanged. Correct the claim or drop the row; a reconciled refutation no longer "
+                f"resolves here." + (f" Skeptic: {s['note'][:300]}" if s.get("note") else "")
+                for s in surviving]
+    # ONE advisory line, not one per element. A live map produced 81 of these, and an advisory in
+    # this report is contractually "fixed or recorded under the heading its message names" — 81 rows
+    # with no heading to record them under is not a finding, it is noise that pushes the ten real
+    # advisories off the top. The count is the finding; `by-element` is where the list lives.
+    kinds: dict[str, int] = {}
+    for e in stated:
+        kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
+    advisory = ([f"{len(stated)} element(s) state a confidence the grounding pass does not support "
+                 f"({', '.join(f'{n} {k}' for k, n in sorted(kinds.items()))}). Nothing writes "
+                 f"`confidence`, so the label and the votes come from different processes and this "
+                 f"is the only place they meet. Run `coyodex grounding by-element --map <this map> "
+                 f"--worklist <pinned.json> --verdicts <…>` for the list, then either challenge the "
+                 f"elements or say `inferred` where nobody looked."]
+                if stated else [])
+    return Leg("grounding refutations", RAN if code in (0, 1) else FAILED,
+               blocking=blocking, advisory=advisory,
+               note=(f"{len(surviving)} refuted claim(s) still in the map, "
+                     f"{len(stated)} element(s) stating a confidence the pass does not support"))
+
+
 #: Where a build keeps the skeptics' verdicts. `finalize` looks here when it was given none, so it
 #: can say that a leg it CAN run was not asked for.
 _VERDICTS_GLOB = "verify/verdicts-*.json"
@@ -376,6 +425,7 @@ def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeRe
         _audit_leg(map_path, verdicts),
         _drift_leg(map_path, repo, []),
         *([_drift_leg(map_path, repo, verdicts)] if verdicts else []),
+        *([_refutations_leg(map_path, verdicts)] if verdicts else []),
         *([_unasked_verdicts_leg(unasked)] if unasked else []),
         _balance_leg(map_path),
     ]
@@ -682,13 +732,31 @@ def main(argv: list[str] | None = None) -> int:
             if a == "--repo":
                 repo = Path(argv[i])
             else:
+                # VARIADIC, exactly as `grounding` had to become: swallow every following non-flag
+                # path. It took one value per flag, so the natural `--verdicts verify/verdicts-*.json`
+                # handed it ONE file and let the shell's other nineteen fall through to `positional`,
+                # where they were silently ignored — the report then described a pass over one batch
+                # as the whole pass. `grounding` failed loudly on the same spelling (`unknown
+                # option(s)`); here it failed silently, which is the worse half of the same bug and
+                # the one this command exists to make impossible.
                 verdicts.append(Path(argv[i]))
+                while i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+                    i += 1
+                    verdicts.append(Path(argv[i]))
         elif a.startswith("-"):
             print(f"ERROR: unknown option '{a}'", file=sys.stderr)
             return 2
         else:
             positional.append(a)
         i += 1
+    if len(positional) > 1:
+        # One map per run. An extra bare path is a mis-typed option, and swallowing it is how the
+        # `--verdicts` glob above went unnoticed for so long: the files landed here and nothing said
+        # a word about them.
+        print(f"ERROR: finalize takes ONE map path; got {len(positional)} "
+              f"({', '.join(positional[:4])}{' …' if len(positional) > 4 else ''}). Pass verdict "
+              f"files after --verdicts.", file=sys.stderr)
+        return 2
     map_path = Path(positional[0] if positional else ".coyodex/project-map.json")
     if not map_path.exists():
         print(f"ERROR: {map_path} not found", file=sys.stderr)

@@ -155,6 +155,10 @@ GROUNDING_RECIPES: dict[str, object] = {
     "by-element": lambda t, m: ["grounding", "by-element", "--map", str(m),
                                 "--worklist", str(_worklist(t, m)),
                                 "--verdicts", str(_verdicts(t, m))],
+    # No --worklist: the gate walks the verdicts against the live map, and the recipe has to
+    # exercise the spelling a build actually uses.
+    "refutations": lambda t, m: ["grounding", "refutations", "--map", str(m),
+                                 "--verdicts", str(_verdicts(t, m))],
     "write":  lambda t, m: ["grounding", "write", "--map", str(m),
                             "--worklist", str(_worklist(t, m)),
                             "--verdicts", str(_verdicts(t, m)),

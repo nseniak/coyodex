@@ -33,8 +33,8 @@ from pathlib import Path
 
 from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
-from coyodex.audit_model import ClaimTarget, resolve_claim
-from coyodex.model import ProjectModel
+from coyodex.audit_model import ClaimTarget, l2_worklist_model, resolve_claim
+from coyodex.model import ModelError, ProjectModel, load_model
 
 USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>]
        coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
@@ -52,6 +52,11 @@ unanimously still reads exactly as the harvesting agent left it. This resolves e
 back onto the element that makes it and prints both, flagging each element whose stated label the
 votes do not support. Derived on every run from the worklist and the verdicts; it stores nothing.
 `--kind` narrows to one of rule_site / description / edge / cadence / lifecycle / security.
+
+`refutations` is the GATE half, and needs no worklist: it walks the verdicts against the live map
+and exits 1 when a claim the skeptics REFUTED is still in it, word for word. Every refutation is
+supposed to be reconciled, and a reconciled claim no longer resolves, so a survivor is one nobody
+acted on. It also lists the elements whose stated confidence the votes do not support (advisory).
 
 `report` prints WHICH claims were refuted, tied, unverifiable or unvoted — the reconcile worklist
 `write` computes and then reduces to four counts. A TIE is listed apart from a stated
@@ -622,6 +627,95 @@ def format_element_checks(rows: list[ElementCheck], unresolved: list[str],
     return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class SurvivingRefutation:
+    """A claim the skeptics REFUTED that the shipped map still makes, word for word.
+
+    The build contract is that every refutation is reconciled: the claim is corrected, or the row is
+    dropped. Either way the wording changes, so the pinned claim no longer resolves against the live
+    map — that is what `claims_superseded` counts. A refuted claim that still resolves to a live
+    element is therefore one nobody acted on, and no gate could see it: `validate` checks shape,
+    `audit` checks the map against itself, and the `grounding` record reduces the whole pass to four
+    numbers in which a refutation and a reconciliation look identical. A live map shipped two of
+    these while its finalize report said 0 blocking and never used the word "refuted".
+
+    THERE IS DELIBERATELY NO RECORDED ESCAPE for this. Every escape in this tool was added after a
+    real false alarm, and there is not one yet: a lead who reads a refutation and disagrees is
+    expected to RE-AUTHOR the claim, which supersedes it and removes it from here by itself. Add the
+    heading when a real map produces a survivor that should stay, not before."""
+    claim: str
+    element_id: str
+    kind: str
+    label: str
+    refuted_by: int
+    note: str = ""
+
+
+def surviving_refutations(m: ProjectModel,
+                          grounding_rows: list[dict]) -> list[SurvivingRefutation]:
+    """The refutations the shipped map still carries.
+
+    Walks the VERDICTS, not the worklist: a refuted claim the reconcile dropped is absent from the
+    live map and must not be looked for, while one the reconcile never touched is exactly what this
+    finds. The pinned worklist is not needed and is not asked for, so this runs anywhere the map and
+    the verdict files are — which is what lets `finalize` include it without a captured snapshot."""
+    votes: dict[str, list[dict]] = {}
+    for r in grounding_rows:
+        claim = r.get("claim")
+        if isinstance(claim, str):
+            votes.setdefault(claim, []).append(r)
+    out: list[SurvivingRefutation] = []
+    for claim, rows in votes.items():
+        if _verdict_bucket(rows) != "refuted":
+            continue
+        target = resolve_claim(m, claim).target
+        if target is None:
+            continue          # reconciled: the live map no longer makes this claim
+        note = next((str(r.get("note") or "") for r in rows if r.get("grounded") is False), "")
+        out.append(SurvivingRefutation(
+            claim=claim, element_id=target.element_id, kind=target.kind, label=target.label,
+            refuted_by=sum(1 for r in rows if r.get("grounded") is False), note=note))
+    out.sort(key=lambda s: (s.kind, s.element_id, s.claim))
+    return out
+
+
+def format_refutations(surviving: list[SurvivingRefutation],
+                       disagreeing: list[ElementCheck], as_json: bool = False) -> str:
+    """The gate's report: what the map still asserts against its own skeptics."""
+    if as_json:
+        return json.dumps({
+            "surviving_refutations": [
+                {"claim": s.claim, "id": s.element_id, "kind": s.kind, "label": s.label,
+                 "refuted_by": s.refuted_by, "note": s.note} for s in surviving],
+            "stated_but_unchallenged": [
+                {"id": e.element_id, "kind": e.kind, "label": e.label, "stated": e.stated,
+                 "status": e.status} for e in disagreeing],
+        }, indent=2, ensure_ascii=False)
+    lines: list[str] = []
+    if surviving:
+        lines.append(f"{len(surviving)} REFUTED claim(s) are still in this map, unchanged. The "
+                     f"build contract is that every refutation is reconciled — corrected, or "
+                     f"dropped — and a reconciled claim no longer resolves here at all:")
+        for s in surviving:
+            lines.append(f"  - {s.claim}   [{s.kind}{' ' + s.element_id if s.element_id else ''}, "
+                         f"refuted by {s.refuted_by}]")
+            if s.note:
+                lines.append(f"      skeptic: {s.note[:200]}")
+    else:
+        lines.append("No refuted claim survives in this map.")
+    if disagreeing:
+        lines.append("")
+        lines.append(f"{len(disagreeing)} element(s) state a confidence the pass does not support. "
+                     f"The label and the votes are written by different processes and nothing else "
+                     f"compares them (`coyodex grounding by-element` lists them in full):")
+        for e in disagreeing[:15]:
+            lines.append(f"  - {e.element_id or '-':<7} {e.kind:<12} says {e.stated}, "
+                         f"pass says {e.status} — {e.label[:44]}")
+        if len(disagreeing) > 15:
+            lines.append(f"  ... and {len(disagreeing) - 15} more")
+    return "\n".join(lines)
+
+
 def _worklist_claims(path: Path) -> list[str]:
     """Claims from a worklist file, in either shape it legitimately arrives in.
 
@@ -732,8 +826,9 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE)
         return 0
     verb, rest = argv[0], argv[1:]
-    if verb not in ("write", "report", "lint", "by-element"):
-        print(f"ERROR: unknown verb '{verb}' (expected `write`, `report`, `by-element` or `lint`)\n\n{USAGE}",
+    if verb not in ("write", "report", "lint", "by-element", "refutations"):
+        print(f"ERROR: unknown verb '{verb}' (expected `write`, `report`, `by-element`, "
+              f"`refutations` or `lint`)\n\n{USAGE}",
               file=sys.stderr)
         return 2
     # Same hole `coyodex fix` had: the option loop below rejects `--help` as an unknown option.
@@ -848,6 +943,30 @@ def main(argv: list[str] | None = None) -> int:
                  f"`evidence` cannot be tested this way"))
         return 0
 
+    if verb == "refutations":
+        # NO --worklist. This walks the verdicts against the LIVE map, so it needs no pinned
+        # snapshot — which is what lets `finalize` run it with the verdict files a build already
+        # has, at the point where a captured worklist may be several reconciles out of date.
+        if not map_path or not verdicts:
+            print(f"ERROR: grounding refutations needs --map and at least one --verdicts",
+                  file=sys.stderr)
+            return 2
+        try:
+            live = load_model(Path(map_path).read_text(encoding="utf-8"))
+        except (OSError, ModelError) as e:
+            print(f"ERROR: --map {map_path} could not be read as a map ({e})", file=sys.stderr)
+            return 2
+        rows, notes = load_verdicts(verdicts)
+        for n in notes:
+            print(n, file=sys.stderr)
+        surviving = surviving_refutations(live, rows)
+        checks, _unresolved = element_checks(live, [w.claim for w in l2_worklist_model(live)], rows)
+        print(format_refutations(surviving, [c for c in checks if c.disagrees], as_json=as_json))
+        # BLOCKING on a survivor, ADVISORY on a label the pass does not support. The second is a
+        # judgement about wording; the first is the map asserting something its own skeptics
+        # disproved, which is the one shape here that makes the map wrong rather than unclear.
+        return 1 if surviving else 0
+
     if not worklist_path or not verdicts:
         print(f"ERROR: --worklist and at least one --verdicts are required\n\n{USAGE}",
               file=sys.stderr)
@@ -915,8 +1034,6 @@ def main(argv: list[str] | None = None) -> int:
         # captured file: a file goes stale between capture and write, and the whole defect here is a
         # record describing a surface that moved.
         try:
-            from coyodex.audit_model import l2_worklist_model
-            from coyodex.model import load_model
             live_model = load_model(Path(map_path).read_text(encoding="utf-8"))
             live_claims = [w.claim for w in l2_worklist_model(live_model)]
         except Exception as e:

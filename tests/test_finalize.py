@@ -579,3 +579,101 @@ def test_finalize_records_whether_balance_ran_and_does_not_gate_on_it():
     assert leg.blocking == [] and leg.advisory == [], (
         "balance never gates — its findings must not become finalize advisories")
     assert report.advisory_total == sum(len(l.advisory) for l in report.legs if l is not leg)
+
+
+# --- the grounding-refutations leg ----------------------------------------------
+
+def make_verdicts(root: Path, name: str, rows: list[dict]) -> Path:
+    """One skeptic's verdict file, where a build keeps them."""
+    d = root / ".coyodex" / "verify"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / name
+    p.write_text(json.dumps({"grounding": rows}), encoding="utf-8")
+    return p
+
+
+def test_a_refutation_the_map_still_carries_blocks_the_run():
+    """No gate could see this before. `validate` reads shape, `audit` reads the map against itself,
+    and the grounding record reduces the pass to four numbers in which a refutation that was
+    reconciled and one that was ignored are the same integer. A live map shipped two refuted edges
+    while this report said 0 blocking and never used the word "refuted"."""
+    root, p = make_repo()
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": False, "evidence": "src/a.py:2",
+                        "note": "src/a.py never reaches back()"}])
+    code = finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)])
+    assert code == 1
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
+    assert len(leg["blocking"]) == 1 and "C1 calls C2" in leg["blocking"][0]
+    assert doc["verdict"] == "BLOCKED"
+
+
+def test_a_refutation_the_reconcile_applied_is_not_reported():
+    """The whole discrimination. A refuted claim that was corrected or dropped no longer resolves
+    against the live map, so it must leave no trace here — otherwise the gate fires forever on work
+    that was done."""
+    root, p = make_repo()
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 persists C2", "grounded": False, "evidence": "src/a.py:2"}])
+    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
+
+
+def test_a_confirmed_claim_never_blocks():
+    root, p = make_repo()
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
+    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
+
+
+def test_the_unchallenged_confidence_finding_is_ONE_advisory_not_one_per_element():
+    """An advisory here is contractually "fixed, or recorded under the heading its message names".
+    A live map has 81 of these and no heading to record them under, so one row per element would
+    push the ten real advisories off the top of the report."""
+    root, p = make_repo(components=30)
+    doc = json.loads(p.read_text())
+    for c in doc["components"]:          # the authored label the votes are compared against
+        c["confidence"] = "verified"
+    p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
+    finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)])
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
+    assert len(leg["advisory"]) == 1
+    assert "element(s) state a confidence" in leg["advisory"][0]
+
+
+def test_the_leg_is_absent_rather_than_silently_clean_when_no_verdicts_are_given():
+    """A leg that cannot run must not report a pass. `finalize` already says which verdict files it
+    was not given; inventing a clean grounding leg out of no verdicts is the failure this whole
+    command exists to stop."""
+    root, p = make_repo()
+    finalize.main([str(p), "--repo", str(root)])
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    assert not [l for l in doc["legs"] if l["name"] == "grounding refutations"]
+
+
+# --- the option parsing the leg exposed ------------------------------------------
+
+def test_verdicts_swallows_every_file_a_shell_glob_expands_to():
+    """`--verdicts verify/verdicts-*.json` is the natural spelling and the one the usage line
+    implies. It took ONE path per flag, so the shell's other files fell through to the positional
+    list and were dropped in silence — and the report then described a pass over one batch as the
+    whole pass. Found by a run that reported 0 blocking on a map with two surviving refutations."""
+    root, p = make_repo()
+    a = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
+    b = make_verdicts(root, "verdicts-b.json",
+                      [{"claim": "C1 calls C2", "grounded": False, "evidence": "src/a.py:2"},
+                       {"claim": "C1 calls C2", "grounded": False, "evidence": "src/a.py:2"}])
+    # Two files, one flag — the glob form. Both must be read, so the refutations win 2-1.
+    code = finalize.main([str(p), "--repo", str(root), "--verdicts", str(a), str(b)])
+    assert code == 1
+
+
+def test_a_second_bare_path_is_refused_rather_than_ignored():
+    """Swallowing it is how the glob above went unnoticed: the files landed in the positional list
+    and nothing said a word."""
+    root, p = make_repo()
+    assert finalize.main([str(p), str(p), "--repo", str(root)]) == 2
