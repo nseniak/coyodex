@@ -379,7 +379,9 @@ def test_the_refutation_rate_is_divided_by_what_was_actually_challenged(tmp_path
     p.write_text(json.dumps({"title": "t", "goal": "g", "grounding": {
         "claims_total": 1385, "claims_challenged": 743,
         "claims_refuted": 6, "claims_unverifiable": 0}}), encoding="utf-8")
-    facts = asdict(read_map(Path(p)))
+    read = read_map(Path(p))
+    assert read is not None, "a map with a grounding block must read"
+    facts = asdict(read)
     assert facts["claims_challenged"] == 743, facts
     assert 100 * facts["claims_refuted"] / facts["claims_challenged"] > 0.8
 
@@ -392,7 +394,9 @@ def test_a_map_without_the_challenged_field_falls_back_to_the_total(tmp_path):
     p = tmp_path / "m.json"
     p.write_text(json.dumps({"title": "t", "goal": "g", "grounding": {
         "claims_total": 500, "claims_refuted": 5}}), encoding="utf-8")
-    assert asdict(read_map(Path(p)))["claims_challenged"] == 500
+    read = read_map(Path(p))
+    assert read is not None, "a map with a grounding block must read"
+    assert asdict(read)["claims_challenged"] == 500
 
 
 # --- an agent is not charged for its coordinator's latency -------------------------

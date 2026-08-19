@@ -24,7 +24,7 @@ from coyodex.balance_lib import (
     subgraph_signal,
     subsystem_children,
 )
-from coyodex.model import Component, Edge, Entity, ExtraSection, Group, ProjectModel
+from coyodex.model import Component, Edge, Entity, ExtraSection, Group, ProjectModel, Store
 from coyodex.validate_model import validate_model
 
 
@@ -534,7 +534,7 @@ def test_the_domain_forest_gets_its_own_fanout_table():
     for i in range(16):
         m.entities.append(Entity(id=f"E{i}", name=f"Ent{i}", source=f"pkg{i}/x.py:1",
                                  meaning="m", subdomain="SD1" if i < 14 else "SD2",
-                                 store={"dep": "D1", "container": f"c{i}", "mode": "collection"}))
+                                 store=Store(dep="D1", container=f"c{i}", mode="collection")))
     text = balance._report(m)
     assert "Per-subdomain fan-out" in text, "the domain forest must get a table"
     sd_line = next(l for l in text.splitlines() if l.strip().startswith("SD1"))

@@ -248,18 +248,27 @@ def _model_with_a_flow() -> ProjectModel:
     )
 
 
+def resolved_members(got: dict[str, object]) -> list[dict[str, object]]:
+    """`resolve_id` answers `dict[str, object]` because its values are ids, names, kinds and lists.
+    Every caller here asked for an element that HAS members, so narrowing once beats an unchecked
+    index at each use."""
+    ms = got["members"]
+    assert isinstance(ms, list), f"members is {ms!r}, not a list"
+    return ms
+
+
 def test_id_on_a_use_case_returns_its_flow_steps_with_anchors():
     got = resolve_id(_model_with_a_flow(), "UC1")
     assert got is not None and got["kind"] == "use_case"
-    assert [s["n"] for s in got["members"]] == [1, 2]
-    assert got["members"][1]["where"] == "backend/auth.py:42"
+    assert [s["n"] for s in resolved_members(got)] == [1, 2]
+    assert resolved_members(got)[1]["where"] == "backend/auth.py:42"
 
 
 def test_id_on_a_sub_flow_knows_its_kind_and_returns_its_steps():
     got = resolve_id(_model_with_a_flow(), "SF1")
     assert got is not None
     assert got["kind"] == "sub_flow"          # was "unknown": SF was missing from the prefix table
-    assert [s["where"] for s in got["members"]] == ["backend/org.py:7"]
+    assert [s["where"] for s in resolved_members(got)] == ["backend/org.py:7"]
 
 
 def test_id_on_an_entry_point_resolves():

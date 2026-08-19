@@ -21,13 +21,24 @@ def make_votes(*rows: tuple[str, object]) -> list[dict]:
     return [{"claim": c, "grounded": g, "evidence": "a/b.py:1"} for c, g in rows]
 
 
+def count(rec: dict[str, object], key: str) -> int:
+    """One count out of the record, narrowed to `int`.
+
+    The record is `dict[str, object]` because it carries the note and the digest as strings
+    alongside the eight counts. Reading a count through here says which keys are numbers, and an
+    entry that stops being one fails on the assert with its key named."""
+    v = rec[key]
+    assert isinstance(v, int), f"grounding record {key!r} is {v!r}, not a count"
+    return v
+
+
 def test_the_four_counts_add_up_to_challenged():
     """The arithmetic `validate` BLOCKS on. Derived, so it cannot drift from the verdicts."""
     rec, errs = build_record(make_worklist("A", "B", "C"),
                              make_votes(("A", True), ("B", False), ("C", "unverifiable")))
     assert not errs
-    assert rec["claims_confirmed"] + rec["claims_refuted"] + rec["claims_unverifiable"] \
-        == rec["claims_challenged"] == 3
+    assert count(rec, "claims_confirmed") + count(rec, "claims_refuted") \
+        + count(rec, "claims_unverifiable") == count(rec, "claims_challenged") == 3
     assert (rec["claims_confirmed"], rec["claims_refuted"], rec["claims_unverifiable"]) == (1, 1, 1)
 
 

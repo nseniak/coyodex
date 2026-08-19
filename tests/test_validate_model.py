@@ -2919,13 +2919,30 @@ def test_the_guard_above_would_catch_a_reintroduced_truncation():
         assert not (tail.search(ok) and not any(h in ok for h in ("shown(", "capped(", "clip("))), ok
 
 
-def make_grounded_model(digest: str = "", **counts: int) -> ProjectModel:
-    """`digest` is split out from `**counts` deliberately: `Grounding` now carries a str field
-    alongside the ints, and widening the kwargs to `int | str` makes every int parameter
-    unassignable instead."""
+def make_grounded_model(digest: str = "", *,
+                        claims_total: int = 0, claims_challenged: int = 0,
+                        claims_confirmed: int = 0, claims_refuted: int = 0,
+                        claims_unverifiable: int = 0, claims_superseded: int = 0,
+                        claims_added_since: int = 0,
+                        claims_live_challenged: int = 0) -> ProjectModel:
+    """The eight COUNT fields, named. They were once `**counts: int`, which read as tidy and typed
+    nothing: `Grounding` carries `note` and `live_claims_digest` as strings, so the spread was
+    unassignable, and a mis-typed count name went straight through to a runtime `TypeError` from a
+    helper whose whole job is to build a valid one."""
     m = make_valid_model()
-    m.grounding = Grounding(**counts, live_claims_digest=digest)
+    m.grounding = Grounding(
+        claims_total=claims_total, claims_challenged=claims_challenged,
+        claims_confirmed=claims_confirmed, claims_refuted=claims_refuted,
+        claims_unverifiable=claims_unverifiable, claims_superseded=claims_superseded,
+        claims_added_since=claims_added_since,
+        claims_live_challenged=claims_live_challenged, live_claims_digest=digest)
     return m
+
+
+def grounding_of(m: ProjectModel) -> Grounding:
+    """`ProjectModel.grounding` is optional; every model `make_grounded_model` returns has one."""
+    assert m.grounding is not None, "make_grounded_model always sets a grounding record"
+    return m.grounding
 
 
 def test_grounding_counts_that_do_not_add_up_are_blocking():
@@ -2950,9 +2967,9 @@ def test_the_honest_version_of_the_same_counts_passes_and_reports_the_right_cove
                             claims_refuted=3)
     assert not any("grounding" in p for p in problems_of(m))
     assert not any("Grounding is partial" in w for w in warnings_of(m))
-    assert validate_model_mod._grounding_split_recorded(m.grounding) is True
+    assert validate_model_mod._grounding_split_recorded(grounding_of(m)) is True
     # …and one confirmed claim fewer would NOT balance, which is what makes the silence meaningful
-    m.grounding.claims_confirmed = 395
+    grounding_of(m).claims_confirmed = 395
     assert any("do not add up" in p for p in problems_of(m))
 
 
@@ -3023,7 +3040,7 @@ def test_an_unverifiable_verdict_is_a_first_class_outcome():
                             claims_refuted=3, claims_unverifiable=6)
     assert not any("grounding" in p for p in problems_of(m))
     # drop the unverifiable count and the sum breaks — so the third term is load-bearing here
-    m.grounding.claims_unverifiable = 0
+    grounding_of(m).claims_unverifiable = 0
     assert any("do not add up" in p for p in problems_of(m))
     # and a map where NOTHING held up is reported, however tidy its arithmetic
     none_held = make_grounded_model(claims_total=42, claims_challenged=42, claims_confirmed=0,

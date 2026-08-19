@@ -16,7 +16,8 @@ from pathlib import Path
 from coyodex import assemble
 from coyodex.assemble import (_infer_ce_verb, ensure_fragments_ignored, load_fragment,
                               load_fragment_paths, merge_fragments)
-from coyodex.model import ModelError, load_model, to_canonical_json
+from coyodex.model import (ExtraSection, ModelError, ProjectModel, load_model,
+                           to_canonical_json)
 
 ASSEMBLE = [sys.executable, "-m", "coyodex.assemble"]
 
@@ -672,7 +673,8 @@ def test_the_grounding_fragment_is_NOT_mistaken_for_a_verdicts_file():
         parts, notes, errors = loaded.parts, loaded.notes, loaded.errors
         assert errors == [] and notes == []
         assert [label for label, _ in parts] == ["grounding.json"]
-        assert parts[0][1].grounding.claims_total == 10
+        record = parts[0][1].grounding
+        assert record is not None and record.claims_total == 10
 
 
 def test_assemble_fails_the_build_and_writes_nothing_when_a_fragment_is_bad():
@@ -708,8 +710,7 @@ def test_a_draft_fragment_is_skipped_by_name():
 
 # ── one section per heading ──────────────────────────────────────────────────────────────────────
 
-def make_extras_fragment(name: str, heading: str, body: str) -> "tuple[str, ProjectModel]":
-    from coyodex.model import ExtraSection, ProjectModel
+def make_extras_fragment(name: str, heading: str, body: str) -> tuple[str, ProjectModel]:
     m = ProjectModel(title="T", goal="g")
     m.extras.append(ExtraSection(heading=heading, body=body))
     return (name, m)

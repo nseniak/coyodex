@@ -135,12 +135,14 @@ def make_documented_ignore_examples() -> list[tuple[str, str]]:
     doc = (ignorefile_mod.__doc__ or "").splitlines()
     start = next((i for i, ln in enumerate(doc) if ln.strip().startswith("# .coyodex/.ignore")), None)
     if start is not None:
-        block: list[str] = []
+        # A different name from the fenced-block `block` above, which is a str: one name for both
+        # made the whole function read as if a fenced block were a list of lines.
+        doc_lines: list[str] = []
         for ln in doc[start:]:
             if not ln.strip():
                 break
-            block.append(ln)
-        out.append(("ignorefile.py docstring", textwrap.dedent("\n".join(block))))
+            doc_lines.append(ln)
+        out.append(("ignorefile.py docstring", textwrap.dedent("\n".join(doc_lines))))
     return out
 
 

@@ -21,6 +21,7 @@ bug in this module, and it produced exactly the wrong answer for the assertion t
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import tempfile
@@ -2346,16 +2347,15 @@ def test_37_sees_a_filter_applied_to_the_file_the_gate_wrote():
               'grep -E "^  - " v.txt | grep -vE "Balance:|unclaimed" | head -40')
     wider = ('coyodex validate m.json > v.txt 2>&1; '
              'grep -E "^  - " v.txt | grep -vE "Balance:|unclaimed|bucket|entry-point kind" | head -25')
-    turns = P.read_turns_from_records([call(narrow), call(wider)]) \
-        if hasattr(P, "read_turns_from_records") else None
-    if turns is None:                      # build turns the same way the module's own tests do
-        from coyodex_eval.transcript import read_turns
-        import json, tempfile, os
-        with tempfile.TemporaryDirectory() as d:
-            p = os.path.join(d, "t.jsonl")
-            with open(p, "w") as fh:
-                fh.write("\n".join(json.dumps(r) for r in (call(narrow), call(wider))) + "\n")
-            turns = read_turns(p)
+    # `read_turns` reads a file, so the records go through one. There used to be a
+    # `hasattr(P, "read_turns_from_records")` branch in front of this: the module has never had that
+    # function, so the guard was always false and the fallback was the only path — a dead branch
+    # advertising an API that does not exist.
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "t.jsonl")
+        with open(path, "w") as fh:
+            fh.write("\n".join(json.dumps(r) for r in (call(narrow), call(wider))) + "\n")
+        turns = read_turns(path)
     a = P.assert_37_gate_filter_did_not_grow(turns)
     grew = [e for e in a.evidence if e.detail.get("filter grew") == "True"]
     assert grew, f"a filter that gained two exclusions must be caught: {a.observed}/{a.of}"

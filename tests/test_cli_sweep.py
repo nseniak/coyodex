@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Callable
 import subprocess
 import sys
 from pathlib import Path
@@ -99,6 +100,10 @@ def _with_coyodex_dir(tmp: Path) -> Path:
 
 
 #: command -> (argv builder, allowed exit codes). The builder gets (tmp_dir, assembled_map_path).
+#: What a recipe IS: given a scratch directory and a map path, the argv to hand `cli`. Typed,
+#: because `dict[str, object]` made every `RECIPES[verb](...)` an uncallable `object`.
+Recipe = Callable[[Path, Path], list[str]]
+
 RECIPES: dict[str, tuple] = {
     "validate":      (lambda t, m: ["validate", str(m), "--check-sources", "--check-coverage"], OK),
     "audit":         (lambda t, m: ["audit", str(m), "--json"], OK),
@@ -132,7 +137,7 @@ RECIPES: dict[str, tuple] = {
 
 #: `fix` verb -> argv builder. Each is invoked in its LISTING form where it has one (no mutation),
 #: because a sweep that edited the map would make every later case depend on the earlier ones.
-FIX_RECIPES: dict[str, object] = {
+FIX_RECIPES: dict[str, Recipe] = {
     "dedup-relation": lambda t, m: ["fix", "dedup-relation", "--map", str(m)],
     "dedup-edge":     lambda t, m: ["fix", "dedup-edge", "--map", str(m)],
     "dedup-security": lambda t, m: ["fix", "dedup-security", "--map", str(m)],
@@ -147,7 +152,7 @@ FIX_RECIPES: dict[str, object] = {
 
 #: `grounding` verb -> argv builder. Its own set for the same reason `fix` has one: a command with
 #: a second-level dispatch is not covered by exercising one of its verbs.
-GROUNDING_RECIPES: dict[str, object] = {
+GROUNDING_RECIPES: dict[str, Recipe] = {
     "report": lambda t, m: ["grounding", "report", "--map", str(m),
                             "--worklist", str(_worklist(t, m)),
                             "--verdicts", str(_verdicts(t, m))],

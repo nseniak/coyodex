@@ -114,7 +114,7 @@ def test_apply_drift_skips_ambiguous_multi_where_edge():
     with tempfile.TemporaryDirectory() as td:
         mp, vp = write(td, m, verdicts)
         assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
-        wheres = sorted(e.where for e in load_model_path(mp).edges)
+        wheres = sorted(e.where or "" for e in load_model_path(mp).edges)
         assert wheres == ["a.py:10", "b.py:10"]    # both untouched
 
 
@@ -504,7 +504,8 @@ def test_subverb_help_falls_back_to_the_whole_usage_when_no_block_matches():
     one that must never print nothing."""
     from coyodex import subverb_help
     usage = "usage: tool <verb>\n\n  alpha --x\n      does alpha\n  beta --y\n      does beta\n"
-    assert subverb_help.verb_block(usage, "alpha").strip().startswith("alpha")
+    alpha = subverb_help.verb_block(usage, "alpha")
+    assert alpha is not None and alpha.strip().startswith("alpha")
     assert subverb_help.verb_block(usage, "nosuchverb") is None
     assert subverb_help.handle(usage, "nosuchverb", ["--help"]) == 0
     assert subverb_help.handle(usage, "alpha", []) is None, "no help asked for → carry on parsing"

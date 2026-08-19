@@ -289,7 +289,7 @@ def test_a_cadence_claim_with_quotes_can_be_recorded():
     claim = "Entry point [poller] hourly sweep runs on cadence 'every 1h'"
     m = make_map_with_drift_exceptions(
         f"- anchor-drift `{claim}`: the stored anchor is the declaration; skeptics read the caller.")
-    findings = [(make_item(claim, "health.py:49"), ad.DriftResult(True, "health.py:49", "health.py:80", True, 31))]
+    findings = [(make_item(claim, "health.py:49"), ad.DriftResult(True, "health.py:49", 80, True, 31))]
     kept, notes = ad.apply_drift_exceptions(m, findings)
     assert kept == []
     assert any("suppressed by recorded exception" in n for n in notes)
@@ -307,7 +307,7 @@ def test_a_line_that_does_not_parse_is_reported_not_silently_dropped():
     m = make_map_with_drift_exceptions("- anchor-drift C42 persists E6: no delimiters, so no key")
     recorded, malformed = ad.drift_exceptions(m)
     assert recorded == set() and len(malformed) == 1
-    findings = [(make_item("C42 persists E6", "a.py:1"), ad.DriftResult(True, "a.py:1", "a.py:9", True, 8))]
+    findings = [(make_item("C42 persists E6", "a.py:1"), ad.DriftResult(True, "a.py:1", 9, True, 8))]
     kept, notes = ad.apply_drift_exceptions(m, findings)
     assert len(kept) == 1                      # the finding still fires — nothing was silenced
     assert any("do not parse, so they silence NOTHING" in n for n in notes)
