@@ -111,6 +111,23 @@ def rule_site_claim(statement: str, where: str, why: str) -> str:
     return f"Rule '{statement}' is enforced at {where}{detail}"
 
 
+def description_claim(cid: str, name: str, purpose: str) -> str:
+    """A component's own description as an L2 claim, EXACTLY as `l2_worklist_model` builds it.
+
+    The map's prose was checked by nobody. `validate` counts sentence length, `audit` finds
+    contradictions BETWEEN records, and the skeptics read structural claims — so a sentence that is
+    simply false about the code passed every gate. A live map shipped `C36`'s description saying a
+    sign-in guard "refuses to be built at all when the service runs for many organizations", beside
+    its own rule `BR21` saying that guard "cannot fire", which was the true reading: the one caller
+    passes a flag that cancels the check. The rule had been challenged and corrected; the sentence
+    next to it never entered the worklist.
+
+    The WHOLE purpose is the claim, not a sentence of it. The false clause was the last of five in
+    one field, and a skeptic handed the field can say which clause fails; a splitter would have to
+    guess where the sentences are, and the map's prose contains lists and abbreviations."""
+    return f'Component {cid} ({name}) is described as: {purpose}'
+
+
 def cadence_claim(kind: str, trigger: str, cadence: str) -> str:
     """An entry point's cadence claim, EXACTLY as `l2_worklist_model` builds it."""
     return f"Entry point [{kind}] {trigger} runs on cadence '{cadence}'"
@@ -321,6 +338,12 @@ _THEMES: tuple[str, ...] = (
     "messaging",      # channel participant lists: the async half of the system
     "lifecycle",      # state machines: rot fastest
     "cadence",        # when code runs
+    "description",    # a component's own prose, checked against its code. ABOVE backbone, not
+                      # below it: a backbone edge is at least anchor-checked by `validate` and
+                      # nudged by `anchor-drift`, while a description is read by no gate at all —
+                      # `validate` counts its sentence length and `audit` compares records. The map
+                      # that produced this tier shipped a false claim about a security guard in
+                      # exactly this field, beside its own rule saying the opposite.
     "backbone",       # every other edge
 )
 
@@ -945,6 +968,27 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                            "line still says this cadence." if cited else
                            "cadence is INFERRED (no declaring anchor) — find the line that "
                            "actually declares the schedule and check the value.")))
+    # DESCRIPTIONS, before the backbone tier so the emission order matches `_THEMES`. The
+    # anchor is the component's declaration site,
+    # which is where a reader starts, and `drift_eligible=False` for the same reason the store
+    # claims set it: that anchor is not meant to be an acting line, so a skeptic reporting a
+    # different one is not drift to correct.
+    for c in m.components:
+        purpose = (c.purpose or "").strip()
+        if not purpose:
+            continue
+        files = ", ".join(c.files[:6]) + (" …" if len(c.files) > 6 else "") if c.files else ""
+        items.append(WorkItem(
+            claim=description_claim(c.id, c.name, purpose),
+            anchor=_anchor(c.source) if c.source else None,
+            drift_eligible=False, theme="description",
+            detail="; ".join(part for part in (
+                f"declared at {c.source}" if c.source else "",
+                f"files: {files}" if files else "") if part) or None,
+            why_risky="prose is read by no other gate: `validate` counts sentence length and "
+                      "`audit` compares records, so a sentence that is simply false about the code "
+                      "reaches the reader unchallenged. Read the WHOLE description against the "
+                      "files and name the clause that fails, if one does."))
     # LAST, so the order matches `_THEMES` — see the note where the other tiers are extended.
     items.extend(other_items)
     seen: set[str] = set()

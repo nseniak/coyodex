@@ -295,7 +295,10 @@ def make_model_touching_every_theme():
     doc = make_map([{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"},
                     {"src": "C1", "verb": "uses", "dst": "D1", "why": "w", "where": "a.py:2"},
                     {"src": "C1", "verb": "persists", "dst": "E1", "why": "w", "where": "a.py:3"}])
-    doc["components"] = [{"id": "C1", "name": "A", "source": "a.py:1"},
+    # A `purpose` on one of them, so the `description` theme is touched too — the fixture's whole
+    # job is to carry one claim of EVERY theme, and a tier it misses becomes a silent exemption.
+    doc["components"] = [{"id": "C1", "name": "A", "source": "a.py:1",
+                          "purpose": "Reads the thing and writes it back."},
                          {"id": "C2", "name": "B", "source": "b.py:1"}]
     doc["edges"].append({"src": "C1", "verb": "calls", "dst": "C2", "why": "w", "where": "a.py:4"})
     doc["deps"] = [{"id": "D1", "name": "redis", "kind": "library"}]

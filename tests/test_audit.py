@@ -2070,3 +2070,47 @@ def test_json_findings_carry_where_as_well_as_location(capsys):
     assert payload["findings"], "the fixture must produce at least one finding"
     for f in payload["findings"]:
         assert f["where"] == f["location"], f
+
+
+def test_a_components_own_description_is_a_grounding_claim():
+    """The map's prose was checked by nobody, and a false sentence shipped because of it.
+
+    `validate` counts sentence length; `audit` compares records; the skeptics read structural
+    claims. A live map shipped `C36`'s description saying a sign-in guard "refuses to be built at
+    all when the service runs for many organizations", beside its own rule `BR21` saying that guard
+    "cannot fire" — which was true: the one caller passes a flag that cancels the check. The rule
+    had been challenged and corrected. The sentence next to it was in no worklist, no prose batch
+    that anyone dispatched, and no gate.
+    """
+    from coyodex import audit_model
+    from coyodex.model import load_model
+    m = load_model(json.dumps({
+        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "components": [
+            {"id": "C1", "name": "Sign-in providers", "purpose": "Signs a person in. The picker "
+             "refuses to be built when the service runs for many organizations.",
+             "source": "auth/provider.py:60", "files": ["auth/provider.py", "auth/stub.py"]},
+            {"id": "C2", "name": "No prose", "purpose": "", "source": "b.py:1"},
+        ],
+    }))
+    items = audit_model.l2_worklist_model(m)
+    desc = [i for i in items if i.theme == "description"]
+    assert len(desc) == 1, "a component with an empty purpose claims nothing"
+    it = desc[0]
+    assert it.claim == audit_model.description_claim(
+        "C1", "Sign-in providers", m.components[0].purpose.strip())
+    assert "refuses to be built" in it.claim, "the WHOLE description is the claim, not a summary"
+    assert it.anchor == "auth/provider.py:60"
+    assert it.drift_eligible is False, (
+        "the anchor is the declaration site, not an acting line, so a skeptic's different line is "
+        "not drift to correct")
+    assert it.detail and "auth/stub.py" in it.detail, (
+        "a fresh-context skeptic needs the files to check the description against")
+
+
+def test_description_claims_sort_above_the_backbone_tier():
+    """A backbone edge is anchor-checked by `validate` and nudged by `anchor-drift`. A description
+    is read by no gate at all, so it is the more dangerous of the two to leave unchallenged."""
+    from coyodex import audit_model
+    themes = list(audit_model._THEMES)
+    assert themes.index("description") < themes.index("backbone")

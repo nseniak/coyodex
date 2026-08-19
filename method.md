@@ -1473,7 +1473,8 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   assembles of the SAME work — before and after a `fix`, or one round of edits — never two
   independent builds, which agree on neither numbering nor wording.) **Batch on the payload's own
   `theme`** — every worklist item carries one from a closed, most-dangerous-first set (`security`,
-  `rule`, `dep-usage`, `ownership`, `persistence`, `messaging`, `lifecycle`, `cadence`, `backbone`)
+  `rule`, `dep-usage`, `ownership`, `persistence`, `messaging`, `lifecycle`, `cadence`, `description`,
+  `backbone`)
   and **`security` holds every `access: true` rule site** as well as the `enforces`/`encrypts`
   edges, so the batch that sorts first really is the access-control batch — send the multi-skeptic
   majority vote there. (A rule site that is NOT an access rule carries `rule`.) `theme_counts` gives
