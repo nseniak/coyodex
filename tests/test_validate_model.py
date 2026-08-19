@@ -3564,3 +3564,31 @@ def test_only_the_markdown_view_surviving_is_still_reported(capsys):
         assert vm.main([str(coy / "project-map.json")]) == 1
         err = capsys.readouterr().err
         assert "project-map.md" in err and "project-map.html" not in err, err
+
+
+def test_the_duplication_advisory_still_fires_at_validate():
+    """The other half of `test_the_duplication_advisory_does_not_fire_at_fragment_lint`.
+
+    Moving it out of the fragment lint must not lose it: at `validate` the model carries the whole
+    map, so the 'Accepted duplications' escape the message names is actually readable, and the
+    advisory is answerable.
+    """
+    from coyodex.validate_model import _duplication_warnings
+    from coyodex.model import load_model
+    steps = [{"n": i, "src": "C70", "dst": "C1", "phrase": f"does thing {i}",
+              "where": f"a.py:{i}"} for i in range(1, 5)]
+    base = {
+        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "components": [{"id": "C70", "name": "G", "purpose": "p"},
+                       {"id": "C1", "name": "P", "purpose": "p"}],
+        "use_cases": [{"id": "UC13", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"},
+                      {"id": "UC15", "name": "B", "actors": ["Dev"], "trigger_outcome": "t"}],
+        "flows": [{"uc": "UC13", "title": "A", "steps": steps},
+                  {"uc": "UC15", "title": "B", "steps": steps}],
+    }
+    fired = _duplication_warnings(load_model(json.dumps(base)))
+    assert [w for w in fired if "UC13 and UC15 share a run of" in w], fired
+
+    # And the escape works where it is readable.
+    base["extras"] = [{"heading": "Accepted duplications", "body": "UC13 & UC15: one path, two doors"}]
+    assert not _duplication_warnings(load_model(json.dumps(base))), "the recorded escape must silence it"

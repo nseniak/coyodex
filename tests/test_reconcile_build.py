@@ -758,3 +758,32 @@ def test_the_generator_witnesses_every_entry_point_it_emits():
         rules = write_rules([{"ids": ["UC1"], "entry_points": ["EP1"]}], tmp)
         doc, _report = expand(m, load_rules(rules))
     assert doc["set"][0]["entry_points"] == [{"id": "EP1", "source": "web/orders.py:9"}]
+
+
+def test_a_temp_out_path_warns_that_the_live_directives_are_stranded(tmp_path, monkeypatch, capsys):
+    """The carry-forward is keyed on `--out`, so a temp path silently loses it.
+
+    A live build ran `--out /tmp/reconcile-new.json` while `.coyodex/reconcile.json` held
+    keep_edges (5), drop_edges and set_anchors. The temp file did not exist, so nothing was
+    carried, nothing was said, and the lead hand-merged the three keys back in python. The tool's
+    own `Next:` hint then echoed the temp path into the suggested `assemble` line.
+    """
+    from coyodex import reconcile_build
+    monkeypatch.chdir(tmp_path)
+    live = tmp_path / ".coyodex" / "reconcile.json"
+    live.parent.mkdir(parents=True)
+    live.write_text(json.dumps({
+        "set": [], "keep_edges": [{"src": "C1", "verb": "uses", "dst": "D1"}],
+        "set_anchors": [{"claim": "C1 uses D1", "where": "a.py:2"}]}), encoding="utf-8")
+
+    frag = tmp_path / "f.json"
+    frag.write_text(json.dumps({"components": [{"id": "C1", "name": "A", "purpose": "p"}]}),
+                    encoding="utf-8")
+    rules = tmp_path / "rules.json"
+    rules.write_text(json.dumps({"rules": [{"ids": ["C1"], "subsystem": "S1"}]}), encoding="utf-8")
+
+    reconcile_build.main(["--fragments", str(frag), "--rules", str(rules),
+                          "--out", str(tmp_path / "temp-reconcile.json")])
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "keep_edges" in err and "set_anchors" in err, err
+    assert ".coyodex/reconcile.json" in err, err

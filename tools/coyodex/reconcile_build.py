@@ -406,6 +406,30 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         if isinstance(prior, dict):
             carried = {k: v for k, v in prior.items() if k != "set" and v}
+    # THE CARRY-FORWARD IS KEYED ON `--out`, so a temp path silently loses it. A live build ran
+    # `--out /tmp/reconcile-new.json` while `.coyodex/reconcile.json` held keep_edges (5),
+    # drop_edges and set_anchors, got no carry-forward because the temp file did not exist, and
+    # hand-merged the three keys back in python. The tool's own `Next:` hint then echoed the temp
+    # path into the suggested `assemble` line, reinforcing it. Say it, rather than let the absence
+    # of a message read as "there was nothing to carry".
+    if not carried and str(out) != _DEFAULT_RECONCILE:
+        live = Path(_DEFAULT_RECONCILE)
+        if live.exists():
+            try:
+                prior_live = json.loads(live.read_text(encoding="utf-8"))
+            except ValueError:
+                prior_live = None
+            if isinstance(prior_live, dict):
+                stranded = {k: v for k, v in prior_live.items() if k != "set" and v}
+                if stranded:
+                    print("WARNING: --out is " + str(out) + ", but " + _DEFAULT_RECONCILE
+                          + " already holds " + ", ".join(
+                              f"{k} ({len(v) if isinstance(v, list) else 1})"
+                              for k, v in sorted(stranded.items()))
+                          + ". The carry-forward is keyed on --out, so those directives are NOT in "
+                            "the file being written and `assemble --reconcile " + str(out)
+                          + "` would drop them. Write to " + _DEFAULT_RECONCILE
+                          + " instead, or merge them yourself.", file=sys.stderr)
     if carried:
         doc.update(carried)
         print("reconcile: carried forward " + ", ".join(

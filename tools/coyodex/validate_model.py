@@ -553,6 +553,24 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
             f"written about one of them silences the other too; if that is not what was meant, "
             f"re-read the rest by validating a copy with the id removed from the 'Balance "
             f"exceptions' extras heading.")
+    return warnings
+
+
+def _duplication_warnings(m: ProjectModel) -> list[str]:
+    """Advisory (NON-BLOCKING): two flows sharing a literal run of identical steps.
+
+    VALIDATE ONLY, and that is the whole point of it living apart from `_granularity_warnings`.
+    The escape this message names — an 'Accepted duplications' extras heading — is read from the
+    model being checked. Under `lint-fragment` that model is ONE fragment, while the heading is
+    written into `extras.json`, a different fragment. So a live build read the advice, recorded
+    exactly the line it asked for, re-ran the same command, and got the identical warning back;
+    `--ids` harvests id tokens from sibling fragments, never their extras. An advisory whose only
+    remedy cannot be reached from the tool that prints it is worse than no advisory, because the
+    author spends a turn obeying it and then distrusts the next one.
+
+    `lint_fragment.py` already keeps `_completeness_warnings` and the per-kind coverage family out
+    for the same reason. This joins them."""
+    warnings: list[str] = []
     accepted = _accepted_duplications(m)
     hops = ([(f.uc, [_step_hop(st, k) for k, st in enumerate(f.steps)]) for f in m.flows]
             + [(sf.id, [_step_hop(st, k) for k, st in enumerate(sf.steps)]) for sf in m.subflows])
@@ -4046,6 +4064,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(flow_warnings)
     warnings.extend(subflow_refcount_warnings(m))
     warnings.extend(_granularity_warnings(m))
+    warnings.extend(_duplication_warnings(m))
     warnings.extend(_completeness_warnings(m))
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))

@@ -1205,7 +1205,13 @@ def _run(argv: list[str] | None = None) -> int:
         return 0
     if as_json:
         print(json.dumps({
+            # `where` mirrors `location`, and BOTH ship. The text report prints `where: …`, so a
+            # reader who saw the human output and then reached for `--json` wrote `f.get("where")`,
+            # matched nothing, printed an empty result and spent the next turn re-doing the same
+            # extraction by grepping the text. Renaming the key instead would break anything that
+            # already reads `location`, which is why the old name stays.
             "findings": [{"check": f.check, "severity": f.severity, "location": f.location,
+                          "where": f.location,
                           "message": f.message} for f in findings],
             # `theme` is what a Phase-4 batcher groups on (method.md: "group by theme/risk"); the
             # ordered `themes` list saves the consumer from hard-coding the risk order, and the

@@ -2050,3 +2050,23 @@ def test_a_second_run_at_a_smaller_cap_leaves_no_stale_prose_batch() -> None:
         assert len(list(out.glob("prose-*.json"))) == 3
         audit_model.write_prose_batches(make_prose_map(), out, cap=10)
         assert [p.name for p in sorted(out.glob("prose-*.json"))] == ["prose-1.json"]
+
+
+def test_json_findings_carry_where_as_well_as_location(capsys):
+    """The text report prints `where: …`; `--json` emitted only `location`.
+
+    A build read the human output, reached for `--json`, wrote `f.get("where", "")`, matched
+    nothing, printed an empty result, and spent the next turn re-doing the same extraction by
+    grepping the text report. Both keys ship now: renaming `location` alone would break anything
+    already reading it.
+    """
+    from coyodex import audit_model
+    m = make_precedence_map(bad=True)
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "map.json"
+        p.write_text(m, encoding="utf-8")
+        audit_model.main([str(p), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["findings"], "the fixture must produce at least one finding"
+    for f in payload["findings"]:
+        assert f["where"] == f["location"], f

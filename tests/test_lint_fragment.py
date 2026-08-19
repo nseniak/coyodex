@@ -458,3 +458,32 @@ def test_a_fragment_without_runs_in_says_nothing_about_it():
     from coyodex.model import Component, ProjectModel
     m = ProjectModel(components=[Component(id="C1", name="A", purpose="p", source="a.py:1")])
     assert not any("runs_in" in w for w in lint_fragment_warnings(m))
+
+
+def test_the_duplication_advisory_does_not_fire_at_fragment_lint():
+    """Its remedy is unreachable from here, so printing it costs a turn and buys nothing.
+
+    The message says to record `'UC13 & UC15: <why>'` under an 'Accepted duplications' extras
+    heading. That heading is read from the model being checked; under `lint-fragment` the model is
+    ONE fragment, while the heading is written into `extras.json`, a different fragment. A live
+    build recorded exactly the line the message asked for, re-ran the same command, and got the
+    identical warning back. `--ids` harvests id tokens from siblings, never their extras.
+
+    The check itself is unchanged and still runs at `validate`, where the escape is readable —
+    `test_the_duplication_advisory_still_fires_at_validate` holds that half.
+    """
+    from coyodex.lint_fragment import lint_fragment_warnings
+    from coyodex.model import load_model
+    steps = [{"n": i, "src": "C70", "dst": "C1", "phrase": f"does thing {i}",
+              "where": f"a.py:{i}"} for i in range(1, 5)]
+    frag = json.dumps({
+        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "components": [{"id": "C70", "name": "G", "purpose": "p"},
+                       {"id": "C1", "name": "P", "purpose": "p"}],
+        "use_cases": [{"id": "UC13", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"},
+                      {"id": "UC15", "name": "B", "actors": ["Dev"], "trigger_outcome": "t"}],
+        "flows": [{"uc": "UC13", "title": "A", "steps": steps},
+                  {"uc": "UC15", "title": "B", "steps": steps}],
+    })
+    warnings = lint_fragment_warnings(load_model(frag))
+    assert not [w for w in warnings if "share a run of" in w], warnings

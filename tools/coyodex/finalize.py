@@ -106,6 +106,9 @@ def _run_leg(name: str, argv: list[str]) -> tuple[int, str, str]:
             elif name == "anchor-drift":
                 from coyodex import anchor_drift
                 code = anchor_drift.main(argv)
+            elif name == "balance":
+                from coyodex import balance
+                code = balance.main(argv)
         except SystemExit as e:                       # a subcommand that argues with its own args
             # `sys.exit("msg")` carries a STRING, so int() would raise inside the handler.
             code = e.code if isinstance(e.code, int) else (0 if e.code is None else 2)
@@ -340,6 +343,32 @@ def _unasked_verdicts_leg(found: list[Path]) -> Leg:
                note="the leg was skipped because no --verdicts was passed")
 
 
+def _balance_leg(map_path: Path) -> Leg:
+    """Phase 3.5 left a trace, or it did not happen.
+
+    `method.md` puts a `coyodex balance` pass after the trace and says to reconcile each finding.
+    Nothing observed it, so a skipped Phase 3.5 and a passed one read the same: one build ran
+    `balance` three times, the next ran it ZERO times, and the only reason nobody noticed is that
+    `validate` happened to emit no balance warning. Running it here means the report always says
+    what the grouping looks like against the real graph.
+
+    INFORMATIONAL, never advisory and never blocking. `method.md` is explicit that "balance never
+    gates and only ever re-groups" — grouping is a free, view-only choice — so a balance finding
+    must not move this command's verdict. The leg exists to record the fact, not to add a gate.
+    """
+    code, out, err = _run_leg("balance", [str(map_path)])
+    text = (out or "") + (err or "")
+    findings = [ln.strip()[2:] for ln in text.splitlines() if ln.startswith("  - ")]
+    if code not in (0, 1):
+        return Leg("balance (informational)", FAILED,
+                   note="balance could not run, so Phase 3.5 has no trace in this report")
+    return Leg("balance (informational)", RAN,
+               note=(f"{len(findings)} balance finding(s) — apply a Drilling-deeper operation, or "
+                     f"record a why under 'Balance exceptions'; this never gates"
+                     if findings else "no balance findings — every diagram reads at target density")
+                    + " (informational: grouping is a view-only choice, method.md)")
+
+
 def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeReport:
     unasked = _unasked_verdicts(map_path, verdicts)
     legs = [
@@ -348,6 +377,7 @@ def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeRe
         _drift_leg(map_path, repo, []),
         *([_drift_leg(map_path, repo, verdicts)] if verdicts else []),
         *([_unasked_verdicts_leg(unasked)] if unasked else []),
+        _balance_leg(map_path),
     ]
     blocking = sum(len(l.blocking) for l in legs)
     advisory = sum(len(l.advisory) for l in legs)

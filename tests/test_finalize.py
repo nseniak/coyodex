@@ -555,3 +555,27 @@ def test_a_map_with_no_verdicts_anywhere_says_nothing_about_them():
     root, p = make_repo()
     assert finalize.main([str(p), "--repo", str(root)]) == 0
     assert "NOT RUN" not in (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+
+
+def test_finalize_records_whether_balance_ran_and_does_not_gate_on_it():
+    """Phase 3.5 left a trace, or it did not happen.
+
+    `method.md` puts a `coyodex balance` pass after the trace and says to reconcile each finding.
+    Nothing observed it, so a skipped Phase 3.5 and a passed one read the same: one build ran
+    `balance` three times and the next ran it ZERO times, and the only reason nobody noticed is
+    that `validate` happened to emit no balance warning that run.
+
+    The leg is INFORMATIONAL. `method.md` is explicit that "balance never gates and only ever
+    re-groups", so its findings must not move this command's verdict.
+    """
+    from coyodex.finalize import build_report
+    repo, map_path = make_repo()
+    report = build_report(map_path, repo, [])
+    balance_legs = [l for l in report.legs if l.name.startswith("balance")]
+    assert len(balance_legs) == 1, [l.name for l in report.legs]
+    leg = balance_legs[0]
+    assert leg.ran, leg.note
+    assert leg.note and "balance finding" in leg.note or "no balance findings" in (leg.note or "")
+    assert leg.blocking == [] and leg.advisory == [], (
+        "balance never gates — its findings must not become finalize advisories")
+    assert report.advisory_total == sum(len(l.advisory) for l in report.legs if l is not leg)
