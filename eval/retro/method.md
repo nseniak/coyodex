@@ -235,12 +235,9 @@ appended. The shape:
 }
 ```
 
-**Severity, fix class and risk are three different questions and must not be collapsed.** Severity
-is what the defect costs the MAP if nobody fixes it. Fix class is whether there is one right answer
-(HARD) or a judgement that can over- or under-fire (SOFT). Risk is what applying the fix could
-break, and **a fix is LOW risk only when a test in the coyodex suite can hold it** — the test fails
-before the change, passes after, and fails again on a revert, and what it asserts is the whole of
-the fix. Name that test file on every LOW row.
+`severity`, `fix_class` and `risk` are defined once, under **What a finding must carry** in
+Step 3. They are three different questions and collapsing them into one impression is what a
+ranked list of prose does instead.
 
 The ledger is git-ignored like everything else under `.coyodex-eval/`. Anything that must outlive a
 `git clean` is promoted into the tracked `backlog.md`, exactly as a proposal is today.
@@ -541,6 +538,25 @@ the minutes it spent.
 - **turn number(s)** — so the user can go and look;
 - **what happened**, in one or two sentences;
 - **the class** (one of the above, or "new");
+- **`severity`** — `HIGH | MED | LOW`. **What the defect costs the MAP if nobody fixes it.** This is
+  the only one of the three tags that describes the BUG rather than the fix. HIGH: the map ships
+  something false or unverified, or a defect of that kind can reach a shipped map unnoticed. MED:
+  the map is not wrong, but a signal was lost, work was redone, or a measurement that future
+  decisions rest on is wrong. LOW: friction, cost or hygiene, and the map is unaffected either way;
+- **`fix_class`** — `HARD | SOFT | HARD / SOFT`. **Whether there is one right answer.** HARD: the
+  defect is deterministic and the fix is exact, a machine can tell whether it landed, and a
+  regression test can hold it. SOFT: the fix is a judgement — a threshold, a wording, a prompt, a
+  policy — that two competent people would implement differently and that can over- or under-fire.
+  Split rows are common and honest: HARD to detect, SOFT to prevent;
+- **`risk`** — `LOW | MEDIUM | HIGH`. **What applying the fix could break**, never what leaving the
+  bug in place costs. **The gate for LOW is testability: a fix is LOW only when a test in the
+  coyodex suite can hold it** — the test fails before the change, passes after, fails again on a
+  revert, and what it asserts is the WHOLE of the fix. **Name that test file on every LOW row**, or
+  the claim is unfalsifiable. MEDIUM: no test can hold the whole fix, OR the change alters what
+  passes and fails, OR something downstream may already read the old shape — a method sentence
+  stating a POLICY the agent must then apply by judgement lands here, because a test can assert the
+  sentence exists but the sentence is not the fix. HIGH: it can stop a build, or it materially
+  changes cost or an output format others parse;
 - **where the fix belongs**: `tool` / `method` / `both` / `neither — agent judgement`;
 - **confidence**: certain (the transcript shows it plainly) vs likely (inferred);
 - **verification**: `re-ran it myself` or `slice reader's word`. One word, on every finding, written
@@ -668,11 +684,14 @@ blocking problems · advisories surviving · components vs E · grounding covera
 every L3 assertion the scorecard printed, with the diff against the previous build
 
 ## Findings
-ranked; each with turn number, class, where the fix belongs, confidence
+FIRST a `Findings at a glance` table — one row per finding, columns
+`# | finding | severity | fix class | risk | the fix in one line` — then the findings themselves,
+ranked, each with turn number, class, where the fix belongs, confidence, verification and probe
 
 ## Proposals
 tool changes · method changes · new L3 assertions worth adding
 · whether the LAST retro's proposals landed
+· each tagged with the severity of what it fixes, its own fix class and its own risk
 
 ## Verification status
 what you re-ran yourself · what a refuter confirmed · what it overturned
@@ -703,6 +722,20 @@ say it plainly
 - **A carried row prints both halves of its comparison and their units.** Write
   `record invocations 40 -> 0`, never "record usage regressed". The ratio rule below applies to
   every carried number too.
+- **Tag every finding and every proposal with all three, and read them as a PAIR.** Severity and
+  risk do not correlate, and that is what makes the table decide anything. **The quadrant that sets
+  the order is HIGH severity at LOW risk**: it lets a wrong map ship, and a named test can hold the
+  fix. On the run this rule came from, the two biggest map-quality defects were also two of the
+  cheapest, safest fixes, and a ranked list of prose had buried both. Say the counts out loud —
+  "of the 24 rows, 12 HARD, 9 SOFT, 3 split; by risk 10 LOW, 11 MED, 3 HIGH" — because a reader who
+  cannot see the shape of the list will read it top to bottom and stop early.
+- **A PROPOSAL IS NEVER A MAP REPAIR.** The taxonomy above is tools, method, assertions, and the
+  previous proposals' status. Nothing else. A defect found in the map is EVIDENCE about the method
+  that produced it; repairing it belongs to a build or a direct map change, and a retro that
+  proposes the edit has quietly changed job. The pull towards writing one is strongest exactly when
+  the defect is small and concrete — one retro drafted two such rows, for two refuted claims and
+  two stale numbers, precisely because each was a two-line fix. Report the defect, name the tool or
+  method change that would have caught it, and stop there.
 - **A single build proves nothing about a trend.** Where a number moved against the previous build,
   say it moved; do not say the method improved. Two data points are two data points.
 - **Propose, do not apply.** End by asking which proposals the user wants implemented.

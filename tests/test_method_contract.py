@@ -1147,3 +1147,24 @@ def test_dispatch_says_the_briefing_comes_before_the_first_tool_call():
     text = (REPO_ROOT / "method" / "dispatch.md").read_text(encoding="utf-8")
     assert "before the first tool call" in text, (
         "'first message' needs a definition a build cannot read as 'somewhere early'")
+
+
+def test_the_retro_method_defines_all_three_finding_tags_and_the_LOW_gate():
+    """A ranked list of prose collapses three different questions into one impression.
+
+    Severity is what the defect costs the MAP, fix class is whether there is one right answer, and
+    risk is what applying the fix could break. They do not correlate: on the run this came from,
+    the two biggest map-quality defects were also two of the cheapest, safest fixes, and both were
+    buried in a flat ranking.
+    """
+    text = (REPO_ROOT / "eval" / "retro" / "method.md").read_text(encoding="utf-8")
+    for tag in ("`severity`", "`fix_class`", "`risk`"):
+        assert tag in text, f"{tag} must be defined in the finding shape"
+    assert "The gate for LOW is testability" in text, (
+        "LOW risk has to be earned by a test, or it is just a feeling")
+    assert "Name that test file on every LOW row" in text
+    assert "HIGH severity at LOW risk" in text, "the ordering quadrant must be stated"
+    assert "A PROPOSAL IS NEVER A MAP REPAIR" in text, (
+        "the taxonomy is tools, method and assertions; a map repair is not a retro proposal")
+    assert "severity | fix class | risk" in text, (
+        "the report skeleton must ask for the at-a-glance table, not just prose")
