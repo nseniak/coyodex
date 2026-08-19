@@ -1129,3 +1129,51 @@ def test_notes_and_errors_are_reachable_only_by_name_and_mean_different_things()
         loaded = load_fragment_paths(sorted(d.glob("*.json")))
         assert loaded.errors and any("extras" in e for e in loaded.errors), loaded.errors
         assert any("draft" in n for n in loaded.notes), "a note must not be reclassified as an error"
+
+
+# --- stream ordering under a pipe (retro 2026-08-18, finding 5) -------------------
+
+def test_failure_survives_a_tail_because_stdout_is_line_buffered():
+    """`assemble 2>&1 | tail -N` must keep the FAILURE, not the harmless notes.
+
+    Piped stdout is block-buffered and flushes at exit; stderr is not. So a run that prints
+    `note:` lines on stdout and `ERROR:` / `ASSEMBLY FAILED` on stderr comes out of the pipe with
+    the failure at the HEAD and the notes at the TAIL. A live build read `2>&1 | tail -2` three
+    times, saw two reassuring `note:` lines each time, and went on reading a stale map for 16
+    turns — losing a whole round of prose fixes with it, which only surfaced when the next
+    successful assemble dropped the long-sentence count 76 -> 53.
+
+    The CLI entry sets `line_buffering=True` so both streams interleave in PROGRAM order. This
+    test has to go through a real pipe: called in-process, the bug does not exist. The fixture
+    must emit at least one stdout note before the failure, or there is nothing to be re-ordered
+    ahead of and the test passes with the fix removed.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "h.json").write_text(make_header_fragment(), encoding="utf-8")
+        (d / "a.json").write_text(make_harvest_fragment(), encoding="utf-8")
+        # The SAME edge at the same call site twice -> a `note:` on stdout before the failure.
+        (d / "t.json").write_text(json.dumps({"edges": [
+            {"src": "C1", "verb": "uses", "dst": "D1", "why": "query", "where": "src/a.py:3"},
+            {"src": "C1", "verb": "uses", "dst": "D1", "why": "query", "where": "src/a.py:3"},
+        ]}), encoding="utf-8")
+        # A well-formed directive naming an id no fragment defines — the shape that aborted a
+        # live build, and the one a `set` typo produces.
+        (d / "reconcile.json").write_text(
+            json.dumps({"set": [{"ids": ["BR9999"], "block": "BLK1"}]}), encoding="utf-8")
+
+        # `2>&1 | tail -2`, the exact shell the build used.
+        merged = subprocess.run(
+            f"{sys.executable} -m coyodex.cli assemble {d}/h.json {d}/a.json {d}/t.json "
+            f"--out {d}/out --reconcile {d}/reconcile.json 2>&1 | tail -2",
+            shell=True, capture_output=True, text=True).stdout
+        lines = [ln for ln in merged.splitlines() if ln.strip()]
+
+        # Program order is: note -> ERROR -> ASSEMBLY FAILED. So the last two lines ARE the two
+        # stderr lines. Without line buffering they arrive first and the note is what survives.
+        assert len(lines) == 2, merged
+        assert "BR9999" in lines[0], (
+            "the directive that failed fell out of `tail -2`; stdout is buffering behind "
+            "stderr again:\n" + merged)
+        assert "ASSEMBLY FAILED" in lines[1], merged
+        assert not (d / "out" / "project-map.json").exists(), "a failed assemble wrote a map"

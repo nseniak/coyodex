@@ -631,3 +631,73 @@ def test_lint_says_how_much_of_the_pass_the_evidence_check_could_test(capsys):
         out = capsys.readouterr().out
         assert "2 verdict row(s)" in out
         assert "covered 1 of 2 row(s)" in out
+
+
+# --- retro 2026-08-18, findings 0 and 21/A1 ------------------------------------------
+
+def test_refuted_claims_still_in_the_map_are_named_at_BOTH_ends_of_the_report():
+    """Two opposite narrowings hid two ends of one section on the same build.
+
+    `grounding report | tail -40` started inside the refuted list, so the
+    `REFUTED BUT NOT SUPERSEDED` header was cut off the top. `| head -30` ended after the third of
+    that section's five bullets. The lead fixed the three it could see, wrote "Three refuted rules
+    still carry their original wording", and two refuted claims shipped in the map. The report is
+    hundreds of lines, so narrowing it is reasonable; the count must therefore survive either cut.
+    """
+    claims = ["C1 calls C2", "C3 reads E1"]
+    rows = [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1"},
+            {"claim": "C3 reads E1", "grounded": False, "evidence": "b.py:2"}]
+    # `live_claims` still carries the refuted claim: the reconcile never removed it.
+    out = G.format_report(claims, rows, live_claims=["C1 calls C2", "C3 reads E1"])
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+
+    assert "REFUTED CLAIM(S) STILL IN THE MAP" in lines[0], (
+        "a `| head -N` reader must see it on the first line:\n" + out)
+    assert "STILL IN THE MAP" in lines[-1] and "C3 reads E1" in lines[-1], (
+        "a `| tail -N` reader must see it on the last line:\n" + out)
+
+    # A clean run must NOT end on a scary line it has no reason to print.
+    clean = G.format_report(claims, [{"claim": c, "grounded": True, "evidence": "a.py:1"}
+                                     for c in claims], live_claims=claims)
+    assert "STILL IN THE MAP" not in clean, clean
+
+
+def test_write_prints_the_numbers_a_note_will_cite(tmp_path: Path):
+    """`--note` is free prose in a permanent record and nothing checks it.
+
+    One shipped note said "Eighteen fresh-context skeptics" about a build that dispatched 17 and
+    produced 20 verdict labels, because 18 was read off a `grounding lint` line printed while a
+    verdict file was still being written. The same note said "Four superseded claims had been
+    CONFIRMED" where the report counts 11, leaving seven overrides of settled verdicts
+    undisclosed. Both numbers exist here, at the moment the note is written.
+    """
+    claims = ["C1 calls C2", "C3 reads E1"]
+    rows = [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1", "skeptic": "sec-a"},
+            {"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1", "skeptic": "sec-b"},
+            {"claim": "C3 reads E1", "grounded": True, "evidence": "b.py:2", "skeptic": "own-1"}]
+    wl = tmp_path / "wl.json"
+    wl.write_text(json.dumps({"worklist": [{"claim": c} for c in claims]}), encoding="utf-8")
+    vd = tmp_path / "v.json"
+    vd.write_text(json.dumps({"grounding": rows}), encoding="utf-8")
+    mp = tmp_path / "map.json"
+    # The shipped map no longer carries "C1 calls C2" -> superseded, and it was CONFIRMED.
+    mp.write_text(json.dumps({
+        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "components": [{"id": "C3", "name": "C3", "purpose": "p"}],
+        "entities": [{"id": "E1", "name": "E1", "meaning": "m"}],
+        "edges": [{"src": "C3", "verb": "reads", "dst": "E1", "why": "w", "where": "b.py:2"}],
+    }), encoding="utf-8")
+
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = main(["write", "--worklist", str(wl), "--verdicts", str(vd),
+                     "--map", str(mp), "--out", str(tmp_path / "g.json"), "--note", "probe"])
+    out = buf.getvalue()
+    assert code == 0, out
+    assert "NOTE FACTS" in out, out
+    assert "distinct skeptic labels 3" in out, (
+        "the label count is the number a note gets wrong; it must be stated:\n" + out)
+    assert "of which 1 had been CONFIRMED" in out, (
+        "a superseded claim that was CONFIRMED is a settled verdict the build overrode, and the "
+        "note must be able to say how many:\n" + out)

@@ -6,6 +6,7 @@ Each subcommand imports its implementation lazily. Stdlib-only; depends on the `
 """
 from __future__ import annotations
 
+import io
 import sys
 
 USAGE = """usage: coyodex-eval <command> [args...]
@@ -40,6 +41,14 @@ Run `coyodex-eval <command> --help` for command-specific options."""
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Line-buffer stdout so the two streams interleave in PROGRAM order under a pipe. Same reason
+    # as `coyodex.cli.main`: piped stdout is block-buffered, stderr is not, so `2>&1 | tail -N`
+    # re-orders a failure to the head of the pipe and leaves harmless notes in the tail.
+    # Guarded on the concrete type: an in-process caller (pytest's capture, a harness) may
+    # replace stdout with a plain stream that has no `reconfigure`, and the buffering bug
+    # does not exist there anyway.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(line_buffering=True)
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help"):
         print(USAGE)

@@ -284,6 +284,19 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
     if as_json:
         return json.dumps(buckets, indent=2, ensure_ascii=False)
     out: list[str] = []
+    # A SUMMARY LINE FIRST, AND THE CRITICAL COUNT AGAIN LAST. This report is read through a pipe,
+    # and two opposite narrowings hid two ends of one section on the same build: `| tail -40`
+    # started inside the refuted list and cut the `REFUTED BUT NOT SUPERSEDED` header off the top,
+    # then `| head -30` ended after the third of its five bullets. The lead fixed the three it
+    # could see, said so, and two refuted claims shipped in the map. Neither narrowing was wrong to
+    # attempt: the report runs hundreds of lines. So the number a reader must not miss is stated at
+    # BOTH ends, which is the same rule `lint-fragment` already follows for its verdict.
+    still_live_n = len(buckets["refuted_not_superseded"])
+    out.append(
+        f"GROUNDING REPORT — {len(buckets['refuted'])} refuted, {len(buckets['tied'])} tied, "
+        f"{len(buckets['unverifiable'])} unverifiable, {len(buckets['unvoted'])} unvoted"
+        + (f", {len(buckets['superseded'])} superseded" if live is not None else "")
+        + (f" · {still_live_n} REFUTED CLAIM(S) STILL IN THE MAP" if still_live_n else ""))
     if live is not None:
         sup = buckets["superseded"]
         out.append(f"\nSUPERSEDED ({len(sup)}) — pinned claims the shipped map no longer carries.")
@@ -350,6 +363,14 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
             for n in (raw_notes if isinstance(raw_notes, list) else [])[:2]:
                 out.append(f"      {str(n)[:160]}")
     out.append(f"\nconfirmed: {len(buckets['confirmed'])} of {len(worklist_claims)} claim(s)")
+    # The trailer half of the both-ends rule above: a `| tail -N` reader gets this even when the
+    # section itself scrolled off the top. Only printed when it is non-zero, so a clean run does
+    # not end on a scary-looking line.
+    if still_live_n:
+        out.append(f"\nSTILL IN THE MAP: {still_live_n} refuted claim(s) the map carries verbatim "
+                   f"— see REFUTED BUT NOT SUPERSEDED above, and fix the map before shipping it: "
+                   + ", ".join(str(r["claim"])[:60] for r in buckets["refuted_not_superseded"][:5])
+                   + (" …" if still_live_n > 5 else ""))
     return "\n".join(out).lstrip("\n")
 
 
@@ -646,6 +667,26 @@ def main(argv: list[str] | None = None) -> int:
         # even when the shipped map is not; a build that saw only that line wrote "All 209 claims
         # were challenged" into a permanent note. `anchor-drift` had already said 199 of 209 ten
         # turns earlier, and nothing tied the two together.
+        # THE NUMBERS A NOTE WILL CITE, COMPUTED, so nobody retypes one from an earlier view.
+        #
+        # `--note` is free prose in a permanent record and in the commit message, and nothing
+        # checks it. One shipped note said "Eighteen fresh-context skeptics" about a build that
+        # dispatched 17 and produced 20 verdict labels: the 18 was read off a `grounding lint`
+        # line printed while one verdict file was still being written, then carried forward. The
+        # same note said "Four superseded claims had been CONFIRMED" where this report counts 11,
+        # leaving seven deliberate overrides of settled claims undisclosed. Both numbers were
+        # available here, at the moment the note was written.
+        buckets = json.loads(format_report(claims, rows, as_json=True, live_claims=live_claims))
+        sup_confirmed = sum(1 for r in buckets["superseded"] if r.get("verdict") == "confirmed")
+        labels = sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")})
+        print(f"  NOTE FACTS — quote these, do not retype them from an earlier run:\n"
+              f"    verdict rows {len(rows)} · distinct skeptic labels {len(labels)} "
+              f"(a label is not an agent: one agent may carry several batches)\n"
+              f"    confirmed {record['claims_confirmed']} · refuted {record['claims_refuted']} · "
+              f"unverifiable {record['claims_unverifiable']} · tied {len(buckets['tied'])}"
+              + (f"\n    superseded {record['claims_superseded']}, of which {sup_confirmed} "
+                 f"had been CONFIRMED — each is a settled verdict the build overrode, and a note "
+                 f"that does not say so hides it" if live_claims is not None else ""))
         live_done = record.get("claims_live_challenged")
         if live_claims is not None and isinstance(live_done, int):
             live_total = len(set(live_claims))

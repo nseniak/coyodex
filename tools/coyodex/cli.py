@@ -8,6 +8,7 @@ import (tree-sitter). See internal/docs/design-notes.md.
 """
 from __future__ import annotations
 
+import io
 import sys
 
 from coyodex import __version__
@@ -97,6 +98,20 @@ def _default_map(argv: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Line-buffer stdout so the two streams interleave in PROGRAM order under a pipe.
+    #
+    # Every command here prints notes on stdout and `ERROR:` / `WARNING:` / `… FAILED` on stderr.
+    # Piped stdout is block-buffered and flushes at exit while stderr is unbuffered, so
+    # `cmd 2>&1 | tail -N` re-orders the failure to the HEAD of the pipe and keeps the harmless
+    # notes in the tail. A live build read that tail three times, saw a reassuring `note:` line
+    # each time, and went on reading a map that `assemble` had refused to write — for 16 turns,
+    # taking a whole round of prose fixes with it. One line here fixes it for every subcommand at
+    # once; a per-site `flush()` would have to be right at ~200 stderr call sites and stay right.
+    #
+    # Guarded on the concrete type: an in-process caller (pytest's capture, a harness) may replace
+    # stdout with a plain stream that has no `reconfigure`, and the bug does not exist there anyway.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(line_buffering=True)
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help"):
         print(USAGE)
