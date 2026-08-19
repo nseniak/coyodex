@@ -33,6 +33,8 @@ from pathlib import Path
 
 from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
+from coyodex.audit_model import ClaimTarget, resolve_claim
+from coyodex.model import ProjectModel
 
 USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>]
        coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
@@ -41,6 +43,15 @@ USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-tra
                                [--map <project-map.json>]
 coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--map <map>] [--json]
        coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
+       coyodex grounding by-element --worklist <audit.json> --verdicts <raw.json>... \\
+                               --map <project-map.json> [--kind <kind>] [--json]
+
+`by-element` says what the pass did to each ELEMENT, beside the confidence its author typed.
+Nothing in the tooling ever writes `confidence`, so an element challenged three times and confirmed
+unanimously still reads exactly as the harvesting agent left it. This resolves every pinned claim
+back onto the element that makes it and prints both, flagging each element whose stated label the
+votes do not support. Derived on every run from the worklist and the verdicts; it stores nothing.
+`--kind` narrows to one of rule_site / description / edge / cadence / lifecycle / security.
 
 `report` prints WHICH claims were refuted, tied, unverifiable or unvoted — the reconcile worklist
 `write` computes and then reduces to four counts. A TIE is listed apart from a stated
@@ -389,6 +400,228 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
     return "\n".join(out).lstrip("\n")
 
 
+# ── per-element checks: what the grounding pass actually did to each element ──────────────────────
+
+
+@dataclass(frozen=True)
+class ElementCheck:
+    """One element of the map, beside what the skeptics did to the claims it makes.
+
+    Some kinds carry an AUTHORED `confidence` — `verified` or `inferred` — written once by the agent
+    that harvested the element. NOTHING in the tooling ever writes that field. So a pass that
+    challenged an element three times with three different lenses and confirmed it unanimously
+    leaves the label exactly as the author typed it, and a reader cannot tell a claim three skeptics
+    proved from one nobody looked at. On a live map every business rule read `inferred` after each
+    of its sites had been confirmed; on another, every rule read `verified` because the author said
+    so and no reader could see which of them a skeptic had actually opened.
+
+    This row is the missing half: `stated` is what the author claimed, the four counts are what the
+    pass did. DERIVED, never stored — recomputed from the pinned worklist and the committed verdict
+    files whenever it is asked for, so it cannot drift from them and no agent can author it."""
+    element_id: str
+    kind: str
+    label: str
+    stated: str = ""
+    confirmed: int = 0
+    refuted: int = 0
+    unverifiable: int = 0
+    unvoted: int = 0
+
+    @property
+    def claims(self) -> int:
+        return self.confirmed + self.refuted + self.unverifiable + self.unvoted
+
+    @property
+    def status(self) -> str:
+        """One word for the whole element. A single refutation OUTRANKS any number of confirmations:
+        the element makes several claims, one of them is wrong, and that is the fact a reader has to
+        see first. `part-checked` is kept apart from `confirmed` for the same reason the record keeps
+        a tie apart from an `unverifiable` — "some of it was checked" is not "it was checked"."""
+        if self.refuted:
+            return "refuted"
+        if self.unverifiable:
+            return "unverifiable"
+        if not self.confirmed:
+            return "unchecked"
+        return "part-checked" if self.unvoted else "confirmed"
+
+    @property
+    def disagrees(self) -> bool:
+        """The pair a reader is here for: an authored label the pass does not support.
+
+        `verified` on an element no skeptic confirmed, or `inferred` on one they all did. Both are
+        the same defect — the label and the evidence were written by different processes and nothing
+        ever compared them."""
+        if self.stated == "verified":
+            return self.status != "confirmed"
+        if self.stated == "inferred":
+            return self.status == "confirmed"
+        return False
+
+
+def _stated_confidence(m: ProjectModel, t: ClaimTarget) -> str:
+    """The element's AUTHORED confidence, or "" for a kind that carries none.
+
+    An edge and a cadenced entry point have no `confidence` field at all, so "" here means "the map
+    never asked the author", which is different from an author who left it blank — but the two are
+    indistinguishable in the stored map, so the report says `-` for both rather than inventing a
+    distinction the data does not hold."""
+    seq: object
+    if t.kind == "rule_site":
+        seq = m.rules
+    elif t.kind == "description":
+        seq = m.components
+    elif t.kind == "lifecycle":
+        seq = m.entities if t.sub == 0 else m.components
+    elif t.kind == "security":
+        seq = m.security
+    else:
+        return ""
+    el = seq[t.idx]  # type: ignore[index]
+    return str(getattr(el, "confidence", "") or "")
+
+
+def _checkable_elements(m: ProjectModel) -> "list[tuple[tuple[str, int, int], ClaimTarget]]":
+    """Every element the L2 worklist COULD have made a claim about, whether or not it did.
+
+    Seeded into the tally with zero votes so an element nobody challenged appears as `unchecked`
+    instead of being absent. Absence is the false negative this whole report exists to remove: a
+    rule missing from the table reads exactly like a rule that passed, and on a live map two rules
+    the author had labelled `verified` carried no pinned claim at all — neither would have appeared.
+
+    The kinds and their conditions mirror `l2_worklist_model` exactly; an element the worklist would
+    skip (a rule with no anchored site, an entity with no store) is not listed as unchecked here,
+    because nothing was ever going to check it and saying otherwise would invent a gap."""
+    out: "list[tuple[tuple[str, int, int], ClaimTarget]]" = []
+    for i, e in enumerate(m.edges):
+        out.append((("edge", i, -1), ClaimTarget("edge", i, -1, "", f"{e.src} {e.verb} {e.dst}")))
+    for i, sec in enumerate(m.security):
+        out.append((("security", i, -1), ClaimTarget("security", i, -1, "", sec.surface)))
+    for i, br in enumerate(m.rules):
+        if any((st.where or "").strip() for st in br.sites):
+            out.append((("rule_site", i, -1),
+                        ClaimTarget("rule_site", i, 0, br.id, br.name or br.statement)))
+    for i, ep in enumerate(m.entry_points):
+        if (ep.cadence or "").strip():
+            out.append((("cadence", i, -1),
+                        ClaimTarget("cadence", i, -1, getattr(ep, "id", "") or "",
+                                    f"[{ep.kind}] {ep.trigger}")))
+    for which, seq in ((0, m.entities), (1, m.components)):
+        for i, el in enumerate(seq):
+            sm = getattr(el, "states", None)
+            if sm is not None and sm.states and (sm.source or "").strip():
+                out.append((("lifecycle", i, which),
+                            ClaimTarget("lifecycle", i, which, el.id, el.name)))
+    for i, en in enumerate(m.entities):
+        st = en.store
+        if st is not None and st.dep:
+            out.append((("store", i, -1), ClaimTarget("store", i, -1, en.id, en.name)))
+    for i, mr in enumerate(m.messaging):
+        out.append((("messaging", i, -1), ClaimTarget("messaging", i, -1, "", mr.name)))
+    for i, c in enumerate(m.components):
+        if (c.purpose or "").strip():
+            out.append((("description", i, -1), ClaimTarget("description", i, -1, c.id, c.name)))
+    return out
+
+
+def element_checks(m: ProjectModel, worklist_claims: list[str],
+                   grounding_rows: list[dict]) -> tuple[list[ElementCheck], list[str]]:
+    """Fold the pinned worklist and the skeptics' votes onto the elements they judged.
+
+    Returns the rows plus the claims that named no single element — an unresolved claim is REPORTED,
+    never dropped, because a growing unresolved list is how a reader learns the worklist and the map
+    have drifted apart (the pinned worklist is a snapshot, and a claim rewritten since resolves to
+    nothing).
+
+    The worklist is de-duplicated exactly as `build_record` and `format_report` do, and for the same
+    reason: a repeated claim counted twice would make this report disagree with the record it exists
+    to explain."""
+    votes: dict[str, list[dict]] = {}
+    for r in grounding_rows:
+        claim = r.get("claim")
+        if isinstance(claim, str):
+            votes.setdefault(claim, []).append(r)
+    seen_claims: set[str] = set()
+    claims = [c for c in worklist_claims if not (c in seen_claims or seen_claims.add(c))]
+    tally: dict[tuple[str, int, int], dict[str, int]] = {}
+    naming: dict[tuple[str, int, int], ClaimTarget] = {}
+    for key, target in _checkable_elements(m):
+        naming[key] = target
+        tally[key] = {"confirmed": 0, "refuted": 0, "unverifiable": 0, "unvoted": 0}
+    unresolved: list[str] = []
+    for claim in claims:
+        target = resolve_claim(m, claim).target
+        if target is None:
+            unresolved.append(claim)
+            continue
+        # ONE ROW PER ELEMENT, not per claim site. A rule with three sites makes three claims and
+        # is still one rule; keying on the site index printed the same rule three times and a reader
+        # counting rows would have over-counted the map. `lifecycle` keeps its `sub` because there it
+        # selects WHICH list the index is into (entities vs components), not a part of one element.
+        key = (target.kind, target.idx, target.sub if target.kind == "lifecycle" else -1)
+        naming.setdefault(key, target)
+        counts = tally.setdefault(key, {"confirmed": 0, "refuted": 0,
+                                        "unverifiable": 0, "unvoted": 0})
+        rows = votes.get(claim)
+        counts["unvoted" if not rows else _verdict_bucket(rows)] += 1
+    out = [ElementCheck(element_id=naming[k].element_id, kind=naming[k].kind,
+                        label=naming[k].label, stated=_stated_confidence(m, naming[k]),
+                        confirmed=c["confirmed"], refuted=c["refuted"],
+                        unverifiable=c["unverifiable"], unvoted=c["unvoted"])
+           for k, c in tally.items()]
+    # Worst first — a refuted element is the one a reader must act on, and an element whose stated
+    # label the pass does not support is the next. Then by kind and id, so a re-run reads the same.
+    order = {"refuted": 0, "unverifiable": 1, "unchecked": 2, "part-checked": 3, "confirmed": 4}
+    out.sort(key=lambda r: (order[r.status], not r.disagrees, r.kind, r.element_id, r.label))
+    return out, unresolved
+
+
+def format_element_checks(rows: list[ElementCheck], unresolved: list[str],
+                          as_json: bool = False, only_kind: str = "") -> str:
+    """The report: every element the pass touched, its authored label, and what the votes said."""
+    if only_kind:
+        rows = [r for r in rows if r.kind == only_kind]
+    if as_json:
+        return json.dumps({
+            "elements": [{"id": r.element_id, "kind": r.kind, "label": r.label,
+                          "stated": r.stated, "status": r.status, "disagrees": r.disagrees,
+                          "claims": r.claims, "confirmed": r.confirmed, "refuted": r.refuted,
+                          "unverifiable": r.unverifiable, "unvoted": r.unvoted} for r in rows],
+            "unresolved_claims": unresolved,
+        }, indent=2, ensure_ascii=False)
+    lines: list[str] = []
+    disagreeing = [r for r in rows if r.disagrees]
+    # "checkable", not "carry a pinned claim": the table now seeds every element the worklist COULD
+    # have claimed, so the count includes the ones it never did — which is the point.
+    lines.append(f"{len(rows)} checkable element(s) · "
+                 f"{sum(1 for r in rows if r.status == 'confirmed')} confirmed, "
+                 f"{sum(1 for r in rows if r.status == 'part-checked')} part-checked, "
+                 f"{sum(1 for r in rows if r.status == 'refuted')} refuted, "
+                 f"{sum(1 for r in rows if r.status == 'unverifiable')} unverifiable, "
+                 f"{sum(1 for r in rows if r.status == 'unchecked')} unchecked")
+    if disagreeing:
+        lines.append(f"{len(disagreeing)} element(s) state a confidence the pass does not support "
+                     f"— the authored label and the votes were written by different processes and "
+                     f"nothing ever compared them:")
+    lines.append("")
+    lines.append(f"{'id':<7} {'kind':<12} {'stated':<9} {'checked':<13} {'votes':<24} label")
+    for r in rows:
+        votes = (f"{r.confirmed}✓ {r.refuted}✗ {r.unverifiable}? {r.unvoted}– "
+                 f"of {r.claims}")
+        flag = "  <- disagrees" if r.disagrees else ""
+        lines.append(f"{r.element_id or '-':<7} {r.kind:<12} {r.stated or '-':<9} "
+                     f"{r.status:<13} {votes:<24} {r.label[:46]}{flag}")
+    if unresolved:
+        lines.append("")
+        lines.append(f"{len(unresolved)} pinned claim(s) name no single element in this map — the "
+                     f"claim was rewritten after the worklist was pinned, or two elements make it:")
+        for c in unresolved[:20]:
+            lines.append(f"  - {c[:110]}")
+        if len(unresolved) > 20:
+            lines.append(f"  ... and {len(unresolved) - 20} more")
+    return "\n".join(lines)
+
+
 def _worklist_claims(path: Path) -> list[str]:
     """Claims from a worklist file, in either shape it legitimately arrives in.
 
@@ -499,8 +732,8 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE)
         return 0
     verb, rest = argv[0], argv[1:]
-    if verb not in ("write", "report", "lint"):
-        print(f"ERROR: unknown verb '{verb}' (expected `write`, `report` or `lint`)\n\n{USAGE}",
+    if verb not in ("write", "report", "lint", "by-element"):
+        print(f"ERROR: unknown verb '{verb}' (expected `write`, `report`, `by-element` or `lint`)\n\n{USAGE}",
               file=sys.stderr)
         return 2
     # Same hole `coyodex fix` had: the option loop below rejects `--help` as an unknown option.
@@ -515,6 +748,7 @@ def main(argv: list[str] | None = None) -> int:
     keep_note = False
     as_json = False
     partial = False
+    only_kind = ""
     i = 0
     while i < len(rest):
         a = rest[i]
@@ -530,7 +764,8 @@ def main(argv: list[str] | None = None) -> int:
             partial = True
         elif a == "--keep-note":
             keep_note = True
-        elif a in ("--worklist", "--verdicts", "--out", "--note", "--note-file", "--map"):
+        elif a in ("--worklist", "--verdicts", "--out", "--note", "--note-file", "--map",
+                   "--kind"):
             i += 1
             if i >= len(rest):
                 print(f"ERROR: {a} needs a value", file=sys.stderr)
@@ -539,6 +774,8 @@ def main(argv: list[str] | None = None) -> int:
                 worklist_path = rest[i]
             elif a == "--map":
                 map_path = rest[i]
+            elif a == "--kind":
+                only_kind = rest[i]
             elif a == "--verdicts":
                 # VARIADIC, as the usage line has always said (`--verdicts <raw.json>...`): swallow
                 # every following non-flag path, not just one. It took exactly one value, so the
@@ -665,6 +902,14 @@ def main(argv: list[str] | None = None) -> int:
     for n in notes:
         print(n, file=sys.stderr)
     live_claims = None
+    live_model = None
+    if verb == "by-element" and not map_path:
+        # by-element resolves each claim back onto an ELEMENT, so it cannot run without the map the
+        # claims are about. Refusing beats reporting an empty table that reads like "nothing was
+        # checked" — the exact false-negative shape this command exists to expose.
+        print("ERROR: grounding by-element needs --map <project-map.json> — it resolves each "
+              "pinned claim back onto the element that makes it.", file=sys.stderr)
+        return 2
     if map_path:
         # The LIVE claim surface, read from the assembled map this record describes. Not a second
         # captured file: a file goes stale between capture and write, and the whole defect here is a
@@ -677,6 +922,12 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             print(f"ERROR: --map {map_path} could not be read as a map ({e})", file=sys.stderr)
             return 2
+    if verb == "by-element":
+        assert live_model is not None   # guarded above: --map is required for this verb
+        checks, unresolved = element_checks(live_model, claims, rows)
+        print(format_element_checks(checks, unresolved, as_json=as_json,
+                                    only_kind=only_kind))
+        return 0
     if verb == "report":
         print(format_report(claims, rows, as_json=as_json, live_claims=live_claims))
         return 0

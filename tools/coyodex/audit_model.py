@@ -128,6 +128,25 @@ def description_claim(cid: str, name: str, purpose: str) -> str:
     return f'Component {cid} ({name}) is described as: {purpose}'
 
 
+def store_claim(el_id: str, name: str, dep: str, container: str, mode: str) -> str:
+    """An entity's storage claim, EXACTLY as `l2_worklist_model` builds it.
+
+    Extracted for the same reason `lifecycle_claim` was: it was built inline, so `resolve_claim`
+    had no way to name the entity a persistence verdict was about and every store claim resolved to
+    nothing. A second hand-written copy of the wording is how the rule-site claim once drifted."""
+    where = f"{dep} container '{container}'" if container else dep
+    return f"{el_id} ({name}) is stored in {where}" + (f" ({mode})" if mode else "")
+
+
+def messaging_claim(name: str, dep: str, publishers: "Sequence[str]",
+                    consumers: "Sequence[str]") -> str:
+    """A messaging channel's wiring claim, EXACTLY as `l2_worklist_model` builds it."""
+    on = f" on {dep}" if dep else ""
+    pubs = ", ".join(publishers) or "nobody"
+    cons = ", ".join(consumers) or "nobody"
+    return f"Channel '{name}'{on}: {pubs} publish(es); {cons} consume(s)"
+
+
 def cadence_claim(kind: str, trigger: str, cadence: str) -> str:
     """An entry point's cadence claim, EXACTLY as `l2_worklist_model` builds it."""
     return f"Entry point [{kind}] {trigger} runs on cadence '{cadence}'"
@@ -142,6 +161,166 @@ def lifecycle_claim(el_id: str, name: str, states: "Sequence[str]",
     correction was reported as an unparseable EDGE claim and dropped."""
     return (f"{el_id} ({name}) has states [{', '.join(states)}]"
             + (f" with {len(transitions)} transition(s)" if transitions else ""))
+
+
+# ── claim → element resolution: the ONE reader ────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ClaimTarget:
+    """WHICH element of the map an L2 claim is about.
+
+    `kind` + `idx` + `sub` ADDRESS the element for a writer; `element_id` and `label` NAME it for a
+    reader. `sub` is the rule SITE index for a rule site, 0 for an entity / 1 for a component on a
+    lifecycle, and -1 for the flat arrays. An edge carries no id in the model, so `element_id` is
+    empty there and `label` holds the `C5 persists E2` triple instead."""
+    kind: str
+    idx: int
+    sub: int = -1
+    element_id: str = ""
+    label: str = ""
+
+
+@dataclass(frozen=True)
+class ClaimMatch:
+    """The resolution of ONE claim: the element that makes it, or why no single element does.
+
+    `count` is how many candidates the matching KIND produced, so a caller can tell "nothing in this
+    map makes this claim" (`kind` empty, count 0) from "two elements make it and picking either
+    would be an accident of order" (count > 1). Both are refusals, and they need different words."""
+    target: ClaimTarget | None
+    kind: str = ""
+    count: int = 0
+
+
+def resolve_claim(m: ProjectModel, claim: str) -> ClaimMatch:
+    """Turn an L2 claim string back into the element that makes it. The single reader.
+
+    Extracted from `apply_anchor_corrections`, which resolves a claim in order to WRITE a corrected
+    anchor onto it, so that `grounding by-element` can use the SAME resolution to read a skeptic's
+    verdict back onto the element it judged. Two copies of this dispatch would drift exactly the way
+    the rule-site claim once did — built in one place, re-derived in the other, wordings diverged,
+    and every rule correction reported as an unparseable edge claim and dropped.
+
+    Six kinds, matched by recomputing every candidate's claim, tried in a fixed order. The FIRST
+    kind with any candidate WINS even when it is ambiguous: falling through would let a claim land
+    on an element of a different kind entirely. `description` is resolution-only — a component's
+    purpose is prose with no anchor to correct — so it is tried last and no writer acts on it."""
+    mo = EDGE_CLAIM.match(claim)
+    if mo:
+        src, verb, dst = mo.group(1), mo.group(2).lower(), mo.group(3)
+        hits = [i for i, e in enumerate(m.edges)
+                if e.src == src and e.verb.strip().lower() == verb and e.dst == dst]
+        if len(hits) != 1:
+            return ClaimMatch(None, "edge", len(hits))
+        e = m.edges[hits[0]]
+        return ClaimMatch(ClaimTarget("edge", hits[0], -1, "", f"{e.src} {e.verb} {e.dst}"),
+                          "edge", 1)
+    sec = [i for i, s in enumerate(m.security)
+           if security_claim(s.surface, s.source) == claim]
+    if sec:
+        if len(sec) != 1:
+            return ClaimMatch(None, "security", len(sec))
+        return ClaimMatch(ClaimTarget("security", sec[0], -1, "", m.security[sec[0]].surface),
+                          "security", 1)
+    sites = [(ri, si) for ri, br in enumerate(m.rules)
+             for si, site in enumerate(br.sites)
+             if (site.where or "").strip()
+             and rule_site_claim(br.statement, (site.where or "").strip(), site.why) == claim]
+    if sites:
+        if len(sites) != 1:
+            return ClaimMatch(None, "rule_site", len(sites))
+        ri, si = sites[0]
+        br = m.rules[ri]
+        return ClaimMatch(ClaimTarget("rule_site", ri, si, br.id, br.name or br.statement),
+                          "rule_site", 1)
+    eps = [i for i, ep in enumerate(m.entry_points)
+           if (ep.cadence or "").strip()
+           and cadence_claim(ep.kind, ep.trigger, ep.cadence) == claim]
+    if eps:
+        if len(eps) != 1:
+            return ClaimMatch(None, "cadence", len(eps))
+        ep = m.entry_points[eps[0]]
+        return ClaimMatch(ClaimTarget("cadence", eps[0], -1, getattr(ep, "id", "") or "",
+                                      f"[{ep.kind}] {ep.trigger}"), "cadence", 1)
+    # Lifecycle LAST among the writable kinds: its target is `states.source` on either an entity or
+    # a component, so `sub` carries WHICH list rather than a nested index.
+    life = [(i, which)
+            for which, seq in ((0, m.entities), (1, m.components))
+            for i, el in enumerate(seq)
+            if (sm := getattr(el, "states", None)) is not None and sm.states
+            and (sm.source or "").strip()
+            and lifecycle_claim(el.id, el.name, sm.states, sm.transitions) == claim]
+    if life:
+        if len(life) != 1:
+            return ClaimMatch(None, "lifecycle", len(life))
+        idx, which = life[0]
+        el = (m.entities if which == 0 else m.components)[idx]
+        return ClaimMatch(ClaimTarget("lifecycle", idx, which, el.id, el.name), "lifecycle", 1)
+    store = [i for i, en in enumerate(m.entities)
+             if (st := en.store) is not None and st.dep
+             and store_claim(en.id, en.name, st.dep, st.container or "", st.mode or "") == claim]
+    if store:
+        if len(store) != 1:
+            return ClaimMatch(None, "store", len(store))
+        en = m.entities[store[0]]
+        return ClaimMatch(ClaimTarget("store", store[0], -1, en.id, en.name), "store", 1)
+    chan = [i for i, mr in enumerate(m.messaging)
+            if messaging_claim(mr.name, mr.broker or "", mr.publishers, mr.consumers) == claim]
+    if chan:
+        if len(chan) != 1:
+            return ClaimMatch(None, "messaging", len(chan))
+        return ClaimMatch(ClaimTarget("messaging", chan[0], -1, "", m.messaging[chan[0]].name),
+                          "messaging", 1)
+    desc = [i for i, c in enumerate(m.components)
+            if description_claim(c.id, c.name, c.purpose) == claim]
+    if desc:
+        if len(desc) != 1:
+            return ClaimMatch(None, "description", len(desc))
+        c = m.components[desc[0]]
+        return ClaimMatch(ClaimTarget("description", desc[0], -1, c.id, c.name), "description", 1)
+    return ClaimMatch(None, "", 0)
+
+
+#: The kinds a correction may WRITE to — the ones whose claim is anchored at the same line a
+#: skeptic is sent to read. Everything `resolve_claim` knows that is NOT in here is resolution-only,
+#: and the writer refuses it in words. An ALLOW-list, not a deny-list: a kind added to the resolver
+#: and forgotten here is skipped with a note, where a deny-list would have dropped it into whichever
+#: branch happened to be last (`cadence`) and indexed the wrong array — which it did, exactly once,
+#: for `store`.
+_WRITABLE_KINDS = frozenset({"edge", "security", "rule_site", "cadence", "lifecycle"})
+
+#: What `apply_anchor_corrections` calls a kind whose candidates were ambiguous. The wording is the
+#: reader's only clue about WHAT was ambiguous, so it names the kind in that kind's own words.
+_AMBIGUOUS_KIND_NOUN = {
+    "security": "security surfaces",
+    "rule_site": "rule sites",
+    "cadence": "entry points",
+    "lifecycle": "lifecycles",
+    "store": "stored entities",
+    "messaging": "messaging channels",
+    "description": "component descriptions",
+}
+
+
+def _unwritable_note(claim: str, match: ClaimMatch) -> str:
+    """The note for a correction that cannot be applied — ambiguous, absent, or anchor-less."""
+    if match.kind == "edge":
+        return (f"WARNING: '{claim}' matches {match.count} edges — skipped (resolve "
+                f"by hand: an ambiguous multi-site edge must not be blind-rewritten).")
+    if match.target is not None and match.kind not in _WRITABLE_KINDS:
+        # Resolution-only kinds. A component's purpose is prose; a store row and a channel row
+        # are anchored at a DECLARING line (the type, the channel), not at the write site a
+        # skeptic reads, which is exactly why both are `drift_eligible=False` in the worklist.
+        # Nudging their anchor toward the skeptic's evidence would move it off the declaration.
+        return (f"WARNING: '{claim}' is a {match.kind} claim — it carries no anchor a "
+                f"correction may move — skipped.")
+    if match.kind:
+        return (f"WARNING: '{claim}' matches {match.count} "
+                f"{_AMBIGUOUS_KIND_NOUN[match.kind]} — skipped (resolve by hand).")
+    return (f"WARNING: '{claim}' matches no edge, security surface, rule site, "
+            f"cadenced entry point or lifecycle in this map — skipped (the claim may "
+            f"have been rewritten since).")
 
 
 def apply_anchor_corrections(m: ProjectModel,
@@ -173,68 +352,12 @@ def apply_anchor_corrections(m: ProjectModel,
         if not corrected:
             notes.append(f"note: no corrected line for '{claim}' — left unchanged")
             continue
-        mo = EDGE_CLAIM.match(claim)
-        if mo:
-            src, verb, dst = mo.group(1), mo.group(2).lower(), mo.group(3)
-            hits = [i for i, e in enumerate(m.edges)
-                    if e.src == src and e.verb.strip().lower() == verb and e.dst == dst]
-            if len(hits) != 1:
-                notes.append(f"WARNING: '{claim}' matches {len(hits)} edges — skipped (resolve "
-                             f"by hand: an ambiguous multi-site edge must not be blind-rewritten).")
-                continue
-            resolved.append((claim, corrected, "edge", hits[0], -1))
+        match = resolve_claim(m, claim)
+        t = match.target
+        if t is None or t.kind not in _WRITABLE_KINDS:
+            notes.append(_unwritable_note(claim, match))
             continue
-        sec = [i for i, s in enumerate(m.security)
-               if security_claim(s.surface, s.source) == claim]
-        if sec:
-            if len(sec) != 1:
-                notes.append(f"WARNING: '{claim}' matches {len(sec)} security surfaces — skipped "
-                             f"(resolve by hand).")
-                continue
-            resolved.append((claim, corrected, "security", sec[0], -1))
-            continue
-        sites = [(ri, si) for ri, br in enumerate(m.rules)
-                 for si, site in enumerate(br.sites)
-                 if (site.where or "").strip()
-                 and rule_site_claim(br.statement, (site.where or "").strip(), site.why) == claim]
-        if sites:
-            if len(sites) != 1:
-                notes.append(f"WARNING: '{claim}' matches {len(sites)} rule sites — skipped "
-                             f"(resolve by hand).")
-                continue
-            resolved.append((claim, corrected, "rule_site", sites[0][0], sites[0][1]))
-            continue
-        eps = [i for i, ep in enumerate(m.entry_points)
-               if (ep.cadence or "").strip()
-               and cadence_claim(ep.kind, ep.trigger, ep.cadence) == claim]
-        if eps:
-            if len(eps) != 1:
-                notes.append(f"WARNING: '{claim}' matches {len(eps)} entry points — skipped "
-                             f"(resolve by hand).")
-                continue
-            resolved.append((claim, corrected, "cadence", eps[0], -1))
-            continue
-        # Lifecycle LAST among the claim-shaped kinds: its target is `states.source` on either an
-        # entity or a component, so `sub` carries WHICH list rather than a nested index. The theme
-        # was drift-ELIGIBLE (the skeptic is sent to the declaring enum, the same line the anchor
-        # holds) with no writer here, so every confirmed lifecycle drift was re-authored by hand —
-        # verbatim the `cadence` gap that this same function was extended to close.
-        life = [(i, which)
-                for which, seq in ((0, m.entities), (1, m.components))
-                for i, el in enumerate(seq)
-                if (sm := getattr(el, "states", None)) is not None and sm.states
-                and (sm.source or "").strip()
-                and lifecycle_claim(el.id, el.name, sm.states, sm.transitions) == claim]
-        if life:
-            if len(life) != 1:
-                notes.append(f"WARNING: '{claim}' matches {len(life)} lifecycles — skipped "
-                             f"(resolve by hand).")
-                continue
-            resolved.append((claim, corrected, "lifecycle", life[0][0], life[0][1]))
-            continue
-        notes.append(f"WARNING: '{claim}' matches no edge, security surface, rule site, "
-                     f"cadenced entry point or lifecycle in this map — skipped (the claim may "
-                     f"have been rewritten since).")
+        resolved.append((claim, corrected, t.kind, t.idx, t.sub))
     # Two corrections resolving to ONE element cannot both be honoured; order must not decide.
     # Keyed on the CORRECTED value, not the claim: the same claim listed twice with two different
     # anchors is the same conflict wearing one name, and comparing claims missed it entirely.
@@ -895,17 +1018,16 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     # The reason is that the skeptic is sent to a DIFFERENT KIND OF LINE than the anchor (the write
     # site vs the type definition), so a difference is not evidence of anything.
     # NOT because `fix apply-drift` would rewrite it: an earlier version of this comment claimed
-    # that and it was false. `fix._EDGE_CLAIM` only matches `<Id> <verb> <Id>`, so a store claim
-    # falls through to the security branch, matches 0 surfaces and writes nothing — verified
-    # byte-for-byte. The harm this prevents is report noise drowning the true drifts, which is
-    # real (8 of 8 findings on a live map) but narrower than "corruption".
+    # that and it was false. It used to fall through every writable branch and write nothing;
+    # `resolve_claim` now names the entity explicitly and `apply_anchor_corrections` refuses it in
+    # words, which is the same outcome said out loud instead of reached by accident. The harm this
+    # prevents is report noise drowning the true drifts, which is real (8 of 8 findings on a live
+    # map) but narrower than "corruption".
     for en in m.entities:
         st = en.store
         if st is not None and st.dep:
-            where = f"{st.dep} container '{st.container}'" if st.container else st.dep
-            mode = f" ({st.mode})" if st.mode else ""
             items.append(WorkItem(
-                claim=f"{en.id} ({en.name}) is stored in {where}{mode}",
+                claim=store_claim(en.id, en.name, st.dep, st.container or "", st.mode or ""),
                 anchor=_anchor(en.source or ""),
                 drift_eligible=False, theme="persistence",
                 why_risky=("the persistence inventory hangs on this row — a wrong dep/container "
@@ -915,11 +1037,8 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     # list silently mis-draws the async half of the system. Anchor = the channel's declaring line.
     # Drift REPORT-ONLY (a refuted row is re-authored).
     for mr in m.messaging:
-        pubs = ", ".join(mr.publishers) or "nobody"
-        cons = ", ".join(mr.consumers) or "nobody"
-        on = f" on {mr.broker}" if mr.broker else ""
         items.append(WorkItem(
-            claim=f"Channel '{mr.name}'{on}: {pubs} publish(es); {cons} consume(s)",
+            claim=messaging_claim(mr.name, mr.broker or "", mr.publishers, mr.consumers),
             anchor=_anchor(mr.source),
             drift_eligible=False, theme="messaging",
             why_risky=("the async catalog hangs on this row — verify the enqueue/consume call "
