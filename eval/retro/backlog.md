@@ -18,7 +18,7 @@ Each item carries the finding it came from and what it would have to read to be 
 
 ## Landed
 
-Verified against the working tree on **2026-08-16**. Commits are on `main`, unpushed.
+Verified against the working tree on **2026-08-16**. Pushed to `origin/main` on 2026-08-19.
 
 | what | evidence |
 |---|---|
@@ -49,7 +49,7 @@ Verified against the working tree on **2026-08-16**. Commits are on `main`, unpu
 
 ### Landed 2026-08-17 — from the mcpolis build of that morning (session `0b3af67e`)
 
-Uncommitted in the working tree. Gates: `pytest tests eval/tests` **2,125 passed**;
+Pushed to `origin/main` on 2026-08-19. Gates at the time: `pytest tests eval/tests` **2,125 passed**;
 `pyright tools/coyodex eval/tools` **0 errors**. Every one was verified against the real build's
 artifacts, not only against a fixture.
 
@@ -104,6 +104,53 @@ artifacts, not only against a fixture.
 
 ---
 
+### Landed 2026-08-19 — from the mcpolis build of 2026-08-18 (session `c72a44ce`)
+
+Pushed to `origin/main`, `b267f1e..3068508`. Gates at the last commit: `pytest tests eval/tests`
+**2,244 passed**; `pyright tools/coyodex eval/tools` **0 errors**. Every fix has a test that was
+checked to FAIL before the change and pass after — one first draft passed with its fix removed,
+because its fixture produced nothing for the failure to be re-ordered ahead of, and a test that
+passes before the fix holds nothing.
+
+**Tools (`coyodex`)**
+
+| what | evidence |
+|---|---|
+| Both CLI entry points line-buffer stdout, so `2>&1 \| tail -N` keeps the FAILURE | Piped stdout is block-buffered and stderr is not, so a failure is re-ordered to the HEAD of the pipe. Three consecutive assembles aborted on a `set` directive naming a deleted rule id, the lead read the tail each time, saw a reassuring `note:`, and went on reading a map the tool had refused to write — 16 turns, taking a round of prose rewrites with it, visible only when the next good assemble dropped the long-sentence count 76 → 53. One line fixes every subcommand; `fix.py` alone has 72 stderr call sites. `bd10157` |
+| `grounding report` states the still-live refuted count on its FIRST line and its LAST | `\| tail -40` started inside the refuted list and cut the section header off the top; `\| head -30` ended after the third of five bullets. The lead fixed the three it could see and **two refuted claims shipped in the map**. `bd10157` |
+| `grounding write` prints a `NOTE FACTS` block | A note said "Eighteen fresh-context skeptics" of a build that dispatched 17 and produced 20 labels, and "Four superseded claims had been CONFIRMED" where the true count was 11 — seven overrides of settled verdicts undisclosed. Both numbers were computable at the moment the note was written. `bd10157` |
+| `audit --json` emits `where` beside `location` | The text report prints `where:`; a script read `f.get("where")`, matched nothing, printed nothing, and the next turn redid it by grepping the text. Both keys ship; a rename would break existing readers. `66d2b39` |
+| `reconcile` warns when `--out` strands the live directives | The carry-forward is keyed on `--out`, so `--out /tmp/…` silently lost keep_edges (5), drop_edges and set_anchors, and the lead hand-merged them. The tool's `Next:` hint then echoed the temp path into the suggested `assemble`. `66d2b39` |
+| The flow-duplication advisory moved to `validate` only | Its escape is an extras heading read from the model being checked — one fragment under `lint-fragment`, while the heading lives in `extras.json`. A build recorded exactly the line it was asked for and got the identical warning back. `--ids` harvests id tokens, never extras. `66d2b39` |
+| `finalize` runs `balance` as an INFORMATIONAL leg | A skipped Phase 3.5 and a passed one read the same. One build ran `balance` three times, the next ZERO, and nothing noticed. Never gates: method.md says balance "never gates and only ever re-groups". `66d2b39` |
+| `record` refuses a line that keys to nothing | It checked the heading and the presence of a why, then wrote whatever it was given. `read-before-create HP2, read-before-create HP3: …` — the check name repeated inside a comma list — keyed zero ids; unrecorded advisories went 1 → 9 and three extra finalize+render rounds were spent finding the shape by trial. Only the lines THIS call adds are checked. `68f4b06` |
+| `grounding lint --expect <batch-ids>` | A missing verdicts file is the one failure nobody spots by eye. One run printed `VERDICTS OK — 18 file(s) well-formed` while a nineteenth was landing, then ran four verdict-consuming commands against the incomplete set. `68f4b06` |
+| `grounding report` lists `ADDED SINCE THE PIN` | `write` printed how many and nothing said which, so a build hand-diffed `audit --json` against the worklist in python and then hand-edited the pinned file. `68f4b06` |
+| `validate` and `finalize` name `coyodex record` in a footer | Sixty advisory strings end by naming an extras heading and none said what writes one. `record` is named six times in `method.md` and the build used it ZERO times, against forty on the build before. A footer, not sixty rewritten strings, and quiet when every escape is already recorded. `8a36641` |
+| `lint-fragment` runs the operative-line check, ADVISORY, with the count in the verdict | The self-check every contract names was blind to the largest defect class it produces: six hand-authored fragments printed `LINT OK — 0 problems` and the next `validate` raised 86 drifted anchors over 366 call-site anchors. Advisory for at least one build — blocking would have failed six fragments on a build that shipped clean. The count rides in the verdict because the agents read this through `head -60`, `head -20`, `head -5` and `tail -20`. `2d325cb` |
+| A component's own `purpose` is an L2 claim, themed `description` | Nothing read the map's prose against the code. A map shipped `C36` saying a sign-in guard "refuses to be built at all…" beside its own `BR21` saying that guard "cannot fire" — the true reading. The rule had been challenged and corrected; the sentence next to it was in no worklist. 80 claims on that map, 500 → 580, ~$8 a build. Sorts ABOVE `backbone`: a backbone edge is at least anchor-checked, a description is read by nothing. `3068508` |
+
+**Measurement (`coyodex-eval`)**
+
+| what | evidence |
+|---|---|
+| `_python_write` sees a path bound to a variable and written through `open(var,'w')` | The dominant hand-edit shape in two measured builds, and neither the literal-path patterns nor `_VAR_BOUND_WRITE` (which covers `Path(…)` + `.write_text()`) matched it. Assertion 27 goes 36/42 → **29/63** and assertion 28's denominator 2 → **11**: the scorecard was reporting about half the hand-scripted edits, in its own favour. `68f4b06` |
+| Assertion 21 says when the digest was FILTERED away rather than absent | It printed `n/a — not captured` about an assemble piped through `grep -E "ERROR\|FAILED\|Assembled"`. The digest existed and the build discarded it, which is the class assertion 37 exists to catch, reported as a clean absence. `68f4b06` |
+| **Assertion 40** — no sub-agent narrowed its own `lint-fragment` output | The first assertion that reads the per-agent transcripts, because this is invisible anywhere else. 8 of 22 invocations were piped on the measured build. A `grep` FOR the string is not an invocation and is excluded — counting one inflated both halves. `68f4b06` |
+
+**Method and templates**
+
+| what | evidence |
+|---|---|
+| The retro carries FINDINGS forward and re-verifies them (Step 0b, `findings.json`) | The backlog carries proposals; nothing carried findings, and neither could say whether a landed fix changed anything. `record --line` landed and usage went 40 → 0; the rules contract landed and worker behaviour changed while the churn it targeted did not. `b267f1e` |
+| Every finding carries `severity`, `fix_class` and `risk`, and **LOW risk is earned by a test** | Three different questions, collapsed into one impression by a ranked list of prose. The LOW gate moved five rows on a finished report. HIGH severity at LOW risk is the quadrant that sets the order. `e693e46` |
+| Step 5b — one reader at the FINISHED report | Step 5 refutes claims mid-draft and overturned six. A separate reader on the finished report then found the most consequential defect of the whole retro (two refuted claims in the shipped map), refuted three of the report's own numbers, and killed its top-ranked proposal by quoting the method line that decided the opposite. `b44d47e` |
+| The operator's `decision` is written into the ledger; the per-agent read states its coverage; a hand-rolled number is a draft until a second signal agrees | Three of one report's own figures were wrong: a path set-difference said three files were "never opened" when all had been read, a pipe count said 4 of 23 because a display truncated at 150 characters, and a per-agent read count did not reproduce. `b44d47e` |
+| `method.md` names `--expect`, `ADDED SINCE THE PIN`, `REFUTED BUT NOT SUPERSEDED`, `NOTE FACTS` and `--note-file`; all three agent contracts say the lint verdict carries a drift count | Five capabilities existed that no build could reach. This is the `reconcile` class — shipped, tested, and run ZERO times across four builds. A test now checks that direction, which nothing did. `5f5e072` |
+| `method.md` says what T7 block bundling costs; `dispatch.md` says the briefing comes before the first tool call | A build gave four of five rule agents two or three blocks each and spent the fresh-context-per-block property without deciding to. Another ran `scope` at turn 6 and emitted two user-facing messages in seventy turns, neither the briefing. `8a36641` |
+
+---
+
 ## Open — tools
 
 What is still open. Landed items move to the table above, with the commit. `scope` here means
@@ -143,18 +190,34 @@ These are `method.md` at the repo root and `method/templates/`, not the retro me
 | 3 | ~~Make the harvest contract fillable — complete it with the row shapes, or generate it~~ **LANDED** `80e77e3` (SERVES slot; the contract is still hand-filled) |
 | 4 | ~~Harvest and trace briefs must cite the UC/CAP/HP ids their slice serves~~ **LANDED** `80e77e3` |
 | 5 | ~~Order a fan-out by expected minutes, not item count; size it to the harness's 20-agent cap~~ **LANDED** `80e77e3` |
-| 6 | State the gate-reading rule for `balance` and `audit` explicitly | Both were narrowed. The `audit` case is already recorded in `method.md` and the build did it anyway, so restating may not be the fix — consider whether the tools should resist narrowing instead. |
-| 7 | Resolve the grounding-write ordering tension; put `--keep-note` / `--note-file` in the worked example | Recording an advisory is a fragment change, but advisories only surface at the gate step after `grounding write` — so the prescribed order forces a redo loop. A 1,300-character note was re-pasted three times and mutated between pastes. |
-| 8 | Say where the 3-vote majority goes — the access batches — once the tool can identify them | Blocked on tools item 1. |
+| 6 | ~~State the gate-reading rule for `balance` and `audit` explicitly~~ **ANSWERED THE OTHER WAY, 2026-08-19** | Its own note asked whether the tools should resist narrowing instead. The 2026-08-18 build answered yes: restating did not work (`balance` ran ZERO times against three on the run before), so the tools changed instead — `grounding report` states its critical count at BOTH ends, `lint-fragment` puts the drift count in the verdict, `finalize` runs `balance` itself and records it, and assertion 21 no longer reports a filtered view as `n/a`. What is still open is narrower and belongs to whoever writes a gate next: **a gate's headline number must survive both a `head` and a `tail`.** |
+| 7 | Resolve the grounding-write ordering tension (**the `--note-file` half LANDED `5f5e072`**) | Recording an advisory is a fragment change, but advisories only surface at the gate step after `grounding write` — so the prescribed order forces a redo loop. The 2026-08-18 build reproduced it exactly: assertion 13 scored 0/1 with four map/fragment writes after `grounding write`, and the note was retyped inline three times (~1,900 characters). `--note-file` is now in the worked example, which fixes the retyping and not the ordering. The ordering half needs a decision: move a validate+audit read BEFORE `grounding write`, or state the loop-back explicitly. |
+| 8 | ~~Say where the 3-vote majority goes — the access batches~~ **LANDED** `method.md:1478` | Verified on the 2026-08-18 build: the 40 highest-risk access claims were three-voted and the three skeptics agreed on all 40 rows, including the single refutation. |
 | 9 | ~~Name `coyodex-eval archive` at the front door of the skill, not parenthetically~~ **LANDED** `80e77e3` |
 | 10 | ~~Distinguish *launching* the pre-index from *reading* it~~ **LANDED** `898233a` |
 | 11 | ~~Say plainly whether a harvest agent may author a fragment-generating program~~ **LANDED** `80e77e3` |
 | 12 | ~~Name `ListAgents` in the anti-polling rule, or bless it as a cheap one-shot~~ **LANDED** `898233a` |
-| 13 | When a build request includes a retro, say up front that the retro needs a fresh chat | One build reached turn 537 before finding out. |
+| 13 | When a build request includes a retro, say up front that the retro needs a fresh chat | One build reached turn 537 before finding out. Untouched as of 2026-08-19. |
 | 14 | ~~The build must commit~~ **LANDED** `80e77e3` |
-| 15 | **The rules contract must say that a file handed to a worker is a file to OPEN.** A brief carries each candidate's component record, source anchor included; the contract has to state that receiving one is not the same as checking it, and that a candidate dismissed without being read is reported as dismissed. | Two builds of ONE commit (bb21a2d) share 25 % of their access enforcement lines: 163 -> 116, 57 shared, 17 files covered only by the older map and 16 only by the newer. Investigated 2026-08-17, three causes ELIMINATED — not the block cuts (the areas are re-cut every build, one name of ten repeated, but coverage does not follow them), not trace coverage (103 of the 106 lost lines sit in files the newer map still anchors), and not effort (median 31 vs 33 code reads per rule worker). The matched pair settles it: on `encryption.py` the older secrets worker ran three commands — the file body, decrypt-failure handling, then the Mongo wrapper against the settings route — and anchored a rule at line 82; the newer worker never ran one command against it, and the file appears exactly ONCE in its whole log, inside the brief it was handed, carrying that same `encryption.py:82`. The candidate was in its hands with the line number. `method/templates/rules-contract.md` (new 2026-08-17) is the first shared wording for this fan-out, so the next build is its first fair test — check whether its secrets worker opens what its brief hands it. |
+| 15 | ~~The rules contract must say that a file handed to a worker is a file to OPEN~~ **LANDED, AND IT WORKS — but the churn it targeted did not move** | `method/templates/rules-contract.md` (2026-08-17) got its first fair test on the 2026-08-18 build: **every one of the 63 files named in a rule worker's brief was opened**, against a previous build whose secrets worker opened none of its handed file. The enforcement-line churn did not follow: 116 → 115 lines with **50 in both**, 50 of a 181-line union (28%), against 57 of 222 (26%) for the pair before. So the diagnosis was incomplete, and the obvious replacement does not survive either — of the 17 files that lost coverage, 14 were in NO rule worker's brief, but access SITES did not fall (123 → 124 across 44 → 47 rules), every one of the 14 is in the map as a component `files` entry, and 8 of the 14 were mentioned inside a worker's transcript anyway. **Now question 3 below, with the experiment that would settle it.** |
 
 ---
+
+### Open — from the mcpolis retro of 2026-08-18 (decided by the operator 2026-08-19)
+
+Nineteen of that retro's twenty-four findings landed; these are what did not.
+
+| # | item | decision | why it is still here |
+|---|---|---|---|
+| 16 | A degraded mode for a fan-out that cannot run | **undecided** | An API outage killed 19 of 61 sub-agents (four records each, zero tool calls, all launched 16:39–17:18). The lead improvised: it hand-harvested 4 of 10 harvest slices and hand-traced 6 of 8 trace slices, and lost the contract's self-check discipline with it — which is where that build's 86 drifted anchors came from. The method describes no degraded mode, so the fallback was invented under pressure. It is an ORPHAN: decisions were recorded on findings and this existed only as a proposal, so nothing ever asked about it. **The ledger should carry proposals too, not only findings.** |
+| 17 | The wider prose surface | **deferred** | Component `purpose` landed as the `description` theme (80 claims). Uncut: component `evidence[].why` (371) — which carries a SECOND copy of the false sentence that motivated the whole tier — plus rule-site `why` (187), edge `why` (276) and flow step phrases (372). All of it would be 1,286 claims and roughly double a build. **Widen once the refutation rate on real descriptions is known; the next build gives that number for free.** |
+| 18 | Assertion 21's sibling: an advisory whose escape is unreachable from the tool that prints it | **open** | The flow-duplication case is fixed by moving the check to `validate`. `test_method_contract` check (c) asserts an escape is read by the check that prints it and did NOT catch this one, so the check has a reach problem of its own. |
+
+**Rejected, 2026-08-19** — recorded so they are not re-proposed: a placeholder-`purpose` warning in
+`lint-fragment` (a threshold, and the harm on the measured build was zero); a rule about the grep
+that dropped an `assemble` WARNING (the dangerous half is fixed by line-buffering, and what remains
+is a filter habit no test can hold); and a method sentence about the post-hoc `granularity` record
+(hygiene, and no test reaches a timing habit).
 
 ## Open — questions a retro could not answer
 
@@ -166,6 +229,9 @@ folder. These are the parked ones, with who can answer them.
 |---|---|---|---|
 | 1 | Do the 44 access rules of the 2026-08-17 mcpolis map SAY what the previous map's 50 said? The deterministic half is answered — the two maps share 25 % of their enforcement lines, 17 files lost their coverage and 16 gained it, so it is neither a clean merge nor a clean loss. What no deterministic check can settle is whether the surviving statements cover the same decisions. | `/coyodex-eval` (judges) | 2026-08-17 |
 | 2 | Which of the 17 files that lost access coverage hold enforcement the map should still be claiming? Two were verified by hand as real — a sign-in signature check and a credential encryption call — and one old anchor was a config constant rather than enforcement. The remaining fourteen are unread. | a human, or a targeted skeptic pass | 2026-08-17 |
+| 3 | What actually causes the access enforcement-line churn? Item 15 above eliminated the diagnosis it was built on. **The experiment: re-run ONE block's rule worker with a `coyodex dump --members`-derived candidate list instead of the hand-curated one, and compare which files earn sites.** One extra agent on the next build. | the next build | 2026-08-19 |
+| 4 | Do the 47 access rules of the 2026-08-18 map say what the previous map's 44 said? Same shape as question 1, for the newer pair: 50 shared enforcement lines of a 181-line union, 17 files lost, 11 gained. | `/coyodex-eval` (judges) | 2026-08-19 |
+| 5 | Is one refuted-claim-in-the-map a pattern? `grounding report`'s `REFUTED BUT NOT SUPERSEDED` section found two on the 2026-08-18 map, both from a reconcile that corrected one copy of a row and left another. Nobody has looked at an older map with the same command. | anyone, one command per archived map | 2026-08-19 |
 
 ## Candidate L3 assertions
 
@@ -182,7 +248,7 @@ these are not — an assertion nobody can implement is a proposal that quietly d
 |---|---|
 | Every recorded exception's `(check, id)` pair appears in the gate's live output — the inverse of 24, which catches records that silence nothing | map + gate output |
 | A budget deviation that leaves the granularity band carries a `granularity` balance exception at the time | map + fan-out prompts + pre-index |
-| No sub-agent narrowed its own `lint-fragment` output | per-agent transcripts |
+| ~~No sub-agent narrowed its own `lint-fragment` output~~ **LANDED as assertion 40** `68f4b06` — 8 of 22 invocations were piped on the 2026-08-18 build. It is the first assertion that reads the per-agent files, so the "change to what it consumes" is now made and the remaining two below are cheaper than they were | per-agent transcripts |
 | A verdict's `evidence`/`note` does not assert a read the agent's transcript contradicts | per-agent transcripts + verdict files |
 
 The last one is partly built already: `coyodex grounding lint --agent-transcripts <dir>` performs
@@ -192,6 +258,10 @@ the same per-agent input as the one above it — so both arrive together or not 
 ---
 
 ## Sources
+
+- 2026-08-18, mcpolis (`c72a44ce`) — 24 findings, 19 landed across `b267f1e..3068508`. Report was
+  at `.coyodex-eval/retro/2026-08-18_2257/` in that project, with a `findings.json` ledger beside
+  it; both are git-ignored, so this file is the surviving record.
 
 - 2026-08-13, coworker (`3ee6dd61`) — the retro these came from. Report was at
   `.coyodex-eval/retro/2026-08-13_0754/` in that project; git-ignored, so treat this file as the
