@@ -429,6 +429,16 @@ def format_report(r: FinalizeReport) -> str:
             tag = f"**{d}**" if d in ("UNRECORDED", "UNSURE") else d
             out.append(f"- {tag}{f' [{h}]' if h else ''} — {a}")
         out.append("")
+        # The UNRECORDED rows are the ones asking to be written, so name the writer beside them.
+        # See the same footer in `validate`: sixty advisory strings name a heading and none names
+        # the command, and a measured build hand-appended every record instead.
+        if any(d in ("UNRECORDED", "UNSURE") for d, _, _ in disp):
+            out.append("Write the missing records with `coyodex record --map <the FRAGMENT that "
+                       "owns extras> --heading \"<heading>\" --line \"<key>: <why>\"` — it "
+                       "shape-checks each line, so one that would silence nothing is refused "
+                       "rather than stored. Re-run `finalize` after, never before: records written "
+                       "against an earlier run's findings go stale the moment anything is fixed.")
+            out.append("")
     for leg in r.legs:
         out.append(f"## {leg.name}")
         if not leg.ran:

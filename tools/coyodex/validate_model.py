@@ -4492,6 +4492,18 @@ def _run(argv: list[str] | None = None) -> int:
         print("\nVALIDATION WARNINGS (non-blocking):")
         for w in warnings:
             print(f"  - {w}")
+        # NAME THE WRITER, ONCE, WHERE THE LEAD IS READING. Sixty of these messages end by telling
+        # the author to record a line under an extras heading, and none of them says what writes
+        # one. `coyodex record` is named six times in `method.md` and a measured build still used
+        # it ZERO times — against forty on the build before it — hand-appending every record with a
+        # `python3` heredoc, which is the exact anti-pattern `record --help` opens by quoting. One
+        # of those hand-written lines keyed no ids at all and cost three extra finalize rounds.
+        # A footer rather than sixty rewritten strings: the sentence lands once and stays right.
+        if any("extras heading" in w for w in warnings):
+            print("\n  To record any escape named above — `record` shape-checks the line before it "
+                  "writes, so a line that would silence nothing is refused rather than stored:\n"
+                  "    coyodex record --map <the FRAGMENT that owns extras> "
+                  "--heading \"<heading>\" --line \"<key>: <why>\"")
     if problems:
         print("\nVALIDATION FAILED:")
         for p in problems:

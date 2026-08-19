@@ -20,7 +20,11 @@ path: your cwd is the analyzed repo, which has no `.venv/`):
 ```
 
 **Show its output verbatim, as your first message.** Do not summarise, re-word or "the highlights
-are" it. It states the rule that decides the file set (git, minus `.gitignore`, minus coyodex's
+are" it. **First message means FIRST: before the first tool call, not after the setup turns.** One
+build ran `scope` at turn 6 and emitted exactly two user-facing messages in its first seventy
+turns, neither of them the briefing and neither naming the mode; the operator learned what the map
+had covered only when the map was finished. The briefing is cheap to print and impossible to
+reconstruct later, because by then the reader has the map and no reason to doubt its scope. It states the rule that decides the file set (git, minus `.gitignore`, minus coyodex's
 built-in exclusions — `node_modules/`, `dist/`, build output, lock files — minus
 `.coyodex/.ignore`), how many files that came to, what each ignore pattern removed — naming any
 pattern that removed nothing — and what the commit pin will mean. Paraphrase it and the narrowing

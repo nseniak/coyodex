@@ -3592,3 +3592,45 @@ def test_the_duplication_advisory_still_fires_at_validate():
     # And the escape works where it is readable.
     base["extras"] = [{"heading": "Accepted duplications", "body": "UC13 & UC15: one path, two doors"}]
     assert not _duplication_warnings(load_model(json.dumps(base))), "the recorded escape must silence it"
+
+
+def test_validate_names_the_writer_command_when_an_advisory_asks_for_a_record(capsys, tmp_path):
+    """Sixty advisory strings end by naming an extras heading, and none named what writes one.
+
+    `coyodex record` is named six times in `method.md` and a measured build used it ZERO times —
+    against forty on the build before — hand-appending every record with a `python3` heredoc,
+    which is the anti-pattern `record --help` opens by quoting. One of those hand-written lines
+    keyed no ids and cost three extra finalize rounds. A footer, not sixty rewritten strings: the
+    sentence lands once and stays right.
+    """
+    from coyodex import validate_model
+    steps = [{"n": i, "src": "C70", "dst": "C1", "phrase": f"does thing {i}",
+              "where": f"a.py:{i}"} for i in range(1, 5)]
+    doc = {
+        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "components": [{"id": "C70", "name": "G", "purpose": "p"},
+                       {"id": "C1", "name": "P", "purpose": "p"}],
+        "use_cases": [{"id": "UC13", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"},
+                      {"id": "UC15", "name": "B", "actors": ["Dev"], "trigger_outcome": "t"}],
+        "flows": [{"uc": "UC13", "title": "A", "steps": steps},
+                  {"uc": "UC15", "title": "B", "steps": steps}],
+    }
+    p = tmp_path / "map.json"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    validate_model.main([str(p)])
+    out = capsys.readouterr().out
+    assert "share a run of" in out, "the fixture must raise an advisory that names a heading"
+    assert "coyodex record --map" in out, out
+    assert "shape-checks" in out, "it must say why the command beats a heredoc"
+
+    # A map raising no advisory that names a heading gets no footer: the line appears where there
+    # is something to record, not on every run. (Verified on a real map too — the 2026-08-18
+    # mcpolis map has every escape recorded and prints no footer.)
+    quiet = {"format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+             "components": [{"id": "C70", "name": "G", "purpose": "p"}]}
+    q = tmp_path / "quiet.json"
+    q.write_text(json.dumps(quiet), encoding="utf-8")
+    validate_model.main([str(q)])
+    quiet_out = capsys.readouterr().out
+    if "extras heading" not in quiet_out:
+        assert "coyodex record --map" not in quiet_out, quiet_out

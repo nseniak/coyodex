@@ -1119,3 +1119,31 @@ def test_the_method_points_the_lead_at_the_shared_writing_rules_file():
     """The lead has to know the file exists to append it, and a pointer is not a restatement."""
     prose = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
     assert "method/templates/writing-rules.md" in prose
+
+
+# --- retro 2026-08-18: findings 7, 14, 19 --------------------------------------------
+
+def test_the_method_says_whether_a_T7_agent_may_own_more_than_one_block():
+    """"One agent per block" was stated and nothing said what bundling costs.
+
+    A build gave four of its five rule agents two or three blocks each. Its `BR` ranges stayed
+    contiguous so nothing failed, and the property the fan-out exists for — fresh context PER
+    block — was spent without anyone deciding to spend it.
+    """
+    text = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
+    assert "One block per agent is the rule" in text, "the rule must be stated, not implied"
+    para = text.split("One block per agent is the rule", 1)[1][:1200]
+    assert "fresh context" in para, "it must say what bundling costs"
+    assert "Balance exceptions" in para, "it must say where a deliberate bundle is recorded"
+
+
+def test_dispatch_says_the_briefing_comes_before_the_first_tool_call():
+    """"First message" was read as "somewhere early".
+
+    One build ran `scope` at turn 6 and emitted two user-facing messages in its first seventy
+    turns, neither of them the briefing and neither naming the mode. The operator learned what the
+    map had covered only once the map was finished.
+    """
+    text = (REPO_ROOT / "method" / "dispatch.md").read_text(encoding="utf-8")
+    assert "before the first tool call" in text, (
+        "'first message' needs a definition a build cannot read as 'somewhere early'")

@@ -1315,6 +1315,16 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   part a reader calls "product-specific". Each agent gets ONE block (its `name` + `purpose`), the
   map, and its own `BR` id range (BR1–19, BR20–39, … — one contiguous range per agent, exactly like
   the trace fan-out's `SFn` ranges, because two agents minting `BR7` is a hard `assemble` failure).
+
+  **One block per agent is the rule, and bundling is allowed only when you say what it costs.** A
+  build gave four of its five rule agents two or three blocks each (R2 got BLK4+BLK5, R4 got
+  BLK6+BLK11+BLK10) and its `BR` ranges stayed contiguous, so nothing failed. What it spent is the
+  property the fan-out exists for: fresh context PER BLOCK. An agent holding three blocks reads the
+  third through whatever the first two left in its window, which is the same reason Phase 4 uses
+  fresh-context skeptics rather than one skeptic with a long list. Bundle when the block count
+  exceeds the harness's agent cap, or when two blocks are genuinely one decision area; record the
+  bundling and its reason under `Balance exceptions` so the next build can tell a deliberate
+  bundle from a lost one.
   **Show the rule SHAPE in the prompt** — a nested `sites[]` is more novel than anything the trace
   agents write, and the sub-flow fan-out learned this the expensive way:
 
