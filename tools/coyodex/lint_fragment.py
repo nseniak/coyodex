@@ -32,6 +32,7 @@ from coyodex.validate_model import (
     confidence_warnings,
     _referenced_ids,
     check_anchor_existence_model,
+    check_operative_lines_model,
     check_domain_relations,
     check_entity_sources_model,
     rule_row_problems,
@@ -382,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: no fragment given", file=sys.stderr)
         return 2
     clean = True
+    n_drift = 0
     unreadable = False
     # Buffered, so the VERDICT can be printed before the detail. It used to print last, after every
     # advisory row — and a harvest agent's own `head -40` cut it off twice: rounds that had already
@@ -430,15 +432,36 @@ def main(argv: list[str] | None = None) -> int:
         else:
             say(f"{p.name}: OK", False)
         # advisory warnings never fail the lint — heuristic nudges the agent can act on or ignore
-        for w in lint_fragment_warnings(m) + _budget_warnings(m, expect):
+        drift: list[str] = []
+        if repo_root is not None:
+            # THE OPERATIVE-LINE CHECK, which this command could not see until now.
+            #
+            # Every contract tells an agent to self-check with `lint-fragment` until clean, and
+            # this was the one defect class it was structurally blind to: it imports
+            # `check_anchor_existence_model` (does the FILE exist) and never
+            # `check_operative_lines_model` (does the LINE act). Six hand-authored trace fragments
+            # each printed `LINT OK — 0 problems`, and the next `validate --check-sources` raised
+            # 86 anchor-drift warnings over 366 call-site anchors — 44 python function headers, 17
+            # imports, 9 comments, one blank line. Repairing them took fifty turns at the lead.
+            #
+            # ADVISORY, deliberately, and for one build before anyone argues about blocking:
+            # `validate_model` documents the check as "non-blocking on purpose" because a drifted
+            # anchor does not refute the relationship, only its `where`. Promoting it here would
+            # have failed six fragments on a build that shipped a clean map.
+            drift = check_operative_lines_model(m, [repo_root.resolve()])
+        for w in lint_fragment_warnings(m) + _budget_warnings(m, expect) + drift:
             say(f"{p.name}: warning: {w}", kind="warning")
+        n_drift += len(drift)
     n_prob, n_warn = tally["problem"], tally["warning"]
+    # The drift count rides in the VERDICT, not only in the rows. The rows are the middle of the
+    # output and a `head -5` cuts them; the verdict is the line every reader keeps.
+    drift_note = f" ({n_drift} anchor drift)" if n_drift else ""
     if unreadable:
         verdict, code = "LINT DID NOT RUN", 2
     elif not clean:
-        verdict, code = f"LINT FAILED — {n_prob} problem(s), {n_warn} advisory warning(s)", 1
+        verdict, code = f"LINT FAILED — {n_prob} problem(s), {n_warn} advisory warning(s){drift_note}", 1
     else:
-        verdict, code = f"LINT OK — 0 problems, {n_warn} advisory warning(s)", 0
+        verdict, code = f"LINT OK — 0 problems, {n_warn} advisory warning(s){drift_note}", 0
     # FIRST line, always, and on STDERR whichever way the lint went. Two reasons, both learned:
     #
     #  * a truncating pipe must keep the verdict, so it leads and both streams are flushed before

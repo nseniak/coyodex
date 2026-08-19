@@ -487,3 +487,45 @@ def test_the_duplication_advisory_does_not_fire_at_fragment_lint():
     })
     warnings = lint_fragment_warnings(load_model(frag))
     assert not [w for w in warnings if "share a run of" in w], warnings
+
+
+def test_lint_sees_a_drifted_anchor_and_says_so_in_the_verdict(tmp_path, capsys):
+    """The one defect class the self-check was structurally blind to.
+
+    Every contract tells an agent to self-check with `lint-fragment` until clean. It imported
+    `check_anchor_existence_model` (does the FILE exist) and never `check_operative_lines_model`
+    (does the LINE act), so six hand-authored trace fragments each printed `LINT OK — 0 problems`
+    and the next `validate --check-sources` raised 86 anchor-drift warnings over 366 call-site
+    anchors: 44 python function headers, 17 imports, 9 comments, one blank line. Repairing them
+    took fifty turns at the lead.
+
+    ADVISORY, and the count rides in the VERDICT. Blocking would have failed six fragments on a
+    build that shipped a clean map, and `validate_model` documents the check as "non-blocking on
+    purpose" — a drifted anchor does not refute the relationship, only its `where`. The rows are
+    the middle of the output and a `head -5` cuts them; the verdict is the line every reader keeps.
+    """
+    src = tmp_path / "a.py"
+    src.write_text("# just a comment\nimport os\n\n\ndef act():\n    return os.getpid()\n",
+                   encoding="utf-8")
+    frag = tmp_path / "T1.json"
+    frag.write_text(json.dumps({
+        "format": "coyodex-map", "title": "T", "goal": "g", "commit": "abc1234",
+        "components": [{"id": "C1", "name": "A", "purpose": "p"},
+                       {"id": "C2", "name": "B", "purpose": "p"}],
+        "use_cases": [{"id": "UC1", "name": "A", "actors": ["Dev"], "trigger_outcome": "t"}],
+        "flows": [{"uc": "UC1", "title": "A", "steps": [
+            {"n": 1, "src": "C1", "dst": "C2", "phrase": "calls act", "where": "a.py:1"}]}],
+    }), encoding="utf-8")
+
+    code = lint_fragment.main(["--repo", str(tmp_path), str(frag)])
+    err = capsys.readouterr().err
+    assert code == 0, "a drifted anchor is advisory, never a lint failure"
+    assert "anchor drift" in err.splitlines()[0], (
+        "the count must ride in the verdict, which is the line a narrow read keeps:\n" + err)
+    assert "anchor the operative statement" in err, err
+
+    # An anchor on the acting line raises nothing.
+    frag.write_text(frag.read_text(encoding="utf-8").replace('"a.py:1"', '"a.py:6"'),
+                    encoding="utf-8")
+    lint_fragment.main(["--repo", str(tmp_path), str(frag)])
+    assert "anchor drift" not in capsys.readouterr().err.splitlines()[0]
