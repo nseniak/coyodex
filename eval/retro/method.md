@@ -157,6 +157,94 @@ wastes a fan-out re-finding what is already fixed. Two failure modes it catches,
   carry the answer into Step 6's proposals section. Publishing a fixed bug as live burns the
   reader's trust in the rest.
 
+### Step 0b — Carry the previous FINDINGS forward, and re-verify each one
+
+The backlog above carries past PROPOSALS. It does not carry past FINDINGS, and neither can say
+whether a landed fix changed anything. Load the newest
+`.coyodex-eval/retro/<ts>/findings.json` and settle every row **before any other analysis starts**.
+A recurrence changes what the rest of the retro should look for, and a fix that landed and did
+nothing is the most expensive result a method change can produce.
+
+Both halves have been observed live on one build: `record --line` landed as a tool while the build
+used `record` **0 times against 40 on the previous build**, and the rules contract landed and did
+change worker behaviour while the churn it targeted did not move.
+
+For each row, run both probes.
+
+- **`product_probe`** answers *did the fix land in `COYODEX_HOME`*. A grep, a `--help` check, or one
+  command against a copy. `null` means the finding is not a product change.
+- **`behaviour_probe`** answers *does the behaviour still occur in THIS build*, and it must return a
+  NUMBER, not a yes. Store it in `observed` and move the old value to `prior`. "Reproduced or
+  worsened" is a comparison, and a boolean cannot express one.
+
+Three rules, each of which a real run has already broken:
+
+1. **A probe that cannot run is `broken`, never `fixed` and never `reproduced`.** A renamed command
+   turns a silent probe into a false verdict, and a false verdict looks exactly like data.
+2. **Zero occurrences with no opportunity is `unproven`, not `fixed`.** Set `opportunity: false` and
+   say so. One live case: scorecard assertion 21 printed `n/a`, which reads as "no opportunity",
+   while the truth was that the build had filtered the line away with a grep.
+3. **Do not answer this by re-reading the previous `report.md` prose.** It runs 300 to 900 lines per
+   retro, it is git-ignored, and a grep over it is unreliable: one alternation typed with a single
+   wrong character reported 0 of 12 reports for a phrase that appears in 10 of them. The ledger
+   exists so this step is one file read and N commands.
+
+Then combine `decision`, `landed` and `observed vs prior` into one verdict per row:
+
+| decision | landed | count vs prior | verdict |
+|---|---|---|---|
+| accepted | yes | 0, with opportunity | **fixed and proven** |
+| accepted | yes | lower, not 0 | **landed, improved, not gone** |
+| accepted | yes | same | **landed but ineffective** |
+| accepted | yes | higher | **landed and worse** |
+| accepted | yes | no opportunity | **unproven this build** |
+| accepted | no | any | **accepted, not done yet** |
+| proposed / deferred | no | higher | **open and worsening** |
+| proposed / deferred | no | same | **open, reproduced** |
+| proposed / deferred | no | lower | **open, improving** |
+| rejected | any | any | listed once, then quiet |
+
+`decision` is the OPERATOR's answer, not the retro's, and nothing else in this method records it.
+An item the operator rejected and an item nobody got to must not read the same.
+
+Increment `retros_open` on every row that is not `fixed and proven` or `rejected`. **An item open
+for four retros is a different problem from a new one**, and the count is what makes a small
+recurring item visible. Carry every row forward whatever its severity: a LOW-severity item that has
+survived five retros outranks a new MED one, and only the count can say so.
+
+Write the updated ledger to YOUR run directory as `findings.json`, with this run's new findings
+appended. The shape:
+
+```json
+{
+  "schema": "coyodex-retro-ledger/v1",
+  "project": "<repo>", "retro": "<ts>", "build_session": "…", "built_at": "…",
+  "code_commit": "…", "tool_commit": "…",
+  "findings": [
+    {
+      "id": "<project>-<date>-<n>", "title": "one line",
+      "severity": "HIGH | MED | LOW", "fix_class": "HARD | SOFT | HARD / SOFT",
+      "risk": "LOW | MEDIUM | HIGH",
+      "decision": "proposed | accepted | rejected | deferred",
+      "landed": true,
+      "product_probe": "…or null", "behaviour_probe": "…returns a number",
+      "observed": 0, "unit": "what the number counts, with its noun",
+      "prior": 0, "opportunity": true, "retros_open": 1
+    }
+  ]
+}
+```
+
+**Severity, fix class and risk are three different questions and must not be collapsed.** Severity
+is what the defect costs the MAP if nobody fixes it. Fix class is whether there is one right answer
+(HARD) or a judgement that can over- or under-fire (SOFT). Risk is what applying the fix could
+break, and **a fix is LOW risk only when a test in the coyodex suite can hold it** — the test fails
+before the change, passes after, and fails again on a revert, and what it asserts is the whole of
+the fix. Name that test file on every LOW row.
+
+The ledger is git-ignored like everything else under `.coyodex-eval/`. Anything that must outlive a
+`git clean` is promoted into the tracked `backlog.md`, exactly as a proposal is today.
+
 Create the output directory `.coyodex-eval/retro/<YYYY-MM-DD_HHMM>/` and write everything there.
 
 ---
@@ -458,6 +546,12 @@ the minutes it spent.
 - **verification**: `re-ran it myself` or `slice reader's word`. One word, on every finding, written
   when the finding is recorded — not reconstructed later from memory across a 40-turn
   reconciliation. This field IS the list Step 5 splits on;
+- **a probe** — one runnable check whose output says whether the behaviour still occurs, returning
+  a NUMBER wherever a number is possible. This is what makes the next retro's Step 0b affordable: it
+  turns "is this still true?" into one command instead of a re-read of every past report. A finding
+  whose behaviour no command can observe carries `behaviour_probe: null` and is reported as
+  `unverifiable`, never quietly dropped. About one finding in five is of that kind — a briefing not
+  shown, a timing habit — and saying so is the honest result;
 - **both halves of every ratio, and where each came from.** "Roughly ten of 67" was exactly ten of
   63 — the 67 mixed two different record types under one heading. One run reported the same
   refutation rate as 0.81% and 0.73% in different places because one used challenged claims as the
@@ -561,6 +655,11 @@ Write `.coyodex-eval/retro/<ts>/report.md` and summarise it in chat. Structure:
 ## What this covers
 the map, the transcript, and what could NOT be assessed
 
+## Carried forward
+landed and worse FIRST · landed but ineffective · open and worsening · open, reproduced
+(each with its `retros_open` count) · fixed and proven · accepted, not done yet ·
+unproven this build · probe broken · rejected (once, then quiet)
+
 ## Product signals
 blocking problems · advisories surviving · components vs E · grounding coverage
 · deltas vs the previous map
@@ -598,6 +697,12 @@ say it plainly
   lines). Distinguish the two kinds and only propose the first: a QUESTION has an answer somebody
   could go and get ("does X still hold on this map?"), while a permanent limit is just this
   instrument's shape ("a single build proves nothing about a trend") and belongs in the report alone.
+- **`Carried forward` leads the report, and `landed and worse` leads that section.** A fix that
+  shipped and made things worse is the most expensive outcome a method change can have, and it is
+  invisible to every other instrument here. A new finding can wait one section.
+- **A carried row prints both halves of its comparison and their units.** Write
+  `record invocations 40 -> 0`, never "record usage regressed". The ratio rule below applies to
+  every carried number too.
 - **A single build proves nothing about a trend.** Where a number moved against the previous build,
   say it moved; do not say the method improved. Two data points are two data points.
 - **Propose, do not apply.** End by asking which proposals the user wants implemented.
