@@ -576,6 +576,17 @@ the minutes it spent.
 
 A finding without a turn number is not a finding. Drop it.
 
+**A number from your own throwaway script is a draft until a second signal agrees with it.** This
+is not a general caution, it is the most common way a retro publishes something false: three of one
+report's own figures were wrong, and each looked exactly as solid as the figures that held. A
+set difference over paths said three files were "never opened" when every one had been read,
+because the brief named `backend/src/…/settings.py` and the command ran `cat -n …/settings.py` —
+**normalise before differencing, and never read an empty intersection as absence.** A pipe count
+said 4 of 23 because the display truncated at 150 characters and hid four more. A per-agent
+read count did not reproduce at all. Cross-check any hand-rolled per-agent number against a second
+signal, and prefer `coyodex-eval transcript` to a heredoc wherever it can answer — the tool exists
+and every wrong number above came from not using it.
+
 **A trend claim needs the whole ordered list, not its two ends.** This is the most common way a wrong
 finding gets published, because a clean correlation across two extremes feels exactly like the
 "anything surprising" class 10 asks for. Every refuted finding on the 2026-08-13 coworker retro had
@@ -661,6 +672,37 @@ asked for confirmation.
 
 ---
 
+## Step 5b — Send one reader at the FINISHED report
+
+Step 5 refutes individual CLAIMS while the report is still being drafted. This is a different job
+and it comes after the report is written: **one fresh-context agent, briefed to refute the REPORT
+as an artifact.** Skipping it because Step 5 already ran is the mistake — on the run this step
+comes from, Step 5 overturned six claims and Step 5b then found the single most consequential
+defect of the whole retro, which no claim-level refuter could have seen because nobody had claimed
+it.
+
+Brief it to attack six things, in this order:
+
+1. **A finding that is factually wrong.** Hand it the numbers that carry the most weight and tell
+   it to recompute each from disk.
+2. **A finding whose numbers are right and whose CAUSE is wrong.** Correlation read as mechanism.
+3. **A proposal that does not follow from its finding**, or that would break something else.
+4. **A claim presented as verified that was not.** Give it the `Verification status` split and tell
+   it to audit that split specifically — anything asserted with more confidence than the split
+   supports, and anything the split calls "re-ran it myself" that does not reproduce.
+5. **A ranking that is wrong.** Argue for a different order if the evidence supports one.
+6. **What the retro MISSED.** The highest-value thing it can return, and the reason this step
+   exists. Name a defect class nobody looked for, a file nobody opened, a question nobody asked.
+
+Expect it to hurt. On its first run it refuted three of the report's own numbers — two were wrong
+counts from the lead's own scripts and one did not reproduce at all — killed the report's
+top-ranked proposal by quoting the method line that already decided the opposite, and found two
+refuted claims sitting in the shipped map that the gate had printed and a pipe had discarded.
+
+Reconcile every verdict yourself, and **re-verify the consequential ones against the files before
+accepting them** — a report-level reader is not automatically right either. Then say in
+`Verification status` what it overturned, including anything of your own it corrected.
+
 ## Step 6 — Report
 
 Write `.coyodex-eval/retro/<ts>/report.md` and summarise it in chat. Structure:
@@ -699,7 +741,12 @@ what you re-ran yourself · what a refuter confirmed · what it overturned
 · where a refuter was wrong · what nobody checked
 
 ## Not assessed
-say it plainly
+say it plainly — and **state the per-agent read COVERAGE as a fraction**: "read 11 of 61 agent
+transcripts — the 5 rule workers and 6 skeptics; no harvest agent and neither surviving trace
+agent". Step 3 says you do not need them all, which is true and is exactly why the number must be
+printed: a report that names the agents it opened and not the ones it skipped reads as a complete
+per-agent pass. On the run this rule comes from, the two trace agents nobody opened held half the
+narrowed self-checks the report went on to under-count
 ```
 
 **Rules for the report.**
@@ -738,7 +785,13 @@ say it plainly
   method change that would have caught it, and stop there.
 - **A single build proves nothing about a trend.** Where a number moved against the previous build,
   say it moved; do not say the method improved. Two data points are two data points.
-- **Propose, do not apply.** End by asking which proposals the user wants implemented.
+- **Propose, do not apply.** End by asking which proposals the user wants implemented — and then
+  **write the answer into `findings.json` as each row's `decision`.** That is the one input the
+  carry-forward needs and the one the retro cannot compute: without it every row stays `proposed`,
+  Step 0b can never print `landed but ineffective`, and the next retro re-proposes everything the
+  operator already refused. Record a rejection's REASON on the row too, so it is answered once and
+  goes quiet rather than being re-argued each run. An operator who does not answer leaves the rows
+  `proposed`, which is honest and is not the same as a `no`.
 - **Re-check the turn count before you write.** Compare `coyodex-eval transcript <t> --stats` against
   the count you noted in Step 2. If it grew, the operator came back to the build window while you
   read, and every UNBOUNDED number you quoted has drifted — one run went 250.5m to 799.7m wall for

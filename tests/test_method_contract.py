@@ -1168,3 +1168,21 @@ def test_the_retro_method_defines_all_three_finding_tags_and_the_LOW_gate():
         "the taxonomy is tools, method and assertions; a map repair is not a retro proposal")
     assert "severity | fix class | risk" in text, (
         "the report skeleton must ask for the at-a-glance table, not just prose")
+
+
+def test_the_retro_method_carries_the_four_habits_that_produced_its_own_corrections():
+    """Each of these caught a real defect in a real retro, and none was written down.
+
+    A claim-level refuter cannot find what nobody claimed; the operator's decision is the one input
+    the carry-forward cannot compute; a per-agent pass that names what it read and not what it
+    skipped reads as complete; and a number from a throwaway script is a draft.
+    """
+    text = (REPO_ROOT / "eval" / "retro" / "method.md").read_text(encoding="utf-8")
+    assert "## Step 5b — Send one reader at the FINISHED report" in text, (
+        "Step 5 refutes claims mid-draft; the finished report needs its own reader")
+    assert "What the retro MISSED" in text, "that is the reason Step 5b exists"
+    assert "write the answer into `findings.json` as each row's `decision`" in text, (
+        "an unrecorded decision leaves every row `proposed` and the carry-forward inert")
+    assert "state the per-agent read COVERAGE as a fraction" in text
+    assert "is a draft until a second signal agrees with it" in text, (
+        "the hand-rolled-scan rule is the most common way a retro publishes something false")
