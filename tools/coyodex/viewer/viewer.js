@@ -26,6 +26,15 @@ let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of 
 let COMPLETENESS = {};        // the four-state counts shown on the System tab
 let HAS_CAPABILITIES = false;
 let CAP_OF_UC = {};           // use-case id -> its capability NODE (names on screen, never ids)
+// ── the DERIVED feature layer (coyodex.features / plan/80-feature-led-views). Everything a feature
+// owns — its roles, use cases, ways in, rules, entities and components — joined ONCE in Python from
+// the stored model. Nothing here is authored, and nothing is re-derived in JS: a second join would
+// eventually disagree with the Rules view, which reads the same `rule_steps` primitive.
+let FEATURES = {};            // the whole bundle (see coyodex.features.as_bundle)
+let FEAT_BY_ID = {};          // feature id -> its facts
+let FEAT_COVERAGE = {};       // how much of the code the feature layer reaches
+let COMP_FEATURES = {};       // component id -> the feature ids whose use-case walks pass through it
+let ROLE_FEATURES = {};       // role id -> {feature id: how many of its use cases this role drives}
 let DEPLOYMENT_GROUP_CARDS;   // product-area container id -> its members' diagram (the container drill)
 let DEPLOYMENT_GROUP_MEMBERS; // product-area container id -> the unit names inside it
 let DEPLOYMENT_EDGES;      // process->process arrow 'U_a>U_b' -> [async channels it carries]
@@ -109,6 +118,12 @@ function applyBundle(b) {
   // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
   COMPLETENESS = GRAPH.completeness || {};
   HAS_CAPABILITIES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'capability');
+  FEATURES = b.features || {};
+  FEAT_BY_ID = {};
+  for (const f of (FEATURES.features || [])) FEAT_BY_ID[f.id] = f;
+  FEAT_COVERAGE = FEATURES.coverage || {};
+  COMP_FEATURES = FEATURES.componentFeatures || {};
+  ROLE_FEATURES = FEATURES.roleFeatures || {};
   CAP_OF_UC = {};
   for (const n of Object.values(GRAPH.nodes || {})) {
     if (n.kind === 'usecase' && n.parent && (GRAPH.nodes[n.parent] || {}).kind === 'capability') {
@@ -304,6 +319,21 @@ for (const s of GRAPH.happy_path || []) if (s.uc) (HP_STEPS_BY_UC[s.uc] ||= []).
 // (gen_viewer._roles_by_name).
 const ROLE_BY_NAME = {};
 for (const r of GRAPH.roles || []) ROLE_BY_NAME[(r.name || '').trim().toLowerCase()] = r;
+// The same roles keyed by ID, which is the token the derived feature layer speaks: `roleFeatures`
+// and a feature's `roles` are id lists. One table per key space, both filled from the same source —
+// never an id looked up in the name index, which is the bug class the comment above records.
+const ROLE_BY_ID = {};
+for (const r of GRAPH.roles || []) if (r.id) ROLE_BY_ID[r.id] = r;
+// A role id in its readable form. Falls back to the id so a map built before roles carried ids
+// degrades to something inert rather than to `undefined`.
+function roleName(rid) { return (ROLE_BY_ID[rid] || {}).name || rid; }
+// A feature id in its readable form, from the derived layer first (it carries every feature) and the
+// graph node second.
+function featureName(fid) {
+  return (FEAT_BY_ID[fid] || {}).name || (GRAPH.nodes[fid] || {}).name || fid;
+}
+// Any element id in its readable form. Names on screen, ids only in the markup.
+function elName(id) { return (GRAPH.nodes[id] || {}).name || id; }
 // Reverse traceability ("Used in UC"): element id -> Set of use-case ids whose T6 flow steps through
 // it. The backward view of the flows (derived here, never authored), shown as links on a node's panel.
 // Sub-flow references are EXPANDED: an element touched only inside a shared sub-flow is used by every
@@ -1273,11 +1303,32 @@ function usedInHtml(id) {
     .filter((g) => g.ucs.length);
   const loose = ordered.filter((uc) => !CAP_OF_UC[uc.id]);
   if (loose.length) groups.push({ cap: null, ucs: loose });
+  // Every FEATURE heading is a link to that feature's page. This is the feature column on the code
+  // views: a component serving four features shows four of them here, where one serving none shows the
+  // empty state above — and from either you get back to what the product does in one click.
   const html = groups.map((g) => '<div class="used-cap-group">'
-    + '<div class="used-cap-name">' + esc(g.cap ? g.cap.name : 'Other use cases') + '</div>'
+    + (g.cap
+      ? '<button type="button" class="used-cap-name featref" data-id="' + esc(g.cap.id) + '">'
+        + esc(g.cap.name) + '</button>'
+      : '<div class="used-cap-name">Other use cases</div>')
     + '<ul class="used-uc-list">' + g.ucs.map((uc) => '<li>' + link(uc) + '</li>').join('')
     + '</ul></div>').join('');
-  return '<dt>In use cases</dt><dd class="used-by-cap">' + html + '</dd>';
+  return '<dt>In use cases</dt><dd class="used-by-cap">' + featureCountHtml(id) + html + '</dd>';
+}
+// How many features reach this component, read straight off the DERIVED layer (`componentFeatures`) and
+// never re-counted from the groups below it. The two are the same join in two languages; taking the
+// number from the Python one is what keeps this pane and the feature page from ever disagreeing.
+//
+// The count is the point of the row on a code view: the grouped list underneath is a wall on a big map
+// (one live feature reaches 55 components), and the reader's first question there is "how many parts of
+// the product does this serve", not "which use cases".
+function featureCountHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || n.kind !== 'component' || !HAS_CAPABILITIES) return '';
+  const fids = COMP_FEATURES[id] || [];
+  if (!fids.length) return '';
+  return '<p class="used-cap-count">Serves ' + fids.length + ' feature'
+    + (fids.length === 1 ? '' : 's') + '</p>';
 }
 // "How it decides" — the T7 rules this component enforces, on its info pane. Modelled on
 // `usedInHtml`: grouped, with an explicit empty state so "this component decides nothing" reads
@@ -1485,6 +1536,11 @@ function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
+  // The FEATURE headings on a component's "In use cases" row: each opens that feature's page. Routed
+  // through selectFromTree, which is the ONE place that answers "which view shows this id" — so the
+  // regrouping of the tabs (and anything else that moves an element's home) cannot break this link.
+  root.querySelectorAll('.featref[data-id]').forEach((b) =>
+    b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
   // Data-view rows in the panel: element chips navigate; the "See in Data view" / "View persisted
   // data" links deep-link into the Data tab focused on a store pane (and, for an entity, its row).
   root.querySelectorAll('.dv-chip[data-id]').forEach((b) =>
@@ -2454,8 +2510,11 @@ function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a 
 const VIEW_GROUPS = [
   ['product', 'Product', 'What does it do for the people who use it?'],
   ['data', 'Data', 'What does it know about, and where does that live?'],
-  ['code', 'Code', 'How is the code arranged, what does it pull in, and how well is it tested?'],
-  ['ops', 'Operations', 'What runs, and how do you run, watch, secure and configure it?'],
+  // Code and Operations were two groups; they are one. Both answer "how is this thing actually built
+  // and run", which is the SECOND question a reader has, and splitting it put five tabs on the top row
+  // when three of them are one idea. Product and Data are what the thing IS; this is the machine.
+  ['hood', 'Under the hood',
+   'How is the code arranged, what does it pull in, how well is it tested, and what runs it?'],
   ['glossary', 'Glossary', 'What do this project\u2019s words mean?'],
 ];
 const GROUP_OF_VIEW = {};   // view id -> its group id, filled from the buttons at boot (one source)
@@ -4876,7 +4935,8 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  if (kind === 'usecases' || kind === 'capability' || kind === 'actor' || kind === 'usecase') return 'usecases';  // a feature's or an actor's use cases, and a use case's flow, live under the Features tab
+  if (kind === 'usecases' || kind === 'capability' || kind === 'actor' || kind === 'usecase'
+      || kind === 'unreached') return 'usecases';  // a feature's or an actor's use cases, a use case's flow, and the code no feature reaches, all live under the Features tab
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup') return 'deployment';  // a process/container card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
@@ -4905,8 +4965,10 @@ function stateTitle(s) {
   if (s.kind === 'usecases') return 'Features';  // user-facing label; internal kind stays `usecases`
   if (s.kind === 'capability') {
     if (s.cap === '-') return 'Not assigned to a feature';
-    return GRAPH.nodes[s.cap] ? GRAPH.nodes[s.cap].name : s.cap;
+    const nm = GRAPH.nodes[s.cap] ? GRAPH.nodes[s.cap].name : s.cap;
+    return s.act ? nm + ' · ' + s.act : nm;   // a grid cell names both axes it crossed
   }
+  if (s.kind === 'unreached') return 'Code no feature reaches';
   if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
@@ -4945,7 +5007,8 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;
   }
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
-  if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap }];  // one feature's use cases
+  if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap, act: s.act }];  // one feature's use cases (a grid cell also carries the role)
+  if (s.kind === 'unreached') return [{ kind: 'usecases' }, { kind: 'unreached' }];  // the coverage line's drill
   if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];        // …or one actor's
   // A use case sits UNDER the card it was listed on, so the trail reads Features › that card › the use
   // case — the same overview → group → member shape Subsystems and Entities already use. WHICH card is
@@ -4959,9 +5022,13 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     // actor's list. Falling back to a lookup only for a use case reached some other way (search, a
     // Happy Path step) while the actor axis happens to be on.
     const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');
-    const mid = ucGroupBy() === 'actor'
+    const cap = HAS_CAPABILITIES ? (CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-') : '';
+    // On the GRID the reader came through a cell, which is one feature AND one role — so the middle
+    // crumb is that cell, not either axis alone. Clicking it reopens the list they were reading.
+    const mid = (ucGroupBy() === 'grid' && act && cap) ? { kind: 'capability', cap, act }
+      : ucGroupBy() === 'actor'
       ? (act ? { kind: 'actor', act } : null)
-      : (HAS_CAPABILITIES ? { kind: 'capability', cap: CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-' } : null);
+      : (cap ? { kind: 'capability', cap } : null);
     return mid ? [{ kind: 'usecases' }, mid, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
   }
@@ -5169,7 +5236,7 @@ function renderGlossary() {
 // this product do?" are different questions, and neither derives the other — replacing the actor
 // grouping with the capability one would have been a silent downgrade for anyone reading the map to
 // answer a permissions question. Only the heading key changes; rows, badges and behaviour do not.
-let UC_GROUP_BY = 'capability';   // 'capability' | 'actor'; falls back to actor on a map with none
+let UC_GROUP_BY = 'capability';   // 'capability' | 'actor' | 'grid'; falls back to actor on a map with none
 
 function ucGroupBy() {
   // A map that never adopted capabilities has nothing to group by — never show an empty switch.
@@ -5251,6 +5318,123 @@ function capabilityGroups() {
   return groups.filter((g) => g.ucs.length);
 }
 
+// ── the feature page ──────────────────────────────────────────────────────────────────────────────
+// One feature, as everything the map knows about it: what it is, who uses it, what you can do, how you
+// reach it, what it decides, what it knows, and what it is built from. Every row is a COUNT of named
+// things that unfolds into the names, and every name navigates to the element's own home view through
+// `selectTargetFor` — the one resolver — so no row hardcodes which tab an element lives on.
+//
+// The numbers come from `coyodex.features`, which joined them once in Python. Re-deriving any of them
+// here would be a second answer to the same question; the Rules view and this page read the SAME rule
+// join, so they cannot disagree about what one feature decides.
+
+// Entry points by id — the ways in a use case names. The flat list is the graph's own (System tab), so
+// there is one place a way in is described.
+const EP_BY_ID = {};
+for (const e of (GRAPH.entry_points || [])) if (e.id) EP_BY_ID[e.id] = e;
+
+// A row's unfoldable list of element names. `ids` are graph ids; each chip navigates to the view that
+// draws that element. `zero` is what the row says when the feature has none of this thing.
+function featChipsHtml(count, noun, plural, ids, zero) {
+  if (!count) return `<span class="used-none">${esc(zero)}</span>`;
+  const label = `${count} ${count === 1 ? noun : plural}`;
+  const chips = ids.map((id) => `<button type="button" class="featref" data-id="${esc(id)}">`
+    + `${esc(elName(id))}</button>`).join('');
+  if (!chips) return esc(label);
+  return `<details class="feat-more"><summary>${esc(label)}</summary>`
+    + `<div class="feat-chips">${chips}</div></details>`;
+}
+
+// What the rule row must admit, beside the rules it CAN name. Both notes are about the join, not about
+// this feature: a page that printed only the joined rules would claim the feature decides less than it
+// does, and a page built without the code index would print a floor as if it were the answer.
+function featRuleNotes() {
+  const out = [];
+  const un = FEAT_COVERAGE.rulesUnjoined || 0;
+  if (un > 0) {
+    out.push(`${un} other rule${un === 1 ? '' : 's'} in this map ${un === 1 ? 'is' : 'are'} enforced `
+      + 'where no use-case walk passes, so no feature could claim '
+      + (un === 1 ? 'it' : 'them') + '. Some may belong here.');
+  }
+  if (FEATURES.ruleJoinUsesExtents === false) {
+    out.push('This map carries no code index, so a rule was matched to a step only on an exact line. '
+      + 'The list above is a floor, not the whole answer.');
+  }
+  return out;
+}
+
+// "How you reach it", counted by the KIND of way in — the same canonical kind the System tab groups by,
+// so `http` and `http-route` land in one count on both screens. A map that records no ways in on its use
+// cases (measured: one live map names 0 of 664) must read NOT RECORDED, never an empty box.
+function featEntryPointsHtml(ids) {
+  if (!ids.length) return '<span class="used-none">not recorded</span>';
+  const byKind = {};
+  const order = [];
+  for (const id of ids) {
+    const e = EP_BY_ID[id];
+    if (!e) continue;
+    const k = ((e.canonical_kind || e.kind || 'other').trim()) || 'other';
+    if (!byKind[k]) { byKind[k] = []; order.push(k); }
+    byKind[k].push(e);
+  }
+  if (!order.length) return '<span class="used-none">not recorded</span>';
+  const summary = order.map((k) => `${byKind[k].length} ${k}`).join(' · ');
+  const rows = order.map((k) => '<div class="feat-ep-kind"><span class="feat-ep-kindname">'
+    + `${esc(k)}</span>` + byKind[k].map((e) => {
+      const trig = e.trigger ? mdInline(e.trigger) : '<span class="muted">(way in)</span>';
+      return e.component && GRAPH.nodes[e.component]
+        ? `<button type="button" class="featep" data-id="${esc(e.component)}" `
+          + `data-idx="${e.index || 0}">${trig}</button>`
+        : `<span class="feat-ep-plain">${trig}</span>`;
+    }).join('') + '</div>').join('');
+  return `<details class="feat-more"><summary>${esc(summary)}</summary>`
+    + `<div class="feat-eps">${rows}</div></details>`;
+}
+
+// The page header: the feature's name, its label, and the seven rows. Rendered above the use-case list
+// by renderUseCases, which stays the ONE renderer of that list.
+function featurePageHtml(capId) {
+  const f = FEAT_BY_ID[capId];
+  if (!f) return '';
+  const lab = f.label
+    ? `<span class="uc-caplabel uc-lab-${esc(f.label.toLowerCase())}">${esc(f.label)}</span>` : '';
+  const row = (k, v) => `<div class="feat-fact"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+  const roles = f.roles.length
+    ? f.roles.map((rid) => `<button type="button" class="featrole" data-act="${esc(roleName(rid))}">`
+        + `${esc(roleName(rid))}</button>`).join('')
+    : '<span class="used-none">not recorded</span>';
+  const ucs = f.useCases.length
+    ? `${f.useCases.length} use case${f.useCases.length === 1 ? '' : 's'}`
+    : 'none';
+  const notes = featRuleNotes().map((n) => `<p class="feat-note">${esc(n)}</p>`).join('');
+  return '<div class="feat-page">'
+    + `<h2 class="feat-page-name">${esc(f.name)}${lab}</h2>`
+    + '<dl class="feat-facts">'
+    + row('what it is', f.purpose ? mdInline(f.purpose) : '<span class="used-none">not recorded</span>')
+    + row('who uses it', roles)
+    + row('what you can do', esc(ucs))
+    + row('how you reach it', featEntryPointsHtml(f.entryPoints))
+    + row('what it decides',
+        featChipsHtml(f.rules.length, 'rule', 'rules', f.rules, 'no rule reaches it') + notes)
+    + row('what it knows',
+        featChipsHtml(f.entities.length, 'entity', 'entities', f.entities, 'nothing recorded'))
+    + row('built from',
+        featChipsHtml(f.components.length, 'component', 'components', f.components, 'nothing recorded'))
+    + '</dl></div>';
+}
+
+// Wire the page's names. Elements go through `selectFromTree`, the one place that answers "which view
+// shows this id"; a role opens its own use-case list, which is not an element and has no node.
+function bindFeaturePage(root) {
+  root.querySelectorAll('.featref').forEach((b) =>
+    b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
+  root.querySelectorAll('.featrole').forEach((b) =>
+    b.addEventListener('click', () => go({ kind: 'actor', act: b.getAttribute('data-act') })));
+  root.querySelectorAll('.featep').forEach((b) =>
+    b.addEventListener('click', () => selectEntryPoint(
+      b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0)));
+}
+
 // The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says which
 // card — `{cap:<id>}` a feature, `{cap:'-'}` the use cases assigned to no feature, `{actor:<name>}` a
 // role — and `null` lists every use case, which is what a map recording no features falls back to.
@@ -5277,9 +5461,21 @@ function renderUseCases(sel) {
   const one = sel && sel.cap ? sel.cap : null;
   const oneActor = sel && sel.actor ? sel.actor : null;
   const byCapability = one ? true : (oneActor ? false : ucGroupBy() === 'capability');
-  const shown = one ? capabilityGroups().filter((g) => (one === '-' ? !g.cap : (g.cap && g.cap.id === one)))
+  // A single feature, and the derived layer knows it: the list becomes that feature's PAGE. Reached
+  // through a grid cell it is scoped to one role too, and then the page header would describe the
+  // whole feature while the list below showed a slice of it — so the header is the feature's own page
+  // only, and a cell keeps the plain scoped list with its heading.
+  const page = (one && one !== '-' && !oneActor && FEAT_BY_ID[one]) ? one : null;
+  let shown = one ? capabilityGroups().filter((g) => (one === '-' ? !g.cap : (g.cap && g.cap.id === one)))
              : oneActor ? groups.filter((g) => g.actor === oneActor)
              : (byCapability ? capabilityGroups() : groups);
+  // A GRID cell names both axes at once — one role's use cases inside one feature — so the feature's
+  // list is narrowed to the use cases that role also drives. The two axes already index the same use
+  // cases, so this intersects them rather than adding a third grouping.
+  if (one && oneActor) {
+    const mine = new Set(((groups.find((g) => g.actor === oneActor) || {}).ucs || []).map((n) => n.id));
+    shown = shown.map((g) => ({ ...g, ucs: g.ucs.filter((n) => mine.has(n.id)) }));
+  }
   // The pinned index: one chip per group, in render order, whichever axis is grouping — so flipping
   // Group by rebuilds it with the other axis's names. Ids are positional because a group's identity is
   // an actor NAME or a capability id, and only one of those is an id at all.
@@ -5314,6 +5510,11 @@ function renderUseCases(sel) {
     }).join('');
     const secId = 'ucsec-' + gi;
     if (byCapability) {
+      // ONE feature, opened from a card: the page header above already carries the name, the label and
+      // the purpose, and the seven rows say how many use cases there are. Repeating all four here put
+      // the same words twice on one screen, so the list keeps only its rows.
+      if (page) return `<section class="uc-group" id="${secId}" data-cap="${esc(one)}">`
+        + `<ul class="uc-list">${rows}</ul></section>`;
       const title = g.cap ? g.cap.name : 'Not assigned to a feature';  // the same words as its card and its crumb
       secs.push({ id: secId, title });
       const lab = g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '';
@@ -5341,9 +5542,10 @@ function renderUseCases(sel) {
   // list already scoped to one card, an axis switch either does nothing or silently changes which card
   // you are looking at. (This list used to be reachable as a flat "all use cases" page carrying the
   // switch, which then restated the overview's own card names twice over — see renderOverview.)
-  diagram.innerHTML = `<div class="usecases-wrap">${tabIndexHtml(secs)}`
+  diagram.innerHTML = `<div class="usecases-wrap">${page ? featurePageHtml(page) : ''}${tabIndexHtml(secs)}`
     + (sections || '<p class="empty">No use cases recorded.</p>') + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
+  if (page) bindFeaturePage(diagram);
   // A row opens the use case's flow — the SAME detail a Happy Path step drills into (one home).
   // Carry the actor whose list this is. A use case named by two roles now appears under BOTH, so
   // recomputing its group from the use case alone would name whichever one comes first and could send
@@ -5361,6 +5563,172 @@ function renderUseCases(sel) {
   });
 }
 
+// FUNCTIONAL COVERAGE: how much of this code a feature or a rule actually reaches. One line on the
+// Features landing, because a map that reads as feature-led while half its code sits under no feature
+// is telling half a story.
+//
+// This says REACH, and nothing else. It does NOT say how sure the map is — a separate measure that no
+// view renders today, and one where 381 elements across four live maps claim `verified` with nobody
+// having checked them. Putting the two numbers in one sentence would let wide reach read as good
+// grounding, so they stay apart.
+function coverageLineHtml() {
+  const total = FEAT_COVERAGE.componentsTotal || 0;
+  if (!total) return '';
+  const un = (FEAT_COVERAGE.componentsUnreached || []).length;
+  const pct = Math.round(100 * (total - un) / total);
+  const tail = un
+    ? ` <button type="button" class="cov-drill">${un} component${un === 1 ? '' : 's'}</button>`
+      + ` ${un === 1 ? 'is' : 'are'} reached by no feature and no rule.`
+    : ' Every component is reached by a feature or a rule.';
+  return `<p class="cov-line">This map reaches <b>${pct}%</b> of the code from a feature or a rule.`
+    + `${tail}</p>`;
+}
+
+// The four groups the unreached components fall into. Read off the FILE PATHS, because that is the only
+// evidence available without a rebuild. Measured on one live map's 13: build and deploy tooling took 8,
+// interface contracts 1, shared screen parts 0, and 4 were left over.
+//
+// The first three are expected — tooling, contracts and shared widgets are not supposed to sit on a
+// use-case walk. Only the LAST group is a finding, and it is labelled "not classified" rather than "a
+// problem": the map may be incomplete, or the code may be dead, and this screen cannot tell which.
+const UNREACHED_GROUPS = [
+  ['contracts', 'Interface contracts',
+   'Declared shapes with no behaviour of their own — nothing walks through them.'],
+  ['screen', 'Shared screen parts',
+   'Reusable widgets every screen draws, which no single use case owns.'],
+  ['tooling', 'Build and deploy tooling',
+   'How the product is built, shipped, started and tested — not what it does.'],
+  ['other', 'Not classified',
+   'Neither a use-case walk nor a rule reaches these, and their files say nothing about why.'],
+];
+// Path segments that name each group. A segment match, never a substring: `tools/` inside this repo's
+// own product code must not read as build tooling, and it does not, because the segments below are the
+// ones a build/deploy/test tree actually uses.
+const UNREACHED_TOOLING_SEGS = new Set(['docker', 'compose', 'deploy', 'deployment', 'ci', '.github',
+  'scripts', 'script', 'bin', 'test', 'tests', 'e2e', 'spec', 'demo', 'dev', 'examples', 'publish',
+  'e2b-templates', 'infra', 'terraform', 'helm', 'k8s']);
+const UNREACHED_TOOLING_FILES = /^(dockerfile|makefile|docker-compose|justfile|procfile)/i;
+const UNREACHED_CONTRACT_SEGS = new Set(['ports', 'port', 'interfaces', 'contracts', 'protocols']);
+const UNREACHED_SCREEN_SEGS = new Set(['ui', 'widgets', 'primitives', 'design-system']);
+// One path can match two groups, so the order they are TESTED in is a decision of its own, and it is
+// not the order they are shown in. Tooling beats shared screen parts: a live map has a demo server whose
+// own folder holds five `widgets/` files, and by weight of files alone it read as the product's shared
+// widgets when everything under `dev/` is scaffolding. The enclosing tree wins over the leaf folder.
+const UNREACHED_PRECEDENCE = ['contracts', 'tooling', 'screen'];
+const UNREACHED_SEGS = { contracts: UNREACHED_CONTRACT_SEGS, tooling: UNREACHED_TOOLING_SEGS,
+                         screen: UNREACHED_SCREEN_SEGS };
+function unreachedClassOfFile(path) {
+  const segs = String(path || '').split('/').filter(Boolean);
+  const base = (segs[segs.length - 1] || '').toLowerCase();
+  for (const key of UNREACHED_PRECEDENCE) {
+    for (const sg of segs) if (UNREACHED_SEGS[key].has(sg)) return key;
+  }
+  if (UNREACHED_TOOLING_FILES.test(base) || /\.(sh|bash|ps1|bat|tf)$/i.test(base)) return 'tooling';
+  return 'other';
+}
+// A component belongs to a group when at least HALF its files vote for it. Below half nothing is
+// claimed, so a component whose files disagree lands in "not classified" instead of being filed under
+// whichever path happened to come first.
+function unreachedClassOf(cid) {
+  const files = (GRAPH.nodes[cid] || {}).files || [];
+  if (!files.length) return 'other';
+  const votes = {};
+  for (const f of files) { const k = unreachedClassOfFile(f); votes[k] = (votes[k] || 0) + 1; }
+  for (const key of UNREACHED_PRECEDENCE) {
+    if ((votes[key] || 0) * 2 >= files.length) return key;
+  }
+  return 'other';
+}
+// The drill out of the coverage line: which code no feature and no rule reaches, in the four groups.
+function renderUnreached() {
+  const ids = FEAT_COVERAGE.componentsUnreached || [];
+  const by = {};
+  for (const cid of ids) (by[unreachedClassOf(cid)] ||= []).push(cid);
+  const secs = [];
+  const sections = UNREACHED_GROUPS.map(([key, title, blurb], gi) => {
+    const mine = by[key] || [];
+    if (!mine.length) return '';
+    const secId = 'unrsec-' + gi;
+    secs.push({ id: secId, title });
+    const rows = mine.map((cid) => {
+      const n = GRAPH.nodes[cid] || {};
+      const files = (n.files || []).slice(0, 3).map((f) => `<code>${esc(f)}</code>`).join(' · ');
+      return `<li class="uc-row" data-id="${esc(cid)}" tabindex="0">`
+        + `<span class="uc-head"><span class="uc-name">${esc(n.name || cid)}</span></span>`
+        + (files ? `<span class="uc-to">${files}</span>` : '') + '</li>';
+    }).join('');
+    return `<section class="uc-group" id="${secId}">`
+      + `<h3 class="uc-actor">${esc(title)}`
+      + `<span class="uc-actor-wants">${mine.length} component${mine.length === 1 ? '' : 's'}</span></h3>`
+      + `<p class="uc-wants">${esc(blurb)}</p><ul class="uc-list">${rows}</ul></section>`;
+  }).join('');
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + `<p class="cov-line">${ids.length} component${ids.length === 1 ? '' : 's'} of `
+    + `${FEAT_COVERAGE.componentsTotal || 0} sit outside every use-case walk and every rule.</p>`
+    + tabIndexHtml(secs)
+    + (sections || '<p class="empty">Every component is reached by a feature or a rule.</p>')
+    + '</div>';
+  bindTabIndex(diagram.querySelector('.usecases-wrap'));
+  const open = (li) => selectFromTree(li.getAttribute('data-id'));
+  diagram.querySelectorAll('.uc-row').forEach((li) => {
+    li.addEventListener('click', () => open(li));
+    li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(li); });
+  });
+}
+
+// The axis switch's own wiring, shared by every setting the overview can be in — including Grid,
+// which returns before the card path runs and would otherwise leave the switch dead.
+function bindOverviewAxis() {
+  viewextra.querySelectorAll('.uc-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      UC_GROUP_BY = b.getAttribute('data-gb');
+      renderOverview();
+      showViewIntro({ kind: 'usecases' });   // the axis changed the view's question, which the pane holds
+    });
+  });
+}
+
+// WHO CAN DO WHAT: the two axes of the overview crossed, one cell per (role, feature) pair, holding
+// how many of that feature's use cases that role drives. Read down a column for "who touches this
+// feature", across a row for "what can this person do". Both existing axes already answer half of
+// that; neither shows the shape of the whole, and on the live maps only a quarter to a third of the
+// cells are filled — which IS the answer, and a list of two separate axes cannot show it.
+//
+// Every number drills to the same list the two axes already drill to, narrowed to both: that role's
+// use cases inside that feature. An empty cell is drawn as a dot, not as a zero — nothing is there.
+function renderRoleGrid() {
+  const feats = FEATURES.features || [];
+  // Roles in the model's own (importance) order, keeping only the ones that drive something.
+  const rids = (GRAPH.roles || []).map((r) => r.id).filter((rid) => rid && ROLE_FEATURES[rid]);
+  if (!feats.length || !rids.length) {
+    diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">'
+      + 'This map records no role driving a feature.</p></div>';
+    return;
+  }
+  const head = feats.map((f) => `<th scope="col"><button type="button" class="rg-col" `
+    + `data-cap="${esc(f.id)}">${esc(f.name)}</button></th>`).join('');
+  const body = rids.map((rid) => {
+    const row = ROLE_FEATURES[rid] || {};
+    const cells = feats.map((f) => {
+      const n = row[f.id] || 0;
+      if (!n) return '<td class="rg-empty">·</td>';
+      return `<td><button type="button" class="rg-cell" data-cap="${esc(f.id)}" `
+        + `data-act="${esc(roleName(rid))}">${n}</button></td>`;
+    }).join('');
+    return `<tr><th scope="row"><button type="button" class="rg-row" `
+      + `data-act="${esc(roleName(rid))}">${esc(roleName(rid))}</button></th>${cells}</tr>`;
+  }).join('');
+  diagram.innerHTML = '<div class="usecases-wrap"><div class="rg-wrap">'
+    + `<table class="rolegrid"><thead><tr><th></th>${head}</tr></thead>`
+    + `<tbody>${body}</tbody></table></div></div>`;
+  diagram.querySelectorAll('.rg-col').forEach((b) =>
+    b.addEventListener('click', () => go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
+  diagram.querySelectorAll('.rg-row').forEach((b) =>
+    b.addEventListener('click', () => go({ kind: 'actor', act: b.getAttribute('data-act') })));
+  diagram.querySelectorAll('.rg-cell').forEach((b) => b.addEventListener('click',
+    () => go({ kind: 'capability', cap: b.getAttribute('data-cap'), act: b.getAttribute('data-act') })));
+}
+
 // The FEATURES overview: the whole product as a grid of cards, on ONE axis at a time.
 //   Feature -> one card per capability   Actor -> one card per role
 // Each card drills to its own use cases. This is the level the flat catalog was missing: 41 rows answer
@@ -5375,7 +5743,8 @@ function renderUseCases(sel) {
 // 31 of the 41 use cases) but a perfectly good thing to CLICK, which is all a card has to be.
 // Only reachable when the map records capabilities; without them the tab keeps its flat list.
 function renderOverview() {
-  const byCapability = ucGroupBy() === 'capability';
+  const axis = ucGroupBy();
+  const byCapability = axis === 'capability';
   const cards = (byCapability ? capabilityGroups() : actorGroups()).map((g) => {
     const cap = byCapability;
     const key = cap ? (g.cap ? g.cap.id : '-') : g.actor;
@@ -5407,20 +5776,21 @@ function renderOverview() {
   // mode belongs beside the view it modifies rather than on a strip of its own above the content. Its
   // answer ("What can each role do?") is not printed here either — viewQuestion puts it in the info
   // pane, the one place every view's question lives.
+  // A third setting beside the two axes: the two crossed. It is a MODE of the same overview, not a
+  // third thing to group by, so it rides the same switch rather than opening a tab of its own.
+  const seg = (key, label) => `<button type="button" data-gb="${key}"`
+    + `${axis === key ? ' class="on"' : ''}>${label}</button>`;
   viewextra.innerHTML = HAS_CAPABILITIES
     ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
-      + `<span class="uc-seg"><button type="button" data-gb="capability"${byCapability ? ' class="on"' : ''}>Feature</button>`
-      + `<button type="button" data-gb="actor"${byCapability ? '' : ' class="on"'}>Actor</button></span></div>`
+      + `<span class="uc-seg">${seg('capability', 'Feature')}${seg('actor', 'Actor')}`
+      + `${seg('grid', 'Grid')}</span></div>`
     : '';
-  diagram.innerHTML = '<div class="usecases-wrap"><div class="feat-grid">'
+  if (axis === 'grid') { renderRoleGrid(); bindOverviewAxis(); return; }
+  diagram.innerHTML = `<div class="usecases-wrap">${coverageLineHtml()}<div class="feat-grid">`
     + (cards || '<p class="empty">No features recorded.</p>') + '</div></div>';
-  viewextra.querySelectorAll('.uc-seg button').forEach((b) => {
-    b.addEventListener('click', () => {
-      UC_GROUP_BY = b.getAttribute('data-gb');
-      renderOverview();
-      showViewIntro({ kind: 'usecases' });   // the axis changed the view's question, which the pane holds
-    });
-  });
+  const cov = diagram.querySelector('.cov-drill');
+  if (cov) cov.addEventListener('click', () => go({ kind: 'unreached' }));
+  bindOverviewAxis();
   diagram.querySelectorAll('.feat-card').forEach((b) => {
     const key = b.getAttribute('data-key');
     b.addEventListener('click', () => go(byCapability ? { kind: 'capability', cap: key } : { kind: 'actor', act: key }));
@@ -6327,7 +6697,12 @@ async function render(sArg, transient) {
   // One feature's use cases — the drill out of those cards ('*' = all of them). The right pane keeps the
   // TAB's question, as one rule's page does: the feature's own name and purpose head the list itself.
   if (s.kind === 'capability' || s.kind === 'actor') {
-    renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap });
+    renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });
+    mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); return;
+  }
+  // The code no feature and no rule reaches — the drill out of the coverage line, under the same tab.
+  if (s.kind === 'unreached') {
+    renderUnreached();
     mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); return;
   }
   // The System tab is HTML, not a mermaid diagram — same shape as Glossary. Its landing level is the
@@ -8843,7 +9218,14 @@ if (impactbtn) {
   }));
 }
 
-// Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise the
-// Happy Path — the behavioural spine, lead-with-behaviour — falling back to Subsystems, then the
-// Dependencies (context) view, when a map has no Happy Path.
-go({ kind: (HAS_DIFF && HAS_GROUPING) ? 'container' : (HAS_HP ? 'hp' : (HAS_GROUPING ? 'container' : 'context')) });
+// Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise on
+// FEATURES — what the product does, as the product's own list of things it does — whenever the map
+// records features at all. The Happy Path is the guided tour of one path through them, and it is the
+// second tab; a map that records no features still lands on it, and one with neither falls back to
+// Subsystems and then to the Dependencies (context) view.
+const LANDING = (HAS_DIFF && HAS_GROUPING) ? 'container'
+  : (HAS_CAPABILITIES && HAS_USECASES) ? 'usecases'
+  : HAS_HP ? 'hp'
+  : HAS_GROUPING ? 'container'
+  : 'context';
+go({ kind: LANDING });

@@ -394,6 +394,57 @@ body.vresizing #stage { pointer-events: none; }
 .uc-lab-core { background: #e0e7ff; color: #4338ca; }
 .uc-lab-supporting { background: #f1f5f9; color: #475569; }
 .uc-lab-platform { background: #f3f4f6; color: #6b7280; }
+/* --- the feature page (plan/80-feature-led-views) ------------------------------------------------
+   One feature as everything the map knows about it: name, label, then seven labelled rows. A definition
+   list, because every row is the same shape — a question on the left, the map's answer on the right —
+   and the reader scans the left column to find the one they came for. */
+.feat-page { padding: 2px 0 6px; }
+.feat-page-name { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 0 12px;
+                  font-size: 19px; font-weight: 700; color: #111827; }
+.feat-facts { margin: 0 0 18px; padding: 0; }
+.feat-fact { display: grid; grid-template-columns: 148px 1fr; gap: 10px; align-items: baseline;
+             padding: 7px 0; border-top: 1px solid #f1f5f9; }
+.feat-fact dt { font-size: 12px; font-weight: 700; color: #6b7280; }
+.feat-fact dd { margin: 0; font-size: 13px; color: #1f2937; line-height: 1.5; }
+.feat-more > summary { cursor: pointer; color: #4338ca; font-size: 13px; }
+.feat-more > summary:hover { text-decoration: underline; }
+.feat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.featref, .featrole { font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer;
+                      border: 1px solid #e5e7eb; border-radius: 9px; background: #fff; color: #374151; }
+.featref:hover, .featrole:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
+.featrole + .featrole { margin-left: 6px; }
+.feat-eps { margin-top: 8px; }
+.feat-ep-kind { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 5px 0; }
+.feat-ep-kindname { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                    padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }
+.featep { font: inherit; font-size: 12px; text-align: left; padding: 2px 8px; cursor: pointer;
+          border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; color: #374151; }
+.featep:hover { border-color: #c7d2fe; background: #eef2ff; }
+.feat-ep-plain { font-size: 12px; color: #6b7280; }
+/* What the rule row has to admit beside the rules it can name: a floor is not an answer. Amber, not
+   red — an incomplete join is a limit of the map, not a defect in the product. */
+.feat-note { margin: 7px 0 0; padding: 6px 9px; font-size: 12px; line-height: 1.45;
+             border-left: 3px solid #fcd34d; background: #fffbeb; color: #92400e; }
+/* --- who can do what: the two axes crossed --------------------------------------------------- */
+.rg-wrap { overflow-x: auto; padding: 4px 0 14px; }
+.rolegrid { border-collapse: collapse; font-size: 13px; }
+.rolegrid th, .rolegrid td { border-bottom: 1px solid #f1f5f9; padding: 4px 6px; text-align: center; }
+.rolegrid thead th { vertical-align: bottom; border-bottom: 1px solid #e5e7eb; }
+.rolegrid tbody th { text-align: left; white-space: nowrap; font-weight: 600; }
+.rg-col, .rg-row, .rg-cell { font: inherit; border: 0; background: transparent; cursor: pointer;
+                             padding: 2px 4px; border-radius: 6px; color: #374151; }
+.rg-col { font-size: 12px; font-weight: 600; color: #4b5563; max-width: 96px; white-space: normal;
+          line-height: 1.25; }
+.rg-cell { font-weight: 650; color: #3730a3; min-width: 30px; }
+.rg-col:hover, .rg-row:hover, .rg-cell:hover { background: #eef2ff; color: #3730a3; }
+.rg-empty { color: #d1d5db; }
+/* --- functional coverage ---------------------------------------------------------------------
+   How much of the code a feature or a rule reaches. Says REACH only: how SURE the map is, is a
+   different measure, and one sentence holding both would let wide reach read as good grounding. */
+.cov-line { margin: 4px 14px 2px; font-size: 13px; color: #4b5563; line-height: 1.5; }
+.cov-drill { font: inherit; font-size: 13px; padding: 0; border: 0; background: transparent;
+             color: #4338ca; cursor: pointer; text-decoration: underline; }
+.cov-drill:hover { color: #3730a3; }
 /* "Not traced" — described, but no flow was walked. Deliberately a visible chip: an untraced use
    case is indistinguishable from a phantom one, and that ambiguity is the defect worth showing. */
 .uc-untraced { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
@@ -420,6 +471,14 @@ body.vresizing #stage { pointer-events: none; }
 #panel .used-by-cap { margin-top: 4px; }
 #panel .used-cap-group + .used-cap-group { margin-top: 9px; }
 #panel .used-cap-name { color: #4b5563; font-size: 11px; font-weight: 700; letter-spacing: 0; }
+/* The feature heading is a LINK to that feature's page — the way back out of the code views into
+   what the product does. Styled as the heading it already was, not as a button. */
+#panel button.used-cap-name { display: block; font: inherit; font-size: 11px; font-weight: 700;
+                              color: #4b5563; text-align: left; padding: 0; border: 0;
+                              background: transparent; cursor: pointer; }
+#panel button.used-cap-name:hover { color: #3730a3; text-decoration: underline; }
+/* How many features this component serves, taken from the derived layer and never re-counted here. */
+#panel .used-cap-count { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #6b7280; }
 #panel .used-uc-list { list-style: none; margin: 2px 0 0; padding: 0; }
 #panel .used-uc-list li { margin: 2px 0; line-height: 1.35; }
 #panel .used-none { color: #9ca3af; }

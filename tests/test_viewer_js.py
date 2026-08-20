@@ -477,7 +477,8 @@ def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();" in js
     assert "function renderUseCases(sel) {" in js
-    assert "renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap });" in js
+    assert ("renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });"
+            in js), "one feature's list, and a grid cell's, are the same renderer scoped differently"
     # In diff mode a card carries its members' change, or dropping the use cases one level down would
     # hide every "changed" badge behind a click.
     feat = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
@@ -683,3 +684,213 @@ def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> No
     assert ".system-wrap > .tab-index:first-child { margin-top: 0; }" in css   # the bar carries its own
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "glossary-wrap\" style=\"padding-top" not in js, "an inline top padding reopens the strip"
+
+
+# --- feature-led views (plan/80) ----------------------------------------------------------------
+
+def _run_js_region(start_marker: str, end_marker: str, snippet: str) -> str:
+    """Run `snippet` against a REGION of viewer.js lifted verbatim between two markers.
+
+    Same trick as `_run_js`, which lifts the escaping helpers: the frontend has no module system, so
+    a pure function of it is exercised by slicing its source and evaluating it. Sliced by marker
+    lines, so a rename fails loudly here rather than silently testing an empty string."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed — skipping viewer JS behaviour gate")
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    lifted = js[js.index(start_marker): js.index(end_marker)]
+    assert lifted.strip(), "the lifted region is empty — fix the markers"
+    with tempfile.TemporaryDirectory() as td:
+        f = Path(td) / "probe.mjs"
+        f.write_text(lifted + "\n" + snippet, encoding="utf-8")
+        r = subprocess.run([node, str(f)], capture_output=True, text=True)
+    assert r.returncode == 0, f"probe failed:\n{r.stderr}"
+    return r.stdout.strip()
+
+
+def test_one_feature_is_a_page_and_not_just_its_use_cases() -> None:
+    """A feature was a label on a use case: to answer "what does Billing & credits do, decide, know
+    and run on?" you read four other views and joined them by hand. Its card now opens a PAGE with
+    those seven answers on it, and the use-case list stays underneath — one renderer for that list,
+    so the row markup, the Happy-Path pill and the flow click cannot drift between the lists."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    page = js[js.index("function featurePageHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featurePageHtml(capId) {") + 10)]
+    for row in ("what it is", "who uses it", "what you can do", "how you reach it",
+                "what it decides", "what it knows", "built from"):
+        assert f"row('{row}'" in page, row
+    # The page rides ON the list renderer rather than replacing it, and the list drops the heading the
+    # page header already carries — the name, the label and the purpose were printed twice otherwise.
+    assert "${page ? featurePageHtml(page) : ''}" in js
+    assert "if (page) bindFeaturePage(diagram);" in js
+
+
+def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
+    """Two silences the page must break. Rules that reach NO use-case walk cannot be placed on any
+    feature (48 of 61 on one live map before the code index, 18 of 61 after), so a page listing only
+    the joined ones claims the feature decides less than it does. And with no code index at all a rule
+    is linked only on an exact line match, which makes every rule list a floor. Both are stated on the
+    page; neither is inferred from the other."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    notes = js[js.index("function featRuleNotes() {"):
+               js.index("\nfunction ", js.index("function featRuleNotes() {") + 10)]
+    assert "FEAT_COVERAGE.rulesUnjoined" in notes and "no use-case walk passes" in notes
+    assert "FEATURES.ruleJoinUsesExtents === false" in notes and "floor" in notes
+    assert "featRuleNotes()" in js[js.index("function featurePageHtml(capId) {"):]
+    # A map whose use cases name no way in (measured: 0 of 664 on one live map) must SAY so.
+    eps = js[js.index("function featEntryPointsHtml(ids) {"):
+             js.index("\nfunction ", js.index("function featEntryPointsHtml(ids) {") + 10)]
+    assert eps.count("not recorded") == 2, "an empty ways-in row must read 'not recorded', not blank"
+
+
+def test_the_feature_page_reads_the_python_join_and_never_redoes_it() -> None:
+    """`coyodex.features` joins a feature to its rules through `validate_model.rule_steps` — the SAME
+    reader the Rules view uses, so the two screens cannot disagree about what one rule governs. A
+    second join written in JS would drift from both. The page therefore reads the shipped lists and
+    counts nothing itself."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    page = js[js.index("function featurePageHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featurePageHtml(capId) {") + 10)]
+    assert "FEAT_BY_ID[capId]" in page
+    for field in ("f.roles", "f.useCases", "f.entryPoints", "f.rules", "f.entities", "f.components"):
+        assert field in page, field
+    # The joins that produce those lists live in Python only.
+    assert "RULES_VIEW" not in page and "USES_BY_NODE" not in page
+    assert "FEATURES = b.features || {};" in js, "the derivation is shipped, not recomputed"
+
+
+def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
+    """`selectTargetFor` is the ONE function that answers "which view draws this id". Regrouping the
+    tabs, and the pointing layer being designed beside this, both change where an element lives — so a
+    link that hardcoded a tab name would rot silently. Every element name on the page goes through it;
+    a ROLE is not an element and has no node, so it opens its own list instead."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = js[js.index("function bindFeaturePage(root) {"):
+              js.index("\nfunction ", js.index("function bindFeaturePage(root) {") + 10)]
+    assert "selectFromTree(b.getAttribute('data-id'))" in bind
+    assert "go({ kind: 'actor', act: b.getAttribute('data-act') })" in bind
+    assert "kind: 'container'" not in bind and "kind: 'domain'" not in bind
+    # A feature has no box on any diagram, so its home is its own page — without this case a feature
+    # id fell through to the default and opened Dependencies.
+    target = js[js.index("function selectTargetFor(id) {"):
+                js.index("\nfunction ", js.index("function selectTargetFor(id) {") + 10)]
+    assert "case 'capability':" in target
+
+
+def test_who_can_do_what_is_a_third_setting_on_the_one_axis_switch() -> None:
+    """Feature and Actor answer half of "who can do what" each, and neither shows the shape of the
+    whole: a quarter of the cells are filled on one live map, a third on another. The grid is a MODE
+    of the same overview, so it rides the switch that already picks the axis instead of opening a tab.
+    Every number drills to the list both axes already drill to, narrowed to both at once."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    over = js[js.index("function renderOverview() {"):
+              js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    assert "seg('grid', 'Grid')" in over and "if (axis === 'grid') { renderRoleGrid();" in over
+    grid = js[js.index("function renderRoleGrid() {"):
+              js.index("\nfunction ", js.index("function renderRoleGrid() {") + 10)]
+    assert "ROLE_FEATURES[rid]" in grid, "the grid is the shipped role→feature count, not a JS re-count"
+    assert "kind: 'capability', cap: b.getAttribute('data-cap'), act: b.getAttribute('data-act')" in grid
+    assert "'<td class=\"rg-empty\">·</td>'" in grid, "an empty cell is nothing there, not a zero"
+    # Both axes of a cell survive into the list, the crumb and a right-pane navigation.
+    assert "if (one && oneActor) {" in js
+    assert "s.kind === 'unreached'" in js[js.index("function topView(kind) {"):]
+
+
+def test_the_coverage_line_reports_reach_and_never_certainty() -> None:
+    """"How much of the code does a feature explain" and "how sure is this map" are different
+    questions, and only the first is answered here. The second is invisible today: `confidence` and
+    `evidence` sit on elements that no view renders, and 381 elements across four live maps say
+    `verified` with no skeptic having opened them. One sentence holding both would let a map read as
+    well-grounded because its features have wide reach."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    start = js.index("function coverageLineHtml() {")
+    line = js[start: js.index("\n}", start)]
+    body = "\n".join(ln for ln in line.splitlines() if not ln.strip().startswith("//"))
+    assert "reaches" in body
+    for word in ("confidence", "verified", "evidence", "sure", "certain"):
+        assert word not in body.lower(), word
+    assert "componentsUnreached" in line and "cov-drill" in line
+
+
+def test_the_unreached_drill_separates_the_finding_from_the_expected() -> None:
+    """The components no feature and no rule reaches are not one pile. Measured on one live map's 13:
+    build and deploy tooling took 8, interface contracts 1, shared screen parts 0, and 4 were left
+    over. Only the LAST group is a finding, and it is labelled "not classified" rather than "a
+    problem" — the map may be incomplete or the code may be dead, and this screen cannot tell which."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    table = js[js.index("const UNREACHED_GROUPS = ["): js.index("\n];", js.index("const UNREACHED_GROUPS = ["))]
+    assert [k for k in re.findall(r"\['([a-z]+)',", table)] == ["contracts", "screen", "tooling", "other"]
+    assert "'Not classified'" in table
+    for bad in ("problem", "dead code", "unused", "wrong"):
+        assert bad not in table.lower(), bad
+
+
+def test_an_unreached_component_is_classified_by_its_whole_path() -> None:
+    """One path can match two groups, so the order they are TESTED in is a decision of its own. A live
+    map has a bundled demo server whose own folder holds five `widgets/` files beside three others: by
+    weight of files alone it read as the product's shared screen parts, when everything under `dev/`
+    is scaffolding. The enclosing tree wins over the leaf folder. Below half the files agreeing,
+    nothing is claimed at all — the component lands in "not classified" instead of being filed under
+    whichever path happened to come first."""
+    probe = """
+const cases = {
+  demo: ['backend/src/x/dev/demo_server.py', 'backend/src/x/dev/README.md',
+         'backend/src/x/dev/widgets/a.js', 'backend/src/x/dev/widgets/b.js',
+         'backend/src/x/dev/widgets/c.js'],
+  widgets: ['frontend/src/components/ui/button.tsx', 'frontend/src/components/ui/dialog.tsx'],
+  ports: ['backend/src/x/domain/ports/__init__.py', 'backend/src/x/domain/ports/account.py'],
+  shell: ['start.sh', 'stop.sh'],
+  compose: ['docker-compose.yml', 'docker/nginx.conf'],
+  product: ['tools/coyodex/grammar.py', 'tools/coyodex/anchors.py'],
+  split: ['scripts/a.py', 'backend/src/x/service.py', 'backend/src/y/other.py'],
+};
+const GRAPH = { nodes: {} };
+const out = {};
+for (const k in cases) { GRAPH.nodes[k] = { files: cases[k] }; out[k] = unreachedClassOf(k); }
+console.log(JSON.stringify(out));
+"""
+    got = json.loads(_run_js_region("const UNREACHED_GROUPS = [",
+                                    "// The drill out of the coverage line", probe))
+    assert got == {"demo": "tooling", "widgets": "screen", "ports": "contracts", "shell": "tooling",
+                   "compose": "tooling", "product": "other", "split": "other"}, got
+
+
+def test_a_map_that_records_features_lands_on_them() -> None:
+    """The map should read as WHAT THE PRODUCT DOES first, with code as the evidence you drill into.
+    The Happy Path is the guided tour of ONE path through the features, which is a second read, so it
+    keeps the second tab. A map recording no features (this repo's own does not) still lands on it."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    landing = js[js.index("const LANDING ="): js.index("go({ kind: LANDING });")]
+    assert "(HAS_CAPABILITIES && HAS_USECASES) ? 'usecases'" in landing
+    assert "HAS_HP ? 'hp'" in landing
+    assert "(HAS_DIFF && HAS_GROUPING) ? 'container'" in landing   # a diff still opens on the overlay
+
+
+def test_code_and_operations_read_as_one_question() -> None:
+    """Five group tabs, three of which answered the same second question — how is this thing built and
+    run. Product and Data are what the thing IS; everything else is the machine, so Code and Operations
+    are one group. Membership rides each button's `data-group`, so the merge is one attribute per
+    button and there is no second list to keep in step."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    table = js[js.index("const VIEW_GROUPS = ["): js.index("\n];", js.index("const VIEW_GROUPS = ["))]
+    assert [g for g in re.findall(r"\['([a-z]+)', '", table)] == ["product", "data", "hood", "glossary"]
+    assert "'Under the hood'" in table
+    hood = re.findall(r'<button data-view="(\w+)" data-group="hood">', html)
+    assert set(hood) == {"container", "context", "tests", "deployment", "system"}, hood
+
+
+def test_a_component_says_how_many_features_it_serves() -> None:
+    """On the code views a component serving four features looked exactly like one serving none. The
+    count comes from `componentFeatures` — the Python join — and is never re-counted from the grouped
+    list beside it, which is the same join written twice over. Each feature heading is now the way back
+    out of the code and into what the product does."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    cnt = js[js.index("function featureCountHtml(id) {"):
+             js.index("\nfunction ", js.index("function featureCountHtml(id) {") + 10)]
+    assert "COMP_FEATURES[id]" in cnt and "Serves " in cnt
+    used = js[js.index("function usedInHtml(id) {"):
+              js.index("\nfunction ", js.index("function usedInHtml(id) {") + 10)]
+    assert "featureCountHtml(id)" in used
+    assert "used-cap-name featref" in used, "a feature heading must open that feature's page"
+    assert "selectFromTree(b.getAttribute('data-id'))" in js[js.index("function bindNodeDetailHandlers(root) {"):]

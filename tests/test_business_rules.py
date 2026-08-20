@@ -1866,13 +1866,15 @@ def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
 
 
 def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
-    """Business logic is read straight after what the product DOES, long before how it is built —
-    and both of its levels must live in `usecases-wrap`, the catalog's scroll container (`height:
+    """Business logic is read straight after what the product DOES, long before how it is built.
+    Features leads the row (it IS what the product does) and the Happy Path — the guided tour of one
+    path through it — is second, so Rules stays third.
+    Both of the tab's levels must live in `usecases-wrap`, the catalog's scroll container (`height:
     100%; overflow: auto`). An invented wrapper has no CSS at all, so the tab renders at full height
     inside a clipped parent and cannot be scrolled."""
     html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
     order = re.findall(r'data-view="(\w+)"', html)
-    assert order[:3] == ["hp", "usecases", "rules"], order
+    assert order[:3] == ["usecases", "hp", "rules"], order
     for fn in ("renderRules", "renderRule"):
         assert '<div class="usecases-wrap">' in _js_function(fn), fn
     css = (VIEWER / "viewer.css").read_text(encoding="utf-8")

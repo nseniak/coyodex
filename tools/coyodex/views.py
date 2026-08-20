@@ -1238,7 +1238,11 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
                for g in m.happy_path],
         "flows": [asdict(f) for f in flows],
         "subflows": subflows,
-        "roles": [{"name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind)}
+        # `id` rides along with the name because the DERIVED feature layer (coyodex.features)
+        # keys a role by its id — `role_features` and `FeatureFacts.roles` are id lists — while
+        # every other consumer here reads the name. Without it the frontend holds no way to turn
+        # `R3` into "Workspace admin", and the who-can-do-what grid would print raw ids.
+        "roles": [{"id": r.id, "name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind)}
                   for r in m.roles],
         "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or ""}
                      for g in m.glossary],
