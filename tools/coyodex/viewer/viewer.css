@@ -395,35 +395,51 @@ body.vresizing #stage { pointer-events: none; }
 .uc-lab-supporting { background: #f1f5f9; color: #475569; }
 .uc-lab-platform { background: #f3f4f6; color: #6b7280; }
 /* --- the feature page (plan/80-feature-led-views) ------------------------------------------------
-   One feature as everything the map knows about it: name, label, then seven labelled rows. A definition
-   list, because every row is the same shape — a question on the left, the map's answer on the right —
-   and the reader scans the left column to find the one they came for. */
-.feat-page { padding: 2px 0 6px; }
-.feat-page-name { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 0 12px;
-                  font-size: 19px; font-weight: 700; color: #111827; }
-.feat-facts { margin: 0 0 18px; padding: 0; }
-.feat-fact { display: grid; grid-template-columns: 148px 1fr; gap: 10px; align-items: baseline;
-             padding: 7px 0; border-top: 1px solid #f1f5f9; }
-.feat-fact dt { font-size: 12px; font-weight: 700; color: #6b7280; }
-.feat-fact dd { margin: 0; font-size: 13px; color: #1f2937; line-height: 1.5; }
-.feat-more > summary { cursor: pointer; color: #4338ca; font-size: 13px; }
-.feat-more > summary:hover { text-decoration: underline; }
-.feat-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+   Three levels, and the CSS is what makes them read as three. A hero that answers "what is this", the
+   use cases as the page's body, and the rest of the map under section headings the pinned chip index
+   jumps to. The first shape was one definition list of seven equal rows, so the purpose weighed the
+   same as the component list and the reader had to work out what mattered. */
+.feat-hero { padding: 4px 0 14px; border-bottom: 1px solid #eef2f7; margin-bottom: 4px; }
+.feat-hero-name { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 0 8px;
+                  font-size: 21px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
+.feat-hero-purpose { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: #374151;
+                     max-width: 68ch; }
+.feat-hero-roles { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; }
+.feat-hero-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+                 color: #6b7280; margin-right: 2px; }
+/* What the map does NOT hold. Quiet, but never blank: an empty box and "nothing recorded" are
+   different facts, and only one of them is honest. */
+.feat-empty { margin: 0; font-size: 13px; color: #9ca3af; }
+/* A chip list, optionally under the name of the group its members live in — a component under its
+   subsystem, an entity under its subdomain. Thirty-one loose chips is a wall; the same thirty-one
+   under six subsystem names say which parts of the machine the feature lives in. */
+.feat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.feat-chipgroup + .feat-chipgroup, .feat-rulegroup + .feat-rulegroup { margin-top: 12px; }
+.feat-chipgroup-name { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: .05em; color: #6b7280; margin: 0 0 6px; }
 .featref, .featrole { font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer;
                       border: 1px solid #e5e7eb; border-radius: 9px; background: #fff; color: #374151; }
 .featref:hover, .featrole:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
-.featrole + .featrole { margin-left: 6px; }
-.feat-eps { margin-top: 8px; }
-.feat-ep-kind { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 5px 0; }
+/* A rule is a sentence, not a chip: it keeps the row shape the use cases above it use, so the two
+   lists on one page read as the same kind of thing. A rule with no name of its own shows its whole
+   statement as the title, and thirty words set bold is a wall — so that case drops to normal weight. */
+.uc-name-plain { font-weight: 400; color: #374151; }
+.uc-row.featref { display: block; width: 100%; text-align: left; font: inherit; border-radius: 8px;
+                  border: 1px solid transparent; background: transparent; padding: 8px 10px; }
+.feat-eps { display: flex; flex-direction: column; gap: 10px; }
+.feat-ep-kind { display: grid; grid-template-columns: 88px 1fr; gap: 8px; align-items: baseline; }
 .feat-ep-kindname { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-                    padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }
+                    padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280;
+                    justify-self: start; }
+.feat-ep-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .featep { font: inherit; font-size: 12px; text-align: left; padding: 2px 8px; cursor: pointer;
           border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; color: #374151; }
 .featep:hover { border-color: #c7d2fe; background: #eef2ff; }
 .feat-ep-plain { font-size: 12px; color: #6b7280; }
-/* What the rule row has to admit beside the rules it can name: a floor is not an answer. Amber, not
-   red — an incomplete join is a limit of the map, not a defect in the product. */
-.feat-note { margin: 7px 0 0; padding: 6px 9px; font-size: 12px; line-height: 1.45;
+/* What the rule list has to admit beside the rules it can name: a floor is not an answer. Sits under
+   the count it qualifies, never mid-page. Amber, not red — an incomplete join is a limit of the map,
+   not a defect in the product. */
+.feat-note { margin: 0 0 10px; padding: 6px 9px; font-size: 12px; line-height: 1.45;
              border-left: 3px solid #fcd34d; background: #fffbeb; color: #92400e; }
 /* --- who can do what: the two axes crossed --------------------------------------------------- */
 .rg-wrap { overflow-x: auto; padding: 4px 0 14px; }

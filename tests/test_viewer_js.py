@@ -708,39 +708,74 @@ def _run_js_region(start_marker: str, end_marker: str, snippet: str) -> str:
     return r.stdout.strip()
 
 
-def test_one_feature_is_a_page_and_not_just_its_use_cases() -> None:
-    """A feature was a label on a use case: to answer "what does Billing & credits do, decide, know
-    and run on?" you read four other views and joined them by hand. Its card now opens a PAGE with
-    those seven answers on it, and the use-case list stays underneath — one renderer for that list,
-    so the row markup, the Happy-Path pill and the flow click cannot drift between the lists."""
+def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
+    """A feature was a label on a use case: to answer "what does Billing & credits do, decide, know and
+    run on?" you read four other views and joined them by hand. The first page that answered it put all
+    seven answers in ONE definition list, so the purpose weighed the same as the component list, the use
+    cases (which ARE the feature) were one row reading "10 use cases", and three rows were folded
+    disclosures opening onto thirty unordered chips.
+
+    Three levels now. A header answers "what is this" — name, label, purpose, who drives it. The use
+    cases are the page's body. The rest of the map, filtered to this feature, follows as sections in
+    reading order: the doors, the decisions, the data, the code. Order on the page IS order of
+    importance, and every section carries its count in its heading, so nothing must be opened to be
+    counted."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    page = js[js.index("function featurePageHtml(capId) {"):
-              js.index("\nfunction ", js.index("function featurePageHtml(capId) {") + 10)]
-    for row in ("what it is", "who uses it", "what you can do", "how you reach it",
-                "what it decides", "what it knows", "built from"):
-        assert f"row('{row}'" in page, row
-    # The page rides ON the list renderer rather than replacing it, and the list drops the heading the
-    # page header already carries — the name, the label and the purpose were printed twice otherwise.
-    assert "${page ? featurePageHtml(page) : ''}" in js
-    assert "if (page) bindFeaturePage(diagram);" in js
+    head = js[js.index("function featureHeadHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featureHeadHtml(capId) {") + 10)]
+    assert "feat-hero-name" in head and "feat-hero-purpose" in head and "Used by" in head
+    assert "f.rules" not in head and "f.components" not in head, "the header holds no counts"
+    secs = js[js.index("function featureSectionsHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featureSectionsHtml(capId) {") + 10)]
+    order = re.findall(r"featSection\(secs, '(\w+)', '([^']+)'", secs)
+    assert [t for _, t in order] == ["How you reach it", "What it decides", "What it knows",
+                                     "What it runs on"], order
+    # The use cases are the FIRST section, emitted by the one list renderer, not by a second copy.
+    assert "secs.push({ id: secId, title: 'What you can do' });" in js
+    assert "secs.concat(extra.secs)" in js, "the pinned index is built from the sections themselves"
+    # Nothing on the page folds shut: a count you must click to see is a count you cannot scan.
+    assert "<details" not in js[js.index("// \u2500\u2500 the feature page"):
+                                js.index("// The Features tab's LIST level")]
+
+
+def test_a_long_list_on_the_feature_page_is_grouped_not_dumped() -> None:
+    """One live feature is built from 55 components and another from 31. As one flat run of chips that
+    is a wall that says nothing about shape. Grouped under the subsystem each component lives in, the
+    same list answers which parts of the machine the feature occupies. Entities group the same way, by
+    subdomain, because both ride the same `parent` pointer. One group is not a grouping — a single
+    heading repeating the section heading above it is drawn plain instead."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    grp = js[js.index("function featChipGroupsHtml(ids) {"):
+             js.index("\nfunction ", js.index("function featChipGroupsHtml(ids) {") + 10)]
+    assert "(GRAPH.nodes[id] || {}).parent" in grp
+    assert "if (groups.length < 2) return chips(ids);" in grp
+    # A feature's rules are cut by DECISION AREA, the same cut the Rules tab makes — one grouping,
+    # shared with the component pane, because two of them would disagree about where a rule sits.
+    assert "function rulesByBlock(ids) {" in js
+    decides = js[js.index("function decidesHtml(id) {"):
+                 js.index("\nfunction ", js.index("function decidesHtml(id) {") + 10)]
+    assert "rulesByBlock(ids)" in decides
 
 
 def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
-    """Two silences the page must break. Rules that reach NO use-case walk cannot be placed on any
-    feature (48 of 61 on one live map before the code index, 18 of 61 after), so a page listing only
-    the joined ones claims the feature decides less than it does. And with no code index at all a rule
-    is linked only on an exact line match, which makes every rule list a floor. Both are stated on the
-    page; neither is inferred from the other."""
+    """Two silences the page must break. Rules enforced where NO use-case walk passes cannot be placed
+    on any feature (27 of 66 on one live map, 47 of 96 on another), so a page listing only the joined
+    ones claims the feature decides less than it does. And with no code index a rule is linked only on
+    an exact line match, which makes every rule list a floor. Both notes sit directly under the count
+    they qualify, not somewhere in the middle of the page."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     notes = js[js.index("function featRuleNotes() {"):
                js.index("\nfunction ", js.index("function featRuleNotes() {") + 10)]
     assert "FEAT_COVERAGE.rulesUnjoined" in notes and "no use-case walk passes" in notes
     assert "FEATURES.ruleJoinUsesExtents === false" in notes and "floor" in notes
-    assert "featRuleNotes()" in js[js.index("function featurePageHtml(capId) {"):]
+    rules = js[js.index("function featRulesHtml(ids) {"):
+               js.index("\nfunction ", js.index("function featRulesHtml(ids) {") + 10)]
+    assert rules.index("featRuleNotes()") < rules.index("rulesByBlock(ids)"), "the note leads the list"
+    assert "if (!ids.length) return notes + featEmpty(" in rules, "a feature deciding nothing still says so"
     # A map whose use cases name no way in (measured: 0 of 664 on one live map) must SAY so.
     eps = js[js.index("function featEntryPointsHtml(ids) {"):
              js.index("\nfunction ", js.index("function featEntryPointsHtml(ids) {") + 10)]
-    assert eps.count("not recorded") == 2, "an empty ways-in row must read 'not recorded', not blank"
+    assert "Not recorded:" in eps, "an empty ways-in section must name the silence, not go blank"
 
 
 def test_the_feature_page_reads_the_python_join_and_never_redoes_it() -> None:
@@ -749,14 +784,24 @@ def test_the_feature_page_reads_the_python_join_and_never_redoes_it() -> None:
     second join written in JS would drift from both. The page therefore reads the shipped lists and
     counts nothing itself."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    page = js[js.index("function featurePageHtml(capId) {"):
-              js.index("\nfunction ", js.index("function featurePageHtml(capId) {") + 10)]
-    assert "FEAT_BY_ID[capId]" in page
-    for field in ("f.roles", "f.useCases", "f.entryPoints", "f.rules", "f.entities", "f.components"):
-        assert field in page, field
-    # The joins that produce those lists live in Python only.
-    assert "RULES_VIEW" not in page and "USES_BY_NODE" not in page
+    secs = js[js.index("function featureSectionsHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featureSectionsHtml(capId) {") + 10)]
+    assert "FEAT_BY_ID[capId]" in secs
+    for field in ("f.entryPoints", "f.rules", "f.entities", "f.components"):
+        assert field in secs, field
+    assert "USES_BY_NODE" not in secs, "the component join lives in Python only"
     assert "FEATURES = b.features || {};" in js, "the derivation is shipped, not recomputed"
+
+
+def test_a_row_is_only_a_use_case_when_it_names_one() -> None:
+    """The feature page draws its RULES as rows of the same shape as the use cases above them, on
+    purpose: two lists on one page should read as the same kind of thing. But the use-case binder
+    claimed every `.uc-row` in the view, so clicking a rule opened `{kind:'usecase', uc:null}` and
+    landed the reader on a screen with no name and no crumb. The selector asks for the attribute that
+    makes a row a use case, not for the class that makes it look like one."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "diagram.querySelectorAll('.uc-row[data-uc]')" in js
+    assert "diagram.querySelectorAll('.uc-row')" not in js, "a bare row selector claims other pages' rows"
 
 
 def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:

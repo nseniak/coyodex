@@ -1343,18 +1343,12 @@ function decidesHtml(id) {
   if (!ids.length) {
     return '<dt>How it decides</dt><dd><span class="used-none">No business rule is enforced here.</span></dd>';
   }
-  const byId = new Map((RULES_VIEW.rules || []).map((r) => [r.id, r]));
-  const blockName = new Map((RULES_VIEW.blocks || []).map((b) => [b.id, b.name]));
-  const groups = new Map();
-  for (const rid of ids) {
-    const r = byId.get(rid);
-    if (!r) continue;
-    const key = r.block || '';
-    groups.set(key, (groups.get(key) || []).concat([r]));
-  }
-  const html = [...groups.entries()].map(([bid, rs]) => '<div class="used-cap-group">'
-    + '<div class="used-cap-name">' + esc(blockName.get(bid) || 'Not assigned to a block') + '</div>'
-    + '<div class="used-uc-list">' + rs.map((r) =>
+  // The grouping is `rulesByBlock`, shared with the feature page's "What it decides". Two
+  // implementations of "these rules, by decision area" would eventually disagree about which area a
+  // rule sits in; the MARKUP differs on purpose (a dense pane line here, rows on a page there).
+  const html = rulesByBlock(ids).map((g) => '<div class="used-cap-group">'
+    + '<div class="used-cap-name">' + esc(g.name) + '</div>'
+    + '<div class="used-uc-list">' + g.rules.map((r) =>
         '<a href="#" class="brref" data-br="' + esc(r.id) + '">' + esc(ruleTitle(r)) + '</a>').join(', ')
     + '</div></div>').join('');
   return '<dt>How it decides</dt><dd class="used-by-cap">' + html + '</dd>';
@@ -5319,10 +5313,19 @@ function capabilityGroups() {
 }
 
 // ── the feature page ──────────────────────────────────────────────────────────────────────────────
-// One feature, as everything the map knows about it: what it is, who uses it, what you can do, how you
-// reach it, what it decides, what it knows, and what it is built from. Every row is a COUNT of named
-// things that unfolds into the names, and every name navigates to the element's own home view through
-// `selectTargetFor` — the one resolver — so no row hardcodes which tab an element lives on.
+// One feature, as everything the map knows about it. THREE levels, not seven equal rows: a header that
+// answers "what is this" in a sentence, the use cases as the page's body, and the rest of the map —
+// filtered to this feature — as sections underneath it.
+//
+// The first shape put all seven answers in one definition list, and every answer then weighed the same:
+// the purpose sat level with the component list, the use cases (which ARE the feature) were one row
+// reading "10 use cases", and three of the rows were folded disclosures that opened onto thirty
+// unordered chips. The reader had to work out what mattered. Now the order on the page IS the order of
+// importance, and each section carries its own count in its heading, so nothing has to be opened to be
+// counted.
+//
+// The sections are the SAME shell every text tab uses (`uc-group` + a heading + the pinned chip index),
+// so this page navigates like the System, Rules and Use Cases tabs rather than inventing a fourth way.
 //
 // The numbers come from `coyodex.features`, which joined them once in Python. Re-deriving any of them
 // here would be a second answer to the same question; the Rules view and this page read the SAME rule
@@ -5333,21 +5336,91 @@ function capabilityGroups() {
 const EP_BY_ID = {};
 for (const e of (GRAPH.entry_points || [])) if (e.id) EP_BY_ID[e.id] = e;
 
-// A row's unfoldable list of element names. `ids` are graph ids; each chip navigates to the view that
-// draws that element. `zero` is what the row says when the feature has none of this thing.
-function featChipsHtml(count, noun, plural, ids, zero) {
-  if (!count) return `<span class="used-none">${esc(zero)}</span>`;
-  const label = `${count} ${count === 1 ? noun : plural}`;
-  const chips = ids.map((id) => `<button type="button" class="featref" data-id="${esc(id)}">`
-    + `${esc(elName(id))}</button>`).join('');
-  if (!chips) return esc(label);
-  return `<details class="feat-more"><summary>${esc(label)}</summary>`
-    + `<div class="feat-chips">${chips}</div></details>`;
+// One section of the page, in the shell the text tabs share. Registers itself in `secs` so the pinned
+// chip index at the top lists it — the index IS the at-a-glance layer, and it cannot fall out of step
+// with the sections because it is built from them.
+function featSection(secs, key, title, count, body) {
+  const id = 'featsec-' + key;
+  secs.push({ id, title });
+  return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}`
+    + (count ? `<span class="uc-actor-wants">${esc(count)}</span>` : '')
+    + `</h3>${body}</section>`;
+}
+function featEmpty(text) { return `<p class="feat-empty">${esc(text)}</p>`; }
+function featCount(n, noun, plural) { return `${n} ${n === 1 ? noun : plural}`; }
+
+// Element names as chips, GROUPED BY THE GROUP THEY LIVE IN — a component by its subsystem, an entity
+// by its subdomain, both of which ride the same `parent` pointer. Thirty-one loose chips is a wall and
+// says nothing about shape; the same thirty-one under six subsystem names says which parts of the
+// machine this feature lives in, which is the question "built from" was really asking.
+function featChipGroupsHtml(ids) {
+  const groups = [];
+  const byParent = new Map();
+  for (const id of ids) {
+    const p = (GRAPH.nodes[id] || {}).parent || '';
+    if (!byParent.has(p)) { byParent.set(p, []); groups.push(p); }
+    byParent.get(p).push(id);
+  }
+  const chips = (list) => `<div class="feat-chips">${list.map((id) =>
+    `<button type="button" class="featref" data-id="${esc(id)}">${esc(elName(id))}</button>`
+  ).join('')}</div>`;
+  // A single group, or none named, is not a grouping — draw the chips plain rather than under one
+  // heading that repeats what the section heading already said.
+  if (groups.length < 2) return chips(ids);
+  return groups.map((p) => {
+    const name = p && GRAPH.nodes[p] ? GRAPH.nodes[p].name : '';
+    return '<div class="feat-chipgroup">'
+      + (name ? `<div class="feat-chipgroup-name">${esc(name)}</div>` : '')
+      + chips(byParent.get(p)) + '</div>';
+  }).join('');
 }
 
-// What the rule row must admit, beside the rules it CAN name. Both notes are about the join, not about
-// this feature: a page that printed only the joined rules would claim the feature decides less than it
-// does, and a page built without the code index would print a floor as if it were the answer.
+// "How you reach it", by the KIND of way in — the same canonical kind the System tab groups by, so
+// `http` and `http-route` land in one group on both screens. A map that records no ways in on its use
+// cases (measured: one live map names 0 of 664) must SAY it is not recorded, never show a blank.
+function featEntryPointsHtml(ids) {
+  const byKind = {};
+  const order = [];
+  for (const id of ids) {
+    const e = EP_BY_ID[id];
+    if (!e) continue;
+    const k = ((e.canonical_kind || e.kind || 'other').trim()) || 'other';
+    if (!byKind[k]) { byKind[k] = []; order.push(k); }
+    byKind[k].push(e);
+  }
+  if (!order.length) return featEmpty('Not recorded: no use case here names a way in.');
+  return '<div class="feat-eps">' + order.map((k) => '<div class="feat-ep-kind">'
+    + `<span class="feat-ep-kindname">${esc(k)}</span>`
+    + '<div class="feat-ep-list">' + byKind[k].map((e) => {
+      const trig = e.trigger ? mdInline(e.trigger) : '<span class="muted">(way in)</span>';
+      return e.component && GRAPH.nodes[e.component]
+        ? `<button type="button" class="featep" data-id="${esc(e.component)}" `
+          + `data-idx="${e.index || 0}">${trig}</button>`
+        : `<span class="feat-ep-plain">${trig}</span>`;
+    }).join('') + '</div></div>').join('') + '</div>';
+}
+
+// The rules of one feature, under the DECISION AREA each belongs to — the same cut the Rules tab makes,
+// so a reader who knows an area from that tab meets it again by the same name here. One grouping,
+// shared with the component pane's "How it decides", because two implementations of "rules by area"
+// would eventually disagree about which area a rule is in.
+function rulesByBlock(ids) {
+  const byId = new Map((RULES_VIEW.rules || []).map((r) => [r.id, r]));
+  const blockName = new Map((RULES_VIEW.blocks || []).map((b) => [b.id, b.name]));
+  const groups = new Map();
+  for (const rid of ids) {
+    const r = byId.get(rid);
+    if (!r) continue;
+    const key = r.block || '';
+    groups.set(key, (groups.get(key) || []).concat([r]));
+  }
+  return [...groups.entries()].map(([bid, rules]) =>
+    ({ id: bid, name: blockName.get(bid) || 'Not assigned to a decision area', rules }));
+}
+// What the rule list has to admit beside the rules it CAN name. Both notes are about the JOIN, not about
+// this feature: a page printing only the joined rules claims the feature decides less than it does, and
+// a map built with no code index shows a floor as if it were the answer. They sit directly under the
+// count they qualify, not somewhere in the middle of the page.
 function featRuleNotes() {
   const out = [];
   const un = FEAT_COVERAGE.rulesUnjoined || 0;
@@ -5358,82 +5431,90 @@ function featRuleNotes() {
   }
   if (FEATURES.ruleJoinUsesExtents === false) {
     out.push('This map carries no code index, so a rule was matched to a step only on an exact line. '
-      + 'The list above is a floor, not the whole answer.');
+      + 'The list below is a floor, not the whole answer.');
   }
   return out;
 }
-
-// "How you reach it", counted by the KIND of way in — the same canonical kind the System tab groups by,
-// so `http` and `http-route` land in one count on both screens. A map that records no ways in on its use
-// cases (measured: one live map names 0 of 664) must read NOT RECORDED, never an empty box.
-function featEntryPointsHtml(ids) {
-  if (!ids.length) return '<span class="used-none">not recorded</span>';
-  const byKind = {};
-  const order = [];
-  for (const id of ids) {
-    const e = EP_BY_ID[id];
-    if (!e) continue;
-    const k = ((e.canonical_kind || e.kind || 'other').trim()) || 'other';
-    if (!byKind[k]) { byKind[k] = []; order.push(k); }
-    byKind[k].push(e);
-  }
-  if (!order.length) return '<span class="used-none">not recorded</span>';
-  const summary = order.map((k) => `${byKind[k].length} ${k}`).join(' · ');
-  const rows = order.map((k) => '<div class="feat-ep-kind"><span class="feat-ep-kindname">'
-    + `${esc(k)}</span>` + byKind[k].map((e) => {
-      const trig = e.trigger ? mdInline(e.trigger) : '<span class="muted">(way in)</span>';
-      return e.component && GRAPH.nodes[e.component]
-        ? `<button type="button" class="featep" data-id="${esc(e.component)}" `
-          + `data-idx="${e.index || 0}">${trig}</button>`
-        : `<span class="feat-ep-plain">${trig}</span>`;
-    }).join('') + '</div>').join('');
-  return `<details class="feat-more"><summary>${esc(summary)}</summary>`
-    + `<div class="feat-eps">${rows}</div></details>`;
+function featRulesHtml(ids) {
+  const notes = featRuleNotes().map((n) => `<p class="feat-note">${esc(n)}</p>`).join('');
+  if (!ids.length) return notes + featEmpty('No rule this map records is enforced on this feature.');
+  const groups = rulesByBlock(ids).map((g) => '<div class="feat-rulegroup">'
+    + `<div class="feat-chipgroup-name">${esc(g.name)}</div>`
+    + '<ul class="uc-list">' + g.rules.map((r) => {
+      // A map that names its rules gets a short bold title with the decision under it. A map that does
+      // not (one live map names none) has the whole STATEMENT as the title — thirty words set bold is a
+      // wall, so it drops to normal weight. `ruleStatementLine` already draws that distinction: it
+      // returns '' exactly when the title IS the statement.
+      const line = ruleStatementLine(r);
+      return `<li class="uc-row featref" data-id="${esc(r.id)}" tabindex="0">`
+        + `<span class="uc-head"><span class="uc-name${line ? '' : ' uc-name-plain'}">`
+        + `${esc(ruleTitle(r))}</span></span>`
+        + (line ? `<span class="uc-to">${mdInline(line)}</span>` : '') + '</li>';
+    }).join('') + '</ul></div>').join('');
+  return notes + groups;
 }
 
-// The page header: the feature's name, its label, and the seven rows. Rendered above the use-case list
-// by renderUseCases, which stays the ONE renderer of that list.
-function featurePageHtml(capId) {
+// The header: what this feature IS, in the three lines a reader needs before anything else. The label,
+// the purpose sentence, and who drives it. Nothing here is a count and nothing here folds open.
+function featureHeadHtml(capId) {
   const f = FEAT_BY_ID[capId];
   if (!f) return '';
   const lab = f.label
     ? `<span class="uc-caplabel uc-lab-${esc(f.label.toLowerCase())}">${esc(f.label)}</span>` : '';
-  const row = (k, v) => `<div class="feat-fact"><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
+  const purpose = f.purpose
+    ? `<p class="feat-hero-purpose">${mdInline(f.purpose)}</p>`
+    : '<p class="feat-hero-purpose feat-empty">No purpose recorded.</p>';
   const roles = f.roles.length
     ? f.roles.map((rid) => `<button type="button" class="featrole" data-act="${esc(roleName(rid))}">`
         + `${esc(roleName(rid))}</button>`).join('')
-    : '<span class="used-none">not recorded</span>';
-  const ucs = f.useCases.length
-    ? `${f.useCases.length} use case${f.useCases.length === 1 ? '' : 's'}`
-    : 'none';
-  const notes = featRuleNotes().map((n) => `<p class="feat-note">${esc(n)}</p>`).join('');
-  return '<div class="feat-page">'
-    + `<h2 class="feat-page-name">${esc(f.name)}${lab}</h2>`
-    + '<dl class="feat-facts">'
-    + row('what it is', f.purpose ? mdInline(f.purpose) : '<span class="used-none">not recorded</span>')
-    + row('who uses it', roles)
-    + row('what you can do', esc(ucs))
-    + row('how you reach it', featEntryPointsHtml(f.entryPoints))
-    + row('what it decides',
-        featChipsHtml(f.rules.length, 'rule', 'rules', f.rules, 'no rule reaches it') + notes)
-    + row('what it knows',
-        featChipsHtml(f.entities.length, 'entity', 'entities', f.entities, 'nothing recorded'))
-    + row('built from',
-        featChipsHtml(f.components.length, 'component', 'components', f.components, 'nothing recorded'))
-    + '</dl></div>';
+    : '<span class="feat-empty">not recorded</span>';
+  // A plain `div`, never a `<header>`: the page's own top bar is styled by a bare `header` selector
+  // (dark navy, flex row), and a semantic header here inherited all of it and rendered unreadable.
+  return '<div class="feat-hero">'
+    + `<h2 class="feat-hero-name">${esc(f.name)}${lab}</h2>${purpose}`
+    + `<p class="feat-hero-roles"><span class="feat-hero-lbl">Used by</span> ${roles}</p>`
+    + '</div>';
+}
+
+// Everything under the use cases: the ways in, the decisions, the data and the code. In that order,
+// which walks the reader from what a person touches down to what the machine is made of. Returns the
+// sections AND their index entries, so the chip bar and the page are built from one list.
+function featureSectionsHtml(capId) {
+  const f = FEAT_BY_ID[capId];
+  if (!f) return { secs: [], html: '' };
+  const secs = [];
+  let html = featSection(secs, 'eps', 'How you reach it',
+    f.entryPoints.length ? featCount(f.entryPoints.length, 'way in', 'ways in') : '',
+    featEntryPointsHtml(f.entryPoints));
+  html += featSection(secs, 'rules', 'What it decides',
+    f.rules.length ? featCount(f.rules.length, 'rule', 'rules') : '',
+    featRulesHtml(f.rules));
+  html += featSection(secs, 'ents', 'What it knows',
+    f.entities.length ? featCount(f.entities.length, 'entity', 'entities') : '',
+    f.entities.length ? featChipGroupsHtml(f.entities)
+                      : featEmpty('No entity this map records is touched by its use cases.'));
+  html += featSection(secs, 'comps', 'What it runs on',
+    f.components.length ? featCount(f.components.length, 'component', 'components') : '',
+    f.components.length ? featChipGroupsHtml(f.components)
+                        : featEmpty('No use-case walk here passes through a component.'));
+  return { secs, html };
 }
 
 // Wire the page's names. Elements go through `selectFromTree`, the one place that answers "which view
 // shows this id"; a role opens its own use-case list, which is not an element and has no node.
 function bindFeaturePage(root) {
-  root.querySelectorAll('.featref').forEach((b) =>
-    b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
+  root.querySelectorAll('.featref[data-id]').forEach((b) => {
+    const open = () => selectFromTree(b.getAttribute('data-id'));
+    b.addEventListener('click', open);
+    b.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(); });
+  });
   root.querySelectorAll('.featrole').forEach((b) =>
     b.addEventListener('click', () => go({ kind: 'actor', act: b.getAttribute('data-act') })));
   root.querySelectorAll('.featep').forEach((b) =>
     b.addEventListener('click', () => selectEntryPoint(
       b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0)));
 }
+
 
 // The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says which
 // card — `{cap:<id>}` a feature, `{cap:'-'}` the use cases assigned to no feature, `{actor:<name>}` a
@@ -5510,11 +5591,17 @@ function renderUseCases(sel) {
     }).join('');
     const secId = 'ucsec-' + gi;
     if (byCapability) {
-      // ONE feature, opened from a card: the page header above already carries the name, the label and
-      // the purpose, and the seven rows say how many use cases there are. Repeating all four here put
-      // the same words twice on one screen, so the list keeps only its rows.
-      if (page) return `<section class="uc-group" id="${secId}" data-cap="${esc(one)}">`
-        + `<ul class="uc-list">${rows}</ul></section>`;
+      // ONE feature, opened from a card: this is the PAGE's body, not a list with the feature's name on
+      // it again. The header above already carries the name, the label and the purpose, so the heading
+      // here names what the section IS — the things you can do — and carries its own count, like every
+      // other section of the page.
+      if (page) {
+        secs.push({ id: secId, title: 'What you can do' });
+        return `<section class="uc-group" id="${secId}" data-cap="${esc(one)}">`
+          + '<h3 class="uc-actor">What you can do'
+          + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length === 1 ? '' : 's'}</span>`
+          + `</h3><ul class="uc-list">${rows}</ul></section>`;
+      }
       const title = g.cap ? g.cap.name : 'Not assigned to a feature';  // the same words as its card and its crumb
       secs.push({ id: secId, title });
       const lab = g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '';
@@ -5542,8 +5629,14 @@ function renderUseCases(sel) {
   // list already scoped to one card, an axis switch either does nothing or silently changes which card
   // you are looking at. (This list used to be reachable as a flat "all use cases" page carrying the
   // switch, which then restated the overview's own card names twice over — see renderOverview.)
-  diagram.innerHTML = `<div class="usecases-wrap">${page ? featurePageHtml(page) : ''}${tabIndexHtml(secs)}`
-    + (sections || '<p class="empty">No use cases recorded.</p>') + '</div>';
+  // On a feature's page the use-case section is the FIRST of five, and the rest of the map — filtered to
+  // this feature — follows it. The pinned index is built from every section, so it and the page cannot
+  // disagree about what is on screen.
+  const extra = page ? featureSectionsHtml(page) : null;
+  const index = tabIndexHtml(extra ? secs.concat(extra.secs) : secs);
+  diagram.innerHTML = `<div class="usecases-wrap">${page ? featureHeadHtml(page) : ''}${index}`
+    + (sections || '<p class="empty">No use cases recorded.</p>')
+    + (extra ? extra.html : '') + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
   if (page) bindFeaturePage(diagram);
   // A row opens the use case's flow — the SAME detail a Happy Path step drills into (one home).
@@ -5553,7 +5646,10 @@ function renderUseCases(sel) {
   const openUc = (li) => go(oneActor
     ? { kind: 'usecase', uc: li.getAttribute('data-uc'), act: oneActor }
     : { kind: 'usecase', uc: li.getAttribute('data-uc') });
-  diagram.querySelectorAll('.uc-row').forEach((li) => {
+  // `[data-uc]`, not every `.uc-row`: the feature page draws its RULES as rows of the same shape, and a
+  // bare class selector claimed those too — a rule click then opened `{kind:'usecase', uc:null}` and
+  // landed on a screen with no name. A row is a use case when it names one.
+  diagram.querySelectorAll('.uc-row[data-uc]').forEach((li) => {
     li.addEventListener('click', (ev) => { if (!ev.target.closest('.uc-hp-pill')) openUc(li); });
     li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.target.closest('.uc-hp-pill')) openUc(li); });
   });
@@ -5670,7 +5766,7 @@ function renderUnreached() {
     + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
   const open = (li) => selectFromTree(li.getAttribute('data-id'));
-  diagram.querySelectorAll('.uc-row').forEach((li) => {
+  diagram.querySelectorAll('.uc-row[data-id]').forEach((li) => {
     li.addEventListener('click', () => open(li));
     li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(li); });
   });
@@ -6585,7 +6681,7 @@ function renderRules(s) {
     + (sections || '<p class="empty">This decision area is not in the map.</p>') + '</div>';
   // A row opens the rule's own page — the SAME detail every cross-link into a rule lands on (one home).
   const open = (li) => go({ kind: 'rule', br: li.getAttribute('data-br') });
-  diagram.querySelectorAll('.uc-row').forEach((li) => {
+  diagram.querySelectorAll('.uc-row[data-br]').forEach((li) => {
     li.addEventListener('click', () => open(li));
     li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(li); });
   });
