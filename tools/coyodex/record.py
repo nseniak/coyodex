@@ -62,7 +62,10 @@ from pathlib import Path
 from coyodex import records
 from coyodex.model import ExtraSection, ProjectModel
 
-USAGE = __doc__
+#: `__doc__` is `str | None` to a type checker, and this is the only `USAGE` in the package that is
+#: not a literal — so it was the only one a test could not assert on without an error. The module
+#: has a docstring; the `or ""` states that rather than making every reader prove it.
+USAGE = __doc__ or ""
 
 #: The headings the tools actually read, and which of them are the map's own build record — one
 #: registry, in `records`, shared with the readers and with the views that decide where a section
