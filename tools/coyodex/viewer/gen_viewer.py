@@ -38,6 +38,9 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
+from coyodex.features import as_bundle, build_index
+from coyodex.model import ModelError, ProjectModel, load_model
+from coyodex.impact_git import Extents, load_map_extents
 from coyodex.grammar import (  # external-dep Kind fold rule + the purpose-bucket grouping axis
     DEP_BUCKET_FOLD_AT, DEP_KINDS_FOLDED, DEP_KINDS_SYSTEM, canonical_bucket, order_buckets,
     resolve_bucket, unit_name_matches_dep,
@@ -3168,17 +3171,38 @@ class ViewBundle(TypedDict):
                                      # ≥2 channels; rendered inside the Data tab's broker pane
     meta: str                      # the header meta line (HTML)
     diffState: dict[str, str]
+    features: dict[str, Any]       # the feature-led derivation (coyodex.features.as_bundle): what
+                                   # each feature owns, the inverse lookups and the coverage
+                                   # line. `{}` when no model could be read beside the graph.
 
 
-def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> ViewBundle:
+def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
+                      model: ProjectModel | None = None,
+                      extents: Extents | None = None) -> ViewBundle:
     """Compute every derived view artifact for one map — the pure-data core that `coyodex serve`
     exposes at /p/<slug>/api/view for the frontend to fetch and render.
+
+    `model` and `extents` feed the feature-led derivation, which needs the model itself rather
+    than the graph projected from it. A caller holding both passes them (the server does);
+    otherwise they are read from `anchor`, and a map that cannot be read there ships an EMPTY
+    `features` block rather than failing the whole bundle — the viewer must still open a map
+    whose folder the server cannot fully read, which is the case this whole function is called
+    per request to survive.
 
     `anchor` is the directory that source links resolve against (the map's `.coyodex/` folder): the
     repo root + GitHub URL are derived from the git work tree around it, overridable in the viewer's
     Settings. Nothing here touches the output file or the frontend assets, so it is safe to call per
     request. `report` is the optional change-impact overlay; None renders the plain baseline.
     """
+    if model is None:
+        map_json = anchor / 'project-map.json'
+        try:
+            model = load_model(map_json.read_text(encoding='utf-8'))
+            if extents is None:
+                extents = load_map_extents(map_json)
+        except (OSError, ModelError):
+            model = None
+    feature_block: dict[str, Any] = as_bundle(build_index(model, extents)) if model else {}
     diff = build_diff(report) if report and report.exists() else None
     base_mm = gen_mermaid(graph, None)
     diff_mm = gen_mermaid(graph, diff) if diff else base_mm
@@ -3265,7 +3289,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         hasDiff=diff is not None,
         hasGrouping=grouping, hasDomain=domain, hasSubdomains=subdomains, hasHp=hp,
         mermaidChannels=gen_channel_mermaids(graph),
-        meta=meta, diffState=state,
+        meta=meta, diffState=state, features=feature_block,
     )
 
 

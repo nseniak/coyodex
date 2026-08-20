@@ -450,10 +450,15 @@ def project_view(proj: Project) -> ViewBundle:
     # "same function as this step" rather than not at all. The markdown view has no such table and
     # degrades to exact-only — the viewer is where the finer answer is available, and using it here
     # keeps the graph a pure function of (model, extents).
-    graph = model_to_graph(load_model(proj.map_json.read_text(encoding="utf-8")),
-                           load_map_extents(proj.map_json))
+    model = load_model(proj.map_json.read_text(encoding="utf-8"))
+    extents = load_map_extents(proj.map_json)
+    graph = model_to_graph(model, extents)
     report = proj.map_json.parent / CHANGE_REPORT
-    proj.view = build_view_bundle(graph, report if report.is_file() else None, proj.map_json.parent)
+    # The feature derivation needs the MODEL, not the graph projected from it, and both are already
+    # in hand here — passing them keeps `build_view_bundle` from reading and parsing the same map a
+    # second time on every cold request.
+    proj.view = build_view_bundle(graph, report if report.is_file() else None,
+                                  proj.map_json.parent, model=model, extents=extents)
     return proj.view
 
 
