@@ -41,10 +41,12 @@ def make_model() -> ProjectModel:
                   entry_point="backend/store.py#L5"),
         Component(id="C3", name="Umbrella", subsystem="S2"),
     ]
+    # Ids as an ASSEMBLED map carries them: entry-point ids are minted at assemble and exist in no
+    # fragment, which is why `--legend` is the only mid-build place to read them.
     m.entry_points = [
-        EntryPoint(kind="http", trigger="GET /orders", source="backend/api.py#L10",
+        EntryPoint(id="EP1", kind="http", trigger="GET /orders", source="backend/api.py#L10",
                    component="C3"),
-        EntryPoint(kind="queue", trigger="orders.created", source="backend/sub.py#L3",
+        EntryPoint(id="EP2", kind="queue", trigger="orders.created", source="backend/sub.py#L3",
                    component="C3"),
     ]
     m.subdomains = [Group(id="SD1", name="Orders")]
@@ -196,6 +198,24 @@ def test_legend_covers_every_element_kind_with_its_parent_and_source():
     assert by_id["UC1"]["kind"] == "use_case"
     # A markdown-link source is reduced to its href, like every other dump slice.
     assert by_id["S1"]["source"] == "backend/core/"
+    # ENTRY POINTS. Their ids are minted at assemble and exist in no fragment, so the map is their
+    # only source — and this legend emitted 0 of them. A build with 108 entry points and 34 reconcile
+    # rules assigning `entry_points` hand-parsed `project-map.json` to get the ids.
+    assert by_id["EP1"] == {"id": "EP1", "name": "GET /orders", "kind": "entry_point",
+                            "parent": "C3", "source": "backend/api.py#L10"}
+
+
+def test_legend_emits_every_id_the_map_defines() -> None:
+    """The legend is the shared id universe a fan-out is handed. A kind missing from it is a kind
+    every sub-agent is blind to, and there is no second place to look mid-build."""
+    from coyodex.dump import legend_of
+    m = make_model()
+    rows = legend_of(m)
+    ids = {r["id"] for r in rows}
+    for group in (m.components, m.deps, m.entities, m.subsystems, m.subdomains, m.use_cases,
+                  m.subflows, m.roles, m.capabilities, m.blocks, m.rules, m.entry_points):
+        for element in group:
+            assert element.id in ids, f"{element.id} is defined in the map and absent from --legend"
 
 
 def test_counts_covers_every_array_not_just_assembles_three():

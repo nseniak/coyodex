@@ -24,6 +24,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from coyodex import provenance
 from coyodex.ignorefile import IGNORE_REL, ignore_report
 from coyodex.preindex_lib import iter_source_files
 from coyodex.reporting import shown
@@ -60,8 +61,11 @@ def read_pin(root: Path) -> Pin:
     """
     sha = _git(root, "rev-parse", "--short", "HEAD")
     date = _git(root, "show", "-s", "--format=%cs", "HEAD")
-    status = _git(root, "status", "--porcelain", "--", ".", ":(exclude).coyodex")
-    dirty = tuple(line[3:].strip() for line in (status or "").splitlines() if line.strip())
+    # ONE definition of "dirty", shared with `provenance.stamp` (which records the operator's answer)
+    # and `lint-fragment` (which checks it). It used to live here alone and exclude `.coyodex` only,
+    # so `.coyodex-eval/` — this toolchain's own git-ignored scratch — read as the user's uncommitted
+    # code and was the sole reason one build asked the operator to pin dirty at all.
+    dirty = provenance.dirty_paths(root)
     return Pin(sha=(sha or "").strip() or None, date=(date or "").strip() or None, dirty=dirty)
 
 

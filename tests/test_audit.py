@@ -1516,9 +1516,32 @@ def test_slash_role_name_yields_no_actor_mismatch() -> None:
     assert audit_model.check_actor_attribution(m) == []
 
 
-def test_whyless_nonfirst_step_warns() -> None:
+def test_whyless_nonfirst_step_is_advisory_so_it_can_be_recorded() -> None:
+    """ADVISORY, not WARNING. `_apply_audit_exceptions` suppresses ADVISORY only, so at WARNING this
+    was the one substantive check no operator could answer — and a live build answered it by deleting
+    a happy-path step and inventing two preconditions that are false against the code."""
     checks = _checks(make_whyless_map())
-    assert checks.get("why-less-step") == "WARNING", checks
+    assert checks.get("why-less-step") == "ADVISORY", checks
+
+
+def test_whyless_step_names_the_line_that_records_it() -> None:
+    """The old message offered "confirm it is a valid entry point" and named no mechanism for it."""
+    found = [f for f in audit_md(make_whyless_map()) if f.check == "why-less-step"]
+    assert found, "expected a why-less-step finding"
+    assert "record 'why-less-step HP2:" in found[0].message, found[0].message
+    assert audit_model.AUDIT_EXCEPTIONS_HEADING in found[0].message, found[0].message
+
+
+def test_a_recorded_line_silences_a_whyless_step() -> None:
+    """The whole point of ADVISORY: the escape the message names actually works. This is the
+    regression the 2026-08-20 argus build paid for in map content."""
+    m = load_model(make_whyless_map())
+    before = [f for f in audit_model.audit_model(m) if f.check == "why-less-step"]
+    assert before, "expected a why-less-step finding to record against"
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body="why-less-step HP2: a real starting point of the walk.")]
+    after = [f for f in audit_model.audit_model(m) if f.check == "why-less-step"]
+    assert not after, [f.location for f in after]
 
 
 # --- L2 worklist ----------------------------------------------------------------
@@ -2114,3 +2137,39 @@ def test_description_claims_sort_above_the_backbone_tier():
     from coyodex import audit_model
     themes = list(audit_model._THEMES)
     assert themes.index("description") < themes.index("backbone")
+
+
+# --- a theme cut into batches ------------------------------------------------------
+# `--cap 40` walked greedily, so a 42-claim theme became 40 + 2 — twice on one build. Two whole
+# fresh-context skeptics were provisioned for two claims each while their siblings carried 40, and
+# one of the 40s was the slowest agent in its barrier. The cap is a ceiling on how much context one
+# skeptic holds; it was never a target to fill before starting the next one.
+
+def test_a_theme_splits_into_even_batches_not_a_full_one_and_a_stub() -> None:
+    from coyodex.audit_model import _even_chunks
+    assert [len(c) for c in _even_chunks(list(range(42)), 40)] == [21, 21]
+    assert [len(c) for c in _even_chunks(list(range(41)), 40)] == [21, 20]
+
+
+def test_the_cap_is_still_a_ceiling() -> None:
+    from coyodex.audit_model import _even_chunks
+    for n in (1, 40, 41, 81, 120, 199):
+        chunks = _even_chunks(list(range(n)), 40)
+        assert all(len(c) <= 40 for c in chunks), (n, [len(c) for c in chunks])
+        assert sum(len(c) for c in chunks) == n
+
+
+def test_the_split_uses_the_fewest_batches_that_respect_the_cap() -> None:
+    """Balancing must not buy evenness with an extra agent — each batch costs a whole context."""
+    from coyodex.audit_model import _even_chunks
+    assert len(_even_chunks(list(range(42)), 40)) == 2
+    assert len(_even_chunks(list(range(98)), 40)) == 3
+    assert len(_even_chunks(list(range(120)), 40)) == 3
+
+
+def test_a_theme_under_the_cap_is_one_batch_and_order_is_kept() -> None:
+    """The worklist is ranked most-dangerous-first within a theme; a shuffle spends the ranking."""
+    from coyodex.audit_model import _even_chunks
+    items = list(range(31))
+    assert _even_chunks(items, 40) == [items]
+    assert [x for c in _even_chunks(list(range(42)), 40) for x in c] == list(range(42))

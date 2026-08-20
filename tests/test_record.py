@@ -250,3 +250,36 @@ def test_record_refuses_a_line_that_keys_to_nothing(tmp_path):
     assert main(["--map", str(frag), "--heading", "Audit exceptions",
                  "--line", "read-before-create HP2, HP3: each reads its own"]) == 0
     assert "HP3" in frag.read_text(encoding="utf-8")
+
+
+# --- which headings can read a comma list -----------------------------------------
+# `--help` says "one reason may answer SEVERAL elements — write them as one comma-separated list".
+# That is right for the families with a key grammar and DESTROYS the record on the families without
+# one, whose readers match the whole key. The distinction lived only in a module comment, so a build
+# followed the advice under `Sweep debt`, silenced 0 of 5 anchors, and spent two rounds finding out.
+
+def test_headings_listing_separates_list_families_from_free_text_ones(capsys):
+    from coyodex.record import main
+    from coyodex import records
+    assert main(["--headings"]) == 0
+    out = capsys.readouterr().out
+    listed, free = out.split("FREE TEXT")
+    for heading in records.KNOWN_HEADINGS:
+        spec = records.spec_of(heading)
+        assert spec is not None
+        where = listed if spec.key else free
+        assert heading in where, f"{heading} is on the wrong side of the split"
+
+
+def test_sweep_debt_is_named_as_a_free_text_family(capsys):
+    """The one a live build merged onto two lines, silencing 0 of the 5 anchors they named."""
+    from coyodex.record import main
+    assert main(["--headings"]) == 0
+    out = capsys.readouterr().out
+    assert "Sweep debt" in out.split("FREE TEXT")[1]
+
+
+def test_the_help_no_longer_recommends_the_merged_form_unconditionally():
+    from coyodex.record import USAGE
+    assert "ONLY WHERE THE HEADING HAS A KEY GRAMMAR" in USAGE
+    assert "coyodex record --headings" in USAGE

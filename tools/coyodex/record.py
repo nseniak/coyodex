@@ -30,6 +30,7 @@ what are independent appends under one heading:
                    --line "http-route: partial — <why>" \\
                    --line "ui-route: complete — <why>"
     coyodex record --heading "Entry-point coverage" --lines-from coverage.txt
+    coyodex record --headings
 
 Every line is shape-checked BEFORE anything is written, so a bad one in a batch of twenty leaves the
 fragment untouched rather than holding half a batch. `--replace` corrects one record, so it refuses
@@ -40,6 +41,13 @@ same sentence once per id (live maps grew 66 lines holding 15 distinct reasons t
 
     coyodex record --heading "Unclaimed surfaces" \\
                    --line "C101, C148, C186: an operator surface in our own back office"
+
+BUT ONLY WHERE THE HEADING HAS A KEY GRAMMAR. Some headings key on free text — a `path:line` anchor,
+a bucket name, a whole quoted claim — and their readers match the WHOLE line, so a comma list under
+one of those silences nothing and this command cannot tell you, because there is no grammar to check
+it against. `coyodex record --headings` prints which is which. Two live rounds of repair came from
+following the advice above under `Sweep debt`: one line naming five anchors cleared none of them,
+and the fix was five lines, one anchor each.
 
 Writes the FRAGMENT when given one, so the next `assemble` carries the record through; writing the
 assembled map instead is the edit the next assemble discards.
@@ -158,11 +166,34 @@ def _all_args(argv: list[str], flag: str) -> list[str]:
     return out
 
 
+def _print_headings() -> int:
+    """Which headings read a comma list, and which key on free text.
+
+    `--help` recommends merging one reason onto one line, which is right for the families with a key
+    grammar and destroys the record on the families without one. That distinction lived only in a
+    module comment, so a build followed the advice under `Sweep debt`, silenced 0 of 5 anchors, and
+    spent two rounds finding out."""
+    from coyodex import records
+    specs = [(h, records.spec_of(h)) for h in records.KNOWN_HEADINGS]
+    listed = [h for h, sp in specs if sp is not None and sp.key]
+    free = [h for h, sp in specs if sp is None or not sp.key]
+    print("Headings whose lines take a COMMA LIST of keys — one reason may answer several:")
+    for h in listed:
+        print(f"  {h}")
+    print("\nHeadings keyed on FREE TEXT — one record per line, because the reader matches the")
+    print("whole key and a comma list matches nothing:")
+    for h in free:
+        print(f"  {h}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or "-h" in argv or "--help" in argv:
         print(USAGE)
         return 0
+    if "--headings" in argv:
+        return _print_headings()
     map_path = _arg(argv, "--map", ".coyodex/project-map.json")
     heading = _arg(argv, "--heading")
     lines = _all_args(argv, "--line")

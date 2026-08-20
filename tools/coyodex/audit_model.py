@@ -698,6 +698,19 @@ def check_actor_attribution(m: ProjectModel) -> list[Finding]:
 
 
 def check_whyless_steps(m: ProjectModel) -> list[Finding]:
+    """A non-initial walk step with no `why:` while its siblings have one.
+
+    ADVISORY, and it was WARNING — the one substantive check emitted above ADVISORY, which made it
+    the one check no operator could ever answer. `_apply_audit_exceptions` suppresses ADVISORY only
+    (CONTRADICTIONS must never be suppressible), so a recorded line keyed on this check silenced
+    nothing, and the message named a second remedy ("confirm it is a valid entry point") with no
+    mechanism behind it.
+
+    A live build paid for that. It recorded its reading three times ("each is a real starting point
+    of the walk"), watched the finding survive each time, and then cleared the gate by CHANGING THE
+    MAP: it deleted a happy-path step and wrote two preconditions that are false against the code.
+    An unanswerable warning does not get waved through — it gets satisfied, and the cheapest way to
+    satisfy it is to make the map say something else."""
     steps = happy_path_steps(m)
     if not any(st.why for st in steps):
         return []
@@ -706,9 +719,10 @@ def check_whyless_steps(m: ProjectModel) -> list[Finding]:
         if st.pos > 0 and st.why is None:
             loc = f"HP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"HP{st.pos + 1} — {st.title}"
             findings.append(Finding(
-                "why-less-step", WARNING, loc,
+                "why-less-step", ADVISORY, loc,
                 "declares no `why:` precondition while other steps do; state its prerequisite, or "
-                "confirm it is a valid entry point."))
+                f"record 'why-less-step HP{st.pos + 1}: <why>' under an "
+                f"'{AUDIT_EXCEPTIONS_HEADING}' extras heading if it is a valid entry point."))
     return findings
 
 
@@ -1189,6 +1203,30 @@ def _opt_value(argv: list[str], flag: str) -> str | None:
     return None
 
 
+def _even_chunks(items: list[WorkItem], cap: int) -> list[list[WorkItem]]:
+    """`items` split into the FEWEST batches of at most `cap`, sized as evenly as they go.
+
+    A greedy `[i:i+cap]` walk obeys the cap and produces a degenerate tail: `--cap 40` cut a 42-claim
+    theme into 40 + 2, twice on one build, so two whole fresh-context skeptics were provisioned for
+    two claims each while their siblings carried 40. The same two agents cost the same and cover
+    21 + 21. The cap is a ceiling on how much context one skeptic is asked to hold; it was never a
+    target to fill before starting the next one.
+
+    Order is preserved — the worklist is ranked most-dangerous-first within a theme, and a shuffle
+    would spend the ranking."""
+    if cap <= 0 or len(items) <= cap:
+        return [items] if items else []
+    n = -(-len(items) // cap)                 # ceil: the fewest batches that respect the cap
+    base, extra = divmod(len(items), n)
+    out: list[list[WorkItem]] = []
+    start = 0
+    for i in range(n):
+        size = base + (1 if i < extra else 0)
+        out.append(items[start:start + size])
+        start += size
+    return out
+
+
 def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> list[tuple[str, int]]:
     """One file per theme (split at `cap` claims), each claim carrying its ANCHOR and `detail`.
 
@@ -1216,7 +1254,7 @@ def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> li
         items = by_theme.get(theme, [])
         if not items:
             continue
-        chunks = [items[i:i + cap] for i in range(0, len(items), cap)] or [[]]
+        chunks = _even_chunks(items, cap) or [[]]
         for n, chunk in enumerate(chunks, 1):
             name = f"claims-{theme}.json" if len(chunks) == 1 else f"claims-{theme}-{n}.json"
             payload = {

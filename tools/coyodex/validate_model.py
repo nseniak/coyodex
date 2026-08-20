@@ -52,6 +52,7 @@ from coyodex.model import (
     EntryPoint,
     FlowStep,
     Grounding,
+    Group,
     MessagingRow,
     ModelError,
     ProjectModel,
@@ -1656,6 +1657,55 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
                 f"'{(cap.label or 'unlabelled').strip()}', not core. Either the label is wrong or "
                 f"the step does not belong on the main walk; record '{g.id}: <why>' under a "
                 "'Happy Path coverage' extras heading to keep it")
+    warnings += _check_walk_records_still_true(m, on_spine, caps, subtree, by_id)
+    return warnings
+
+
+#: A `Happy Path coverage` line asserting that something IS on the walk. The heading's whole job is
+#: to explain what sits there and what does not, so these are the claims that go stale when the walk
+#: changes underneath them.
+_ON_THE_WALK = re.compile(r"\bon (?:the|its own) (?:walk|spine)\b|\bsits? on (?:the walk|it)\b",
+                          re.IGNORECASE)
+
+
+def _check_walk_records_still_true(m: ProjectModel, on_spine: Container[str],
+                                   caps: dict[str, Group], subtree: dict[str, set[str]],
+                                   by_id: dict[str, UseCase]) -> list[str]:
+    """A recorded rationale that the walk has since outgrown.
+
+    Every other check here asks whether a gap is RECORDED. Nothing asked whether the record is still
+    TRUE, and a record is prose beside a number — the pairing where this class always lives. The
+    2026-08-20 argus map shipped `CAP8: the demo site exists so a demo has a page that really
+    changes, so only the version switch sits on the walk` while **0 of CAP8's 2 use cases** appear in
+    the walk: the version-switch step had been deleted three turns after the line was written, to
+    clear an unrelated warning, and nothing re-read the sentence.
+
+    Two shapes, both keyed on an id the map defines:
+
+    * a `HPn` record naming a step the walk no longer has — fully deterministic;
+    * a `CAPn` record whose prose claims something of that capability sits on the walk, when none of
+      its use cases does.
+
+    ADVISORY, and narrow on purpose: it fires only on a POSITIVE claim about the walk, because the
+    heading's ordinary content is the opposite ("these are off the spine, and why")."""
+    warnings: list[str] = []
+    step_ids = {g.id for g in m.happy_path}
+    for line in records.lines(m, "Happy Path coverage"):
+        for key in records.keys_on_line(line):
+            if key.startswith("HP") and key not in step_ids:
+                warnings.append(
+                    f"a 'Happy Path coverage' line records {key}, and the walk has no such step — "
+                    f"the record outlived what it explains. Re-read it against the walk and remove "
+                    f"or re-key it: {line.strip()[:120]}")
+            elif key.startswith("CAP") and _ON_THE_WALK.search(line):
+                mine = [uc for uc in sorted(subtree.get(key) or set()) if uc in by_id]
+                if mine and not any(uc in on_spine for uc in mine):
+                    cap = caps.get(key)
+                    name = cap.name if cap is not None else key
+                    warnings.append(
+                        f"a 'Happy Path coverage' line says something of {key} ({name}) sits on the "
+                        f"walk, and 0 of its {len(mine)} use case(s) do. The walk changed after the "
+                        f"line was written; re-read it: {line.strip()[:120]}")
     return warnings
 
 
@@ -1866,8 +1916,17 @@ def _check_entry_kinds(m: ProjectModel) -> list[str]:
 # like "Mounted ASGI" are legal and must be recordable — the non-greedy match stops at the
 # separator+contract-word, adversarial-review finding #1) and is compared CASEFOLDED (finding #4:
 # minted kinds have no canonical spelling to converge on, so `Gateway-loop:` covers `gateway-loop`).
+# Leading MARKUP is stripped, not just `**`. An agent writing markdown reaches for a backtick around
+# an identifier as readily as for bold, and three correct statements were discarded in silence for
+# that one character: `- `ui-route: complete` — read every <Route> …` matched nothing, the warning
+# said only "no completeness statement for kind(s) 'ui-route'", and the barrier repaired it by
+# RE-RECORDING a second, differently worded line without re-reading the code. The map shipped two
+# ui-route statements, one of which no tool can read. A parser that rejects a correct record must at
+# least say the record was there.
+_MARKUP = r"[*`_]*"
 _KIND_COVERAGE_LINE = re.compile(
-    r"^\s*(?:[-*]\s+)?\**\s*([A-Za-z][\w -]*?)\**\s*[:(—–-]\s*\**(complete|sampled|partial)\b",
+    r"^\s*(?:[-*]\s+)?" + _MARKUP + r"\s*([A-Za-z][\w -]*?)" + _MARKUP +
+    r"\s*[:(—–-]\s*" + _MARKUP + r"(complete|sampled|partial)\b",
     re.IGNORECASE)
 
 

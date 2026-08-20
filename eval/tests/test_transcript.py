@@ -348,3 +348,50 @@ def test_an_unbalanced_brace_leaves_the_text_alone():
     cmd = "run(){ coyodex validate map.json\ncoyodex audit map.json\n"
     names = [i.name for i in transcript._invocations_in(cmd)]
     assert "audit" in names
+
+
+# --- the COMMAND cap: it truncated silently, with no marker and no flag to lift it ---------------
+# `--full`'s own help says "include the whole command". It printed `body.splitlines()[:40]` with no
+# notice, while the RESULT path two lines below printed a truncation line and honoured
+# `--full-output`. On one build 9 of 197 tool-call bodies exceeded the cap and the worst lost 333 of
+# its 373 lines — invisible to the retrospective whose whole job is reading what a build hand-wrote.
+
+def make_long_command_transcript(tmp: Path, n_lines: int) -> Path:
+    body = "python3 - <<'PY'\n" + "\n".join(f"line_{i} = {i}" for i in range(n_lines)) + "\nPY"
+    rec = json.dumps({
+        "type": "assistant",
+        "message": {"id": "m0", "content": [
+            {"type": "tool_use", "id": "t0", "name": "Bash", "input": {"command": body}}]}})
+    p = tmp / "long_cmd.jsonl"
+    p.write_text(rec + "\n", encoding="utf-8")
+    return p
+
+
+def test_a_truncated_command_says_how_much_it_dropped(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        p = make_long_command_transcript(Path(td), 100)
+        assert transcript.main([str(p), "--full"]) == 0
+        out = capsys.readouterr().out
+        shown = [ln for ln in out.splitlines() if ln.startswith("        | ")]
+        assert len(shown) == transcript.COMMAND_LINES + 1, len(shown)
+        assert "more line(s)" in shown[-1], shown[-1]
+        assert "--full-output" in shown[-1], shown[-1]
+
+
+def test_full_output_lifts_the_command_cap_too(capsys):
+    """It lifted only the RESULT cap, so the flag named in the truncation notice did not help."""
+    with tempfile.TemporaryDirectory() as td:
+        p = make_long_command_transcript(Path(td), 100)
+        assert transcript.main([str(p), "--full-output"]) == 0
+        out = capsys.readouterr().out
+        shown = [ln for ln in out.splitlines() if ln.startswith("        | ")]
+        assert len(shown) == 102, len(shown)          # heredoc opener + 100 lines + PY
+        assert not any("more line(s)" in ln for ln in shown), shown[-1]
+
+
+def test_a_short_command_carries_no_marker(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        p = make_long_command_transcript(Path(td), 3)
+        assert transcript.main([str(p), "--full"]) == 0
+        out = capsys.readouterr().out
+        assert "more line(s)" not in out

@@ -90,12 +90,31 @@ structured rows and `coyodex assemble` writes the model + views.
 opens; one build burned a turn finding that out. Read it in windows — `Read` with `offset`/`limit`,
 about 300 lines at a time, no gaps — and do that FIRST rather than after two failed attempts.
 
+**When you archive, remember the archived map at the GATE.** `coyodex finalize --access-baseline
+<archived-map.json>` adds one advisory leg: files that held ACCESS enforcement in that map and are
+named by no access rule in the new one. It runs after the map is written, so it cannot contaminate
+the rebuild, and before the commit, which is the last moment anybody looks. It is not a
+contradiction of the rule below: the build is finished by then, and a claim that vanished between
+two maps of unchanged code is invisible to every other gate — one pair held its access-rule COUNT at
+21 → 21 while the file verifying an identity token's signature lost its claim outright.
+
 **Archiving an existing map is `coyodex-eval archive <repo>`.** Say so before the rest of this
 paragraph, because the rest is a prohibition and the command is the permitted action: a build asked
 to archive first did it by hand — `mv .coyodex .coyodex-archive-<date>` — before the skill was even
 loaded, which left ~59 files of the old map inside the harvest scope (2731 analysed against 2672
 once it was filed properly), and then spent four turns discovering the command in `--help`. It files
 the map under `.coyodex/dev-rebuilds/NNNN/`, which is excluded from the walk.
+
+**Read the retro backlog's open experiments — this is the only place they reach a build.**
+`COYODEX_HOME/eval/retro/backlog.md` ends with "Open — questions a retro could not answer", and some
+of those rows carry `owner: the next build`. Nothing put them in front of one. Question 3 was raised
+on 2026-08-19 with its whole experiment written out — *"re-run ONE block's rule worker with a
+`coyodex dump --members`-derived candidate list instead of the hand-curated one, and compare which
+files earn sites. One extra agent on the next build"* — and the next build ran nine rule agents,
+none of them that one, then a retrospective parked the same question a third time. Read the table,
+run any row owned by the build (they are costed in agents, and so far always ONE), and say in the
+final report what it returned. A question nobody can be assigned is a question nobody answers.
+(This is a COYODEX-DEVELOPER step: a user of coyodex has no backlog. Skip it when the file is absent.)
 
 **Do not open a previous map while building.** Not the one git still has, and not one filed under
 `.coyodex/dev-rebuilds/` (the coyodex author's own archive; a user of coyodex never has that

@@ -677,3 +677,128 @@ def test_a_second_bare_path_is_refused_rather_than_ignored():
     and nothing said a word."""
     root, p = make_repo()
     assert finalize.main([str(p), str(p), "--repo", str(root)]) == 2
+
+
+# --- an escape that is not an extras heading --------------------------------------
+# The disposition table resolved an escape by matching the advisory text against
+# `records.KNOWN_HEADINGS` — a list of EXTRAS headings. An advisory offering a MAP FIELD as its
+# remedy therefore fell through to "carried (no escape)" while the build had already taken it. On
+# the 2026-08-20 argus map the post-pin-claims advisory says "or say in `grounding.note` which
+# claims were minted after the pin", the shipped note says exactly that, and the report AND the
+# commit message both called it unescapable.
+
+_POSTPIN = ("Grounding covers the PINNED worklist, not the shipped map: 1 of the shipped map's "
+            "376 claim(s) have NO verdict (375 do). Challenge them and re-run `coyodex grounding "
+            "write`, or say in `grounding.note` which claims were minted after the pin and why "
+            "they were not re-challenged.")
+
+
+def _disposition_for(note: str | None, advisory: str) -> tuple[str, str]:
+    from coyodex.finalize import advisory_disposition, FinalizeReport, Leg, RAN
+    import json, tempfile, os
+    m: dict[str, object] = {"format": "coyodex-map", "title": "t", "goal": "g"}
+    if note is not None:
+        m["grounding"] = {"claims_total": 3, "claims_challenged": 3, "claims_confirmed": 3,
+                          "claims_refuted": 0, "claims_unverifiable": 0, "note": note}
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "m.json")
+        with open(p, "w") as fh:
+            json.dump(m, fh)
+        rep = FinalizeReport(map_path=p, map_sha256="x", verdict="ADVISORIES",
+                             legs=[Leg("validate", RAN, advisory=[advisory])],
+                             advisory_total=1, blocking_total=0)
+        got = advisory_disposition(Path(p), rep)
+    return got[0][0], got[0][1]
+
+
+def test_an_advisory_escaped_through_a_map_field_is_not_carried_with_no_escape():
+    disposition, where = _disposition_for("Nine claims were minted after the pin; here is why.",
+                                          _POSTPIN)
+    assert disposition == "recorded", disposition
+    assert where == "grounding.note", where
+
+
+def test_the_same_advisory_with_an_empty_note_is_unrecorded_not_unsure():
+    """Both halves of the key are known — the field is named and it is empty — so absence is a fact."""
+    assert _disposition_for("", _POSTPIN)[0] == "UNRECORDED"
+    assert _disposition_for(None, _POSTPIN)[0] == "UNRECORDED"
+
+
+def test_an_advisory_naming_no_escape_at_all_is_still_carried():
+    """Widening the vocabulary must not turn every unescapable advisory into a recorded one."""
+    minted = ("entry-point kind(s) minted (not a seed): 'browser-launch' — fine where the seeds "
+              "name nothing close.")
+    assert _disposition_for("a note about something else", minted)[0] == "carried (no escape)"
+
+
+# --- the access baseline leg -------------------------------------------------------
+
+def _finalize_with_baseline(tmp: Path, before: dict, after: dict):
+    from coyodex.finalize import build_report
+    base = tmp / "before.json"
+    cur = tmp / "after.json"
+    base.write_text(json.dumps(before), encoding="utf-8")
+    cur.write_text(json.dumps(after), encoding="utf-8")
+    return build_report(cur, tmp, [], base)
+
+
+_AUTH = {"format": "coyodex-map", "title": "t", "goal": "g",
+         "rules": [{"id": "BR21", "statement": "Only a proven upstream identity", "access": True,
+                    "risk": "impersonation",
+                    "sites": [{"where": "a/auth_google.py:67", "why": "verifies the signature"}]}]}
+_NO_AUTH = {"format": "coyodex-map", "title": "t", "goal": "g",
+            "rules": [{"id": "BR7", "statement": "Owner scoping", "access": True, "risk": "leak",
+                       "sites": [{"where": "b/store.py:18", "why": "scopes by owner"}]}]}
+
+
+def test_finalize_names_a_file_that_lost_its_access_claim():
+    """The signal existed only in `coyodex-eval compare`'s notes — a developer-only command that runs
+    at retro time. Here it runs after the map is written, so reading the baseline cannot contaminate
+    the rebuild, and before the commit, which is the last moment anybody looks."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        report = _finalize_with_baseline(Path(td), _AUTH, _NO_AUTH)
+    leg = next(l for l in report.legs if l.name == "access baseline")
+    assert leg.advisory, leg
+    assert "a/auth_google.py" in leg.advisory[0]
+    assert not leg.blocking, "two LLM builds legitimately differ — this must never gate"
+
+
+def test_finalize_says_so_when_the_whole_surface_survived():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        report = _finalize_with_baseline(Path(td), _AUTH, _AUTH)
+    leg = next(l for l in report.legs if l.name == "access baseline")
+    assert not leg.advisory, leg
+    assert "still named by an access rule" in leg.note
+
+
+def test_the_leg_is_absent_when_no_baseline_is_given():
+    """A build with no predecessor must not grow a leg that silently reports nothing."""
+    from coyodex.finalize import build_report
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        cur = Path(td) / "after.json"
+        cur.write_text(json.dumps(_NO_AUTH), encoding="utf-8")
+        report = build_report(cur, Path(td), [])
+    assert not any(l.name == "access baseline" for l in report.legs)
+
+
+def test_an_unreadable_baseline_is_INCOMPLETE_not_a_pass():
+    """A leg that could not run must never read as silence — that is the whole INCOMPLETE rule."""
+    from coyodex.finalize import build_report, FAILED
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        cur = tmp / "after.json"
+        cur.write_text(json.dumps(_NO_AUTH), encoding="utf-8")
+        bad = tmp / "bad.json"
+        bad.write_text("{ not json", encoding="utf-8")
+        report = build_report(cur, tmp, [], bad)
+    leg = next(l for l in report.legs if l.name == "access baseline")
+    assert leg.status == FAILED
+    assert "could not be read" in leg.note
+    # A FAILED leg forces INCOMPLETE unless something BLOCKS — the verdict order is blocking first,
+    # then incomplete, because a blocking problem is known and an unrun leg is unknown.
+    assert report.verdict in ("BLOCKED", "INCOMPLETE"), report.verdict
+    assert leg not in [l for l in report.legs if l.status == "ran"]

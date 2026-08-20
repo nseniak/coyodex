@@ -368,10 +368,17 @@ def report(argv: list[str]) -> int:
                 f"{_fmt_int(gran.get('counted_loc'))} LOC "
                 f"(median file {gran.get('median_file_loc')} LOC)"]
         if gran.get("bound_by") == "file-count" and int(gran.get("median_file_loc") or 0) < 80:
+            # The escape used to be written for ONE direction only — "if you build under the band"
+            # — and a build that landed 27% ABOVE E, against the note's own stated expectation, hit
+            # nothing: the band is wide (±40%), so no gate fired and no record was asked for. The
+            # note is a DIRECTION, not a band, and a build that goes the other way owes the same
+            # sentence. Say both, and say it about the note rather than about the band.
             out += ["  NOTE: the FILE cap binds and files are small, so E counts many tiny files as",
-                    "        unit-sized mass. Expect the honest altitude to sit BELOW E here; if you",
-                    "        build under the band, record the literal `granularity` under a",
-                    "        'Balance exceptions' extras heading with the why."]
+                    "        unit-sized mass. Expect the honest altitude to sit BELOW E here.",
+                    "        Record the literal `granularity` under a 'Balance exceptions' extras",
+                    "        heading, with the why, if you land OUTSIDE the band in either direction",
+                    "        — or ABOVE E at all, which is the opposite of what this note expects",
+                    "        and is the case the band is too wide to catch."]
     per = gran.get("per_dir") or {}
     out.append("  Hand each harvest agent ITS slice's number — never a gut estimate (method.md).")
     if dirs:

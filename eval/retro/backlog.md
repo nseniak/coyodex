@@ -149,6 +149,60 @@ passes before the fix holds nothing.
 | `method.md` names `--expect`, `ADDED SINCE THE PIN`, `REFUTED BUT NOT SUPERSEDED`, `NOTE FACTS` and `--note-file`; all three agent contracts say the lint verdict carries a drift count | Five capabilities existed that no build could reach. This is the `reconcile` class — shipped, tested, and run ZERO times across four builds. A test now checks that direction, which nothing did. `5f5e072` |
 | `method.md` says what T7 block bundling costs; `dispatch.md` says the briefing comes before the first tool call | A build gave four of five rule agents two or three blocks each and spent the fresh-context-per-block property without deciding to. Another ran `scope` at turn 6 and emitted two user-facing messages in seventy turns, neither the briefing. `8a36641` |
 
+### Landed 2026-08-20 — from the argus build of that morning (session `446bbaeb`)
+
+Gates at the last change: `pytest tests eval/tests` **2,340 passed** (2,283 before, so 57 new
+tests); `pyright tools/coyodex eval/tools` **0 errors**. Every fix was checked to FAIL before the
+change. The operator chose "everything ranked HIGH or MEDIUM"; the LOW rows below are deferred, not
+rejected.
+
+**This is also the first argus retro to appear here at all** — see `Sources`. The 2026-08-14 one
+never got an entry, and two of its proposals are recorded above under someone else's numbering.
+
+**Tools (`coyodex`)**
+
+| what | evidence |
+|---|---|
+| `lint-fragment --repo` FAILS a header whose `commit` lacks `-dirty` on a dirty tree, and `provenance stamp --update-header` writes the pin itself | The operator was OFFERED and ACCEPTED a `-dirty` pin; the header was hand-written as the bare sha, this lint returned `0 problems` on it, and the final report told the operator the suffix HAD been recorded. Another session then edited a file mid-build and **9 of the map's 10 anchors into it resolve against the wrong lines at the recorded commit**. `scope`, `stamp` and `lint-fragment` now share ONE definition of dirty — which also stops `.coyodex-eval/`, this toolchain's own scratch, reading as the user's uncommitted code (it was the sole reason that build asked the pin question at all). |
+| `why-less-step` is ADVISORY, and its message names the line that records it | It was the one substantive check emitted at WARNING, and `_apply_audit_exceptions` suppresses ADVISORY only — so no recorded exception could ever silence it. A build recorded its reading three times, watched the finding survive, then cleared the gate by CHANGING THE MAP: it deleted a happy-path step and wrote two preconditions, one of which is false against the code. |
+| `validate` re-reads a `Happy Path coverage` rationale against the walk it describes | Every other check asks whether a gap is RECORDED; nothing asked whether the record is still TRUE. The shipped map says `CAP8: … only the version switch sits on the walk` while **0 of CAP8's 2 use cases** are on it — the step was deleted three turns after the line was written. Catches the dangling-`HPn` shape deterministically too. |
+| `finalize --access-baseline <map>` names files that lost their ACCESS claim | The access-rule COUNT held at 21 → 21, so `auth-surfaces-no-drop` passed, while `adapters/auth_google.py` lost its claim outright — the file that verifies the Google ID token's signature, issuer and audience, carried as BR21 by the previous map and by **0 of the new map's 61 rules**. The signal existed only in `coyodex-eval compare`'s notes: a developer-only command, run at retro time, whose output was parked as "a reading job" for three retrospectives. The leg runs after the map is written (so it cannot contaminate the rebuild) and before the commit. New module `access_surface.py`. |
+| `finalize` resolves an escape named as a MAP FIELD, not only an extras heading | The disposition table matched `records.KNOWN_HEADINGS` only, so the post-pin advisory — whose own text offers "or say in `grounding.note` …", and whose escape the build had already taken — was filed `carried (no escape)`, and the commit message repeated it. |
+| `record --headings`, and `--help` stops recommending the merged form unconditionally | "Write them as one comma-separated list" is right for the 6 headings with a key grammar and destroys the record on the 5 keyed on free text. A build followed it under `Sweep debt`, silenced **0 of 5** anchors, and spent two rounds finding out. |
+| `dump --legend` emits `entry_point` rows | **0 of 277** on a map with 108 entry points — the one id kind minted at assemble, so the map is its only mid-build source, while 34 of that build's 65 reconcile `set` entries assign `entry_points`. The lead hand-parsed the map for the ids and then hand-wrote the whole fan-out legend. |
+| `validate`'s coverage-line parser strips leading markup | A backtick around the identifier discarded three correct statements in silence; the warning said only "no completeness statement", and the barrier repaired it by RE-RECORDING a second differently worded line. The map ships two ui-route statements, one unreadable. |
+| `grounding lint --agent-transcripts` reads `*.output`, and its error names the directory that works | The flag was suggested by the tool twice on one build and used **0 times**: every dispatch result names `<session>/tasks/<id>.output`, and pointing it there failed with "holds no .jsonl". |
+| `fix row --edge SRC:VERB:DST` | A fragment edge carries no `id`, so `--id` could never reach one — which is why three heredocs rewrote an edge's `why` by hand two turns after using this verb correctly on a component. Shares every existing guard. |
+| `audit --batches` splits a theme evenly | `--cap 40` cut a 42-claim theme into 40 + 2, twice, so **2 of 19 skeptics covered 4 of 388 claims** while a sibling carried 40 and was the slowest agent in its barrier. 21 + 21 costs the same two agents. |
+| `preindex`'s granularity NOTE covers both directions | Its escape was written for "if you build under the band". A build landed **27% ABOVE E**, against the note's own stated expectation, inside the ±40% band — so nothing fired and no record was asked for. |
+
+**Measurement (`coyodex-eval`)**
+
+| what | evidence |
+|---|---|
+| **Assertion 16 ranks by real per-agent duration, joined on the dispatching call's id** | It measured nothing for two builds, and it took THREE bugs: it read duration as launch-turn → `tool_result`, which under async dispatch is the launch ACKNOWLEDGEMENT (4–26 seconds against real runtimes of 1.6–6.7 minutes); it timed from `turn.timestamp`, which every call in one message shares, so the latencies rose with position and the "slowest" was always the last dispatched; and it ranked with `order.index()` over LAUNCH TURN INDICES, which are identical across a one-message fan-out, so `rank` was always 0 and failure was impossible for 4 of 5 fan-outs. It scored **5/5 and 4/4** and a retrospective published "the dispatch-longest-first rule is working" on it. Now **2 of 5** and **1 of 4**, naming the real stragglers. |
+| Assertion 8 is scoped to the L2 worklist | The banner it enforces sits under the L2 heading. It counted every audit invocation, so paging the L1 findings block — the human-facing half, which a build must page to reconcile advisories one at a time — scored against a rule about the worklist. It tests for a printed CLAIM ROW now: **0 of 4** this build, **1 of 4** the previous one, against a headline `3 of 12` that was measuring paging habit. Two cheaper tests were tried and are wrong, both recorded in the docstring. |
+| `process --diff` flags a score whose DENOMINATOR collapsed | Assertion 35 went `39 of 41` → `1 of 1` and a retrospective read it, in a carried-forward table, as "fixed and proven". 19 of that build's 37 assertions carried one observation or none. |
+| `transcript --full` prints a truncation marker for a COMMAND, and `--full-output` lifts that cap too | A bare `[:40]` with no notice and no flag, while the RESULT path two lines below printed a marker and honoured `--full-output`. `--full`'s own help says "include the whole command". 9 of one build's 197 tool-call bodies exceeded it; the worst lost **333 of its 373 lines**, silently, from the retrospective whose whole job is reading what a build hand-wrote. |
+| `compare` explains a distinct-hosts drop caused by folding units into variants | `method.md` models one process across environments as ONE unit with a variant each, so adopting the prescribed form READS as a regression and stamped a whole comparison REGRESSED. The GATE is unchanged — `test_compare.py:556` pins that another shape of the same process cannot buy linkage — and a NOTE says what happened. |
+
+**Method and templates**
+
+| what | evidence |
+|---|---|
+| The trace contract states that a flow OPENS with the actor its use case declares, and `«USE_CASES»` must carry the actors | Nothing said it, the legend prints roles and use cases as two unlinked lists, and `lint-fragment`'s flat id set structurally cannot check it. Eight agents each wrote the caller the code showed them and the lead repointed **34 of 38** role endpoints in one script at the barrier. |
+| A `gapfill-contract.md` template ships, and `coyodex contract gapfill` serves it | `method/templates/` had four contracts and no fifth, so the gap-fill slice was hand-composed every build. Its brief was the ONE trace-phase contract of eleven missing "do NOT spawn sub-agents", and lost four more shared blocks with it; the same build hand-wrote its test-completeness brief and lost the no-delegation block and `--expect` too. |
+| The "reach for the verb" table names `record --remove/--replace/--lines-from` and `fix row --set-why` | All four shipped, tested, in the tool commit that build pinned, and ran **zero times between them** while six of its heredocs did exactly those jobs — one splicing `extras.json` by string match twelve turns after using `fix row` correctly on the same component. |
+| The N-vote rule asks for the disagreement count in `grounding.note` | Three builds have now three-voted an access theme: 160 redundant rows / 0 verdict disagreements / 1 anchor disagreement, then 40 / 0 / 0, then 100 / 0 / 0 — and on the last, all 150 rows returned an `evidence` string identical to the claim's own anchor. Independently written (0 of 50 triples had two identical notes), so it is replication, not copying — but the next decision about the rule should rest on the number, not on one build. |
+| `dispatch.md`'s Build step reads the backlog's `owner: the next build` rows, and names `finalize --access-baseline` at archive time | Question 3 was raised 2026-08-19 with its whole experiment written out and costed at ONE agent. The next build ran nine rule agents, none of them that one, and a retrospective then parked the same question a third time. Nothing put the table in front of a build. |
+
+**Deferred, not rejected** (the operator took HIGH + MEDIUM): `coyodex contract prose`; `scope`
+excluding `.coyodex-eval` as its own line (it landed inside the pin fix); `finalize` printing the
+sub-agent count; `cost` pricing haiku; the trace contract's "do not pipe the lint output" line; the
+skeptic contract returning a false-row count; the retro ledger carrying proposals (already open as
+item 16 above).
+
+
 ---
 
 ## Open — tools
@@ -258,6 +312,12 @@ the same per-agent input as the one above it — so both arrive together or not 
 ---
 
 ## Sources
+
+- 2026-08-20, argus (`446bbaeb`) — 25 findings, 22 landed. Report and a `findings.json` ledger were
+  at `.coyodex-eval/retro/2026-08-20_1130/` in that project; git-ignored, so this file is the
+  surviving record. **The 2026-08-14 argus retro has no entry of its own** — 20 findings, 23
+  proposals, of which two are recorded above as "the 2026-08-14 proposal N" under numbering that
+  does not match that report. That is the gap open item 16 names.
 
 - 2026-08-18, mcpolis (`c72a44ce`) — 24 findings, 19 landed across `b267f1e..3068508`. Report was
   at `.coyodex-eval/retro/2026-08-18_2257/` in that project, with a `findings.json` ledger beside

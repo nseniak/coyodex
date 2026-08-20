@@ -747,3 +747,61 @@ def test_report_lists_the_claims_added_since_the_pin(tmp_path):
     assert "C3 reads E1" in out.split("ADDED SINCE THE PIN")[1], out
     # Nothing added -> no section, so a clean run does not grow a heading that says zero.
     assert "ADDED SINCE THE PIN" not in G.format_report(pinned, rows, live_claims=pinned)
+
+
+# --- the directory the harness actually hands the lead ----------------------------
+# `--agent-transcripts` was suggested by the tool twice on one build and used ZERO times. Every
+# `Agent` dispatch result names `<session>/tasks/<id>.output` — the same JSONL under a different
+# suffix — and pointing the flag there failed outright with "holds no .jsonl". The directory that
+# works, `<session>/subagents/`, is named nowhere the lead could see.
+
+def _agent_dir(tmp: Path, name: str, filename: str, body: str) -> Path:
+    d = tmp / name
+    d.mkdir(parents=True, exist_ok=True)
+    (d / filename).write_text(body, encoding="utf-8")
+    return d
+
+
+def _lint_with(agent_dir: Path, tmp: Path) -> tuple[int, str]:
+    from coyodex.grounding import main
+    import io, contextlib
+    p = tmp / "v.json"
+    p.write_text(json.dumps({"grounding": [
+        {"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "s",
+         "note": "Read a.py and it holds"}]}), encoding="utf-8")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = main(["lint", "--verdicts", str(p), "--agent-transcripts", str(agent_dir)])
+    return rc, buf.getvalue()
+
+
+def test_a_dot_output_transcript_is_read_like_a_dot_jsonl():
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        d = _agent_dir(tmp, "session/tasks", "abc123.output", "a.py\n")
+        rc, out = _lint_with(d, tmp)
+        assert rc == 0, out
+        assert "covered 1 of 1 row(s)" in out, out
+
+
+def test_an_empty_transcript_dir_names_the_one_that_works():
+    """"holds no .jsonl" told the lead neither which suffix nor which directory."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        (tmp / "session" / "subagents").mkdir(parents=True)
+        (tmp / "session" / "subagents" / "agent-1.jsonl").write_text("a.py\n", encoding="utf-8")
+        empty = tmp / "session" / "tasks"
+        empty.mkdir(parents=True)
+        rc, out = _lint_with(empty, tmp)
+        assert rc != 0, out
+        assert "subagents" in out, out
+
+
+def test_the_empty_dir_message_does_not_invent_a_sibling_that_is_not_there():
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        empty = tmp / "nowhere" / "tasks"
+        empty.mkdir(parents=True)
+        rc, out = _lint_with(empty, tmp)
+        assert rc != 0, out
+        assert "Did you mean" not in out, out

@@ -667,15 +667,25 @@ is wrong rather than absent.
 
 **Reach for the verb before the heredoc.** Every row below replaces a `python3 - <<'PY'` block, and
 each verb exists because a hand script got the same job wrong once. Measured: 12 of one build's 28
-hand-written scripts had a verb already, and the scorecard assertion watching this fell 1.00 → 0.57:
+hand-written scripts had a verb already, and the scorecard assertion watching this fell 1.00 → 0.57.
+
+**And the verb you have not heard of is the one you will hand-roll.** A later build ran
+`record --remove`, `record --replace`, `record --lines-from` and `fix row --set-why` **zero times
+between them**, while six of its heredocs did exactly those four jobs — including one that spliced
+`extras.json` by string match twelve turns after using `fix row` correctly on the same component.
+All four shipped, tested, in the tool commit that build pinned. Read this table at the barrier, not
+from memory:
 
 | you are about to hand-write | run instead |
 |---|---|
 | a walk over `build-fragments/*.json` counting rows | `coyodex dump --counts` (it reads a FRAGMENT too) |
 | a listing of ids / names / sources | `coyodex dump --legend`, `--id`, `--record`, `--edges`, `--members` |
 | a tally of `true`/`false` across the verdict files | `coyodex grounding report` — the hand tally cannot tell a tie from a stated `unverifiable` |
-| an append into an extras heading | `coyodex record --heading … --line …` (`--replace` to correct one) |
-| a rewrite of a rule's / entity's own TEXT | `coyodex fix row --fragments .coyodex/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly |
+| an append into an extras heading | `coyodex record --heading … --line …` |
+| **deleting or correcting a recorded line** | `coyodex record --remove "<prefix>"` / `--replace "<prefix>"` — a python splice of `extras.json` takes the heading with it when the line is the last one |
+| **a batch of recorded lines** | `coyodex record --lines-from <file\|->` — one process, one write, every line shape-checked before any of them lands |
+| **which headings may carry a comma list of ids** | `coyodex record --headings` — five of them key on free text and silence NOTHING when merged; the merged form is right only for the other six |
+| a rewrite of a rule's / entity's / **a walk step's** own TEXT | `coyodex fix row --fragments .coyodex/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly. It reaches ANY row with an id, `happy_path` steps included: `--set-why`, `--set-confidence`, `--set-risk` all work |
 | a corrected anchor | `coyodex fix apply-drift --to-reconcile` |
 | a duplicate edge or relation resolved | `coyodex fix dedup-edge` / `dedup-relation --to-reconcile` |
 | a before/after comparison of two maps | `coyodex diff <old> <new>` |
@@ -1498,7 +1508,17 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   across 160 redundant rows the three skeptics disagreed on the verdict ZERO times and on the
   evidence anchor once. Unanimity is a real result — it is the only evidence that the
   highest-risk claims are not one agent's blind spot — but it is not discovery, and if the budget
-  is tight a second single-vote batch elsewhere finds more. Two skeptics cannot form a majority, and a tie broken by the lead reading
+  is tight a second single-vote batch elsewhere finds more.
+  **Record the disagreement count every build, in `grounding.note`** — "the three security voters
+  disagreed on N verdicts and M evidence anchors across R redundant rows". It costs a sentence and it
+  is the only number that can ever settle whether the vote is worth its four agents. Three builds
+  have now three-voted an access theme: 160 redundant rows / 0 verdict disagreements / 1 anchor
+  disagreement, then 40 claims / 0 / 0, then 100 redundant rows / 0 / 0 — and on the last one all 150
+  rows returned an `evidence` string identical to the anchor the claim already carried. That is
+  replication, not redundancy (the notes were independently written; none of the 50 triples had two
+  identical ones), and it is worth knowing — but it is now three data points saying the same thing,
+  and the next decision about this rule should be made on the number rather than on the memory of
+  one build. Two skeptics cannot form a majority, and a tie broken by the lead reading
   the code is the build-context blind spot the fresh-context rule exists to break, reintroduced at
   the last step. Give each row a `skeptic` id so two independent agreements are never mistaken for
   one vote counted twice. And note what a tie IS: `grounding write` files it under `unverifiable`,

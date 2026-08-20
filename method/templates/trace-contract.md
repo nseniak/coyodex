@@ -12,9 +12,13 @@ that passed a shared block to 12 of 14 slices, missed two, and shipped one of th
 Fill the «angle-bracket» slots. There are exactly SEVEN — «COYODEX_HOME», «REPO», «AGENT_ID»,
 «USE_CASES», «SF_RANGE», «LEGEND», «WHERE_TO_LOOK» — each spelled the same way everywhere.
 
-- **«USE_CASES»** — the `UCn` ids this agent owns, with each one's name and `Trigger → Outcome`
-  copied from the map. Always whole use cases: **never split one use case's flow across two agents**,
-  because a flow traced by two contexts loses its coherence.
+- **«USE_CASES»** — the `UCn` ids this agent owns, with each one's name, `Trigger → Outcome` **and
+  its declared `actors`**, copied from the map. Always whole use cases: **never split one use case's
+  flow across two agents**, because a flow traced by two contexts loses its coherence.
+  **The actors are not optional.** The legend prints roles and use cases as two unlinked lists, so
+  an agent handed the ids alone cannot tell which role its flow should open with — and eight agents
+  on one build each opened with the caller the code showed them, costing 34 endpoint repointings at
+  the barrier. Fill it as `UC12 Rename a tracked page (actors: R1) — Trigger → Outcome`.
 - **«SF_RANGE»** — this agent's sub-flow id range (`SF1–9`, `SF10–19`, …), exactly like the harvest
   id ranges. Two agents minting `SF7` is a hard `assemble` failure.
 - **«LEGEND»** — the PATH to the id legend file (the assembled map, or a legend the lead wrote).
@@ -75,6 +79,15 @@ lead; nothing above this line goes into an agent prompt.
 > - **`n` is unique within a flow.** It identifies the step for navigation and for diff impact.
 > - **Actor steps** use the role id as `src` (`R1 → C5`). An actor step needs no `where`, though one
 >   is welcome when the handler line is clear.
+> - **A flow OPENS with an actor its own use case declares.** Your slice's use cases are listed
+>   above with their `actors`; step 1's `src` must be one of them. This is not the same question as
+>   "who calls this code first" — the caller at the entry point is often a client application while
+>   the GOAL is the person's, and the use case names whoever owns the goal. If the code convinces you
+>   the declared actor is wrong, **say so in your reply** and keep the declared one; do not silently
+>   substitute. `lint-fragment` cannot check this — its `--ids` input is a flat id set, so it can
+>   only see that `R4` is *a* role, not that this use case declares `R1`. On one build eight agents
+>   each wrote the caller they saw in the code and the lead repointed **34 of 38** role endpoints at
+>   the barrier, one turn, one script, after the agents were gone.
 > - **Steps may go BACKWARD.** Record the return-direction interactions that carry meaning: the
 >   response the actor sees (the use case's outcome), an error or fallback path, a callback the callee
 >   fires back. Write them like any step — `C5 → C2 : returns the member list`. Do not echo every

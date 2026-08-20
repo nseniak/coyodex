@@ -909,6 +909,12 @@ def summarise_call(call: ToolCall, width: int = 100) -> str:
     return text[:width]
 
 
+#: How many lines of a tool call's COMMAND `--full` prints before truncating. `--full-output` lifts
+#: it, exactly as it lifts the result cap. It used to be a bare `[:40]` slice with no marker and no
+#: flag, so a reader could not tell a 40-line command from a 373-line one.
+COMMAND_LINES = 40
+
+
 def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str, str] | None = None,
                  width: int = 100, result_chars: int = 600, result_lines: int = 20) -> str:
     """Render turns as readable text.
@@ -954,7 +960,18 @@ def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str
                 body = call.command if call.name == "Bash" else call.text()
                 lines.append(f"{head} {summarise_call(call, width)}")
                 if body and body != summarise_call(call, width):
-                    lines.append("        | " + "\n        | ".join(body.splitlines()[:40]))
+                    # The COMMAND cap. It was a bare `[:40]` with no marker and no way to lift it,
+                    # while the RESULT path below printed a truncation line and honoured
+                    # `--full-output`. `--full`'s own help says "include the whole command", and 9
+                    # of one build's 197 tool-call bodies were longer than the cap — the worst lost
+                    # 333 of its 373 lines, silently. A retrospective hunting hand-written
+                    # substitutes for tool calls is exactly the reader this blinded.
+                    cmd_lines = body.splitlines()
+                    cmd_kept = cmd_lines if unlimited else cmd_lines[:COMMAND_LINES]
+                    lines.append("        | " + "\n        | ".join(cmd_kept))
+                    if len(cmd_lines) > len(cmd_kept):
+                        lines.append(f"        | … {len(cmd_lines) - len(cmd_kept)} more line(s) "
+                                     f"(--full-output for all of it)")
                 out = (results or {}).get(call.id, "")
                 if out:
                     snippet = out if unlimited else out[:result_chars]

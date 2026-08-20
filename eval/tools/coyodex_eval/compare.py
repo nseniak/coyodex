@@ -391,6 +391,26 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             f"distinct component sets hosted across the units "
             f"{baseline.deployment_distinct_hosted_sets} -> "
             f"{candidate.deployment_distinct_hosted_sets}"))
+        # A DROP explained by the variants merge is not a loss of modelling. `method.md` models one
+        # process across environments as ONE unit with a variant each; the alternative — a unit per
+        # environment — inflates the distinct-set count, so adopting the prescribed form READS as a
+        # regression. The gate itself must not move (a test pins that another shape of the same
+        # process cannot buy linkage), so say what happened instead. On the pair this came from,
+        # units carrying 2+ variants went 1 of 6 to 2 of 5 while the gate failed 3 -> 2.
+        if (not sets_ok
+                and baseline.deployment_units_multi_variant is not None
+                and candidate.deployment_units_multi_variant is not None
+                and candidate.deployment_units_multi_variant
+                > baseline.deployment_units_multi_variant
+                and candidate.deployment_units < baseline.deployment_units):
+            notes.append(
+                f"deployment-distinct-hosts dropped while the candidate FOLDED units into variants: "
+                f"units carrying 2+ `variants` {baseline.deployment_units_multi_variant} -> "
+                f"{candidate.deployment_units_multi_variant} across "
+                f"{baseline.deployment_units} -> {candidate.deployment_units} unit(s). method.md "
+                f"models one process in several environments as ONE unit with a variant each, so "
+                f"this gate reads the prescribed form as a regression. Check the fold is real "
+                f"before treating the FAIL as one")
         if (candidate.deployment_units_linked > candidate.deployment_distinct_hosted_sets
                 and candidate.deployment_distinct_hosted_sets):
             notes.append(

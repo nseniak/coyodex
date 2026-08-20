@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -529,3 +530,73 @@ def test_lint_sees_a_drifted_anchor_and_says_so_in_the_verdict(tmp_path, capsys)
                     encoding="utf-8")
     lint_fragment.main(["--repo", str(tmp_path), str(frag)])
     assert "anchor drift" not in capsys.readouterr().err.splitlines()[0]
+
+
+# --- the pin: a header that says `clean` about a dirty tree -----------------------------------
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True,
+                   capture_output=True, text=True)
+
+
+def make_repo_with_header(tmp_path: Path, pin: str, dirty_path: str | None) -> tuple[Path, Path]:
+    """A real git repo with one commit, a header fragment pinned to `pin`, and optionally one
+    uncommitted file. Returns (repo, header)."""
+    repo = tmp_path / "repo"
+    (repo / "src").mkdir(parents=True)
+    (repo / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    _git(repo, "init", "-q")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "one")
+    if dirty_path is not None:
+        p = repo / dirty_path
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("changed\n", encoding="utf-8")
+    header = tmp_path / "header.json"
+    header.write_text(json.dumps({
+        "format": "coyodex-map", "title": "T", "goal": "g",
+        "commit": pin, "committed": "2026-01-01", "built": "2026-01-01 00:00",
+    }), encoding="utf-8")
+    return repo, header
+
+
+def _pin_problems(repo: Path, header: Path) -> list[str]:
+    m = load_fragment(header.read_text(encoding="utf-8"), header.name)
+    return [p for p in lint_fragment.lint_fragment_problems(m, repo) if "header pin" in p]
+
+
+def test_a_bare_pin_on_a_dirty_tree_is_a_lint_problem(tmp_path: Path) -> None:
+    """The 2026-08-20 argus build hand-wrote the bare sha after the operator had chosen the dirty
+    pin, and this lint returned `0 problems` on that exact header."""
+    repo, header = make_repo_with_header(tmp_path, "abc1234", "src/b.py")
+    found = _pin_problems(repo, header)
+    assert found, "expected the bare pin on a dirty tree to be flagged"
+    assert "abc1234-dirty" in found[0], found[0]
+
+
+def test_a_dirty_suffixed_pin_on_a_dirty_tree_is_clean(tmp_path: Path) -> None:
+    repo, header = make_repo_with_header(tmp_path, "abc1234-dirty", "src/b.py")
+    assert _pin_problems(repo, header) == []
+
+
+def test_a_bare_pin_on_a_clean_tree_is_clean(tmp_path: Path) -> None:
+    repo, header = make_repo_with_header(tmp_path, "abc1234", None)
+    assert _pin_problems(repo, header) == []
+
+
+def test_coyodex_own_scratch_never_makes_the_tree_read_as_dirty(tmp_path: Path) -> None:
+    """`.coyodex-eval/` is this toolchain's git-ignored scratch. It was the ONLY path `scope`
+    reported on a live build, so the operator was asked to pin dirty because of a directory coyodex
+    had just written itself."""
+    repo, header = make_repo_with_header(tmp_path, "abc1234", ".coyodex-eval/retro/x/report.md")
+    assert _pin_problems(repo, header) == []
+    repo2, header2 = make_repo_with_header(tmp_path / "two", "abc1234", ".coyodex/project-map.json")
+    assert _pin_problems(repo2, header2) == []
+
+
+def test_the_pin_check_is_silent_without_repo(tmp_path: Path) -> None:
+    """The tree is the evidence; with no `--repo` there is nothing to compare against."""
+    _repo, header = make_repo_with_header(tmp_path, "abc1234", "src/b.py")
+    m = load_fragment(header.read_text(encoding="utf-8"), header.name)
+    assert [p for p in lint_fragment.lint_fragment_problems(m, None) if "header pin" in p] == []

@@ -676,36 +676,73 @@ def assert_7_reconcile_command_used(turns: Sequence[Turn]) -> Assertion:
                      len(by_tool) + len(by_hand), tuple(by_tool + by_hand))
 
 
+#: One numbered CLAIM ROW of `audit`'s L2 worklist (`  12. Rule '…' is enforced at …`).
+#:
+#: The heading alone is not the test, and using it was a first cut that over-counted by half. A
+#: window can print `L2 grounding worklist (376 claims …)` plus its own "never parse this text"
+#: banner and stop — that is a reader seeing the banner, not a reader parsing the worklist. On the
+#: 2026-08-20 argus build 6 of the 12 audit reads reached the heading and only 4 showed a claim row.
+_L2_CLAIM_ROW = re.compile(r"^\s+\d+\.\s", re.M)
+
+
 def assert_8_audit_read_as_json(turns: Sequence[Turn]) -> Assertion:
     """8 — `coyodex audit --json` is used, and audit output is not paged through head/sed/grep.
 
     The machine-readable payload was built for the Phase-4 batching step, and the method forbids
-    regex-parsing the human report. `of` is every audit invocation; `observed` is those that asked
-    for JSON and did not page the result."""
+    regex-parsing the human report. `of` is every audit invocation THAT REACHED THE L2 WORKLIST;
+    `observed` is those that asked for JSON and did not page the result.
+
+    **Scoped to L2, because the banner is.** `audit`'s report is two sections: the L1
+    self-contradiction findings, then the L2 grounding worklist, and the "never parse this text"
+    banner sits under the L2 heading, conditioned on batching. This assertion counted every audit
+    invocation, so a build that paged the L1 findings — the human-facing half, which has no JSON
+    consumer and which a build must read one advisory at a time to reconcile them — was scored
+    against a rule about the worklist. On the 2026-08-20 argus build ALL NINE penalised reads were
+    L1 windows, while the one turn that actually consumed the worklist used `--json` and `--batches`
+    correctly. It scored 3 of 12 and carried "open, reproduced" for two retros on that basis.
+
+    The test is the OUTPUT, not the flags and not the window arithmetic: a read reached the worklist
+    when its captured output shows at least one numbered CLAIM ROW. A call with no captured output is
+    not counted — an unmeasurable read is not a violation. (Both cheaper tests were tried and are
+    wrong: inferring the section from `head -N` arithmetic said "all nine reads were L1" about a
+    build where four printed claim rows, and matching the L2 heading alone counted two reads that
+    printed the heading, its banner, and nothing else.)"""
     good: list[Evidence] = []
     bad: list[Evidence] = []
-    for idx, cmd in bash_commands(turns):
-        if not _invokes(cmd, "audit"):
-            continue
-        # `--batches` writes the claim files and prints a SUMMARY of what it wrote; the payload is
-        # on disk, not on stdout. Paging that summary hides nothing, and asking it for `--json` is
-        # meaningless. A live build ran the JSON form and the batches form in the same turn and
-        # scored 1/2 for the second one — an accusation about the very step the flag exists for.
-        #
-        # Judged PER SEGMENT. Skipping the whole call let a paged human-report read hide by having a
-        # `--batches` run chained after it — and the docstring's own motivating case is two audit
-        # forms in one turn, so same-command chaining is the shape actually observed.
-        # Split on command separators but NOT on `|`: a pipeline is ONE unit here, because the
-        # pager an audit is piped into is the whole subject. Splitting it off scored
-        # `audit --json | head -40` as unpaged.
-        for seg in re.split(r"&&|\|\||[;\n]", _shell_only(cmd)):
-            if not _invokes(seg, "audit") or "--batches" in seg:
+    results = results_by_tool_use_id(turns)
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            idx, cmd = turn.index, call.command
+            if not cmd or not _invokes(cmd, "audit"):
                 continue
-            as_json = "--json" in seg
-            paged = bool(_PAGERS.search(seg))
-            target = good if (as_json and not paged) else bad
-            target.append(Evidence(idx, {"json": as_json, "paged": paged,
-                                         "command": seg.strip()[:120]}))
+            out = results.get(call.id, "")
+            if not _L2_CLAIM_ROW.search(out):
+                # Either the read never reached the worklist, or nothing was captured. Neither is
+                # evidence about a rule that only governs the worklist.
+                continue
+            # `--batches` writes the claim files and prints a SUMMARY of what it wrote; the payload is
+            # on disk, not on stdout. Paging that summary hides nothing, and asking it for `--json` is
+            # meaningless. A live build ran the JSON form and the batches form in the same turn and
+            # scored 1/2 for the second one — an accusation about the very step the flag exists for.
+            #
+            # Judged PER SEGMENT. Skipping the whole call let a paged human-report read hide by having a
+            # `--batches` run chained after it — and the docstring's own motivating case is two audit
+            # forms in one turn, so same-command chaining is the shape actually observed.
+            # Split on command separators but NOT on `|`: a pipeline is ONE unit here, because the
+            # pager an audit is piped into is the whole subject. Splitting it off scored
+            # `audit --json | head -40` as unpaged.
+            for seg in re.split(r"&&|\|\||[;\n]", _shell_only(cmd)):
+                if not _invokes(seg, "audit") or "--batches" in seg:
+                    continue
+                as_json = "--json" in seg
+                paged = bool(_PAGERS.search(seg))
+                target = good if (as_json and not paged) else bad
+                target.append(Evidence(idx, {"json": as_json, "paged": paged,
+                                             "command": seg.strip()[:120]}))
+    if not (good or bad):
+        return Assertion(8, "audit read as JSON, not paged", 0, 0, (),
+                         "no audit read printed a worklist claim row — the L1 findings block, which "
+                         "this rule does not govern, is not counted")
     return Assertion(8, "audit read as JSON, not paged", len(good), len(good) + len(bad),
                      tuple(bad or good))
 
@@ -1050,31 +1087,51 @@ def _seconds(stamp: str) -> float | None:
         return None
 
 
-def _fanout_groups(turns: Sequence[Turn]) -> list[list[tuple[int, float | None]]]:
-    """Agent launches grouped into fan-outs, each entry `(launch turn, duration in seconds)`.
+@dataclass(frozen=True)
+class Dispatch:
+    """One sub-agent launch, in the order the lead emitted it."""
 
-    Duration is the gap between the launch turn and the turn carrying that call's tool_result, so a
-    background launch measures the AGENT's runtime rather than the launch acknowledgement."""
-    ended: dict[str, float | None] = {}
+    turn: int
+    position: int           # 0-based position within its own launch turn
+    call_id: str
+    label: str
+    started: float | None   # the CALL's own timestamp, never the Turn's — see below
+
+
+def _dispatches(turns: Sequence[Turn]) -> list[Dispatch]:
+    """Every `Agent` launch, ordered, with the call's OWN execution time.
+
+    `ToolCall.timestamp` exists for exactly this, and its docstring says why: "a Turn carries the
+    first one's time, so ten calls in one response all share the Turn's timestamp while executing
+    minutes apart. Anything timing a call against its result must read this." The fan-out grouping
+    used `turn.timestamp` anyway, which made every agent in a batch look like it started at the same
+    instant AND made its "duration" the streaming latency of the launch acknowledgement — 4 to 26
+    seconds, rising monotonically with dispatch position, on a batch whose real runtimes spanned 1.6
+    to 6.7 minutes."""
+    out: list[Dispatch] = []
     for turn in turns:
-        for res in turn.tool_results:
-            ended.setdefault(res.tool_use_id, _seconds(turn.timestamp))
-    launches: list[tuple[int, float | None, float | None]] = []
-    for turn in turns:
-        for call in turn.agent_calls:
-            started = _seconds(turn.timestamp)
-            finished = ended.get(call.id)
-            launches.append((turn.index, started, finished))
-    groups: list[list[tuple[int, float | None]]] = []
-    prev_start: float | None = None
-    for idx, started, finished in launches:
-        duration = (finished - started) if (started is not None and finished is not None) else None
-        new_group = (not groups or started is None or prev_start is None
-                     or started - prev_start > _FANOUT_GAP_SECONDS)
+        for pos, call in enumerate(turn.agent_calls):
+            started = _seconds(call.timestamp) if call.timestamp else _seconds(turn.timestamp)
+            out.append(Dispatch(turn.index, pos, call.id,
+                                str((call.input or {}).get("description", "")) or call.id, started))
+    return out
+
+
+def _fanout_groups(turns: Sequence[Turn]) -> list[list[Dispatch]]:
+    """Agent launches grouped into fan-outs, in dispatch order.
+
+    A fan-out is one message by `method.md`'s rule, so most groups hold a single turn index; the
+    grouping still spans turns, because a lead that serialises its dispatch is exactly the shape
+    assertion 3 measures and this one must still rank."""
+    groups: list[list[Dispatch]] = []
+    prev: float | None = None
+    for d in _dispatches(turns):
+        new_group = (not groups or d.started is None or prev is None
+                     or d.started - prev > _FANOUT_GAP_SECONDS)
         if new_group:
             groups.append([])
-        groups[-1].append((idx, duration))
-        prev_start = started
+        groups[-1].append(d)
+        prev = d.started
     return groups
 
 
@@ -1271,32 +1328,51 @@ def assert_15_no_advisory_rechecked_with_a_narrower_filter(turns: Sequence[Turn]
                      pairs - len(narrowed), pairs, tuple(narrowed))
 
 
-def assert_16_longest_slice_dispatched_first(turns: Sequence[Turn]) -> Assertion:
-    """16 — the slowest agent in a fan-out is not the one dispatched last.
+def assert_16_longest_slice_dispatched_first(turns: Sequence[Turn],
+                                             ctx: ScoreContext) -> Assertion:
+    """16 — the slowest agent in a fan-out is not one of the last dispatched.
 
     A straggler dispatched last holds the barrier for its whole runtime. In a live build the T5
     domain-model slice ran 10.2 min against siblings' 5.0-6.9 and was dispatched twelfth, closing
-    the barrier ~4 min later than it had to. The method warns about stragglers but never says
-    "dispatch the known-longest slice first".
+    the barrier ~4 min later than it had to.
 
-    `of` counts fan-outs whose agents can be timed; `observed` counts those where the slowest agent
-    was not in the last third of the dispatch order."""
+    **This assertion measured nothing for two builds, and it took three bugs to do it.**
+
+      1. It read each agent's "duration" as the gap between the launch TURN and the turn carrying
+         that call's `tool_result`. Under an async harness the `tool_result` is the launch
+         ACKNOWLEDGEMENT, so the number was the streaming latency of the dispatch: 4 to 26 seconds
+         on a batch whose real runtimes spanned 1.6 to 6.7 minutes.
+      2. It timed from `turn.timestamp`, which every call in one message shares, so the latencies
+         rose monotonically with position and the "slowest" was always the last dispatched.
+      3. It then ranked with `order.index(slowest)` over a list of LAUNCH TURN INDICES. A fan-out is
+         one message by `method.md`'s own rule, so every entry held the same index, `index` returned
+         the first match — always 0 — and `rank >= 2/3` could not be true. 4 of 5 fan-outs on the
+         measured build were unfailable by construction. It scored 5/5 and 4/4 and a retrospective
+         published "the dispatch-longest-first rule is working" on the strength of it.
+
+    Now: real per-agent durations, joined on the dispatching call's id, ranked by POSITION in the
+    dispatch order. `n/a` when the per-agent transcripts are absent — a lead-transcript-only reading
+    of this is what produced the fake number, and a fake number is worse than a gap."""
+    if not ctx.agent_durations:
+        return Assertion(16, "longest slice dispatched first", 0, 0, (),
+                         "no per-agent transcripts beside the session file — the lead's transcript "
+                         "cannot time an async dispatch, and guessing is what broke this before")
     ok, bad = 0, []
     for group in _fanout_groups(turns):
-        timed = [(idx, dur) for idx, dur in group if dur is not None]
+        timed = [(i, d) for i, d in enumerate(group) if d.call_id in ctx.agent_durations]
         if len(timed) < 3:
             continue
-        slowest_at = max(timed, key=lambda p: p[1])[0]
-        order = [idx for idx, _ in timed]
-        rank = order.index(slowest_at)
-        if rank >= (len(order) * 2) // 3:
-            bad.append(Evidence(slowest_at, {"dispatched": rank + 1, "of": len(order)}))
+        rank, slowest = max(timed, key=lambda p: ctx.agent_durations[p[1].call_id])
+        if rank >= (len(timed) * 2) // 3:
+            bad.append(Evidence(slowest.turn, {
+                "agent": slowest.label, "dispatched": rank + 1, "of": len(timed),
+                "minutes": round(ctx.agent_durations[slowest.call_id] / 60.0, 1)}))
         else:
             ok += 1
     total = ok + len(bad)
     if not total:
         return Assertion(16, "longest slice dispatched first", 0, 0, (),
-                         "no fan-out with timeable agents in this transcript")
+                         "no fan-out of three or more timeable agents in this transcript")
     return Assertion(16, "longest slice dispatched first", ok, total, tuple(bad))
 
 
@@ -1396,6 +1472,12 @@ class ScoreContext:
     #: transcript cannot show: whether an agent narrowed its own self-check. Empty when the
     #: `<session>/subagents/` directory is absent — a different harness, or no fan-out.
     agent_lint_calls: tuple[tuple[str, str], ...] = ()
+    #: Real sub-agent runtimes in seconds, keyed by the id of the `Agent` call that spawned each —
+    #: `<agent>.meta.json` carries that `toolUseId`, which is the only exact join between the lead's
+    #: dispatch and the agent's own file. Empty when the `<session>/subagents/` directory is absent.
+    #: Assertion 16 needs this: the lead's transcript CANNOT time an async dispatch, and the three
+    #: bugs that came from pretending otherwise are written up in that assertion.
+    agent_durations: Mapping[str, float] = field(default_factory=dict)
     #: The map's ACCESS SURFACE — `access: true` business rules, which the T7 fold made the single
     #: home for auth. Read from the model rather than matched out of advisory prose, so these two
     #: assertions do not break when an advisory is reworded. None when no map was given.
@@ -1421,6 +1503,41 @@ class ScoreContext:
         if self.load_error:
             return f"--map was given but FAILED TO LOAD ({self.load_error}), so {subject} is unknown"
         return f"no map given, so {subject} is unknown"
+
+
+def read_agent_durations(session: Path) -> dict[str, float]:
+    """`{dispatching tool_use id: seconds the agent actually ran}` from the per-agent transcripts.
+
+    The join is `<agent>.meta.json`'s `toolUseId`, not the description — two agents in one build have
+    carried the same description, and a name join would silently pick one of them.
+
+    Duration comes from `cost.Actor.duration`, which subtracts the stretches an agent sat blocked on
+    its coordinator. Ranking a straggler on the raw span measures the LEAD's latency and calls it the
+    agent's, and the two "slowest" agents of one measured build held 4.7 and 6.9 minutes of exactly
+    that."""
+    from coyodex_eval.cost import Actor, classify, subagent_dir
+    from coyodex_eval.transcript import read_turns as read_agent_turns
+    d = subagent_dir(session)
+    if not d.is_dir():
+        return {}
+    out: dict[str, float] = {}
+    for f in sorted(d.glob("agent-*.jsonl")):
+        meta_path = f.parent / (f.stem + ".meta.json")
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        call_id = meta.get("toolUseId") if isinstance(meta, dict) else None
+        if not isinstance(call_id, str) or not call_id:
+            continue
+        turns = read_agent_turns(f, include_sidechains=True)
+        if not turns:
+            continue
+        description = meta.get("description") if isinstance(meta, dict) else ""
+        actor = Actor(name=str(description or f.stem),
+                      role=classify(str(description or "")), turns=turns)
+        out[call_id] = actor.duration
+    return out
 
 
 def read_agent_lint_calls(session: Path) -> tuple[tuple[str, str], ...]:
@@ -2797,7 +2914,8 @@ def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
     # context. Passing it to every assertion would invite the rest to reach for the repo, and a
     # scorecard that needs the repo cannot score an archived corpus transcript.
     # The context-taking assertions: their subject is the committed MAP, not the run.
-    _needs_ctx = {assert_6_grounding_recorded, assert_23_the_build_saw_the_whole_gate,
+    _needs_ctx = {assert_6_grounding_recorded, assert_16_longest_slice_dispatched_first,
+                  assert_23_the_build_saw_the_whole_gate,
                   assert_24_no_inert_recorded_exception,
                   assert_32_every_access_rule_states_its_risk,
                   assert_33_access_granularity_is_recorded,
@@ -2826,12 +2944,18 @@ def score_transcript(path: Path | str, *, label: str = "",
     ctx = read_score_context(map_path)
     # The per-agent files are keyed off the TRANSCRIPT path, not the map, so they are attached
     # here rather than inside `read_score_context`.
-    ctx = replace(ctx, agent_lint_calls=read_agent_lint_calls(p))
+    ctx = replace(ctx, agent_lint_calls=read_agent_lint_calls(p),
+                  agent_durations=read_agent_durations(p))
     return score_turns(turns, transcript=str(p), label=label or p.stem,
                        grouping_consistent=grouping_is_consistent(p), ctx=ctx)
 
 
 # --- the diff --------------------------------------------------------------------------
+
+#: A denominator at or below this holds too little to read a score off. One observation is not a
+#: measurement; zero is `n/a` and already says so.
+_THIN_DENOMINATOR = 1
+
 
 @dataclass(frozen=True)
 class ScoreDelta:
@@ -2843,6 +2967,28 @@ class ScoreDelta:
     after: float | None
     before_counts: str
     after_counts: str
+    before_of: int | None = None
+    after_of: int | None = None
+
+    @property
+    def thin(self) -> str:
+        """Why this row's SCORE should not be read as a movement, when its denominator moved instead.
+
+        A score is `observed / of`, and `of` is how many opportunities the run held. When `of`
+        collapses, the score can rise while the evidence disappears: assertion 35 went `39 of 41` to
+        `1 of 1` between two builds and was read — by a retrospective, in a carried-forward table —
+        as a defect "fixed and proven". One observation is not proof of anything, and a reader
+        looking at two columns of scores cannot see it. 19 of that build's 37 assertions carried one
+        observation or none."""
+        if self.before_of is None or self.after_of is None:
+            return ""
+        if self.after_of == 0:
+            return ""
+        if self.after_of <= _THIN_DENOMINATOR and self.before_of > _THIN_DENOMINATOR:
+            return f"denominator {self.before_of} -> {self.after_of}"
+        if self.before_of >= 4 * max(self.after_of, 1):
+            return f"denominator {self.before_of} -> {self.after_of}"
+        return ""
 
     @property
     def direction(self) -> str:
@@ -2861,7 +3007,7 @@ class ScoreDelta:
     def as_json(self) -> dict[str, object]:
         return {"id": self.id, "name": self.name, "before": self.before, "after": self.after,
                 "before_counts": self.before_counts, "after_counts": self.after_counts,
-                "direction": self.direction}
+                "direction": self.direction, "thin": self.thin}
 
 
 def diff(before: Scorecard, after: Scorecard) -> tuple[ScoreDelta, ...]:
@@ -2876,7 +3022,8 @@ def diff(before: Scorecard, after: Scorecard) -> tuple[ScoreDelta, ...]:
             id=aid, name=named.name if named is not None else str(aid),
             before=ba.score if ba else None, after=aa.score if aa else None,
             before_counts=f"{ba.observed}/{ba.of}" if ba else "-",
-            after_counts=f"{aa.observed}/{aa.of}" if aa else "-"))
+            after_counts=f"{aa.observed}/{aa.of}" if aa else "-",
+            before_of=ba.of if ba else None, after_of=aa.of if aa else None))
     return tuple(out)
 
 
@@ -2930,10 +3077,20 @@ def format_diff(before: Scorecard, after: Scorecard) -> str:
     lines = [f"L3 scorecard diff — {before.label or before.transcript}"
              f"  ->  {after.label or after.transcript}", "",
              f"  {'#':>2}  {'before':>6}  {'after':>6}  {'move':<5}  assertion"]
+    thin: list[str] = []
     for r in rows:
         lines.append(f"  {r.id:>2}  {_fmt_score(r.before)}  {_fmt_score(r.after)}  "
-                     f"{r.direction:<5}  {r.name}   [{r.before_counts} -> {r.after_counts}]")
+                     f"{r.direction:<5}  {r.name}   [{r.before_counts} -> {r.after_counts}]"
+                     + (f"   THIN ({r.thin})" if r.thin else ""))
+        if r.thin:
+            thin.append(f"  {r.id:>2}  {r.name} — {r.thin}")
     lines += ["", "Relative by design — which way each number moved. No threshold, no verdict."]
+    if thin:
+        lines += ["",
+                  f"THIN — {len(thin)} assertion(s) whose DENOMINATOR collapsed. A score is "
+                  f"observed/of, so a rise here is not evidence of a fix; the run simply held fewer "
+                  f"opportunities of that kind. One retrospective read `39 of 41` -> `1 of 1` as "
+                  f"'fixed and proven'.", *thin]
     return "\n".join(lines)
 
 

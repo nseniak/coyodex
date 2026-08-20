@@ -1360,6 +1360,26 @@ def _rows_with_id(doc: object, wanted: str) -> list[tuple[str, int]]:
     return hits
 
 
+def _edges_with_triple(doc: object, src: str, verb: str, dst: str) -> list[tuple[str, int]]:
+    """(array key, index) for every fragment edge matching `(src, verb, dst)` exactly.
+
+    Fragment edges carry NO `id` — an edge's identity is its triple — so `--id` cannot reach one and
+    `_rows_with_id` returns nothing for them. That is why three heredocs on one build rewrote an
+    edge's `why` by hand while `fix row` sat unused two turns away: the verb existed, the ADDRESS
+    did not."""
+    hits: list[tuple[str, int]] = []
+    if not isinstance(doc, dict):
+        return hits
+    for key, value in doc.items():
+        if not isinstance(value, list):
+            continue
+        for i, row in enumerate(value):
+            if (isinstance(row, dict) and row.get("src") == src
+                    and row.get("verb") == verb and row.get("dst") == dst):
+                hits.append((key, i))
+    return hits
+
+
 def _surviving_ids(paths: list[Path]) -> tuple[frozenset[str], str]:
     """Every id the fragments assemble to, plus a complaint when they do not assemble at all.
 
@@ -1389,13 +1409,13 @@ def row(argv: list[str]) -> int:
     """Rewrite one field of one row, in the fragment that authored it."""
     if subverb_help.wants_help(argv):
         return subverb_help.handle(_USAGE, "row", argv) or 0
-    fragments = row_id = None
+    fragments = row_id = edge_triple = None
     sets: dict[str, str] = {}
     json_sets: dict[str, object] = {}
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in ("--fragments", "--id") or a.startswith(("--set-", "--set-json-")):
+        if a in ("--fragments", "--id", "--edge") or a.startswith(("--set-", "--set-json-")):
             if i + 1 >= len(argv):
                 return usage_error(_USAGE, "row", f"{a} needs a value")
             val = argv[i + 1]
@@ -1408,6 +1428,8 @@ def row(argv: list[str]) -> int:
                 fragments = val
             elif a == "--id":
                 row_id = val
+            elif a == "--edge":
+                edge_triple = val
             elif a.startswith("--set-json-"):
                 # STRUCTURED fields. `--set-<field> <text>` writes a string, which is right for a
                 # statement, a meaning or a purpose and useless for the rest: an entity's `states`
@@ -1424,8 +1446,17 @@ def row(argv: list[str]) -> int:
                 sets[a[len("--set-"):].replace("-", "_")] = val
             continue
         return usage_error(_USAGE, "row", f"unknown argument '{a}'")
-    if not fragments or not row_id:
-        return usage_error(_USAGE, "row", "--fragments and --id are required")
+    if not fragments or not (row_id or edge_triple):
+        return usage_error(_USAGE, "row", "--fragments and one of --id / --edge are required")
+    if row_id and edge_triple:
+        return usage_error(_USAGE, "row", "--id and --edge address different things; give one")
+    edge_src = edge_verb = edge_dst = ""
+    if edge_triple:
+        parts = edge_triple.split(":")
+        if len(parts) != 3 or not all(p.strip() for p in parts):
+            return usage_error(_USAGE, "row", f"--edge takes SRC:VERB:DST, got '{edge_triple}'")
+        edge_src, edge_verb, edge_dst = (p.strip() for p in parts)
+    label = row_id or str(edge_triple)
     if not sets and not json_sets:
         return usage_error(_USAGE, "row",
                            "give at least one --set-<field> <text> or --set-json-<field> <json>")
@@ -1464,15 +1495,24 @@ def row(argv: list[str]) -> int:
         except (OSError, ValueError) as exc:
             print(f"ERROR: cannot read {p}: {exc}", file=sys.stderr)
             return 2
-        owners += [(p, key, idx) for key, idx in _rows_with_id(docs[p], row_id)]
+        owners += [(p, key, idx) for key, idx in (
+            _rows_with_id(docs[p], row_id) if row_id
+            else _edges_with_triple(docs[p], edge_src, edge_verb, edge_dst))]
     if len(owners) != 1:
         if not owners:
-            print(f"ERROR: no fragment under {where} declares a row with id '{row_id}'.\n"
-                  f"       Entry-point ids are MINTED at assemble and exist in no fragment, so they "
-                  f"cannot be addressed here; correct the entry point by its trigger/source in the "
-                  f"harvest fragment that declares it.", file=sys.stderr)
+            if edge_triple:
+                print(f"ERROR: no fragment under {where} declares an edge {edge_triple}.\n"
+                      f"       The triple must match EXACTLY — `coyodex dump --edges` prints the "
+                      f"spelling the fragments use, and an edge the map shows may have been merged "
+                      f"from a triple spelled differently in its authoring fragment.",
+                      file=sys.stderr)
+            else:
+                print(f"ERROR: no fragment under {where} declares a row with id '{row_id}'.\n"
+                      f"       Entry-point ids are MINTED at assemble and exist in no fragment, so "
+                      f"they cannot be addressed here; correct the entry point by its "
+                      f"trigger/source in the harvest fragment that declares it.", file=sys.stderr)
         else:
-            print(f"ERROR: '{row_id}' is declared by {len(owners)} fragment rows — refusing rather "
+            print(f"ERROR: '{label}' is declared by {len(owners)} fragment rows — refusing rather "
                   f"than guessing which:", file=sys.stderr)
             for p, key, idx in owners:
                 print(f"         {p.name}: {key}[{idx}]", file=sys.stderr)
@@ -1481,7 +1521,7 @@ def row(argv: list[str]) -> int:
     target = docs[path][array_key][index]           # type: ignore[index]
     unknown = [f for f in sets if f not in target]
     if unknown:
-        print(f"ERROR: {path.name}: {array_key}[{index}] ('{row_id}') has no field(s) "
+        print(f"ERROR: {path.name}: {array_key}[{index}] ('{label}') has no field(s) "
               f"{', '.join(sorted(unknown))}. Present: {', '.join(sorted(target))}.\n"
               f"       A field the row does not carry is a typo or a field the SCHEMA owns "
               f"elsewhere; this command never invents one.", file=sys.stderr)
@@ -1498,13 +1538,13 @@ def row(argv: list[str]) -> int:
     edits: dict[str, object] = {**sets, **json_sets}
     missing = sorted(f for f in edits if f not in target)
     if missing:
-        print(f"ERROR: {row_id} has no field(s) {', '.join(missing)} — a new key here is a schema "
+        print(f"ERROR: {label} has no field(s) {', '.join(missing)} — a new key here is a schema "
               f"change, not a correction. Present fields: {', '.join(sorted(target))}",
               file=sys.stderr)
         return 2
     original = {f: target[f] for f in edits}
     if all(target[f] == v for f, v in edits.items()):
-        print(f"row: {row_id} already says that — nothing written.")
+        print(f"row: {label} already says that — nothing written.")
         return 0
     for f, v in edits.items():
         target[f] = v
@@ -1545,7 +1585,7 @@ def row(argv: list[str]) -> int:
 
     path.write_text(text, encoding="utf-8")
     for f, v in edits.items():
-        print(f"  {row_id}.{f}: {original[f]!r} → {v!r}")
+        print(f"  {label}.{f}: {original[f]!r} → {v!r}")
     print(f"row: rewrote {len(edits)} field(s) on {path.name}: {array_key}[{index}].")
     print(f"     Re-assemble to see it in the map. If the row carries L2 CLAIMS (a rule statement, a "
           f"site, an entity store, a cadence), their claim TEXT has changed, so the skeptics' "
@@ -1564,7 +1604,8 @@ _USAGE = """usage: coyodex fix <verb> [args...]
 
 Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
 
-  row --fragments <dir|file> --id <ID> --set-<field> <text> [--set-<field> <text> ...]
+  row --fragments <dir|file> (--id <ID> | --edge <SRC:VERB:DST>)
+      --set-<field> <text> [--set-<field> <text> ...]
       Rewrite one row's own TEXT in the FRAGMENT that authored it — a rule's statement or risk, an
       entity's meaning, a component's purpose. The one writer that is durable by construction: the
       fragment is the source, so the edit survives every re-assemble with no reconcile directive.
@@ -1578,6 +1619,11 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       or collapse two, moving ids the worklist, the reconcile file and the grounding record cite.
       Anchors (`source`/`where`) are `apply-drift`; assignment (`subsystem`/`block`/…) is
       reconcile's `set`. Both are refused by name.
+      `--edge SRC:VERB:DST` addresses a fragment EDGE, which carries no id — an edge's identity is
+      its triple, so `--id` could never reach one and three heredocs on one build rewrote an edge's
+      `why` by hand two turns after using this verb correctly. Every guard above still applies.
+      `--id` also reaches a happy-path STEP (`--id HP11 --set-why …`); it is not components and
+      rules only.
 
   apply-drift --map <map> --verdicts <raw.json>... [--tolerance N] [--to-reconcile <file>]
       Write the grounding skeptics' corrected anchor into each drifted element: an edge `where`, a

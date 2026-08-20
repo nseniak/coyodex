@@ -170,6 +170,13 @@ class MapProfile:
     # passed on 2/8 -> 3/10 because a unit had been ADDED, not because code had been placed. This
     # counts DISTINCT non-empty component sets instead, so replicating a shape cannot move it.
     deployment_distinct_hosted_sets: int = 0
+    #: Units carrying two or more `variants`. `method.md` models one process that runs in several
+    #: environments as ONE unit with a variant per environment, and the alternative — a unit per
+    #: environment — inflates `deployment_distinct_hosted_sets`. So a map that adopts the prescribed
+    #: form scores lower on that gate than one that duplicates. This number is what tells the two
+    #: apart; the gate stays as it is, because "another shape of the same process" must not buy
+    #: linkage, and a NOTE explains the drop instead. None on a profile blessed before the field.
+    deployment_units_multi_variant: int | None = None
     # The EMPTY boxes: units running no component and no entry point that are not system infra
     # either (`validate_model.orphan_deployment_units`, the same list `validate` advises on).
     #
@@ -332,6 +339,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         deployment_units=len(unit_names),
         deployment_units_linked=sum(1 for u in unit_names if u in claimed),
         deployment_distinct_hosted_sets=len(set(hosted.values())),
+        deployment_units_multi_variant=sum(1 for u in m.deployment if len(u.variants or []) > 1),
         deployment_orphan_units=len(validate_model.orphan_deployment_units(m)),
         deployment_runs_in_adopted=bool(
             any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)),

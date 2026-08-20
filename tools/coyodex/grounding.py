@@ -796,17 +796,41 @@ def _read_claim_coverage(rows: list[dict]) -> tuple[int, int]:
     return len(rows), testable
 
 
+#: Suffixes a per-agent transcript is written under. `.jsonl` is the settled convention; `.output`
+#: is what the harness names in the dispatch result it hands the LEAD — same JSONL, different
+#: extension — and pointing this flag at that directory failed outright. The flag was suggested by
+#: the tool twice on one build and used zero times, because the only path the lead had been given
+#: was the one that does not work.
+_AGENT_TRANSCRIPT_GLOBS = ("*.jsonl", "*.output")
+
+
+def _agent_transcript_files(agent_dir: Path) -> list[Path]:
+    """Every per-agent transcript under `agent_dir`, whichever suffix the harness used."""
+    seen: dict[Path, None] = {}
+    for pattern in _AGENT_TRANSCRIPT_GLOBS:
+        for f in sorted(agent_dir.glob(pattern)):
+            seen.setdefault(f.resolve(), None)
+    return sorted(seen)
+
+
 def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> list[str]:
     """Files a note says were read, that the agent's own transcript never opened."""
     opened: set[str] = set()
-    seen_any = False
-    for f in sorted(agent_dir.glob("*.jsonl")):
-        seen_any = True
+    files = _agent_transcript_files(agent_dir)
+    for f in files:
         for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
             for m in re.finditer(r"[\w./-]+\.[A-Za-z0-9]+", line):
                 opened.add(m.group(0).lstrip("./"))
-    if not seen_any:
-        return [f"--agent-transcripts {agent_dir} holds no .jsonl — nothing to check evidence against"]
+    if not files:
+        # Name the directory that DOES work. The lead is handed
+        # `<session>/tasks/<id>.output` at dispatch and has to guess that the readable copies live
+        # in `<session>/subagents/`; "holds no .jsonl" told it neither.
+        sibling = agent_dir.parent / "subagents"
+        hint = (f" Did you mean {sibling}? That is where this harness keeps the readable per-agent "
+                f"files; the `tasks/` directory a dispatch result names holds the same JSONL under "
+                f"a different suffix." if sibling.is_dir() and sibling != agent_dir else "")
+        return [f"--agent-transcripts {agent_dir} holds no per-agent transcript "
+                f"({' or '.join(_AGENT_TRANSCRIPT_GLOBS)}) — nothing to check evidence against.{hint}"]
     claimed: dict[str, int] = {}
     for r in rows:
         for hit in _CLAIMS_A_READ.findall(str(r.get("note") or "")):

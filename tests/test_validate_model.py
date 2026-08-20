@@ -185,6 +185,83 @@ def test_kind_coverage_records_spaced_and_case_drifted_minted_kinds() -> None:
     assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
 
 
+def test_kind_coverage_reads_a_line_wrapped_in_markdown_markup() -> None:
+    """A backtick around the identifier is as natural as bold, and it used to discard the record in
+    silence: h7's three statements — ``- `ui-route: complete` — read every <Route> element`` and two
+    siblings — parsed 0 of 3, the warning said only "no completeness statement", and the barrier
+    answered by RE-RECORDING a second differently worded line. The shipped map carries two ui-route
+    statements and no tool can read one of them."""
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="ui-route"), make_ep(kind="middleware", trigger="mw"),
+                      make_ep(kind="startup-hook", trigger="boot")]
+    assert any("Entry-point coverage" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Entry-point coverage", body=(
+        "- `ui-route: complete` — read every <Route> element in the router\n"
+        "- **middleware: complete** — one route-level gate\n"
+        "- _startup-hook_: complete — second pass over main.tsx"))]
+    assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
+
+
+def test_kind_coverage_still_ignores_prose_that_merely_mentions_a_kind() -> None:
+    """Widening the markup must not widen what counts as a RECORD. A sentence is not a contract."""
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="ui-route")]
+    m.extras = [ExtraSection(heading="Entry-point coverage", body=(
+        "Not counted as separate addresses: the two wrapper routes that only mount a frame.\n"
+        "The `ui-route` rows were the complete set at the time of writing."))]
+    assert any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
+
+
+# --- a recorded rationale the walk outgrew -----------------------------------------
+# Every other check here asks whether a gap is RECORDED. Nothing asked whether the record is still
+# TRUE. The 2026-08-20 argus map shipped `CAP8: … so only the version switch sits on the walk` while
+# 0 of CAP8's 2 use cases appear in the walk — the version-switch step had been deleted three turns
+# after the line was written, to clear an unrelated warning, and nothing re-read the sentence.
+
+def _walk_model(record: str, keep_step: bool = True):
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP8", name="Demo target site", label="supporting")]
+    # UC1 comes from the base model and belongs to no CAP8 — it is what the walk falls back to when
+    # the demo step is deleted, which is the shape the real map ended up in.
+    m.use_cases = list(m.use_cases) + [
+        UseCase(id="UC33", name="Visit the demo site", actors=["R1"],
+                trigger_outcome="a visitor opens it -> it renders", capability="CAP8"),
+        UseCase(id="UC34", name="Switch the demo version", actors=["R1"],
+                trigger_outcome="an admin picks one -> it serves that one", capability="CAP8")]
+    m.happy_path = ([HappyStep(id="HP1", uc="UC34", title="Switch the demo version")] if keep_step
+                    else [HappyStep(id="HP1", uc="UC1", title="View")])
+    m.extras = [ExtraSection(heading="Happy Path coverage", body=record)]
+    return m
+
+
+def test_a_capability_record_claiming_the_walk_is_checked_against_the_walk() -> None:
+    m = _walk_model("CAP8: the demo exists so a demo has a page that changes, so only the version "
+                    "switch sits on the walk", keep_step=False)
+    assert any("sits on the walk, and 0 of its 2 use case(s) do" in w for w in warnings_of(m)), \
+        warnings_of(m)
+
+
+def test_the_same_record_is_silent_while_the_claim_is_still_true() -> None:
+    m = _walk_model("CAP8: the demo exists so a demo has a page that changes, so only the version "
+                    "switch sits on the walk", keep_step=True)
+    assert not any("sits on the walk, and 0 of" in w for w in warnings_of(m)), warnings_of(m)
+
+
+def test_an_ordinary_off_the_spine_rationale_is_not_flagged() -> None:
+    """The heading's ordinary content is the OPPOSITE claim — "these are off the spine, and why" —
+    and a check that fired on those would fire on every map and be ignored."""
+    m = _walk_model("CAP8: the demo site is scaffolding for a demo, not product functionality",
+                    keep_step=False)
+    assert not any("sits on the walk" in w for w in warnings_of(m)), warnings_of(m)
+
+
+def test_a_record_naming_a_walk_step_that_no_longer_exists_is_flagged() -> None:
+    """Fully deterministic half: the walk lost HP18 and the line explaining HP18 stayed behind."""
+    m = _walk_model("HP18: the version switch is what makes the demo worth showing", keep_step=True)
+    assert any("records HP18, and the walk has no such step" in w for w in warnings_of(m)), \
+        warnings_of(m)
+
+
 # --- structured store + persistence coverage (WS-A1) ------------------------------
 
 def test_store_dep_shape_and_mode_are_blocking() -> None:

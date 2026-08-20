@@ -28,6 +28,10 @@ CONTRACTS: dict[str, str] = {
     "trace": "trace-contract.md",
     "rules": "rules-contract.md",
     "skeptic": "skeptic-contract.md",
+    # The fifth slice every build has, and the one no template covered. Hand-composed briefs lose
+    # the shared machinery: the gap-fill brief was the ONE trace-phase contract of eleven missing
+    # "do NOT spawn sub-agents", and it lost four more blocks with it.
+    "gapfill": "gapfill-contract.md",
 }
 
 # Which contracts author reader-facing prose, and therefore carry the writing rules. A skeptic

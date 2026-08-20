@@ -180,6 +180,17 @@ def legend_of(m: ProjectModel) -> list[dict[str, object]]:
     for br in m.rules:
         out.append({"id": br.id, "name": br.name or br.statement, "kind": "business_rule",
                     "parent": br.block or "", "source": ""})
+    # ENTRY POINTS, and they are the row this legend most needed. Their ids are MINTED AT ASSEMBLE
+    # and exist in no fragment, so the assembled map is their only source — every other kind here
+    # can be read off the fragments a build already has. `--legend` emitted 0 of them, on a map with
+    # 108, while 34 of that build's 65 reconcile `set` entries assigned `entry_points`; the lead
+    # hand-parsed `project-map.json` for the ids and then hand-wrote the whole fan-out legend in
+    # python. `name` is the trigger sentence, which is what an entry point is called by.
+    for ep in m.entry_points:
+        if not ep.id:
+            continue      # not yet minted — a fragment's entry point has no id to share
+        out.append({"id": ep.id, "name": ep.trigger, "kind": "entry_point",
+                    "parent": ep.component or "", "source": _href(ep.source) or ""})
     return out
 
 

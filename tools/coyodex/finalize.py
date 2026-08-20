@@ -44,6 +44,12 @@ import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+from coyodex.reporting import shown
+
+if TYPE_CHECKING:
+    from coyodex.model import ProjectModel
 
 from coyodex.model import ModelError, access_rules, load_model_path
 
@@ -418,7 +424,50 @@ def _balance_leg(map_path: Path) -> Leg:
                     + " (informational: grouping is a view-only choice, method.md)")
 
 
-def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeReport:
+def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
+    """Files that held ACCESS enforcement in a previous map and are named by no access rule now.
+
+    A from-scratch rebuild is deliberately blind to its predecessor, and that independence is the
+    point. The cost is that a security claim can vanish between two maps of unchanged code with
+    nothing in the build noticing: on the 2026-08-20 argus pair the access-rule STATEMENT count held
+    at 21 -> 21 — so `compare`'s hard gate passed — while `adapters/auth_google.py` lost its claim
+    entirely. That file verifies the Google ID token's signature, issuer and audience; the previous
+    map said so as access rule BR21, and none of the new map's 61 rules mentions a signature, an
+    issuer or an audience.
+
+    `coyodex-eval compare` prints this, and printing it there is too late twice over: it is a
+    developer-only command, and it runs at retro time. Here it runs AFTER the map is written — so
+    reading the baseline cannot contaminate the rebuild — and BEFORE the commit, which is the last
+    moment anybody looks.
+
+    ADVISORY, never blocking, and FILES rather than statements or lines. Two independent LLM builds
+    legitimately reword and re-anchor; a file that lost its coverage altogether is the one signal
+    that survives both."""
+    from coyodex.access_surface import load_surface, lost_files
+    from coyodex.assemble import load_map_or_fragment
+    try:
+        base = load_surface(baseline)
+        m, _present = load_map_or_fragment(map_path)
+    except Exception as exc:                       # noqa: BLE001 — any unreadable baseline is one case
+        return Leg("access baseline", FAILED,
+                   note=f"--access-baseline {baseline} could not be read ({exc}), so nothing says "
+                        f"whether an auth claim was dropped")
+    lost = lost_files(base, m)
+    if not lost:
+        return Leg("access baseline", RAN,
+                   note=f"every one of the {len(base)} file(s) that held access enforcement in "
+                        f"{baseline.name} is still named by an access rule")
+    listed = shown(lost, 8, unit="file(s)")
+    return Leg("access baseline", RAN, advisory=[
+        f"{len(lost)} of {len(base)} file(s) that held ACCESS enforcement in {baseline.name} are "
+        f"named by NO access rule in this map: {listed}. The code may be unchanged — check each one "
+        f"before shipping. A statement count can hold steady while a claim disappears, so this is "
+        f"not visible in `auth-surfaces-no-drop`. Record 'access-baseline <path>: <why>' under an "
+        f"'Audit exceptions' extras heading for each one that is deliberate."])
+
+
+def build_report(map_path: Path, repo: Path, verdicts: list[Path],
+                 access_baseline: Path | None = None) -> FinalizeReport:
     unasked = _unasked_verdicts(map_path, verdicts)
     legs = [
         _validate_leg(map_path, repo),
@@ -427,6 +476,7 @@ def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeRe
         *([_drift_leg(map_path, repo, verdicts)] if verdicts else []),
         *([_refutations_leg(map_path, verdicts)] if verdicts else []),
         *([_unasked_verdicts_leg(unasked)] if unasked else []),
+        *([_access_baseline_leg(map_path, access_baseline)] if access_baseline else []),
         _balance_leg(map_path),
     ]
     blocking = sum(len(l.blocking) for l in legs)
@@ -614,7 +664,11 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
       id, so the pairing cannot be decided here. Say so; do not guess either way.
     - `disclosure` — the advisory reports what a record silenced. Asking whether it is recorded is
       a category error.
-    - `carried (no escape)` — names no heading; can only be fixed."""
+    - `carried (no escape)` — names no heading AND no map-field escape; can only be fixed.
+
+    An advisory may offer a MAP FIELD instead of an extras heading — `grounding.note` is one — and
+    this table read only `records.KNOWN_HEADINGS`, so it filed a taken escape as an absent one and
+    the commit message repeated it."""
     from coyodex import records
     from coyodex.assemble import load_map_or_fragment
     try:
@@ -634,6 +688,10 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
                 out.append(("disclosure", heading, a))
                 continue
             if not heading:
+                field = _map_field_escape(m, a)
+                if field is not None:
+                    out.append(field)
+                    continue
                 out.append(("carried (no escape)", "", a))
                 continue
             ids = set(_ADVISORY_IDS.findall(a)) & defined
@@ -660,6 +718,30 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
             else:
                 out.append(("UNRECORDED", heading, a))
     return out
+
+
+#: Escapes an advisory can name that are NOT extras headings. `records.KNOWN_HEADINGS` is the only
+#: vocabulary the disposition table knew, so an advisory offering a MAP FIELD as its second remedy
+#: fell straight through to `carried (no escape)` — while the build had already taken that remedy.
+#: The post-pin-claims advisory says, in its own text, "or say in `grounding.note` which claims were
+#: minted after the pin and why they were not re-challenged"; the 2026-08-20 argus map carries
+#: exactly that sentence, and both the report and the commit message called it unescapable.
+_MAP_FIELD_ESCAPES = ("grounding.note",)
+
+
+def _map_field_escape(m: "ProjectModel", advisory: str) -> tuple[str, str, str] | None:
+    """`(disposition, field, advisory)` when the advisory names a map-field escape, else None.
+
+    Only the fields listed above, and only when the advisory NAMES one — a classifier that guesses
+    at prose is how "no granularity record" got filed as recorded."""
+    low = advisory.lower()
+    for field in _MAP_FIELD_ESCAPES:
+        if field not in low:
+            continue
+        if field == "grounding.note":
+            note = (m.grounding.note if m.grounding else "") or ""
+            return ("recorded" if note.strip() else "UNRECORDED", field, advisory)
+    return None
 
 
 def gate_block(report: FinalizeReport, map_sha: str) -> str:
@@ -696,7 +778,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex finalize [--repo <root>] [--verdicts <file>]... "
-              "[--emit-gate-block <file>] "
+              "[--emit-gate-block <file>] [--access-baseline <map-or-surface.json>] "
               "[.coyodex/project-map.json]\n\n"
               "The pre-commit read: validate (--check-sources --check-coverage) + audit +\n"
               "anchor-drift (shape-only, and verdict-based when --verdicts is given). Writes\n"
@@ -708,12 +790,20 @@ def main(argv: list[str] | None = None) -> int:
               "should have run did not (INCOMPLETE — never reported as a pass). Unapplied anchor\n"
               "drift is reported, never gating: apply-drift cannot fix an entry-point cadence\n"
               "anchor, so gating on it would fail a build that has no remedy.\n\n"
+              "--access-baseline names a PREVIOUS map (or a `coyodex access-surface` file) and adds\n"
+              "one advisory leg: files that held ACCESS enforcement there and are named by no access\n"
+              "rule here. A rebuild is blind to its predecessor by design, so a security claim can\n"
+              "disappear between two maps of unchanged code with nothing noticing — one pair held its\n"
+              "access-rule COUNT at 21 -> 21 while the file verifying an identity token's signature\n"
+              "lost its claim entirely. Reading it HERE cannot contaminate the rebuild: the map is\n"
+              "already written, and the commit has not happened yet.\n\n"
               "Read the REPORT FILE, not this stdout: a file survives `> /dev/null` and `| tail`,\n"
               "and it carries whole lists with no `+N more`.")
         return 0
     repo: Path | None = None
     verdicts: list[Path] = []
     gate_block_path: Path | None = None
+    access_baseline: Path | None = None
     positional: list[str] = []
     i = 0
     while i < len(argv):
@@ -724,13 +814,15 @@ def main(argv: list[str] | None = None) -> int:
                 print("ERROR: --emit-gate-block needs a value", file=sys.stderr)
                 return 2
             gate_block_path = Path(argv[i])
-        elif a in ("--repo", "--verdicts"):
+        elif a in ("--repo", "--verdicts", "--access-baseline"):
             i += 1
             if i >= len(argv):
                 print(f"ERROR: {a} needs a path", file=sys.stderr)
                 return 2
             if a == "--repo":
                 repo = Path(argv[i])
+            elif a == "--access-baseline":
+                access_baseline = Path(argv[i])
             else:
                 # VARIADIC, exactly as `grounding` had to become: swallow every following non-flag
                 # path. It took one value per flag, so the natural `--verdicts verify/verdicts-*.json`
@@ -775,7 +867,10 @@ def main(argv: list[str] | None = None) -> int:
     # No `set_full_lists` here: every leg that renders a list goes through a `--json` subcommand, and
     # each of those sets and RESETS the mode itself — so a flag set here was cleared by the first leg
     # and did nothing. Whole lists come from the legs' own JSON, which is the honest mechanism.
-    report = build_report(map_path, repo, verdicts)
+    if access_baseline is not None and not access_baseline.exists():
+        print(f"ERROR: --access-baseline {access_baseline} not found", file=sys.stderr)
+        return 1
+    report = build_report(map_path, repo, verdicts, access_baseline)
     json_path = map_path.parent / f"{REPORT_STEM}.json"
     md_path = map_path.parent / f"{REPORT_STEM}.md"
     json_path.write_text(report.to_json(), encoding="utf-8")

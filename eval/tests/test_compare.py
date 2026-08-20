@@ -691,3 +691,44 @@ def test_a_short_dropped_list_is_not_truncated() -> None:
     cand = make_profile(auth_surfaces=["a"], security_surfaces=3)
     note = next(n for n in compare(base, cand).notes if "not (by name) in candidate" in n)
     assert "more" not in note and "b" in note and "c" in note
+
+
+# --- the variants fold reads as a regression --------------------------------------
+# `method.md` models one process across environments as ONE unit with a variant each. The
+# alternative — a unit per environment — inflates `deployment_distinct_hosted_sets`, so a map that
+# adopts the prescribed form FAILS `deployment-distinct-hosts-no-drop`. The gate must not move (a
+# test below pins that another shape of the same process cannot buy linkage), so the drop is
+# explained instead. On the pair this came from, units with 2+ variants went 1 of 6 to 2 of 5 while
+# the gate failed 3 -> 2, and the whole comparison was stamped REGRESSED.
+
+def test_a_distinct_hosts_drop_from_folding_units_into_variants_is_explained():
+    from coyodex_eval.compare import compare as compare_profiles
+    base = make_profile(deployment_units=6, deployment_units_linked=3,
+                        deployment_distinct_hosted_sets=3, deployment_units_multi_variant=1)
+    cand = make_profile(deployment_units=5, deployment_units_linked=2,
+                        deployment_distinct_hosted_sets=2, deployment_units_multi_variant=2)
+    report = compare_profiles(base, cand)
+    gate = next(g for g in report.gates if g.name == "deployment-distinct-hosts-no-drop")
+    assert not gate.passed, "the gate itself must still fail — a shape is not a placement"
+    assert any("FOLDED units into variants" in n for n in report.notes), report.notes
+
+
+def test_a_distinct_hosts_drop_with_no_variant_fold_gets_no_excuse():
+    """The note must not fire on a genuine loss of modelling, which is what the gate is for."""
+    from coyodex_eval.compare import compare as compare_profiles
+    base = make_profile(deployment_units=6, deployment_units_linked=3,
+                        deployment_distinct_hosted_sets=3, deployment_units_multi_variant=1)
+    cand = make_profile(deployment_units=6, deployment_units_linked=2,
+                        deployment_distinct_hosted_sets=2, deployment_units_multi_variant=1)
+    report = compare_profiles(base, cand)
+    assert not any("FOLDED units into variants" in n for n in report.notes), report.notes
+
+
+def test_a_baseline_blessed_before_the_variant_field_gets_no_excuse_either():
+    from coyodex_eval.compare import compare as compare_profiles
+    base = make_profile(deployment_units=6, deployment_units_linked=3,
+                        deployment_distinct_hosted_sets=3, deployment_units_multi_variant=None)
+    cand = make_profile(deployment_units=5, deployment_units_linked=2,
+                        deployment_distinct_hosted_sets=2, deployment_units_multi_variant=2)
+    report = compare_profiles(base, cand)
+    assert not any("FOLDED units into variants" in n for n in report.notes), report.notes

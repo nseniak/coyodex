@@ -126,6 +126,57 @@ def git_value(repo: Path, *args: str) -> str | None:
     return out.stdout.strip() or None
 
 
+#: Directories whose churn is coyodex's OWN and must never make the user's tree read as dirty.
+#: `.coyodex/` is the map and its reports; `.coyodex-eval/` is the eval and retro scratch, which is
+#: git-ignored scratch by design. Leaving the second one out is not cosmetic: on a live build it was
+#: the ONLY path `scope` reported, so the operator was asked to choose a dirty pin because of a
+#: directory this toolchain had just written itself.
+_OURS = (".coyodex", ".coyodex-eval")
+
+
+def _git_raw(repo: Path, *args: str) -> str | None:
+    """`git_value` without the `.strip()`. Porcelain status is COLUMN-ORIENTED — `XY path`, where a
+    clean index leaves column 1 blank — so stripping the output eats the first line's leading space
+    and takes a character off the first path with it. Caught by a test, one commit after the strip
+    turned `tests/test_audit.py` into `ests/test_audit.py`."""
+    try:
+        out = subprocess.run(["git", "-C", str(repo), *args],
+                             capture_output=True, text=True, check=True, timeout=5,
+                             stdin=subprocess.DEVNULL,
+                             env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"})
+    except (subprocess.SubprocessError, OSError):
+        return None
+    return out.stdout
+
+
+def dirty_paths(repo: Path) -> tuple[str, ...]:
+    """Repo-relative paths changed but not committed, excluding coyodex's own output.
+
+    One definition, read by `scope` (which asks the operator), by `stamp` (which records the answer)
+    and by `lint-fragment` (which checks the record). They disagreed once and the map shipped a pin
+    that said `clean` about a tree that was not."""
+    excludes = [f":(exclude){d}" for d in _OURS]
+    status = _git_raw(repo, "status", "--porcelain", "--", ".", *excludes)
+    return tuple(line[3:].strip() for line in (status or "").splitlines() if line.strip())
+
+
+def pin_sha(repo: Path) -> str | None:
+    """HEAD's short sha, with the `-dirty` suffix when the working tree carries uncommitted code.
+
+    `method.md` requires `<short-sha>-dirty` whenever the operator proceeds on a dirty tree, and
+    `dispatch.md` reads the suffix back ("if the pin ends in `-dirty` it never matched a clean
+    commit"). Nothing wrote it. On the 2026-08-20 argus build the operator was offered, and chose,
+    an option whose own text promised `611c93c-dirty`; the header was then hand-written as plain
+    `611c93c`, the final report told the operator the suffix HAD been recorded, and nine of the ten
+    map anchors into a file another session edited mid-build now resolve against the wrong lines.
+    The suffix is not a label — it is the difference between "read this at that commit" and "this
+    commit does not contain what I read"."""
+    sha = git_value(repo, "rev-parse", "--short", "HEAD")
+    if not sha:
+        return None
+    return f"{sha}-dirty" if dirty_paths(repo) else sha
+
+
 def now_minute() -> str:
     """Local wall-clock, minute precision. Build time per the user's choice."""
     return datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -149,7 +200,7 @@ def stamp(repo: Path, mode: str = "build", session_id: str | None = None,
         session_id=sid,
         built_at=built_at or now_minute(),
         mode=mode,
-        code_commit=git_value(repo, "rev-parse", "--short", "HEAD"),
+        code_commit=pin_sha(repo),
         code_committed=git_value(repo, "show", "-s", "--format=%cs", "HEAD"),
     )
     path = coyodex_dir / PROVENANCE_NAME
@@ -182,8 +233,10 @@ stamp   Record this session's id + minute-precise build time in <repo>/.coyodex/
         it.
 
         --update-header <header-fragment.json>
-                WRITE the stamped minute straight into that fragment's `built`, so the header and
-                provenance cannot disagree. USE THIS. Without it the only way to close the loop is
+                WRITE the stamped minute straight into that fragment's `built`, AND the stamped pin
+                into its `commit`, so the header and provenance cannot disagree. The pin carries the
+                `-dirty` suffix `method.md` requires whenever the working tree holds uncommitted code
+                (coyodex's own `.coyodex/` and `.coyodex-eval/` never count as dirt). USE THIS. Without it the only way to close the loop is
                 to read `built_at=...` off stdout and hand-write it back, and hand-writing it is a
                 map write in the middle of the one closing sequence: builds did it with a
                 `python3 - <<'PY'` heredoc that json-loads the fragment, sets one string and dumps
@@ -263,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
     for w in warnings:
         print(f"coyodex provenance: {w}", file=sys.stderr)
     if header_path is not None:
-        rc = _write_header_built(Path(header_path), entry.built_at)
+        rc = _write_header_built(Path(header_path), entry.built_at, entry.code_commit)
         if rc:
             return rc
     # stdout carries the one value the build must copy verbatim; the human line goes to stderr, so
@@ -273,8 +326,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _write_header_built(header: Path, built_at: str) -> int:
-    """Put `built_at` in the header fragment's `built`. Returns a non-zero exit on failure.
+def _write_header_built(header: Path, built_at: str, commit: str | None = None) -> int:
+    """Put `built_at` in the header fragment's `built`, and the stamped pin in its `commit`.
+
+    Returns a non-zero exit on failure.
+
+    The `commit` half exists because the pin was the one field a build hand-wrote and nothing
+    checked. `stamp` computes it from git — including the `-dirty` suffix `method.md` requires —
+    so writing it here is the only way the header and the provenance file cannot disagree.
 
     The alternative, and what builds actually did, is a `python3 - <<'PY'` heredoc that json-loads
     the fragment, sets one string and dumps it back — a hand-written map write in the middle of the
@@ -294,8 +353,14 @@ def _write_header_built(header: Path, built_at: str) -> int:
         return 2
     was = data.get("built")
     data["built"] = built_at
+    changed = [f"built {was!r} -> {built_at!r}"]
+    if commit is not None:
+        was_commit = data.get("commit")
+        if was_commit != commit:
+            data["commit"] = commit
+            changed.append(f"commit {was_commit!r} -> {commit!r}")
     header.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"header {header.name}: built {was!r} -> {built_at!r}", file=sys.stderr)
+    print(f"header {header.name}: " + "; ".join(changed), file=sys.stderr)
     return 0
 
 

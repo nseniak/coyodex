@@ -379,13 +379,60 @@ def test_a7_is_not_applicable_when_no_reconcile_file_was_produced():
     assert (a.observed, a.of, a.score) == (0, 0, None)
 
 
+#: An audit read whose captured output REACHED the L2 worklist. Assertion 8's banner governs that
+#: section only, so this is the shape it may judge.
+_AUDIT_L2 = ("L1 self-contradiction findings (0):\n\nL2 grounding worklist (12 claims to disprove):\n"
+             "  (batching these? read `coyodex audit --json` — never parse this text)\n"
+             "  1. Rule 'X' is enforced at a.py:3\n  2. Rule 'Y' is enforced at b.py:9")
+#: An audit read that stopped inside the L1 findings block — the human-facing half, with no `--json`
+#: consumer. Nine such reads were penalised on one build for a rule that does not reach them.
+_AUDIT_L1 = "L1 self-contradiction findings (3):\n\n[1] ADVISORY — dependency-phrasing"
+#: The heading and its banner, with no claim row — a window that stopped at the top of the worklist.
+_AUDIT_HEADING_ONLY = ("L1 self-contradiction findings (0):\n\nL2 grounding worklist (12 claims):\n"
+                       "  (batching these? read `coyodex audit --json` — never parse this text)")
+
+
 def test_a8_wants_json_and_penalises_paging_the_human_report():
-    good = score(make_turn(0, make_bash("coyodex audit m.json --json > claims.json")))[8]
+    good = score(make_turn(0, make_bash("coyodex audit m.json --json > claims.json", uid="g"),
+                           results=(("g", _AUDIT_L2),)))[8]
     assert (good.observed, good.of, good.score) == (1, 1, 1.0)
-    paged = score(make_turn(0, make_bash("coyodex audit m.json --json | head -40")))[8]
+    paged = score(make_turn(0, make_bash("coyodex audit m.json --json | head -40", uid="p"),
+                            results=(("p", _AUDIT_L2),)))[8]
     assert (paged.observed, paged.of) == (0, 1)
-    human = score(make_turn(0, make_bash("coyodex audit m.json | sed -n '1,50p'")))[8]
+    human = score(make_turn(0, make_bash("coyodex audit m.json | sed -n '1,50p'", uid="h"),
+                            results=(("h", _AUDIT_L2),)))[8]
     assert (human.observed, human.of) == (0, 1)
+
+
+def test_8_does_not_judge_a_read_that_never_reached_the_worklist():
+    """The banner sits under the L2 heading. A window over the L1 findings block is a read of the
+    human-facing half, which has no machine-readable form to prefer — and a build reconciling
+    advisories one at a time has to page it. All nine reads this assertion penalised on the
+    2026-08-20 argus build were of that block."""
+    turns = (make_turn(0, make_bash("coyodex audit m.json | head -40", uid="a"),
+                       results=(("a", _AUDIT_L1),)),
+             make_turn(2, make_bash("coyodex audit m.json | sed -n '1,20p'", uid="b"),
+                       results=(("b", _AUDIT_L1),)))
+    a = P.assert_8_audit_read_as_json(turns)
+    assert (a.observed, a.of) == (0, 0), a
+    assert "L1 findings block" in a.note
+
+
+def test_8_does_not_judge_a_window_that_stopped_at_the_worklist_heading():
+    """Printing `L2 grounding worklist (…)` and its own "never parse this text" banner is a reader
+    SEEING the banner, not a reader parsing the worklist. Matching the heading alone over-counted
+    this build by half."""
+    a = P.assert_8_audit_read_as_json(
+        (make_turn(0, make_bash("coyodex audit m.json | head -12", uid="x"),
+                   results=(("x", _AUDIT_HEADING_ONLY),)),))
+    assert (a.observed, a.of) == (0, 0), a
+
+
+def test_8_does_not_judge_a_read_whose_output_was_not_captured():
+    """An unmeasurable read is not a violation. Guessing which half a window covered, from the
+    window arithmetic alone, is how this assertion got it wrong in the other direction."""
+    a = P.assert_8_audit_read_as_json((make_turn(0, make_bash("coyodex audit m.json | head -40")),))
+    assert (a.observed, a.of) == (0, 0), a
 
 
 # --- assertion 9 ----------------------------------------------------------------------
@@ -779,35 +826,75 @@ def make_result_turn(index: int, stamp: str, uid: str) -> Turn:
                 tool_results=(ToolResult(tool_use_id=uid, content="done"),))
 
 
+def _agent(uid: str, stamp: str = "") -> ToolCall:
+    return ToolCall(name="Agent", input={"description": uid}, id=uid, timestamp=stamp)
+
+
+def _ctx16(**seconds: float) -> P.ScoreContext:
+    """Real per-agent runtimes, keyed by the dispatching call's id — what `.meta.json`'s `toolUseId`
+    joins on. These CANNOT come from the lead's transcript: an async dispatch's `tool_result` is the
+    launch acknowledgement, so timing a call against its result measures streaming latency. Three
+    bugs and two builds' worth of a fake 1.00 came from pretending otherwise."""
+    return P.ScoreContext(agent_durations=dict(seconds))
+
+
 def test_16_flags_the_slowest_slice_dispatched_last():
-    def agent(uid: str) -> ToolCall:
-        return ToolCall(name="Agent", input={"description": uid}, id=uid)
     turns = (
-        make_timed_turn(0, "2026-08-01T08:00:00Z", agent("a")),
-        make_timed_turn(1, "2026-08-01T08:00:10Z", agent("b")),
-        make_timed_turn(2, "2026-08-01T08:00:20Z", agent("c")),   # dispatched last, runs longest
-        make_result_turn(3, "2026-08-01T08:05:00Z", "a"),
-        make_result_turn(4, "2026-08-01T08:05:10Z", "b"),
-        make_result_turn(5, "2026-08-01T08:20:00Z", "c"),
+        make_timed_turn(0, "2026-08-01T08:00:00Z", _agent("a"), _agent("b"), _agent("c")),
     )
-    a = P.score_turns(turns).by_id()[16]
+    a = P.score_turns(turns, ctx=_ctx16(a=300.0, b=310.0, c=1200.0)).by_id()[16]
     assert (a.observed, a.of) == (0, 1)
     assert a.evidence[0].detail["dispatched"] == 3
+    assert a.evidence[0].detail["agent"] == "c"
+    assert a.evidence[0].detail["minutes"] == 20.0
 
 
 def test_16_passes_when_the_slowest_goes_first():
-    def agent(uid: str) -> ToolCall:
-        return ToolCall(name="Agent", input={"description": uid}, id=uid)
     turns = (
-        make_timed_turn(0, "2026-08-01T08:00:00Z", agent("a")),   # longest, dispatched first
-        make_timed_turn(1, "2026-08-01T08:00:10Z", agent("b")),
-        make_timed_turn(2, "2026-08-01T08:00:20Z", agent("c")),
-        make_result_turn(3, "2026-08-01T08:20:00Z", "a"),
-        make_result_turn(4, "2026-08-01T08:05:10Z", "b"),
-        make_result_turn(5, "2026-08-01T08:05:20Z", "c"),
+        make_timed_turn(0, "2026-08-01T08:00:00Z", _agent("a"), _agent("b"), _agent("c")),
     )
-    a = P.score_turns(turns).by_id()[16]
+    a = P.score_turns(turns, ctx=_ctx16(a=1200.0, b=310.0, c=300.0)).by_id()[16]
     assert (a.observed, a.of) == (1, 1)
+
+
+def test_16_can_fail_a_fanout_sent_as_one_message():
+    """The bug that made this assertion unfailable. A fan-out is ONE message by `method.md`'s rule,
+    so every launch shared a turn index; the old code ranked with `order.index(...)` over those
+    indices, got 0 every time, and could not report a straggler. 4 of the 5 fan-outs on the build
+    that exposed it were unfailable by construction, and it scored 5/5."""
+    turns = (make_timed_turn(0, "2026-08-01T08:00:00Z",
+                             *[_agent(c) for c in "abcdefghijklm"]),)
+    slow = {c: 100.0 for c in "abcdefghijklm"}
+    slow["j"] = 400.0                                   # 10th of 13 — inside the last third
+    a = P.score_turns(turns, ctx=_ctx16(**slow)).by_id()[16]
+    assert (a.observed, a.of) == (0, 1), a
+    assert a.evidence[0].detail["dispatched"] == 10
+    assert a.evidence[0].detail["of"] == 13
+
+
+def test_16_is_na_without_the_per_agent_transcripts():
+    """A lead-transcript-only reading of this is what produced the fake number. `n/a` is the honest
+    answer; a guess is not."""
+    turns = (make_timed_turn(0, "2026-08-01T08:00:00Z", _agent("a"), _agent("b"), _agent("c")),
+             make_result_turn(1, "2026-08-01T08:05:00Z", "a"))
+    a = P.score_turns(turns).by_id()[16]
+    assert (a.observed, a.of) == (0, 0)
+    assert "per-agent" in a.note
+
+
+def test_16_does_not_time_a_call_by_its_turn():
+    """`ToolCall.timestamp` exists because ten calls in one response share the Turn's stamp. The old
+    grouping read the Turn's, so a batch looked simultaneous and its "durations" were the
+    acknowledgement latencies, rising with dispatch position."""
+    turns = (make_timed_turn(0, "2026-08-01T08:00:00Z",
+                             _agent("a", "2026-08-01T08:00:00Z"),
+                             _agent("b", "2026-08-01T08:00:02Z"),
+                             _agent("c", "2026-08-01T08:00:04Z")),)
+    groups = P._fanout_groups(turns)
+    assert len(groups) == 1 and len(groups[0]) == 3
+    assert [d.position for d in groups[0]] == [0, 1, 2]
+    assert [d.started for d in groups[0]] == sorted(d.started or 0 for d in groups[0])
+    assert len({d.started for d in groups[0]}) == 3, "each call keeps its own execution time"
 
 
 def test_17_flags_a_drift_exception_recorded_without_opening_the_file():
@@ -1631,9 +1718,11 @@ def test_8_does_not_flag_the_batches_summary():
     """`--batches` writes the claim FILES; its stdout is a summary, so paging it hides nothing and
     `--json` is meaningless for it. A build that ran the JSON form and the batches form in one turn
     scored 1/2 for the second."""
-    turns = (make_turn(1, make_bash("coyodex audit m.json --json > worklist.json")),
+    turns = (make_turn(1, make_bash("coyodex audit m.json --json > worklist.json", uid="j"),
+                       results=(("j", _AUDIT_L2),)),
              make_turn(3, make_bash("coyodex audit m.json --batches .coyodex/verify --cap 40 "
-                                    "2>&1 | tail -20")))
+                                    "2>&1 | tail -20", uid="b"),
+                       results=(("b", _AUDIT_L2),)))
     a = P.assert_8_audit_read_as_json(turns)
     assert (a.observed, a.of) == (1, 1), a
 
@@ -1810,7 +1899,9 @@ def test_8_batches_skip_does_not_erase_a_paged_read_chained_beside_it():
     """Skipping the whole Bash call let a paged human-report read hide behind a `--batches` run
     chained after it — and two audit forms in one turn is the observed shape."""
     turns = (make_turn(1, make_bash("coyodex audit m.json | head -40; "
-                                    "coyodex audit m.json --batches .coyodex/verify --cap 40")),)
+                                    "coyodex audit m.json --batches .coyodex/verify --cap 40",
+                                    uid="c"),
+                       results=(("c", _AUDIT_L2),)),)
     a = P.assert_8_audit_read_as_json(turns)
     assert (a.observed, a.of) == (0, 1), a
 
@@ -2477,3 +2568,43 @@ def test_assertion_40_counts_only_real_lint_invocations():
     assert (a.observed, a.of) == (1, 2), a
     empty = P.assert_40_no_subagent_narrowed_its_own_lint((), P.ScoreContext())
     assert empty.of == 0 and "no per-agent transcripts" in (empty.note or ""), empty
+
+
+# --- a score whose DENOMINATOR collapsed is not a movement -------------------------
+# A score is observed/of. When `of` collapses the score can rise while the evidence disappears:
+# assertion 35 went `39 of 41` to `1 of 1` between two builds, and a retrospective read it as a
+# defect "fixed and proven". 19 of that build's 37 assertions carried one observation or none.
+
+def _card(label: str, rows: list[tuple[int, str, int, int]]) -> P.Scorecard:
+    return P.Scorecard(transcript=label, turns=10, label=label, assertions=tuple(
+        P.Assertion(i, name, observed, of) for i, name, observed, of in rows))
+
+
+def test_the_diff_flags_a_score_that_rose_on_a_collapsed_denominator():
+    before = _card("before", [(35, "no relative map path", 39, 41)])
+    after = _card("after", [(35, "no relative map path", 1, 1)])
+    row = P.diff(before, after)[0]
+    assert row.direction == "up"
+    assert row.thin == "denominator 41 -> 1"
+    out = P.format_diff(before, after)
+    assert "THIN" in out and "41 -> 1" in out
+
+
+def test_a_denominator_that_merely_shrank_a_little_is_not_thin():
+    before = _card("before", [(9, "no advisory waved through", 20, 22)])
+    after = _card("after", [(9, "no advisory waved through", 18, 20)])
+    assert P.diff(before, after)[0].thin == ""
+    assert "THIN" not in P.format_diff(before, after)
+
+
+def test_a_denominator_that_fell_by_four_times_is_thin_even_above_one():
+    before = _card("before", [(27, "no hand script", 40, 48)])
+    after = _card("after", [(27, "no hand script", 10, 12)])
+    assert P.diff(before, after)[0].thin == "denominator 48 -> 12"
+
+
+def test_an_assertion_that_went_na_is_not_reported_as_thin():
+    """`n/a` already says the run held no opportunity — that is the honest answer, not a caveat."""
+    before = _card("before", [(36, "exit code not read through a pipe", 14, 14)])
+    after = _card("after", [(36, "exit code not read through a pipe", 0, 0)])
+    assert P.diff(before, after)[0].thin == ""

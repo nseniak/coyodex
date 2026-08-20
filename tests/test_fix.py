@@ -1558,3 +1558,63 @@ def test_a_field_the_row_does_not_have_is_refused_rather_than_invented():
     with tempfile.TemporaryDirectory() as tmp:
         d = _frag_dir(tmp, _entity_doc())
         assert main(["row", "--fragments", d, "--id", "E1", "--set-json-staets", "[]"]) == 2
+
+
+# --- addressing an EDGE, which carries no id ---------------------------------------
+# A fragment edge's identity is its `(src, verb, dst)` triple, so `--id` could never reach one. That
+# is the whole reason three heredocs on one build rewrote an edge's `why` by hand — two turns after
+# using `fix row` correctly on a component. The verb existed; the ADDRESS did not.
+
+def _edge_fragment(tmp: Path, why: str = "reads the settings") -> Path:
+    d = tmp / "build-fragments"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "t1.json").write_text(json.dumps({
+        "components": [{"id": "C1", "name": "A", "purpose": "does a thing.",
+                        "files": ["a.py"], "source": "a.py:1"},
+                       {"id": "C2", "name": "B", "purpose": "does another thing.",
+                        "files": ["b.py"], "source": "b.py:1"}],
+        "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": why, "where": "a.py:9"}],
+    }), encoding="utf-8")
+    return d
+
+
+def _edge_why(d: Path) -> str:
+    doc = json.loads((d / "t1.json").read_text(encoding="utf-8"))
+    return doc["edges"][0]["why"]
+
+
+def test_an_edge_why_is_addressable_by_its_triple(tmp_path: Path) -> None:
+    from coyodex.fix import main
+    d = _edge_fragment(tmp_path)
+    assert main(["row", "--fragments", str(d), "--edge", "C1:calls:C2",
+                 "--set-why", "hands the request on"]) == 0
+    assert _edge_why(d) == "hands the request on"
+
+
+def test_a_triple_that_matches_nothing_is_refused_not_guessed(tmp_path: Path) -> None:
+    from coyodex.fix import main
+    d = _edge_fragment(tmp_path)
+    assert main(["row", "--fragments", str(d), "--edge", "C1:reads:C2", "--set-why", "x"]) == 2
+    assert _edge_why(d) == "reads the settings", "nothing may be written on a failed resolve"
+
+
+def test_a_malformed_triple_is_a_usage_error(tmp_path: Path) -> None:
+    from coyodex.fix import main
+    d = _edge_fragment(tmp_path)
+    assert main(["row", "--fragments", str(d), "--edge", "C1:calls", "--set-why", "x"]) == 2
+    assert main(["row", "--fragments", str(d), "--edge", "C1::C2", "--set-why", "x"]) == 2
+
+
+def test_id_and_edge_are_not_combinable(tmp_path: Path) -> None:
+    """They address different things; guessing which one the caller meant is the failure mode every
+    other resolver here refuses."""
+    from coyodex.fix import main
+    d = _edge_fragment(tmp_path)
+    assert main(["row", "--fragments", str(d), "--id", "C1", "--edge", "C1:calls:C2",
+                 "--set-why", "x"]) == 2
+
+
+def test_neither_id_nor_edge_is_a_usage_error(tmp_path: Path) -> None:
+    from coyodex.fix import main
+    d = _edge_fragment(tmp_path)
+    assert main(["row", "--fragments", str(d), "--set-why", "x"]) == 2

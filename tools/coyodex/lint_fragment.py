@@ -14,7 +14,8 @@ import re
 import sys
 from pathlib import Path
 
-from coyodex import grammar
+from coyodex import grammar, provenance
+from coyodex.reporting import shown
 from coyodex.assemble import load_fragment
 from coyodex.model import ID_SHAPE, ModelError, ProjectModel, access_rules, all_elements
 from coyodex.validate_model import (
@@ -186,7 +187,33 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
         roots = [repo_root.resolve()]
         problems += check_anchor_existence_model(m, roots)
         problems += check_entity_sources_model(m, roots)
+        problems += _check_pin_matches_the_tree(m, repo_root)
     return problems
+
+
+def _check_pin_matches_the_tree(m: ProjectModel, repo_root: Path) -> list[str]:
+    """A header fragment claiming a bare sha while the working tree carries uncommitted code.
+
+    `method.md` requires `<short-sha>-dirty` when the operator proceeds on a dirty tree, and
+    `dispatch.md` reads the suffix back. Nothing wrote it and nothing checked it, so a build that had
+    been offered — and had accepted — a `-dirty` pin hand-wrote the bare sha, passed this very lint
+    clean, and shipped a map whose anchors do not resolve at the commit it names. Nine of its ten
+    anchors into one file another session edited mid-build point at the wrong lines today.
+
+    Needs `--repo`, because the tree is the evidence. Silent where git cannot answer, where the
+    fragment carries no pin, and where the pin is already suffixed — the failure mode of a check that
+    guesses about a repo it cannot read is worse than the gap it closes."""
+    pin = (m.commit or "").strip()
+    if not pin or pin.endswith("-dirty"):
+        return []
+    dirty = provenance.dirty_paths(repo_root)
+    if not dirty:
+        return []
+    listed = shown(list(dirty), 5, unit="path(s)")
+    return [f"header pin `{pin}` says the map describes commit {pin}, but {len(dirty)} path(s) are "
+            f"changed and not committed: {listed}. Either commit them and re-stamp, or record the pin "
+            f"as `{pin}-dirty` (method.md) — `coyodex provenance stamp --update-header <header>` "
+            f"writes the suffix for you. coyodex's own .coyodex/ and .coyodex-eval/ do not count."]
 
 
 def _legacy_security_warnings(m: ProjectModel) -> list[str]:
