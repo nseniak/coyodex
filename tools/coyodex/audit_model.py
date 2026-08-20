@@ -24,7 +24,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, TypeVar
 
 from coyodex import balance_lib, prose, records, grammar
 from coyodex.anchors import FILEREF as _FILEREF
@@ -1203,7 +1203,10 @@ def _opt_value(argv: list[str], flag: str) -> str | None:
     return None
 
 
-def _even_chunks(items: list[WorkItem], cap: int) -> list[list[WorkItem]]:
+_Chunkable = TypeVar("_Chunkable")
+
+
+def _even_chunks(items: list[_Chunkable], cap: int) -> list[list[_Chunkable]]:
     """`items` split into the FEWEST batches of at most `cap`, sized as evenly as they go.
 
     A greedy `[i:i+cap]` walk obeys the cap and produces a degenerate tail: `--cap 40` cut a 42-claim
@@ -1218,7 +1221,7 @@ def _even_chunks(items: list[WorkItem], cap: int) -> list[list[WorkItem]]:
         return [items] if items else []
     n = -(-len(items) // cap)                 # ceil: the fewest batches that respect the cap
     base, extra = divmod(len(items), n)
-    out: list[list[WorkItem]] = []
+    out: list[list[_Chunkable]] = []
     start = 0
     for i in range(n):
         size = base + (1 if i < extra else 0)

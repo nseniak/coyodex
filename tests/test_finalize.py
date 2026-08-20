@@ -770,7 +770,11 @@ def test_finalize_says_so_when_the_whole_surface_survived():
         report = _finalize_with_baseline(Path(td), _AUTH, _AUTH)
     leg = next(l for l in report.legs if l.name == "access baseline")
     assert not leg.advisory, leg
-    assert "still named by an access rule" in leg.note
+    # `Leg.note` is optional by design — a leg that RAN with nothing to say carries None. Binding it
+    # makes the failure name the missing note rather than an AttributeError two frames down.
+    note = leg.note
+    assert note is not None, leg
+    assert "still named by an access rule" in note
 
 
 def test_the_leg_is_absent_when_no_baseline_is_given():
@@ -797,7 +801,9 @@ def test_an_unreadable_baseline_is_INCOMPLETE_not_a_pass():
         report = build_report(cur, tmp, [], bad)
     leg = next(l for l in report.legs if l.name == "access baseline")
     assert leg.status == FAILED
-    assert "could not be read" in leg.note
+    note = leg.note
+    assert note is not None, leg
+    assert "could not be read" in note
     # A FAILED leg forces INCOMPLETE unless something BLOCKS — the verdict order is blocking first,
     # then incomplete, because a blocking problem is known and an unrun leg is unknown.
     assert report.verdict in ("BLOCKED", "INCOMPLETE"), report.verdict
