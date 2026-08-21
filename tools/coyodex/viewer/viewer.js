@@ -34,7 +34,6 @@ let FEATURES = {};            // the whole bundle (see coyodex.features.as_bundl
 let FEAT_BY_ID = {};          // feature id -> its facts
 let FEAT_COVERAGE = {};       // how much of the code the feature layer reaches
 let COMP_FEATURES = {};       // component id -> the feature ids whose use-case walks pass through it
-let ROLE_FEATURES = {};       // role id -> {feature id: how many of its use cases this role drives}
 let DEPLOYMENT_GROUP_CARDS;   // product-area container id -> its members' diagram (the container drill)
 let DEPLOYMENT_GROUP_MEMBERS; // product-area container id -> the unit names inside it
 let DEPLOYMENT_EDGES;      // process->process arrow 'U_a>U_b' -> [async channels it carries]
@@ -63,6 +62,8 @@ let HAS_SUBDOMAINS;  // domain model grouped into subdomains -> Domain view lead
 let HAS_HP;
 let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
 let HAS_USECASES;    // gates the Use Cases tab (any use-case node present)
+let HAS_ACTORS;      // gates the Actors tab (any actor node present)
+let HAS_GOAL;        // gates the Goal tab (the SYS node carries a product description)
 let HAS_SYSTEM;      // gates the System tab (any operational/reference collection present)
 let HAS_DATA;        // gates the Data tab (any physical store present in data_view)
 let DATA_VIEW;       // the store-centric Data-view payload (GRAPH.data_view)
@@ -114,6 +115,8 @@ function applyBundle(b) {
                                       // code-pane elements are bound.
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
+  HAS_ACTORS = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'human' || n.kind === 'service');
+  HAS_GOAL = !!((GRAPH.nodes && GRAPH.nodes.SYS && (GRAPH.nodes.SYS.fields || {}).Overview) || '').trim();
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
   // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
   COMPLETENESS = GRAPH.completeness || {};
@@ -123,7 +126,6 @@ function applyBundle(b) {
   for (const f of (FEATURES.features || [])) FEAT_BY_ID[f.id] = f;
   FEAT_COVERAGE = FEATURES.coverage || {};
   COMP_FEATURES = FEATURES.componentFeatures || {};
-  ROLE_FEATURES = FEATURES.roleFeatures || {};
   CAP_OF_UC = {};
   for (const n of Object.values(GRAPH.nodes || {})) {
     if (n.kind === 'usecase' && n.parent && (GRAPH.nodes[n.parent] || {}).kind === 'capability') {
@@ -334,6 +336,169 @@ function featureName(fid) {
 }
 // Any element id in its readable form. Names on screen, ids only in the markup.
 function elName(id) { return (GRAPH.nodes[id] || {}).name || id; }
+
+// ── THE ELEMENT CARD ──────────────────────────────────────────────────────────────────────────────
+// ONE card design for every element, in every place an element is shown: a card list, a group of
+// cards, or the info pane beside a diagram. Before this the file held five card-ish shapes that had
+// drifted apart, so "make cards a bit denser" meant five edits and four of them got forgotten.
+//
+// A card is SYNTHETIC on purpose. Title and description carry it; anything else has to earn its line,
+// because a card's whole job is to survive being stacked twenty deep without drowning the reader.
+// "Stored" on an entity earns it. A component's file list does not.
+//
+// Its two actions are fixed, so they mean the same thing wherever a card appears:
+//   click the card       -> DRILL IN   (a container opens its contents, a leaf opens its details)
+//   click the type pill  -> SHOW IN CONTEXT (the element's home view, focused on it)
+
+// The reader's word for each element type. ONE map: the card's type pill, the info pane's pill and the
+// search badge all read it, so the product's vocabulary changes in one place. Three copies of this map
+// used to exist and two of them disagreed.
+const ELEMENT_LABEL = {
+  capability: 'feature', usecase: 'use case', human: 'actor', service: 'actor',
+  component: 'component', subsystem: 'subsystem', entity: 'entity', subdomain: 'subdomain',
+  dep: 'dependency', process: 'process', rule: 'business rule', block: 'decision area',
+  system: 'system',
+};
+function elementLabel(kind) { return ELEMENT_LABEL[kind] || kind || ''; }
+
+// The one sentence a card leads with, per element type. Every type stores its description under its own
+// field name, and reading the wrong one is the difference between a card that says something and a card
+// that is blank — so the mapping lives here rather than at each call site.
+const CARD_DESC_FIELD = {
+  capability: ['Purpose'], usecase: ['Trigger → Outcome'], human: ['Wants'], service: ['Wants'],
+  component: ['Purpose'], subsystem: ['Purpose'], subdomain: ['Purpose'], block: ['Purpose'],
+  entity: ['Meaning'], dep: ['Used for', 'Type'], process: ['Runs on'], rule: ['Decision'],
+  system: ['Overview'],
+};
+
+// What a card SAYS about one element: title, the reader's word for its type, the one sentence, and the
+// few extra pills its type earns.
+function cardFacts(id) {
+  const n = GRAPH.nodes[id];
+  if (!n) return null;
+  const f = n.fields || {};
+  let desc = (CARD_DESC_FIELD[n.kind] || []).map((k) => f[k]).find((v) => (v || '').trim()) || '';
+  // A map that gives a rule no short name of its own uses the whole statement as the title, and the
+  // description field then holds the same words. One copy, not two.
+  if (desc.trim() === (n.name || '').trim()) desc = '';
+  const pills = [];
+  // A feature's weight, an actor's nature and a dependency's kind are each one word that changes how the
+  // rest of the card reads, so each rides beside the type pill rather than eating the description.
+  if (n.kind === 'capability' && f.Label) pills.push({ text: f.Label, cls: 'uc-lab-' + f.Label.toLowerCase() });
+  if (n.kind === 'human' || n.kind === 'service') pills.push({ text: n.kind, cls: 'ecard-pill-' + n.kind });
+  if (n.kind === 'dep' && f.Kind) pills.push({ text: f.Kind, cls: '' });
+  return { id, kind: n.kind, name: n.name || id, type: elementLabel(n.kind), desc, pills };
+}
+
+// An entity's card earns one extra line: WHERE it is kept. The spec names this case, and it is the one
+// fact about an entity a reader wants without opening anything.
+function cardExtraHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || n.kind !== 'entity' || !n.store) return '';
+  const where = [(GRAPH.nodes[n.store.dep] || {}).name, n.store.container].filter(Boolean).join(' · ');
+  if (!where) return '';
+  return `<p class="ecard-extra"><span class="ecard-lbl">Stored</span> ${esc(where)}</p>`;
+}
+
+function cardPillsHtml(pills) {
+  return (pills || []).map((p) =>
+    `<span class="ecard-pill ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('');
+}
+
+// One card. `extra` is caller HTML appended to the pill row (a Happy-Path jump, a diff badge) — the few
+// things that belong to a context rather than to the element, and would be wrong baked into the card.
+function elementCardHtml(id, opts) {
+  const c = cardFacts(id);
+  if (!c) return '';
+  const o = opts || {};
+  const desc = o.desc !== undefined ? o.desc : c.desc;
+  return `<article class="ecard" data-id="${esc(id)}" tabindex="0">`
+    + '<div class="ecard-head">'
+    + `<span class="ecard-name">${esc(o.name || c.name)}</span>`
+    + `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
+    + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`
+    + cardPillsHtml(c.pills) + (o.extra || '')
+    + '</div>'
+    + (desc ? `<p class="ecard-desc">${mdInline(desc)}</p>` : '')
+    + cardExtraHtml(id)
+    + '</article>';
+}
+
+// A card for something that is NOT a map element: a System collection, a kind of way in, the use cases
+// belonging to no feature. Same shape and same look as the element card, because a reader should not
+// have to learn two card designs — but no type pill and no element actions, because it has neither.
+function plainCardHtml(o) {
+  return `<article class="ecard" data-key="${esc(o.key)}" tabindex="0">`
+    + '<div class="ecard-head">'
+    + `<span class="ecard-name">${esc(o.name)}</span>`
+    + (o.pill || '')
+    + (o.count ? `<span class="ecard-pill">${esc(o.count)}</span>` : '')
+    + '</div>'
+    + (o.desc ? `<p class="ecard-desc">${esc(o.desc)}</p>` : '')
+    + '</article>';
+}
+function bindPlainCards(root, onOpen) {
+  root.querySelectorAll('.ecard[data-key]').forEach((card) => {
+    const open = () => onOpen(card.getAttribute('data-key'));
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(); });
+  });
+}
+
+// A CARD LIST: element cards stacked vertically. `per` lets a caller add its own per-card extras.
+function elementCardListHtml(ids, per) {
+  if (!ids || !ids.length) return '';
+  return `<div class="ecard-list">${ids.map((id) =>
+    elementCardHtml(id, per ? per(id) : null)).join('')}</div>`;
+}
+
+// A CARD GROUP LIST: cards laid out across then down, for choosing rather than reading.
+function elementCardGridHtml(ids, per) {
+  if (!ids || !ids.length) return '';
+  return `<div class="ecard-grid">${ids.map((id) =>
+    elementCardHtml(id, per ? per(id) : null)).join('')}</div>`;
+}
+
+// DRILL IN: a container opens its contents in their home view; a leaf opens its own details. The one
+// answer to "what happens when I click this element", so every card list behaves the same.
+function drillInto(id) {
+  const n = GRAPH.nodes[id];
+  if (!n) return;
+  switch (n.kind) {
+    case 'capability': return go({ kind: 'capability', cap: id });
+    case 'usecase': return go({ kind: 'usecase', uc: id });
+    case 'human': case 'service': return go({ kind: 'actor', act: n.name });
+    case 'subsystem': return go({ kind: 'subsystem', sid: id });
+    case 'subdomain': return go({ kind: 'domsub', sd: id });
+    case 'block': return go({ kind: 'rules', blk: id });
+    case 'rule': return go({ kind: 'rule', br: id });
+    case 'process': return go({ kind: 'deploymentUnit', unit: n.unit });
+    default: return go({ kind: 'element', id });   // component, entity, dependency: their details page
+  }
+}
+// SHOW IN CONTEXT: the element's home view, focused on it. `selectTargetFor` is the one function that
+// answers which view that is; `selectFromTree` does the navigating and the focusing.
+function showInContext(id) { selectFromTree(id); }
+
+// Wire every card under `root`. One binder, so the two actions cannot differ between two card lists.
+function bindElementCards(root, onDrill) {
+  root.querySelectorAll('.ecard-type[data-ctx]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();               // the pill's action is not the card's
+    showInContext(b.getAttribute('data-ctx'));
+  }));
+  root.querySelectorAll('.ecard[data-id]').forEach((card) => {
+    const open = (ev) => {
+      // The pill has its own action, and so does anything the CALLER put in the card (a Happy-Path
+      // jump). Neither is the card's drill, and a click on one must not fire both.
+      if (ev.target.closest('.ecard-type') || ev.target.closest('[data-card-own]')) return;
+      const id = card.getAttribute('data-id');
+      if (onDrill) onDrill(id); else drillInto(id);
+    };
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(ev); });
+  });
+}
+
 // Reverse traceability ("Used in UC"): element id -> Set of use-case ids whose T6 flow steps through
 // it. The backward view of the flows (derived here, never authored), shown as links on a node's panel.
 // Sub-flow references are EXPANDED: an element touched only inside a shared sub-flow is used by every
@@ -1476,9 +1641,10 @@ const ROLE_LABEL = { datastore: 'store', messaging: 'bus', service: 'service', s
 // whole story. Kind + bucket drop from the field rows below (shown here); roles are edge-derived, not a field.
 //: The reader's word for a node kind where the internal one would leak — the pane's pill is the one
 //: place the raw `kind` string reaches the screen.
-const KIND_LABEL = { dep: 'dependency', block: 'decision area', rule: 'business rule' };
+//: ONE vocabulary, in ELEMENT_LABEL beside the card. The pane pill, the card's type pill and the
+//: search badge each used to carry their own copy of this map, and two of the three disagreed.
 function kindPills(n) {
-  const type = KIND_LABEL[n.kind] || n.kind;
+  const type = elementLabel(n.kind);
   const sub = n.kind === 'dep' && n.fields ? n.fields.Kind : '';
   const bucket = n.kind === 'dep' && n.fields ? n.fields.Bucket : '';
   const roles = (n.kind === 'dep' && Array.isArray(n.roles)) ? n.roles : [];
@@ -2519,6 +2685,8 @@ const GROUP_LABEL = {};     // group id -> its label, from VIEW_GROUPS
 const groupLast = {};
 const VIEW_LABEL = {};   // view id -> its tab label, filled from the buttons at boot (one source)
 const VIEW_Q = {
+  goal: 'What is this product for, and who is it for?',
+  actors: 'Who and what drives this product, and what can each of them do?',
   hp: 'What does this system do, end to end?',
   usecases: 'What can this product do, feature by feature?',
   container: 'How is the code organised, and what depends on what?',
@@ -2694,7 +2862,6 @@ function viewNotes(view) {
 // answer inline beside it ("What can each role do?"), which put view questions in two places; this is
 // the one place they live.
 function viewQuestion(view) {
-  if (view === 'usecases' && HAS_CAPABILITIES && ucGroupBy() === 'actor') return 'What can each role do?';
   return VIEW_Q[view] || '';
 }
 function viewIntroHtml(view) {
@@ -4875,6 +5042,30 @@ function showViewIntro(s) {
   const top = topLevelView(s);
   panel.innerHTML = top ? viewIntroHtml(top) : EMPTY_PANEL;
 }
+// The views that are TEXT, not a diagram: a card list, a grid of cards, or an element's details. Per
+// the spec these carry no info pane — they put their title and their question at the top of the page
+// itself, and the pane beside a page of prose only ever repeated it.
+// NOT the legend's `TEXT_VIEWS` above, which asks a different question ("does this view draw shapes
+// worth a legend") and is keyed by TOP-LEVEL view. This one is keyed by STATE KIND, because a use-case
+// FLOW lives under the Features tab and is a diagram with a pane, while its sibling states are pages.
+const TEXT_PAGES = new Set(['goal', 'actors', 'usecases', 'capability', 'actor',
+  'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element']);
+// Show or hide the info pane (and the handle that resizes it) for the state being rendered.
+function syncInfoPane(s) {
+  const text = TEXT_PAGES.has(s.kind);
+  panel.hidden = text;
+  const split = document.getElementById('vsplit');
+  if (split) split.hidden = text;
+}
+// The title and the question every card list, card grid and details page leads with. The question is
+// the SAME string the info pane used to hold (VIEW_Q), read from one place, so a view cannot answer one
+// question in its pane and another on its page.
+function viewHeadHtml(title, question) {
+  return '<div class="view-head">'
+    + `<h2 class="view-title">${esc(title)}</h2>`
+    + (question ? `<p class="view-q">${esc(question)}</p>` : '')
+    + '</div>';
+}
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
   // Prepended AFTER the body so it leads the pane whatever the body wrote (including the deployment
@@ -4926,11 +5117,12 @@ function bindFor(s) {
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules') return kind;
+  if (kind === 'goal' || kind === 'actors') return kind;  // each is its own tab
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  if (kind === 'usecases' || kind === 'capability' || kind === 'actor' || kind === 'usecase'
-      || kind === 'unreached') return 'usecases';  // a feature's or an actor's use cases, a use case's flow, and the code no feature reaches, all live under the Features tab
+  if (kind === 'actor') return 'actors';   // one actor's use cases live under the Actors tab
+  if (kind === 'usecases' || kind === 'capability' || kind === 'usecase') return 'usecases';  // a feature's page and a use case's flow live under the Features tab
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup') return 'deployment';  // a process/container card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
@@ -4962,8 +5154,9 @@ function stateTitle(s) {
     const nm = GRAPH.nodes[s.cap] ? GRAPH.nodes[s.cap].name : s.cap;
     return s.act ? nm + ' · ' + s.act : nm;   // a grid cell names both axes it crossed
   }
-  if (s.kind === 'unreached') return 'Code no feature reaches';
   if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
+  if (s.kind === 'actors') return 'Actors';
+  if (s.kind === 'goal') return 'Goal';
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
   if (s.kind === 'deploymentUnit') return s.unit;
@@ -5000,10 +5193,13 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];
     return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;
   }
+  if (s.kind === 'goal') return [{ kind: 'goal' }];
+  if (s.kind === 'actors') return [{ kind: 'actors' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap, act: s.act }];  // one feature's use cases (a grid cell also carries the role)
-  if (s.kind === 'unreached') return [{ kind: 'usecases' }, { kind: 'unreached' }];  // the coverage line's drill
-  if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];        // …or one actor's
+  // An actor's use cases hang off the ACTORS tab now that actors have one of their own. Filed under
+  // Features they read as a second, competing answer to "what can this product do".
+  if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];
   // A use case sits UNDER the card it was listed on, so the trail reads Features › that card › the use
   // case — the same overview → group → member shape Subsystems and Entities already use. WHICH card is
   // not fixed: the overview has two axes, and a use case belongs to exactly one group on each. So the
@@ -5015,14 +5211,11 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     // `s.act` is the list the reader actually came through, set when the row was opened from an
     // actor's list. Falling back to a lookup only for a use case reached some other way (search, a
     // Happy Path step) while the actor axis happens to be on.
-    const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');
+    // `s.act` is the list the reader actually came through, set when the row was opened from an actor's
+    // list. Without it the crumb names the feature, which is where a use case lives by default.
+    const act = s.act || (HAS_CAPABILITIES ? '' : actorGroupOf(s.uc));
     const cap = HAS_CAPABILITIES ? (CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-') : '';
-    // On the GRID the reader came through a cell, which is one feature AND one role — so the middle
-    // crumb is that cell, not either axis alone. Clicking it reopens the list they were reading.
-    const mid = (ucGroupBy() === 'grid' && act && cap) ? { kind: 'capability', cap, act }
-      : ucGroupBy() === 'actor'
-      ? (act ? { kind: 'actor', act } : null)
-      : (cap ? { kind: 'capability', cap } : null);
+    const mid = act ? { kind: 'actor', act } : (cap ? { kind: 'capability', cap } : null);
     return mid ? [{ kind: 'usecases' }, mid, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
   }
@@ -5230,12 +5423,6 @@ function renderGlossary() {
 // this product do?" are different questions, and neither derives the other — replacing the actor
 // grouping with the capability one would have been a silent downgrade for anyone reading the map to
 // answer a permissions question. Only the heading key changes; rows, badges and behaviour do not.
-let UC_GROUP_BY = 'capability';   // 'capability' | 'actor' | 'grid'; falls back to actor on a map with none
-
-function ucGroupBy() {
-  // A map that never adopted capabilities has nothing to group by — never show an empty switch.
-  return HAS_CAPABILITIES ? UC_GROUP_BY : 'actor';
-}
 
 function actorTextOf(n) {
   return ((n.fields && n.fields.Actor) || (n.actors || []).join(', ') || 'Other').trim();
@@ -5427,32 +5614,25 @@ function featRuleNotes() {
   if (un > 0) {
     out.push(`${un} other rule${un === 1 ? '' : 's'} in this map ${un === 1 ? 'is' : 'are'} enforced `
       + 'where no use-case walk passes, so no feature could claim '
-      + (un === 1 ? 'it' : 'them') + '. Some may belong here.');
+      + (un === 1 ? 'it' : 'them') + '.');
   }
   if (FEATURES.ruleJoinUsesExtents === false) {
     out.push('This map carries no code index, so a rule was matched to a step only on an exact line. '
-      + 'The list below is a floor, not the whole answer.');
+      + 'Every feature\u2019s rule list is a floor, not the whole answer.');
   }
   return out;
 }
 function featRulesHtml(ids) {
-  const notes = featRuleNotes().map((n) => `<p class="feat-note">${esc(n)}</p>`).join('');
+  // No note here. What the rule JOIN could and could not reach is a fact about coyodex's own analysis,
+  // and the product views carry none of those: they all live together under System › About this map.
+  const notes = '';
   if (!ids.length) return notes + featEmpty('No rule this map records is enforced on this feature.');
   const groups = rulesByBlock(ids).map((g) => '<div class="feat-rulegroup">'
     + `<div class="feat-chipgroup-name">${esc(g.name)}</div>`
-    + '<ul class="uc-list">' + g.rules.map((r) => {
-      // A map that names its rules gets a short bold title with the decision under it. A map that does
-      // not (one live map names none) has the whole STATEMENT as the title — thirty words set bold is a
-      // wall, so it drops to normal weight. `ruleStatementLine` already draws that distinction: it
-      // returns '' exactly when the title IS the statement.
-      const line = ruleStatementLine(r);
-      return `<li class="uc-row featref" data-id="${esc(r.id)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name${line ? '' : ' uc-name-plain'}">`
-        + `${esc(ruleTitle(r))}</span></span>`
-        + (line ? `<span class="uc-to">${mdInline(line)}</span>` : '') + '</li>';
-    }).join('') + '</ul></div>').join('');
+    + elementCardListHtml(g.rules.map((r) => r.id)) + '</div>').join('');
   return notes + groups;
 }
+
 
 // The header: what this feature IS, in the three lines a reader needs before anything else. The label,
 // the purpose sentence, and who drives it. Nothing here is a count and nothing here folds open.
@@ -5489,14 +5669,22 @@ function featureSectionsHtml(capId) {
   html += featSection(secs, 'rules', 'What it decides',
     f.rules.length ? featCount(f.rules.length, 'rule', 'rules') : '',
     featRulesHtml(f.rules));
+  // The DATA MODEL is main implementation information, which the reader wants without drilling — so the
+  // entities are full cards, each carrying where it is stored, not a row of bare names.
   html += featSection(secs, 'ents', 'What it knows',
     f.entities.length ? featCount(f.entities.length, 'entity', 'entities') : '',
-    f.entities.length ? featChipGroupsHtml(f.entities)
+    f.entities.length ? elementCardListHtml(f.entities)
                       : featEmpty('No entity this map records is touched by its use cases.'));
+  // The CODE is the lowest-priority thing on this page: the reader wants the story first, the main
+  // implementation facts second, and the parts list a distant third. So it is the one section that
+  // arrives folded — its heading still states how many components there are, which is the fact worth
+  // scanning, and the names are one click away for the reader who actually wants them.
   html += featSection(secs, 'comps', 'What it runs on',
     f.components.length ? featCount(f.components.length, 'component', 'components') : '',
-    f.components.length ? featChipGroupsHtml(f.components)
-                        : featEmpty('No use-case walk here passes through a component.'));
+    f.components.length
+      ? '<details class="feat-fold"><summary>Show the parts</summary>'
+        + featChipGroupsHtml(f.components) + '</details>'
+      : featEmpty('No use-case walk here passes through a component.'));
   return { secs, html };
 }
 
@@ -5523,137 +5711,85 @@ function bindFeaturePage(root) {
 // click exist once and cannot drift between the lists.
 function renderUseCases(sel) {
   const groups = actorGroups();
-  const kindBadge = (kind) => {
-    const k = (kind || '').trim().toLowerCase();
-    if (k !== 'human' && k !== 'service') return '';
-    return `<span class="uc-kind uc-kind-${k}">${esc(k)}</span>`;
-  };
-  const pill = (uc) => {
-    // On the Happy Path? -> a "Happy Path" pill that jumps there (and lights this use case's step(s)).
-    // The label is the plain words, not the `HPn` position: the click already lands on the right step,
-    // so the number added nothing. No pill at all = off-spine.
-    if (!(HP_STEPS_BY_UC[uc] || []).length) return '';
-    return `<button type="button" class="uc-hp-pill" data-uc="${esc(uc)}"`
-      + ' title="On the Happy Path — click to jump there">Happy Path</button>';
-  };
-  // Which card's use cases this is. A feature's list is by definition grouped by capability and by
-  // exactly one of them; an actor's list likewise. `sel` null = the whole flat catalog, which only a
-  // map with no features ever renders.
+  // Which list this is. `{cap}` a feature's page, `{cap:'-'}` the use cases in no feature, `{actor}`
+  // one role's, and `null` the flat catalog a map with no features falls back to.
   const one = sel && sel.cap ? sel.cap : null;
   const oneActor = sel && sel.actor ? sel.actor : null;
-  const byCapability = one ? true : (oneActor ? false : ucGroupBy() === 'capability');
-  // A single feature, and the derived layer knows it: the list becomes that feature's PAGE. Reached
-  // through a grid cell it is scoped to one role too, and then the page header would describe the
-  // whole feature while the list below showed a slice of it — so the header is the feature's own page
-  // only, and a cell keeps the plain scoped list with its heading.
-  const page = (one && one !== '-' && !oneActor && FEAT_BY_ID[one]) ? one : null;
-  let shown = one ? capabilityGroups().filter((g) => (one === '-' ? !g.cap : (g.cap && g.cap.id === one)))
+  const byCapability = !!one;
+  const page = (one && one !== '-' && FEAT_BY_ID[one]) ? one : null;
+  const shown = one ? capabilityGroups().filter((g) => (one === '-' ? !g.cap : (g.cap && g.cap.id === one)))
              : oneActor ? groups.filter((g) => g.actor === oneActor)
-             : (byCapability ? capabilityGroups() : groups);
-  // A GRID cell names both axes at once — one role's use cases inside one feature — so the feature's
-  // list is narrowed to the use cases that role also drives. The two axes already index the same use
-  // cases, so this intersects them rather than adding a third grouping.
-  if (one && oneActor) {
-    const mine = new Set(((groups.find((g) => g.actor === oneActor) || {}).ucs || []).map((n) => n.id));
-    shown = shown.map((g) => ({ ...g, ucs: g.ucs.filter((n) => mine.has(n.id)) }));
-  }
-  // The pinned index: one chip per group, in render order, whichever axis is grouping — so flipping
-  // Group by rebuilds it with the other axis's names. Ids are positional because a group's identity is
-  // an actor NAME or a capability id, and only one of those is an id at all.
+             : groups;
+  // What a use-case card carries BEYOND the element itself: the other axis (who drives it here, or
+  // which feature it belongs to), its change badge, its Happy-Path jump, and the honest "not traced".
+  // Context, not identity, which is why none of it is baked into the shared card.
+  const per = (id) => {
+    const n = GRAPH.nodes[id] || {};
+    const cross = byCapability
+      ? `<span class="ecard-pill ecard-pill-${esc(roleKindOf(n))}">${esc(actorTextOf(n))}</span>`
+      : (CAP_OF_UC[id] ? `<span class="ecard-pill">${esc(CAP_OF_UC[id].name)}</span>` : '');
+    const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(id))
+      ? '<span class="badge modified">changed</span>' : '';
+    // On the Happy Path? A pill that jumps there and lights this use case's step(s). No pill = off-spine.
+    const hp = (HP_STEPS_BY_UC[id] || []).length
+      ? `<button type="button" class="uc-hp-pill" data-card-own data-uc="${esc(id)}"`
+        + ' title="On the Happy Path — click to jump there">Happy Path</button>' : '';
+    const untraced = FLOWS_MM && FLOWS_MM[id] ? ''
+      : '<span class="uc-untraced" title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
+    return { extra: cross + changed + hp + untraced };
+  };
   const secs = [];
   const sections = shown.map((g, gi) => {
-    // One actor: its kind and what it wants, as before. SEVERAL interchangeable actors: the kind only
-    // when they agree on it (they normally do — a human "or" a service is the method's tell that one of
-    // them isn't really an actor), and no "wants", because each of them wants something of their own and
-    // one header cannot speak for both. Clicking either name's own group still shows theirs.
-    const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
-    const kind = kinds.size === 1 ? [...kinds][0] : '';
-    const w = (g.roles || []).length === 1 ? g.roles[0].wants : '';
-    // Its OWN line under the heading, always — inline beside the name it sat on the same line for a
-    // short want and wrapped onto the next for a long one, so the section headers never lined up. The
-    // label carries the weight, since without it the sentence reads as a description of the actor.
-    const wants = w ? `<p class="uc-wants"><span class="uc-wants-lbl">Wants:</span> ${mdInline(w)}</p>` : '';
-    const rows = g.ucs.map((n) => {
-      const to = (n.fields && n.fields['Trigger → Outcome']) || '';
-      // In diff mode, flag a use case whose flow touches changed code (derived from the element diff).
-      const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(n.id)) ? '<span class="badge modified">changed</span>' : '';
-      // The badge on the row is whichever axis is NOT the heading — actor when grouped by
-      // capability, capability when grouped by actor — so the other dimension stays visible either way.
-      const cross = byCapability
-        ? `<span class="uc-kind uc-kind-${esc(roleKindOf(n))}">${esc(actorTextOf(n))}</span>`
-        : (CAP_OF_UC[n.id] ? `<span class="uc-caplabel">${esc(CAP_OF_UC[n.id].name)}</span>` : '');
-      const untraced = FLOWS_MM && FLOWS_MM[n.id] ? ''
-        : '<span class="uc-untraced" title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
-      return `<li class="uc-row${changed ? ' uc-changed' : ''}" data-uc="${esc(n.id)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${cross}${changed}${pill(n.id)}${untraced}</span>`
-        + (to ? `<span class="uc-to">${mdInline(to)}</span>` : '')
-        + '</li>';
-    }).join('');
+    const ids = g.ucs.map((n) => n.id);
     const secId = 'ucsec-' + gi;
+    const count = `${ids.length} use case${ids.length === 1 ? '' : 's'}`;
     if (byCapability) {
       // ONE feature, opened from a card: this is the PAGE's body, not a list with the feature's name on
-      // it again. The header above already carries the name, the label and the purpose, so the heading
-      // here names what the section IS — the things you can do — and carries its own count, like every
-      // other section of the page.
-      if (page) {
-        secs.push({ id: secId, title: 'What you can do' });
-        return `<section class="uc-group" id="${secId}" data-cap="${esc(one)}">`
-          + '<h3 class="uc-actor">What you can do'
-          + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length === 1 ? '' : 's'}</span>`
-          + `</h3><ul class="uc-list">${rows}</ul></section>`;
-      }
-      const title = g.cap ? g.cap.name : 'Not assigned to a feature';  // the same words as its card and its crumb
+      // it again. The hero above carries the name, the label and the purpose, so the heading here names
+      // what the section IS, and carries its own count like every other section of the page.
+      const title = page ? 'What you can do' : (g.cap ? g.cap.name : 'Not assigned to a feature');
       secs.push({ id: secId, title });
-      const lab = g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '';
-      // On ONE feature's page the heading is the only thing naming it, so it carries the feature's own
-      // purpose. On the full list the purpose belongs to the cards one level up, and repeating it on
-      // every heading would bury the use cases the list exists to show.
-      const purpose = (one && g.cap && g.cap.fields && g.cap.fields.Purpose)
-        ? `<p class="uc-wants">${mdInline(g.cap.fields.Purpose)}</p>` : '';
-      // A plain section, exactly like the actor grouping's: no twisty, nothing to fold. `platform`
-      // capabilities used to start collapsed so the background use cases would not bury the product
-      // ones — but a section that hides itself is a second thing to learn on a screen whose whole job
-      // is to list what the product does, and the `platform` label already says which is which.
       return `<section class="uc-group" id="${secId}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
-        + `<h3 class="uc-actor">${esc(title)}${lab}`
-        + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span></h3>`
-        + purpose
-        + `<ul class="uc-list">${rows}</ul></section>`;
+        + `<h3 class="uc-actor">${esc(title)}<span class="uc-actor-wants">${count}</span></h3>`
+        + elementCardListHtml(ids, per) + '</section>';
     }
+    // An actor's section, or one section per actor on the flat fallback. Several INTERCHANGEABLE actors
+    // agree on their kind or the header shows none, and "wants" is only shown for a lone role, because
+    // each of a pair wants something of their own and one header cannot speak for both.
+    const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
+    const kind = kinds.size === 1 ? [...kinds][0] : '';
+    const badge = (kind === 'human' || kind === 'service')
+      ? `<span class="ecard-pill ecard-pill-${kind}">${esc(kind)}</span>` : '';
+    const w = (g.roles || []).length === 1 ? g.roles[0].wants : '';
+    const wants = w ? `<p class="uc-wants"><span class="uc-wants-lbl">Wants:</span> ${mdInline(w)}</p>` : '';
     secs.push({ id: secId, title: g.actor });
     return `<section class="uc-group" id="${secId}">`
-      + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}</h3>${wants}`
-      + `<ul class="uc-list">${rows}</ul></section>`;
+      + `<h3 class="uc-actor">${esc(g.actor)}${badge}<span class="uc-actor-wants">${count}</span></h3>`
+      + wants + elementCardListHtml(ids, per) + '</section>';
   }).join('');
-  // No Group-by switch here. It belongs to the OVERVIEW, which is the level that HAS two axes; on a
-  // list already scoped to one card, an axis switch either does nothing or silently changes which card
-  // you are looking at. (This list used to be reachable as a flat "all use cases" page carrying the
-  // switch, which then restated the overview's own card names twice over — see renderOverview.)
+  // A page's own title comes from its hero. Every other list is a CARD LIST view, so it leads with its
+  // title and the question it answers, and carries no info pane beside it.
+  const head = page ? featureHeadHtml(page)
+    : oneActor ? viewHeadHtml(oneActor, `What can ${oneActor} do?`)
+    : one === '-' ? viewHeadHtml('Not assigned to a feature',
+        'Which use cases does this map place under no feature?')
+    : viewHeadHtml('Use cases', VIEW_Q.usecases);
   // On a feature's page the use-case section is the FIRST of five, and the rest of the map — filtered to
   // this feature — follows it. The pinned index is built from every section, so it and the page cannot
   // disagree about what is on screen.
   const extra = page ? featureSectionsHtml(page) : null;
   const index = tabIndexHtml(extra ? secs.concat(extra.secs) : secs);
-  diagram.innerHTML = `<div class="usecases-wrap">${page ? featureHeadHtml(page) : ''}${index}`
+  diagram.innerHTML = `<div class="usecases-wrap">${head}${index}`
     + (sections || '<p class="empty">No use cases recorded.</p>')
     + (extra ? extra.html : '') + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
   if (page) bindFeaturePage(diagram);
-  // A row opens the use case's flow — the SAME detail a Happy Path step drills into (one home).
-  // Carry the actor whose list this is. A use case named by two roles now appears under BOTH, so
-  // recomputing its group from the use case alone would name whichever one comes first and could send
-  // the reader back to a list they never opened — the very defect the crumb fix removed.
-  const openUc = (li) => go(oneActor
-    ? { kind: 'usecase', uc: li.getAttribute('data-uc'), act: oneActor }
-    : { kind: 'usecase', uc: li.getAttribute('data-uc') });
-  // `[data-uc]`, not every `.uc-row`: the feature page draws its RULES as rows of the same shape, and a
-  // bare class selector claimed those too — a rule click then opened `{kind:'usecase', uc:null}` and
-  // landed on a screen with no name. A row is a use case when it names one.
-  diagram.querySelectorAll('.uc-row[data-uc]').forEach((li) => {
-    li.addEventListener('click', (ev) => { if (!ev.target.closest('.uc-hp-pill')) openUc(li); });
-    li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.target.closest('.uc-hp-pill')) openUc(li); });
-  });
-  // A pill jumps to the Happy Path tab with every step of this use case lit (see selectHPUseCase).
+  // Carry the actor whose list this is into the drill, so the crumb names the list the reader came
+  // through. A use case named by two roles appears under BOTH, so recomputing its group from the use
+  // case alone could send them back to a list they never opened.
+  bindElementCards(diagram, oneActor
+    ? (id) => go({ kind: 'usecase', uc: id, act: oneActor })
+    : null);
   diagram.querySelectorAll('.uc-hp-pill').forEach((btn) => {
     btn.addEventListener('click', (ev) => { ev.stopPropagation(); go({ kind: 'hp', sel: 'hpuc:' + btn.getAttribute('data-uc') }); });
   });
@@ -5673,8 +5809,7 @@ function coverageLineHtml() {
   const un = (FEAT_COVERAGE.componentsUnreached || []).length;
   const pct = Math.round(100 * (total - un) / total);
   const tail = un
-    ? ` <button type="button" class="cov-drill">${un} component${un === 1 ? '' : 's'}</button>`
-      + ` ${un === 1 ? 'is' : 'are'} reached by no feature and no rule.`
+    ? ` ${un} component${un === 1 ? '' : 's'} ${un === 1 ? 'is' : 'are'} reached by no feature and no rule.`
     : ' Every component is reached by a feature or a rule.';
   return `<p class="cov-line">This map reaches <b>${pct}%</b> of the code from a feature or a rule.`
     + `${tail}</p>`;
@@ -5735,162 +5870,97 @@ function unreachedClassOf(cid) {
   }
   return 'other';
 }
-// The drill out of the coverage line: which code no feature and no rule reaches, in the four groups.
-function renderUnreached() {
+// The code no feature and no rule reaches, in the four groups — the BODY of a System collection.
+// It lives under "About this map" because it is a fact about coyodex's own analysis, not about the
+// product: the reader looking at what the product does never asked how much of the code was explained.
+function unreachedHtml() {
   const ids = FEAT_COVERAGE.componentsUnreached || [];
   const by = {};
   for (const cid of ids) (by[unreachedClassOf(cid)] ||= []).push(cid);
-  const secs = [];
-  const sections = UNREACHED_GROUPS.map(([key, title, blurb], gi) => {
+  const groups = UNREACHED_GROUPS.map(([key, title, blurb]) => {
     const mine = by[key] || [];
     if (!mine.length) return '';
-    const secId = 'unrsec-' + gi;
-    secs.push({ id: secId, title });
-    const rows = mine.map((cid) => {
-      const n = GRAPH.nodes[cid] || {};
-      const files = (n.files || []).slice(0, 3).map((f) => `<code>${esc(f)}</code>`).join(' · ');
-      return `<li class="uc-row" data-id="${esc(cid)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name">${esc(n.name || cid)}</span></span>`
-        + (files ? `<span class="uc-to">${files}</span>` : '') + '</li>';
-    }).join('');
-    return `<section class="uc-group" id="${secId}">`
-      + `<h3 class="uc-actor">${esc(title)}`
-      + `<span class="uc-actor-wants">${mine.length} component${mine.length === 1 ? '' : 's'}</span></h3>`
-      + `<p class="uc-wants">${esc(blurb)}</p><ul class="uc-list">${rows}</ul></section>`;
+    return '<div class="feat-rulegroup">'
+      + `<div class="feat-chipgroup-name">${esc(title)} · ${mine.length} `
+      + `component${mine.length === 1 ? '' : 's'}</div>`
+      + `<p class="feat-empty">${esc(blurb)}</p>`
+      + elementCardListHtml(mine) + '</div>';
   }).join('');
-  diagram.innerHTML = '<div class="usecases-wrap">'
-    + `<p class="cov-line">${ids.length} component${ids.length === 1 ? '' : 's'} of `
-    + `${FEAT_COVERAGE.componentsTotal || 0} sit outside every use-case walk and every rule.</p>`
-    + tabIndexHtml(secs)
-    + (sections || '<p class="empty">Every component is reached by a feature or a rule.</p>')
+  // What the RULE join could not reach, said here rather than on a feature's page: a page listing eight
+  // rules is not the place to explain coyodex's join, but the number still has to be somewhere.
+  const notes = featRuleNotes().map((n) => `<p class="feat-note">${esc(n)}</p>`).join('');
+  return coverageLineHtml() + notes
+    + (groups || '<p class="feat-empty">Every component is reached by a feature or a rule.</p>');
+}
+
+// The GOAL view: what this product is for, in the map's own words. It is the first thing the reader
+// should meet, and it used to be reachable only as the default info pane of the Happy Path — so it
+// vanished the moment you clicked anything, and a reader who arrived on any other tab never saw it.
+function renderGoal() {
+  const n = GRAPH.nodes.SYS || {};
+  const overview = ((n.fields || {}).Overview || '').trim();
+  diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">'
+    + viewHeadHtml(n.name || 'Goal', VIEW_Q.goal)
+    + (overview ? `<div class="goal-body">${mdRefs(overview, GRAPH.nodes)}</div>`
+                : '<p class="empty">This map records no product description.</p>')
     + '</div>';
-  bindTabIndex(diagram.querySelector('.usecases-wrap'));
-  const open = (li) => selectFromTree(li.getAttribute('data-id'));
-  diagram.querySelectorAll('.uc-row[data-id]').forEach((li) => {
-    li.addEventListener('click', () => open(li));
-    li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(li); });
-  });
+  // An id named in the prose is a live link to that element, through the one resolver.
+  diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) =>
+    btn.addEventListener('click', () => showInContext(btn.getAttribute('data-id'))));
 }
 
-// The axis switch's own wiring, shared by every setting the overview can be in — including Grid,
-// which returns before the card path runs and would otherwise leave the switch dead.
-function bindOverviewAxis() {
-  viewextra.querySelectorAll('.uc-seg button').forEach((b) => {
-    b.addEventListener('click', () => {
-      UC_GROUP_BY = b.getAttribute('data-gb');
-      renderOverview();
-      showViewIntro({ kind: 'usecases' });   // the axis changed the view's question, which the pane holds
-    });
-  });
+// The ACTORS view: everyone and everything that drives this product, as a card list. Each card opens
+// what that actor can do. This was a MODE of the Features screen, which meant "what can each person
+// do" was answered on a screen titled "Features", behind a switch most readers never touched.
+function renderActors() {
+  const ids = Object.values(GRAPH.nodes || {})
+    .filter((n) => n.kind === 'human' || n.kind === 'service').map((n) => n.id);
+  const counts = {};
+  for (const g of actorGroups()) counts[g.actor] = g.ucs.length;
+  const per = (id) => {
+    const n = counts[(GRAPH.nodes[id] || {}).name] || 0;
+    return { extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>` };
+  };
+  diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Actors', VIEW_Q.actors)
+    + (ids.length ? elementCardListHtml(ids, per) : '<p class="empty">This map records no actors.</p>')
+    + '</div>';
+  bindElementCards(diagram);
 }
 
-// WHO CAN DO WHAT: the two axes of the overview crossed, one cell per (role, feature) pair, holding
-// how many of that feature's use cases that role drives. Read down a column for "who touches this
-// feature", across a row for "what can this person do". Both existing axes already answer half of
-// that; neither shows the shape of the whole, and on the live maps only a quarter to a third of the
-// cells are filled — which IS the answer, and a list of two separate axes cannot show it.
+// The FEATURES view: the whole product as a grid of element cards, one per feature. Each card drills
+// into that feature's page. This is the level the flat catalog was missing: 41 rows answer "what can
+// each person do", and nobody could read the product off them.
 //
-// Every number drills to the same list the two axes already drill to, narrowed to both: that role's
-// use cases inside that feature. An empty cell is drawn as a dot, not as a zero — nothing is there.
-function renderRoleGrid() {
-  const feats = FEATURES.features || [];
-  // Roles in the model's own (importance) order, keeping only the ones that drive something.
-  const rids = (GRAPH.roles || []).map((r) => r.id).filter((rid) => rid && ROLE_FEATURES[rid]);
-  if (!feats.length || !rids.length) {
-    diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">'
-      + 'This map records no role driving a feature.</p></div>';
-    return;
-  }
-  const head = feats.map((f) => `<th scope="col"><button type="button" class="rg-col" `
-    + `data-cap="${esc(f.id)}">${esc(f.name)}</button></th>`).join('');
-  const body = rids.map((rid) => {
-    const row = ROLE_FEATURES[rid] || {};
-    const cells = feats.map((f) => {
-      const n = row[f.id] || 0;
-      if (!n) return '<td class="rg-empty">·</td>';
-      return `<td><button type="button" class="rg-cell" data-cap="${esc(f.id)}" `
-        + `data-act="${esc(roleName(rid))}">${n}</button></td>`;
-    }).join('');
-    return `<tr><th scope="row"><button type="button" class="rg-row" `
-      + `data-act="${esc(roleName(rid))}">${esc(roleName(rid))}</button></th>${cells}</tr>`;
-  }).join('');
-  diagram.innerHTML = '<div class="usecases-wrap"><div class="rg-wrap">'
-    + `<table class="rolegrid"><thead><tr><th></th>${head}</tr></thead>`
-    + `<tbody>${body}</tbody></table></div></div>`;
-  diagram.querySelectorAll('.rg-col').forEach((b) =>
-    b.addEventListener('click', () => go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
-  diagram.querySelectorAll('.rg-row').forEach((b) =>
-    b.addEventListener('click', () => go({ kind: 'actor', act: b.getAttribute('data-act') })));
-  diagram.querySelectorAll('.rg-cell').forEach((b) => b.addEventListener('click',
-    () => go({ kind: 'capability', cap: b.getAttribute('data-cap'), act: b.getAttribute('data-act') })));
-}
-
-// The FEATURES overview: the whole product as a grid of cards, on ONE axis at a time.
-//   Feature -> one card per capability   Actor -> one card per role
-// Each card drills to its own use cases. This is the level the flat catalog was missing: 41 rows answer
-// "what can each person do" but nobody could read the product off them. Making the cards a LEVEL rather
-// than a second tab follows the house pattern (Subsystems, Entities and the Happy Path all drill
-// overview -> group -> member with a breadcrumb), so a use case has exactly one home.
-//
-// The axis switch lives HERE and only here. It used to sit on a flat "show all use cases" page one
-// level down, which was the only way to reach the actor axis at all — and that page then restated the
-// eight card names in its chip bar AND again in every section heading, immediately after you had read
-// them as cards. Actors make a poor thing to READ as an overview (on one real map a single actor holds
-// 31 of the 41 use cases) but a perfectly good thing to CLICK, which is all a card has to be.
-// Only reachable when the map records capabilities; without them the tab keeps its flat list.
+// ONE axis, features. It used to carry a Group by switch with Actor and Grid settings, and both are
+// gone: actors have their own view now, and one question answered on two screens is one screen too
+// many. A card grid, a title and the question it answers — nothing else on the page.
 function renderOverview() {
-  const axis = ucGroupBy();
-  const byCapability = axis === 'capability';
-  const cards = (byCapability ? capabilityGroups() : actorGroups()).map((g) => {
-    const cap = byCapability;
-    const key = cap ? (g.cap ? g.cap.id : '-') : g.actor;
-    const name = cap ? (g.cap ? g.cap.name : 'Not assigned to a feature') : g.actor;
-    // A feature says what it covers; an actor says what they want. Both are the map's own words for
-    // "why this card exists", so the card reads the same either way.
-    const blurb = cap ? ((g.cap && g.cap.fields && g.cap.fields.Purpose) || '')
-                      : ((g.roles || []).length === 1 ? (g.roles[0].wants || '') : '');
-    const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
-    const kind = (!cap && kinds.size === 1) ? [...kinds][0] : '';
-    const tag = cap
-      ? (g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '')
-      : ((kind === 'human' || kind === 'service') ? `<span class="uc-kind uc-kind-${kind}">${esc(kind)}</span>` : '');
-    // In diff mode a card carries its members' change: without it, dropping the use cases one level
-    // down would hide every "changed" badge behind a click.
-    const changed = (mode === 'diff' && hasDiff() && g.ucs.some((n) => usecaseDiffState(n.id)))
+  const groups = capabilityGroups();
+  // The card is the SHARED element card, so a feature reads the same here, in a search result and in
+  // any list that ever shows one. Its use-case count rides as an extra pill: it is a fact about the
+  // product (how much you can do here), which is what a card grid is for choosing between.
+  const per = (id) => {
+    const g = groups.find((x) => x.cap && x.cap.id === id);
+    const n = g ? g.ucs.length : 0;
+    // In diff mode a card carries its members' change, or dropping the use cases one level down would
+    // hide every "changed" badge behind a click.
+    const changed = (mode === 'diff' && hasDiff() && g && g.ucs.some((x) => usecaseDiffState(x.id)))
       ? '<span class="badge modified">changed</span>' : '';
-    // The actor's line is labelled "Wants:" exactly as the list's actor sections label it — without it
-    // the sentence reads as a description of the role rather than of what the role is after. A feature's
-    // line needs no label: the card's name and the sentence are the same kind of thing.
-    const lbl = cap ? '' : '<span class="uc-wants-lbl">Wants:</span> ';
-    return `<button type="button" class="feat-card" data-key="${esc(key)}">`
-      + `<span class="feat-head"><span class="feat-name">${esc(name)}</span>${tag}${changed}</span>`
-      + (blurb ? `<span class="feat-purpose">${lbl}${mdInline(blurb)}</span>` : '')
-      + `<span class="feat-count">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span>`
-      + '</button>';
-  }).join('');
-  // The axis switch lives in the header's view row (#viewextra), not in the page: it is a mode, and a
-  // mode belongs beside the view it modifies rather than on a strip of its own above the content. Its
-  // answer ("What can each role do?") is not printed here either — viewQuestion puts it in the info
-  // pane, the one place every view's question lives.
-  // A third setting beside the two axes: the two crossed. It is a MODE of the same overview, not a
-  // third thing to group by, so it rides the same switch rather than opening a tab of its own.
-  const seg = (key, label) => `<button type="button" data-gb="${key}"`
-    + `${axis === key ? ' class="on"' : ''}>${label}</button>`;
-  viewextra.innerHTML = HAS_CAPABILITIES
-    ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
-      + `<span class="uc-seg">${seg('capability', 'Feature')}${seg('actor', 'Actor')}`
-      + `${seg('grid', 'Grid')}</span></div>`
-    : '';
-  if (axis === 'grid') { renderRoleGrid(); bindOverviewAxis(); return; }
-  diagram.innerHTML = `<div class="usecases-wrap">${coverageLineHtml()}<div class="feat-grid">`
-    + (cards || '<p class="empty">No features recorded.</p>') + '</div></div>';
-  const cov = diagram.querySelector('.cov-drill');
-  if (cov) cov.addEventListener('click', () => go({ kind: 'unreached' }));
-  bindOverviewAxis();
-  diagram.querySelectorAll('.feat-card').forEach((b) => {
-    const key = b.getAttribute('data-key');
-    b.addEventListener('click', () => go(byCapability ? { kind: 'capability', cap: key } : { kind: 'actor', act: key }));
-  });
+    return { extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>${changed}` };
+  };
+  const ids = groups.filter((g) => g.cap).map((g) => g.cap.id);
+  const loose = groups.find((g) => !g.cap);
+  // Use cases belonging to no feature are a real card, not a silent omission — but they are not an
+  // element, so they get the card's SHAPE without its element actions.
+  const looseCard = loose ? plainCardHtml({ key: '-', name: 'Not assigned to a feature',
+    count: `${loose.ucs.length} use case${loose.ucs.length === 1 ? '' : 's'}` }) : '';
+  const grid = ids.length || looseCard
+    ? `<div class="ecard-grid">${ids.map((id) => elementCardHtml(id, per(id))).join('')}${looseCard}</div>`
+    : '<p class="empty">No features recorded.</p>';
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + viewHeadHtml('Features', VIEW_Q.usecases) + grid + '</div>';
+  bindElementCards(diagram);
+  bindPlainCards(diagram, (key) => go({ kind: 'capability', cap: key }));
 }
 
 // The PINNED SECTION INDEX shared by every card-list tab (System, Use Cases, Business rules): a row
@@ -6006,6 +6076,13 @@ function systemSections() {
   // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
   // tag, and the self-starting kinds are listed first so "what runs with no user?" clusters at the
   // top without a separate section. Each row links to its owning component.
+  // Functional coverage — how much of the code the feature layer reaches, and what it misses. A fact
+  // about the MAP, so it belongs on this tab and nowhere near the product views.
+  if ((FEAT_COVERAGE.componentsTotal || 0) && HAS_CAPABILITIES) {
+    sec('map', 'Functional coverage', unreachedHtml(),
+        `${FEAT_COVERAGE.componentsTotal} components`,
+        'How much of this code a feature or a rule reaches, and which components neither touches.');
+  }
   const eps = G.entry_points || [];
   if (eps.length) {
     const byKind = {};
@@ -6152,19 +6229,15 @@ function renderSystem() {
   const live = SYS_BANDS.filter(([b]) => all.some((s) => s.band === b));
   const bands = live.map(([band, title]) => {
     const cards = all.filter((s) => s.band === band).map((s) =>
-      `<button type="button" class="feat-card" data-sys="${esc(s.id)}">`
-      + `<span class="feat-head"><span class="feat-name">${esc(s.title)}</span></span>`
-      + (s.blurb ? `<span class="feat-purpose">${esc(s.blurb)}</span>` : '')
-      + (s.count ? `<span class="feat-count">${esc(s.count)}</span>` : '')
-      + '</button>').join('');
+      plainCardHtml({ key: s.id, name: s.title, desc: s.blurb, count: s.count })).join('');
     // With only one band there is nothing to tell it apart from, so its label would be noise.
     const head = live.length > 1 ? `<h3 class="sys-band">${esc(title)}</h3>` : '';
-    return head + `<div class="feat-grid">${cards}</div>`;
+    return head + `<div class="ecard-grid">${cards}</div>`;
   }).join('');
   diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
+    + viewHeadHtml('System', VIEW_Q.system)
     + (bands || '<p class="empty">No system facts recorded.</p>') + '</div>';
-  diagram.querySelectorAll('.feat-card').forEach((b) =>
-    b.addEventListener('click', () => go({ kind: 'sysSection', sys: b.getAttribute('data-sys') })));
+  bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: key }));
 }
 // Level 2 — one collection. Its own title heads it, since the crumb is the only other thing naming it.
 function renderSystemSection(sysId, epk) {
@@ -6173,15 +6246,12 @@ function renderSystemSection(sysId, epk) {
   // A collection that carries KINDS gets the card treatment one level deeper: its cards first, then
   // one kind's table. Every other collection is a single page.
   if (found.kinds && !epk) {
-    const cards = found.kinds.map((k) => `<button type="button" class="feat-card" data-epk="${esc(k.key)}">`
-      + `<span class="feat-head"><span class="feat-name">${esc(k.key)}</span>${k.tag}</span>`
-      + `<span class="feat-count">${k.count} entry point${k.count === 1 ? '' : 's'}</span></button>`).join('');
+    const cards = found.kinds.map((k) => plainCardHtml({ key: k.key, name: k.key, pill: k.tag,
+      count: `${k.count} way${k.count === 1 ? '' : 's'} in` })).join('');
     diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
-      + `<h3 class="uc-actor">${esc(found.title)}<span class="uc-actor-wants">${esc(found.count)}</span></h3>`
-      + (found.blurb ? `<p class="uc-wants">${esc(found.blurb)}</p>` : '')
-      + `<div class="feat-grid">${cards}</div></div>`;
-    diagram.querySelectorAll('.feat-card').forEach((b) => b.addEventListener('click',
-      () => go({ kind: 'sysSection', sys: sysId, epk: b.getAttribute('data-epk') })));
+      + viewHeadHtml(found.title, found.blurb)
+      + `<div class="ecard-grid">${cards}</div></div>`;
+    bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: sysId, epk: key }));
     return;
   }
   const one = found.kinds ? found.kinds.find((k) => k.key === epk) : null;
@@ -6202,6 +6272,7 @@ function renderSystemSection(sysId, epk) {
   diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) => {
     btn.addEventListener('click', () => selectFromTree(btn.getAttribute('data-id')));
   });
+  bindElementCards(diagram);   // a collection whose rows ARE elements (functional coverage) draws cards
   bindTabIndex(diagram.querySelector('.system-wrap'));
 }
 // Wire the System tab's pinned section index: click a chip to jump to its section, and highlight the chip
@@ -6624,18 +6695,21 @@ function renderRules(s) {
   // and the same complaint: the chip bar named the areas, then every heading named them again, and the
   // rules the page exists to show started below the fold. `s.blk` picks the area; no `blk` is the cards.
   if (!s || !s.blk) {
+    // A decision area IS a map element, so its card is the shared element card — with its rule count
+    // and, for a nested area, the parent it sits under.
     const cards = groups.map((g) => {
-      const parent = g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : '';
-      return `<button type="button" class="feat-card" data-blk="${esc(g.id)}">`
-        + `<span class="feat-head"><span class="feat-name">${esc(g.name)}</span>${parent}</span>`
-        + (g.purpose ? `<span class="feat-purpose">${mdInline(g.purpose)}</span>` : '')
-        + `<span class="feat-count">${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}</span>`
-        + '</button>';
+      const parent = g.parentName ? `<span class="ecard-pill">in ${esc(g.parentName)}</span>` : '';
+      const count = `<span class="ecard-pill">${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}</span>`;
+      return GRAPH.nodes[g.id]
+        ? elementCardHtml(g.id, { extra: parent + count, desc: g.purpose })
+        : plainCardHtml({ key: g.id, name: g.name, desc: g.purpose,
+                          count: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}` });
     }).join('');
-    diagram.innerHTML = '<div class="usecases-wrap"><div class="feat-grid">'
+    diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Rules', VIEW_Q.rules)
+      + '<div class="ecard-grid">'
       + (cards || '<p class="empty">No business rules recorded.</p>') + '</div></div>';
-    diagram.querySelectorAll('.feat-card').forEach((b) =>
-      b.addEventListener('click', () => go({ kind: 'rules', blk: b.getAttribute('data-blk') })));
+    bindElementCards(diagram, (id) => go({ kind: 'rules', blk: id }));
+    bindPlainCards(diagram, (key) => go({ kind: 'rules', blk: key }));
     return;
   }
   const secs = [];
@@ -6771,6 +6845,7 @@ async function render(sArg, transient) {
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   const s = sArg || history[hi];
+  syncInfoPane(s);   // a text view has no info pane; a diagram view does (one rule, before any return)
   // Hide the floating over-the-diagram control HERE, before the HTML-tab early returns below.
   // syncFlowPicker runs at the END of render, which the table views (Glossary / Use Cases / System /
   // Data / Tests) and the degraded "could not render" branch never reach — so a control shown on a
@@ -6790,15 +6865,13 @@ async function render(sArg, transient) {
     if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();
     mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return;
   }
+  // The two views the product leads with: what it is for, and who drives it.
+  if (s.kind === 'goal') { renderGoal(); mainScene = null; renderChrome(s); restoreTextScroll(s); return; }
+  if (s.kind === 'actors') { renderActors(); mainScene = null; renderChrome(s); restoreTextScroll(s); return; }
   // One feature's use cases — the drill out of those cards ('*' = all of them). The right pane keeps the
   // TAB's question, as one rule's page does: the feature's own name and purpose head the list itself.
   if (s.kind === 'capability' || s.kind === 'actor') {
     renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });
-    mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); return;
-  }
-  // The code no feature and no rule reaches — the drill out of the coverage line, under the same tab.
-  if (s.kind === 'unreached') {
-    renderUnreached();
     mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); return;
   }
   // The System tab is HTML, not a mermaid diagram — same shape as Glossary. Its landing level is the
@@ -8546,10 +8619,10 @@ const sbClose = document.getElementById('sbclose');
 const sbResults = document.getElementById('sbresults');
 const sbMeta = document.getElementById('sbmeta');
 
-const SB_KIND_LABEL = { usecase: 'use case', subsystem: 'subsystem', component: 'component',
-                        subdomain: 'subdomain', entity: 'entity', process: 'process',
-                        block: 'decision area', rule: 'business rule', capability: 'feature' };
-const sbElemLabel = (n) => (n.kind === 'dep' ? ((n.fields && n.fields.Kind) || 'dependency') : (SB_KIND_LABEL[n.kind] || n.kind));
+// The search badge speaks the SAME vocabulary as every card and every pane pill (ELEMENT_LABEL). A
+// dependency is the one exception: its own sub-kind (datastore / service / …) says more than the word
+// "dependency" does, and the search list is where that distinction earns its place.
+const sbElemLabel = (n) => (n.kind === 'dep' ? ((n.fields && n.fields.Kind) || 'dependency') : elementLabel(n.kind));
 // A per-kind nudge so a same-quality name match on a behaviour/structure element outranks a raw path hit.
 const SB_TYPE_BONUS = { usecase: 45, subsystem: 40, component: 35, entity: 35, subdomain: 30, dep: 30,
                         process: 28, gloss: 25, sys: 12, field: 10, file: 5, dir: -5, symbol: -2 };
@@ -9014,6 +9087,8 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'hp' && !HAS_HP) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'goal' && !HAS_GOAL) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'actors' && !HAS_ACTORS) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'usecases' && !HAS_USECASES) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'deployment' && !HAS_DEPLOYMENT) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
@@ -9315,13 +9390,14 @@ if (impactbtn) {
 }
 
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise on
-// FEATURES — what the product does, as the product's own list of things it does — whenever the map
-// records features at all. The Happy Path is the guided tour of one path through them, and it is the
-// second tab; a map that records no features still lands on it, and one with neither falls back to
-// Subsystems and then to the Dependencies (context) view.
+// GOAL, which is what the product is FOR and the first thing a newcomer should read. Each fallback is
+// the next thing down the product row: Actors, then the Happy Path, then Features, and only then the
+// machine (Subsystems, and Dependencies for a map with no grouping at all).
 const LANDING = (HAS_DIFF && HAS_GROUPING) ? 'container'
-  : (HAS_CAPABILITIES && HAS_USECASES) ? 'usecases'
+  : HAS_GOAL ? 'goal'
+  : HAS_ACTORS ? 'actors'
   : HAS_HP ? 'hp'
+  : (HAS_CAPABILITIES && HAS_USECASES) ? 'usecases'
   : HAS_GROUPING ? 'container'
   : 'context';
 go({ kind: LANDING });

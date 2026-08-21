@@ -115,11 +115,13 @@
              tab click. Each view's caption lives in the info pane's top-level state (see VIEW_Q). -->
         <div id="stagesubrow">
           <span id="viewsw">
-            <!-- PRODUCT — what it does for a user. Features comes FIRST and is the landing view on any
-                 map that records features: the product's own list of what it does. The Happy Path is
-                 the guided tour of one path through them, which is a second read, not the first. -->
-            <button data-view="usecases" data-group="product">Features</button>  <!-- internal kind stays `usecases`; lands on the feature cards, which drill to one feature's page (hidden when no use cases) -->
+            <!-- PRODUCT — what it does for a user, in the order a newcomer reads it: what the product
+                 is FOR, then WHO drives it, then one walk end to end, then the full list of what it
+                 does, then what it decides. Goal is the landing view whenever the map records one. -->
+            <button data-view="goal" data-group="product">Goal</button>  <!-- the product description; hidden when the map records none -->
+            <button data-view="actors" data-group="product">Actors</button>  <!-- card list of everyone and everything that drives it (hidden when none) -->
             <button data-view="hp" data-group="product">Happy Path</button>  <!-- internal kind stays `hp` -->
+            <button data-view="usecases" data-group="product">Features</button>  <!-- internal kind stays `usecases`; a grid of feature cards, each drilling to that feature's page (hidden when no use cases) -->
             <!-- The Rules view is a PRODUCT view, not a reference one: what the product decides is read
                  straight after what it does, and long before how it is built. -->
             <button data-view="rules" data-group="product">Rules</button>  <!-- T7: the decisions this product makes (hidden when the map states none) -->

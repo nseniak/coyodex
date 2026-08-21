@@ -1866,15 +1866,15 @@ def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
 
 
 def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
-    """Business logic is read straight after what the product DOES, long before how it is built.
-    Features leads the row (it IS what the product does) and the Happy Path — the guided tour of one
-    path through it — is second, so Rules stays third.
+    """Business logic is read straight after what the product DOES, long before how it is built. The
+    product row reads in the order a newcomer needs it: what the product is FOR, who drives it, one walk
+    end to end, everything it does, and only then what it decides. So Rules is last of the five.
     Both of the tab's levels must live in `usecases-wrap`, the catalog's scroll container (`height:
     100%; overflow: auto`). An invented wrapper has no CSS at all, so the tab renders at full height
     inside a clipped parent and cannot be scrolled."""
     html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
     order = re.findall(r'data-view="(\w+)"', html)
-    assert order[:3] == ["usecases", "hp", "rules"], order
+    assert order[:5] == ["goal", "actors", "hp", "usecases", "rules"], order
     for fn in ("renderRules", "renderRule"):
         assert '<div class="usecases-wrap">' in _js_function(fn), fn
     css = (VIEWER / "viewer.css").read_text(encoding="utf-8")
@@ -2253,10 +2253,19 @@ def test_an_impact_row_for_a_rule_site_is_readable_and_clickable() -> None:
     assert "const rid = parseRuleSiteEid(id);" in goto[:600]
 
 
-def test_the_pane_pill_and_the_search_badge_speak_the_readers_language() -> None:
-    assert "block: 'decision area', rule: 'business rule'" in VIEWER_JS
-    assert "KIND_LABEL = { dep: 'dependency', block: 'decision area', rule: 'business rule' }" \
-        in VIEWER_JS
+def test_one_vocabulary_serves_every_pill_and_badge() -> None:
+    """The reader's word for an element type is used in three places: the type pill on a card, the pill
+    at the top of the info pane, and the badge in a search result. Each used to carry its own copy of
+    the map, and two of the three disagreed. ONE table now, so the product's vocabulary is changed in
+    one place, and a new element type cannot reach the screen under its internal name in one view and
+    its readable one in another."""
+    assert "const ELEMENT_LABEL = {" in VIEWER_JS
+    assert "rule: 'business rule', block: 'decision area'," in VIEWER_JS
+    assert "KIND_LABEL" not in VIEWER_JS and "SB_KIND_LABEL" not in VIEWER_JS
+    for reader in ("const type = elementLabel(n.kind);",                      # the pane pill
+                   "elementLabel(n.kind));",                                  # the search badge
+                   "type: elementLabel(n.kind)"):                             # the card's type pill
+        assert reader in VIEWER_JS, reader
 
 
 def test_the_list_nests_child_blocks_under_their_parent() -> None:

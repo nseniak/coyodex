@@ -394,6 +394,43 @@ body.vresizing #stage { pointer-events: none; }
 .uc-lab-core { background: #e0e7ff; color: #4338ca; }
 .uc-lab-supporting { background: #f1f5f9; color: #475569; }
 .uc-lab-platform { background: #f3f4f6; color: #6b7280; }
+/* --- a text view's own head ----------------------------------------------------------------------
+   A card list, a card grid and a details page each lead with their title and, under it, the question
+   they answer. The question used to live in the info pane beside them, which is the pane those views
+   no longer have: a page of prose does not need a second pane repeating its purpose. */
+.view-head { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #eef2f7; }
+.view-title { margin: 0; font-size: 19px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
+.view-q { margin: 4px 0 0; font-size: 13px; color: #6b7280; font-style: italic; }
+/* --- THE ELEMENT CARD ----------------------------------------------------------------------------
+   ONE card design for every element, in every place an element is shown: a card list, a grid of cards,
+   or the info pane. Five card-ish shapes used to live in this file and had drifted apart, so a change
+   to "how a card looks" meant five edits. Change it HERE and every list in the app moves together.
+
+   Synthetic on purpose: title row, one sentence, and at most one earned extra line. A card has to
+   survive being stacked twenty deep, so vertical space is the scarce thing it spends. */
+.ecard { display: block; width: 100%; text-align: left; padding: 11px 13px; cursor: pointer;
+         border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+.ecard:hover { border-color: #c7d2fe; background: #f8f9ff; box-shadow: 0 2px 10px rgba(80,70,229,.07); }
+.ecard:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+.ecard-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; }
+.ecard-name { font-size: 14px; font-weight: 650; color: #111827; }
+/* The type pill is the element's word for what it IS, and it is a BUTTON: clicking it shows the element
+   in its home view. Quiet enough to read as a label, live enough to invite the click. */
+.ecard-type { font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase;
+              letter-spacing: .04em; padding: 1px 7px; border-radius: 9px; cursor: pointer;
+              border: 1px solid #e5e7eb; background: #f9fafb; color: #6b7280; }
+.ecard-type:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
+.ecard-pill { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+              padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }
+.ecard-pill-human { background: #fff7ed; color: #9a3412; }
+.ecard-pill-service { background: #eef2ff; color: #3730a3; }
+.ecard-desc { margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: #4b5563; }
+.ecard-extra { margin: 5px 0 0; font-size: 12px; color: #6b7280; }
+.ecard-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px;
+             color: #9ca3af; margin-right: 4px; }
+/* A CARD LIST reads down the page; a CARD GRID is for choosing between groups, across then down. */
+.ecard-list { display: flex; flex-direction: column; gap: 8px; }
+.ecard-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 /* --- the feature page (plan/80-feature-led-views) ------------------------------------------------
    Three levels, and the CSS is what makes them read as three. A hero that answers "what is this", the
    use cases as the page's body, and the rest of the map under section headings the pinned chip index
@@ -426,6 +463,11 @@ body.vresizing #stage { pointer-events: none; }
 .uc-name-plain { font-weight: 400; color: #374151; }
 .uc-row.featref { display: block; width: 100%; text-align: left; font: inherit; border-radius: 8px;
                   border: 1px solid transparent; background: transparent; padding: 8px 10px; }
+/* The code section folds. It is the lowest priority thing on a feature page, and its heading already
+   states the count, which is the fact worth scanning. */
+.feat-fold > summary { cursor: pointer; color: #4338ca; font-size: 13px; }
+.feat-fold > summary:hover { text-decoration: underline; }
+.feat-fold[open] > summary { margin-bottom: 10px; }
 .feat-eps { display: flex; flex-direction: column; gap: 10px; }
 .feat-ep-kind { display: grid; grid-template-columns: 88px 1fr; gap: 8px; align-items: baseline; }
 .feat-ep-kindname { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;

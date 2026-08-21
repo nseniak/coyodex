@@ -23,13 +23,21 @@ VIEWER_DIR = Path(__file__).resolve().parent.parent / "tools" / "coyodex" / "vie
 
 
 def _node_check(js_path: Path) -> None:
+    """`node --check` on a COPY named `.mjs`, never on the file in place.
+
+    viewer.js is an ES module (top-level await, no bundler), but node decides CJS-vs-ESM from the
+    nearest package.json, and the repo has none. Checked in place, node parses it as CommonJS, hits
+    the top-level `await` first, and reports THAT — so any real syntax error further down is masked by
+    a line that has been fine for a year. Measured: a duplicate `const` on line 5018 was reported as
+    an await error on line 156. The `.mjs` suffix removes the guessing."""
     node = shutil.which("node")
     if node is None:
         pytest.skip("node not installed — skipping viewer JS syntax gate")
     assert js_path.exists(), f"expected {js_path} to exist"
-    result = subprocess.run(
-        [node, "--check", str(js_path)], capture_output=True, text=True
-    )
+    with tempfile.TemporaryDirectory() as td:
+        probe = Path(td) / (js_path.stem + ".mjs")
+        probe.write_text(js_path.read_text(encoding="utf-8"), encoding="utf-8")
+        result = subprocess.run([node, "--check", str(probe)], capture_output=True, text=True)
     assert result.returncode == 0, f"{js_path.name} failed `node --check`:\n{result.stderr}"
 
 
@@ -482,26 +490,25 @@ def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
     # In diff mode a card carries its members' change, or dropping the use cases one level down would
     # hide every "changed" badge behind a click.
     feat = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "g.ucs.some((n) => usecaseDiffState(n.id))" in feat
+    assert "g.ucs.some((x) => usecaseDiffState(x.id))" in feat
 
 
-def test_the_axis_switch_lives_on_the_overview_and_nowhere_else() -> None:
-    """Both axes (feature / actor) are properties of the OVERVIEW, which is the level that has two ways
-    to cut the same use cases. On a list already scoped to one card an axis switch either does nothing
-    or silently swaps which card you are reading. It used to live on a flat "all use cases" page that
-    was the only route to the actor axis, and that page restated the overview's card names in a chip
-    bar AND again in every section heading, right after you had read them as cards. Both axes draw
-    cards from ONE grouping function each, shared with the list that drills out of them."""
+def test_features_answers_one_question_and_actors_answers_the_other() -> None:
+    """The Features screen used to carry a Group by switch with an Actor setting and a Grid setting, so
+    "what can each person do" was answered on a screen titled Features, behind a control most readers
+    never touched. Actors is its own view now, and the switch is gone: one question, one screen. The
+    Features view draws feature cards and nothing else, and the actor grouping it used to host lives on
+    in ONE function, shared by the Actors view and by an actor's own use-case list."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "uc-groupby" in over and "capabilityGroups()" in over and "actorGroups()" in over
-    lst = js[js.index("function renderUseCases(sel) {"): js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
-    assert "uc-groupby" not in lst, "the list level must not carry an axis switch"
-    assert "feat-all" not in js, "the flat all-use-cases page is gone"
-    # Two axes, two states, both filed under the same tab so the crumb reads Features > the card.
-    assert "if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }]" in js
-    assert "kind === 'actor'" in js[js.index("function topView(kind) {"):]
-
+    assert "capabilityGroups()" in over
+    assert "actorGroups()" not in over, "Features must not answer the Actors question too"
+    assert "uc-groupby" not in js, "the axis switch is gone, not hidden"
+    assert "UC_GROUP_BY" not in js and "ucGroupBy" not in js
+    assert "renderRoleGrid" not in js
+    actors = js[js.index("function renderActors() {"): js.index("\nfunction ", js.index("function renderActors() {") + 10)]
+    assert "actorGroups()" in actors and "elementCardListHtml" in actors
+    assert "if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];" in js
 
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
     """`pushContentPoint` rebuilds the current state field by field so opening a file keeps the screen
@@ -528,7 +535,7 @@ def test_a_use_cases_crumb_names_the_card_it_was_listed_on() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     anc = js[js.index("if (s.kind === 'usecase') {"):]
     anc = anc[: anc.index("\n  }")]
-    assert "ucGroupBy() === 'actor'" in anc and "actorGroupOf(s.uc)" in anc
+    assert "s.act ||" in anc and "actorGroupOf(s.uc)" in anc
     assert "CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-'" in anc
     assert "function actorGroupOf(ucId) {" in js and "actorGroups().find(" in js
 
@@ -556,8 +563,8 @@ def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     assert "byActor[key].ucs.push(n)" in body
     # One undeclared name still sends the whole use case to Other: a half-known pair has no per-role home.
     assert "known ? names.map((nm, i) =>" in body and "[[OTHER, 'Other', null]]" in body
-    assert "{ kind: 'usecase', uc: li.getAttribute('data-uc'), act: oneActor }" in js
-    assert "const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');" in js
+    assert "(id) => go({ kind: 'usecase', uc: id, act: oneActor })" in js
+    assert "const act = s.act || (HAS_CAPABILITIES ? '' : actorGroupOf(s.uc));" in js
 
 
 def test_a_mode_switch_is_the_quietest_control_in_the_header() -> None:
@@ -590,19 +597,36 @@ def test_every_header_row_starts_at_the_same_edge() -> None:
 
 
 def test_a_views_mode_switch_never_survives_a_move_to_another_view() -> None:
-    """The switch belongs to ONE view. Left in the header it would float above a view it does not act
-    on — the same failure the floating flow picker had, and it is cleared in the same place, before the
-    HTML-tab early returns. Its answer moved to the info pane, so a view's question has one home."""
+    """A mode switch belongs to ONE view. Left in the header it floats above a view it does not act on,
+    which is the failure the floating flow picker had, and it is cleared in the same place: before the
+    HTML-tab early returns. No view carries one today (the Features axis was the last, and it is gone),
+    so this guards the mechanism rather than a current switch."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     render = js[js.index("  const fp = document.getElementById('flowpicker');"):]
     assert "viewextra.innerHTML = '';" in render[:600]
-    over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "viewextra.innerHTML = HAS_CAPABILITIES" in over
-    assert "uc-groupby-why" not in js, "the axis answer belongs to the info pane, not beside the switch"
+    assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
-    assert "ucGroupBy() === 'actor') return 'What can each role do?'" in js
     assert "viewQuestion(view) ? `<p class=\"viewq\">" in js
 
+
+def test_a_text_view_puts_its_question_on_the_page_and_drops_the_info_pane() -> None:
+    """Per the spec a card list, a card grid and a details page carry no info pane: they lead with their
+    own title and, under it, the question they answer. The pane beside a page of prose only repeated it,
+    and it stole a third of the height from the content it was describing. A DIAGRAM still has one,
+    because there the pane is where a selected shape's card goes."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function syncInfoPane(s) {" in js and "panel.hidden = text;" in js
+    assert "syncInfoPane(s);" in js[js.index("async function render(sArg, transient) {"):][:1200]
+    pages = js[js.index("const TEXT_PAGES = new Set(["):]
+    pages = pages[: pages.index("]);")]
+    for kind in ("goal", "actors", "usecases", "capability", "actor", "rules", "system", "glossary"):
+        assert f"'{kind}'" in pages, kind
+    assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram keeps its pane"
+    # One question per view, read from the SAME table the pane used to read.
+    assert "function viewHeadHtml(title, question) {" in js
+    assert "viewHeadHtml('Features', VIEW_Q.usecases)" in js
+    assert "viewHeadHtml('Actors', VIEW_Q.actors)" in js
+    assert "viewHeadHtml('Rules', VIEW_Q.rules)" in js
 
 def test_the_system_tab_is_cards_over_one_builder() -> None:
     """It used to stack every collection on one scrolling page under a chip bar: on a real map that is
@@ -618,7 +642,7 @@ def test_the_system_tab_is_cards_over_one_builder() -> None:
         body = js[js.index(f"function {fn}("): js.index("\nfunction ", js.index(f"function {fn}(") + 10)] \
             if f"\nfunction " in js[js.index(f"function {fn}("):] else js[js.index(f"function {fn}("):]
         assert "systemSections()" in body, fn
-    assert 'class="feat-card" data-sys=' in js          # the same card component as the Features tab
+    assert "plainCardHtml({ key: s.id, name: s.title" in js   # the ONE card component, as everywhere
     assert "go({ kind: 'sysSection', sys:" in js
     assert "const head = live.length > 1 ?" in js       # one band draws no label
     # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
@@ -664,7 +688,7 @@ def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
     # the page draws cards from them, so the cards and the table cannot disagree about a count.
     assert "kinds.push({ key: k, count: byKind[k].length" in js
     assert "if (found.kinds && !epk) {" in js
-    assert "go({ kind: 'sysSection', sys: sysId, epk: b.getAttribute('data-epk') })" in js
+    assert "bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: sysId, epk: key }));" in js
     assert "'gid', 'sys', 'epk'];" in js
 
 
@@ -731,11 +755,12 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     assert [t for _, t in order] == ["How you reach it", "What it decides", "What it knows",
                                      "What it runs on"], order
     # The use cases are the FIRST section, emitted by the one list renderer, not by a second copy.
-    assert "secs.push({ id: secId, title: 'What you can do' });" in js
+    assert "const title = page ? 'What you can do'" in js
     assert "secs.concat(extra.secs)" in js, "the pinned index is built from the sections themselves"
-    # Nothing on the page folds shut: a count you must click to see is a count you cannot scan.
-    assert "<details" not in js[js.index("// \u2500\u2500 the feature page"):
-                                js.index("// The Features tab's LIST level")]
+    # Only the CODE folds. It is the lowest-priority thing on the page and its count is in the
+    # heading; every other section is open, because a count you must click to see cannot be scanned.
+    region = js[js.index("// \u2500\u2500 the feature page"): js.index("function bindFeaturePage(root) {")]
+    assert region.count("<details") == 1 and "feat-fold" in region
 
 
 def test_a_long_list_on_the_feature_page_is_grouped_not_dumped() -> None:
@@ -770,8 +795,12 @@ def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
     assert "FEATURES.ruleJoinUsesExtents === false" in notes and "floor" in notes
     rules = js[js.index("function featRulesHtml(ids) {"):
                js.index("\nfunction ", js.index("function featRulesHtml(ids) {") + 10)]
-    assert rules.index("featRuleNotes()") < rules.index("rulesByBlock(ids)"), "the note leads the list"
+    assert "featRuleNotes()" not in rules, "a product page carries no coyodex statistic"
     assert "if (!ids.length) return notes + featEmpty(" in rules, "a feature deciding nothing still says so"
+    # The notes still exist — on the System tab, with every other fact about coyodex's own analysis.
+    cov = js[js.index("function unreachedHtml() {"):
+             js.index("\nfunction ", js.index("function unreachedHtml() {") + 10)]
+    assert "featRuleNotes()" in cov and "coverageLineHtml()" in cov
     # A map whose use cases name no way in (measured: 0 of 664 on one live map) must SAY so.
     eps = js[js.index("function featEntryPointsHtml(ids) {"):
              js.index("\nfunction ", js.index("function featEntryPointsHtml(ids) {") + 10)]
@@ -800,8 +829,14 @@ def test_a_row_is_only_a_use_case_when_it_names_one() -> None:
     landed the reader on a screen with no name and no crumb. The selector asks for the attribute that
     makes a row a use case, not for the class that makes it look like one."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "diagram.querySelectorAll('.uc-row[data-uc]')" in js
     assert "diagram.querySelectorAll('.uc-row')" not in js, "a bare row selector claims other pages' rows"
+    # The lists are element CARDS now, and the same rule holds one level up: the shared binder acts on
+    # `.ecard[data-id]`, and a caller's own control inside a card opts out with `data-card-own`.
+    bind = js[js.index("function bindElementCards(root, onDrill) {"):
+              js.index("\nfunction ", js.index("function bindElementCards(root, onDrill) {") + 10)]
+    assert "root.querySelectorAll('.ecard[data-id]')" in bind
+    assert "ev.target.closest('[data-card-own]')" in bind
+    assert "data-card-own" in js[js.index("function renderUseCases(sel) {"):]
 
 
 def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
@@ -822,24 +857,15 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
     assert "case 'capability':" in target
 
 
-def test_who_can_do_what_is_a_third_setting_on_the_one_axis_switch() -> None:
-    """Feature and Actor answer half of "who can do what" each, and neither shows the shape of the
-    whole: a quarter of the cells are filled on one live map, a third on another. The grid is a MODE
-    of the same overview, so it rides the switch that already picks the axis instead of opening a tab.
-    Every number drills to the list both axes already drill to, narrowed to both at once."""
+def test_an_actors_use_cases_hang_off_the_actors_tab() -> None:
+    """An actor's list used to be filed under Features, which made it a second, competing answer to
+    "what can this product do". It belongs to the Actors view, whose card opens it, and the crumb reads
+    Actors › that actor. The drill carries the actor so a use case named by two roles returns the reader
+    to the list they actually came through."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    over = js[js.index("function renderOverview() {"):
-              js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "seg('grid', 'Grid')" in over and "if (axis === 'grid') { renderRoleGrid();" in over
-    grid = js[js.index("function renderRoleGrid() {"):
-              js.index("\nfunction ", js.index("function renderRoleGrid() {") + 10)]
-    assert "ROLE_FEATURES[rid]" in grid, "the grid is the shipped role→feature count, not a JS re-count"
-    assert "kind: 'capability', cap: b.getAttribute('data-cap'), act: b.getAttribute('data-act')" in grid
-    assert "'<td class=\"rg-empty\">·</td>'" in grid, "an empty cell is nothing there, not a zero"
-    # Both axes of a cell survive into the list, the crumb and a right-pane navigation.
-    assert "if (one && oneActor) {" in js
-    assert "s.kind === 'unreached'" in js[js.index("function topView(kind) {"):]
-
+    assert "if (kind === 'actor') return 'actors';" in js
+    assert "if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];" in js
+    assert "renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });" in js
 
 def test_the_coverage_line_reports_reach_and_never_certainty() -> None:
     """"How much of the code does a feature explain" and "how sure is this map" are different
@@ -854,7 +880,12 @@ def test_the_coverage_line_reports_reach_and_never_certainty() -> None:
     assert "reaches" in body
     for word in ("confidence", "verified", "evidence", "sure", "certain"):
         assert word not in body.lower(), word
-    assert "componentsUnreached" in line and "cov-drill" in line
+    assert "componentsUnreached" in line
+    # It is a fact about coyodex's own analysis, so it lives on the System tab under "About this map",
+    # never on a product view. The reader looking at what the product does did not ask for it.
+    assert "sec('map', 'Functional coverage', unreachedHtml()," in js
+    assert "coverageLineHtml()" not in js[js.index("function renderOverview() {"):
+                                          js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
 
 
 def test_the_unreached_drill_separates_the_finding_from_the_expected() -> None:
@@ -895,7 +926,7 @@ for (const k in cases) { GRAPH.nodes[k] = { files: cases[k] }; out[k] = unreache
 console.log(JSON.stringify(out));
 """
     got = json.loads(_run_js_region("const UNREACHED_GROUPS = [",
-                                    "// The drill out of the coverage line", probe))
+                                    "// The code no feature and no rule reaches", probe))
     assert got == {"demo": "tooling", "widgets": "screen", "ports": "contracts", "shell": "tooling",
                    "compose": "tooling", "product": "other", "split": "other"}, got
 
