@@ -938,6 +938,26 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
 
+def test_a_card_drops_its_type_pill_on_that_types_own_view() -> None:
+    """The type pill names what an element IS and, clicked, shows it in context. On the view that is
+    that type's home both jobs are already done: the tab said the word, and "in context" is the page
+    the reader is on. So the Features grid asks for the card WITHOUT it — nine cards on one live map
+    stopped printing "feature" nine times, and eight of them fit their pills on one line again.
+
+    It is an OPT-IN on the shared card, not a rule the card guesses: the same feature card in a search
+    hit or an info pane is somewhere else, and there the type is the thing the reader lacks."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    card = js[js.index("function elementCardHtml(id, opts) {"):
+              js.index("\nfunction ", js.index("function elementCardHtml(id, opts) {") + 10)]
+    assert "const typeHtml = o.noType ? ''" in card
+    assert 'class="ecard-type"' in card and "+ typeHtml" in card
+    over = js[js.index("function renderOverview() {"):
+              js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    assert "return { noType: true," in over
+    # Only the feature grid opts in. Every other caller of the shared card still shows the type.
+    assert js.count("noType: true") == 1
+
+
 def test_the_coverage_line_reports_reach_and_never_certainty() -> None:
     """"How much of the code does a feature explain" and "how sure is this map" are different
     questions, and only the first is answered here. The second is invisible today: `confidence` and

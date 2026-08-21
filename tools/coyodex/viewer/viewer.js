@@ -414,11 +414,17 @@ function elementCardHtml(id, opts) {
   // so each card's title is its whole statement. Thirty words set bold is a wall, so a long title drops
   // to normal weight. Measured by length rather than by kind: any element can carry a long name.
   const nm = o.name || c.name;
+  // `noType` drops the type pill, for a card sitting on its own type's HOME VIEW. There the tab has
+  // already named the type, so the pill is the word repeated once per card — and its action, show
+  // this element in context, would land on the page the reader is already reading. It also costs a
+  // slot on the title line: with it, four of the ten feature cards on one live map wrapped.
+  const typeHtml = o.noType ? ''
+    : `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
+      + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`;
   return `<article class="ecard" data-id="${esc(id)}" tabindex="0">`
     + '<div class="ecard-head">'
     + `<span class="ecard-name${nm.length > 70 ? ' ecard-name-long' : ''}">${esc(nm)}</span>`
-    + `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
-    + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`
+    + typeHtml
     + cardPillsHtml(c.pills) + (o.extra || '')
     + '</div>'
     + (desc ? `<p class="ecard-desc">${mdInline(desc)}</p>` : '')
@@ -6128,6 +6134,7 @@ function renderOverview() {
   // The card is the SHARED element card, so a feature reads the same here, in a search result and in
   // any list that ever shows one. Its use-case count rides as an extra pill: it is a fact about the
   // product (how much you can do here), which is what a card grid is for choosing between.
+  // The type pill does NOT ride: this IS the features view, so every card on it is a feature.
   const per = (id) => {
     const g = groups.find((x) => x.cap && x.cap.id === id);
     const n = g ? g.ucs.length : 0;
@@ -6135,7 +6142,8 @@ function renderOverview() {
     // hide every "changed" badge behind a click.
     const changed = (mode === 'diff' && hasDiff() && g && g.ucs.some((x) => usecaseDiffState(x.id)))
       ? '<span class="badge modified">changed</span>' : '';
-    return { extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>${changed}` };
+    return { noType: true,
+             extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>${changed}` };
   };
   const ids = groups.filter((g) => g.cap).map((g) => g.cap.id);
   const loose = groups.find((g) => !g.cap);
