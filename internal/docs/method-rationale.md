@@ -42,6 +42,11 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 - **Anchor**: `**It says NOTHING about who the capability is for.** That is a second, independent`
 - **Evidence**: The predecessor field was a three-value `label` (core | supporting | platform). Two of its three values had no definition in any file, and every branch in the tooling tested only `== "core"`, so nothing ever distinguished them. The audience half was therefore unenforced and drifted: across rebuilds of the same repo one week apart the same feature was `platform`, then `supporting`; an audit feature was `supporting`, then `core`. Splitting the two questions also named the missing 2x2 cell — staff work the walk shows on purpose — which is all that six per-step records on the three live maps existed to excuse; they were deleted in the same change.
 
+### R02d — One audience is a signal, never a grouping rule
+- **Where**: `method.md`
+- **Anchor**: `**One audience is NOT a grouping rule.** Several actors in one capability is ordinary`
+- **Evidence**: Requiring one audience per capability was proposed and dropped. Measured across the three reference maps: 10 of 27 capabilities have more than one human actor and every one of them is unanimous, so the rule would have changed nothing — several actors is ordinary, several GOALS is the defect. It would also force a wrong split on a shared surface (a support desk is one goal the customer and the company both act in), a shape none of the three maps happens to have. The mixed-audience warning stays as a signal with three causes the check cannot tell apart, and only the third (a genuinely shared surface) is recordable.
+
 ### R02c — Audience is authored on the role because the role is the stable element
 - **Where**: `method.md`
 - **Anchor**: `**Authored on the role because the role is the stable element.** Across 21 rebuilds`

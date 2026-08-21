@@ -51,9 +51,11 @@ class FeatureFacts:
     name: str
     purpose: str = ""
     happy_path: str = ""                                     # expected / excluded — AUTHORED
-    audience: str = ""                                       # user / staff / mixed — DERIVED from the
+    audience: list[str] = field(default_factory=list)        # user and/or staff — DERIVED from the
                                                              # roles driving its use cases, never
-                                                             # authored, so the two cannot disagree
+                                                             # authored, so the two cannot disagree.
+                                                             # A SET: a surface both sides act in
+                                                             # honestly carries both words
     roles: list[str] = field(default_factory=list)           # who drives its use cases
     use_cases: list[str] = field(default_factory=list)
     entry_points: list[str] = field(default_factory=list)    # how you reach it
@@ -190,7 +192,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     features = [
         FeatureFacts(
             id=c.id, name=c.name, purpose=c.purpose, happy_path=c.happy_path,
-            audience=audience.get(c.id, ""),
+            audience=audience.get(c.id) or [],
             roles=_sorted_ids(feat_roles[c.id]),
             use_cases=_sorted_ids(feat_ucs[c.id]),
             entry_points=_sorted_ids(feat_eps[c.id]),

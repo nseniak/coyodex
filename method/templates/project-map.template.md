@@ -30,9 +30,9 @@
 <!-- Primary actors only — the parties who INITIATE use cases. External systems the project calls
      out to (IdPs, sandboxes, upstream services, third-party APIs) go in T2, not here. -->
 
-| Role | Kind | What they want | Use cases they drive |
-|---|---|---|---|
-| **<Role>** | human | <goal> | UC1 |
+| Role | Kind | Audience | What they want | Use cases they drive |
+|---|---|---|---|---|
+| **<Role>** | human | user | <goal> | UC1 |
 
 ---
 

@@ -341,7 +341,7 @@ def model_to_markdown(m: ProjectModel) -> str:
                  "two can never contradict each other.", ""]
                 + _table(["ID", "Capability", "Happy Path", "Audience", "Purpose", "Parent"],
                          [[f"**{c.id}**", c.name, c.happy_path,
-                           cap_audience.get(c.id, ""),
+                           ", ".join(cap_audience.get(c.id) or ()),
                            c.purpose, cap_parent.get(c.parent or "", "")]
                           for c in m.capabilities]))
     if m.use_cases:
@@ -1062,8 +1062,10 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
                               {"Capability": cap.name, "Purpose": cap.purpose,
                                "Parent": parent_name,
                                **({"Happy Path": cap.happy_path} if cap.happy_path else {}),
-                               **({"Audience": aud} if (aud := cap_audience_nodes.get(cap.id))
-                                  else {})},
+                               # Joined, because a node field is a display string. The card splits
+                               # it back into one pill per audience.
+                               **({"Audience": ", ".join(aud)}
+                                  if (aud := cap_audience_nodes.get(cap.id)) else {})},
                               cap.parent)
     # Blocks and rules are never DRAWN as boxes — they group decisions, not code — but they must
     # reach the browser as nodes all the same: `test_convert_and_views` requires every defined

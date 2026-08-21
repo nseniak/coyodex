@@ -678,13 +678,13 @@ def capability_members(m: ProjectModel) -> dict[str, set[str]]:
     return {c.id: walk(c.id, set()) for c in m.capabilities}
 
 
-#: What `capability_audience` returns for a capability whose human actors disagree. Not a value the
-#: map may ever author — it is the finding, and `_check_capability_audience` reports it.
-AUDIENCE_MIXED = "mixed"
-
-
-def capability_audience(m: ProjectModel) -> dict[str, str]:
+def capability_audience(m: ProjectModel) -> dict[str, list[str]]:
     """Per capability, WHO it is for, derived from the roles driving its use cases.
+
+    A SET, in `grammar.ROLE_AUDIENCE` order, never a single word with a "mixed" sentinel. A feature
+    serving both sides is legal (a support desk is one goal the customer and the company both act
+    in), so the honest answer is both words, and the viewer shows both pills. A sentinel would have
+    to be either an alarm on a feature the operator already accepted, or a third audience nobody has.
 
     The map authors the audience once, on the ROLE (`Role.audience`), and it is derived up from
     there. Nothing is authored on the capability, so a capability's audience can never contradict
@@ -700,14 +700,14 @@ def capability_audience(m: ProjectModel) -> dict[str, str]:
     administrator operates).
 
     Machine roles are the FALLBACK, not a veto: a capability whose use cases name no human at all
-    still gets an answer rather than nothing. Returns `""` when no actor of either kind carries a
+    still gets an answer rather than nothing. Returns `[]` when no actor of either kind carries a
     tag, which is "nobody decided", never "user".
 
     Reads the SUBTREE (`capability_members`), so a parent capability inherits its children's actors
     the way every other capability-altitude question here does."""
     by_id = {u.id: u for u in m.use_cases}
     roles = {r.id: r for r in m.roles}
-    out: dict[str, str] = {}
+    out: dict[str, list[str]] = {}
     for cap, ucs in capability_members(m).items():
         human: set[str] = set()
         machine: set[str] = set()
@@ -718,7 +718,7 @@ def capability_audience(m: ProjectModel) -> dict[str, str]:
                     continue
                 (machine if (role.kind or "").strip().lower().startswith("s") else human).add(tag)
         votes = human or machine
-        out[cap] = "" if not votes else (votes.copy().pop() if len(votes) == 1 else AUDIENCE_MIXED)
+        out[cap] = [a for a in grammar.ROLE_AUDIENCE if a in votes]
     return out
 
 
@@ -2895,11 +2895,17 @@ def _check_role_audience(m: ProjectModel) -> list[str]:
 def _check_capability_audience(m: ProjectModel) -> list[str]:
     """The derived half: a role left untagged, and the ONE cross-check the tag buys.
 
-    A capability whose HUMAN actors disagree is the one place a wrong tag or a wrongly-grouped
-    capability shows up mechanically, and it is cheap — measured on the three live maps it fires
-    exactly once, on a demo site an outside visitor browses and the company's own administrator
-    operates, which is a real defect. Record `CAPn: <why>` under an 'Audience exceptions' extras
-    heading to accept one (a shared surface both sides genuinely use)."""
+    A capability whose HUMAN actors disagree is where a broken grouping shows up mechanically, and
+    it is cheap — measured on the three live maps it fires exactly once, on a demo site an outside
+    visitor browses and the company's own administrator operates.
+
+    It is a SIGNAL, not a rule, and it has three causes the check cannot tell apart: the goal is
+    really two goals (the usual one — two people on opposite sides of the company rarely share one);
+    an actor is wrong; or the surface genuinely serves both (a support desk). Only the third is
+    legitimate, and it is recordable. Measured against the alternative: making one-audience a
+    GROUPING rule would force a wrong split on that third shape, and would have touched none of the
+    10 capabilities of 27 that already have several actors, because every one of them is
+    unanimous — several actors is normal, several GOALS is the defect."""
     untagged = [r.id for r in m.roles if not (r.audience or "").strip()]
     warnings: list[str] = []
     # Silent while NO role carries an audience — the axis is un-adopted, not a gap (the same
@@ -2914,11 +2920,13 @@ def _check_capability_audience(m: ProjectModel) -> list[str]:
     recorded = records.recorded_keys(m, "Audience exceptions")
     caps = {c.id: c for c in m.capabilities}
     warnings += [
-        f"{cid} ({caps[cid].name}) is driven by both `user` and `staff` roles — one capability, two "
-        "audiences: split it, move the odd use case to the capability that fits, or record "
-        f"'{cid}: <why>' under an 'Audience exceptions' extras heading"
+        f"{cid} ({caps[cid].name}) is driven by both `user` and `staff` roles — usually two goals in "
+        "one capability, so re-read its goal first; check too that each use case names the actor who "
+        "really initiates it. Split it, move the odd use case to the capability that fits, correct "
+        f"the actor, or — if the surface genuinely serves both sides — record '{cid}: <why>' under "
+        "an 'Audience exceptions' extras heading"
         for cid, aud in sorted(capability_audience(m).items())
-        if aud == AUDIENCE_MIXED and cid in caps and cid not in recorded]
+        if len(aud) > 1 and cid in caps and cid not in recorded]
     return warnings
 
 

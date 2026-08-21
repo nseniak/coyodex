@@ -96,9 +96,9 @@ def test_a_feature_carries_its_authored_walk_expectation_and_its_derived_audienc
     """Two independent words, and only one of them is authored. The predecessor was ONE word
     carrying both questions, whose middle value ended up meaning neither."""
     ix = index_of(make_map())
-    assert (feature(ix).happy_path, feature(ix).audience) == ("expected", "user")
+    assert (feature(ix).happy_path, feature(ix).audience) == ("expected", ["user"])
     bundled = as_bundle(ix)["features"][0]
-    assert (bundled["happyPath"], bundled["audience"]) == ("expected", "user")
+    assert (bundled["happyPath"], bundled["audience"]) == ("expected", ["user"])
 
 
 def test_a_feature_gathers_the_components_and_entities_its_flow_touches():

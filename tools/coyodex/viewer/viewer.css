@@ -424,7 +424,6 @@ body.vresizing #stage { pointer-events: none; }
    AUDIENCE (who it is for) is a filled tint; HAPPY PATH (must the walk reach it) is an outline. */
 .uc-aud-user { background: #e0e7ff; color: #4338ca; }
 .uc-aud-staff { background: #fef3c7; color: #92400e; }
-.uc-aud-mixed { background: #fee2e2; color: #b91c1c; }
 .uc-walk-expected { background: transparent; color: #4338ca; box-shadow: inset 0 0 0 1px #c7d2fe; }
 .uc-walk-excluded { background: transparent; color: #6b7280; box-shadow: inset 0 0 0 1px #e5e7eb; }
 /* The info pane holds ONE card — the same card a list holds. The pane's own padding already frames it,

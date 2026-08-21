@@ -386,7 +386,11 @@ function cardFacts(id) {
   // actors), `Happy Path` is whether the guided walk must reach it. One word carrying both is what
   // the old three-value label did, and its middle value ended up meaning neither.
   if (n.kind === 'capability') {
-    if (f.Audience) pills.push({ text: f.Audience, cls: 'uc-aud-' + f.Audience.toLowerCase() });
+    // One pill PER audience. A feature both sides act in says `user` and `staff`, which is the
+    // honest answer; a single "mixed" word would be an alarm on a feature already accepted.
+    for (const a of (f.Audience || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+      pills.push({ text: a, cls: 'uc-aud-' + a.toLowerCase() });
+    }
     if (f['Happy Path']) pills.push({ text: f['Happy Path'], cls: 'uc-walk-' + f['Happy Path'].toLowerCase() });
   }
   if (n.kind === 'human' || n.kind === 'service') pills.push({ text: n.kind, cls: 'ecard-pill-' + n.kind });
@@ -5803,7 +5807,7 @@ function featureHeadHtml(capId) {
     ? `<span class="uc-caplabel uc-${kind}-${esc(v.toLowerCase())}">${esc(v)}</span>` : '');
   return pageHeroHtml({
     name: f.name,
-    pills: capPill(f.audience, 'aud') + capPill(f.happyPath, 'walk'),
+    pills: (f.audience || []).map((a) => capPill(a, 'aud')).join('') + capPill(f.happyPath, 'walk'),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
     meta: `<span class="page-hero-lbl">Used by</span> ${roles}`,
@@ -5868,13 +5872,17 @@ function actorHeadHtml(actorName) {
   // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
   const role = g && g.roles.length === 1 ? g.roles[0] : null;
   const kind = ((role || {}).kind || '').trim().toLowerCase();
-  // Whose side this person is on rides beside whether they are a person or a program. The two are
+  // Whose side this actor is on rides beside whether it is a person or a program. The two are
   // independent: a customer's own bot is service+user, the product's upkeep job is service+staff.
+  // On a PROGRAM the word is possessive — a bare `staff` on a scheduler reads as "this program is a
+  // person", which is the one thing the stored word does not mean. The model keeps `staff`; only
+  // the reading changes, so there is no second vocabulary to drift.
   const aud = ((role || {}).audience || '').trim().toLowerCase();
+  const audText = aud && kind === 'service' ? `${aud}-owned` : aud;
   return pageHeroHtml({
     pills: ((kind === 'human' || kind === 'service')
       ? `<span class="ecard-pill ecard-pill-${kind}">${esc(kind)}</span>` : '')
-      + (aud ? `<span class="uc-caplabel uc-aud-${esc(aud)}">${esc(aud)}</span>` : ''),
+      + (aud ? `<span class="uc-caplabel uc-aud-${esc(aud)}">${esc(audText)}</span>` : ''),
     desc: role && role.wants ? mdInline(role.wants) : '',
     noDesc: 'This map does not say what this actor wants.',
   });

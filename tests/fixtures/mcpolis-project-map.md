@@ -86,7 +86,7 @@ The use-case grouping. `Happy Path` is AUTHORED: must the walk reach this capabi
 | **CAP4** | Tool access via gateway | expected | user | The runtime path a client takes to list and call tools through the gateway. |  |
 | **CAP5** | Secrets & variables | excluded | user | Template variables, passwords and sandbox credential files behind upstream config. |  |
 | **CAP6** | Audit & oversight | expected | user | Reading back what happened in an org. |  |
-| **CAP7** | Admin surfaces & ops | excluded | mixed | Alternative management channels and operator support paths. |  |
+| **CAP7** | Admin surfaces & ops | excluded | user, staff | Alternative management channels and operator support paths. |  |
 
 ---
 

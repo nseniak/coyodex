@@ -3360,7 +3360,7 @@ def make_audience_model() -> ProjectModel:
 
 def test_a_capabilitys_audience_is_derived_from_the_roles_driving_its_use_cases() -> None:
     m = make_audience_model()
-    assert validate_model_mod.capability_audience(m) == {"CAP1": "user", "CAP2": "staff"}
+    assert validate_model_mod.capability_audience(m) == {"CAP1": ["user"], "CAP2": ["staff"]}
     assert not any("audiences" in w for w in warnings_of(m))
 
 
@@ -3370,10 +3370,10 @@ def test_only_human_roles_vote_and_machines_are_the_fallback() -> None:
     capabilities `mixed` on the live maps, two of them falsely."""
     m = make_audience_model()
     m.use_cases[0].actors = ["R1", "R3"]                  # staff-tagged machine inside a user feature
-    assert validate_model_mod.capability_audience(m)["CAP1"] == "user"
+    assert validate_model_mod.capability_audience(m)["CAP1"] == ["user"]
     m.use_cases[0].actors = ["R3"]                        # no human left: the machine answers
     m.use_cases[1].actors = ["R3"]
-    assert validate_model_mod.capability_audience(m)["CAP1"] == "staff"
+    assert validate_model_mod.capability_audience(m)["CAP1"] == ["staff"]
 
 
 def test_a_capability_driven_by_both_sides_warns_and_can_be_recorded() -> None:
@@ -3381,6 +3381,9 @@ def test_a_capability_driven_by_both_sides_warns_and_can_be_recorded() -> None:
     site an outside visitor browses and the company's own administrator operates."""
     m = make_audience_model()
     m.use_cases[1].actors = ["R2"]                        # CAP1 now holds a user AND a staff use case
+    # BOTH words, never a "mixed" sentinel: the views show two pills, and a surface that really does
+    # serve both sides keeps an honest answer after the operator records it.
+    assert validate_model_mod.capability_audience(m)["CAP1"] == ["user", "staff"]
     assert any("CAP1" in w and "both `user` and `staff`" in w for w in warnings_of(m))
     m.extras = [ExtraSection(heading="Audience exceptions",
                              body="CAP1: the status page is the one surface both sides read")]
@@ -3439,7 +3442,7 @@ def test_a_staff_capability_on_the_walk_costs_no_record() -> None:
     m.happy_path.append(HappyStep(id="HP2", title="Read", uc="UC3"))
     ws = warnings_of(m)
     assert not any("HP2" in w for w in ws)
-    assert validate_model_mod.capability_audience(m)["CAP2"] == "staff"
+    assert validate_model_mod.capability_audience(m)["CAP2"] == ["staff"]
 
 
 def test_an_excluded_capability_holding_off_spine_use_cases_needs_one_record() -> None:
