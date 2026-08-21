@@ -1838,7 +1838,7 @@ def _js_function(name: str) -> str:
     return _js_code(VIEWER_JS[start:VIEWER_JS.index("\nfunction ", start + 10)])
 
 
-RULE_RENDERERS = ("renderRules", "renderRule", "ruleTagsHtml", "ruleSiteRow", "ruleStepChip",
+RULE_RENDERERS = ("renderRules", "renderRule", "ruleAnalysisGapsHtml", "ruleSiteRow", "ruleStepChip",
                   "ruleBlockGroups", "decidesHtml", "stepRulesHtml")
 
 
@@ -1863,20 +1863,21 @@ def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
     # gone — the page already says it in full, with every call site and every step.
     assert "site.components" not in _js_function("renderRules")
     assert "site.components" in _js_function("ruleSiteRow")     # the page's per-site owners
-    assert "r.swept" in _js_function("ruleTagsHtml")            # the sweep-debt chip, shown on both
+    assert "r.swept" in _js_function("ruleAnalysisGapsHtml")    # the sweep gap, now a System collection
     assert "l.strength" in _js_function("ruleStepChip")
 
 
 def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
     """Business logic is read straight after what the product DOES, long before how it is built. The
-    product row reads in the order a newcomer needs it: what the product is FOR, who drives it, one walk
-    end to end, everything it does, and only then what it decides. So Rules is last of the five.
+    product row reads in the order a newcomer needs it: everything the product does (led by what it is
+    FOR), then one walk end to end, then who drives it, and only then what it decides. So Rules is last
+    of the four.
     Both of the tab's levels must live in `usecases-wrap`, the catalog's scroll container (`height:
     100%; overflow: auto`). An invented wrapper has no CSS at all, so the tab renders at full height
     inside a clipped parent and cannot be scrolled."""
     html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
     order = re.findall(r'data-view="(\w+)"', html)
-    assert order[:5] == ["goal", "actors", "hp", "usecases", "rules"], order
+    assert order[:4] == ["usecases", "hp", "actors", "rules"], order
     for fn in ("renderRules", "renderRule"):
         assert '<div class="usecases-wrap">' in _js_function(fn), fn
     css = (VIEWER / "viewer.css").read_text(encoding="utf-8")
@@ -2093,10 +2094,16 @@ def test_a_nameless_rule_still_resolves_through_dump() -> None:
         == "Only the order's owner may cancel it."
 
 
-def test_the_tab_badges_only_what_it_can_derive() -> None:
-    """The tab badges DERIVED state and nothing else. Both survivors — sweep debt and unverified —
-    are computed from the site anchors by the one Python implementation. The two authored flags that
-    used to sit beside them are not shown:
+def test_how_far_the_analysis_got_is_reported_on_the_map_tab_not_on_a_rule() -> None:
+    """Sweep debt and unverified call sites are facts about coyodex's ANALYSIS, not about the product.
+    They were chips on every rule, on the list and on the rule's own page. A reader asking what the
+    product decides never asked how thoroughly the map was built, so they moved to System › About this
+    map, beside functional coverage and every other such number. Nothing is lost: both are still
+    derived, still named, and now list the rules they apply to.
+
+    What is reported there is still DERIVED state and nothing else. Both survivors are computed from
+    the site anchors by the one Python implementation. The two authored flags that used to sit beside
+    them are still not shown anywhere:
 
     `confidence` is the agent's own word for its own work — nothing derives it, nothing checks it
     (`confidence_warnings` does not even cover rules), and the dispatch template's example JSON
@@ -2106,14 +2113,22 @@ def test_the_tab_badges_only_what_it_can_derive() -> None:
 
     `access` is a real distinction, but the System tab's Security & auth section IS the access rules,
     with each one's risk and enforcement sites — a bare word here was a second, poorer rendering."""
-    tags = _js_function("ruleTagsHtml")
+    assert "ruleTagsHtml" not in VIEWER_JS, "a rule carries no analysis chip any more"
+    tags = _js_function("ruleAnalysisGapsHtml")
     for derived in ("r.swept", "r.unverified"):
         assert derived in tags, derived
+    # It is a System collection, on the "About this map" band, listing the rules rather than badging.
+    assert "sec('map', 'Rule analysis gaps', ruleAnalysisGapsHtml()," in VIEWER_JS
+    assert "elementCardGroupsHtml(" in tags
     for authored in ("confidence", "access"):
         assert authored not in tags, authored
         # …and no other part of the tab quietly puts it back.
         for fn in ("renderRules", "renderRule"):
             assert authored not in _js_function(fn), (fn, authored)
+    # The product views say nothing about how well the map was made.
+    for fn in ("renderRules", "renderRule"):
+        for gap in ("swept", "unverified"):
+            assert gap not in _js_function(fn), (fn, gap)
     # Both fields are still carried — this is a display decision, not a payload change.
     m = make_checkable_model()
     m.rules[0].confidence = "verified"

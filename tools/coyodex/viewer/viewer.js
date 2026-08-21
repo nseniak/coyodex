@@ -63,7 +63,6 @@ let HAS_HP;
 let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
 let HAS_USECASES;    // gates the Use Cases tab (any use-case node present)
 let HAS_ACTORS;      // gates the Actors tab (any actor node present)
-let HAS_GOAL;        // gates the Goal tab (the SYS node carries a product description)
 let HAS_SYSTEM;      // gates the System tab (any operational/reference collection present)
 let HAS_DATA;        // gates the Data tab (any physical store present in data_view)
 let DATA_VIEW;       // the store-centric Data-view payload (GRAPH.data_view)
@@ -116,7 +115,6 @@ function applyBundle(b) {
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
   HAS_ACTORS = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'human' || n.kind === 'service');
-  HAS_GOAL = !!((GRAPH.nodes && GRAPH.nodes.SYS && (GRAPH.nodes.SYS.fields || {}).Overview) || '').trim();
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
   // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
   COMPLETENESS = GRAPH.completeness || {};
@@ -2730,7 +2728,6 @@ const GROUP_LABEL = {};     // group id -> its label, from VIEW_GROUPS
 const groupLast = {};
 const VIEW_LABEL = {};   // view id -> its tab label, filled from the buttons at boot (one source)
 const VIEW_Q = {
-  goal: 'What is this product for, and who is it for?',
   actors: 'Who and what drives this product, and what can each of them do?',
   hp: 'What does this system do, end to end?',
   usecases: 'What can this product do, feature by feature?',
@@ -5095,7 +5092,7 @@ function showViewIntro(s) {
 // NOT the legend's `TEXT_VIEWS` above, which asks a different question ("does this view draw shapes
 // worth a legend") and is keyed by TOP-LEVEL view. This one is keyed by STATE KIND, because a use-case
 // FLOW lives under the Features tab and is a diagram with a pane, while its sibling states are pages.
-const TEXT_PAGES = new Set(['goal', 'actors', 'usecases', 'capability', 'actor',
+const TEXT_PAGES = new Set(['actors', 'usecases', 'capability', 'actor',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element']);
 // Show or hide the info pane (and the handle that resizes it) for the state being rendered.
 function syncInfoPane(s) {
@@ -5172,7 +5169,7 @@ function elementHomeView(id) {
 function topView(kind, id) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'element') return id ? elementHomeView(id) : 'container';
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules') return kind;
-  if (kind === 'goal' || kind === 'actors') return kind;  // each is its own tab
+  if (kind === 'actors') return kind;   // the Actors view is its own tab
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
@@ -5212,7 +5209,6 @@ function stateTitle(s) {
   }
   if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
   if (s.kind === 'actors') return 'Actors';
-  if (s.kind === 'goal') return 'Goal';
   if (s.kind === 'element') return elName(s.id);
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
@@ -5257,7 +5253,6 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     const base = t ? ancestors(t.state) : [];
     return base.concat([{ kind: 'element', id: s.id }]);
   }
-  if (s.kind === 'goal') return [{ kind: 'goal' }];
   if (s.kind === 'actors') return [{ kind: 'actors' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap, act: s.act }];  // one feature's use cases (a grid cell also carries the role)
@@ -5860,8 +5855,9 @@ function renderUseCases(sel) {
     : one === '-' ? viewHeadHtml('Not assigned to a feature',
         'Which use cases does this map place under no feature?')
     // A map recording no features falls back to the flat catalog, and the tab's own question ("feature
-    // by feature") would then name something the page does not have.
-    : viewHeadHtml('Use cases', 'What can this product do, and who does each thing?');
+    // by feature") would then name something the page does not have. It leads with the product
+    // description all the same: that map has one, and this is the page a reader lands on.
+    : viewHeadHtml('Use cases', 'What can this product do, and who does each thing?') + productLeadHtml();
   // On a feature's page the use-case section is the FIRST of five, and the rest of the map — filtered to
   // this feature — follows it. The pinned index is built from every section, so it and the page cannot
   // disagree about what is on screen.
@@ -5871,6 +5867,7 @@ function renderUseCases(sel) {
     + (sections || '<p class="empty">No use cases recorded.</p>')
     + (extra ? extra.html : '') + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
+  bindProductLead();
   if (page) bindFeaturePage(diagram);
   // Carry the actor whose list this is into the drill, so the crumb names the list the reader came
   // through. A use case named by two roles appears under BOTH, so recomputing its group from the use
@@ -5976,20 +5973,17 @@ function unreachedHtml() {
     + (groups || '<p class="feat-empty">Every component is reached by a feature or a rule.</p>');
 }
 
-// The GOAL view: what this product is for, in the map's own words. It is the first thing the reader
-// should meet, and it used to be reachable only as the default info pane of the Happy Path — so it
-// vanished the moment you clicked anything, and a reader who arrived on any other tab never saw it.
-function renderGoal() {
+// What this product is FOR, in the map's own words — the lead paragraph of the Features view. It had
+// a tab of its own for a moment, and a tab is the wrong home for three sentences: the reader had to
+// visit a page, read it once and never return. Above the feature cards it is the first thing on the
+// landing screen and costs nothing to skip.
+//
+// Before that it was the Happy Path's default info pane, which was worse still: it vanished on the
+// first click, and a reader who landed on any other tab never saw it at all.
+function productLeadHtml() {
   const n = GRAPH.nodes.SYS || {};
   const overview = ((n.fields || {}).Overview || '').trim();
-  diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">'
-    + viewHeadHtml(n.name || 'Goal', VIEW_Q.goal)
-    + (overview ? `<div class="goal-body">${mdRefs(overview, GRAPH.nodes)}</div>`
-                : '<p class="empty">This map records no product description.</p>')
-    + '</div>';
-  // An id named in the prose is a live link to that element, through the one resolver.
-  diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) =>
-    btn.addEventListener('click', () => showInContext(btn.getAttribute('data-id'))));
+  return overview ? `<div class="view-lead">${mdRefs(overview, GRAPH.nodes)}</div>` : '';
 }
 
 // The ACTORS view: everyone and everything that drives this product, as a card list. Each card opens
@@ -6058,9 +6052,10 @@ function renderOverview() {
     // The same actor cards the Actors view draws, laid out to CHOOSE from rather than to read down.
     const cards = actorCardsHtml(true);
     diagram.innerHTML = '<div class="usecases-wrap">'
-      + viewHeadHtml('Features', 'What can each role do?')
+      + viewHeadHtml('Features', 'What can each role do?') + productLeadHtml()
       + (cards || '<p class="empty">This map records no actors.</p>') + '</div>';
     bindElementCards(diagram, openActor);
+    bindProductLead();
     bindOverviewAxis();
     return;
   }
@@ -6087,10 +6082,16 @@ function renderOverview() {
     ? `<div class="ecard-grid">${ids.map((id) => elementCardHtml(id, per(id))).join('')}${looseCard}</div>`
     : '<p class="empty">No features recorded.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + viewHeadHtml('Features', VIEW_Q.usecases) + grid + '</div>';
+    + viewHeadHtml('Features', VIEW_Q.usecases) + productLeadHtml() + grid + '</div>';
+  bindProductLead();
   bindElementCards(diagram);
   bindPlainCards(diagram, (key) => go({ kind: 'capability', cap: key }));
   bindOverviewAxis();
+}
+// An id named in the product description is a live link to that element, through the one resolver.
+function bindProductLead() {
+  diagram.querySelectorAll('.view-lead .sys-ref[data-id]').forEach((btn) =>
+    btn.addEventListener('click', () => showInContext(btn.getAttribute('data-id'))));
 }
 // The axis switch's own wiring, shared by both settings of the view.
 function bindOverviewAxis() {
@@ -6212,6 +6213,13 @@ function systemSections() {
   // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
   // tag, and the self-starting kinds are listed first so "what runs with no user?" clusters at the
   // top without a separate section. Each row links to its owning component.
+  // What coyodex's own rule analysis fell short on. Beside functional coverage, for the same reason:
+  // both say how far the MAP got, which is not something a product view should ever claim to answer.
+  if (ruleAnalysisGapCount()) {
+    sec('map', 'Rule analysis gaps', ruleAnalysisGapsHtml(),
+        `${ruleAnalysisGapCount()} rule${ruleAnalysisGapCount() === 1 ? '' : 's'}`,
+        'Rules whose code was never swept, and rules enforced where no component claims the line.');
+  }
   // Functional coverage — how much of the code the feature layer reaches, and what it misses. A fact
   // about the MAP, so it belongs on this tab and nowhere near the product views.
   if ((FEAT_COVERAGE.componentsTotal || 0) && HAS_CAPABILITIES) {
@@ -6767,10 +6775,16 @@ function ruleBlockGroups() {
 function ruleGroupKeyFor(bid) {
   return ruleBlockGroups().some((g) => g.id === bid) ? bid : 'none';
 }
-// A rule's state chips, shown on its row AND on its page — one spelling of "sweep debt" and
-// "unverified", so the list and the detail never disagree about a rule.
+// Which rules coyodex's own analysis fell short on: the ones whose code it never swept for other
+// places the same decision is made, and the ones with a call site no component claims. Both are
+// derived from the site anchors by the one Python implementation.
 //
-// THE TAB BADGES ONLY WHAT IT DERIVES. Both survivors are computed from the site anchors by the one
+// They used to be chips on every rule, on the list AND on the rule's page. They are facts about the
+// ANALYSIS, not about the product, and a reader asking what the product decides never asked how
+// thoroughly the map was built — so they moved here, to System › About this map, where every other
+// such fact already lives. A rule can appear in both groups: they are two different shortfalls.
+//
+// THE TAB BADGED ONLY WHAT IT DERIVES. Both survivors are computed from the site anchors by the one
 // Python implementation. The two authored flags that used to sit beside them are gone:
 //   `confidence` — the agent's own word for its own work ("verified" = I read it in the code), which
 //     nothing derives and nothing checks, and which comes out CONSTANT: every rule in a map carries
@@ -6782,10 +6796,21 @@ function ruleGroupKeyFor(bid) {
 //     second rendering as a bare word here added a badge to every row and answered nothing.
 // Both fields still reach the model, the markdown view and the security surface — this is a display
 // decision, not a payload change.
-function ruleTagsHtml(r) {
-  return (r.swept ? '' : '<span class="br-tag br-debt" title="the code was not swept for other places'
-        + ' this decision is made">sweep debt</span>')
-    + (r.unverified ? '<span class="br-tag br-warn" title="a call site no component claims">unverified</span>' : '');
+function ruleAnalysisGapsHtml() {
+  const rules = RULES_VIEW.rules || [];
+  const ids = (f) => rules.filter(f).map((r) => r.id);
+  return elementCardGroupsHtml([
+    { title: 'Not swept', ids: ids((r) => !r.swept),
+      desc: 'The code was never searched for other places this same decision is made, so the sites '
+          + 'listed for these rules may not be all of them.' },
+    { title: 'Call site unclaimed', ids: ids((r) => r.unverified),
+      desc: 'These rules are enforced at a line no component in the map claims, so the map cannot '
+          + 'say which part of the product owns the decision.' },
+  ]);
+}
+function ruleAnalysisGapCount() {
+  const rules = RULES_VIEW.rules || [];
+  return rules.filter((r) => !r.swept || r.unverified).length;
 }
 // A site: line — component(s). EVERY owner is listed; one nobody claims says so rather than
 // rendering blank, and a declared absence says what it is instead of pretending to be a gap.
@@ -6856,13 +6881,9 @@ function renderRules(s) {
     diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">This decision area is not in the map.</p></div>';
     return;
   }
-  // The warning chips ride beside the type pill: one word each, and each one changes how much weight to
-  // put on the rule below it. Where the rule is ENFORCED does not ride here — it was a third line on
-  // the old row, and the rule's own page already carries it in full, with every call site and step.
-  const per = (id) => {
-    const r = ruleById(id);
-    return { extra: r ? ruleTagsHtml(r) : '' };
-  };
+  // Nothing rides beside the type pill. Where a rule is ENFORCED was a third line on the old row, and
+  // the rule's own page carries it in full; how well coyodex ANALYSED the rule is a fact about the map,
+  // and lives with the others under System › About this map.
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({
       name: g.name,
@@ -6871,7 +6892,7 @@ function renderRules(s) {
       noDesc: 'No description recorded for this decision area.',
       meta: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
     })
-    + (g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id), per)
+    + (g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id))
                       : '<p class="empty">No rules assigned to this area yet.</p>')
     + '</div>';
   bindElementCards(diagram);
@@ -6908,7 +6929,7 @@ function renderRule(s) {
     : '<p class="empty">No entity is named by this rule.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
     + '<section class="uc-group">'
-    + `<h3 class="uc-actor">${esc(ruleTitle(r))}${ruleTagsHtml(r)}</h3>`
+    + `<h3 class="uc-actor">${esc(ruleTitle(r))}</h3>`
     + (ruleStatementLine(r) ? `<p class="br-statement">${mdInline(r.statement)}</p>` : '')
     + `<p class="uc-wants"><span class="uc-wants-lbl">Decision area:</span> ${area}</p>`
     + (blk && blk.purpose ? `<p class="uc-wants">${mdInline(blk.purpose)}</p>` : '')
@@ -6992,7 +7013,6 @@ async function render(sArg, transient) {
   if (s.kind === 'element') {
     renderElementDetails(s.id); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
-  if (s.kind === 'goal') { renderGoal(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   if (s.kind === 'actors') { renderActors(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // One feature's use cases — the drill out of those cards ('*' = all of them). The right pane keeps the
   // TAB's question, as one rule's page does: the feature's own name and purpose head the list itself.
@@ -9239,7 +9259,6 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'hp' && !HAS_HP) { b.style.display = 'none'; return; }
-  if (b.dataset.view === 'goal' && !HAS_GOAL) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'actors' && !HAS_ACTORS) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'usecases' && !HAS_USECASES) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'deployment' && !HAS_DEPLOYMENT) { b.style.display = 'none'; return; }
@@ -9542,14 +9561,13 @@ if (impactbtn) {
 }
 
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise on
-// GOAL, which is what the product is FOR and the first thing a newcomer should read. Each fallback is
-// the next thing down the product row: Actors, then the Happy Path, then Features, and only then the
-// machine (Subsystems, and Dependencies for a map with no grouping at all).
+// FEATURES, which leads with what the product is FOR and then lists everything it does. Each fallback
+// is the next thing down the product row: the Happy Path, then Actors, and only then the machine
+// (Subsystems, and Dependencies for a map with no grouping at all).
 const LANDING = (HAS_DIFF && HAS_GROUPING) ? 'container'
-  : HAS_GOAL ? 'goal'
-  : HAS_ACTORS ? 'actors'
+  : HAS_USECASES ? 'usecases'
   : HAS_HP ? 'hp'
-  : (HAS_CAPABILITIES && HAS_USECASES) ? 'usecases'
+  : HAS_ACTORS ? 'actors'
   : HAS_GROUPING ? 'container'
   : 'context';
 go({ kind: LANDING });

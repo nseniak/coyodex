@@ -637,7 +637,7 @@ def test_a_text_view_puts_its_question_on_the_page_and_drops_the_info_pane() -> 
     assert "syncInfoPane(s);" in js[js.index("async function render(sArg, transient) {"):][:1200]
     pages = js[js.index("const TEXT_PAGES = new Set(["):]
     pages = pages[: pages.index("]);")]
-    for kind in ("goal", "actors", "usecases", "capability", "actor", "rules", "system", "glossary"):
+    for kind in ("actors", "usecases", "capability", "actor", "rules", "system", "glossary"):
         assert f"'{kind}'" in pages, kind
     assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram keeps its pane"
     # One question per view, read from the SAME table the pane used to read.
@@ -974,15 +974,24 @@ console.log(JSON.stringify(out));
                    "compose": "tooling", "product": "other", "split": "other"}, got
 
 
-def test_a_map_that_records_features_lands_on_them() -> None:
-    """The map should read as WHAT THE PRODUCT DOES first, with code as the evidence you drill into.
-    The Happy Path is the guided tour of ONE path through the features, which is a second read, so it
-    keeps the second tab. A map recording no features (this repo's own does not) still lands on it."""
+def test_a_map_lands_on_what_the_product_does() -> None:
+    """The map should read as WHAT THE PRODUCT DOES first, with code as the evidence you drill into. So
+    the landing view is Features, which opens with the product description and then lists everything the
+    product does. Each fallback is the next thing down the product row, and only then the machine.
+
+    The description had a tab of its own for one round. A tab is the wrong home for three sentences: the
+    reader visits it once and never returns. As the lead of the landing page it cannot be missed and
+    costs nothing to scroll past."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     landing = js[js.index("const LANDING ="): js.index("go({ kind: LANDING });")]
-    assert "(HAS_CAPABILITIES && HAS_USECASES) ? 'usecases'" in landing
-    assert "HAS_HP ? 'hp'" in landing
+    assert "HAS_USECASES ? 'usecases'" in landing
+    assert "HAS_HP ? 'hp'" in landing and "HAS_ACTORS ? 'actors'" in landing
     assert "(HAS_DIFF && HAS_GROUPING) ? 'container'" in landing   # a diff still opens on the overlay
+    assert "'goal'" not in js and "renderGoal" not in js, "the Goal tab is gone, not hidden"
+    # …and the description leads the Features page, on either setting of the axis.
+    over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    assert over.count("productLeadHtml()") == 2
+    assert "GRAPH.nodes.SYS" in js[js.index("function productLeadHtml() {"):]
 
 
 def test_code_and_operations_read_as_one_question() -> None:
