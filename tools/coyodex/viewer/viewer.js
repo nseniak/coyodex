@@ -412,9 +412,13 @@ function elementCardHtml(id, opts) {
   if (!c) return '';
   const o = opts || {};
   const desc = o.desc !== undefined ? o.desc : c.desc;
+  // A title over about a line long is a SENTENCE, not a label — one live map names none of its rules,
+  // so each card's title is its whole statement. Thirty words set bold is a wall, so a long title drops
+  // to normal weight. Measured by length rather than by kind: any element can carry a long name.
+  const nm = o.name || c.name;
   return `<article class="ecard" data-id="${esc(id)}" tabindex="0">`
     + '<div class="ecard-head">'
-    + `<span class="ecard-name">${esc(o.name || c.name)}</span>`
+    + `<span class="ecard-name${nm.length > 70 ? ' ecard-name-long' : ''}">${esc(nm)}</span>`
     + `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
     + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`
     + cardPillsHtml(c.pills) + (o.extra || '')
@@ -1295,7 +1299,7 @@ function locateActionFor(id) {
   const t = selectTargetFor(id);
   if (!t || !t.selectId) return null;  // excludes actor aliases and anything without a structural home
   const target = { ...t.state, sel: 'node:' + t.selectId };
-  const tab = stateTitle({ kind: topView(t.state.kind) });
+  const tab = stateTitle({ kind: topView(t.state.kind, t.state.id) });
   return { kind: 'locate', title: 'Locate in ' + tab, run: () => {
     pendingCenter = t.selectId;
     go(target);
@@ -1359,7 +1363,7 @@ function relationshipLocateAction(srcId, dstId) {
     ? relationshipLocateTarget(srcId, dstId)
     : relationshipLocateTarget(dstId, srcId);
   if (!target) return null;
-  const tab = stateTitle({ kind: topView(target.kind) });
+  const tab = stateTitle({ kind: topView(target.kind, target.id) });
   return { kind: 'locate', title: 'Locate in ' + tab, run: () => go(target) };
 }
 function decorateActionIcons(scene, s) {
@@ -1657,7 +1661,7 @@ function kindPills(n) {
 }
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
 // writes, no handler wiring. Used by showNode to fill the panel with a single element's detail.
-function nodeDetailHtml(id) {
+function nodeDetailBodyHtml(id) {
   const n = GRAPH.nodes[id];
   if (!n) return '';
   const fields = n.fields || {};
@@ -1676,10 +1680,24 @@ function nodeDetailHtml(id) {
       : mdInline(v)) + '</dd>').join('');
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
-  return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
-    + explain
+  return explain
     + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${decidesHtml(id)}${triggeredByHtml(id)}</dl>`
     + impactSectionHtml(id);
+}
+// Everything the map holds about one element, as a PAGE. The info pane shows the element's card and
+// nothing else (the spec: same card format, in the pane as in a list), so this is where the depth
+// went — one click away, on a page with the room for it, instead of a pane that stole a third of the
+// screen from the diagram it was describing.
+function renderElementDetails(id) {
+  const n = GRAPH.nodes[id];
+  if (!n) { diagram.innerHTML = '<p class="empty">This element is not in the map.</p>'; return; }
+  const chg = n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '';
+  diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">'
+    + '<div class="view-head"><h2 class="view-title">' + esc(n.name) + '</h2>'
+    + `<p class="view-q">${kindPills(n)}${chg}</p></div>`
+    + `<div class="edetail">${nodeDetailBodyHtml(id)}</div></div>`;
+  bindNodeDetailHandlers(diagram);
+  bindElementCards(diagram);
 }
 // Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
 // selectable "Triggered by" entry-point rows.
@@ -1717,7 +1735,11 @@ function bindNodeDetailHandlers(root) {
 }
 function showNode(id) {
   if (!GRAPH.nodes[id]) return;
-  panel.innerHTML = nodeDetailHtml(id);
+  // The pane shows the element's CARD — the same card a list shows, so a reader meets one design and
+  // one pair of actions wherever an element appears. Everything deeper is on the card's own page, which
+  // the card itself opens. `.pane-card` only marks the context; the card inside it is unchanged.
+  panel.innerHTML = `<div class="pane-card">${elementCardHtml(id)}</div>`;
+  bindElementCards(panel);
   bindNodeDetailHandlers(panel);
   // Source buttons in the pane need binding too. `bindNodeDetailHandlers` wires the navigation
   // links (use case / process / data chips) but not `.srclink`, and this is the ONE panel builder
@@ -2923,7 +2945,7 @@ function setLegendOpen(on) {
 // The text tabs render HTML tables, not diagrams — nothing there has a shape or a colour to look up.
 const TEXT_VIEWS = new Set(['glossary', 'usecases', 'system', 'data', 'tests', 'rules']);
 function syncLegend(s) {
-  const on = legendOpen() && !!s && !TEXT_VIEWS.has(topView(s.kind));
+  const on = legendOpen() && !!s && !TEXT_VIEWS.has(topView(s.kind, s.id));
   legend.classList.toggle('on', on);
   legendbtn.classList.toggle('on', legendOpen());
   legendbtn.setAttribute('aria-pressed', String(legendOpen()));
@@ -3619,7 +3641,7 @@ const tabLast = {};
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
 const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
-                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk'];
+                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'id'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
@@ -3633,7 +3655,8 @@ function stateKey(s) {
     + (s.bkid ? ':' + s.bkid : '')  // bucketfold drills are keyed by their BKF id
     + (s.gid ? ':' + s.gid : '')   // …and a deployment container card by its group id
     + (s.epk ? ':' + s.epk : '')   // …and one entry-point KIND inside the Entry points collection
-    + (s.sys ? ':' + s.sys : '');  // one System collection, the drill out of its cards
+    + (s.sys ? ':' + s.sys : '')   // one System collection, the drill out of its cards
+    + (s.id ? ':' + s.id : '');    // …and one element's own details page
 }
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
 // scroll offset, or the file browser showing. Restored on back/forward so returning to a point reopens
@@ -3694,7 +3717,7 @@ function captureViewState() {  // stash the leaving entry's pan/zoom + selection
   pendingLeaveContent = undefined;
   // Remember where this tab was left (a shallow clone so later mutation of the history entry can't
   // rewrite it), so a return to the tab restores this exact spot rather than the overview.
-  tabLast[topView(history[hi].kind)] = { ...history[hi] };
+  tabLast[topView(history[hi].kind, history[hi].id)] = { ...history[hi] };
 }
 // Record a new history point that keeps the CURRENT diagram view + selection and changes only the right
 // pane (a file switch in the menu, or opening a file from the browser). Back/forward step through these
@@ -3731,7 +3754,7 @@ function fwd() { if (hi < history.length - 1) { const from = history[hi]; captur
 // drill + selection + camera + pane); its first visit lands on the overview. Clicking the tab you are
 // ALREADY on is a "reset" — it zooms back out to that tab's plain overview (see resetTab).
 function goTab(view) {
-  const cur = hi >= 0 ? topView(history[hi].kind) : null;
+  const cur = hi >= 0 ? topView(history[hi].kind, history[hi].id) : null;
   if (view === cur) { resetTab(view); return; }
   const saved = tabLast[view];
   go(saved ? { ...saved } : { kind: view }, true);  // instant: a tab switch never plays the drill zoom
@@ -4463,7 +4486,8 @@ function showDeploymentGroup(gid) {
 function showDeploymentUnit(unit) {
   const uid = unitProcessNodeId(unit);
   const eps = (GRAPH.entry_points || []).filter((e) => e.activation === 'self' && threadHostUnits(e).includes(unit));
-  let html = uid ? nodeDetailHtml(uid) : `<section class="uc-group"><h3 class="uc-actor">${esc(unit)}</h3></section>`;
+  let html = uid ? (`<div class="pane-card">${elementCardHtml(uid)}</div>` + nodeDetailBodyHtml(uid))
+                 : `<section class="uc-group"><h3 class="uc-actor">${esc(unit)}</h3></section>`;
   // A clear gap between the process's own detail (dl + impact) and the threads it hosts — the node
   // detail ends with no bottom margin, so without this the box reads as glued to the fields above it.
   if (eps.length) html += `<section class="uc-group" style="margin-top:20px"><h3 class="uc-actor">Threads / loops (${eps.length})</h3>${threadRowsHtml(eps)}</section>`;
@@ -5033,7 +5057,7 @@ function mermaidFor(s) {
 // A tab's OWN overview (not a drilled card) — `container` yes, `subsystem` no. Those are the states
 // whose pane leads with the view intro.
 function topLevelView(s) {
-  const tv = topView(s.kind);
+  const tv = topView(s.kind, s.id);
   return s.kind === tv ? tv : null;
 }
 // The pane for a table view (Glossary / Use Cases / System / Data / Tests): it renders no diagram and
@@ -5115,7 +5139,15 @@ function bindFor(s) {
   else if (s.kind === 'bucketfold') bindBucketFold();
   else bindComponent();
 }
-function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
+// An element's DETAILS page has no tab of its own: it belongs under whichever tab is that element's
+// home view. `selectTargetFor` is the one function that knows which that is, so the answer cannot
+// disagree with where "show in context" would take the same element.
+function elementHomeView(id) {
+  const t = selectTargetFor(id);
+  return t ? topView(t.state.kind, t.state.id) : 'container';
+}
+function topView(kind, id) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
+  if (kind === 'element') return id ? elementHomeView(id) : 'container';
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules') return kind;
   if (kind === 'goal' || kind === 'actors') return kind;  // each is its own tab
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
@@ -5157,6 +5189,7 @@ function stateTitle(s) {
   if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
   if (s.kind === 'actors') return 'Actors';
   if (s.kind === 'goal') return 'Goal';
+  if (s.kind === 'element') return elName(s.id);
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
   if (s.kind === 'deploymentUnit') return s.unit;
@@ -5192,6 +5225,13 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'sysSection') {
     const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];
     return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;
+  }
+  // An element's details page sits under the trail of its HOME view, so the crumb reads
+  // Subsystems › Gateway tool access › Tool catalog — the drill path the spec asks for, mixing views.
+  if (s.kind === 'element') {
+    const t = selectTargetFor(s.id);
+    const base = t ? ancestors(t.state) : [];
+    return base.concat([{ kind: 'element', id: s.id }]);
   }
   if (s.kind === 'goal') return [{ kind: 'goal' }];
   if (s.kind === 'actors') return [{ kind: 'actors' }];
@@ -5263,7 +5303,7 @@ function renderChrome(s) {
   // and the cards badge their member components (via bindNodes).
   const diffHost = IMPACT ? true
     : (s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge');
-  const tv = topView(s.kind);
+  const tv = topView(s.kind, s.id);
   syncLegend(s);
   syncEnvPicker(s);
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
@@ -5410,6 +5450,7 @@ function renderGlossary() {
   // No inline padding-top: it would pin the table's sticky column headers 20px down with terms
   // scrolling through the gap above them. The stylesheet gives the first child a margin instead.
   diagram.innerHTML = '<div class="glossary-wrap">'
+    + viewHeadHtml('Glossary', VIEW_Q.glossary)
     + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
     + `<tbody>${rows}</tbody></table></div>`;
 }
@@ -5773,7 +5814,9 @@ function renderUseCases(sel) {
     : oneActor ? viewHeadHtml(oneActor, `What can ${oneActor} do?`)
     : one === '-' ? viewHeadHtml('Not assigned to a feature',
         'Which use cases does this map place under no feature?')
-    : viewHeadHtml('Use cases', VIEW_Q.usecases);
+    // A map recording no features falls back to the flat catalog, and the tab's own question ("feature
+    // by feature") would then name something the page does not have.
+    : viewHeadHtml('Use cases', 'What can this product do, and who does each thing?');
   // On a feature's page the use-case section is the FIRST of five, and the rest of the map — filtered to
   // this feature — follows it. The pinned index is built from every section, so it and the page cannot
   // disagree about what is on screen.
@@ -6528,7 +6571,8 @@ function renderTests() {
       + '<th>Gap / risk</th><th>Confidence</th></tr></thead>'
       + `<tbody>${rows}</tbody></table>`
     : '<p class="empty">No test-completeness rows recorded.</p>';
-  diagram.innerHTML = `<div class="usecases-wrap system-wrap">${noteHtml}${table}</div>`;
+  diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
+    + viewHeadHtml('Tests', VIEW_Q.tests) + noteHtml + table + '</div>';
   diagram.querySelectorAll('a.tstref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); selectFromTree(a.getAttribute('data-id'));
   }));
@@ -6830,6 +6874,13 @@ function renderRule(s) {
 // decision area on one page, so a cross-link naming an area had to scroll to its section and then block
 // the remembered offset from undoing that. An area is its own page now, so there is nothing to scroll to
 // and nothing to override — the state's own remembered offset is simply correct, as it is everywhere else.
+// Point at the card "show in context" was asked for, once the page holding it exists. After
+// restoreTextScroll, so the remembered scroll position cannot undo the scroll-into-view.
+function applyPendingFlash() {
+  if (!pendingFlash) return;
+  const id = pendingFlash; pendingFlash = null;
+  flashCard(id);
+}
 function restoreTextScroll(s) {
   const sc = textScroller();
   if (!sc) return;
@@ -6858,38 +6909,41 @@ async function render(sArg, transient) {
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
-  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
+  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Features tab is an HTML catalog, not a mermaid diagram — same shape as Glossary. Its landing
   // level is the feature cards; a map that records no features keeps the flat use-case list instead.
   if (s.kind === 'usecases') {
     if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();
-    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return;
+    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // The two views the product leads with: what it is for, and who drives it.
-  if (s.kind === 'goal') { renderGoal(); mainScene = null; renderChrome(s); restoreTextScroll(s); return; }
-  if (s.kind === 'actors') { renderActors(); mainScene = null; renderChrome(s); restoreTextScroll(s); return; }
+  if (s.kind === 'element') {
+    renderElementDetails(s.id); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+  }
+  if (s.kind === 'goal') { renderGoal(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
+  if (s.kind === 'actors') { renderActors(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // One feature's use cases — the drill out of those cards ('*' = all of them). The right pane keeps the
   // TAB's question, as one rule's page does: the feature's own name and purpose head the list itself.
   if (s.kind === 'capability' || s.kind === 'actor') {
     renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });
-    mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); return;
+    mainScene = null; showViewIntro({ kind: 'usecases' }); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // The System tab is HTML, not a mermaid diagram — same shape as Glossary. Its landing level is the
   // collection cards; one collection is the drill out of them, and keeps the TAB's question, as one
   // rule's page does: the collection's own name and blurb head the page itself.
-  if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
+  if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   if (s.kind === 'sysSection') {
     renderSystemSection(s.sys, s.epk); mainScene = null; showViewIntro({ kind: 'system' }); renderChrome(s);
     restoreTextScroll(s); return;
   }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
-  if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
+  if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
-  if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
+  if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Business rules tab is the block rail + rule panes (HTML) — the same shape as Data.
   if (s.kind === 'rules') {
     renderRules(s);   // the area cards, or one area's rules when `s.blk` names it
-    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return;
+    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // One rule's page — the drill out of that list. The right pane keeps the TAB's question: everything
   // the map holds about this rule is on the page itself, and repeating it beside itself said nothing.
@@ -7270,8 +7324,13 @@ function selectTargetFor(id) {
     // Its home is its own card's list, one level inside the Features tab. Without this case it fell to
     // the `default` below and opened Dependencies, which is a confident wrong answer to a search hit
     // the index itself labels a feature.
+    // A feature and an actor are drawn as no box anywhere: their home view is the CARD LIST that shows
+    // them. "Show in context" scrolls to the card and flashes it, which is what the spec asks a card
+    // list to do — and it is a different action from DRILLING IN, which opens the element's own page.
     case 'capability':
-      return { state: { kind: 'capability', cap: id }, selectId: null };
+      return { state: { kind: 'usecases' }, selectId: null, flashId: id };
+    case 'human': case 'service':
+      return { state: { kind: 'actors' }, selectId: null, flashId: id };
     case 'component': {
       // Open the component INSIDE its parent subsystem's card (the zoomed-in neighbourhood), where it's
       // drawn as a member box. A default subsystem is injected when a map has none, so this parent is
@@ -7315,9 +7374,30 @@ function selectTargetFor(id) {
 }
 // `allIds`: the full node_path_index collision set at the path this navigation came from (undefined /
 // [] for callers that aren't file-tree-driven, e.g. a flow narrative link — no "Also defined here" then).
+// A card the next render must scroll to and flash — the card-list half of "show in context", where a
+// diagram would instead select and centre a box. Consumed once, by the render that draws the card.
+let pendingFlash = null;
+function flashCard(id) {
+  const card = diagram.querySelector(`.ecard[data-id="${CSS.escape(id)}"]`);
+  if (!card) return;
+  card.scrollIntoView({ block: 'center' });
+  card.classList.remove('ecard-flash');
+  void card.offsetWidth;                       // restart the animation on a repeat of the same card
+  card.classList.add('ecard-flash');
+  setTimeout(() => card.classList.remove('ecard-flash'), 1400);
+}
 function selectFromTree(nodeId) {
   const t = selectTargetFor(nodeId);
   if (!t) { suppressTreeScroll = false; suppressBrowse = false; return; }  // no selection follows — don't leave the one-shots stuck
+  // A card list has nothing to select: the element IS a card on the page, so the move is to go there
+  // and point at it. Already on that page, point at it without navigating.
+  if (t.flashId) {
+    const cur0 = history[hi];
+    if (cur0 && stateKey(cur0) === stateKey(t.state)) { flashCard(t.flashId); return; }
+    pendingFlash = t.flashId;
+    go(t.state);
+    return;
+  }
   const cur = history[hi];
   // Select in place when the target box is ALREADY drawn in the current view — even if this isn't the
   // node's "home" view (e.g. a component shown inside a two-subsystem edge card, or beside another

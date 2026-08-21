@@ -394,6 +394,23 @@ body.vresizing #stage { pointer-events: none; }
 .uc-lab-core { background: #e0e7ff; color: #4338ca; }
 .uc-lab-supporting { background: #f1f5f9; color: #475569; }
 .uc-lab-platform { background: #f3f4f6; color: #6b7280; }
+/* The info pane holds ONE card — the same card a list holds. The pane's own padding already frames it,
+   so the card drops its border there and reads as the pane's content rather than as a box in a box. */
+#panel .pane-card .ecard { border-color: transparent; padding: 0; background: transparent; }
+#panel .pane-card .ecard:hover { background: transparent; box-shadow: none; border-color: transparent; }
+#panel .pane-card .ecard:hover .ecard-name { text-decoration: underline; }
+#panel .pane-card .ecard-name { font-size: 15px; }
+/* An element's DETAILS page: the same field rows the pane used to hold, given a page to sit on. */
+.edetail dl { margin: 0; }
+.edetail dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+              color: #9ca3af; margin-top: 14px; }
+.edetail dd { margin: 3px 0 0; font-size: 13px; line-height: 1.55; color: #374151; }
+/* "Show in context" on a card list: the card is scrolled to and briefly ringed. A page can hold
+   forty cards, and "it is somewhere below" is not pointing at one. */
+@keyframes ecard-flash { 0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+                         18% { box-shadow: 0 0 0 4px rgba(99,102,241,.35); } }
+.ecard-flash { animation: ecard-flash 1.4s ease-out; border-color: #a5b4fc; }
+@media (prefers-reduced-motion: reduce) { .ecard-flash { animation: none; border-color: #6366f1; } }
 /* --- a text view's own head ----------------------------------------------------------------------
    A card list, a card grid and a details page each lead with their title and, under it, the question
    they answer. The question used to live in the info pane beside them, which is the pane those views
@@ -401,6 +418,15 @@ body.vresizing #stage { pointer-events: none; }
 .view-head { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #eef2f7; }
 .view-title { margin: 0; font-size: 19px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
 .view-q { margin: 4px 0 0; font-size: 13px; color: #6b7280; font-style: italic; }
+/* A REFERENCE TABLE is the one thing that stays a table: its rows are not map elements, and columns
+   are what let a reader compare forty of them down a page. It borrows the card's frame so the two sit
+   together on a screen — same border, same radius, same quiet header. */
+table.glossary, table.dv-table { border-collapse: separate; border-spacing: 0; width: 100%;
+                                 border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;
+                                 background: #fff; }
+table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight: 700; color: #6b7280;
+    text-transform: uppercase; letter-spacing: .05em; background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb; }
 /* --- THE ELEMENT CARD ----------------------------------------------------------------------------
    ONE card design for every element, in every place an element is shown: a card list, a grid of cards,
    or the info pane. Five card-ish shapes used to live in this file and had drifted apart, so a change
@@ -414,6 +440,7 @@ body.vresizing #stage { pointer-events: none; }
 .ecard:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
 .ecard-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; }
 .ecard-name { font-size: 14px; font-weight: 650; color: #111827; }
+.ecard-name-long { font-weight: 400; font-size: 13.5px; line-height: 1.5; color: #1f2937; }
 /* The type pill is the element's word for what it IS, and it is a BUTTON: clicking it shows the element
    in its home view. Quiet enough to read as a label, live enough to invite the click. */
 .ecard-type { font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -460,7 +487,6 @@ body.vresizing #stage { pointer-events: none; }
 /* A rule is a sentence, not a chip: it keeps the row shape the use cases above it use, so the two
    lists on one page read as the same kind of thing. A rule with no name of its own shows its whole
    statement as the title, and thirty words set bold is a wall — so that case drops to normal weight. */
-.uc-name-plain { font-weight: 400; color: #374151; }
 .uc-row.featref { display: block; width: 100%; text-align: left; font: inherit; border-radius: 8px;
                   border: 1px solid transparent; background: transparent; padding: 8px 10px; }
 /* The code section folds. It is the lowest priority thing on a feature page, and its heading already

@@ -164,7 +164,7 @@ def test_node_use_cases_are_grouped_by_capability_without_a_serves_row() -> None
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     trace = js[js.index("function tracedUseCasesFor"):js.index("// The \"Triggered by\"")]
-    detail = js[js.index("function nodeDetailHtml"):js.index("function bindNodeDetailHandlers")]
+    detail = js[js.index("function nodeDetailBodyHtml"):js.index("function bindNodeDetailHandlers")]
 
     assert "isAncestorOf(id, eid)" in trace
     assert "UC_NODES.filter((uc) => set.has(uc.id))" in trace
@@ -222,7 +222,7 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "const t = selectTargetFor(id)" in locate_code
     assert "!t || !t.selectId" in locate_code  # actor aliases have no structural home
     assert "kind: 'locate'" in locate_code
-    assert "const tab = stateTitle({ kind: topView(t.state.kind) })" in locate_code
+    assert "const tab = stateTitle({ kind: topView(t.state.kind, t.state.id) })" in locate_code
     assert "title: 'Locate in ' + tab" in locate_code
     assert "sel: 'node:' + t.selectId" in locate_code
     assert "pendingCenter = t.selectId" in locate_code
@@ -540,15 +540,21 @@ def test_a_use_cases_crumb_names_the_card_it_was_listed_on() -> None:
     assert "function actorGroupOf(ucId) {" in js and "actorGroups().find(" in js
 
 
-def test_a_feature_found_by_search_opens_the_features_tab() -> None:
-    """A feature is drawn as no box anywhere, so `selectTargetFor` had nothing to select and fell to
-    its `default`, opening Dependencies — a confident wrong answer to a hit the index itself labels a
-    feature. Its home is its own card's list."""
+def test_a_feature_found_by_search_lands_on_its_card() -> None:
+    """A feature is DRAWN as no box anywhere — it groups behaviour — so nothing can be selected for it.
+    Without a case of its own it fell to the default and opened Dependencies, which is a confident wrong
+    answer to a search hit the index itself labels a feature. Its home view is the card list that shows
+    it, so a hit lands there and the card is scrolled to and ringed: the card-list half of "show in
+    context", where a diagram would select and centre a box. An actor resolves the same way."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "case 'capability':" in js
-    assert "return { state: { kind: 'capability', cap: id }, selectId: null };" in js
-    assert "capability: 'feature'" in js
-
+    target = js[js.index("function selectTargetFor(id) {"):
+                js.index("\nfunction ", js.index("function selectTargetFor(id) {") + 10)]
+    assert "return { state: { kind: 'usecases' }, selectId: null, flashId: id };" in target
+    assert "return { state: { kind: 'actors' }, selectId: null, flashId: id };" in target
+    # The flash survives the navigation: it is stashed, and consumed by the render that draws the card.
+    assert "pendingFlash = t.flashId;" in js
+    assert "function applyPendingFlash() {" in js and "flashCard(id);" in js
+    assert "if (cur0 && stateKey(cur0) === stateKey(t.state)) { flashCard(t.flashId); return; }" in js
 
 def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     """Either named role can start it, so both cards must show it. Filing it under the first hid it
@@ -648,7 +654,7 @@ def test_the_system_tab_is_cards_over_one_builder() -> None:
     # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
     assert "const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
     assert "return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;" in js
-    assert "'gid', 'sys', 'epk'];" in js                 # …and its keys survive a right-pane navigation
+    assert "'gid', 'sys', 'epk', 'id'];" in js                 # …and its keys survive a right-pane navigation
 
 
 def test_the_only_pinned_lines_are_the_ones_that_still_say_something() -> None:
@@ -689,7 +695,7 @@ def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
     assert "kinds.push({ key: k, count: byKind[k].length" in js
     assert "if (found.kinds && !epk) {" in js
     assert "bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: sysId, epk: key }));" in js
-    assert "'gid', 'sys', 'epk'];" in js
+    assert "'gid', 'sys', 'epk', 'id'];" in js
 
 
 def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> None:
