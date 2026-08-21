@@ -443,9 +443,8 @@ def test_no_tab_row_can_ever_clip_a_tab_out_of_reach() -> None:
     the switch drops onto the second, whole."""
     css = (VIEWER_DIR / "viewer.css").read_text()
     subrow = css[css.index("#stagesubrow {"): css.index("}", css.index("#stagesubrow {"))]
-    assert "flex-wrap: wrap" in subrow, "the row holding the tabs AND the mode switch must wrap"
-    assert "margin-left: auto" not in css[css.index("#viewextra {"): css.index("}", css.index("#viewextra {"))], \
-        "the switch sits beside the tabs, not at the far edge where nobody looks"
+    assert "flex-wrap: wrap" in subrow
+    assert "viewextra" not in css, "the header's mode slot is gone; the switch lives with its list"
     for row in ("#groupsw", "#viewsw"):
         rule = css[css.index(f"\n{row} {{") : css.index("}", css.index(f"\n{row} {{"))]
         assert "flex-wrap: wrap" in rule, row
@@ -509,7 +508,8 @@ def test_features_keeps_both_axes_and_actors_drills_across_into_one() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "let UC_GROUP_BY = 'capability';" in js and "function ucGroupBy() {" in js
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "seg('capability', 'Feature')" in over and "seg('actor', 'Actor')" in over
+    assert "seg('capability', 'Category')" in over and "seg('actor', 'Actor')" in over
+    assert "Group features by" in over, "the label says what is being grouped, not just that it is"
     assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
     # Both settings draw actor cards from ONE builder, shared with the Actors view.
@@ -585,21 +585,23 @@ def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     assert "const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');" in js
 
 
-def test_a_mode_switch_is_the_quietest_control_in_the_header() -> None:
-    """Three stacked bars of segments read as three levels of tabs, and the bottom one is not a tab:
-    the Features axis is a MODE. In its own strip it wore the same solid indigo as the GROUP row, so
-    the least important control on screen shouted as loudly as the one deciding which fifth of the map
-    you are in. It rides the view row now, right-aligned, in that row's own weight. The quieting is
-    scoped to `#viewextra`: the flow picker reuses `.uc-seg` in a card floating over the diagram,
-    where a solid active state is correct."""
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    quiet = css[css.index("#viewextra .uc-seg button.on {"):]
-    quiet = quiet[: quiet.index("}")]
-    assert "#6366f1" not in quiet, "the mode switch must not borrow the group row's solid indigo"
-    assert "#e0e7ff" in quiet
-    loud = css[css.index("\n.uc-seg button.on {"):]
-    assert "#6366f1" in loud[: loud.index("}")], "the floating flow picker keeps the loud style"
+def test_the_group_by_switch_sits_with_the_list_it_switches() -> None:
+    """It spent two rounds in the header — a strip of its own, then beside the view tabs — and in both
+    it was a control floating away from the thing it controls, in a band the reader had learned to read
+    as navigation. It is emitted with the cards now, directly above them: the row that changes the rows.
 
+    The header slot it used to live in is gone with it. It existed to host one control, that control
+    left, and an empty slot nothing fills is chrome pretending to be a feature."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    assert "viewextra" not in js and "viewextra" not in html
+    over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    # …and it is emitted immediately before the cards, on BOTH settings of the axis.
+    assert over.count("+ switchHtml") == 2
+    assert "productLeadHtml() + switchHtml + grid" in over
+    bind = js[js.index("function bindOverviewAxis() {"):
+              js.index("\nfunction ", js.index("function bindOverviewAxis() {") + 10)]
+    assert "diagram.querySelectorAll('.uc-groupby .uc-seg button')" in bind
 
 def test_every_header_row_starts_at_the_same_edge() -> None:
     """The search button sat before the group row and pushed it 42px in, so the group row, the view row
@@ -614,18 +616,16 @@ def test_every_header_row_starts_at_the_same_edge() -> None:
     assert "margin-left: auto" in util
 
 
-def test_a_views_mode_switch_never_survives_a_move_to_another_view() -> None:
-    """A mode switch belongs to ONE view. Left in the header it floats above a view it does not act on,
-    which is the failure the floating flow picker had, and it is cleared in the same place: before the
-    HTML-tab early returns. No view carries one today (the Features axis was the last, and it is gone),
-    so this guards the mechanism rather than a current switch."""
+def test_no_control_outlives_the_view_that_drew_it() -> None:
+    """A view's own controls are drawn by that view's renderer into the view's own content, so moving
+    to another view cannot leave one behind: the content is replaced whole. This used to need a header
+    slot cleared on every render, which is the mechanism the floating flow picker also needs — and that
+    one still does, because it floats over the diagram rather than living in it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     render = js[js.index("  const fp = document.getElementById('flowpicker');"):]
-    assert "viewextra.innerHTML = '';" in render[:600]
+    assert "if (fp) fp.hidden = true;" in render[:400], "the floating picker is still hidden up front"
     assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
-    assert "viewq.textContent = q;" in js, "the question is navigation, not a pane"
-
 
 def test_the_question_belongs_to_the_view_and_lives_with_the_tabs() -> None:
     """A view's question is the same sentence at every depth inside that view, so it is a property of

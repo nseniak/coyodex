@@ -206,7 +206,6 @@ const envpicker = document.getElementById('envpicker');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
-const viewextra = document.getElementById('viewextra');  // the open view's own mode switch, right of the view row
 const viewq = document.getElementById('viewq');          // the open view's question, its own line under the tabs
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
@@ -6087,19 +6086,21 @@ function renderActors() {
 // many. A card grid, a title and the question it answers — nothing else on the page.
 function renderOverview() {
   const axis = ucGroupBy();
-  // The switch lives in the header's view row, beside the view it modifies — it is a MODE, not a strip
-  // of tabs. Only where the map has both axes to switch between.
+  // The switch sits with the LIST IT SWITCHES, directly above the cards. It spent two rounds in the
+  // header — first on a strip of its own, then beside the view tabs — and in both places it was a
+  // control floating away from the thing it controls, in a band the reader had learned to treat as
+  // navigation. Above the cards there is nothing to learn: it is the row that changes the rows.
   const seg = (key, label) => `<button type="button" data-gb="${key}"`
     + `${axis === key ? ' class="on"' : ''}>${label}</button>`;
-  viewextra.innerHTML = HAS_CAPABILITIES
-    ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
-      + `<span class="uc-seg">${seg('capability', 'Feature')}${seg('actor', 'Actor')}</span></div>`
+  const switchHtml = HAS_CAPABILITIES
+    ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group features by</span>'
+      + `<span class="uc-seg">${seg('capability', 'Category')}${seg('actor', 'Actor')}</span></div>`
     : '';
   if (axis === 'actor') {
     // The same actor cards the Actors view draws, laid out to CHOOSE from rather than to read down.
     const cards = actorCardsHtml(true);
     diagram.innerHTML = '<div class="usecases-wrap">'
-      + viewHeadHtml('Features') + productLeadHtml()
+      + viewHeadHtml('Features') + productLeadHtml() + switchHtml
       + (cards || '<p class="empty">This map records no actors.</p>') + '</div>';
     bindElementCards(diagram, openActor);
     bindProductLead();
@@ -6129,7 +6130,7 @@ function renderOverview() {
     ? `<div class="ecard-grid">${ids.map((id) => elementCardHtml(id, per(id))).join('')}${looseCard}</div>`
     : '<p class="empty">No features recorded.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + viewHeadHtml('Features') + productLeadHtml() + grid + '</div>';
+    + viewHeadHtml('Features') + productLeadHtml() + switchHtml + grid + '</div>';
   bindProductLead();
   bindElementCards(diagram);
   bindPlainCards(diagram, (key) => go({ kind: 'capability', cap: key }));
@@ -6142,7 +6143,7 @@ function bindProductLead() {
 }
 // The axis switch's own wiring, shared by both settings of the view.
 function bindOverviewAxis() {
-  viewextra.querySelectorAll('.uc-seg button').forEach((b) => {
+  diagram.querySelectorAll('.uc-groupby .uc-seg button').forEach((b) => {
     b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderOverview(); });
   });
 }
@@ -7043,9 +7044,6 @@ async function render(sArg, transient) {
   // diagram would otherwise still be floating over the table you switched to.
   const fp = document.getElementById('flowpicker');
   if (fp) fp.hidden = true;
-  // Same reason, for the header's mode slot: the switch belongs to ONE view, so it must not survive a
-  // move to another. Re-filled by that view's own renderer (renderOverview) when it runs.
-  viewextra.innerHTML = '';
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
