@@ -456,6 +456,25 @@ function elementCardListHtml(ids, per) {
     elementCardHtml(id, per ? per(id) : null)).join('')}</div>`;
 }
 
+// A GROUPED CARD LIST: a card list cut into sections, where each SECTION is itself a card holding its
+// members — a macro card. The third list shape, between the plain card list (one flat run) and the card
+// grid (cards across then down, for choosing). It exists because some lists have a natural cut that is
+// not a level: humans and services are both actors, and putting them behind a drill would hide half the
+// list to say something a heading says for free.
+//
+// `groups` = [{ title, count, desc, ids, per }]. Empty groups are dropped, and a single group draws no
+// macro frame at all — one section heading repeating the page title says nothing.
+function elementCardGroupsHtml(groups) {
+  const live = (groups || []).filter((g) => g.ids && g.ids.length);
+  if (!live.length) return '';
+  if (live.length === 1) return elementCardListHtml(live[0].ids, live[0].per);
+  return `<div class="mcard-list">${live.map((g) => '<section class="mcard">'
+    + `<div class="mcard-head"><h3 class="mcard-title">${esc(g.title)}</h3>`
+    + `<span class="mcard-count">${esc(g.count || String(g.ids.length))}</span></div>`
+    + (g.desc ? `<p class="mcard-desc">${esc(g.desc)}</p>` : '')
+    + elementCardListHtml(g.ids, g.per) + '</section>').join('')}</div>`;
+}
+
 // A CARD GROUP LIST: cards laid out across then down, for choosing rather than reading.
 function elementCardGridHtml(ids, per) {
   if (!ids || !ids.length) return '';
@@ -5153,8 +5172,9 @@ function topView(kind, id) {  // which top-level button a state lives under (con
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  if (kind === 'actor') return 'actors';   // one actor's use cases live under the Actors tab
-  if (kind === 'usecases' || kind === 'capability' || kind === 'usecase') return 'usecases';  // a feature's page and a use case's flow live under the Features tab
+  // One actor's use cases live under FEATURES, on its actor axis — the Actors view is the list of
+  // actors THEMSELVES, and its cards drill across into that axis (see openActor).
+  if (kind === 'usecases' || kind === 'capability' || kind === 'actor' || kind === 'usecase') return 'usecases';
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup') return 'deployment';  // a process/container card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
@@ -5237,9 +5257,8 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'actors') return [{ kind: 'actors' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap, act: s.act }];  // one feature's use cases (a grid cell also carries the role)
-  // An actor's use cases hang off the ACTORS tab now that actors have one of their own. Filed under
-  // Features they read as a second, competing answer to "what can this product do".
-  if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];
+  // …and one actor's, whose parent crumb reopens the Features view on the axis that lists them.
+  if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];
   // A use case sits UNDER the card it was listed on, so the trail reads Features › that card › the use
   // case — the same overview → group → member shape Subsystems and Entities already use. WHICH card is
   // not fixed: the overview has two axes, and a use case belongs to exactly one group on each. So the
@@ -5251,11 +5270,14 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     // `s.act` is the list the reader actually came through, set when the row was opened from an
     // actor's list. Falling back to a lookup only for a use case reached some other way (search, a
     // Happy Path step) while the actor axis happens to be on.
-    // `s.act` is the list the reader actually came through, set when the row was opened from an actor's
-    // list. Without it the crumb names the feature, which is where a use case lives by default.
-    const act = s.act || (HAS_CAPABILITIES ? '' : actorGroupOf(s.uc));
+    // `s.act` is the list the reader actually came through, set when the card was opened from an
+    // actor's list. Falling back to a lookup only for a use case reached some other way (a search, a
+    // Happy Path step) while the actor axis happens to be on.
+    const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');
     const cap = HAS_CAPABILITIES ? (CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-') : '';
-    const mid = act ? { kind: 'actor', act } : (cap ? { kind: 'capability', cap } : null);
+    const mid = ucGroupBy() === 'actor'
+      ? (act ? { kind: 'actor', act } : null)
+      : (cap ? { kind: 'capability', cap } : null);
     return mid ? [{ kind: 'usecases' }, mid, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
   }
@@ -5465,6 +5487,12 @@ function renderGlossary() {
 // grouping with the capability one would have been a silent downgrade for anyone reading the map to
 // answer a permissions question. Only the heading key changes; rows, badges and behaviour do not.
 
+// Which axis the Features view is cut on: FEATURE (one card per capability) or ACTOR (one card per
+// role). Both are kept because "what does this product do?" and "what can this role do?" are different
+// questions and neither derives the other. A map with no capabilities has only one axis to be on.
+let UC_GROUP_BY = 'capability';   // 'capability' | 'actor'
+function ucGroupBy() { return HAS_CAPABILITIES ? UC_GROUP_BY : 'actor'; }
+
 function actorTextOf(n) {
   return ((n.fields && n.fields.Actor) || (n.actors || []).join(', ') || 'Other').trim();
 }
@@ -5668,10 +5696,12 @@ function featRulesHtml(ids) {
   // and the product views carry none of those: they all live together under System › About this map.
   const notes = '';
   if (!ids.length) return notes + featEmpty('No rule this map records is enforced on this feature.');
-  const groups = rulesByBlock(ids).map((g) => '<div class="feat-rulegroup">'
-    + `<div class="feat-chipgroup-name">${esc(g.name)}</div>`
-    + elementCardListHtml(g.rules.map((r) => r.id)) + '</div>').join('');
-  return notes + groups;
+  // The same grouped card list the Actors view uses: sections cut by decision area, each a macro card
+  // holding its rules. Hand-rolled here first, which is exactly the drift the shared component ends.
+  return notes + elementCardGroupsHtml(rulesByBlock(ids).map((g) => ({
+    title: g.name, ids: g.rules.map((r) => r.id),
+    count: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
+  })));
 }
 
 
@@ -5920,15 +5950,10 @@ function unreachedHtml() {
   const ids = FEAT_COVERAGE.componentsUnreached || [];
   const by = {};
   for (const cid of ids) (by[unreachedClassOf(cid)] ||= []).push(cid);
-  const groups = UNREACHED_GROUPS.map(([key, title, blurb]) => {
-    const mine = by[key] || [];
-    if (!mine.length) return '';
-    return '<div class="feat-rulegroup">'
-      + `<div class="feat-chipgroup-name">${esc(title)} · ${mine.length} `
-      + `component${mine.length === 1 ? '' : 's'}</div>`
-      + `<p class="feat-empty">${esc(blurb)}</p>`
-      + elementCardListHtml(mine) + '</div>';
-  }).join('');
+  const groups = elementCardGroupsHtml(UNREACHED_GROUPS.map(([key, title, blurb]) => ({
+    title, desc: blurb, ids: by[key] || [],
+    count: `${(by[key] || []).length} component${(by[key] || []).length === 1 ? '' : 's'}`,
+  })));
   // What the RULE join could not reach, said here rather than on a feature's page: a page listing eight
   // rules is not the place to explain coyodex's join, but the number still has to be somewhere.
   const notes = featRuleNotes().map((n) => `<p class="feat-note">${esc(n)}</p>`).join('');
@@ -5955,19 +5980,46 @@ function renderGoal() {
 // The ACTORS view: everyone and everything that drives this product, as a card list. Each card opens
 // what that actor can do. This was a MODE of the Features screen, which meant "what can each person
 // do" was answered on a screen titled "Features", behind a switch most readers never touched.
-function renderActors() {
-  const ids = Object.values(GRAPH.nodes || {})
-    .filter((n) => n.kind === 'human' || n.kind === 'service').map((n) => n.id);
+// Every actor as a card, with how many use cases they drive. ONE builder, because actors are shown on
+// two screens — their own view, and the Features view's actor axis — and two builders would drift into
+// two different actor cards.
+function actorCardsHtml(grid) {
+  const all = Object.values(GRAPH.nodes || {}).filter((n) => n.kind === 'human' || n.kind === 'service');
+  if (!all.length) return '';
   const counts = {};
   for (const g of actorGroups()) counts[g.actor] = g.ucs.length;
   const per = (id) => {
     const n = counts[(GRAPH.nodes[id] || {}).name] || 0;
     return { extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>` };
   };
+  const ids = all.map((n) => n.id);
+  // On the Features view's actor axis the cards are a GRID: there they are a thing to choose between,
+  // and the grid is the shape every chooser in the app uses.
+  if (grid) return elementCardGridHtml(ids, per);
+  // On the Actors view they are a thing to READ, and a person and a piece of software are not the same
+  // kind of driver — one signs in, the other runs on its own. So the list is cut in two.
+  const of = (kind) => all.filter((n) => n.kind === kind).map((n) => n.id);
+  return elementCardGroupsHtml([
+    { title: 'People', ids: of('human'), per,
+      desc: 'Someone who signs in and asks the product for something.' },
+    { title: 'Software', ids: of('service'), per,
+      desc: 'A caller with no person behind it: a script, a schedule, another service.' },
+  ]);
+}
+// An actor's card opens what that actor can do — which lives under FEATURES, on its actor axis. So the
+// click sets that axis and drills there: the reader lands on the list, and the crumb above it goes back
+// to the same actor cards they clicked from, rather than to a screen they have not seen.
+function openActor(id) {
+  const n = GRAPH.nodes[id];
+  if (!n) return;
+  UC_GROUP_BY = 'actor';
+  go({ kind: 'actor', act: n.name });
+}
+function renderActors() {
+  const cards = actorCardsHtml(false);
   diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Actors', VIEW_Q.actors)
-    + (ids.length ? elementCardListHtml(ids, per) : '<p class="empty">This map records no actors.</p>')
-    + '</div>';
-  bindElementCards(diagram);
+    + (cards || '<p class="empty">This map records no actors.</p>') + '</div>';
+  bindElementCards(diagram, openActor);
 }
 
 // The FEATURES view: the whole product as a grid of element cards, one per feature. Each card drills
@@ -5978,6 +6030,25 @@ function renderActors() {
 // gone: actors have their own view now, and one question answered on two screens is one screen too
 // many. A card grid, a title and the question it answers — nothing else on the page.
 function renderOverview() {
+  const axis = ucGroupBy();
+  // The switch lives in the header's view row, beside the view it modifies — it is a MODE, not a strip
+  // of tabs. Only where the map has both axes to switch between.
+  const seg = (key, label) => `<button type="button" data-gb="${key}"`
+    + `${axis === key ? ' class="on"' : ''}>${label}</button>`;
+  viewextra.innerHTML = HAS_CAPABILITIES
+    ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
+      + `<span class="uc-seg">${seg('capability', 'Feature')}${seg('actor', 'Actor')}</span></div>`
+    : '';
+  if (axis === 'actor') {
+    // The same actor cards the Actors view draws, laid out to CHOOSE from rather than to read down.
+    const cards = actorCardsHtml(true);
+    diagram.innerHTML = '<div class="usecases-wrap">'
+      + viewHeadHtml('Features', 'What can each role do?')
+      + (cards || '<p class="empty">This map records no actors.</p>') + '</div>';
+    bindElementCards(diagram, openActor);
+    bindOverviewAxis();
+    return;
+  }
   const groups = capabilityGroups();
   // The card is the SHARED element card, so a feature reads the same here, in a search result and in
   // any list that ever shows one. Its use-case count rides as an extra pill: it is a fact about the
@@ -6004,6 +6075,13 @@ function renderOverview() {
     + viewHeadHtml('Features', VIEW_Q.usecases) + grid + '</div>';
   bindElementCards(diagram);
   bindPlainCards(diagram, (key) => go({ kind: 'capability', cap: key }));
+  bindOverviewAxis();
+}
+// The axis switch's own wiring, shared by both settings of the view.
+function bindOverviewAxis() {
+  viewextra.querySelectorAll('.uc-seg button').forEach((b) => {
+    b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderOverview(); });
+  });
 }
 
 // The PINNED SECTION INDEX shared by every card-list tab (System, Use Cases, Business rules): a row

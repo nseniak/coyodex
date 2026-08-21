@@ -493,22 +493,27 @@ def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
     assert "g.ucs.some((x) => usecaseDiffState(x.id))" in feat
 
 
-def test_features_answers_one_question_and_actors_answers_the_other() -> None:
-    """The Features screen used to carry a Group by switch with an Actor setting and a Grid setting, so
-    "what can each person do" was answered on a screen titled Features, behind a control most readers
-    never touched. Actors is its own view now, and the switch is gone: one question, one screen. The
-    Features view draws feature cards and nothing else, and the actor grouping it used to host lives on
-    in ONE function, shared by the Actors view and by an actor's own use-case list."""
+def test_features_keeps_both_axes_and_actors_drills_across_into_one() -> None:
+    """"What does this product do?" and "what can this role do?" are different questions and neither
+    derives the other, so the Features view keeps both axes on one switch. (The third setting it briefly
+    had — the two crossed as a matrix — is gone.) The ACTORS view is the list of actors themselves, and
+    its card drills ACROSS: it sets the actor axis and opens that actor's use cases under Features, so
+    the crumb above the list goes back to the cards the reader just clicked."""
     js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "let UC_GROUP_BY = 'capability';" in js and "function ucGroupBy() {" in js
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "capabilityGroups()" in over
-    assert "actorGroups()" not in over, "Features must not answer the Actors question too"
-    assert "uc-groupby" not in js, "the axis switch is gone, not hidden"
-    assert "UC_GROUP_BY" not in js and "ucGroupBy" not in js
+    assert "seg('capability', 'Feature')" in over and "seg('actor', 'Actor')" in over
+    assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
+    # Both settings draw actor cards from ONE builder, shared with the Actors view.
+    assert over.count("actorCardsHtml(true)") == 1
     actors = js[js.index("function renderActors() {"): js.index("\nfunction ", js.index("function renderActors() {") + 10)]
-    assert "actorGroups()" in actors and "elementCardListHtml" in actors
-    assert "if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];" in js
+    assert "actorCardsHtml(false)" in actors
+    # The drill across, and the tab it lands on.
+    opener = js[js.index("function openActor(id) {"): js.index("\nfunction ", js.index("function openActor(id) {") + 10)]
+    assert "UC_GROUP_BY = 'actor';" in opener and "go({ kind: 'actor', act: n.name });" in opener
+    assert "if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];" in js
+    assert "kind === 'actor'" in js[js.index("function topView(kind, id) {"):]
 
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
     """`pushContentPoint` rebuilds the current state field by field so opening a file keeps the screen
@@ -570,7 +575,7 @@ def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     # One undeclared name still sends the whole use case to Other: a half-known pair has no per-role home.
     assert "known ? names.map((nm, i) =>" in body and "[[OTHER, 'Other', null]]" in body
     assert "(id) => go({ kind: 'usecase', uc: id, act: oneActor })" in js
-    assert "const act = s.act || (HAS_CAPABILITIES ? '' : actorGroupOf(s.uc));" in js
+    assert "const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');" in js
 
 
 def test_a_mode_switch_is_the_quietest_control_in_the_header() -> None:
@@ -863,15 +868,25 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
     assert "case 'capability':" in target
 
 
-def test_an_actors_use_cases_hang_off_the_actors_tab() -> None:
-    """An actor's list used to be filed under Features, which made it a second, competing answer to
-    "what can this product do". It belongs to the Actors view, whose card opens it, and the crumb reads
-    Actors › that actor. The drill carries the actor so a use case named by two roles returns the reader
-    to the list they actually came through."""
+def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
+    """A third list shape, between the flat card list and the card grid: sections, each drawn as a card
+    that CONTAINS its members. It earns its place where a list has a natural cut that is not a level —
+    a person and a piece of software are both actors, and putting either behind a drill would hide half
+    the list to say what a heading says for free. Three screens had hand-rolled the same shape, which is
+    the drift the spec's "centralize the card designs" exists to stop."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "if (kind === 'actor') return 'actors';" in js
-    assert "if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];" in js
-    assert "renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });" in js
+    body = js[js.index("function elementCardGroupsHtml(groups) {"):
+              js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups) {") + 10)]
+    assert "mcard" in body and "elementCardListHtml(g.ids, g.per)" in body
+    # An empty group is dropped, and a lone group draws no frame: one heading repeating the page title
+    # says nothing.
+    assert "filter((g) => g.ids && g.ids.length)" in body
+    assert "if (live.length === 1) return elementCardListHtml(live[0].ids, live[0].per);" in body
+    for caller in ("function actorCardsHtml(grid) {", "function featRulesHtml(ids) {",
+                   "function unreachedHtml() {"):
+        fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
+        assert "elementCardGroupsHtml(" in fn, caller
+    assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
 
 def test_the_coverage_line_reports_reach_and_never_certainty() -> None:
     """"How much of the code does a feature explain" and "how sure is this map" are different

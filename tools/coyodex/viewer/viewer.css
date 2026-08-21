@@ -455,6 +455,18 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .ecard-extra { margin: 5px 0 0; font-size: 12px; color: #6b7280; }
 .ecard-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px;
              color: #9ca3af; margin-right: 4px; }
+/* A MACRO CARD: a section of a grouped card list, drawn as a card that CONTAINS its members. The frame
+   is quieter than the cards inside it (tinted ground, no shadow), so the eye reads the members first
+   and the grouping second — the reverse would make the section compete with its own content. */
+.mcard-list { display: flex; flex-direction: column; gap: 14px; }
+.mcard { border: 1px solid #e5e7eb; border-radius: 12px; background: #f9fafb; padding: 12px 12px 14px; }
+.mcard-head { display: flex; align-items: baseline; gap: 9px; margin: 0 0 2px; padding: 0 2px 8px;
+              border-bottom: 1px solid #eef2f7; }
+.mcard-title { margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase;
+               letter-spacing: .05em; color: #4b5563; }
+.mcard-count { font-size: 12px; color: #9ca3af; }
+.mcard-desc { margin: 8px 2px 0; font-size: 12px; color: #6b7280; line-height: 1.45; }
+.mcard .ecard-list { margin-top: 10px; }
 /* A CARD LIST reads down the page; a CARD GRID is for choosing between groups, across then down. */
 .ecard-list { display: flex; flex-direction: column; gap: 8px; }
 .ecard-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
@@ -478,7 +490,7 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    subsystem, an entity under its subdomain. Thirty-one loose chips is a wall; the same thirty-one
    under six subsystem names say which parts of the machine the feature lives in. */
 .feat-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.feat-chipgroup + .feat-chipgroup, .feat-rulegroup + .feat-rulegroup { margin-top: 12px; }
+.feat-chipgroup + .feat-chipgroup { margin-top: 12px; }
 .feat-chipgroup-name { font-size: 11px; font-weight: 700; text-transform: uppercase;
                        letter-spacing: .05em; color: #6b7280; margin: 0 0 6px; }
 .featref, .featrole { font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer;
