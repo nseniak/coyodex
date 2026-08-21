@@ -624,14 +624,42 @@ def test_a_views_mode_switch_never_survives_a_move_to_another_view() -> None:
     assert "viewextra.innerHTML = '';" in render[:600]
     assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
-    assert "viewQuestion(view) ? `<p class=\"viewq\">" in js
+    assert "viewq.textContent = q;" in js, "the question is navigation, not a pane"
 
 
-def test_a_text_view_puts_its_question_on_the_page_and_drops_the_info_pane() -> None:
-    """Per the spec a card list, a card grid and a details page carry no info pane: they lead with their
-    own title and, under it, the question they answer. The pane beside a page of prose only repeated it,
-    and it stole a third of the height from the content it was describing. A DIAGRAM still has one,
-    because there the pane is where a selected shape's card goes."""
+def test_the_question_belongs_to_the_view_and_lives_with_the_tabs() -> None:
+    """A view's question is the same sentence at every depth inside that view, so it is a property of
+    the VIEW and not of any page. It spent one round in the content, where it read as a caption for
+    whatever happened to be below it and changed as the reader drilled, and one round before that in
+    the info pane, where only diagrams had one. It is a line of the navigation block now: under the
+    tabs, above the breadcrumb. What this view answers, then where in it you are.
+
+    So no page head carries a question, and the info pane carries none either. A pane with nothing
+    selected owes the reader the one thing navigation cannot say — what to do next."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert '<div id="viewq" hidden></div>' in html
+    assert html.index('id="viewq"') > html.index('id="stagesubrow"'), "below the sub tabs"
+    assert html.index('id="viewq"') < html.index('id="crumb"'), "above the breadcrumb"
+    assert "#viewq {" in css
+    chrome = js[js.index("function renderChrome(s) {"):
+                js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
+    assert "const q = viewQuestion(tv);" in chrome and "viewq.hidden = !q;" in chrome
+    # Not in the content, and not in the pane.
+    intro = js[js.index("function viewIntroHtml(view) {"):
+               js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
+    assert "viewQuestion" not in intro and "EMPTY_PANEL" in intro
+    head = js[js.index("function viewHeadHtml(title, desc) {"):
+              js.index("\nfunction ", js.index("function viewHeadHtml(title, desc) {") + 10)]
+    assert "question" not in head.lower().split("*/")[-1]
+    assert "VIEW_Q." not in js[js.index("function renderOverview() {"):], "a page never quotes the view's question"
+
+
+def test_a_text_view_drops_the_info_pane() -> None:
+    """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
+    of prose only repeated it, and it stole a third of the height from the content it described. A
+    DIAGRAM still has one, because there the pane is where a selected shape's card goes."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "function syncInfoPane(s) {" in js and "panel.hidden = text;" in js
     assert "syncInfoPane(s);" in js[js.index("async function render(sArg, transient) {"):][:1200]
@@ -640,11 +668,6 @@ def test_a_text_view_puts_its_question_on_the_page_and_drops_the_info_pane() -> 
     for kind in ("actors", "usecases", "capability", "actor", "rules", "system", "glossary"):
         assert f"'{kind}'" in pages, kind
     assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram keeps its pane"
-    # One question per view, read from the SAME table the pane used to read.
-    assert "function viewHeadHtml(title, question) {" in js
-    assert "viewHeadHtml('Features', VIEW_Q.usecases)" in js
-    assert "viewHeadHtml('Actors', VIEW_Q.actors)" in js
-    assert "viewHeadHtml('Rules', VIEW_Q.rules)" in js
 
 def test_the_system_tab_is_cards_over_one_builder() -> None:
     """It used to stack every collection on one scrolling page under a chip bar: on a real map that is
@@ -1077,13 +1100,9 @@ def test_a_page_never_repeats_the_tab_it_was_opened_from() -> None:
     an actor, a System collection, "Use cases" on a map recording no features — is information, not an
     echo, and stays. One rule, in the one function every page head goes through."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    head = js[js.index("function viewHeadHtml(title, question) {"):
-              js.index("\nfunction ", js.index("function viewHeadHtml(title, question) {") + 10)]
+    head = js[js.index("function viewHeadHtml(title, desc) {"):
+              js.index("\nfunction ", js.index("function viewHeadHtml(title, desc) {") + 10)]
     assert "const tab = cur ? VIEW_LABEL[topView(cur.kind, cur.id)] : '';" in head
-    assert "const echo = tab && title === tab;" in head
-    assert "echo ? '' :" in head
-    # With the title gone, the QUESTION is the page's head — so it is set as one: upright, a size up,
-    # dark enough to lead. Under a title it stays quiet, because two headings compete.
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    lead = css[css.index(".view-q:first-child {"): css.index("}", css.index(".view-q:first-child {"))]
-    assert "font-style: normal" in lead and "font-size: 16px" in lead
+    assert "const showTitle = !(tab && title === tab);" in head
+    # A head with neither a title of its own nor a description is not drawn at all.
+    assert "if (!showTitle && !desc) return '';" in head

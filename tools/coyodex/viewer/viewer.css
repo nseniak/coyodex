@@ -436,15 +436,9 @@ body.vresizing #stage { pointer-events: none; }
    no longer have: a page of prose does not need a second pane repeating its purpose. */
 .view-head { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #eef2f7; }
 .view-title { margin: 0; font-size: 19px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
-/* The question under a title stays quiet: the title is the heading and two headings compete. */
-.view-q { margin: 4px 0 0; font-size: 13px; color: #6b7280; font-style: italic; }
-/* STANDING ALONE it IS the head — on every top-level view, whose title is now the tab. So it reads as a
-   title, quietly: upright rather than italic, a size up, and dark enough to lead a page. Left as small
-   grey italic it looked like a caption for the content below it, with nothing above to caption. */
-.view-q:first-child {
-  margin: 0; font-size: 16px; font-style: normal; font-weight: 500; color: #374151;
-  letter-spacing: -.005em;
-}
+/* A page's own description, when it has one — a System collection's blurb. Not a question: the view's
+   question lives in the navigation block, on its own line under the tabs. */
+.view-desc { margin: 4px 0 0; font-size: 13.5px; color: #6b7280; line-height: 1.5; }
 /* The product description, leading the Features page. Set a touch larger than a card's prose and held
    to a readable measure: it is the one paragraph on the screen meant to be read rather than scanned. */
 .view-lead { margin: 0 0 18px; font-size: 14.5px; line-height: 1.6; color: #374151; max-width: 76ch; }
@@ -884,6 +878,12 @@ body.altmod .opensrc, body.altmod .opensrc * {
   .action-icon.flash circle { animation: none; }
 }
 
+/* The open view's QUESTION, a line of the navigation block rather than of the page. It belongs to the
+   view, so it says the same thing at every depth inside it — which is exactly why it cannot live in the
+   content, where it read as a caption for whatever was under it and changed as the reader drilled.
+   Set above the breadcrumb and below the tabs: what this view answers, then where in it you are. */
+#viewq { padding: 7px 14px 8px; font-size: 13.5px; line-height: 1.4; color: #4b5563;
+         background: #fbfbfe; border-bottom: 1px solid #e5e7eb; }
 .hint { padding: 6px 14px; font-size: 12px; color: #6b7280; background: #f3f4f6; min-height: 28px; }
 /* breadcrumb: the structural nesting path down to the current view */
 #crumb .crumbseg { color: #2563eb; cursor: pointer; }

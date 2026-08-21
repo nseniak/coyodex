@@ -156,6 +156,11 @@
                strip, sits on the row of the view it belongs to, and is styled to match that row. -->
           <span id="viewextra"></span>
         </div>
+        <!-- The open view's QUESTION, on its own line under the sub tabs. It belongs to the view, not
+             to the page: it is the same sentence at every depth inside that view, so it sits in the
+             navigation block with the tabs rather than in the content, where it read as a caption for
+             whatever happened to be below it. The info pane and the page heads no longer carry it. -->
+        <div id="viewq" hidden></div>
         <div class="hint"><span id="crumb"></span></div>
       </div>
       <div id="diagram"></div>

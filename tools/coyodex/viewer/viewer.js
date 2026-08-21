@@ -207,6 +207,7 @@ const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
 const viewextra = document.getElementById('viewextra');  // the open view's own mode switch, right of the view row
+const viewq = document.getElementById('viewq');          // the open view's question, its own line under the tabs
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
@@ -2908,9 +2909,12 @@ function viewQuestion(view) {
 }
 function viewIntroHtml(view) {
   const notes = viewNotes(view);
+  // No question here any more: it belongs to the VIEW, so it lives in the navigation block with the
+  // tabs, where it reads the same at every depth. What a pane with nothing selected owes the reader is
+  // the one thing the navigation cannot say — what to do next.
   return `<div class="pane-title"><h2>${esc(VIEW_LABEL[view] || view)}</h2></div>`
-    + (viewQuestion(view) ? `<p class="viewq">${esc(viewQuestion(view))}</p>` : '')
-    + (notes.length ? `<div class="viewnotes">${notes.map((t) => `<span class="vnote">${esc(t)}</span>`).join('')}</div>` : '');
+    + (notes.length ? `<div class="viewnotes">${notes.map((t) => `<span class="vnote">${esc(t)}</span>`).join('')}</div>` : '')
+    + EMPTY_PANEL;
 }
 // Build the one legend. The change badges join it as a section in diff mode, so there is still exactly
 // one place to look up what anything on screen means.
@@ -5104,17 +5108,21 @@ function syncInfoPane(s) {
 // The title and the question every card list, card grid and details page leads with. The question is
 // the SAME string the info pane used to hold (VIEW_Q), read from one place, so a view cannot answer one
 // question in its pane and another on its page.
-function viewHeadHtml(title, question) {
-  // A title that repeats the open tab is dropped: the tab is the first place the page is named, and
-  // naming it again one line below is the same repeat the breadcrumb no longer makes. A page whose
-  // title says something ELSE — an actor, a collection, "Use cases" on a map with no features — keeps
-  // it, because then the word is information rather than an echo.
+// The head of a page: its name, and a description when the page HAS one of its own. Never a question —
+// the question belongs to the view and lives in the navigation block above.
+//
+// A title that repeats the open tab is dropped: the tab is the first place the page is named, and
+// naming it again one line below is the same repeat the breadcrumb no longer makes. A page whose title
+// says something ELSE — an actor, a collection, "Use cases" on a map with no features — keeps it,
+// because then the word is information rather than an echo. A head with neither is not drawn at all.
+function viewHeadHtml(title, desc) {
   const cur = hi >= 0 ? history[hi] : null;
   const tab = cur ? VIEW_LABEL[topView(cur.kind, cur.id)] : '';
-  const echo = tab && title === tab;
+  const showTitle = !(tab && title === tab);
+  if (!showTitle && !desc) return '';
   return '<div class="view-head">'
-    + (echo ? '' : `<h2 class="view-title">${esc(title)}</h2>`)
-    + (question ? `<p class="view-q">${esc(question)}</p>` : '')
+    + (showTitle ? `<h2 class="view-title">${esc(title)}</h2>` : '')
+    + (desc ? `<p class="view-desc">${esc(desc)}</p>` : '')
     + '</div>';
 }
 function applyDefaultPanel(s) {
@@ -5359,6 +5367,10 @@ function renderChrome(s) {
   // A state whose top view has no BUTTON has no group either (the dormant flat Components map is one).
   // Left alone that emptied the whole switcher at once — no group lit AND every sub tab hidden — so the
   // reader lost both rows. Keep the rows as they were instead: a stale group beats no rows at all.
+  // The question of the view you are in, at whatever depth. Part of the navigation, not the content.
+  const q = viewQuestion(tv);
+  viewq.textContent = q;
+  viewq.hidden = !q;
   const tg = GROUP_OF_VIEW[tv];
   if (tg) {
     groupLast[tg] = tv;
@@ -5507,7 +5519,7 @@ function renderGlossary() {
   // No inline padding-top: it would pin the table's sticky column headers 20px down with terms
   // scrolling through the gap above them. The stylesheet gives the first child a margin instead.
   diagram.innerHTML = '<div class="glossary-wrap">'
-    + viewHeadHtml('Glossary', VIEW_Q.glossary)
+    + viewHeadHtml('Glossary')
     + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
     + `<tbody>${rows}</tbody></table></div>`;
 }
@@ -5887,13 +5899,12 @@ function renderUseCases(sel) {
   // A page's own title comes from its hero. Every other list is a CARD LIST view, so it leads with its
   // title and the question it answers, and carries no info pane beside it.
   const head = page ? featureHeadHtml(page)
-    : oneActor ? viewHeadHtml(oneActor, `What can ${oneActor} do?`)
-    : one === '-' ? viewHeadHtml('Not assigned to a feature',
-        'Which use cases does this map place under no feature?')
+    : oneActor ? viewHeadHtml(oneActor)
+    : one === '-' ? viewHeadHtml('Not assigned to a feature')
     // A map recording no features falls back to the flat catalog, and the tab's own question ("feature
     // by feature") would then name something the page does not have. It leads with the product
     // description all the same: that map has one, and this is the page a reader lands on.
-    : viewHeadHtml('Use cases', 'What can this product do, and who does each thing?') + productLeadHtml();
+    : viewHeadHtml('Use cases') + productLeadHtml();
   // On a feature's page the use-case section is the FIRST of five, and the rest of the map — filtered to
   // this feature — follows it. The pinned index is built from every section, so it and the page cannot
   // disagree about what is on screen.
@@ -6062,7 +6073,7 @@ function openActor(id) {
 }
 function renderActors() {
   const cards = actorCardsHtml(false);
-  diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Actors', VIEW_Q.actors)
+  diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Actors')
     + (cards || '<p class="empty">This map records no actors.</p>') + '</div>';
   bindElementCards(diagram, openActor);
 }
@@ -6088,7 +6099,7 @@ function renderOverview() {
     // The same actor cards the Actors view draws, laid out to CHOOSE from rather than to read down.
     const cards = actorCardsHtml(true);
     diagram.innerHTML = '<div class="usecases-wrap">'
-      + viewHeadHtml('Features', 'What can each role do?') + productLeadHtml()
+      + viewHeadHtml('Features') + productLeadHtml()
       + (cards || '<p class="empty">This map records no actors.</p>') + '</div>';
     bindElementCards(diagram, openActor);
     bindProductLead();
@@ -6118,7 +6129,7 @@ function renderOverview() {
     ? `<div class="ecard-grid">${ids.map((id) => elementCardHtml(id, per(id))).join('')}${looseCard}</div>`
     : '<p class="empty">No features recorded.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + viewHeadHtml('Features', VIEW_Q.usecases) + productLeadHtml() + grid + '</div>';
+    + viewHeadHtml('Features') + productLeadHtml() + grid + '</div>';
   bindProductLead();
   bindElementCards(diagram);
   bindPlainCards(diagram, (key) => go({ kind: 'capability', cap: key }));
@@ -6415,7 +6426,7 @@ function renderSystem() {
     return head + `<div class="ecard-grid">${cards}</div>`;
   }).join('');
   diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
-    + viewHeadHtml('System', VIEW_Q.system)
+    + viewHeadHtml('System')
     + (bands || '<p class="empty">No system facts recorded.</p>') + '</div>';
   bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: key }));
 }
@@ -6709,7 +6720,7 @@ function renderTests() {
       + `<tbody>${rows}</tbody></table>`
     : '<p class="empty">No test-completeness rows recorded.</p>';
   diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
-    + viewHeadHtml('Tests', VIEW_Q.tests) + noteHtml + table + '</div>';
+    + viewHeadHtml('Tests') + noteHtml + table + '</div>';
   diagram.querySelectorAll('a.tstref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); selectFromTree(a.getAttribute('data-id'));
   }));
@@ -6902,7 +6913,7 @@ function renderRules(s) {
         : plainCardHtml({ key: g.id, name: g.name, desc: g.purpose,
                           count: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}` });
     }).join('');
-    diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Rules', VIEW_Q.rules)
+    diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Rules')
       + '<div class="ecard-grid">'
       + (cards || '<p class="empty">No business rules recorded.</p>') + '</div></div>';
     bindElementCards(diagram, (id) => go({ kind: 'rules', blk: id }));
