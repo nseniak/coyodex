@@ -509,7 +509,7 @@ def test_features_keeps_both_axes_and_actors_drills_across_into_one() -> None:
     assert "let UC_GROUP_BY = 'capability';" in js and "function ucGroupBy() {" in js
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
     assert "seg('capability', 'Category')" in over and "seg('actor', 'Actor')" in over
-    assert "Group features by" in over, "the label says what is being grouped, not just that it is"
+    assert "Features grouped by" in over, "the label says what is being grouped, not just that it is"
     assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
     # Both settings draw actor cards from ONE builder, shared with the Actors view.

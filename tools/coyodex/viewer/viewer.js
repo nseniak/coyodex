@@ -6107,7 +6107,7 @@ function renderOverview() {
   const seg = (key, label) => `<button type="button" data-gb="${key}"`
     + `${axis === key ? ' class="on"' : ''}>${label}</button>`;
   const switchHtml = HAS_CAPABILITIES
-    ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group features by</span>'
+    ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Features grouped by</span>'
       + `<span class="uc-seg">${seg('capability', 'Category')}${seg('actor', 'Actor')}</span></div>`
     : '';
   if (axis === 'actor') {
