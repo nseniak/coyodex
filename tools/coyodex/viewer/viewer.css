@@ -375,9 +375,6 @@ body.vresizing #stage { pointer-events: none; }
 .uc-wants { margin: -2px 0 10px; font-size: 12px; font-weight: 400; color: #6b7280; line-height: 1.45; }
 .uc-wants-lbl { font-weight: 700; color: #374151; }
 .uc-list { list-style: none; margin: 0 0 8px; padding: 0; }
-.uc-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
-.uc-row:hover { background: #f5f7ff; }
-.uc-row:focus { outline: none; border-color: #c7d2fe; background: #f5f7ff; }
 .uc-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .uc-name { font-size: 13px; font-weight: 600; color: #1f2937; }
 .uc-to { display: block; font-size: 12px; color: #6b7280; line-height: 1.45; margin-top: 2px; }
@@ -479,18 +476,18 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 /* A CARD LIST reads down the page; a CARD GRID is for choosing between groups, across then down. */
 .ecard-list { display: flex; flex-direction: column; gap: 8px; }
 .ecard-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-/* --- the feature page (plan/80-feature-led-views) ------------------------------------------------
+/* --- a page about ONE element: the hero, shared by the feature page and the decision-area page ------------------------------------------------
    Three levels, and the CSS is what makes them read as three. A hero that answers "what is this", the
    use cases as the page's body, and the rest of the map under section headings the pinned chip index
    jumps to. The first shape was one definition list of seven equal rows, so the purpose weighed the
    same as the component list and the reader had to work out what mattered. */
-.feat-hero { padding: 4px 0 14px; border-bottom: 1px solid #eef2f7; margin-bottom: 4px; }
-.feat-hero-name { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 0 8px;
+.page-hero { padding: 4px 0 14px; border-bottom: 1px solid #eef2f7; margin-bottom: 4px; }
+.page-hero-name { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 0 8px;
                   font-size: 21px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
-.feat-hero-purpose { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: #374151;
+.page-hero-purpose { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: #374151;
                      max-width: 68ch; }
-.feat-hero-roles { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; }
-.feat-hero-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+.page-hero-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; }
+.page-hero-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
                  color: #6b7280; margin-right: 2px; }
 /* What the map does NOT hold. Quiet, but never blank: an empty box and "nothing recorded" are
    different facts, and only one of them is honest. */
@@ -505,11 +502,6 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .featref, .featrole { font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer;
                       border: 1px solid #e5e7eb; border-radius: 9px; background: #fff; color: #374151; }
 .featref:hover, .featrole:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
-/* A rule is a sentence, not a chip: it keeps the row shape the use cases above it use, so the two
-   lists on one page read as the same kind of thing. A rule with no name of its own shows its whole
-   statement as the title, and thirty words set bold is a wall — so that case drops to normal weight. */
-.uc-row.featref { display: block; width: 100%; text-align: left; font: inherit; border-radius: 8px;
-                  border: 1px solid transparent; background: transparent; padding: 8px 10px; }
 /* The code section folds. It is the lowest priority thing on a feature page, and its heading already
    states the count, which is the fact worth scanning. */
 .feat-fold > summary { cursor: pointer; color: #4338ca; font-size: 13px; }
@@ -1258,7 +1250,7 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .src-list { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
 
 /* ── Business logic (T7): the decision layer, in the Use Cases catalog's clothes. Level 1 (the
-   decision areas and their rules) reuses .usecases-wrap / .uc-group / .uc-row wholesale — a list of
+   decision areas and their rules) reuses .usecases-wrap / .uc-group wholesale — a list of
    areas holding rows reads exactly like a list of actors holding use cases — and level 2 (one rule's
    page) reuses the same cards for its sections. Only the rule-specific parts are styled here. ── */
 .br-tag { display: inline-block; margin-left: 7px; padding: 1px 6px; border-radius: 4px;
@@ -1291,8 +1283,6 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .br-statement { margin: -2px 0 10px; font-size: 14px; line-height: 1.5; color: #1f2937; }
 /* A rule row's third line — where the decision lives. Dimmer than the statement above it: it is the
    derived answer, and the row's own decision has to stay the thing the eye lands on. */
-.br-where { display: block; margin-top: 3px; font-size: 11.5px; color: #94a3b8; line-height: 1.45; }
-.br-where .br-nowhere, .br-where .br-unverified { font-size: 11.5px; }
 /* The decision area a rule belongs to, on its page — a chip that walks back out to the list. */
 .br-blk { font: inherit; font-size: 12px; cursor: pointer; padding: 1px 9px; border-radius: 999px;
           border: 1px solid #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 600; }

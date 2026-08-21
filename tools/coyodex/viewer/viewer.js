@@ -5709,26 +5709,37 @@ function featRulesHtml(ids) {
 }
 
 
-// The header: what this feature IS, in the three lines a reader needs before anything else. The label,
-// the purpose sentence, and who drives it. Nothing here is a count and nothing here folds open.
+// The head of a page about ONE element: its name, the pills it earns, the sentence saying what it is,
+// and one line of context. A feature's page and a decision area's page are the same shape, so they are
+// the same function — `desc` and `meta` arrive as rendered HTML, because each caller knows whether its
+// own text is markdown.
+//
+// A plain `div`, never a `<header>`: the page's own top bar is styled by a bare `header` selector (dark
+// navy, flex row), and a semantic header here inherited all of it and rendered unreadable.
+function pageHeroHtml(o) {
+  return '<div class="page-hero">'
+    + `<h2 class="page-hero-name">${esc(o.name)}${o.pills || ''}</h2>`
+    + (o.desc ? `<p class="page-hero-purpose">${o.desc}</p>`
+              : `<p class="page-hero-purpose feat-empty">${esc(o.noDesc || 'Nothing recorded.')}</p>`)
+    + (o.meta ? `<p class="page-hero-meta">${o.meta}</p>` : '')
+    + '</div>';
+}
+// What this feature IS, in the three lines a reader needs before anything else.
 function featureHeadHtml(capId) {
   const f = FEAT_BY_ID[capId];
   if (!f) return '';
-  const lab = f.label
-    ? `<span class="uc-caplabel uc-lab-${esc(f.label.toLowerCase())}">${esc(f.label)}</span>` : '';
-  const purpose = f.purpose
-    ? `<p class="feat-hero-purpose">${mdInline(f.purpose)}</p>`
-    : '<p class="feat-hero-purpose feat-empty">No purpose recorded.</p>';
   const roles = f.roles.length
     ? f.roles.map((rid) => `<button type="button" class="featrole" data-act="${esc(roleName(rid))}">`
         + `${esc(roleName(rid))}</button>`).join('')
     : '<span class="feat-empty">not recorded</span>';
-  // A plain `div`, never a `<header>`: the page's own top bar is styled by a bare `header` selector
-  // (dark navy, flex row), and a semantic header here inherited all of it and rendered unreadable.
-  return '<div class="feat-hero">'
-    + `<h2 class="feat-hero-name">${esc(f.name)}${lab}</h2>${purpose}`
-    + `<p class="feat-hero-roles"><span class="feat-hero-lbl">Used by</span> ${roles}</p>`
-    + '</div>';
+  return pageHeroHtml({
+    name: f.name,
+    pills: f.label
+      ? `<span class="uc-caplabel uc-lab-${esc(f.label.toLowerCase())}">${esc(f.label)}</span>` : '',
+    desc: f.purpose ? mdInline(f.purpose) : '',
+    noDesc: 'No purpose recorded.',
+    meta: `<span class="page-hero-lbl">Used by</span> ${roles}`,
+  });
 }
 
 // Everything under the use cases: the ways in, the decisions, the data and the code. In that order,
@@ -6749,7 +6760,6 @@ function ruleBlockGroups() {
 }
 // One decision area's card id — the same string on both levels, so a cross-link that names an area
 // and the section it scrolls to cannot drift apart.
-function blockSectionId(bid) { return 'blk-' + (bid || 'none'); }
 // The GROUP a block id actually lands in: itself when the list draws that area, `none` when it does
 // not (an id the map never declared). ONE answer, so a crumb asking to scroll to an area and the
 // list that renders the areas cannot disagree — asking for `#blk-BLK9` when BR7's `BLK9` was never
@@ -6838,53 +6848,33 @@ function renderRules(s) {
     bindPlainCards(diagram, (key) => go({ kind: 'rules', blk: key }));
     return;
   }
-  const secs = [];
-  const sections = groups.filter((g) => g.id === s.blk).map((g) => {
-    const rows = g.rules.map((r) => {
-      // WHERE, in one line — the components the SERVER resolved for this rule's sites, de-duplicated
-      // because one component can own several of them. Each of the three empty answers reads as what
-      // it is: a declared absence, an unclaimed call site, or no call site at all.
-      const comps = [];
-      for (const site of (r.sites || [])) {
-        for (const c of (site.components || [])) if (comps.indexOf(c.name) < 0) comps.push(c.name);
-      }
-      const sites = r.sites || [];
-      // Three names, then a count. One rule can be enforced in a dozen components (an escaping rule
-      // lives in every generator), and spelling them all out turned a one-line row into a paragraph.
-      const named = comps.length > 3 ? comps.slice(0, 3).join(', ') + ' +' + (comps.length - 3) + ' more'
-                                     : comps.join(', ');
-      const where = comps.length ? 'Enforced in ' + esc(named)
-        : !sites.length ? '<span class="br-nowhere">no call site recorded</span>'
-        : sites.every((site) => site.declared) ? '<span class="br-nowhere">enforced by construction</span>'
-        : '<span class="br-unverified">no component claims its call site</span>';
-      const nst = (r.steps || []).length;
-      const steps = nst ? ` · at ${nst} flow step${nst === 1 ? '' : 's'}` : '';
-      // Three lines, the Use Cases row's shape plus one: the TITLE to scan, the decision itself,
-      // then where it lives. Before `name` existed the sentence WAS the heading, so a list of rules
-      // was a wall of prose with nothing to skim.
-      const decision = ruleStatementLine(r);
-      return `<li class="uc-row" data-br="${esc(r.id)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name">${esc(ruleTitle(r))}</span>${ruleTagsHtml(r)}</span>`
-        + (decision ? `<span class="uc-to">${mdInline(decision)}</span>` : '')
-        + `<span class="br-where">${where}${steps}</span></li>`;
-    }).join('');
-    const parent = g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : '';
-    return `<section class="uc-group" id="${esc(blockSectionId(g.id))}">`
-      + `<h3 class="uc-actor">${esc(g.name)}${parent}`
-      + `<span class="uc-actor-wants">${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}</span></h3>`
-      + (g.purpose ? `<p class="uc-wants">${mdInline(g.purpose)}</p>` : '')
-      + (g.rules.length ? `<ul class="uc-list">${rows}</ul>`
-                        : '<p class="empty">No rules assigned to this area yet.</p>')
-      + '</section>';
-  }).join('');
+  // ONE decision area, as a page: its own hero, then its rules as the SAME element cards every other
+  // list draws. This list was the last hand-rolled row design in the file — and the one the spec named
+  // as the model to copy everywhere, which makes it the last place that had not copied itself.
+  const g = groups.find((x) => x.id === s.blk);
+  if (!g) {
+    diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">This decision area is not in the map.</p></div>';
+    return;
+  }
+  // The warning chips ride beside the type pill: one word each, and each one changes how much weight to
+  // put on the rule below it. Where the rule is ENFORCED does not ride here — it was a third line on
+  // the old row, and the rule's own page already carries it in full, with every call site and step.
+  const per = (id) => {
+    const r = ruleById(id);
+    return { extra: r ? ruleTagsHtml(r) : '' };
+  };
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + (sections || '<p class="empty">This decision area is not in the map.</p>') + '</div>';
-  // A row opens the rule's own page — the SAME detail every cross-link into a rule lands on (one home).
-  const open = (li) => go({ kind: 'rule', br: li.getAttribute('data-br') });
-  diagram.querySelectorAll('.uc-row[data-br]').forEach((li) => {
-    li.addEventListener('click', () => open(li));
-    li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(li); });
-  });
+    + pageHeroHtml({
+      name: g.name,
+      pills: g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : '',
+      desc: g.purpose ? mdInline(g.purpose) : '',
+      noDesc: 'No description recorded for this decision area.',
+      meta: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
+    })
+    + (g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id), per)
+                      : '<p class="empty">No rules assigned to this area yet.</p>')
+    + '</div>';
+  bindElementCards(diagram);
   // An area is now its own page rather than one section of a long scroll, so arriving focused on one
   // needs no scroll-into-view: the page IS that area, from its first line.
 }

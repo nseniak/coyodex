@@ -765,8 +765,11 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     head = js[js.index("function featureHeadHtml(capId) {"):
               js.index("\nfunction ", js.index("function featureHeadHtml(capId) {") + 10)]
-    assert "feat-hero-name" in head and "feat-hero-purpose" in head and "Used by" in head
+    assert "pageHeroHtml({" in head and "Used by" in head
     assert "f.rules" not in head and "f.components" not in head, "the header holds no counts"
+    # A feature's page and a decision area's page are the same shape, so they are the same function.
+    assert "function pageHeroHtml(o) {" in js
+    assert "pageHeroHtml({" in js[js.index("function renderRules(s) {"):]
     secs = js[js.index("function featureSectionsHtml(capId) {"):
               js.index("\nfunction ", js.index("function featureSectionsHtml(capId) {") + 10)]
     order = re.findall(r"featSection\(secs, '(\w+)', '([^']+)'", secs)

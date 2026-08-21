@@ -1857,9 +1857,11 @@ def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
         # OWNER from `files`, or a step link by parsing anchors, is the second implementation.
         for shape in (".files", "whereNode(", "parseStepEid(", "COMP_LOOKUP"):
             assert shape not in body, (fn, shape)
-    # ...and they DO read the server-computed answers. The two levels split them: the LIST summarises
-    # a rule's owners and its state, the rule's own PAGE renders each site and each step link.
-    assert "site.components" in _js_function("renderRules")     # the list's "Enforced in …" line
+    # ...and they DO read the server-computed answers. The two levels split them: the LIST is cards,
+    # carrying the rule and the two warning chips; the rule's own PAGE renders each site and each step
+    # link. The list used to summarise a rule's owners on a third line of its own, and that line is
+    # gone — the page already says it in full, with every call site and every step.
+    assert "site.components" not in _js_function("renderRules")
     assert "site.components" in _js_function("ruleSiteRow")     # the page's per-site owners
     assert "r.swept" in _js_function("ruleTagsHtml")            # the sweep-debt chip, shown on both
     assert "l.strength" in _js_function("ruleStepChip")
@@ -1999,7 +2001,10 @@ def test_a_rule_drills_into_its_own_page_the_way_a_use_case_does() -> None:
     assert "if (s.kind === 'rule') {\n    renderRule(s);" in VIEWER_JS           # render
     assert "{ kind: 'rule', br: s.br }" in VIEWER_JS                            # ancestors (the trail)
     lst = _js_function("renderRules")
-    assert "go({ kind: 'rule', br: li.getAttribute('data-br') })" in lst        # a row drills
+    # The list is element CARDS now, so the drill is the shared card binder's — one answer to "what
+    # happens when I click an element", which for a rule is its own page (see `drillInto`).
+    assert "bindElementCards(diagram);" in lst
+    assert "case 'rule': return go({ kind: 'rule', br: id });" in VIEWER_JS
     for detail in ("ruleSiteRow", "ruleStepChip", "srcCell"):
         assert detail not in lst, detail
 
@@ -2053,9 +2058,12 @@ def test_a_nameless_rule_is_not_rendered_as_its_own_statement_twice() -> None:
     assert "function ruleStatementLine(r)" in VIEWER_JS
     line = _js_function("ruleStatementLine")
     assert "(r.name || '').trim()" in line and "r.statement : ''" in line
-    for fn in ("renderRules", "renderRule"):
-        body = _js_function(fn)
-        assert "ruleStatementLine(r)" in body, fn
+    assert "ruleStatementLine(r)" in _js_function("renderRule")
+    # The LIST is element cards now, and the shared card applies the same rule to every element: a
+    # description that only repeats the title is not a second fact, so it is dropped. One guard for
+    # every kind, instead of one rule renderer remembering to do it.
+    facts = _js_function("cardFacts")
+    assert "if (desc.trim() === (n.name || '').trim()) desc = '';" in facts
 
 
 def test_a_block_outside_the_forest_still_appears_with_its_rules() -> None:
