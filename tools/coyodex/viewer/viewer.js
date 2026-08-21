@@ -390,7 +390,10 @@ function cardFacts(id) {
       pills.push({ text: a, cls: 'uc-aud-' + a.toLowerCase() });
     }
   }
-  if (n.kind === 'human' || n.kind === 'service') pills.push({ text: n.kind, cls: 'ecard-pill-' + n.kind });
+  // `service` only. A person is what an actor USUALLY is, so the word sits on nearly every card and
+  // tells the reader nothing; `service` is the exception worth a pill, because it says this one runs
+  // with nobody watching. Same argument the actor cards already make for dropping the type pill.
+  if (n.kind === 'service') pills.push({ text: n.kind, cls: 'ecard-pill-service' });
   if (n.kind === 'dep' && f.Kind) pills.push({ text: f.Kind, cls: '' });
   return { id, kind: n.kind, name: n.name || id, type: elementLabel(n.kind), desc, pills };
 }
@@ -5858,8 +5861,8 @@ function actorHeadHtml(actorName) {
   const aud = ((role || {}).audience || '').trim().toLowerCase();
   const audText = aud && kind === 'service' ? `${aud}-owned` : aud;
   return pageHeroHtml({
-    pills: ((kind === 'human' || kind === 'service')
-      ? `<span class="ecard-pill ecard-pill-${kind}">${esc(kind)}</span>` : '')
+    pills: (kind === 'service'
+      ? `<span class="ecard-pill ecard-pill-service">${esc(kind)}</span>` : '')
       + (aud ? `<span class="uc-caplabel uc-aud-${esc(aud)}">${esc(audText)}</span>` : ''),
     desc: role && role.wants ? mdInline(role.wants) : '',
     noDesc: 'This map does not say what this actor wants.',
@@ -5925,8 +5928,8 @@ function renderUseCases(sel) {
     // each of a pair wants something of their own and one header cannot speak for both.
     const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
     const kind = kinds.size === 1 ? [...kinds][0] : '';
-    const badge = (kind === 'human' || kind === 'service')
-      ? `<span class="ecard-pill ecard-pill-${kind}">${esc(kind)}</span>` : '';
+    const badge = kind === 'service'
+      ? `<span class="ecard-pill ecard-pill-service">${esc(kind)}</span>` : '';
     const w = (g.roles || []).length === 1 ? g.roles[0].wants : '';
     const wants = w ? `<p class="uc-wants"><span class="uc-wants-lbl">Wants:</span> ${mdInline(w)}</p>` : '';
     secs.push({ id: secId, title: g.actor });
