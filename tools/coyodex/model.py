@@ -41,6 +41,12 @@ class Role:
     id: str                   # Rn — a role is a first-class element, referenced by id (not by name)
     name: str
     kind: str = ""            # human | service (free text preserved; the viewer normalizes)
+    audience: str = ""        # user | staff (grammar.ROLE_AUDIENCE) — WHO this role is. "staff" = the
+                              # person works for the company that ships the product. The map's one
+                              # authored answer to "who is this for": a capability's audience is
+                              # DERIVED from the roles driving its use cases (`capability_audience`),
+                              # so the two can never contradict each other. Orthogonal to `kind`: a
+                              # customer's own bot is service+user, an upkeep job is service+staff.
     wants: str = ""
     drives: str = ""          # the "Use cases they drive" cell (UC ids inside)
 
@@ -90,13 +96,14 @@ class Group:
     name: str
     purpose: str = ""
     parent: str | None = None
-    label: str = ""            # CAPABILITY-ONLY: core | supporting | platform (grammar.CAP_LABELS).
-                               # An authored judgement about the USE CASES in this capability — it is
-                               # what makes Happy-Path membership a rule instead of a written record
-                               # per off-spine use case. Nothing derives it: the touch-count primitive
-                               # says which elements a capability reaches, never whether a component or
-                               # a subsystem is "platform". `validate` blocks it on a subsystem or a
-                               # subdomain, which have no such judgement to carry.
+    happy_path: str = ""       # CAPABILITY-ONLY: expected | excluded (grammar.CAP_HAPPY_PATH). Does the
+                               # Happy-Path walk have to reach this capability? It is what makes
+                               # membership a rule instead of a written record per off-spine use case.
+                               # Deliberately NOT derived from `ProjectModel.happy_path`: a field that
+                               # always agreed with the walk could never disagree with it, and the
+                               # disagreement IS the check. `validate` blocks it on a subsystem or a
+                               # subdomain, which have no walk to be on. Says NOTHING about audience —
+                               # that is `Role.audience`, derived up by `capability_audience`.
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""
@@ -627,7 +634,8 @@ class ProjectModel:
                                      # forest beside capabilities/subsystems/subdomains. A block
                                      # groups rules the way a capability groups use cases; its
                                      # `purpose` carries the "what this area decides" line. Group's
-                                     # `label` and `tech` stay capability-/subsystem-only (validate).
+                                     # `happy_path` and `tech` stay capability-/subsystem-only
+                                     # (validate).
     rules: list[BusinessRule] = field(default_factory=list)  # the decisions themselves
     extras: list[ExtraSection] = field(default_factory=list)
 
@@ -882,8 +890,16 @@ def _check_json_value(value: object, path: str) -> object:
 #: an alpha format, and CONTRIBUTING says treat generated maps as disposable). What this buys is that
 #: an operator holding a map written last week reads one line and knows the fix, instead of grepping
 #: the schema for a field that no longer exists.
-_RENAMED_FIELDS: dict[str, str] = {"claims_grounded": "claims_challenged"}
+_RENAMED_FIELDS: dict[str, str] = {"claims_grounded": "claims_challenged",
+                                   "label": "happy_path"}
 _RENAME_NOTES: dict[str, str] = {
+    "label": ("It was a THREE-value word (core | supporting | platform) carrying two questions at "
+              "once, and two of its values had no definition anywhere. Split them: `happy_path` "
+              "(expected | excluded) on the CAPABILITY says whether the walk must reach it, and "
+              "`audience` (user | staff) on the ROLE says who it is for — a capability's audience is "
+              "derived from its actors. Old value → new: core → happy_path 'expected'; supporting / "
+              "platform → 'excluded' UNLESS a walk step already reaches it, in which case "
+              "'expected'. There is no mechanical rule for the audience half; read the roles."),
     "claims_grounded": ("It counted claims that got a VERDICT, which read as 'held up' and let a map "
                         "record total 399 / grounded 399 / refuted 3. Rename it, and add the verdict "
                         "split `claims_confirmed` / `claims_unverifiable` — validate blocks unless "

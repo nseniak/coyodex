@@ -380,9 +380,15 @@ function cardFacts(id) {
   // description field then holds the same words. One copy, not two.
   if (desc.trim() === (n.name || '').trim()) desc = '';
   const pills = [];
-  // A feature's weight, an actor's nature and a dependency's kind are each one word that changes how the
-  // rest of the card reads, so each rides beside the type pill rather than eating the description.
-  if (n.kind === 'capability' && f.Label) pills.push({ text: f.Label, cls: 'uc-lab-' + f.Label.toLowerCase() });
+  // A feature's two words, an actor's nature and a dependency's kind each change how the rest of the
+  // card reads, so each rides beside the type pill rather than eating the description. A feature's
+  // pair is deliberately two pills and not one: `Audience` is who it is for (derived from its
+  // actors), `Happy Path` is whether the guided walk must reach it. One word carrying both is what
+  // the old three-value label did, and its middle value ended up meaning neither.
+  if (n.kind === 'capability') {
+    if (f.Audience) pills.push({ text: f.Audience, cls: 'uc-aud-' + f.Audience.toLowerCase() });
+    if (f['Happy Path']) pills.push({ text: f['Happy Path'], cls: 'uc-walk-' + f['Happy Path'].toLowerCase() });
+  }
   if (n.kind === 'human' || n.kind === 'service') pills.push({ text: n.kind, cls: 'ecard-pill-' + n.kind });
   if (n.kind === 'dep' && f.Kind) pills.push({ text: f.Kind, cls: '' });
   return { id, kind: n.kind, name: n.name || id, type: elementLabel(n.kind), desc, pills };
@@ -5793,10 +5799,11 @@ function featureHeadHtml(capId) {
     ? f.roles.map((rid) => `<button type="button" class="featrole" data-act="${esc(roleName(rid))}">`
         + `${esc(roleName(rid))}</button>`).join('')
     : '<span class="feat-empty">not recorded</span>';
+  const capPill = (v, kind) => (v
+    ? `<span class="uc-caplabel uc-${kind}-${esc(v.toLowerCase())}">${esc(v)}</span>` : '');
   return pageHeroHtml({
     name: f.name,
-    pills: f.label
-      ? `<span class="uc-caplabel uc-lab-${esc(f.label.toLowerCase())}">${esc(f.label)}</span>` : '',
+    pills: capPill(f.audience, 'aud') + capPill(f.happyPath, 'walk'),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
     meta: `<span class="page-hero-lbl">Used by</span> ${roles}`,
@@ -5861,9 +5868,13 @@ function actorHeadHtml(actorName) {
   // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
   const role = g && g.roles.length === 1 ? g.roles[0] : null;
   const kind = ((role || {}).kind || '').trim().toLowerCase();
+  // Whose side this person is on rides beside whether they are a person or a program. The two are
+  // independent: a customer's own bot is service+user, the product's upkeep job is service+staff.
+  const aud = ((role || {}).audience || '').trim().toLowerCase();
   return pageHeroHtml({
-    pills: (kind === 'human' || kind === 'service')
-      ? `<span class="ecard-pill ecard-pill-${kind}">${esc(kind)}</span>` : '',
+    pills: ((kind === 'human' || kind === 'service')
+      ? `<span class="ecard-pill ecard-pill-${kind}">${esc(kind)}</span>` : '')
+      + (aud ? `<span class="uc-caplabel uc-aud-${esc(aud)}">${esc(aud)}</span>` : ''),
     desc: role && role.wants ? mdInline(role.wants) : '',
     noDesc: 'This map does not say what this actor wants.',
   });

@@ -32,10 +32,13 @@ trapdoor is a synthetic ticketing service that exists to be MAPPED WRONG. Every 
 
 ## Roles (actors)
 
-| Role | Kind | What they want | Use cases they drive |
-|---|---|---|---|
-| **Reporter** | human | to add context to a ticket they raised and see what happened to it | UC2, UC4 |
-| **Support agent** | human | to work a tenant's queue: find tickets, read them, and move them along the lifecycle | UC1, UC2, UC3, UC5 |
+`Audience` says WHO this role is: `staff` = the person works for the company that ships the product,
+`user` = everyone else. Every capability's audience is derived from it.
+
+| Role | Kind | Audience | What they want | Use cases they drive |
+|---|---|---|---|---|
+| **Reporter** | human |  | to add context to a ticket they raised and see what happened to it | UC2, UC4 |
+| **Support agent** | human |  | to work a tenant's queue: find tickets, read them, and move them along the lifecycle | UC1, UC2, UC3, UC5 |
 
 ---
 

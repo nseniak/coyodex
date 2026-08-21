@@ -678,6 +678,50 @@ def capability_members(m: ProjectModel) -> dict[str, set[str]]:
     return {c.id: walk(c.id, set()) for c in m.capabilities}
 
 
+#: What `capability_audience` returns for a capability whose human actors disagree. Not a value the
+#: map may ever author — it is the finding, and `_check_capability_audience` reports it.
+AUDIENCE_MIXED = "mixed"
+
+
+def capability_audience(m: ProjectModel) -> dict[str, str]:
+    """Per capability, WHO it is for, derived from the roles driving its use cases.
+
+    The map authors the audience once, on the ROLE (`Role.audience`), and it is derived up from
+    there. Nothing is authored on the capability, so a capability's audience can never contradict
+    its actors — the failure mode the previous three-value `label` had, where a capability driven
+    only by the platform's own operator was authored `supporting` and nothing ever compared the two.
+
+    ONLY HUMAN ROLES VOTE. A machine actor is the product doing work on someone's behalf, and one
+    scheduler routinely fires a customer's work AND the company's own upkeep. Measured on the three
+    live maps: letting machines vote turns 3 of 27 capabilities `mixed`, two of them falsely (a
+    skills feature only because the product's own scheduler fires the skill; a billing feature only
+    because the payment processor delivers the event). Humans alone leave 26 of 27 unanimous, and the
+    one `mixed` is a real defect (a demo site an outside visitor browses and the company's own
+    administrator operates).
+
+    Machine roles are the FALLBACK, not a veto: a capability whose use cases name no human at all
+    still gets an answer rather than nothing. Returns `""` when no actor of either kind carries a
+    tag, which is "nobody decided", never "user".
+
+    Reads the SUBTREE (`capability_members`), so a parent capability inherits its children's actors
+    the way every other capability-altitude question here does."""
+    by_id = {u.id: u for u in m.use_cases}
+    roles = {r.id: r for r in m.roles}
+    out: dict[str, str] = {}
+    for cap, ucs in capability_members(m).items():
+        human: set[str] = set()
+        machine: set[str] = set()
+        for uc in ucs:
+            for rid in (by_id[uc].actors or ()) if uc in by_id else ():
+                role = roles.get(rid)
+                if role is None or not (tag := (role.audience or "").strip().lower()):
+                    continue
+                (machine if (role.kind or "").strip().lower().startswith("s") else human).add(tag)
+        votes = human or machine
+        out[cap] = "" if not votes else (votes.copy().pop() if len(votes) == 1 else AUDIENCE_MIXED)
+    return out
+
+
 def capability_elements(m: ProjectModel) -> dict[str, set[str]]:
     """Per capability, the element ids its use cases' flows touch — its whole subtree's union.
     Every DEFINED capability appears, including one whose use cases are all untraced: that empty
@@ -1354,7 +1398,7 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
     traced, which today is invisible."""
     traced = set(flow_endpoint_ids_by_uc(m))
     cap_of = {u.id: (u.capability or "").strip() for u in m.use_cases}
-    labels = {c.id: (c.label or "").strip().lower() for c in m.capabilities}
+    labels = {c.id: (c.happy_path or "").strip().lower() for c in m.capabilities}
     on_spine = {g.uc for g in m.happy_path if g.uc}
     ext = external_entry_points(m)
     return {
@@ -1369,9 +1413,9 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
         "capabilities": len(m.capabilities),
         "capabilities_untraced": len([cid for cid, ends in capability_elements(m).items()
                                       if not ends]),
-        "off_spine_in_core_capabilities": len(
+        "off_spine_in_expected_capabilities": len(
             [u for u in m.use_cases
-             if u.id not in on_spine and labels.get(cap_of.get(u.id, ""), "") == "core"]),
+             if u.id not in on_spine and labels.get(cap_of.get(u.id, ""), "") == "expected"]),
     }
 
 
@@ -1556,17 +1600,25 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
     also the shape that does not scale — on the reference map it is 11 records, and the method's own
     history is of records that cost more to write than to skip.
 
-    With capabilities the question moves up a level and runs in BOTH directions:
+    With capabilities the question moves up a level and runs in BOTH directions, keyed on the
+    capability's authored `happy_path` expectation:
 
-      * forward — a **core** capability no spine step reaches. About five checks, each a real gap.
-      * converse — a spine step whose use case sits in a NON-core capability. This is the direction a
-        single-direction check cannot produce, and it is the one that catches a walk quietly padded
-        with supporting work (on the reference map: the audit-log step).
+      * forward — a capability marked `expected` that no spine step reaches. About five checks, each
+        a real gap.
+      * converse — a spine step whose use case sits in an `excluded` capability. This is the
+        direction a single-direction check cannot produce, and it is the one that catches a walk
+        quietly padded with side work (on the reference map: the audit-log step).
 
-    A non-core capability that HOLDS off-spine use cases still leaves a record — one line for the
-    capability, not one per use case. Without that, relabelling a capability core→supporting would
-    silence its whole membership with no trace anywhere, which is exactly the escape the label must
+    An `excluded` capability that HOLDS off-spine use cases still leaves a record — one line for the
+    capability, not one per use case. Without that, flipping a capability expected→excluded would
+    silence its whole membership with no trace anywhere, which is exactly the escape the field must
     not become.
+
+    AUDIENCE IS NOT READ HERE. `happy_path` answers "must the walk reach this?" and nothing else. A
+    staff capability may legitimately sit on the walk — the story has to show the operator and the
+    upkeep job at work somewhere — and it needs no per-step excuse for doing so. The previous
+    three-value `label` had no word for that case, which is the whole reason six per-step records
+    existed on the live maps.
 
     What is deliberately given up: an individual core use case falling off the walk no longer warns,
     because its capability still passes. On the reference map that is six use cases (including
@@ -1579,6 +1631,7 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
                 for u in m.use_cases if u.id not in on_spine and u.id not in recorded]
     warnings: list[str] = []
     caps = {c.id: c for c in m.capabilities}
+    adopted = any((c.happy_path or "").strip() for c in m.capabilities)
     # A use case in NO capability falls through every check below, because all of them key off
     # membership — so an off-spine use case with an empty or typo'd `capability` was reported by
     # nothing at all, and was not counted either. That is a silent loss, not the documented trade
@@ -1604,12 +1657,12 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
     # instead of at every level. Without this a three-node core tree produced three warnings for one
     # absence, and a record on the root silenced only the root while its children kept firing, which
     # breaks the "one line covers it" promise exactly where the tree is deepest.
-    # The forward (core-off-the-walk) check honours a SCOPED record, `CAPn/spine`. The non-core check
-    # keeps the bare `CAPn`. Sharing one token let a line written about a supporting capability's
-    # off-spine members keep hiding a real core-coverage gap after that capability was relabelled
-    # core — one record silencing a check it was never written for.
+    # The forward (expected-off-the-walk) check honours a SCOPED record, `CAPn/spine`. The excluded
+    # check keeps the bare `CAPn`. Sharing one token let a line written about an excluded
+    # capability's off-spine members keep hiding a real coverage gap after that capability was
+    # flipped to `expected` — one record silencing a check it was never written for.
     unreached_core = {cid for cid, c in caps.items()
-                      if (c.label or "").strip().lower() == "core"
+                      if (c.happy_path or "").strip().lower() == "expected"
                       and subtree.get(cid) and not any(uc in on_spine for uc in subtree[cid])}
     spine_recorded = {r[:-len("/spine")] for r in recorded if r.endswith("/spine")}
     covered_by_ancestor: set[str] = set()
@@ -1621,42 +1674,58 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
                 break
             anc, guard = (caps[anc].parent if anc in caps else None), guard + 1
     for cap_id, cap in caps.items():
-        label = (cap.label or "").strip().lower()
+        expectation = (cap.happy_path or "").strip().lower()
         mine = direct.get(cap_id, [])
         if not subtree.get(cap_id):
             continue
-        if label == "core":
+        if expectation == "expected":
             # The `recorded` test is INSIDE each branch, not above them. Sharing it let one `CAPn`
-            # line silence both checks: record a supporting capability's off-spine members, later
-            # relabel it core, and the stale record went on hiding a genuine core-coverage gap.
+            # line silence both checks: record an excluded capability's off-spine members, later
+            # flip it to `expected`, and the stale record went on hiding a genuine coverage gap.
             # One record silences exactly one (check, id) pair — the rule the HP-step case follows.
             if (cap_id in unreached_core and cap_id not in spine_recorded
                     and cap_id not in covered_by_ancestor):
                 mine = [by_id[uc] for uc in sorted(subtree.get(cap_id, ())) if uc in by_id]
                 warnings.append(
-                    f"{cap_id} ({cap.name}) is a core capability that no Happy-Path step reaches — "
-                    f"the walk traverses all main functionality: give one of its {len(mine)} use "
-                    f"case(s) a spine step, or record '{cap_id}/spine: <why>' under a 'Happy Path "
-                    "coverage' extras heading")
+                    f"{cap_id} ({cap.name}) is marked `happy_path: expected` and no Happy-Path step "
+                    f"reaches it — the walk traverses all main functionality: give one of its "
+                    f"{len(mine)} use case(s) a spine step, or record '{cap_id}/spine: <why>' under "
+                    "a 'Happy Path coverage' extras heading")
+        elif not expectation:
+            # "Nobody decided" is its own state, and it must NOT read as `excluded`. The old
+            # three-value `label` had no such state: an empty one fell through to the non-core
+            # branch, so an unanswered capability was silently treated as deliberately off the walk.
+            # That is why this field is a word pair and not a boolean.
+            #
+            # Silent while NO capability carries one at all — the axis is un-adopted, not a gap, the
+            # same graceful degradation `_check_environments` gives a project with no environments.
+            # A map that groups its use cases but has not adopted this field still gets the
+            # per-use-case fallback at the top of this function via `adopted`.
+            if not adopted:
+                continue
+            warnings.append(
+                f"{cap_id} ({cap.name}) has no `happy_path` expectation — the Coverage rule cannot "
+                f"ask whether the walk should reach it: set `happy_path` to one of "
+                f"{', '.join(grammar.CAP_HAPPY_PATH)}")
         elif (cap_id not in recorded) and (off := [u for u in mine if u.id not in on_spine]):
             warnings.append(
-                f"{cap_id} ({cap.name}) is labelled '{label or 'unlabelled'}' and holds "
+                f"{cap_id} ({cap.name}) is marked `happy_path: excluded` and holds "
                 f"{len(off)} off-spine use case(s) — one record covers them all: write "
-                f"'{cap_id}: <why>' under a 'Happy Path coverage' extras heading (or, if this is "
-                "really product functionality, label the capability core)")
+                f"'{cap_id}: <why>' under a 'Happy Path coverage' extras heading (or, if the walk "
+                "really should reach it, mark it `happy_path: expected`)")
     for g in m.happy_path:
         cap_id = (next((u.capability for u in m.use_cases if u.id == g.uc), "") or "").strip()
         cap = caps.get(cap_id)
         if (g.uc and cap is not None and g.id not in recorded
-                and (cap.label or "").strip().lower() != "core"):
+                and (cap.happy_path or "").strip().lower() == "excluded"):
             # The escape is the STEP's id, never the capability's: recording `CAPn` already means
             # "this non-core capability's off-spine use cases are fine", a different judgement. One
             # record must silence exactly one (check, id) pair.
             warnings.append(
-                f"{g.id} realizes {g.uc}, which sits in {cap_id} ({cap.name}) — labelled "
-                f"'{(cap.label or 'unlabelled').strip()}', not core. Either the label is wrong or "
-                f"the step does not belong on the main walk; record '{g.id}: <why>' under a "
-                "'Happy Path coverage' extras heading to keep it")
+                f"{g.id} realizes {g.uc}, which sits in {cap_id} ({cap.name}) — marked "
+                "`happy_path: excluded`. Either the expectation is wrong or the step does not "
+                f"belong on the main walk; record '{g.id}: <why>' under a 'Happy Path coverage' "
+                "extras heading to keep it")
     warnings += _check_walk_records_still_true(m, on_spine, caps, subtree, by_id)
     return warnings
 
@@ -2790,30 +2859,67 @@ def _check_group_tech(m: ProjectModel) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
-def _check_group_label(m: ProjectModel) -> list[str]:
-    """`label` (core | supporting | platform) is a CAPABILITY field, and the mirror of
+def _check_group_happy_path(m: ProjectModel) -> list[str]:
+    """`happy_path` (expected | excluded) is a CAPABILITY field, and the mirror of
     `_check_group_tech`: one `Group` dataclass backs FOUR forests, so nothing structural stops a
     subsystem, a subdomain or a block from carrying one.
 
-    Blocking on the wrong forest is the point. The label is an authored judgement about USE CASES —
-    it is what lets the Happy-Path rule ask "does every core capability reach the walk?" instead of
-    demanding a written record per off-spine use case. On a subsystem it would read as a claim that
-    some CODE is platform machinery, and nothing derives or checks such a claim: the touch-count
-    primitive says which elements a capability reaches, never whether a component is machinery
-    (measured on the reference map, the maximum spread was 4 capabilities of 7 — no threshold
-    separates the two, which is why that classification was dropped rather than tuned). An
-    unbacked label on the structural side would be exactly the parallel, contradictable axis the
+    Blocking on the wrong forest is the point. The field answers "must the walk reach this?", and
+    only a capability is ON the walk at all — a subsystem groups components, which the walk never
+    visits. On the structural side it would be exactly the parallel, contradictable axis the
     `tech`-on-a-subdomain rule already refuses."""
-    problems = [f"{g.id} carries `label` ('{g.label.strip()}') — label is a capability field "
-                f"(an authored judgement about use cases); drop it from this {kind}"
+    problems = [f"{g.id} carries `happy_path` ('{g.happy_path.strip()}') — happy_path is a "
+                f"capability field (only a capability is on the walk); drop it from this {kind}"
                 for arr, kind in ((m.subsystems, "subsystem"), (m.subdomains, "subdomain"),
                                   (m.blocks, "block"))
-                for g in arr if (g.label or "").strip()]
-    problems += [f"{c.id} has an unknown `label` '{c.label.strip()}' — one of "
-                 f"{', '.join(grammar.CAP_LABELS)}"
+                for g in arr if (g.happy_path or "").strip()]
+    problems += [f"{c.id} has an unknown `happy_path` '{c.happy_path.strip()}' — one of "
+                 f"{', '.join(grammar.CAP_HAPPY_PATH)}"
                  for c in m.capabilities
-                 if (c.label or "").strip() and c.label.strip().lower() not in grammar.CAP_LABELS]
+                 if (c.happy_path or "").strip()
+                 and c.happy_path.strip().lower() not in grammar.CAP_HAPPY_PATH]
     return problems
+
+
+def _check_role_audience(m: ProjectModel) -> list[str]:
+    """`audience` (user | staff) on every role — the map's ONE authored answer to "who is this for".
+
+    BLOCKING on an unknown value, the way every closed vocabulary here is."""
+    return [f"{r.id} has an unknown `audience` '{r.audience.strip()}' — one of "
+            f"{', '.join(grammar.ROLE_AUDIENCE)}"
+            for r in m.roles
+            if (r.audience or "").strip()
+            and r.audience.strip().lower() not in grammar.ROLE_AUDIENCE]
+
+
+def _check_capability_audience(m: ProjectModel) -> list[str]:
+    """The derived half: a role left untagged, and the ONE cross-check the tag buys.
+
+    A capability whose HUMAN actors disagree is the one place a wrong tag or a wrongly-grouped
+    capability shows up mechanically, and it is cheap — measured on the three live maps it fires
+    exactly once, on a demo site an outside visitor browses and the company's own administrator
+    operates, which is a real defect. Record `CAPn: <why>` under an 'Audience exceptions' extras
+    heading to accept one (a shared surface both sides genuinely use)."""
+    untagged = [r.id for r in m.roles if not (r.audience or "").strip()]
+    warnings: list[str] = []
+    # Silent while NO role carries an audience — the axis is un-adopted, not a gap (the same
+    # graceful degradation `_check_environments` gives a project with no environments). Once ONE
+    # role is tagged the map has adopted the axis, and a role left untagged is a real hole: every
+    # capability it drives becomes unanswerable.
+    if untagged and len(untagged) != len(m.roles):
+        warnings.append(
+            f"Role(s) with no `audience`: {_shown(untagged, 8)} — every capability's audience is "
+            "DERIVED from the roles driving its use cases, so an untagged role makes its "
+            f"capabilities unanswerable: tag each one {' or '.join(grammar.ROLE_AUDIENCE)}")
+    recorded = records.recorded_keys(m, "Audience exceptions")
+    caps = {c.id: c for c in m.capabilities}
+    warnings += [
+        f"{cid} ({caps[cid].name}) is driven by both `user` and `staff` roles — one capability, two "
+        "audiences: split it, move the odd use case to the capability that fits, or record "
+        f"'{cid}: <why>' under an 'Audience exceptions' extras heading"
+        for cid, aud in sorted(capability_audience(m).items())
+        if aud == AUDIENCE_MIXED and cid in caps and cid not in recorded]
+    return warnings
 
 
 def _check_environments(m: ProjectModel) -> list[str]:
@@ -4140,7 +4246,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     tech_problems, tech_warnings = _check_group_tech(m)
     problems.extend(tech_problems)
     warnings.extend(tech_warnings)
-    problems.extend(_check_group_label(m))
+    problems.extend(_check_group_happy_path(m))
+    problems.extend(_check_role_audience(m))
+    warnings.extend(_check_capability_audience(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_runs_in_family_warnings(m))   # the whole `runs_in` family, through ONE counted exit

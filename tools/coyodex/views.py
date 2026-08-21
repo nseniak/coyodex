@@ -40,6 +40,7 @@ from coyodex.validate_model import (
     capability_elements,
     completeness_counts,
     component_file_owners,
+    capability_audience,
     element_capabilities,
     rule_components,
     rule_entities,
@@ -325,16 +326,22 @@ def model_to_markdown(m: ProjectModel) -> str:
                        [[f"**{g.term}**", g.meaning, _anchor_link(g.source)] for g in m.glossary]))
     if m.roles:
         section("Roles (actors)",
-                _table(["Role", "Kind", "What they want", "Use cases they drive"],
-                       [[f"**{r.name}**", r.kind, r.wants, r.drives] for r in m.roles]))
+                ["`Audience` says WHO this role is: `staff` = the person works for the company that "
+                 "ships the product,", "`user` = everyone else. Every capability's audience is "
+                 "derived from it.", ""]
+                + _table(["Role", "Kind", "Audience", "What they want", "Use cases they drive"],
+                         [[f"**{r.name}**", r.kind, r.audience, r.wants, r.drives]
+                          for r in m.roles]))
     if m.capabilities:
         cap_parent = {c.id: c.name for c in m.capabilities}
+        cap_audience = capability_audience(m)
         section("Capabilities — what this product does",
-                ["The use-case grouping. `label` is an authored judgement about the use cases in "
-                 "each capability", "(core = the product, and the Happy Path walks every core "
-                 "capability); nothing derives it.", ""]
-                + _table(["ID", "Capability", "Label", "Purpose", "Parent"],
-                         [[f"**{c.id}**", c.name, c.label,
+                ["The use-case grouping. `Happy Path` is AUTHORED: must the walk reach this "
+                 "capability?", "`Audience` is DERIVED from the roles driving its use cases, so the "
+                 "two can never contradict each other.", ""]
+                + _table(["ID", "Capability", "Happy Path", "Audience", "Purpose", "Parent"],
+                         [[f"**{c.id}**", c.name, c.happy_path,
+                           cap_audience.get(c.id, ""),
                            c.purpose, cap_parent.get(c.parent or "", "")]
                           for c in m.capabilities]))
     if m.use_cases:
@@ -1045,14 +1052,18 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
                             s.parent)
     # Capabilities: the use-case forest. A capability is never DRAWN as a box — it groups behavior,
     # not code — but it must reach the browser as a node all the same: the Use Cases tab groups by it,
-    # the overlay selects by it, and both show its NAME, never its id. `label` rides along because it
-    # is what the Happy-Path membership rule reads.
+    # the overlay selects by it, and both show its NAME, never its id. Two words ride along: the
+    # AUTHORED `Happy Path` expectation the membership rule reads, and the DERIVED `Audience`, which
+    # is computed here because the typed model is in hand and the frontend cannot call Python.
+    cap_audience_nodes = capability_audience(m)
     for cap in m.capabilities:
         parent_name = capability_names.get(cap.parent, cap.parent) if cap.parent else ""
         nodes[cap.id] = _node(cap, "capability", cap.name, None,
                               {"Capability": cap.name, "Purpose": cap.purpose,
                                "Parent": parent_name,
-                               **({"Label": cap.label} if cap.label else {})},
+                               **({"Happy Path": cap.happy_path} if cap.happy_path else {}),
+                               **({"Audience": aud} if (aud := cap_audience_nodes.get(cap.id))
+                                  else {})},
                               cap.parent)
     # Blocks and rules are never DRAWN as boxes — they group decisions, not code — but they must
     # reach the browser as nodes all the same: `test_convert_and_views` requires every defined
@@ -1242,7 +1253,8 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         # keys a role by its id — `role_features` and `FeatureFacts.roles` are id lists — while
         # every other consumer here reads the name. Without it the frontend holds no way to turn
         # `R3` into "Workspace admin", and the who-can-do-what grid would print raw ids.
-        "roles": [{"id": r.id, "name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind)}
+        "roles": [{"id": r.id, "name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind),
+                   "audience": r.audience}
                   for r in m.roles],
         "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or ""}
                      for g in m.glossary],

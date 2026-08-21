@@ -5,11 +5,14 @@
   "commit": "b9050ae",
   "committed": "2026-07-29",
   "built": "2026-07-29 11:06",
+  "tool_commit": null,
+  "tool_committed": null,
   "roles": [
     {
       "id": "R1",
       "name": "Developer",
       "kind": "human",
+      "audience": "user",
       "wants": "to understand and oversee a codebase they have lost track of — top-down, without reading all of it, drilling into the code only where it matters",
       "drives": "UC1, UC3, UC4, UC5, UC10, UC11"
     },
@@ -17,6 +20,7 @@
       "id": "R2",
       "name": "Coding agent",
       "kind": "service",
+      "audience": "user",
       "wants": "to turn a repo it has read into a grounded, gate-passing map, and to keep that map in step with the code as the developer changes it",
       "drives": "UC2, UC6, UC7, UC8"
     },
@@ -24,6 +28,7 @@
       "id": "R3",
       "name": "Method maintainer",
       "kind": "human",
+      "audience": "staff",
       "wants": "evidence that a change to coyodex's own method or tooling made the maps it produces better rather than worse",
       "drives": "UC9"
     }
@@ -352,7 +357,7 @@
       "name": "Method & skill",
       "purpose": "The prose program a coding agent executes: the method docs that tell it how to build, check and maintain a map, plus the small manifest that makes /coyodex reach them. This is shipped as markdown rather than code, and it is as much the product as the tools are.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": null,
       "confidence": "verified",
       "tech": "",
@@ -363,7 +368,7 @@
       "name": "Map authoring",
       "purpose": "Everything that turns an agent's reading of a repo into the stored map: sizing the code tree first, then defining what a map IS and merging the agents' fragments into one canonical document.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -374,7 +379,7 @@
       "name": "Map model",
       "purpose": "The definition of a map: the typed document, the vocabularies its fields may use, the anchor format every claim is written in, and the published JSON schema derived from all of it.",
       "parent": "S2",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -385,7 +390,7 @@
       "name": "Fragment assembly",
       "purpose": "The build path from many agents to one file: each agent self-checks its fragment, the assembler merges them by id, and reconcile/fix apply the assignments and corrections that must survive a re-assemble.",
       "parent": "S2",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -396,7 +401,7 @@
       "name": "Map checking",
       "purpose": "The gates a map must pass before anyone trusts it: is it well-formed and do all its references and anchors resolve, do its cited lines really exist in the code, is it self-contradictory, and is it readable at each altitude.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -407,7 +412,7 @@
       "name": "Map viewing",
       "purpose": "How a reader actually consumes a map: the model turned into diagrams and tables, served locally, and explored in the browser down to the source line each box stands for.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "",
@@ -418,7 +423,7 @@
       "name": "Diagram generation",
       "purpose": "Builds, from the stored model, every diagram and side-panel payload the viewer shows — the context and subsystem drills, the domain class diagrams, the deployment and channel views, and the Happy Path and use-case sequences.",
       "parent": "S7",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "Python",
@@ -429,7 +434,7 @@
       "name": "Browser viewer",
       "purpose": "The single-page app the reader works in: the diagram canvas and its drill navigation, the info pane for a selected element, the file browser and code viewer, search, and the change-impact overlay.",
       "parent": "S7",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "JavaScript (browser)",
@@ -440,7 +445,7 @@
       "name": "Map serving",
       "purpose": "The small local HTTP server that fronts every mapped project — serving each map's diagram data built on demand, and reading the mapped repo's files from git at the commit the map is pinned to.",
       "parent": "S7",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "Python",
@@ -451,7 +456,7 @@
       "name": "Map lifecycle",
       "purpose": "Keeping a map true over time: working out what a code diff does to the map and what that ripples to, and preserving a map together with the exact conversation that built it.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": null,
       "confidence": "inferred",
       "tech": "Python",
@@ -462,7 +467,7 @@
       "name": "Method-quality eval",
       "purpose": "coyodex measuring itself: rebuild a map with the current method, judge it on grounding and a rubric, and compare it against the project's committed baseline to say whether the method got better or worse.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "eval/tools/coyodex_eval/",
       "confidence": "verified",
       "tech": "Python",
@@ -473,7 +478,7 @@
       "name": "Command front door",
       "purpose": "The single `coyodex` command every other part is reached through, and the read-only lookup that answers questions about a stored map without opening it by hand.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -3144,7 +3149,7 @@
       "name": "Map document",
       "purpose": "The committed map document as a whole — the typed record every other layer reads, plus the declarative directives and proposals that edit it between builds.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/model.py:418",
       "confidence": "high",
       "tech": "",
@@ -3155,7 +3160,7 @@
       "name": "Behavioral layer",
       "purpose": "The part of the map that answers 'what does this system do, for whom, in what order' — roles, glossary, use cases, the Happy Path spine, and the use-case flows.",
       "parent": "SD1",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/model.py:38",
       "confidence": "high",
       "tech": "",
@@ -3166,7 +3171,7 @@
       "name": "Structural layer",
       "purpose": "The machine behind the behavior — components, their groups, external dependencies, entry points, the backbone edge list, the async channel catalog, and the citations grounding them.",
       "parent": "SD1",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/model.py:99",
       "confidence": "high",
       "tech": "",
@@ -3177,7 +3182,7 @@
       "name": "Domain-model layer",
       "purpose": "The map's own picture of the mapped project's data — entity cards with their fields, relations, storage and lifecycles, and the plumbing types deliberately left unmodelled.",
       "parent": "SD1",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/model.py:244",
       "confidence": "high",
       "tech": "",
@@ -3188,7 +3193,7 @@
       "name": "Operational & quality layer",
       "purpose": "How the mapped system is deployed, watched, secured and configured, plus the map's honesty record — test-coverage gaps, grounding coverage, and preserved freeform sections.",
       "parent": "SD1",
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/model.py:338",
       "confidence": "high",
       "tech": "",
@@ -3199,7 +3204,7 @@
       "name": "Code pre-index",
       "purpose": "The mechanical reading of the source tree handed to a build — the file walk, the symbols and imports found in each file, and the component-count expectation derived from directory size.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/preindex_lib.py:253",
       "confidence": "high",
       "tech": "",
@@ -3210,7 +3215,7 @@
       "name": "Viewer graph & file browser",
       "purpose": "The shape the map takes on its way to the screen — drawable nodes and arrows, flows, the change-impact report, the coverage-tagged file tree, and the list of recently opened projects.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/viewer/build_graph.py:111",
       "confidence": "high",
       "tech": "",
@@ -3221,7 +3226,7 @@
       "name": "Change impact",
       "purpose": "What a code change does to an existing map — the raw diff pieces, the per-file picture of which pinned lines moved, each anchor it hits, and the ripple out to neighbouring elements.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "tools/coyodex/impact_lib.py:170",
       "confidence": "high",
       "tech": "",
@@ -3232,7 +3237,7 @@
       "name": "Method-quality eval",
       "purpose": "The measurements that say whether a rebuilt map got better or worse — the deterministic profile, the judged semantic scores, and the gated comparison against the blessed baseline.",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": "eval/tools/coyodex_eval/profile.py:37",
       "confidence": "high",
       "tech": "",
@@ -11735,6 +11740,7 @@
     "claims_superseded": 0,
     "claims_added_since": 0,
     "live_claims_digest": "",
+    "claims_live_challenged": 0,
     "note": "Full Phase-4 coverage: all 185 L2 claims from the audit worklist were challenged by 8 fresh-context skeptics that never saw the build reasoning, batched by theme (security, external dependencies + persistence, domain ownership x2, backbone edges x2) and told to default to refuted on doubt. The 14 security claims were judged three times independently with different lenses — read-the-check, attack-the-surface, and prove-the-call-chain — and decided by majority; one skeptic verified them against a live throwaway server rather than by reading. 3 claims were refuted and reconciled: the /api/browse route has no containment of its own (re-anchored to the loopback Host guard that is its real barrier, with the gap stated), the pre-index builds rather than owns its per-directory expectation record, and the backup script copies the map folder without owning the map document (edge dropped). The ref-injection guard was confirmed real but anchored at a copy that never sees user input; its anchor was repointed. All 5 state machines were checked against their declaring lines and none was invented."
   },
   "blocks": [
@@ -11743,7 +11749,7 @@
       "name": "Who may reach the local server",
       "purpose": "what the map server accepts, and from whom",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": null,
       "confidence": "verified",
       "tech": "",
@@ -11754,7 +11760,7 @@
       "name": "What the server will read off disk",
       "purpose": "which files leave the machine, and at which commit",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": null,
       "confidence": "verified",
       "tech": "",
@@ -11765,7 +11771,7 @@
       "name": "What the viewer page will run or render",
       "purpose": "which code executes in the reader's browser, and which text reaches the page",
       "parent": null,
-      "label": "",
+      "happy_path": "",
       "source": null,
       "confidence": "verified",
       "tech": "",
@@ -11776,6 +11782,7 @@
     {
       "id": "BR1",
       "statement": "The map server answers only callers on the machine it runs on.",
+      "name": "",
       "block": "BLK1",
       "sites": [
         {
@@ -11791,6 +11798,7 @@
     {
       "id": "BR2",
       "statement": "A request whose Host header does not name loopback is refused.",
+      "name": "",
       "block": "BLK1",
       "sites": [
         {
@@ -11806,6 +11814,7 @@
     {
       "id": "BR3",
       "statement": "A page on another origin may not add, forget or reorder a project.",
+      "name": "",
       "block": "BLK1",
       "sites": [
         {
@@ -11821,6 +11830,7 @@
     {
       "id": "BR4",
       "statement": "A file is read at the map's pinned commit, never from a path that escapes the repository.",
+      "name": "",
       "block": "BLK2",
       "sites": [
         {
@@ -11836,6 +11846,7 @@
     {
       "id": "BR5",
       "statement": "The one route that reads real disk still resolves inside the repository.",
+      "name": "",
       "block": "BLK2",
       "sites": [
         {
@@ -11851,6 +11862,7 @@
     {
       "id": "BR6",
       "statement": "A commit value can never be parsed by git as a flag.",
+      "name": "",
       "block": "BLK2",
       "sites": [
         {
@@ -11866,6 +11878,7 @@
     {
       "id": "BR7",
       "statement": "A branch or revision expression can never be parsed by git as a flag.",
+      "name": "",
       "block": "BLK2",
       "sites": [
         {
@@ -11881,6 +11894,7 @@
     {
       "id": "BR8",
       "statement": "The folder picker walks the whole filesystem; nothing on that route narrows it.",
+      "name": "",
       "block": "BLK2",
       "sites": [
         {
@@ -11896,6 +11910,7 @@
     {
       "id": "BR9",
       "statement": "A folder is served only when it already holds a `.coyodex/` directory.",
+      "name": "",
       "block": "BLK1",
       "sites": [
         {
@@ -11911,6 +11926,7 @@
     {
       "id": "BR10",
       "statement": "A frontend asset is served by exact name, never by a path.",
+      "name": "",
       "block": "BLK2",
       "sites": [
         {
@@ -11926,6 +11942,7 @@
     {
       "id": "BR11",
       "statement": "An editor hand-off link may only use a scheme on the allowlist.",
+      "name": "",
       "block": "BLK3",
       "sites": [
         {
@@ -11941,6 +11958,7 @@
     {
       "id": "BR12",
       "statement": "A third-party script runs only when its content hash matches.",
+      "name": "",
       "block": "BLK3",
       "sites": [
         {
@@ -11956,6 +11974,7 @@
     {
       "id": "BR13",
       "statement": "Text authored in the map is escaped before it reaches a diagram label.",
+      "name": "",
       "block": "BLK3",
       "sites": [
         {
@@ -11971,6 +11990,7 @@
     {
       "id": "BR14",
       "statement": "A request body over 64 KB is not parsed at all.",
+      "name": "",
       "block": "BLK1",
       "sites": [
         {

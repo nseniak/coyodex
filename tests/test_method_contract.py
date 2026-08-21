@@ -86,6 +86,7 @@ COMMAND_MODULE: dict[str, str] = {
 MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "audit exceptions", "balance exceptions", "coverage exceptions",
     "accepted duplications", "entry-point coverage", "happy path coverage",
+    "audience exceptions",
     "persistence exceptions", "unclaimed surfaces", "drift exceptions",
     "bucket vocabulary", "sweep debt",
 )
@@ -609,6 +610,12 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     "{} store-hygiene advisory/advisories suppressed by the recorded `store` exception":
         "same shape as the `runs-in` count above — a suppression report that can itself be "
         "suppressed reports nothing",
+    # Fill-in-the-field advisories. There is nothing for an operator to ACCEPT: "deliberately no
+    # expectation" is what `excluded` means, and "deliberately no audience" is not a state a role can
+    # be in. A record here would rebuild the exact hole the old three-value `label` had, where an
+    # empty value silently read as "off the walk".
+    "{} ({}) has no `happy_path` expectation": "answer it — `excluded` IS the recorded decision",
+    "Role(s) with no `audience`: {}": "answer it — there is no third state for a role to be in",
     # Deliberately un-escapable: the whole point is that a suppressed count stays visible.
     "{} {}: {} → {} claims entity use the backbone doesn't": "author the edge; the safety net derives it",
 }

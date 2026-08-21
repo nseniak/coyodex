@@ -60,30 +60,33 @@ who want a curated, governed set of MCP tools shared across their AI assistants.
 
 ## Roles (actors)
 
-| Role | Kind | What they want | Use cases they drive |
-|---|---|---|---|
-| **Org creator** | human | Sign up and create an organization to govern their team's MCPs | UC1 |
-| **Org admin** | human | Add/configure upstreams, define roles and per-tool access, manage the team, mint tokens, read audit | UC2, UC3, UC4, UC5, UC6, UC9, UC10, UC13, UC14, UC15, UC16, UC18, UC19, UC20, UC21, UC22, UC24, UC25 |
-| **Team member** | human | Connect their AI client through the gateway and call the tools their role allows | UC7, UC8, UC12 |
-| **Headless agent** | service | Connect without a browser sign-in and call tools under a least-privilege role | UC11 |
-| **Superadmin** | human | Step into orgs for support, end sessions, clear stuck connections without seeing secrets | UC23 |
+`Audience` says WHO this role is: `staff` = the person works for the company that ships the product,
+`user` = everyone else. Every capability's audience is derived from it.
+
+| Role | Kind | Audience | What they want | Use cases they drive |
+|---|---|---|---|---|
+| **Org creator** | human | user | Sign up and create an organization to govern their team's MCPs | UC1 |
+| **Org admin** | human | user | Add/configure upstreams, define roles and per-tool access, manage the team, mint tokens, read audit | UC2, UC3, UC4, UC5, UC6, UC9, UC10, UC13, UC14, UC15, UC16, UC18, UC19, UC20, UC21, UC22, UC24, UC25 |
+| **Team member** | human | user | Connect their AI client through the gateway and call the tools their role allows | UC7, UC8, UC12 |
+| **Headless agent** | service | user | Connect without a browser sign-in and call tools under a least-privilege role | UC11 |
+| **Superadmin** | human | staff | Step into orgs for support, end sessions, clear stuck connections without seeing secrets | UC23 |
 
 ---
 
 ## Capabilities — what this product does
 
-The use-case grouping. `label` is an authored judgement about the use cases in each capability
-(core = the product, and the Happy Path walks every core capability); nothing derives it.
+The use-case grouping. `Happy Path` is AUTHORED: must the walk reach this capability?
+`Audience` is DERIVED from the roles driving its use cases, so the two can never contradict each other.
 
-| ID | Capability | Label | Purpose | Parent |
-|---|---|---|---|---|
-| **CAP1** | Organizations & teams | core | Creating an org, growing the team around it, and winding it down. |  |
-| **CAP2** | Upstream MCPs | core | Adding upstream MCP servers, authorizing them, and keeping their config current. |  |
-| **CAP3** | Access control | core | Who may call which tools: roles, per-tool rules, and the tokens that carry them. |  |
-| **CAP4** | Tool access via gateway | core | The runtime path a client takes to list and call tools through the gateway. |  |
-| **CAP5** | Secrets & variables | supporting | Template variables, passwords and sandbox credential files behind upstream config. |  |
-| **CAP6** | Audit & oversight | supporting | Reading back what happened in an org. |  |
-| **CAP7** | Admin surfaces & ops | platform | Alternative management channels and operator support paths. |  |
+| ID | Capability | Happy Path | Audience | Purpose | Parent |
+|---|---|---|---|---|---|
+| **CAP1** | Organizations & teams | expected | user | Creating an org, growing the team around it, and winding it down. |  |
+| **CAP2** | Upstream MCPs | expected | user | Adding upstream MCP servers, authorizing them, and keeping their config current. |  |
+| **CAP3** | Access control | expected | user | Who may call which tools: roles, per-tool rules, and the tokens that carry them. |  |
+| **CAP4** | Tool access via gateway | expected | user | The runtime path a client takes to list and call tools through the gateway. |  |
+| **CAP5** | Secrets & variables | excluded | user | Template variables, passwords and sandbox credential files behind upstream config. |  |
+| **CAP6** | Audit & oversight | expected | user | Reading back what happened in an org. |  |
+| **CAP7** | Admin surfaces & ops | excluded | mixed | Alternative management channels and operator support paths. |  |
 
 ---
 

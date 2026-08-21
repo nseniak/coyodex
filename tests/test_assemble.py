@@ -869,8 +869,8 @@ def make_capability_fragment() -> str:
     """A behavioral fragment plus the T4 rows a synthesis-time reconcile will link it to."""
     return json.dumps({
         "title": "Demo", "goal": "g",
-        "capabilities": [{"id": "CAP1", "name": "Ordering", "label": "core"},
-                         {"id": "CAP2", "name": "Ops", "label": "platform"}],
+        "capabilities": [{"id": "CAP1", "name": "Ordering", "happy_path": "expected"},
+                         {"id": "CAP2", "name": "Ops", "happy_path": "excluded"}],
         "use_cases": [{"id": "UC1", "name": "Place an order"},
                       {"id": "UC2", "name": "Rotate the keys"}],
         "components": [{"id": "C1", "name": "A", "purpose": "p", "source": "a.py:1"}],

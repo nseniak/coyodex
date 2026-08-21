@@ -52,10 +52,15 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "goal":   "<T0 prose — the problem the project solves and for whom>",
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
-  "roles":       [ { "id": "Rn", "name", "kind": "human|service", "wants", "drives" } ],
+  "roles":       [ { "id": "Rn", "name", "kind": "human|service", "audience": "user|staff",
+                     "wants", "drives" } ],       // audience: staff = works for the company that
+                                                  // ships the product. A capability's audience is
+                                                  // DERIVED from it, never authored.
   "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>" } ],
   "capabilities": [ { "id": "CAPn", "name", "purpose", "parent": "CAPn|null",
-                      "label": "core|supporting|platform" } ],  // capability-only; blocked on S/SD
+                      "happy_path": "expected|excluded" } ],    // capability-only; blocked on S/SD
+                                                  // must the walk reach it? Says nothing about
+                                                  // audience — that derives from the roles.
   "use_cases":   [ { "id": "UCn", "name", "actors": ["Rn", ...], "trigger_outcome",
                      "capability": "CAPn|null",                 // assigned at synthesis via reconcile
                      "entry_points": ["EPn", …] } ],            // the TRIGGER arm; empty is legitimate

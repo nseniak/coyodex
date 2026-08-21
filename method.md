@@ -106,14 +106,40 @@ one content family with no structure at all, and no screen answers *"what does t
 - **A capability is a group of use cases that serve one goal of the product** — `Organizations &
   teams`, `Upstream MCPs`, `Tool access via gateway`. Aim for the same 5±2 the diagrams use: five
   boxes is a product description, twenty is a list.
-- **Each capability carries a `label`: `core` | `supporting` | `platform`.** This is an authored
-  judgement about the USE CASES in it, and it is what turns Happy-Path membership into a rule (see
-  the Coverage rule below) instead of a written justification per off-spine use case.
-- **Nothing derives it, and it says nothing about code.** The tooling can tell you which elements a
-  capability's flows reach; it cannot tell you that a component is platform machinery — no threshold
-  over that reach separates machinery from product. `validate` therefore BLOCKS `label` on a
-  subsystem or a subdomain — an unbacked classification of code is exactly the parallel,
-  contradictable axis the `tech`-on-a-subdomain rule already refuses.
+- **Each capability carries a `happy_path`: `expected` | `excluded`.** Must the walk reach at least
+  one of its use cases? `expected` = yes. `excluded` = no, and one record says why. This is what
+  turns Happy-Path membership into a rule (see the Coverage rule below) instead of a written
+  justification per off-spine use case.
+- **It says NOTHING about who the capability is for.** That is a second, independent question, and
+  it is answered once on the ROLE (`audience`, below) and derived up. A capability may be staff work
+  that the walk shows on purpose — the story has to meet the operator and the upkeep job somewhere —
+  and it needs no per-step excuse for that.
+- **Deliberately not derived from the walk.** A value that always agreed with `happy_path[]` could
+  never disagree with it, and the disagreement IS the check: "you wrote that the walk must reach
+  this, and it never does" is the gap the forward direction exists to find. An EMPTY value means
+  nobody decided, and warns; it never reads as `excluded`. (This is why the field is a word pair and
+  not a boolean: `false` cannot tell "undecided" from "deliberately off".)
+- **`validate` BLOCKS `happy_path` on a subsystem or a subdomain** — only a capability is on the
+  walk at all, and a walk expectation over code is exactly the parallel, contradictable axis the
+  `tech`-on-a-subdomain rule already refuses.
+
+### Audience — who a capability is for, authored once on the role
+
+Every ROLE carries an **`audience`: `user` | `staff`**. `staff` = this person works for the company
+that ships the product. `user` = everyone else, including someone who has not bought it yet.
+
+- **A capability's audience is DERIVED from it**, never authored: the roles driving its use cases
+  vote. Nothing on the capability to contradict its own actors.
+- **Only HUMAN roles vote.** A machine actor is the product doing work on someone's behalf, and one
+  scheduler routinely fires a customer's work *and* the company's own upkeep. Machine roles are the
+  fallback when a capability's use cases name no human at all.
+- **A capability whose human actors disagree warns** (`mixed`): one capability, two audiences. Split
+  it, move the odd use case, or record `CAPn: <why>` under an **"Audience exceptions"** heading.
+- **Orthogonal to `kind`.** A customer's own bot is `service` + `user`; an upkeep job is `service` +
+  `staff`. Neither derives the other.
+- **Authored on the role because the role is the stable element.** Across 21 rebuilds of one repo the
+  capability set churned every build while the same four roles appeared in nearly every one and never
+  changed side.
 - **Assign it once, at synthesis**, as `reconcile` set directives (`{"ids": ["UC1"], "capability":
   "CAP1"}`) — the same pass that assigns `subsystem` / `subdomain` / `runs_in`.
 - **Do not confuse a capability with a product area.** A capability groups *use cases* (behavioral);
@@ -155,17 +181,20 @@ the spine; built after harvest + at least one full trace.
   invented persona nicknames, which anchor to nothing and can read as real data.
 - **Coverage rule — asked at CAPABILITY altitude.** Pick the walk hitting all main functionality +
   all actors; if one linear walk can't reach everything, the use cases left off still have their own
-  T6 flow, just not a spine position. Membership follows the capability's `label`, in **both**
+  T6 flow, just not a spine position. Membership follows the capability's `happy_path`, in **both**
   directions, and `validate` warns (advisory) on each:
-  - **forward** — a **core** capability that no spine step reaches. About five checks on a real map,
-    each a genuine gap. Fix it, or record `CAPn: <why>`.
-  - **converse** — a spine step whose use case sits in a **non-core** capability: either the label is
-    wrong or the step does not belong on the main walk. Record `HPn: <why>` to keep it. This is the
-    direction a one-way check cannot produce, and it is what catches a walk quietly padded with
-    supporting work.
-  - a **non-core capability that HOLDS off-spine use cases** needs ONE record — `CAPn: <why>`, not a
-    line per use case. Without it, relabelling a capability core→supporting would silence its whole
-    membership with no trace anywhere, and the label would have become an unrecorded escape.
+  - **forward** — a capability marked **`expected`** that no spine step reaches. About five checks on
+    a real map, each a genuine gap. Fix it, or record `CAPn/spine: <why>`.
+  - **converse** — a spine step whose use case sits in an **`excluded`** capability: either the
+    expectation is wrong or the step does not belong on the main walk. Record `HPn: <why>` to keep
+    it. This is the direction a one-way check cannot produce, and it is what catches a walk quietly
+    padded with side work.
+  - an **`excluded` capability that HOLDS off-spine use cases** needs ONE record — `CAPn: <why>`, not
+    a line per use case. Without it, flipping a capability expected→excluded would silence its whole
+    membership with no trace anywhere, and the field would have become an unrecorded escape.
+  - a capability with **NO `happy_path` at all** warns on its own: the rule cannot ask the question.
+  - **`audience` is not read here.** A `staff` capability sits on the walk whenever the story needs
+    it there, and that costs no record.
   - a **role none of whose use cases has a spine position** (the "involves all relevant actors" half)
     is unchanged: an ops-only role kept off the walk is legitimate, but it is a decision — record
     `Rn: <why>` under the same heading.
@@ -1136,8 +1165,8 @@ synthesis → parallel trace.**
   would argue about ("who may cancel an order", "how a plan limit is applied"), 8-12 of them on a
   map this size. A block is a `Group` like a capability, so it carries `name` + `purpose` (the "what
   this area decides" line), and `source` only if the area has one honest home directory — a block
-  groups DECISIONS, not code, so the viewer never treats that anchor as a file's owner. `label` and
-  `tech` are blocked on it, as they are on a subdomain. Leave `rules[]` empty: it is written after
+  groups DECISIONS, not code, so the viewer never treats that anchor as a file's owner. `happy_path`
+  and `tech` are blocked on it, as they are on a subdomain. Leave `rules[]` empty: it is written after
   the trace, when the flows exist to sweep. **Also assign each component's `subsystem`, each
   entity's `subdomain`, each use case's `capability` and its trigger `entry_points`, each
   component's `runs_in`, and any dep `bucket` fixes here — as a `--reconcile` file, NOT a

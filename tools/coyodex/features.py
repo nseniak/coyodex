@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from coyodex.anchors import parse_anchor
 from coyodex.impact_git import Extents
 from coyodex.model import ProjectModel, expanded_flow_steps
-from coyodex.validate_model import anchored_flow_steps, rule_steps
+from coyodex.validate_model import anchored_flow_steps, capability_audience, rule_steps
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,10 @@ class FeatureFacts:
     id: str
     name: str
     purpose: str = ""
-    label: str = ""                                          # core / supporting / platform
+    happy_path: str = ""                                     # expected / excluded — AUTHORED
+    audience: str = ""                                       # user / staff / mixed — DERIVED from the
+                                                             # roles driving its use cases, never
+                                                             # authored, so the two cannot disagree
     roles: list[str] = field(default_factory=list)           # who drives its use cases
     use_cases: list[str] = field(default_factory=list)
     entry_points: list[str] = field(default_factory=list)    # how you reach it
@@ -183,9 +186,11 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             if loc is not None:
                 comp_in_rule.update(file_owners.get(loc.path) or ())
 
+    audience = capability_audience(m)
     features = [
         FeatureFacts(
-            id=c.id, name=c.name, purpose=c.purpose, label=c.label,
+            id=c.id, name=c.name, purpose=c.purpose, happy_path=c.happy_path,
+            audience=audience.get(c.id, ""),
             roles=_sorted_ids(feat_roles[c.id]),
             use_cases=_sorted_ids(feat_ucs[c.id]),
             entry_points=_sorted_ids(feat_eps[c.id]),
@@ -235,7 +240,8 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
     the two drift."""
     return {
         "features": [
-            {"id": f.id, "name": f.name, "purpose": f.purpose, "label": f.label,
+            {"id": f.id, "name": f.name, "purpose": f.purpose,
+             "happyPath": f.happy_path, "audience": f.audience,
              "roles": f.roles, "useCases": f.use_cases, "entryPoints": f.entry_points,
              "rules": f.rules, "entities": f.entities, "components": f.components}
             for f in ix.features],

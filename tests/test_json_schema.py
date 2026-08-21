@@ -72,8 +72,10 @@ def test_the_capability_pointer_fields_carry_their_id_patterns():
     assert uc["capability"]["pattern"] == r"^CAP\d+$"
     assert uc["entry_points"]["items"]["pattern"] == r"^EP\d+$"
     assert schema["$defs"]["EntryPoint"]["properties"]["id"]["pattern"] == r"^EP\d+$"
-    label = schema["$defs"]["Group"]["properties"]["label"]
-    assert set(label["enum"]) == {"", "core", "supporting", "platform"}
+    walk = schema["$defs"]["Group"]["properties"]["happy_path"]
+    assert set(walk["enum"]) == {"", "expected", "excluded"}
+    aud = schema["$defs"]["Role"]["properties"]["audience"]
+    assert set(aud["enum"]) == {"", "user", "staff"}
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from coyodex.features import build_index
+from coyodex.features import as_bundle, build_index
 from coyodex.model import FORMAT, load_model
 
 
@@ -27,10 +27,12 @@ def make_map(*, capability_on_uc: str | None = "CAP1", rules: list[dict] | None 
     """One feature, one use case, two components, one entity — the smallest map that can join."""
     return {
         "format": FORMAT, "title": "T", "goal": "G",
-        "roles": [{"id": "R1", "name": "User", "kind": "human", "wants": "x", "drives": "UC1"},
-                  {"id": "R2", "name": "Admin", "kind": "human", "wants": "y", "drives": "UC1"}],
+        "roles": [{"id": "R1", "name": "User", "kind": "human", "audience": "user",
+                   "wants": "x", "drives": "UC1"},
+                  {"id": "R2", "name": "Admin", "kind": "human", "audience": "user",
+                   "wants": "y", "drives": "UC1"}],
         "capabilities": [{"id": "CAP1", "name": "Billing", "purpose": "takes the money",
-                          "label": "core"}],
+                          "happy_path": "expected"}],
         "use_cases": [{"id": "UC1", "name": "Pay", "actors": ["R1", "R2"],
                        "capability": capability_on_uc,
                        "entry_points": entry_points if entry_points is not None else ["EP1"]}],
@@ -87,7 +89,16 @@ def index_of(doc: dict, extents: dict | None = EXTENTS):
 def test_a_feature_gathers_the_roles_use_cases_and_ways_in_of_its_use_cases():
     f = feature(index_of(make_map()))
     assert (f.roles, f.use_cases, f.entry_points) == (["R1", "R2"], ["UC1"], ["EP1"])
-    assert (f.name, f.purpose, f.label) == ("Billing", "takes the money", "core")
+    assert (f.name, f.purpose, f.happy_path) == ("Billing", "takes the money", "expected")
+
+
+def test_a_feature_carries_its_authored_walk_expectation_and_its_derived_audience():
+    """Two independent words, and only one of them is authored. The predecessor was ONE word
+    carrying both questions, whose middle value ended up meaning neither."""
+    ix = index_of(make_map())
+    assert (feature(ix).happy_path, feature(ix).audience) == ("expected", "user")
+    bundled = as_bundle(ix)["features"][0]
+    assert (bundled["happyPath"], bundled["audience"]) == ("expected", "user")
 
 
 def test_a_feature_gathers_the_components_and_entities_its_flow_touches():

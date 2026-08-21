@@ -231,6 +231,15 @@
           "type": "string",
           "description": "human | service, free text (not a closed vocabulary)."
         },
+        "audience": {
+          "type": "string",
+          "enum": [
+            "",
+            "user",
+            "staff"
+          ],
+          "description": "WHO this role is: `staff` = the person works for the company that ships the product; `user` = everyone else, including someone who has not bought it yet. The map's ONE authored answer to 'who is this for' \u2014 a capability's audience is DERIVED from the roles driving its use cases, never authored, so the two can never contradict. Orthogonal to `kind`."
+        },
         "wants": {
           "type": "string"
         },
@@ -289,15 +298,14 @@
           "pattern": "^(UC|HP|SD|SF|CAP|EP|BLK|BR|C|D|E|S|R)\\d+$",
           "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP, a BLK a BLK), or null for top-level."
         },
-        "label": {
+        "happy_path": {
           "type": "string",
           "enum": [
             "",
-            "core",
-            "supporting",
-            "platform"
+            "expected",
+            "excluded"
           ],
-          "description": "CAPABILITY-ONLY: an authored judgement about the use cases in this capability \u2014 core is the product and the Happy Path walks every core capability. Nothing derives it, and `validate` blocks it on a subsystem or a subdomain."
+          "description": "CAPABILITY-ONLY: must the Happy-Path walk reach this capability? `expected` = yes, at least one of its use cases; `excluded` = no, and one 'Happy Path coverage' record says why. Deliberately NOT derived from happy_path[] \u2014 a value that always agreed with the walk could never disagree with it, and the disagreement IS the check. Says nothing about audience. `validate` blocks it on a subsystem or a subdomain."
         },
         "source": {
           "type": [

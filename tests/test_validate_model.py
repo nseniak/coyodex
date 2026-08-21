@@ -220,7 +220,7 @@ def test_kind_coverage_still_ignores_prose_that_merely_mentions_a_kind() -> None
 
 def _walk_model(record: str, keep_step: bool = True):
     m = make_valid_model()
-    m.capabilities = [Group(id="CAP8", name="Demo target site", label="supporting")]
+    m.capabilities = [Group(id="CAP8", name="Demo target site", happy_path="excluded")]
     # UC1 comes from the base model and belongs to no CAP8 — it is what the walk falls back to when
     # the demo step is deleted, which is the shape the real map ended up in.
     m.use_cases = list(m.use_cases) + [
@@ -571,24 +571,24 @@ def test_tech_on_subdomain_blocks_and_on_subsystem_is_clean() -> None:
 
 # --- label on capabilities (plan/60-capabilities Step 1) --------------------------------
 
-def test_label_on_a_capability_is_clean_and_on_a_subsystem_blocks() -> None:
-    """The mirror of the `tech` rule: one Group dataclass, three forests. `label` is an authored
-    judgement about USE CASES; on a subsystem it would assert that some CODE is platform machinery,
-    and nothing derives or checks such a claim."""
+def test_happy_path_on_a_capability_is_clean_and_on_a_subsystem_blocks() -> None:
+    """The mirror of the `tech` rule: one Group dataclass, four forests. `happy_path` asks whether
+    the WALK must reach this, and only a capability is on the walk at all — a subsystem groups
+    components, which the walk never visits."""
     m = make_valid_model()
-    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", label="core")]
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected")]
     m.use_cases[0].capability = "CAP1"
-    assert not any("label" in p.lower() for p in problems_of(m))
-    m.subsystems = [Group(id="S1", name="Core", purpose="core", label="platform")]
+    assert not any("happy_path" in p.lower() for p in problems_of(m))
+    m.subsystems = [Group(id="S1", name="Core", purpose="core", happy_path="excluded")]
     m.components[0].subsystem = "S1"
     assert any("S1" in p and "capability field" in p for p in problems_of(m))
 
 
-def test_label_outside_the_closed_vocabulary_blocks() -> None:
+def test_happy_path_outside_the_closed_vocabulary_blocks() -> None:
     m = make_valid_model()
-    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", label="essential")]
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="core")]
     m.use_cases[0].capability = "CAP1"
-    assert any("CAP1" in p and "unknown `label`" in p for p in problems_of(m))
+    assert any("CAP1" in p and "unknown `happy_path`" in p for p in problems_of(m))
 
 
 def test_tech_on_a_capability_blocks() -> None:
@@ -3311,10 +3311,11 @@ def test_the_inert_record_phrase_has_exactly_one_producer():
 # --- capability-level spine membership + two-arm entry-point claiming (plan/60 Step 3) ----------
 
 def make_capability_model() -> ProjectModel:
-    """Two capabilities, one core and one supporting, each with an on-spine and an off-spine member."""
+    """Two capabilities, one `expected` and one `excluded`, each with an on-spine and an off-spine
+    member."""
     m = make_valid_model()
-    m.capabilities = [Group(id="CAP1", name="Ordering", label="core"),
-                      Group(id="CAP2", name="Reporting", label="supporting")]
+    m.capabilities = [Group(id="CAP1", name="Ordering", happy_path="expected"),
+                      Group(id="CAP2", name="Reporting", happy_path="excluded")]
     m.use_cases = [UseCase(id="UC1", name="Place order", actors=["R1"], capability="CAP1"),
                    UseCase(id="UC2", name="Amend order", actors=["R1"], capability="CAP1"),
                    UseCase(id="UC3", name="Read report", actors=["R1"], capability="CAP2")]
@@ -3324,39 +3325,129 @@ def make_capability_model() -> ProjectModel:
     return m
 
 
-def test_a_core_capability_off_the_spine_warns_once_not_per_use_case() -> None:
+def test_an_expected_capability_off_the_spine_warns_once_not_per_use_case() -> None:
     m = make_capability_model()
-    m.happy_path = [HappyStep(id="HP1", title="Read", uc="UC3")]   # only the supporting one walks
+    m.happy_path = [HappyStep(id="HP1", title="Read", uc="UC3")]   # only the excluded one walks
     ws = warnings_of(m)
-    assert any("CAP1" in w and "core capability that no Happy-Path step reaches" in w for w in ws)
+    assert any("CAP1" in w and "no Happy-Path step reaches it" in w for w in ws)
     # the two CAP1 members are NOT each nagged about — that is the whole point of moving altitude
     assert not any("off the Happy-Path spine and unrecorded" in w for w in ws)
 
 
-def test_off_spine_members_of_a_core_capability_are_silent_when_the_capability_walks() -> None:
+def test_off_spine_members_of_an_expected_capability_are_silent_when_the_capability_walks() -> None:
     """UC2 is off the walk and produces no warning — accepted, and counted instead."""
     m = make_capability_model()
     ws = warnings_of(m)
     assert not any("UC2" in w and "spine" in w for w in ws)
-    assert validate_model_mod.completeness_counts(m)["off_spine_in_core_capabilities"] == 1
+    assert validate_model_mod.completeness_counts(m)["off_spine_in_expected_capabilities"] == 1
 
 
-def test_a_spine_step_in_a_non_core_capability_warns_and_can_be_recorded() -> None:
+# --- audience: authored once on the ROLE, derived up to the capability ---------------------------
+# The predecessor was a three-value `label` on the CAPABILITY carrying this question AND the walk
+# question in one word. Two of its three values had no definition in any file and no branch ever
+# distinguished them, so the audience half was unenforced and drifted between rebuilds of the same
+# repo. Authored on the role, derived up, nothing on the capability can contradict its own actors.
+
+def make_audience_model() -> ProjectModel:
+    """A customer feature and a staff feature, plus one machine actor that serves BOTH sides."""
+    m = make_capability_model()
+    m.roles = [Role(id="R1", name="Customer", kind="human", audience="user"),
+               Role(id="R2", name="Operator", kind="human", audience="staff"),
+               Role(id="R3", name="Scheduler", kind="service", audience="staff")]
+    m.use_cases[2].actors = ["R2"]                        # UC3 (CAP2) is the staff one
+    return m
+
+
+def test_a_capabilitys_audience_is_derived_from_the_roles_driving_its_use_cases() -> None:
+    m = make_audience_model()
+    assert validate_model_mod.capability_audience(m) == {"CAP1": "user", "CAP2": "staff"}
+    assert not any("audiences" in w for w in warnings_of(m))
+
+
+def test_only_human_roles_vote_and_machines_are_the_fallback() -> None:
+    """A machine actor is the product doing work on someone's behalf, and one scheduler routinely
+    fires a customer's work AND the company's own upkeep. Letting machines vote turned 3 of 27
+    capabilities `mixed` on the live maps, two of them falsely."""
+    m = make_audience_model()
+    m.use_cases[0].actors = ["R1", "R3"]                  # staff-tagged machine inside a user feature
+    assert validate_model_mod.capability_audience(m)["CAP1"] == "user"
+    m.use_cases[0].actors = ["R3"]                        # no human left: the machine answers
+    m.use_cases[1].actors = ["R3"]
+    assert validate_model_mod.capability_audience(m)["CAP1"] == "staff"
+
+
+def test_a_capability_driven_by_both_sides_warns_and_can_be_recorded() -> None:
+    """The one cross-check the tag buys. On the three live maps it fires exactly once, on a demo
+    site an outside visitor browses and the company's own administrator operates."""
+    m = make_audience_model()
+    m.use_cases[1].actors = ["R2"]                        # CAP1 now holds a user AND a staff use case
+    assert any("CAP1" in w and "both `user` and `staff`" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Audience exceptions",
+                             body="CAP1: the status page is the one surface both sides read")]
+    assert not any("CAP1" in w and "both `user` and `staff`" in w for w in warnings_of(m))
+
+
+def test_an_audience_outside_the_closed_vocabulary_blocks() -> None:
+    m = make_audience_model()
+    m.roles[0].audience = "customer"
+    assert any("R1" in p and "unknown `audience`" in p for p in problems_of(m))
+
+
+def test_an_untagged_role_warns_only_once_the_axis_is_adopted() -> None:
+    """Graceful degradation, the same shape a project with no environments gets: silent while NO
+    role carries an audience, a real hole the moment one does."""
+    m = make_audience_model()
+    assert not any("no `audience`" in w for w in warnings_of(m))
+    m.roles[1].audience = ""
+    assert any("R2" in w and "no `audience`" in w for w in warnings_of(m))
+    for r in m.roles:
+        r.audience = ""
+    assert not any("no `audience`" in w for w in warnings_of(m))
+
+
+def test_a_spine_step_in_an_excluded_capability_warns_and_can_be_recorded() -> None:
     """The converse direction — the one a single-direction check cannot produce."""
     m = make_capability_model()
     m.happy_path.append(HappyStep(id="HP2", title="Read", uc="UC3"))
-    assert any("HP2" in w and "not core" in w for w in warnings_of(m))
+    assert any("HP2" in w and "happy_path: excluded" in w for w in warnings_of(m))
     m.extras = [ExtraSection(heading="Happy Path coverage",
                              body="HP2: the operator reads the report as part of the main walk")]
-    assert not any("HP2" in w and "not core" in w for w in warnings_of(m))
+    assert not any("HP2" in w and "happy_path: excluded" in w for w in warnings_of(m))
 
 
-def test_a_non_core_capability_holding_off_spine_use_cases_needs_one_record() -> None:
+def test_a_capability_with_no_happy_path_value_warns_once_the_axis_is_adopted() -> None:
+    """"Nobody decided" is its own state and must never read as `excluded` — the hole the old
+    three-value `label` had, where an empty value silently meant "deliberately off the walk". It is
+    also why the field is a word pair and not a boolean: `false` cannot carry "undecided".
+
+    Silent while NO capability carries one, so a map that has not adopted the axis degrades the way
+    a project with no environments does."""
+    m = make_capability_model()
+    m.capabilities[1].happy_path = ""
+    assert any("CAP2" in w and "no `happy_path` expectation" in w for w in warnings_of(m))
+    m.capabilities[0].happy_path = ""                    # nobody has one now: un-adopted, not a gap
+    assert not any("no `happy_path` expectation" in w for w in warnings_of(m))
+
+
+def test_a_staff_capability_on_the_walk_costs_no_record() -> None:
+    """The 2x2 cell the old three-value label had no word for. `platform` and `supporting` were both
+    read as "not core", so a spine step in staff work demanded a written excuse — six of them across
+    the three live maps. Audience is not read by the Coverage rule at all now."""
+    m = make_capability_model()
+    m.roles = [Role(id="R1", name="Operator", kind="human", audience="staff")]
+    m.capabilities[1].happy_path = "expected"
+    m.happy_path.append(HappyStep(id="HP2", title="Read", uc="UC3"))
+    ws = warnings_of(m)
+    assert not any("HP2" in w for w in ws)
+    assert validate_model_mod.capability_audience(m)["CAP2"] == "staff"
+
+
+def test_an_excluded_capability_holding_off_spine_use_cases_needs_one_record() -> None:
     m = make_capability_model()
     ws = warnings_of(m)
     assert any("CAP2" in w and "off-spine use case" in w for w in ws)
     m.extras = [ExtraSection(heading="Happy Path coverage",
-                             body="CAP2: reporting is supporting work, deliberately off the walk")]
+                             body="CAP2: reporting is side work, deliberately off the walk")]
     assert not any("CAP2" in w and "off-spine use case" in w for w in warnings_of(m))
 
 
@@ -3421,7 +3512,7 @@ def test_a_dangling_capability_or_entry_point_reference_blocks() -> None:
     m.use_cases[0].capability = "CAP99"
     assert any("CAP99" in p for p in problems_of(m))
     m = make_capability_model()
-    m.capabilities.append(Group(id="CAP3", name="Orphan", parent="CAP404", label="core"))
+    m.capabilities.append(Group(id="CAP3", name="Orphan", parent="CAP404", happy_path="expected"))
     assert any("CAP404" in p for p in problems_of(m))
     m = make_capability_model()
     m.use_cases[0].entry_points = ["EP7"]
@@ -3439,24 +3530,24 @@ def test_a_cycle_in_the_capability_forest_blocks() -> None:
 
 def test_a_stale_record_cannot_silence_the_other_capability_check() -> None:
     """One record silences exactly one (check, id) pair. Sharing the `recorded` test across both
-    branches meant a line written about a SUPPORTING capability's off-spine members kept hiding a
-    real core-coverage gap after the capability was relabelled core."""
+    branches meant a line written about an EXCLUDED capability's off-spine members kept hiding a
+    real coverage gap after the capability was flipped to `expected`."""
     m = make_capability_model()
     m.extras = [ExtraSection(heading="Happy Path coverage",
-                             body="CAP2: reporting is supporting work, deliberately off the walk")]
+                             body="CAP2: reporting is side work, deliberately off the walk")]
     assert not any("CAP2" in w and "off-spine use case" in w for w in warnings_of(m))
-    m.capabilities[1].label = "core"          # relabelled; the old record must not cover this
+    m.capabilities[1].happy_path = "expected"   # flipped; the old record must not cover this
     m.happy_path = [HappyStep(id="HP1", title="Place", uc="UC1")]
     assert any("CAP2" in w and "no Happy-Path step reaches" in w for w in warnings_of(m))
 
 
-def test_an_unreached_core_subtree_reports_once_at_its_highest_ancestor() -> None:
-    """A three-node core tree with nothing on the walk is ONE absence, not three warnings — and a
+def test_an_unreached_expected_subtree_reports_once_at_its_highest_ancestor() -> None:
+    """A three-node `expected` tree with nothing on the walk is ONE absence, not three warnings — and a
     record on the root retires the whole subtree, which is what "one line covers it" has to mean."""
     m = make_capability_model()
-    m.capabilities = [Group(id="CAP1", name="Commerce", label="core"),
-                      Group(id="CAP2", name="Ordering", parent="CAP1", label="core"),
-                      Group(id="CAP3", name="Fulfilment", parent="CAP1", label="core")]
+    m.capabilities = [Group(id="CAP1", name="Commerce", happy_path="expected"),
+                      Group(id="CAP2", name="Ordering", parent="CAP1", happy_path="expected"),
+                      Group(id="CAP3", name="Fulfilment", parent="CAP1", happy_path="expected")]
     m.use_cases = [UseCase(id="UC1", name="Order", actors=["R1"], capability="CAP2"),
                    UseCase(id="UC2", name="Ship", actors=["R1"], capability="CAP3")]
     m.flows = [Flow(uc=u.id, title=u.name,
@@ -3464,7 +3555,7 @@ def test_an_unreached_core_subtree_reports_once_at_its_highest_ancestor() -> Non
     # a walk exists (an empty one would trip the additivity guard and skip the family) but it
     # reaches nothing in the core subtree
     m.use_cases.append(UseCase(id="UC9", name="Elsewhere", actors=["R1"], capability="CAP1x"))
-    m.capabilities.append(Group(id="CAP1x", name="Other", label="supporting"))
+    m.capabilities.append(Group(id="CAP1x", name="Other", happy_path="excluded"))
     m.flows.append(Flow(uc="UC9", title="Elsewhere",
                         steps=[FlowStep(n=1, src="R1", dst="C1", phrase="does")]))
     m.happy_path = [HappyStep(id="HP1", title="Elsewhere", uc="UC9")]

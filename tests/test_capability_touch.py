@@ -53,8 +53,8 @@ def make_subflow_model() -> ProjectModel:
     that would silently under-count: without expansion, C9 is touched by nobody and both
     capabilities look smaller than they are."""
     m = ProjectModel(title="T", goal="g")
-    m.capabilities = [Group(id="CAP1", name="Ordering", label="core"),
-                      Group(id="CAP2", name="Billing", label="core")]
+    m.capabilities = [Group(id="CAP1", name="Ordering", happy_path="expected"),
+                      Group(id="CAP2", name="Billing", happy_path="expected")]
     m.use_cases = [UseCase(id="UC1", name="Order", capability="CAP1"),
                    UseCase(id="UC2", name="Bill", capability="CAP2")]
     m.subflows = [SubFlow(id="SF1", name="Auth dance",
@@ -185,7 +185,7 @@ def test_a_use_case_with_no_capability_contributes_to_none() -> None:
 
 def test_a_capability_naming_no_use_cases_is_empty_not_missing() -> None:
     m = make_subflow_model()
-    m.capabilities.append(Group(id="CAP3", name="Unused", label="platform"))
+    m.capabilities.append(Group(id="CAP3", name="Unused", happy_path="excluded"))
     assert vm.capability_elements(m)["CAP3"] == set()
 
 
@@ -202,7 +202,7 @@ def test_completeness_counts_on_the_fixture() -> None:
     c = v.completeness_counts(load_fixture())
     assert c["use_cases"] == 25 and c["use_cases_traced"] == 15 and c["use_cases_untraced"] == 10
     assert c["capabilities"] == 7 and c["capabilities_untraced"] == 1
-    assert c["off_spine_in_core_capabilities"] == 6
+    assert c["off_spine_in_expected_capabilities"] == 6
 
 
 # --- the viewer transport (Step 6a): the frontend cannot call Python -----------------------------
@@ -234,8 +234,8 @@ def test_use_case_nodes_carry_their_capability_as_parent() -> None:
 def make_nested_model() -> ProjectModel:
     """A parent capability holding NO use case directly — everything lives in its child."""
     m = ProjectModel(title="T", goal="g")
-    m.capabilities = [Group(id="CAP1", name="Commerce", label="core"),
-                      Group(id="CAP2", name="Ordering", parent="CAP1", label="core")]
+    m.capabilities = [Group(id="CAP1", name="Commerce", happy_path="expected"),
+                      Group(id="CAP2", name="Ordering", parent="CAP1", happy_path="expected")]
     m.use_cases = [UseCase(id="UC1", name="Place order", capability="CAP2")]
     m.flows = [Flow(uc="UC1", title="Order",
                     steps=[FlowStep(n=1, src="C1", dst="C2", phrase="places")])]

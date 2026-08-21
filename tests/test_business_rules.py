@@ -253,10 +253,10 @@ def test_a_block_nesting_cycle_is_blocking() -> None:
 
 # --- per-kind Group field guards -------------------------------------------------
 
-def test_a_block_may_not_carry_a_capability_label() -> None:
+def test_a_block_may_not_carry_a_capability_happy_path() -> None:
     m = make_ruled_model()
-    m.blocks[0].label = "core"
-    assert any("BLK1 carries `label`" in p and "block" in p for p in problems_of(m))
+    m.blocks[0].happy_path = "expected"
+    assert any("BLK1 carries `happy_path`" in p and "block" in p for p in problems_of(m))
 
 
 def test_a_block_may_not_carry_a_subsystem_tech() -> None:
