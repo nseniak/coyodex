@@ -437,8 +437,15 @@ def test_no_tab_row_can_ever_clip_a_tab_out_of_reach() -> None:
     had ZERO visible width and could not be clicked, and Glossary was cut mid-word. A hidden tab is a
     view the reader cannot reach and has no way to discover, so buttons keep their natural width and
     the row wraps instead. Grouping does not retire this rule — a very narrow pane can still overflow
-    a four-view sub row."""
+    a four-view sub row. The mode switch now sits INLINE after the view tabs rather than pushed to the
+    far edge, so the sub row itself has to wrap too: otherwise the switch is the thing a narrow pane
+    cuts off, and #stage hides its overflow. Measured at a 400px pane: the row grows to two lines and
+    the switch drops onto the second, whole."""
     css = (VIEWER_DIR / "viewer.css").read_text()
+    subrow = css[css.index("#stagesubrow {"): css.index("}", css.index("#stagesubrow {"))]
+    assert "flex-wrap: wrap" in subrow, "the row holding the tabs AND the mode switch must wrap"
+    assert "margin-left: auto" not in css[css.index("#viewextra {"): css.index("}", css.index("#viewextra {"))], \
+        "the switch sits beside the tabs, not at the far edge where nobody looks"
     for row in ("#groupsw", "#viewsw"):
         rule = css[css.index(f"\n{row} {{") : css.index("}", css.index(f"\n{row} {{"))]
         assert "flex-wrap: wrap" in rule, row

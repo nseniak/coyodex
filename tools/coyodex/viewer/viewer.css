@@ -134,15 +134,24 @@ body.vresizing #stage { pointer-events: none; }
 #groupsw button.active { background: #6366f1; color: #fff; }
 /* Row 2 — the open group's VIEWS: deliberately quieter than row 1 (loose chips, no box, a tinted pill
    for the active one), so the two rows read as a hierarchy rather than as two competing tab bars. */
-#stagesubrow { display: flex; align-items: center; gap: 8px; background: #fbfbfe; padding: 5px 14px;
-               border-bottom: 1px solid #e5e7eb; min-height: 31px; }
-/* The open view's own mode switch, right-aligned on the view row. Deliberately the QUIETEST control in
-   the header: a mode is not a destination, and in its own solid-indigo strip it read as louder than the
-   group row that decides which fifth of the map you are in. Weight now runs loud (groups) -> medium
-   (views) -> quiet (mode), which is the order of what the three actually do. Scoped to #viewextra, NOT
-   applied to `.uc-seg` at large: the flow picker reuses that class in a card floating over the diagram,
-   where a solid active state is right. */
-#viewextra { margin-left: auto; display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+#stagesubrow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; background: #fbfbfe;
+               padding: 5px 14px; border-bottom: 1px solid #e5e7eb; min-height: 31px; }
+/* The open view's own mode switch, sitting immediately AFTER the view tabs. It was right-aligned to the
+   far edge of the pane, which on a wide window put a hundred empty pixels between the tabs and the one
+   control that changes what they show — and a reader looking at the Features tab never saw that the
+   screen had a second axis at all. Beside the tabs it is found; a rule and a little air keep it from
+   reading as a sixth tab.
+
+   Still the QUIETEST of the three header controls: a mode is not a destination, and in its own
+   solid-indigo strip it read as louder than the group row that decides which fifth of the map you are
+   in. Weight runs loud (groups) -> medium (views) -> quiet (mode), which is the order of what the three
+   actually do. Scoped to #viewextra, NOT applied to `.uc-seg` at large: the flow picker reuses that
+   class in a card floating over the diagram, where a solid active state is right.
+
+   `flex-wrap` on the row above is what keeps the switch reachable: inline after the tabs it would
+   otherwise be the thing a narrow pane clips, and #stage hides its overflow. */
+#viewextra { display: flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+#viewextra:not(:empty) { margin-left: 6px; padding-left: 12px; border-left: 1px solid #e5e7eb; }
 #viewextra .uc-groupby { margin: 0; gap: 7px; align-items: center; }
 #viewextra .uc-seg { border-color: #e0e7ff; }
 #viewextra .uc-seg button { padding: 2px 9px; }
