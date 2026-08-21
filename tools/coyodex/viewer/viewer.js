@@ -6141,7 +6141,10 @@ function renderOverview() {
     + `${axis === key ? ' class="on"' : ''}>${label}</button>`;
   const switchHtml = HAS_CAPABILITIES
     ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Features grouped by</span>'
-      + `<span class="uc-seg">${seg('capability', 'Category')}${seg('actor', 'Actor')}</span></div>`
+      // `Capability`, not `Category`. "Category" was the one word in the whole viewer that named a
+      // capability as something other than itself, it matched nothing in the method, and a reader
+      // had no way to know the two words meant one thing.
+      + `<span class="uc-seg">${seg('capability', 'Capability')}${seg('actor', 'Actor')}</span></div>`
     : '';
   if (axis === 'actor') {
     // The same actor cards the Actors view draws, laid out to CHOOSE from rather than to read down.

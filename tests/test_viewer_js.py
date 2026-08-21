@@ -508,7 +508,11 @@ def test_features_keeps_both_axes_and_actors_drills_across_into_one() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "let UC_GROUP_BY = 'capability';" in js and "function ucGroupBy() {" in js
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "seg('capability', 'Category')" in over and "seg('actor', 'Actor')" in over
+    # The axis is named `Capability`, the word the method uses. It read `Category` for one round —
+    # the only place in the viewer that called a capability something else, matching nothing a reader
+    # could look up.
+    assert "seg('capability', 'Capability')" in over and "seg('actor', 'Actor')" in over
+    assert "'Category'" not in js, "one word per thing; `Category` named a capability twice over"
     assert "Features grouped by" in over, "the label says what is being grouped, not just that it is"
     assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
