@@ -5850,6 +5850,24 @@ function bindFeaturePage(root) {
       b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0)));
 }
 
+// The head of ONE role's page: the SHARED page hero, so a role, a feature and a decision area all
+// announce themselves the same way. The name is not in it — the breadcrumb carries that — so what is
+// left is whether it is a person or a piece of software, and the sentence saying what it is after.
+// Before this the role's page drew a bordered section whose heading was the page's own title, with the
+// cards inside it: the name twice, and a card containing cards.
+function actorHeadHtml(actorName) {
+  const g = actorGroups().find((x) => x.actor === actorName);
+  // A group is one role, or the "Other" bucket for an actor this map never declared. Other has no
+  // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
+  const role = g && g.roles.length === 1 ? g.roles[0] : null;
+  const kind = ((role || {}).kind || '').trim().toLowerCase();
+  return pageHeroHtml({
+    pills: (kind === 'human' || kind === 'service')
+      ? `<span class="ecard-pill ecard-pill-${kind}">${esc(kind)}</span>` : '',
+    desc: role && role.wants ? mdInline(role.wants) : '',
+    noDesc: 'This map does not say what this actor wants.',
+  });
+}
 
 // The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says which
 // card — `{cap:<id>}` a feature, `{cap:'-'}` the use cases assigned to no feature, `{actor:<name>}` a
@@ -5888,11 +5906,17 @@ function renderUseCases(sel) {
     // components have cards on that same page and there the word tells the reader which is which.
     return { noType: !page, extra: cross + changed + hp + untraced };
   };
+  // A page about ONE thing draws no section for that thing. The breadcrumb is already the page's
+  // title, so a heading repeating it is the name twice, and the frame around the cards is a card
+  // containing cards — both shapes this viewer removed everywhere else. What the thing IS moves to the
+  // page hero above. Sections stay where they are a real cut: one per role on the flat catalog.
+  const solo = !!oneActor || one === '-';
   const secs = [];
   const sections = shown.map((g, gi) => {
     const ids = g.ucs.map((n) => n.id);
     const secId = 'ucsec-' + gi;
     const count = `${ids.length} use case${ids.length === 1 ? '' : 's'}`;
+    if (solo) return elementCardListHtml(ids, per);
     if (byCapability) {
       // ONE feature, opened from a card: this is the PAGE's body, not a list with the feature's name on
       // it again. The hero above carries the name, the label and the purpose, so the heading here names
@@ -5920,8 +5944,8 @@ function renderUseCases(sel) {
   // A page's own title comes from its hero. Every other list is a CARD LIST view, so it leads with its
   // title and the question it answers, and carries no info pane beside it.
   const head = page ? featureHeadHtml(page)
-    : oneActor ? viewHeadHtml(oneActor)
-    : one === '-' ? viewHeadHtml('Not assigned to a feature')
+    : oneActor ? actorHeadHtml(oneActor)
+    : one === '-' ? viewHeadHtml('Not assigned to a feature', 'Use cases that belong to no feature.')
     // A map recording no features falls back to the flat catalog, and the tab's own question ("feature
     // by feature") would then name something the page does not have. It leads with the product
     // description all the same: that map has one, and this is the page a reader lands on.

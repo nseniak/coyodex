@@ -938,6 +938,30 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
 
+def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
+    """A role's page used to open with a bordered block whose heading was the page's own title, with the
+    use-case cards inside it: the name twice (breadcrumb, then heading) and a card containing cards.
+    Both shapes were removed everywhere else in this viewer, and this page had kept them.
+
+    What the role IS moves to the SHARED page hero — the same one a feature's page and a decision area's
+    page use — and the cards become a plain list. Sections survive where they are a real cut: one per
+    role on the flat catalog a map with no features falls back to."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    ucs = js[js.index("function renderUseCases(sel) {"):
+             js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
+    assert "const solo = !!oneActor || one === '-';" in ucs
+    assert "if (solo) return elementCardListHtml(ids, per);" in ucs
+    assert "oneActor ? actorHeadHtml(oneActor)" in ucs
+    # …and the flat catalog still cuts by role, so the guard is not "always drop the section".
+    assert "const kinds = new Set((g.roles || []).map" in ucs
+    head = js[js.index("function actorHeadHtml(actorName) {"):
+              js.index("\nfunction ", js.index("function actorHeadHtml(actorName) {") + 10)]
+    assert "pageHeroHtml({" in head, "one hero builder, shared with the feature and rule-area pages"
+    assert "actorName" in head and "esc(actorName)" not in head, "the hero must not print the name"
+    # The "Other" bucket is not a role: no kind, nothing it wants, and the hero says so.
+    assert "g.roles.length === 1 ? g.roles[0] : null" in head
+
+
 def test_a_card_drops_its_type_pill_on_that_types_own_view() -> None:
     """The type pill names what an element IS and, clicked, shows it in context. On the view that is
     that type's home both jobs are already done: the tab said the word, and "in context" is the page
