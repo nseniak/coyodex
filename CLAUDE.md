@@ -14,9 +14,11 @@ the code's names.
 - **build** — analyzing a project from scratch and producing a new map. Throws
   away hand edits.
 - **viewer** — the browser page that shows a map. Served live, never committed.
-- **view** (a tab in the viewer) — one diagram answering one question: Happy
-  Path, Use Cases, Business logic, Entities, Subsystems, Dependencies, Data,
-  Deployment, System, Glossary, Tests.
+- **view** (a tab in the viewer) — one screen answering one question. Today:
+  Features, Happy Path, Actors, Rules, Entities, Storage, Subsystems,
+  Dependencies, Tests, Deployment, System, Glossary.
+- **group** — the four tabs above the views: Product, Data, Under the hood,
+  Glossary. A group is a set of tabs, never a page you can be on.
 - **box** — one thing drawn on a view. **arrow** — a relation between two boxes.
 - **code link** — the `file:line` a box points at. A box without one is
   ungrounded, which is a defect.
@@ -24,6 +26,36 @@ the code's names.
 - **accept** — folding a change-impact report into the baseline.
 - **Coyote Effect** — the situation coyodex exists for: your agent wrote a lot
   of code, it runs, and you have lost track of what is under your feet.
+
+**The viewer's screens** (see the Notion page "feature-driven map spec" for the
+design principles these come from)
+
+- **card** — one element, shown as its name, a pill saying what type it is, and
+  one sentence. One design, used everywhere an element appears.
+- **type pill** — the word on a card saying what kind of thing it is. Clicking
+  it shows that element in context.
+- **card list** — cards stacked down the page, to be read. **card grid** —
+  cards across then down, to be chosen between. **grouped card list** — a card
+  list cut into sections by a heading, where the cut is not a level (People and
+  Software on Actors).
+- **page hero** — the block at the top of a page about one element: its pills,
+  the sentence saying what it is, one line of context. It does NOT carry the
+  name; the breadcrumb does.
+- **element details page** — everything the map holds about one element,
+  reached by clicking its card. The info pane shows only the card.
+- **home view** — the one view that draws a given element type. One function
+  answers "which view shows this thing".
+- **drill in** — click a card. A container opens its contents; anything else
+  opens its own details.
+- **show in context** — click the type pill. On a diagram, select and centre
+  the shape. On a card list, scroll to the card and briefly ring it.
+- **view question** — the one sentence a view answers. It belongs to the view,
+  not to any page, so it sits beside the view tabs and never changes as you
+  drill.
+- **the trail** — the group tabs, the view tabs and the breadcrumb, read as one
+  path. Where you are is the last item in it, and nothing else names it. The
+  breadcrumb's last item is the page's title, so no page draws its own heading.
+- **product overview** — the product description, leading the Features page.
 
 **How coyodex is delivered**
 
