@@ -881,11 +881,12 @@ def test_a_row_is_only_a_use_case_when_it_names_one() -> None:
     assert "diagram.querySelectorAll('.uc-row')" not in js, "a bare row selector claims other pages' rows"
     # The lists are element CARDS now, and the same rule holds one level up: the shared binder acts on
     # `.ecard[data-id]`, and a caller's own control inside a card opts out with `data-card-own`.
+    # Only the BINDER half is pinned: the opt-out has no producer since the use-case Happy-Path pill
+    # was removed, and pinning a producer that no longer exists would fail on the next honest edit.
     bind = js[js.index("function bindElementCards(root, onDrill) {"):
               js.index("\nfunction ", js.index("function bindElementCards(root, onDrill) {") + 10)]
     assert "root.querySelectorAll('.ecard[data-id]')" in bind
     assert "ev.target.closest('[data-card-own]')" in bind
-    assert "data-card-own" in js[js.index("function renderUseCases(sel) {"):]
 
 
 def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:

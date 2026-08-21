@@ -89,16 +89,18 @@ def index_of(doc: dict, extents: dict | None = EXTENTS):
 def test_a_feature_gathers_the_roles_use_cases_and_ways_in_of_its_use_cases():
     f = feature(index_of(make_map()))
     assert (f.roles, f.use_cases, f.entry_points) == (["R1", "R2"], ["UC1"], ["EP1"])
-    assert (f.name, f.purpose, f.happy_path) == ("Billing", "takes the money", "expected")
+    assert (f.name, f.purpose) == ("Billing", "takes the money")
 
 
-def test_a_feature_carries_its_authored_walk_expectation_and_its_derived_audience():
-    """Two independent words, and only one of them is authored. The predecessor was ONE word
-    carrying both questions, whose middle value ended up meaning neither."""
+def test_a_feature_carries_its_derived_audience_and_not_its_walk_expectation():
+    """`audience` is derived and drawn; `happy_path` is authored and NOT drawn — it is an authoring
+    decision the Coverage rule reads, and a reader of the map has no use for it, so no view carries
+    it and the bundle does not ship it."""
     ix = index_of(make_map())
-    assert (feature(ix).happy_path, feature(ix).audience) == ("expected", ["user"])
+    assert feature(ix).audience == ["user"]
     bundled = as_bundle(ix)["features"][0]
-    assert (bundled["happyPath"], bundled["audience"]) == ("expected", ["user"])
+    assert bundled["audience"] == ["user"]
+    assert "happyPath" not in bundled and not hasattr(feature(ix), "happy_path")
 
 
 def test_a_feature_gathers_the_components_and_entities_its_flow_touches():

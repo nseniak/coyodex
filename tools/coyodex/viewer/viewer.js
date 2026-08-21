@@ -309,8 +309,6 @@ for (const a of HP_ACTORS) for (const st of a.steps) (HP_ACTORS_OF_STEP[st.id] |
 // this maps to a LIST — the `HPn` pill lists them all and lights every one when clicked. A use case
 // with no entry here is off-spine (no pill).
 const UC_NODES = Object.values(GRAPH.nodes || {}).filter((n) => n.kind === 'usecase');
-const HP_STEPS_BY_UC = {};
-for (const s of GRAPH.happy_path || []) if (s.uc) (HP_STEPS_BY_UC[s.uc] ||= []).push(s.id);
 // Role lookup by name (lower-cased) -> {name, kind, wants} for the Use Cases actor-section headers.
 // Keyed in the AUTHORED name space, because its tokens are `usecase.actors[]`, which the server builds
 // from the roles table's own names. Keep it that way: a role name has a second, SANITISED form (what
@@ -391,7 +389,6 @@ function cardFacts(id) {
     for (const a of (f.Audience || '').split(',').map((s) => s.trim()).filter(Boolean)) {
       pills.push({ text: a, cls: 'uc-aud-' + a.toLowerCase() });
     }
-    if (f['Happy Path']) pills.push({ text: f['Happy Path'], cls: 'uc-walk-' + f['Happy Path'].toLowerCase() });
   }
   if (n.kind === 'human' || n.kind === 'service') pills.push({ text: n.kind, cls: 'ecard-pill-' + n.kind });
   if (n.kind === 'dep' && f.Kind) pills.push({ text: f.Kind, cls: '' });
@@ -4914,21 +4911,6 @@ function selectHPStep(scene, i, hpId, aids) { selReplace(scene, hpStepDesc(scene
 // realizes it glows and its driving actor stays lit; the rest dims. A use case can occupy several
 // positions, so more than one step may light — that is exactly the "appears twice" signal. The panel
 // shows the use case (not a single step), and the selection is keyed by uc so back/forward restores it.
-function hpUseCaseDesc(scene, uc) {
-  const glow = [], keep = [];
-  (GRAPH.happy_path || []).forEach((step, i) => {
-    if (step.uc !== uc) return;
-    const m = scene.hpMsg[i]; if (!m) return;
-    glow.push(...hpMsgEls(m));
-    for (const a of (HP_ACTORS_OF_STEP[step.id] || [])) {
-      const rec = scene.hpActor[a.aid];
-      if (rec) keep.push(...rec.els);
-    }
-  });
-  return { key: 'hpuc:' + uc, glow: () => hpHighlight(scene, glow, false),
-           focus: { els: new Set([...glow, ...keep]) }, show: () => showUseCaseSummary(uc) };
-}
-function selectHPUseCase(scene, uc) { selReplace(scene, hpUseCaseDesc(scene, uc)); }
 
 // Bind the Happy Path: steps + actors both select; a step ⌘-clicks to its Level-2 components view.
 // The step id is no longer in the label, so message[i] pairs with GRAPH.happy_path[i] by order; an actor's
@@ -4999,10 +4981,6 @@ function bindHP() {
   // selected step keeps all of them lit rather than just whichever one the arrow starts from.
   const aidsOfStep = {};
   for (const a of HP_ACTORS) for (const i of a.stepIdx) (aidsOfStep[i] || (aidsOfStep[i] = [])).push(a.aid);
-  // Per-use-case selector: arriving from a Use-cases `HPn` pill (state `sel: 'hpuc:<uc>'`) lights every
-  // step of that use case. Registered for each use case that occupies ≥1 position; back/forward too.
-  for (const uc of Object.keys(HP_STEPS_BY_UC)) scene.selectors['hpuc:' + uc] = () => selAdd(scene, hpUseCaseDesc(scene, uc));
-
   // steps: plain click selects (panel), ⌘-click adds to the multi-selection, ⌥-click drills to Level 2.
   (GRAPH.happy_path || []).forEach((step, i) => {
     const { text, line } = scene.hpMsg[i];
@@ -5807,7 +5785,7 @@ function featureHeadHtml(capId) {
     ? `<span class="uc-caplabel uc-${kind}-${esc(v.toLowerCase())}">${esc(v)}</span>` : '');
   return pageHeroHtml({
     name: f.name,
-    pills: (f.audience || []).map((a) => capPill(a, 'aud')).join('') + capPill(f.happyPath, 'walk'),
+    pills: (f.audience || []).map((a) => capPill(a, 'aud')).join(''),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
     meta: `<span class="page-hero-lbl">Used by</span> ${roles}`,
@@ -5914,16 +5892,12 @@ function renderUseCases(sel) {
       : (CAP_OF_UC[id] ? `<span class="ecard-pill">${esc(CAP_OF_UC[id].name)}</span>` : '');
     const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(id))
       ? '<span class="badge modified">changed</span>' : '';
-    // On the Happy Path? A pill that jumps there and lights this use case's step(s). No pill = off-spine.
-    const hp = (HP_STEPS_BY_UC[id] || []).length
-      ? `<button type="button" class="uc-hp-pill" data-card-own data-uc="${esc(id)}"`
-        + ' title="On the Happy Path — click to jump there">Happy Path</button>' : '';
     const untraced = FLOWS_MM && FLOWS_MM[id] ? ''
       : '<span class="uc-untraced" title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
     // The type pill goes only where the screen holds nothing but use cases: a role's list, the flat
     // catalog, the use cases in no feature. A FEATURE'S PAGE keeps it, because rules, entities and
     // components have cards on that same page and there the word tells the reader which is which.
-    return { noType: !page, extra: cross + changed + hp + untraced };
+    return { noType: !page, extra: cross + changed + untraced };
   };
   // A page about ONE thing draws no section for that thing. The breadcrumb is already the page's
   // title, so a heading repeating it is the name twice, and the frame around the cards is a card
@@ -5986,9 +5960,6 @@ function renderUseCases(sel) {
   bindElementCards(diagram, oneActor
     ? (id) => go({ kind: 'usecase', uc: id, act: oneActor })
     : null);
-  diagram.querySelectorAll('.uc-hp-pill').forEach((btn) => {
-    btn.addEventListener('click', (ev) => { ev.stopPropagation(); go({ kind: 'hp', sel: 'hpuc:' + btn.getAttribute('data-uc') }); });
-  });
 }
 
 // FUNCTIONAL COVERAGE: how much of this code a feature or a rule actually reaches. One line on the

@@ -75,18 +75,17 @@ who want a curated, governed set of MCP tools shared across their AI assistants.
 
 ## Capabilities — what this product does
 
-The use-case grouping. `Happy Path` is AUTHORED: must the walk reach this capability?
-`Audience` is DERIVED from the roles driving its use cases, so the two can never contradict each other.
+The use-case grouping. `Audience` is DERIVED from the roles driving its use cases, so nothing on a capability can contradict its own actors.
 
-| ID | Capability | Happy Path | Audience | Purpose | Parent |
-|---|---|---|---|---|---|
-| **CAP1** | Organizations & teams | expected | user | Creating an org, growing the team around it, and winding it down. |  |
-| **CAP2** | Upstream MCPs | expected | user | Adding upstream MCP servers, authorizing them, and keeping their config current. |  |
-| **CAP3** | Access control | expected | user | Who may call which tools: roles, per-tool rules, and the tokens that carry them. |  |
-| **CAP4** | Tool access via gateway | expected | user | The runtime path a client takes to list and call tools through the gateway. |  |
-| **CAP5** | Secrets & variables | excluded | user | Template variables, passwords and sandbox credential files behind upstream config. |  |
-| **CAP6** | Audit & oversight | expected | user | Reading back what happened in an org. |  |
-| **CAP7** | Admin surfaces & ops | excluded | user, staff | Alternative management channels and operator support paths. |  |
+| ID | Capability | Audience | Purpose | Parent |
+|---|---|---|---|---|
+| **CAP1** | Organizations & teams | user | Creating an org, growing the team around it, and winding it down. |  |
+| **CAP2** | Upstream MCPs | user | Adding upstream MCP servers, authorizing them, and keeping their config current. |  |
+| **CAP3** | Access control | user | Who may call which tools: roles, per-tool rules, and the tokens that carry them. |  |
+| **CAP4** | Tool access via gateway | user | The runtime path a client takes to list and call tools through the gateway. |  |
+| **CAP5** | Secrets & variables | user | Template variables, passwords and sandbox credential files behind upstream config. |  |
+| **CAP6** | Audit & oversight | user | Reading back what happened in an org. |  |
+| **CAP7** | Admin surfaces & ops | user, staff | Alternative management channels and operator support paths. |  |
 
 ---
 

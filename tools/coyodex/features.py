@@ -50,7 +50,8 @@ class FeatureFacts:
     id: str
     name: str
     purpose: str = ""
-    happy_path: str = ""                                     # expected / excluded — AUTHORED
+    # `happy_path` is deliberately NOT carried: it is an authoring decision the Coverage rule reads,
+    # and no view draws it, so shipping it would be a field nothing consumes.
     audience: list[str] = field(default_factory=list)        # user and/or staff — DERIVED from the
                                                              # roles driving its use cases, never
                                                              # authored, so the two cannot disagree.
@@ -191,7 +192,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     audience = capability_audience(m)
     features = [
         FeatureFacts(
-            id=c.id, name=c.name, purpose=c.purpose, happy_path=c.happy_path,
+            id=c.id, name=c.name, purpose=c.purpose,
             audience=audience.get(c.id) or [],
             roles=_sorted_ids(feat_roles[c.id]),
             use_cases=_sorted_ids(feat_ucs[c.id]),
@@ -243,7 +244,7 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
     return {
         "features": [
             {"id": f.id, "name": f.name, "purpose": f.purpose,
-             "happyPath": f.happy_path, "audience": f.audience,
+             "audience": f.audience,
              "roles": f.roles, "useCases": f.use_cases, "entryPoints": f.entry_points,
              "rules": f.rules, "entities": f.entities, "components": f.components}
             for f in ix.features],

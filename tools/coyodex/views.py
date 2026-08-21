@@ -336,11 +336,12 @@ def model_to_markdown(m: ProjectModel) -> str:
         cap_parent = {c.id: c.name for c in m.capabilities}
         cap_audience = capability_audience(m)
         section("Capabilities — what this product does",
-                ["The use-case grouping. `Happy Path` is AUTHORED: must the walk reach this "
-                 "capability?", "`Audience` is DERIVED from the roles driving its use cases, so the "
-                 "two can never contradict each other.", ""]
-                + _table(["ID", "Capability", "Happy Path", "Audience", "Purpose", "Parent"],
-                         [[f"**{c.id}**", c.name, c.happy_path,
+                ["The use-case grouping. `Audience` is DERIVED from the roles driving its use "
+                 "cases, so nothing on a capability can contradict its own actors.", ""]
+                # `happy_path` is deliberately absent: it is an authoring decision the Coverage rule
+                # reads, and a reader of the map has no use for it. It stays in the model.
+                + _table(["ID", "Capability", "Audience", "Purpose", "Parent"],
+                         [[f"**{c.id}**", c.name,
                            ", ".join(cap_audience.get(c.id) or ()),
                            c.purpose, cap_parent.get(c.parent or "", "")]
                           for c in m.capabilities]))
@@ -1061,7 +1062,6 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         nodes[cap.id] = _node(cap, "capability", cap.name, None,
                               {"Capability": cap.name, "Purpose": cap.purpose,
                                "Parent": parent_name,
-                               **({"Happy Path": cap.happy_path} if cap.happy_path else {}),
                                # Joined, because a node field is a display string. The card splits
                                # it back into one pill per audience.
                                **({"Audience": ", ".join(aud)}
