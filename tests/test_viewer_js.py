@@ -954,8 +954,18 @@ def test_a_card_drops_its_type_pill_on_that_types_own_view() -> None:
     over = js[js.index("function renderOverview() {"):
               js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
     assert "return { noType: true," in over
-    # Only the feature grid opts in. Every other caller of the shared card still shows the type.
-    assert js.count("noType: true") == 1
+    # The actor cards too: the Actors view and the Features view's actor axis both hold nothing else,
+    # and ONE builder draws the card for both, so the pill cannot come back on one of them.
+    actors = js[js.index("function actorCardsHtml(grid) {"):
+                js.index("\nfunction ", js.index("function actorCardsHtml(grid) {") + 10)]
+    assert "return { noType: true," in actors
+    # A use-case list opts in only where the screen holds nothing but use cases. A FEATURE'S PAGE draws
+    # rules, entities and component cards below the same list, so there the word still tells them apart.
+    ucs = js[js.index("function renderUseCases(sel) {"):
+             js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
+    assert "return { noType: !page, extra:" in ucs
+    # Nowhere else. A feature card in a search hit or an info pane still shows what it is.
+    assert js.count("noType") == 5, "one reader in the card, and three callers that opt in"
 
 
 def test_the_coverage_line_reports_reach_and_never_certainty() -> None:

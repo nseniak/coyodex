@@ -5883,7 +5883,10 @@ function renderUseCases(sel) {
         + ' title="On the Happy Path — click to jump there">Happy Path</button>' : '';
     const untraced = FLOWS_MM && FLOWS_MM[id] ? ''
       : '<span class="uc-untraced" title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
-    return { extra: cross + changed + hp + untraced };
+    // The type pill goes only where the screen holds nothing but use cases: a role's list, the flat
+    // catalog, the use cases in no feature. A FEATURE'S PAGE keeps it, because rules, entities and
+    // components have cards on that same page and there the word tells the reader which is which.
+    return { noType: !page, extra: cross + changed + hp + untraced };
   };
   const secs = [];
   const sections = shown.map((g, gi) => {
@@ -6066,9 +6069,13 @@ function actorCardsHtml(grid) {
   if (!all.length) return '';
   const counts = {};
   for (const g of actorGroups()) counts[g.actor] = g.ucs.length;
+  // No type pill: both screens that draw these cards — the Actors view and the Features view's actor
+  // axis — hold nothing but actors, so the word would sit on every card and tell the reader nothing.
+  // How many use cases the actor drives is the fact that earns the slot instead.
   const per = (id) => {
     const n = counts[(GRAPH.nodes[id] || {}).name] || 0;
-    return { extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>` };
+    return { noType: true,
+             extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>` };
   };
   const ids = all.map((n) => n.id);
   // On the Features view's actor axis the cards are a GRID: there they are a thing to choose between,
