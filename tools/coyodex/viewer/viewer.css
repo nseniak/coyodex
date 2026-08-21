@@ -464,18 +464,18 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .ecard-extra { margin: 5px 0 0; font-size: 12px; color: #6b7280; }
 .ecard-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px;
              color: #9ca3af; margin-right: 4px; }
-/* A MACRO CARD: a section of a grouped card list, drawn as a card that CONTAINS its members. The frame
-   is quieter than the cards inside it (tinted ground, no shadow), so the eye reads the members first
-   and the grouping second — the reverse would make the section compete with its own content. */
-.mcard-list { display: flex; flex-direction: column; gap: 14px; }
-.mcard { border: 1px solid #e5e7eb; border-radius: 12px; background: #f9fafb; padding: 12px 12px 14px; }
-.mcard-head { display: flex; align-items: baseline; gap: 9px; margin: 0 0 2px; padding: 0 2px 8px;
-              border-bottom: 1px solid #eef2f7; }
-.mcard-title { margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase;
-               letter-spacing: .05em; color: #4b5563; }
-.mcard-count { font-size: 12px; color: #9ca3af; }
-.mcard-desc { margin: 8px 2px 0; font-size: 12px; color: #6b7280; line-height: 1.45; }
-.mcard .ecard-list { margin-top: 10px; }
+/* A SECTION of a grouped card list. NOT a card: a heading, and under it the ordinary card list, at the
+   ordinary width, flush with the page. The first attempt boxed each section in a tinted frame that
+   contained its members, and two nested card shapes on one screen read as two levels of thing when
+   there is only one — the reader had to work out whether the frame was itself something to click.
+   The break is carried by space and a hairline, which is all it needs to carry. */
+.csec-list { display: flex; flex-direction: column; gap: 26px; }
+.csec-head { display: flex; align-items: baseline; gap: 9px; margin: 0 0 4px; padding-bottom: 6px;
+             border-bottom: 1px solid #eef2f7; }
+.csec-title { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
+              letter-spacing: .06em; color: #6b7280; }
+.csec-count { font-size: 12px; color: #9ca3af; }
+.csec-desc { margin: 0 0 10px; font-size: 12px; color: #6b7280; line-height: 1.45; }
 /* A CARD LIST reads down the page; a CARD GRID is for choosing between groups, across then down. */
 .ecard-list { display: flex; flex-direction: column; gap: 8px; }
 .ecard-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }

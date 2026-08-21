@@ -456,22 +456,26 @@ function elementCardListHtml(ids, per) {
     elementCardHtml(id, per ? per(id) : null)).join('')}</div>`;
 }
 
-// A GROUPED CARD LIST: a card list cut into sections, where each SECTION is itself a card holding its
-// members — a macro card. The third list shape, between the plain card list (one flat run) and the card
-// grid (cards across then down, for choosing). It exists because some lists have a natural cut that is
-// not a level: humans and services are both actors, and putting them behind a drill would hide half the
-// list to say something a heading says for free.
+// A GROUPED CARD LIST: the plain card list, cut into sections by a heading. The third list shape,
+// between the flat card list (one run) and the card grid (across then down, for choosing). It exists
+// because some lists have a natural cut that is not a level: humans and services are both actors, and
+// putting either behind a drill would hide half the list to say what a heading says for free.
+//
+// The cards are the SAME cards, at the same width, flush with the page. A first attempt boxed each
+// section in a tinted frame that contained its members, and two nested card shapes on one screen read
+// as two levels of thing when there is only one: the reader had to work out whether the frame was
+// itself something to click. A heading is enough to say "these belong together".
 //
 // `groups` = [{ title, count, desc, ids, per }]. Empty groups are dropped, and a single group draws no
-// macro frame at all — one section heading repeating the page title says nothing.
+// heading at all — one section title repeating the page title says nothing.
 function elementCardGroupsHtml(groups) {
   const live = (groups || []).filter((g) => g.ids && g.ids.length);
   if (!live.length) return '';
   if (live.length === 1) return elementCardListHtml(live[0].ids, live[0].per);
-  return `<div class="mcard-list">${live.map((g) => '<section class="mcard">'
-    + `<div class="mcard-head"><h3 class="mcard-title">${esc(g.title)}</h3>`
-    + `<span class="mcard-count">${esc(g.count || String(g.ids.length))}</span></div>`
-    + (g.desc ? `<p class="mcard-desc">${esc(g.desc)}</p>` : '')
+  return `<div class="csec-list">${live.map((g) => '<section class="csec">'
+    + `<div class="csec-head"><h3 class="csec-title">${esc(g.title)}</h3>`
+    + `<span class="csec-count">${esc(g.count || String(g.ids.length))}</span></div>`
+    + (g.desc ? `<p class="csec-desc">${esc(g.desc)}</p>` : '')
     + elementCardListHtml(g.ids, g.per) + '</section>').join('')}</div>`;
 }
 

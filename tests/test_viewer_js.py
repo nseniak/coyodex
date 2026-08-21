@@ -876,15 +876,27 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
 
 
 def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
-    """A third list shape, between the flat card list and the card grid: sections, each drawn as a card
-    that CONTAINS its members. It earns its place where a list has a natural cut that is not a level —
-    a person and a piece of software are both actors, and putting either behind a drill would hide half
-    the list to say what a heading says for free. Three screens had hand-rolled the same shape, which is
-    the drift the spec's "centralize the card designs" exists to stop."""
+    """A third list shape, between the flat card list and the card grid: the SAME card list, cut into
+    sections by a heading. It earns its place where a list has a natural cut that is not a level — a
+    person and a piece of software are both actors, and putting either behind a drill would hide half
+    the list to say what a heading says for free. Three screens had hand-rolled the shape, which is the
+    drift the spec's "centralize the card designs" exists to stop.
+
+    The section is NOT a card. It was, in a tinted frame containing its members, and two nested card
+    shapes on one screen read as two levels of thing when there is only one — the reader had to work out
+    whether the frame was itself something to click. So the cards keep the plain list's look and width,
+    and the break is carried by a heading, space and a hairline."""
     js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
     body = js[js.index("function elementCardGroupsHtml(groups) {"):
               js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups) {") + 10)]
-    assert "mcard" in body and "elementCardListHtml(g.ids, g.per)" in body
+    assert "csec" in body and "elementCardListHtml(g.ids, g.per)" in body
+    assert "mcard" not in js and "mcard" not in css, "the boxed section is gone, not shadowed"
+    sec = css[css.index(".csec-head {"): css.index("}", css.index(".csec-head {"))]
+    assert "border-bottom" in sec
+    for boxed in ("border-radius", "background"):
+        rule = css[css.index("\n.csec {") : css.index("}", css.index("\n.csec {"))] if "\n.csec {" in css else ""
+        assert boxed not in rule, "a section must not draw itself as a card"
     # An empty group is dropped, and a lone group draws no frame: one heading repeating the page title
     # says nothing.
     assert "filter((g) => g.ids && g.ids.length)" in body
