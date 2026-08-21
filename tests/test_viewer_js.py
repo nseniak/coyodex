@@ -1022,3 +1022,68 @@ def test_a_component_says_how_many_features_it_serves() -> None:
     assert "featureCountHtml(id)" in used
     assert "used-cap-name featref" in used, "a feature heading must open that feature's page"
     assert "selectFromTree(b.getAttribute('data-id'))" in js[js.index("function bindNodeDetailHandlers(root) {"):]
+
+
+def test_the_breadcrumb_is_the_tail_of_one_trail() -> None:
+    """The group tab, the view tab and the breadcrumb are one path, read left to right and top to
+    bottom. Treated as one, every repeated name falls out. The crumb dropped its FIRST segment, which
+    was always the view tab's own label — so "Features" was printed twice on every drilled page — and
+    its LAST when the page carries that name in its own head, which was the second printing of the
+    drilled thing. What is left is exactly the levels nothing else on screen shows.
+
+    A diagram has no head, so it is not self-naming and its crumb keeps the level it drilled into.
+    Measured on the live map: a rule's page went from "Rules › Who may call which tool › No role, no
+    tools" beside a lit Rules tab and a heading repeating the rule, to one clickable segment."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    chain = js[js.index("function crumbChain(s) {"):
+               js.index("\nfunction ", js.index("function crumbChain(s) {") + 10)]
+    assert "chain.shift()" in chain and "topView(chain[0].kind, chain[0].id) === chain[0].kind" in chain
+    assert "if (chain.length && pageNamesItself(s)) chain.pop();" in chain
+    named = js[js.index("const SELF_NAMING = new Set(["):]
+    named = named[: named.index("]);")]
+    for kind in ("capability", "actor", "rule", "element", "sysSection"):
+        assert f"'{kind}'" in named, kind
+    for diagram in ("subsystem", "domsub", "hp", "container"):
+        assert f"'{diagram}'" not in named, diagram   # no head to carry the name
+    # The row now hides only when the crumb adds NOTHING. At `< 2` a one-segment crumb vanished and
+    # took the last way back off the screen with it.
+    assert "hidden = chain.length < 1;" in js
+
+
+def test_a_view_tab_says_whether_you_are_inside_it() -> None:
+    """A tab had two states, and needed three: off, open at its top, and open but BELOW. The third is
+    the only visible way back up from a page whose breadcrumb is empty — a feature's page has none,
+    because its parent IS the tab. Clicking an already-open tab has always jumped to the top of that
+    view, and nothing on screen said so: a lit tab reads as "you are here", not as something to click.
+
+    So the drilled state hollows the pill to an outline, adds an up arrow, and names its destination in
+    a tooltip. It also gains a hover, which the at-the-top tab deliberately does not — an inert control
+    should not pretend otherwise."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "const atRoot = stateKey(s) === stateKey({ kind: tv });" in js
+    assert "b.classList.toggle('drilled', on && !atRoot);" in js
+    assert "b.title = 'Back to ' + (VIEW_LABEL[tv] || tv);" in js
+    drilled = css[css.index("#viewsw button.active.drilled {"):
+                  css.index("}", css.index("#viewsw button.active.drilled {"))]
+    assert "background: transparent" in drilled, "the third state must not read as the second"
+    assert '#viewsw button.active.drilled::after' in css and '\\2191' in css
+    assert "#viewsw button.active.drilled:hover" in css
+
+
+def test_a_page_never_repeats_the_tab_it_was_opened_from() -> None:
+    """Six pages printed a title identical to the tab you had just clicked, one line below it. The tab
+    is where the page is named; the page does not name it again. A title that says something ELSE —
+    an actor, a System collection, "Use cases" on a map recording no features — is information, not an
+    echo, and stays. One rule, in the one function every page head goes through."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    head = js[js.index("function viewHeadHtml(title, question) {"):
+              js.index("\nfunction ", js.index("function viewHeadHtml(title, question) {") + 10)]
+    assert "const tab = cur ? VIEW_LABEL[topView(cur.kind, cur.id)] : '';" in head
+    assert "const echo = tab && title === tab;" in head
+    assert "echo ? '' :" in head
+    # With the title gone, the QUESTION is the page's head — so it is set as one: upright, a size up,
+    # dark enough to lead. Under a title it stays quiet, because two headings compete.
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    lead = css[css.index(".view-q:first-child {"): css.index("}", css.index(".view-q:first-child {"))]
+    assert "font-style: normal" in lead and "font-size: 16px" in lead

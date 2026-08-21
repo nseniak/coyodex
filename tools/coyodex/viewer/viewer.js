@@ -5105,8 +5105,15 @@ function syncInfoPane(s) {
 // the SAME string the info pane used to hold (VIEW_Q), read from one place, so a view cannot answer one
 // question in its pane and another on its page.
 function viewHeadHtml(title, question) {
+  // A title that repeats the open tab is dropped: the tab is the first place the page is named, and
+  // naming it again one line below is the same repeat the breadcrumb no longer makes. A page whose
+  // title says something ELSE — an actor, a collection, "Use cases" on a map with no features — keeps
+  // it, because then the word is information rather than an echo.
+  const cur = hi >= 0 ? history[hi] : null;
+  const tab = cur ? VIEW_LABEL[topView(cur.kind, cur.id)] : '';
+  const echo = tab && title === tab;
   return '<div class="view-head">'
-    + `<h2 class="view-title">${esc(title)}</h2>`
+    + (echo ? '' : `<h2 class="view-title">${esc(title)}</h2>`)
     + (question ? `<p class="view-q">${esc(question)}</p>` : '')
     + '</div>';
 }
@@ -5318,6 +5325,23 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   else if (s.kind === 'edge') trail.push({ kind: 'edge', a: s.a, b: s.b });  // a pair lives beside the subsystems
   return trail;
 }
+// A page that carries its OWN name in its head. The crumb then stops at the parent, because the name
+// would otherwise be printed twice: once in grey chrome and once, forty pixels lower, as the heading of
+// the thing itself. A diagram has no head, so it is not in this set and its crumb names the level.
+const SELF_NAMING = new Set(['capability', 'actor', 'rule', 'element', 'sysSection']);
+function pageNamesItself(s) {
+  if (SELF_NAMING.has(s.kind)) return true;
+  return s.kind === 'rules' && !!s.blk;   // one decision area's page, headed by the area
+}
+// The breadcrumb is the TAIL of one trail that starts in the tabs: group tab, view tab, then this. So
+// it never repeats the view tab (its own first step), and never repeats a page that names itself.
+// What is left is exactly the levels nothing else on screen shows, and every one of them is clickable.
+function crumbChain(s) {
+  const chain = ancestors(s);
+  if (chain.length && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();
+  if (chain.length && pageNamesItself(s)) chain.pop();
+  return chain;
+}
 function renderChrome(s) {
   // The baseline⇄diff change-impact overlay lives on the Subsystems views now (overview + cards),
   // not the removed flat Components map: the overview badges each subsystem with its subtree's change,
@@ -5343,9 +5367,19 @@ function renderChrome(s) {
     // above it says nothing. The strip still renders at its normal height (#stagesubrow min-height), so
     // opening that group does not shunt the diagram up and back down again.
     const lone = groupViews(tg).length < 2;
+    // A tab has THREE states, not two: off, open-at-its-top, and open-but-BELOW. The third is the one
+    // that was missing, and it is the only visible way back up from a page whose breadcrumb is empty —
+    // a feature's page has no crumb, because its parent IS this tab. Clicking an already-open tab has
+    // always jumped to the top of that view (resetTab); nothing on screen said so, because a lit tab
+    // reads as "you are here" rather than as somewhere you can click.
+    const atRoot = stateKey(s) === stateKey({ kind: tv });
     viewsw.querySelectorAll('button[data-view]').forEach((b) => {
       b.hidden = lone || b.dataset.group !== tg;
-      b.classList.toggle('active', b.dataset.view === tv);
+      const on = b.dataset.view === tv;
+      b.classList.toggle('active', on);
+      b.classList.toggle('drilled', on && !atRoot);
+      if (on && !atRoot) b.title = 'Back to ' + (VIEW_LABEL[tv] || tv);
+      else b.removeAttribute('title');
     });
   }
   navback.disabled = hi <= 0;
@@ -5354,8 +5388,10 @@ function renderChrome(s) {
   // Only show the bar once it actually branches (a `›` between crumbs) — a lone crumb (a tab's own
   // overview) is just the tab name repeated, so hide the whole bar there.
   crumb.innerHTML = '';
-  const chain = ancestors(s);
-  if (crumb.parentElement) crumb.parentElement.hidden = chain.length < 2;
+  const chain = crumbChain(s);
+  // The row hides only when the crumb has nothing to add — never merely because it is down to one
+  // segment, which used to take the last way back off the screen with it.
+  if (crumb.parentElement) crumb.parentElement.hidden = chain.length < 1;
   chain.forEach((node, i) => {
     if (i) crumb.appendChild(document.createTextNode(' › '));
     const cur = i === chain.length - 1;

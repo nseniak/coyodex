@@ -162,6 +162,19 @@ body.vresizing #stage { pointer-events: none; }
                  flex: 0 0 auto; white-space: nowrap; }
 #viewsw button:hover { background: #eef2ff; }
 #viewsw button.active { background: #e0e7ff; color: #3730a3; font-weight: 600; }
+/* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
+   whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab
+   reads as "you are here", so this one has to read as "you are inside here": the pill hollows out to an
+   outline, and a small up-arrow says which direction the click goes. It also gains a hover, which the
+   at-the-top tab deliberately has not — an inert control should not pretend otherwise. */
+#viewsw button.active.drilled {
+  background: transparent; box-shadow: inset 0 0 0 1px #c7d2fe; color: #4338ca;
+}
+#viewsw button.active.drilled::after {
+  content: "\2191"; margin-left: 5px; font-weight: 400; opacity: .75;
+}
+#viewsw button.active.drilled:hover { background: #eef2ff; box-shadow: inset 0 0 0 1px #a5b4fc; }
+#viewsw button.active:not(.drilled):hover { background: #e0e7ff; }   /* at the top: nothing to click to */
 /* The FEATURES overview: one card per capability, the whole product readable on one screen. A grid of
    equal cards rather than a list, because the cards are peers to be scanned, not steps to be read in
    order. Each card is a <button>, so it is keyboard-reachable like every other drill in the viewer. */
@@ -423,7 +436,15 @@ body.vresizing #stage { pointer-events: none; }
    no longer have: a page of prose does not need a second pane repeating its purpose. */
 .view-head { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #eef2f7; }
 .view-title { margin: 0; font-size: 19px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
+/* The question under a title stays quiet: the title is the heading and two headings compete. */
 .view-q { margin: 4px 0 0; font-size: 13px; color: #6b7280; font-style: italic; }
+/* STANDING ALONE it IS the head — on every top-level view, whose title is now the tab. So it reads as a
+   title, quietly: upright rather than italic, a size up, and dark enough to lead a page. Left as small
+   grey italic it looked like a caption for the content below it, with nothing above to caption. */
+.view-q:first-child {
+  margin: 0; font-size: 16px; font-style: normal; font-weight: 500; color: #374151;
+  letter-spacing: -.005em;
+}
 /* The product description, leading the Features page. Set a touch larger than a card's prose and held
    to a readable measure: it is the one paragraph on the screen meant to be read rather than scanned. */
 .view-lead { margin: 0 0 18px; font-size: 14.5px; line-height: 1.6; color: #374151; max-width: 76ch; }
