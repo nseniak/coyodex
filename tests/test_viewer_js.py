@@ -603,18 +603,28 @@ def test_the_group_by_switch_sits_with_the_list_it_switches() -> None:
               js.index("\nfunction ", js.index("function bindOverviewAxis() {") + 10)]
     assert "diagram.querySelectorAll('.uc-groupby .uc-seg button')" in bind
 
-def test_every_header_row_starts_at_the_same_edge() -> None:
-    """The search button sat before the group row and pushed it 42px in, so the group row, the view row
-    and the switch each began at a different x and the three read as unrelated strips. Measured after:
-    15px and 14px, the 1px being the group control's own border. The utilities are what moves."""
-    html = (VIEWER_DIR / "viewer.html").read_text()
-    head = html[html.index('<div id="stageheadrow">'): html.index('<div id="stagesubrow">')]
-    assert head.index('id="groupsw"') < head.index('id="searchbtn"'), "nothing may precede the group row"
-    assert 'id="stageheadutil"' in head
+def test_the_breadcrumb_starts_under_the_active_tabs_label() -> None:
+    """The alignment IS the design. The view row pads 10px and each tab pads 7px inside that, so the
+    breadcrumb's 17px left padding lands its first segment exactly under the active tab's label — the
+    path reads as starting from the tab it belongs to, rather than floating at the page edge."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    util = css[css.index("#stageheadutil {"): css.index("}", css.index("#stageheadutil {"))]
-    assert "margin-left: auto" in util
+    sub = css[css.index("#stagesubrow {"): css.index("}", css.index("#stagesubrow {"))]
+    assert "padding: 0 10px" in sub
+    tab = css[css.index("#viewsw button {"): css.index("}", css.index("#viewsw button {"))]
+    assert "padding: 8px 7px 6px" in tab
+    hint = css[css.index("\n.hint {"): css.index("}", css.index("\n.hint {"))]
+    assert "padding: 6px 12px 7px 17px" in hint, "10px row + 7px tab = 17px"
 
+def test_the_active_view_is_underlined_and_the_active_group_is_a_pill() -> None:
+    """Two tab rows one above the other, and if both mark their active item the same way the reader
+    cannot tell which level they are reading. The group is a pale pill on a tinted ground; the view is
+    an underline on white. The underline also does a second job: it is the mark the breadcrumb below
+    lines up with."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    grp = css[css.index("#groupsw button.active {"): css.index("}", css.index("#groupsw button.active {"))]
+    assert "#e0e7ff" in grp and "#3730a3" in grp
+    view = css[css.index("#viewsw button.active {"): css.index("}", css.index("#viewsw button.active {"))]
+    assert "border-bottom-color: #6366f1" in view and "background" not in view
 
 def test_no_control_outlives_the_view_that_drew_it() -> None:
     """A view's own controls are drawn by that view's renderer into the view's own content, so moving
@@ -627,34 +637,29 @@ def test_no_control_outlives_the_view_that_drew_it() -> None:
     assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
 
-def test_the_question_belongs_to_the_view_and_lives_with_the_tabs() -> None:
+def test_the_question_belongs_to_the_view_and_rides_the_view_row() -> None:
     """A view's question is the same sentence at every depth inside that view, so it is a property of
-    the VIEW and not of any page. It spent one round in the content, where it read as a caption for
-    whatever happened to be below it and changed as the reader drilled, and one round before that in
-    the info pane, where only diagrams had one. It is a line of the navigation block now: under the
-    tabs, above the breadcrumb. What this view answers, then where in it you are.
+    the VIEW. It spent a round in the content, where it read as a caption for whatever sat below it and
+    changed as the reader drilled, and a round before that in the info pane, where only diagrams had one.
 
-    So no page head carries a question, and the info pane carries none either. A pane with nothing
-    selected owes the reader the one thing navigation cannot say — what to do next."""
+    It rides the view-tab row now, right of the tabs — the same row, because it names the same thing
+    those tabs select. At a narrow column it wraps below them rather than truncating: half a question
+    answers nothing."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert '<div id="viewq" hidden></div>' in html
-    assert html.index('id="viewq"') > html.index('id="stagesubrow"'), "below the sub tabs"
-    assert html.index('id="viewq"') < html.index('id="crumb"'), "above the breadcrumb"
-    assert "#viewq {" in css
+    assert '<span id="viewq" hidden></span>' in html
+    sub = html[html.index('<nav id="stagesubrow"'): html.index("</nav>", html.index('<nav id="stagesubrow"'))]
+    assert 'id="viewq"' in sub, "the question is IN the view-tab row"
+    q = css[css.index("#viewq {"): css.index("}", css.index("#viewq {"))]
+    assert "margin-left" not in q, "beside the tabs it belongs to, not pushed to the far edge"
+    assert "#viewq { flex: 1 0 100%;" in css, "and below them when the column is narrow"
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
     assert "const q = viewQuestion(tv);" in chrome and "viewq.hidden = !q;" in chrome
-    # Not in the content, and not in the pane.
     intro = js[js.index("function viewIntroHtml(view) {"):
                js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
-    assert "viewQuestion" not in intro and "EMPTY_PANEL" in intro
-    head = js[js.index("function viewHeadHtml(title, desc) {"):
-              js.index("\nfunction ", js.index("function viewHeadHtml(title, desc) {") + 10)]
-    assert "question" not in head.lower().split("*/")[-1]
-    assert "VIEW_Q." not in js[js.index("function renderOverview() {"):], "a page never quotes the view's question"
-
+    assert "viewQuestion" not in intro
 
 def test_a_text_view_drops_the_info_pane() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
@@ -1047,52 +1052,62 @@ def test_a_component_says_how_many_features_it_serves() -> None:
     assert "selectFromTree(b.getAttribute('data-id'))" in js[js.index("function bindNodeDetailHandlers(root) {"):]
 
 
-def test_the_breadcrumb_is_the_tail_of_one_trail() -> None:
-    """The group tab, the view tab and the breadcrumb are one path, read left to right and top to
-    bottom. Treated as one, every repeated name falls out. The crumb dropped its FIRST segment, which
-    was always the view tab's own label — so "Features" was printed twice on every drilled page — and
-    its LAST when the page carries that name in its own head, which was the second printing of the
-    drilled thing. What is left is exactly the levels nothing else on screen shows.
+def test_the_path_shows_only_where_you_went_after_choosing_the_view() -> None:
+    """The tabs identify the view; the breadcrumb identifies the path INSIDE it. So the path never
+    repeats the sub-tab that opened it, and never shows the group at all — "Product" is a set of tabs,
+    not a page you can be on. At the top of a view there is no path, and the row takes no space: an
+    empty strip is furniture.
 
-    A diagram has no head, so it is not self-naming and its crumb keeps the level it drilled into.
-    Measured on the live map: a rule's page went from "Rules › Who may call which tool › No role, no
-    tools" beside a lit Rules tab and a heading repeating the rule, to one clickable segment."""
+    Its last item is the page's own name, rendered as the document's h1, so NO page draws a heading of
+    its own — the duplication every earlier arrangement kept reintroducing somewhere else. When the row
+    collapses, that h1 would vanish with it and leave the document untitled, so the view's name stands
+    in, readable by a screen reader and invisible on screen where the tab already carries it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    chain = js[js.index("function crumbChain(s) {"):
-               js.index("\nfunction ", js.index("function crumbChain(s) {") + 10)]
-    assert "chain.shift()" in chain and "topView(chain[0].kind, chain[0].id) === chain[0].kind" in chain
-    assert "if (chain.length && pageNamesItself(s)) chain.pop();" in chain
-    named = js[js.index("const SELF_NAMING = new Set(["):]
-    named = named[: named.index("]);")]
-    for kind in ("capability", "actor", "rule", "element", "sysSection"):
-        assert f"'{kind}'" in named, kind
-    for diagram in ("subsystem", "domsub", "hp", "container"):
-        assert f"'{diagram}'" not in named, diagram   # no head to carry the name
-    # The row now hides only when the crumb adds NOTHING. At `< 2` a one-segment crumb vanished and
-    # took the last way back off the screen with it.
-    assert "hidden = chain.length < 1;" in js
-
-
-def test_a_view_tab_says_whether_you_are_inside_it() -> None:
-    """A tab had two states, and needed three: off, open at its top, and open but BELOW. The third is
-    the only visible way back up from a page whose breadcrumb is empty — a feature's page has none,
-    because its parent IS the tab. Clicking an already-open tab has always jumped to the top of that
-    view, and nothing on screen said so: a lit tab reads as "you are here", not as something to click.
-
-    So the drilled state hollows the pill to an outline, adds an up arrow, and names its destination in
-    a tooltip. It also gains a hover, which the at-the-top tab deliberately does not — an inert control
-    should not pretend otherwise."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
+    crumbs = js[js.index("  crumb.innerHTML = '';"):]
+    crumbs = crumbs[: crumbs.index("\n}")]
+    assert "if (chain.length && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();" in crumbs
+    assert "const empty = !chain.length;" in crumbs
+    assert "classList.toggle('hint-empty', empty)" in crumbs
+    assert "h.className = 'sr-only';" in crumbs
+    assert "document.createElement(cur ? 'h1' : 'button')" in crumbs
+    assert "crumbsep" in crumbs and "aria-hidden" in crumbs
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "const atRoot = stateKey(s) === stateKey({ kind: tv });" in js
-    assert "b.classList.toggle('drilled', on && !atRoot);" in js
-    assert "b.title = 'Back to ' + (VIEW_LABEL[tv] || tv);" in js
-    drilled = css[css.index("#viewsw button.active.drilled {"):
-                  css.index("}", css.index("#viewsw button.active.drilled {"))]
-    assert "background: transparent" in drilled, "the third state must not read as the second"
-    assert '#viewsw button.active.drilled::after' in css and '\\2191' in css
-    assert "#viewsw button.active.drilled:hover" in css
+    assert ".hint.hint-empty { padding: 0; border-bottom: 0; }" in css and ".sr-only {" in css
+    # No page draws its own name.
+    head = js[js.index("function viewHeadHtml(_title, desc) {"):
+              js.index("\nfunction ", js.index("function viewHeadHtml(_title, desc) {") + 10)]
+    assert "view-title" not in head and "_title" in head
+    hero = js[js.index("function pageHeroHtml(o) {"):
+              js.index("\nfunction ", js.index("function pageHeroHtml(o) {") + 10)]
+    assert "o.name" not in hero and "page-hero-pills" in hero
+    assert "page-hero-name" not in js and "view-title" not in js
+    for fn in ("renderRule", "renderElementDetails"):
+        body = js[js.index(f"function {fn}("): js.index("\nfunction ", js.index(f"function {fn}(") + 10)]
+        assert "ruleTitle(r)}</h3>" not in body and "view-title" not in body, fn
+    # One heading per page: the app's own name is a brand mark.
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    import re as _re
+    assert not _re.search(r"<h1[ >]", html), "the only h1 is built at runtime, in the breadcrumb"
+    assert 'class="brand"' in html
 
+def test_the_title_bar_holds_every_utility_and_wraps_before_it_clips() -> None:
+    """Eight controls, all of them things you do to the map rather than places you go: back, forward,
+    the three zoom controls, search, help and settings. Search and the legend toggle used to sit in the
+    group row, which made that row two things at once. They are quiet icon buttons on the navy ground —
+    eight filled chips read as eight destinations.
+
+    At a narrow column the bar wraps into two lines, identity then controls, rather than squeezing."""
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    head = html[html.index("<header>"): html.index("</header>")]
+    for control in ("navback", "navfwd", "zoomout", "zoomlevel", "zoomin", "searchbtn", "helpbtn",
+                    "setbtn", "legendbtn"):
+        assert f'id="{control}"' in head, control
+    assert "stageheadutil" not in html and "stageheadutil" not in css
+    btn = css[css.index("header button {"): css.index("}", css.index("header button {"))]
+    assert "width: 26px" in btn and "height: 26px" in btn and "background: transparent" in btn
+    assert "background: rgba(255,255,255,.12)" in css
+    assert "@media (max-width: 480px)" in css and "header .brand { flex: 1 0 100%; }" in css
 
 def test_a_page_never_repeats_the_tab_it_was_opened_from() -> None:
     """Six pages printed a title identical to the tab you had just clicked, one line below it. The tab
@@ -1100,9 +1115,8 @@ def test_a_page_never_repeats_the_tab_it_was_opened_from() -> None:
     an actor, a System collection, "Use cases" on a map recording no features — is information, not an
     echo, and stays. One rule, in the one function every page head goes through."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    head = js[js.index("function viewHeadHtml(title, desc) {"):
-              js.index("\nfunction ", js.index("function viewHeadHtml(title, desc) {") + 10)]
-    assert "const tab = cur ? VIEW_LABEL[topView(cur.kind, cur.id)] : '';" in head
-    assert "const showTitle = !(tab && title === tab);" in head
-    # A head with neither a title of its own nor a description is not drawn at all.
-    assert "if (!showTitle && !desc) return '';" in head
+    head = js[js.index("function viewHeadHtml(_title, desc) {"):
+              js.index("\nfunction ", js.index("function viewHeadHtml(_title, desc) {") + 10)]
+    # A head with no description of its own is not drawn at all: the page's name is the breadcrumb's
+    # last item, and there is nothing else for a head to say.
+    assert "return desc ?" in head

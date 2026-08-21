@@ -1714,8 +1714,7 @@ function renderElementDetails(id) {
   if (!n) { diagram.innerHTML = '<p class="empty">This element is not in the map.</p>'; return; }
   const chg = n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '';
   diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">'
-    + '<div class="view-head"><h2 class="view-title">' + esc(n.name) + '</h2>'
-    + `<p class="view-q">${kindPills(n)}${chg}</p></div>`
+    + `<div class="page-hero"><p class="page-hero-pills">${kindPills(n)}${chg}</p></div>`
     + `<div class="edetail">${nodeDetailBodyHtml(id)}</div></div>`;
   bindNodeDetailHandlers(diagram);
   bindElementCards(diagram);
@@ -5114,15 +5113,11 @@ function syncInfoPane(s) {
 // naming it again one line below is the same repeat the breadcrumb no longer makes. A page whose title
 // says something ELSE — an actor, a collection, "Use cases" on a map with no features — keeps it,
 // because then the word is information rather than an echo. A head with neither is not drawn at all.
-function viewHeadHtml(title, desc) {
-  const cur = hi >= 0 ? history[hi] : null;
-  const tab = cur ? VIEW_LABEL[topView(cur.kind, cur.id)] : '';
-  const showTitle = !(tab && title === tab);
-  if (!showTitle && !desc) return '';
-  return '<div class="view-head">'
-    + (showTitle ? `<h2 class="view-title">${esc(title)}</h2>` : '')
-    + (desc ? `<p class="view-desc">${esc(desc)}</p>` : '')
-    + '</div>';
+function viewHeadHtml(_title, desc) {
+  // No title. The page is named by the last item of the breadcrumb, which is the document's h1, and a
+  // heading here would print that name a second time twenty pixels below it. The argument is kept in
+  // the signature because every caller reads better naming the page it draws.
+  return desc ? `<div class="view-head"><p class="view-desc">${esc(desc)}</p></div>` : '';
 }
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
@@ -5332,23 +5327,6 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   else if (s.kind === 'edge') trail.push({ kind: 'edge', a: s.a, b: s.b });  // a pair lives beside the subsystems
   return trail;
 }
-// A page that carries its OWN name in its head. The crumb then stops at the parent, because the name
-// would otherwise be printed twice: once in grey chrome and once, forty pixels lower, as the heading of
-// the thing itself. A diagram has no head, so it is not in this set and its crumb names the level.
-const SELF_NAMING = new Set(['capability', 'actor', 'rule', 'element', 'sysSection']);
-function pageNamesItself(s) {
-  if (SELF_NAMING.has(s.kind)) return true;
-  return s.kind === 'rules' && !!s.blk;   // one decision area's page, headed by the area
-}
-// The breadcrumb is the TAIL of one trail that starts in the tabs: group tab, view tab, then this. So
-// it never repeats the view tab (its own first step), and never repeats a page that names itself.
-// What is left is exactly the levels nothing else on screen shows, and every one of them is clickable.
-function crumbChain(s) {
-  const chain = ancestors(s);
-  if (chain.length && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();
-  if (chain.length && pageNamesItself(s)) chain.pop();
-  return chain;
-}
 function renderChrome(s) {
   // The baseline⇄diff change-impact overlay lives on the Subsystems views now (overview + cards),
   // not the removed flat Components map: the overview badges each subsystem with its subtree's change,
@@ -5373,7 +5351,11 @@ function renderChrome(s) {
   const tg = GROUP_OF_VIEW[tv];
   if (tg) {
     groupLast[tg] = tv;
-    groupsw.querySelectorAll('button[data-group]').forEach((b) => b.classList.toggle('active', b.dataset.group === tg));
+    groupsw.querySelectorAll('button[data-group]').forEach((b) => {
+      const on = b.dataset.group === tg;
+      b.classList.toggle('active', on);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    });
     // A group holding ONE view (Glossary) draws no sub tabs at all: a lone chip repeating the group name
     // above it says nothing. The strip still renders at its normal height (#stagesubrow min-height), so
     // opening that group does not shunt the diagram up and back down again.
@@ -5388,7 +5370,9 @@ function renderChrome(s) {
       b.hidden = lone || b.dataset.group !== tg;
       const on = b.dataset.view === tv;
       b.classList.toggle('active', on);
-      b.classList.toggle('drilled', on && !atRoot);
+      if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+      // The drilled state is gone: the breadcrumb names every level again, and its first segment — the
+      // view, sitting directly under this tab's label — is the visible way back up.
       if (on && !atRoot) b.title = 'Back to ' + (VIEW_LABEL[tv] || tv);
       else b.removeAttribute('title');
     });
@@ -5399,14 +5383,38 @@ function renderChrome(s) {
   // Only show the bar once it actually branches (a `›` between crumbs) — a lone crumb (a tab's own
   // overview) is just the tab name repeated, so hide the whole bar there.
   crumb.innerHTML = '';
-  const chain = crumbChain(s);
-  // The row hides only when the crumb has nothing to add — never merely because it is down to one
-  // segment, which used to take the last way back off the screen with it.
-  if (crumb.parentElement) crumb.parentElement.hidden = chain.length < 1;
+  // The path INSIDE the open view: the sub-tab's own name is dropped, because the tab above already
+  // says it, and the group is never here at all — "Product" is a set of tabs, not a page you can be on.
+  // What is left is where you went after choosing the view. Nothing to show means no row: at the top of
+  // a view there is no path, and an empty strip is furniture.
+  //
+  // The LAST item is the page's own name, so it is the document's h1 and no page draws a heading. When
+  // the row collapses that h1 would go with it, leaving the document untitled — so the view's name
+  // takes its place, readable by a screen reader and invisible on screen, where the tab already has it.
+  const chain = ancestors(s);
+  if (chain.length && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();
+  const empty = !chain.length;
+  if (crumb.parentElement) crumb.parentElement.classList.toggle('hint-empty', empty);
+  if (empty) {
+    const h = document.createElement('h1');
+    h.className = 'sr-only';
+    h.textContent = stateTitle({ kind: topView(s.kind, s.id) });
+    crumb.appendChild(h);
+    return;
+  }
   chain.forEach((node, i) => {
-    if (i) crumb.appendChild(document.createTextNode(' › '));
+    if (i) {
+      const sep = document.createElement('span');
+      sep.className = 'crumbsep';
+      sep.setAttribute('aria-hidden', 'true');
+      sep.textContent = '\u203a';
+      crumb.appendChild(sep);
+    }
     const cur = i === chain.length - 1;
-    const seg = document.createElement(cur ? 'span' : 'a');
+    // The current item is the page title: an h1, not a link. Everything above it is a button, because
+    // it does something when clicked and a screen reader should hear that.
+    const seg = document.createElement(cur ? 'h1' : 'button');
+    if (!cur) seg.type = 'button';
     seg.className = 'crumbseg' + (cur ? ' cur' : '');
     seg.textContent = stateTitle(node);
     if (!cur) seg.addEventListener('click', () => go(node));
@@ -5759,8 +5767,10 @@ function featRulesHtml(ids) {
 // A plain `div`, never a `<header>`: the page's own top bar is styled by a bare `header` selector (dark
 // navy, flex row), and a semantic header here inherited all of it and rendered unreadable.
 function pageHeroHtml(o) {
+  // The NAME is not here: the breadcrumb's last item is the page's h1. What is left is what hung off
+  // that name — the pills it earns, the sentence saying what it is, and one line of context.
   return '<div class="page-hero">'
-    + `<h2 class="page-hero-name">${esc(o.name)}${o.pills || ''}</h2>`
+    + (o.pills ? `<p class="page-hero-pills">${o.pills}</p>` : '')
     + (o.desc ? `<p class="page-hero-purpose">${o.desc}</p>`
               : `<p class="page-hero-purpose feat-empty">${esc(o.noDesc || 'Nothing recorded.')}</p>`)
     + (o.meta ? `<p class="page-hero-meta">${o.meta}</p>` : '')
@@ -6029,7 +6039,11 @@ function unreachedHtml() {
 function productLeadHtml() {
   const n = GRAPH.nodes.SYS || {};
   const overview = ((n.fields || {}).Overview || '').trim();
-  return overview ? `<div class="view-lead">${mdRefs(overview, GRAPH.nodes)}</div>` : '';
+  if (!overview) return '';
+  // Labelled, in the same small caps the Group-by switch below it uses, so the two read as the two
+  // blocks of one page rather than as a stray paragraph followed by a control.
+  return '<div class="view-lead"><p class="block-lbl">Product overview</p>'
+    + `<div class="view-lead-body">${mdRefs(overview, GRAPH.nodes)}</div></div>`;
 }
 
 // The ACTORS view: everyone and everything that drives this product, as a card list. Each card opens
@@ -6977,7 +6991,6 @@ function renderRule(s) {
     : '<p class="empty">No entity is named by this rule.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
     + '<section class="uc-group">'
-    + `<h3 class="uc-actor">${esc(ruleTitle(r))}</h3>`
     + (ruleStatementLine(r) ? `<p class="br-statement">${mdInline(r.statement)}</p>` : '')
     + `<p class="uc-wants"><span class="uc-wants-lbl">Decision area:</span> ${area}</p>`
     + (blk && blk.purpose ? `<p class="uc-wants">${mdInline(blk.purpose)}</p>` : '')

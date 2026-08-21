@@ -5,19 +5,31 @@
    not at page level, so it no longer factors into this. */
 body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #111;
        height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-header { padding: 8px 14px; background: #1e1b4b; color: #fff; display: flex; gap: 12px; align-items: center; }
-header h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 0 0 auto; }
-/* In FULL mode the title links back to the server's landing page (all maps). */
-header h1.home-link { cursor: pointer; }
-header h1.home-link:hover { text-decoration: underline; }
-header .meta { font-size: 12px; opacity: .8; flex: 1; }
-header .meta .repo { color: #c7d2fe; font-weight: 600; }  /* the mapped repo name — file links resolve here */
-header button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 6px;
-                background: #6366f1; color: #fff; cursor: pointer; }
-header button:hover { background: #818cf8; }
-#nav { display: inline-flex; gap: 4px; flex: 0 0 auto; }
-#nav button { font-size: 13px; line-height: 1; padding: 4px 9px; }
-#nav button:disabled { background: #3730a3; color: #818cf8; opacity: .55; cursor: default; }
+/* One visible focus ring for the whole app, bright enough to find on the navy bar and on white. */
+:focus-visible { outline: 3px solid #818cf8; outline-offset: 2px; }
+/* THE TITLE BAR. Identity on the left, the eight controls on the right, and nothing else. The controls
+   are quiet icon buttons on the navy ground rather than solid indigo chips: a row of eight filled
+   buttons read as eight destinations, when they are utilities you use once and forget. */
+header { min-height: 40px; padding: 4px 8px; background: #1e1b4b; color: #fff;
+         display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+header .brand { font-size: 13px; font-weight: 600; color: #fff; flex: 0 0 auto; }
+header .brand.home-link { cursor: pointer; }
+header .brand.home-link:hover { text-decoration: underline; }
+header .meta { font-size: 12px; font-weight: 500; color: #c7d2fe; flex: 1 1 12ch; min-width: 0; }
+header .meta .repo { color: #fff; font-weight: 600; }   /* the mapped repo name — file links resolve here */
+header button { font: inherit; font-size: 12.5px; line-height: 1; width: 26px; height: 26px;
+                display: inline-flex; align-items: center; justify-content: center; padding: 0;
+                border: 0; border-radius: 6px; background: transparent; color: #e0e7ff; cursor: pointer; }
+header button:hover { background: rgba(255,255,255,.12); color: #fff; }
+/* At a narrow column the bar wraps into two lines: who you are looking at, then what you can do to it.
+   `flex-basis: 100%` on the identity forces the break rather than letting the controls squeeze. */
+@media (max-width: 480px) {
+  header .brand { flex: 1 0 100%; }
+  header .meta { flex: 1 0 100%; }
+}
+#nav { display: inline-flex; gap: 2px; flex: 0 0 auto; }
+#nav button:disabled { color: #6366f1; opacity: .55; cursor: default; background: transparent; }
+#zoomlevel { width: auto; padding: 0 7px; font-variant-numeric: tabular-nums; }
 #zoomctl { display: inline-flex; gap: 4px; flex: 0 0 auto; align-items: center; }
 #zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }
 #zoomctl #zoomlevel { min-width: 52px; font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -28,12 +40,9 @@ main { display: flex; flex: 1; min-height: 0; }
    (elements, files/folders, glossary terms, entity fields). Hidden by default (the `hidden` attribute
    wins over the flex display); the header magnifier / "/" toggles it. When open it's a fixed-width
    column left of the diagram, so the rest of the layout just shifts right. */
-/* The search button sits in the stage head row, just left of the view selector (#viewsw), and matches
-   its pill styling. */
-#searchbtn { font-size: 13px; line-height: 1; padding: 4px 9px; flex: 0 0 auto; cursor: pointer;
-             border: 1px solid #c7d2fe; border-radius: 6px; background: #fff; color: #4338ca; }
-#searchbtn:hover { background: #eef2ff; }
-body.search-open #searchbtn { background: #6366f1; color: #fff; border-color: #6366f1; }
+/* Search lives in the title bar with the other utilities, so it takes their icon-button look; the only
+   thing it adds is an ON state, because unlike the rest it opens a panel that stays open. */
+body.search-open #searchbtn { background: rgba(255,255,255,.22); color: #fff; }
 #searchbar { flex: 0 0 auto; width: 300px; min-width: 0; display: flex; flex-direction: column;
              background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
 #searchbar[hidden] { display: none; }
@@ -113,10 +122,8 @@ body.vresizing #stage { pointer-events: none; }
 #diagram { flex: 1 1 auto; min-width: 0; min-height: 0; }
 /* View selector + breadcrumb, a normal-flow bar at the top of the graph pane. */
 #stagehead { flex: 0 0 auto; z-index: 6; }
-#stageheadrow { display: flex; align-items: center; gap: 8px; background: #fff; padding: 8px 14px;
-                border-bottom: 1px solid #e5e7eb; }
-/* Utilities (search, legend) ride the far right, so every row of the header starts at the same x. */
-#stageheadutil { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+#stageheadrow { display: flex; align-items: center; gap: 8px; background: #fbfbfe; padding: 4px 10px;
+                border-bottom: 1px solid #e5e7eb; min-height: 34px; }
 /* Neither row may ever SQUEEZE its buttons. Both used to be one nowrap flex row with `overflow:hidden`,
    so a pane too narrow for every tab silently amputated the last ones: measured at a 1280px window the
    Tests tab had ZERO visible width and could not be clicked at all, and Glossary was cut mid-word. A
@@ -125,23 +132,37 @@ body.vresizing #stage { pointer-events: none; }
    make this rule redundant: a very narrow pane can still overflow a four-view sub row. */
 /* Row 1 — the GROUPS: a solid segmented control, the loudest thing in the head. `overflow:hidden` is
    kept only to clip the children's square corners inside the rounded border. */
-#groupsw { display: inline-flex; flex-wrap: wrap; border: 1px solid #c7d2fe; border-radius: 6px;
-           overflow: hidden; }
-#groupsw button { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 12px; border: 0;
-                  background: transparent; color: #4338ca; border-radius: 0; cursor: pointer;
+/* Row 1 — the GROUPS. Loose pills, no surrounding box: the box made the row a segmented control, which
+   is a switch between equals, when these are four areas of a map. The active one is a pale pill. */
+#groupsw { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+#groupsw button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 4px 10px; border: 0;
+                  background: transparent; color: #4b5563; border-radius: 6px; cursor: pointer;
                   flex: 0 0 auto; white-space: nowrap; }
-#groupsw button:hover { background: #eef2ff; }
-#groupsw button.active { background: #6366f1; color: #fff; }
+#groupsw button:hover { background: #eef2ff; color: #3730a3; }
+#groupsw button.active { background: #e0e7ff; color: #3730a3; }
 /* Row 2 — the open group's VIEWS: deliberately quieter than row 1 (loose chips, no box, a tinted pill
    for the active one), so the two rows read as a hierarchy rather than as two competing tab bars. */
-#stagesubrow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; background: #fbfbfe;
-               padding: 5px 14px; border-bottom: 1px solid #e5e7eb; min-height: 31px; }
-#viewsw { display: inline-flex; flex-wrap: wrap; gap: 2px; }
-#viewsw button { font: inherit; font-size: 12px; padding: 3px 9px; border: 0; background: transparent;
-                 color: #4338ca; border-radius: 5px; cursor: pointer;
-                 flex: 0 0 auto; white-space: nowrap; }
-#viewsw button:hover { background: #eef2ff; }
-#viewsw button.active { background: #e0e7ff; color: #3730a3; font-weight: 600; }
+/* Row 2 — the open group's VIEWS, with the view's fixed QUESTION on the same row. White ground under a
+   tinted group row, so the two read as outer and inner rather than as two competing bars. The active
+   view is marked by an UNDERLINE, not a pill: a pill here would match the group row's active pill and
+   the two levels would look alike. The underline also anchors the breadcrumb, which starts at the same
+   x as this tab's label. */
+#stagesubrow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; background: #fff;
+               padding: 0 10px; border-bottom: 1px solid #e5e7eb; min-height: 36px; }
+#viewsw { display: inline-flex; flex-wrap: wrap; }
+#viewsw button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 7px 6px; border: 0;
+                 background: transparent; color: #4b5563; border-radius: 0; cursor: pointer;
+                 flex: 0 0 auto; white-space: nowrap; border-bottom: 2px solid transparent; }
+#viewsw button:hover { color: #3730a3; }
+#viewsw button.active { color: #4338ca; border-bottom-color: #6366f1; }
+/* The view's question. Right of the tabs while there is room; below them, left aligned, when there is
+   not — never truncated, because a half-shown question answers nothing. */
+/* Immediately right of the tabs, not pushed to the far edge: it belongs to them. Wide apart it read as
+   an unrelated caption floating at the other end of the row. */
+#viewq { font-size: 12.5px; font-weight: 500; color: #6b7280; line-height: 1.35; padding: 4px 0; }
+@media (max-width: 480px) {
+  #viewq { flex: 1 0 100%; padding: 0 0 6px; }
+}
 /* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
    whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab
    reads as "you are here", so this one has to read as "you are inside here": the pill hollows out to an
@@ -379,8 +400,7 @@ body.vresizing #stage { pointer-events: none; }
    The catalog groups by capability OR by actor — both kept, because "what does this product do?"
    and "what can this role do?" are different questions and neither derives the other. */
 .uc-groupby { display: flex; align-items: baseline; gap: 9px; margin: 0 0 14px; }
-.uc-groupby-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280;
-                  font-weight: 700; }
+
 .uc-groupby-why { font-size: 12px; color: #6b7280; }
 .uc-seg { display: inline-flex; border: 1px solid #c7d2fe; border-radius: 6px; overflow: hidden; }
 .uc-seg button { font: inherit; font-size: 12px; padding: 3px 11px; border: 0; background: transparent;
@@ -415,13 +435,18 @@ body.vresizing #stage { pointer-events: none; }
    they answer. The question used to live in the info pane beside them, which is the pane those views
    no longer have: a page of prose does not need a second pane repeating its purpose. */
 .view-head { margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid #eef2f7; }
-.view-title { margin: 0; font-size: 19px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
 /* A page's own description, when it has one — a System collection's blurb. Not a question: the view's
    question lives in the navigation block, on its own line under the tabs. */
 .view-desc { margin: 4px 0 0; font-size: 13.5px; color: #6b7280; line-height: 1.5; }
-/* The product description, leading the Features page. Set a touch larger than a card's prose and held
-   to a readable measure: it is the one paragraph on the screen meant to be read rather than scanned. */
-.view-lead { margin: 0 0 18px; font-size: 14.5px; line-height: 1.6; color: #374151; max-width: 76ch; }
+/* The product description, leading the Features page. Set a touch larger than a card's prose: it is the
+   one paragraph on the screen meant to be read rather than scanned. Full column width — held to a
+   narrower measure it left a column of empty space beside itself that read as a missing second column. */
+.view-lead { margin: 0 0 18px; }
+.view-lead-body { font-size: 14.5px; line-height: 1.6; color: #374151; }
+/* One small-caps label for the blocks of a page — the product overview, the Group-by switch. */
+.block-lbl, .uc-groupby-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase;
+                              letter-spacing: .05em; color: #6b7280; }
+.block-lbl { margin: 0 0 7px; }
 /* A REFERENCE TABLE is the one thing that stays a table: its rows are not map elements, and columns
    are what let a reader compare forty of them down a page. It borrows the card's frame so the two sit
    together on a screen — same border, same radius, same quiet header. */
@@ -480,8 +505,7 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    jumps to. The first shape was one definition list of seven equal rows, so the purpose weighed the
    same as the component list and the reader had to work out what mattered. */
 .page-hero { padding: 4px 0 14px; border-bottom: 1px solid #eef2f7; margin-bottom: 4px; }
-.page-hero-name { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin: 0 0 8px;
-                  font-size: 21px; font-weight: 700; color: #111827; letter-spacing: -.01em; }
+.page-hero-pills { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0 0 8px; }
 .page-hero-purpose { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: #374151;
                      max-width: 68ch; }
 .page-hero-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; }
@@ -701,8 +725,8 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 
 /* Info pane: now the BOTTOM of the left column (was a fixed-width side pane). Full column width; its
    HEIGHT is the resizable dimension (dragged via #vsplit, persisted). */
-#panel { flex: 0 0 auto; height: 300px; min-height: 0; padding: 16px; overflow-y: auto; background: #fff;
-         border-top: 1px solid #e5e7eb; }
+#panel { flex: 0 0 auto; height: 300px; min-height: 0; padding: 16px; overflow-y: auto;
+         background: #fbfbfe; border-top: 1px solid #e5e7eb; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }
 /* name + kind tag (and any change badge) on one line — the identity a box/edge keeps even once its
@@ -858,17 +882,26 @@ body.altmod .opensrc, body.altmod .opensrc * {
   .action-icon.flash circle { animation: none; }
 }
 
-/* The open view's QUESTION, a line of the navigation block rather than of the page. It belongs to the
-   view, so it says the same thing at every depth inside it — which is exactly why it cannot live in the
-   content, where it read as a caption for whatever was under it and changed as the reader drilled.
-   Set above the breadcrumb and below the tabs: what this view answers, then where in it you are. */
-#viewq { padding: 7px 14px 8px; font-size: 13.5px; line-height: 1.4; color: #4b5563;
-         background: #fbfbfe; border-bottom: 1px solid #e5e7eb; }
-.hint { padding: 6px 14px; font-size: 12px; color: #6b7280; background: #f3f4f6; min-height: 28px; }
-/* breadcrumb: the structural nesting path down to the current view */
-#crumb .crumbseg { color: #2563eb; cursor: pointer; }
+/* THE BREADCRUMB ROW: the path inside the open view, and the page's own title.
+   The 17px left padding is the whole point of the row's alignment — 10px of view-row padding plus the
+   active tab's 7px inner padding — so the first crumb starts exactly under that tab's LABEL. The view
+   name then appears twice on purpose and reads as the tab continuing downward, which is why the first
+   segment is set quiet: it is a continuation, not a second claim. */
+.hint { background: #fbfbfe; border-bottom: 1px solid #e5e7eb; padding: 6px 12px 7px 17px; }
+/* At the top of a view there is no path to show, so the row takes no space at all. It stays in the
+   document because it still carries the page's heading, for anyone who cannot see the tabs. */
+.hint.hint-empty { padding: 0; border-bottom: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+           clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+#crumb { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 7px; }
+#crumb .crumbseg { font-size: 13px; font-weight: 600; color: #4338ca; cursor: pointer;
+                   background: none; border: 0; padding: 0; font-family: inherit; }
 #crumb .crumbseg:hover { text-decoration: underline; }
-#crumb .crumbseg.cur { color: #374151; font-weight: 600; cursor: default; }
+#crumb .crumbsep { color: #9ca3af; font-size: 14px; }
+/* The current item IS the page's h1. Nothing in the content repeats it. */
+#crumb h1.crumbseg.cur { font-size: 16px; font-weight: 600; color: #111827; line-height: 22px;
+                         margin: 0; cursor: default; }
+#crumb h1.crumbseg.cur:hover { text-decoration: none; }
 /* hover tooltip: previews an element's meaning without selecting it. pointer-events:none so it
    never steals the hover or the click. Kept in flow (opacity, not display) so offsetWidth is valid
    for the overflow-flip in moveTip. */
@@ -905,11 +938,8 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #legendclose { position: absolute; top: 4px; right: 5px; border: 0; background: transparent;
                color: #9ca3af; font-size: 15px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 #legendclose:hover { color: #374151; }
-#legendbtn { font: inherit; font-size: 12px; font-weight: 700; color: #64748b; background: #eef2f7;
-             border: 1px solid transparent; border-radius: 9px; padding: 2px 9px; margin-left: 8px;
-             cursor: pointer; }
-#legendbtn:hover { background: #e2e8f0; }
-#legendbtn.on { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
+/* Same: a title-bar utility, with an ON state because the legend it toggles stays on screen. */
+#legendbtn.on { background: rgba(255,255,255,.22); color: #fff; }
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 
