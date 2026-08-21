@@ -1120,3 +1120,40 @@ def test_a_page_never_repeats_the_tab_it_was_opened_from() -> None:
     # A head with no description of its own is not drawn at all: the page's name is the breadcrumb's
     # last item, and there is nothing else for a head to say.
     assert "return desc ?" in head
+
+
+def test_the_question_reads_as_a_sentence_and_not_as_a_fifth_tab() -> None:
+    """Set upright at the tabs' own size, right after them, the question read as a fifth disabled tab —
+    and the ambiguity is what made it invisible, not the contrast. Italic fixes what it IS before
+    fixing how loud it is: nothing else in this app is italic, so one glance says sentence, not control.
+    A rule after the last tab says where the controls stopped.
+
+    The rule belongs to the TAB GROUP, so it is drawn only when something follows the tabs — and it
+    goes when the question wraps to its own line, where it would sit under them as a stray tick."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "viewsw.classList.toggle('has-after', !!q);" in js
+    rule = css[css.index("#viewsw.has-after {"): css.index("}", css.index("#viewsw.has-after {"))]
+    assert "border-right: 1px solid #e5e7eb" in rule
+    q = css[css.index("#viewq {"): css.index("}", css.index("#viewq {"))]
+    assert "font-style: italic" in q
+    narrow = css[css.index("@media (max-width: 480px) {", css.index("#viewq {")):]
+    assert "#viewsw.has-after { border-right: 0;" in narrow[:400], "no stray tick under the tabs"
+
+
+def test_the_app_name_is_a_working_way_back_to_all_maps() -> None:
+    """It was an <h1> with a click handler, and became a plain span when the page's one heading moved to
+    the breadcrumb — which silently took the link with it. A span with a click handler is not a control:
+    no keyboard tab stop, no Enter, nothing announced. So it carries a link role, a tab stop and its own
+    key handling, and a home icon says what it does before you hover it."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert 'class="brand-home"' in html and 'aria-hidden="true"' in html
+    block = js[js.index("const brand = document.querySelector('header .brand');"):]
+    block = block[: block.index("\n  }") + 4]
+    assert "brand.setAttribute('role', 'link');" in block
+    assert "brand.setAttribute('tabindex', '0');" in block
+    assert "e.key === 'Enter' || e.key === ' '" in block
+    assert "brand.addEventListener('click', home);" in block
+    assert "header .brand.home-link { cursor: pointer; }" in css

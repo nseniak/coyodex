@@ -5348,6 +5348,9 @@ function renderChrome(s) {
   const q = viewQuestion(tv);
   viewq.textContent = q;
   viewq.hidden = !q;
+  // The rule belongs to the TAB GROUP, not to the question: it marks where the controls stop, so it is
+  // drawn only when there is something after them to separate from.
+  viewsw.classList.toggle('has-after', !!q);
   const tg = GROUP_OF_VIEW[tv];
   if (tg) {
     groupLast[tg] = tv;
@@ -7833,8 +7836,21 @@ async function initServerMode() {
   document.body.classList.add('served');
   // The header title becomes a link back to the server's landing page (all maps) — only in FULL mode,
   // since a static file:// map has no server root to return to.
-  const h1 = document.querySelector('header h1');
-  if (h1) { h1.classList.add('home-link'); h1.title = 'Back to all maps'; h1.addEventListener('click', () => { location.href = new URL('/', location.href).href; }); }
+  // A <span>, not an <h1>, since the page's one heading is the current breadcrumb item — but it is a
+  // real control, so it takes a button's role, a keyboard tab stop and Enter/Space, which a clickable
+  // span otherwise silently withholds.
+  const brand = document.querySelector('header .brand');
+  if (brand) {
+    brand.classList.add('home-link');
+    brand.title = 'Back to all maps';
+    brand.setAttribute('role', 'link');
+    brand.setAttribute('tabindex', '0');
+    const home = () => { location.href = new URL('/', location.href).href; };
+    brand.addEventListener('click', home);
+    brand.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); home(); }
+    });
+  }
   refitStage();  // the diagram column just narrowed to make room for the browser + code panes
   loadServerTree();
 }

@@ -12,9 +12,12 @@ body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #1
    buttons read as eight destinations, when they are utilities you use once and forget. */
 header { min-height: 40px; padding: 4px 8px; background: #1e1b4b; color: #fff;
          display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-header .brand { font-size: 13px; font-weight: 600; color: #fff; flex: 0 0 auto; }
+header .brand { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;
+                color: #fff; flex: 0 0 auto; border-radius: 6px; padding: 3px 6px; margin-left: -6px; }
+header .brand-home { font-size: 15px; line-height: 1; color: #c7d2fe; }
 header .brand.home-link { cursor: pointer; }
-header .brand.home-link:hover { text-decoration: underline; }
+header .brand.home-link:hover { background: rgba(255,255,255,.12); }
+header .brand.home-link:hover .brand-home { color: #fff; }
 header .meta { font-size: 12px; font-weight: 500; color: #c7d2fe; flex: 1 1 12ch; min-width: 0; }
 header .meta .repo { color: #fff; font-weight: 600; }   /* the mapped repo name — file links resolve here */
 header button { font: inherit; font-size: 12.5px; line-height: 1; width: 26px; height: 26px;
@@ -158,9 +161,16 @@ body.vresizing #stage { pointer-events: none; }
 /* The view's question. Right of the tabs while there is room; below them, left aligned, when there is
    not — never truncated, because a half-shown question answers nothing. */
 /* Immediately right of the tabs, not pushed to the far edge: it belongs to them. Wide apart it read as
-   an unrelated caption floating at the other end of the row. */
-#viewq { font-size: 12.5px; font-weight: 500; color: #6b7280; line-height: 1.35; padding: 4px 0; }
+   an unrelated caption floating at the other end of the row.
+   ITALIC, and behind a rule. Set upright at tab size it read as a fifth, disabled tab — the ambiguity
+   was what made it invisible, not the contrast. Nothing else in this app is italic, so one glance says
+   this is a sentence and not a control; the rule says where the controls stopped. */
+#viewsw.has-after { border-right: 1px solid #e5e7eb; padding-right: 14px; margin-right: 0; }
+#viewq { font-size: 12.5px; font-weight: 500; font-style: italic; color: #6b7280; line-height: 1.35;
+         padding: 4px 0; }
 @media (max-width: 480px) {
+  /* Wrapped onto its own line the rule would sit under the tabs as a stray tick, so it goes. */
+  #viewsw.has-after { border-right: 0; padding-right: 0; }
   #viewq { flex: 1 0 100%; padding: 0 0 6px; }
 }
 /* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
