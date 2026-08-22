@@ -801,8 +801,15 @@ def test_the_only_pinned_lines_are_the_ones_that_still_say_something() -> None:
     on screen and pushed the column headers further down. What still earns a pin is the index bar
     (which kind am I in) and the table's own COLUMN headers (what is this cell)."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    title = css[css.index(".system-wrap .uc-actor {"): css.index("}", css.index(".system-wrap .uc-actor {"))]
-    assert "sticky" not in title
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    # The header is gone entirely now, not just unpinned: the breadcrumb's last item IS this page's
+    # name, so a heading here printed it twice, inside a box that was a card wrapped round a table.
+    assert ".system-wrap .uc-actor" not in css and ".system-wrap .uc-group" not in css
+    sec = js[js.index("function renderSystemSection(sysId, epk) {"):
+             js.index("\nfunction ", js.index("function renderSystemSection(sysId, epk) {") + 10)]
+    assert "uc-group" not in sec and "uc-actor" not in sec
+    assert "pageHeroHtml({" in sec, "the same hero a role's page and a feature's page use"
+    assert "noDesc: false," in sec, "an entry-point kind is a bare word, not a missing sentence"
     th = css[css.index(".system-wrap .glossary thead th {"): css.index("}", css.index(".system-wrap .glossary thead th {"))]
     assert "top: var(--tab-index-h)" in th, "column headers pin directly under the bar, or to the top"
     assert "--sys-header-h" not in css, "the second offset died with the sticky header it measured"

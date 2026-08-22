@@ -288,7 +288,6 @@ body.vresizing #stage { pointer-events: none; }
 /* System tab: the operational reference tables, laid out as cards (reuses .usecases-wrap + .uc-group +
    .glossary). Tables sit flush inside each card; entry points are split into per-kind sub-tables. */
 .system-wrap .glossary { margin: 0; max-width: none; }
-.system-wrap .uc-group > .glossary { margin-top: 4px; }
 .sys-subhead { margin: 14px 0 2px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                letter-spacing: .04em; color: #64748b; }
 .sys-subhead:first-of-type { margin-top: 4px; }
@@ -362,7 +361,6 @@ body.vresizing #stage { pointer-events: none; }
    sticky copy following you down repeated a label that was already on screen and stole a strip from
    the rows. What is still worth pinning is the pinned index (which kind am I in) and the table's own
    COLUMN headers (what is this cell), and those two stack directly. */
-.system-wrap .uc-actor { margin-top: 0; }
 /* Column headers pin BELOW the index bar when there is one, and to the top when there is not. */
 .system-wrap .glossary thead th { top: var(--tab-index-h); z-index: 2; }
 /* A soft shadow lifts the bottom-most sticky line off the scrolling rows: the column-header line in a

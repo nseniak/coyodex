@@ -5838,7 +5838,10 @@ function pageHeroHtml(o) {
   // that name — the pills it earns, the sentence saying what it is, and one line of context.
   return '<div class="page-hero">'
     + (o.pills ? `<p class="page-hero-pills">${o.pills}</p>` : '')
+    // `noDesc: false` = this page HAS no sentence by design (an entry-point kind is a bare word), as
+    // opposed to a page whose sentence the map failed to record, which says so.
     + (o.desc ? `<p class="page-hero-purpose">${o.desc}</p>`
+              : o.noDesc === false ? ''
               : `<p class="page-hero-purpose feat-empty">${esc(o.noDesc || 'Nothing recorded.')}</p>`)
     + (o.meta ? `<p class="page-hero-meta">${o.meta}</p>` : '')
     + '</div>';
@@ -6512,7 +6515,9 @@ function renderSystem() {
     + (bands || '<p class="empty">No system facts recorded.</p>') + '</div>';
   bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: key }));
 }
-// Level 2 — one collection. Its own title heads it, since the crumb is the only other thing naming it.
+// Level 2 — one collection. It draws NO title: the breadcrumb's last item is this page's name, and the
+// bordered block that used to hold the table was a card wrapped around content. Both were the shape
+// this viewer removed on a role's page, standing here too.
 function renderSystemSection(sysId, epk) {
   const found = systemSections().find((s) => s.id === sysId);
   if (!found) { renderSystem(); return; }
@@ -6528,14 +6533,16 @@ function renderSystemSection(sysId, epk) {
     return;
   }
   const one = found.kinds ? found.kinds.find((k) => k.key === epk) : null;
-  const title = one ? one.key : found.title;
   const count = one ? `${one.count} entry point${one.count === 1 ? '' : 's'}` : found.count;
   const body = one ? one.html : found.html;
   diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
-    + `<section class="uc-group"><h3 class="uc-actor">${esc(title)}${one ? one.tag : ''}`
-    + (count ? `<span class="uc-actor-wants">${esc(count)}</span>` : '') + '</h3>'
-    + (!one && found.blurb ? `<p class="uc-wants">${esc(found.blurb)}</p>` : '')
-    + body + '</section></div>';
+    + pageHeroHtml({
+      pills: one ? one.tag : '',
+      desc: !one && found.blurb ? esc(found.blurb) : '',
+      noDesc: false,   // an entry-point KIND is a bare word; there is no sentence to miss
+      meta: count ? esc(count) : '',
+    })
+    + body + '</div>';
   // A System entry-point Component link navigates to that component AND selects the exact entry
   // point in its "Triggered by" pane list (same as a search hit).
   diagram.querySelectorAll('.sys-node').forEach((btn) => {
