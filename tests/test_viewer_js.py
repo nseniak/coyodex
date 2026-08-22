@@ -785,7 +785,8 @@ def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_sa
     # ONE rule, called from both paths that fill the card: a selection, and a page's own default.
     sync = js[js.index("function paneSync() {"): js.index("\n}", js.index("function paneSync() {"))]
     assert "PANEL_HOST.hidden = !has;" in sync
-    assert "#panelclose" in sync, "the close button is stamped from the one place, so no card is stuck open"
+    assert 'id="panelclose"' in sync, "the close button is stamped from the one place, so no card is stuck open"
+    assert 'id="panelbar"' in sync, "…and so is the bar it rides on"
     assert "paneSync();" in js[js.index("function renderSelPanel(scene) {"):
                                 js.index("\n}", js.index("function renderSelPanel(scene) {"))]
     assert "paneSync();" in js[js.index("function applyDefaultPanel(s) {"):
@@ -860,6 +861,37 @@ def test_a_deployment_arrow_has_a_page_like_every_other_arrow() -> None:
     assert "if (s.kind === 'depedge') return [{ kind: 'deployment' }, { kind: 'depedge', a: s.a, b: s.b }];" in js, \
         "the trail reads Deployment > A to B; an arrow joins two processes and belongs under neither"
     assert "kind === 'depedge') return 'deployment'" in js, "and it lives under the Deployment tab"
+
+def test_the_selection_card_can_be_moved_and_resized_and_remembers_it() -> None:
+    """The card floats, so one landing spot cannot suit every reader on every map: a wide Subsystems
+    overview wants it out of the middle, a tall sequence wants it short. It is dragged by its bar and
+    resized from its corner, and both survive a reload.
+
+    The BAR is the only grab handle. Dragging on the card's own text would fight selecting that text, and
+    a reader copying a call site out of a row should be able to.
+
+    The box is stored in the diagram area's own pixels and CLAMPED on restore, not on save: the window it
+    was dragged in is not the window it comes back to, and a card whose bar sits off the edge cannot be
+    dragged back. A double-click on the bar puts it home, because a floating thing needs a way back or one
+    bad drag on a small window loses it.
+
+    The resize watcher must ignore CONTENT changes — every new card is a height change — or a card nobody
+    ever touched would pin itself wherever the stylesheet first put it and stop following the stylesheet.
+    An inline width or height is the only proof a reader dragged the corner."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "panelBox: 'coyodex.panelBox'" in js
+    assert "function applyPanelBox() {" in js and "applyPanelBox();" in js[js.index("function paneSync() {"):
+                                                                          js.index("\n}", js.index("function paneSync() {"))]
+    assert "closest('#panelbar')" in js, "the bar is the handle"
+    assert "if (!PANEL_HOST.style.width && !PANEL_HOST.style.height) return;" in js, \
+        "a content-driven height change is not a resize"
+    assert "savePanelBox(null);" in js, "double-click puts the card home"
+    pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
+    assert "resize: both" in pane and "overflow: auto" in pane, "the corner grip needs a clipped overflow"
+    assert "min-width" in pane and "min-height" in pane, "it must not shrink to an unreadable stub"
+    bar = css[css.index("#panelbar {"): css.index("}", css.index("#panelbar {"))]
+    assert "position: sticky" in bar, "the handle and the close button stay reachable in a scrolled card"
 
 def test_a_text_view_drops_the_source_pane_until_a_code_link_asks_for_it() -> None:
     """The same rule, one step further out, for the whole right-hand column (file browser + code viewer).

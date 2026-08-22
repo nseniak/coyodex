@@ -5336,9 +5336,38 @@ function viewHeadHtml(_title, desc) {
 function paneSync() {
   const has = !!PANEL_HOST.innerHTML.trim();
   PANEL_HOST.hidden = !has;
-  if (!has || PANEL_HOST.querySelector('#panelclose')) return;
-  PANEL_HOST.insertAdjacentHTML('afterbegin',
-    '<button id="panelclose" type="button" title="Close (Esc)">\u00d7</button>');
+  if (!has) return;
+  if (!PANEL_HOST.querySelector('#panelbar')) {
+    PANEL_HOST.insertAdjacentHTML('afterbegin',
+      '<div id="panelbar" title="Drag to move \u00b7 double-click to put it back">'
+      + '<span class="grip" aria-hidden="true"></span>'
+      + '<button id="panelclose" type="button" title="Close (Esc)">\u00d7</button></div>');
+  }
+  applyPanelBox();
+}
+// --- where the card sits, and how big ---------------------------------------------
+// The card floats, so the one place it lands cannot be right for every reader on every map: a wide
+// Subsystems overview wants it out of the middle, a tall sequence wants it short. So it is draggable by
+// its bar and resizable from its corner, and both are remembered.
+//
+// Stored as a plain box in the DIAGRAM AREA's own pixels, and clamped on every restore rather than on
+// save: the window it was dragged in is not the window it comes back to, and a card whose bar is off the
+// edge cannot be dragged back. Nothing stored = the top-right default, which is where a card that has
+// never been moved belongs.
+function panelBox() { try { return JSON.parse(lsGet(LS.panelBox) || 'null') || null; } catch (_) { return null; } }
+function savePanelBox(b) { lsSet(LS.panelBox, b ? JSON.stringify(b) : ''); }
+function applyPanelBox() {
+  const wrap = document.getElementById('diagwrap');
+  const b = panelBox();
+  const st = PANEL_HOST.style;
+  if (!wrap || !b) { st.left = st.top = st.width = st.height = ''; st.right = ''; return; }
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (b.w) st.width = Math.min(b.w, Math.max(240, W - 24)) + 'px';
+  if (b.h) st.height = Math.min(b.h, Math.max(90, H - 24)) + 'px';
+  const r = PANEL_HOST.getBoundingClientRect();
+  st.right = 'auto';
+  st.left = Math.max(0, Math.min(b.left, W - Math.min(r.width, W) )) + 'px';
+  st.top = Math.max(0, Math.min(b.top, H - Math.min(r.height, H))) + 'px';
 }
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
@@ -8850,6 +8879,69 @@ PANEL_HOST.addEventListener('click', (ev) => {
   try { to = JSON.parse(more.getAttribute('data-drill')); } catch (_) { return; }
   if (to) go(to);
 });
+// --- dragging the card by its bar, and resizing it from its corner -----------------
+// The bar is the only grab handle: dragging on the card's own text would fight selecting that text, and
+// a reader who wants to copy a call site should be able to. Pointer events (not mouse) so a trackpad and
+// a touchscreen behave the same, and the capture keeps the drag alive when the cursor leaves the card.
+let panelDrag = null;
+PANEL_HOST.addEventListener('pointerdown', (ev) => {
+  const bar = ev.target && ev.target.closest && ev.target.closest('#panelbar');
+  if (!bar || (ev.target.closest && ev.target.closest('#panelclose'))) return;
+  const wrap = document.getElementById('diagwrap');
+  if (!wrap) return;
+  const r = PANEL_HOST.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+  panelDrag = { dx: ev.clientX - r.left, dy: ev.clientY - r.top, w, cw: r.width, ch: r.height };
+  bar.setPointerCapture(ev.pointerId);
+  document.body.classList.add('panel-dragging');
+  ev.preventDefault();
+});
+PANEL_HOST.addEventListener('pointermove', (ev) => {
+  if (!panelDrag) return;
+  const d = panelDrag;
+  // Clamped so the whole card stays inside the drawing area — a bar dragged past the edge is a card
+  // that cannot be dragged back.
+  const left = Math.max(0, Math.min(ev.clientX - d.w.left - d.dx, d.w.width - d.cw));
+  const top = Math.max(0, Math.min(ev.clientY - d.w.top - d.dy, d.w.height - d.ch));
+  PANEL_HOST.style.right = 'auto';
+  PANEL_HOST.style.left = Math.round(left) + 'px';
+  PANEL_HOST.style.top = Math.round(top) + 'px';
+});
+const endPanelDrag = () => {
+  if (!panelDrag) return;
+  panelDrag = null;
+  document.body.classList.remove('panel-dragging');
+  storePanelBox();
+};
+PANEL_HOST.addEventListener('pointerup', endPanelDrag);
+PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
+// Double-click the bar to put the card back in its corner at its natural size. A floating thing needs a
+// way home, or one bad drag on a small window loses it for good.
+PANEL_HOST.addEventListener('dblclick', (ev) => {
+  if (!ev.target || !ev.target.closest || !ev.target.closest('#panelbar')) return;
+  savePanelBox(null);
+  applyPanelBox();
+});
+// The corner grip is the browser's own (CSS `resize: both`), which writes the size straight onto the
+// element and fires no event — so watch the element instead of trying to catch the drag.
+if (window.ResizeObserver) {
+  let t = null;
+  new ResizeObserver(() => {
+    // It fires for CONTENT too — every new card is a height change — and a card that was never touched
+    // must keep following the stylesheet. An inline width or height is the only proof a reader dragged
+    // the corner, since the default size comes from the stylesheet and leaves both empty.
+    if (PANEL_HOST.hidden || panelDrag) return;
+    if (!PANEL_HOST.style.width && !PANEL_HOST.style.height) return;
+    clearTimeout(t); t = setTimeout(storePanelBox, 250);   // one write per gesture, not per frame
+  }).observe(PANEL_HOST);
+}
+function storePanelBox() {
+  const wrap = document.getElementById('diagwrap');
+  if (!wrap || PANEL_HOST.hidden) return;
+  const r = PANEL_HOST.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+  const st = PANEL_HOST.style;
+  savePanelBox({ left: Math.round(r.left - w.left), top: Math.round(r.top - w.top),
+                 w: st.width ? Math.round(r.width) : 0, h: st.height ? Math.round(r.height) : 0 });
+}
 PANEL_HOST.addEventListener('click', (ev) => {
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;
   ev.stopPropagation();
@@ -8896,7 +8988,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
