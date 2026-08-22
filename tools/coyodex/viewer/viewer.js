@@ -206,7 +206,8 @@ const envpicker = document.getElementById('envpicker');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
-const viewq = document.getElementById('viewq');          // the open view's question, its own line under the tabs
+const viewq = document.getElementById('viewq');          // the question BESIDE the title, on a diagram view
+const pageq = document.getElementById('pageq');          // …and leading the page itself, on a text view
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
@@ -5480,8 +5481,18 @@ function renderChrome(s) {
   // info pane (half the views have none, and it vanished on the first click) and the first block of the
   // page (read as a caption, and every page began inventing its own).
   const q = chain.length === 1 ? viewQuestion(tv) : '';
-  viewq.textContent = q;
-  viewq.hidden = !q;
+  // TWO places, one sentence, and TEXT_PAGES — the one list answering "is this page prose" — decides
+  // which. On a page of prose the question LEADS the page, at the page's own text size and left edge,
+  // where it reads as the opening sentence of what follows. On a diagram it stays beside the title:
+  // a diagram is not prose, it has no opening line to be, and the info pane already occupies that slot.
+  // It is still outside the page's SCROLL in both places, which is what separates this from the
+  // placement the spec undid — a sentence that scrolls with the content read as a caption for whatever
+  // block sat under it, and every page began inventing its own.
+  const onPage = !!q && TEXT_PAGES.has(s.kind);
+  viewq.textContent = onPage ? '' : q;
+  viewq.hidden = !q || onPage;
+  pageq.textContent = onPage ? q : '';
+  pageq.hidden = !onPage;
   // No dividing rule any more. It existed because the question sat among the TABS, at their size and
   // weight, where it read as a fifth disabled one. Beside a 16px bold page title it is a 12.5px grey
   // italic sentence, and nothing about it can be mistaken for a control, so a gap is separation enough.

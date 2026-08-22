@@ -159,6 +159,14 @@
              fills the row and the reader is past asking what the view is for. -->
         <nav class="hint" id="crumbrow" aria-label="You are here"><span id="crumb"></span><span id="viewq" hidden></span></nav>
       </div>
+      <!-- The view's question, on a TEXT page: it leads the page instead of riding the trail row beside
+           the title. Set at the page's own text size and left edge, so it reads as the page's opening
+           sentence rather than as one more strip of chrome. It stays OUTSIDE the page's scroll, which is
+           what separates it from the placement the spec undid: a sentence that scrolls away read as a
+           caption for whatever block sat under it, and every page began inventing its own.
+           A DIAGRAM page still uses #viewq in the trail row above — a diagram has no page of prose to
+           lead, and its info pane already sits where this line would go. -->
+      <p id="pageq" hidden></p>
       <div id="diagram"></div>
       <div id="legend"></div>
       <!-- Deployment environment filter. Floats over the diagram (bottom-left, mirroring #legend) rather

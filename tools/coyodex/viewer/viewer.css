@@ -175,6 +175,15 @@ body.vresizing #stage { pointer-events: none; }
 /* A dash joins it to the title: "Features — what this view answers". Drawn, not stored, so the string
    stays the pure question for a screen reader and for the one table that holds it. */
 #viewq::before { content: "\2014"; margin-right: 7px; font-style: normal; color: #9ca3af; }
+/* THE SAME SENTENCE, leading a TEXT page instead of riding the trail row. It is set at the page's own
+   text size (14px, the body size) and on the page's own left edge and reading cap, so it reads as the
+   opening line of what follows rather than as one more strip of chrome above it. Still italic, and for
+   the same reason it always was: nothing else in this app is, so one glance says sentence, not control.
+   No dash here — the dash exists to JOIN it to a title on the same line, and on its own line it would
+   be a stray tick. No rule, no background and no border either: anything that boxes it turns the page's
+   first sentence back into a bar. */
+#pageq { margin: 0; padding: 14px 20px 0; max-width: 1100px; font-size: 14px; font-weight: 400;
+         font-style: italic; color: #6b7280; line-height: 1.5; }
 /* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
    whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab
    reads as "you are here", so this one has to read as "you are inside here": the pill hollows out to an

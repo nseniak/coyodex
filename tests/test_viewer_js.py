@@ -643,37 +643,55 @@ def test_no_control_outlives_the_view_that_drew_it() -> None:
     assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
 
-def test_the_question_rides_the_trail_row_and_only_at_the_top_of_a_view() -> None:
+def test_the_question_leads_a_text_page_and_rides_the_trail_row_on_a_diagram() -> None:
     """A view's question is the same sentence at every depth inside that view, read from ONE table by
     the top view, so it is a property of the VIEW and can never change as the reader drills. Where it
-    is DRAWN has moved three times: the info pane (only diagrams have one, and it vanished on the first
+    is DRAWN has moved four times: the info pane (only diagrams have one, and it vanished on the first
     click), the first block of the page (read as a caption, and each page began inventing its own),
-    then beside the view tabs.
+    beside the view tabs (upright at tab size, it read as a fifth disabled tab), then the trail row
+    beside the page title.
 
-    It rides the TRAIL row now, joined to the page title by a dash: `Features — What can this product
-    do, feature by feature?`. Measured on the three maps at 1440px, the two rows it replaces were both
-    mostly empty — a one-word trail with 96% of its row blank, and the question one row up with 725 to
-    915px of tab row empty beside it.
+    It now takes TWO places, and TEXT_PAGES — the one list answering "is this page prose" — decides
+    which. On a page of prose the question LEADS the page, at the page's own 14px text size and on the
+    page's own left edge, where it reads as the opening sentence of what follows. Beside the title it
+    was a 12.5px grey line hung off a dash, which is chrome about the page rather than the page's own
+    first words. On a DIAGRAM it stays beside the title: a diagram is not prose, it has no opening line
+    to be, and its info pane already occupies the slot a leading sentence would take.
+
+    What the caption failure taught still holds, and is what `#pageq` keeps: the sentence is outside the
+    page's SCROLL. A question that scrolls away with the content becomes a caption for whichever block
+    happens to sit under it, and cannot be the view's fixed answer once it is gone.
 
     Shown ONLY on the view's own landing screen, which is exactly a one-item trail: every trail starts
-    at its view. One level in, the trail fills the row on its own, and a reader who has chosen something
-    on the view has already answered what the view is for. The row itself does not wrap: the sentence
-    always begins on the title's line, and at a narrow window it shrinks and its own text runs on
-    underneath rather than the whole sentence dropping to a line of its own, which would read as the
-    caption this replaced."""
+    at its view. One level in, the reader has chosen something on the view and is past asking what the
+    view is for."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     crumbrow = html[html.index('<nav class="hint" id="crumbrow"'):
                     html.index("</nav>", html.index('<nav class="hint" id="crumbrow"'))]
-    assert 'id="viewq"' in crumbrow, "the question is IN the trail row"
+    assert 'id="viewq"' in crumbrow, "the diagram question is IN the trail row"
     sub = html[html.index('<nav id="stagesubrow"'): html.index("</nav>", html.index('<nav id="stagesubrow"'))]
     assert 'id="viewq"' not in sub, "and no longer among the tabs"
+    # The page question leads the page, and sits OUTSIDE it: between the trail row and #diagram, so it
+    # never scrolls away with the content it introduces.
+    assert html.index('<p id="pageq" hidden></p>') > html.index('id="crumbrow"'), \
+        "the page question comes after the trail row"
+    assert html.index('<p id="pageq" hidden></p>') < html.index('<div id="diagram">'), \
+        "…and before the page, outside its scroll"
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
     assert "const q = chain.length === 1 ? viewQuestion(tv) : '';" in chrome, \
         "a one-item trail IS the view's own landing screen"
-    assert "viewq.hidden = !q;" in chrome
+    assert "const onPage = !!q && TEXT_PAGES.has(s.kind);" in chrome, \
+        "ONE list decides which of the two places the sentence takes"
+    assert "viewq.hidden = !q || onPage;" in chrome, "a text page's title carries no question beside it"
+    assert "pageq.hidden = !onPage;" in chrome
+    pq = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
+    assert "font-size: 14px" in pq, "the page's own text size, not the trail row's 12.5px"
+    assert "font-style: italic" in pq
+    assert "padding: 14px 20px 0" in pq, "the page's own left edge"
+    assert "#pageq::before" not in css, "no dash on a sentence that has no title to join"
     hint = css[css.index("\n.hint {"): css.index("}", css.index("\n.hint {"))]
     assert "display: flex" in hint and "align-items: baseline" in hint
     assert "flex-wrap" not in hint, "the sentence must begin on the title's line, never below it"
@@ -1450,7 +1468,12 @@ def test_the_question_reads_as_a_sentence_and_not_as_a_control() -> None:
     assert "font-style: italic" in q
     dash = css[css.index("#viewq::before {"): css.index("}", css.index("#viewq::before {"))]
     assert "\\2014" in dash, "an em dash joins the question to the title"
-    assert "viewq.textContent = q;" in js, "the string itself carries no dash"
+    # Leading a text page it is italic for the SAME reason, and bigger rather than louder: it is the
+    # page's opening sentence, so it takes the page's text size. The dash goes with the title it joined.
+    pq = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
+    assert "font-style: italic" in pq
+    assert "viewq.textContent = onPage ? '' : q;" in js, "the string itself carries no dash"
+    assert "pageq.textContent = onPage ? q : '';" in js
 
 def test_the_app_name_is_a_working_way_back_to_all_maps() -> None:
     """It was an <h1> with a click handler, and became a plain span when the page's one heading moved to
