@@ -987,6 +987,18 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
         "opening shows what was selected while it was shut"
     assert "codeOpen = lsGet(LS.codeOpen) === '1';" in js, "…and it survives a reload"
     # The two visible ways out, and the one visible way in.
+    # The × lives in BOTH panes of the column, because either can be the only one on screen: browsing
+    # hides the code viewer outright, and opening the column with nothing selected lands exactly there —
+    # so the code viewer's × went with it and the title bar's toggle was the only way back out.
+    # Closing from the browser also UNPINS: a pinned browser holds the column open by itself, so leaving
+    # the pin set would make the × look broken.
+    assert 'id="treeclose"' in html and "#treeclose {" in css
+    assert "treeCloseBtn.addEventListener('click'" in js
+    tc = js[js.index("const treeCloseBtn = document.getElementById('treeclose');"):]
+    tc = tc[: tc.index("\n});") + 4]
+    assert "treePinned = false" in tc and "setCodeOpen(false)" in tc
+    assert "body.tree-browsing:not(.tree-pinned) #codeview { display: none; }" in css, \
+        "…which is why one × in the code viewer was not enough"
     assert 'id="cvclose"' in html and "#cvclose[hidden] { display: none; }" in css
     assert 'id="codebtn"' in html and "#codebtn.on" in css
     assert "codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));" in js

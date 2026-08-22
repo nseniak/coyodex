@@ -219,6 +219,10 @@
       <button id="treecodebtn" type="button" title="Show the source">&#60;/&#62; Source</button>
       <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
       <button id="treepin" type="button" title="Pin the file browser beside the code">&#128204;</button>
+      <!-- The same × the code viewer's header carries. The browser can be the ONLY thing in the column —
+           browsing hides the code viewer entirely — and then the column's own close button went with it,
+           leaving the title bar's toggle as the only way out of a pane the reader had opened. -->
+      <button id="treeclose" type="button" title="Hide the source pane" aria-label="Hide the source pane">&times;</button>
     </div>
     <div id="treebody"></div>
   </aside>

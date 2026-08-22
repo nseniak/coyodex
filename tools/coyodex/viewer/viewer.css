@@ -706,6 +706,11 @@ body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
            border-radius: 5px; padding: 1px 5px; font-size: 12px; line-height: 1.2; filter: grayscale(1) opacity(.55); }
 #treepin:hover { background: #f5f6ff; filter: grayscale(.3) opacity(.9); }
 #treepin.pinned { background: #eef2ff; border-color: #c7d2fe; filter: none; }
+/* The column's × in the browser's head, styled as the code viewer's own so the two read as one control
+   in two places rather than two controls. */
+#treeclose { flex: 0 0 auto; cursor: pointer; border: 0; background: none; color: #9ca3af;
+             border-radius: 4px; padding: 1px 6px; font-size: 15px; line-height: 1.2; }
+#treeclose:hover { background: #f3f4f6; color: #374151; }
 #treebody { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 12px; font-size: 13px; }
 /* one row = caret + icon + name (+ a node-id chip when a node points exactly here). Depth is set
    inline via padding-left. The whole row is the click target. */

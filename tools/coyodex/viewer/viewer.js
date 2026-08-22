@@ -8506,6 +8506,15 @@ if (cvopen) cvopen.addEventListener('click', () => { if (cvPath) openSource({ fi
 // there (syncCodePane): on a diagram the column is the view's other half and there is nothing to close.
 const cvCloseBtn = document.getElementById('cvclose');
 if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => setCodeOpen(false));
+// The file browser can be the only thing in the column (browsing hides the code viewer), so it carries the
+// same × — one way out, wherever the reader is looking, rather than one that comes and goes with a pane.
+// Closing UNPINS as well: a pinned browser keeps the column open by itself, so leaving the pin set would
+// make the × look broken.
+const treeCloseBtn = document.getElementById('treeclose');
+if (treeCloseBtn) treeCloseBtn.addEventListener('click', () => {
+  if (treePinned) { treePinned = false; lsSet(LS.treePinned, ''); applyTreeState(); }
+  setCodeOpen(false);
+});
 const codeBtn = document.getElementById('codebtn');
 if (codeBtn) {
   if (!SERVED) codeBtn.hidden = true;   // a static map has no code column to show
