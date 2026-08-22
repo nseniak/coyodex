@@ -5497,9 +5497,12 @@ function resyncCodePane() { const s = history[hi]; if (s) syncCodePane(s); }
 function noteCodeAsked() {
   if (codeOpen) return;
   pendingCode = null;   // the click names its own file; it must not be overridden by a stale selection
-  codeOpen = true;
-  lsSet(LS.codeOpen, '1');
-  resyncCodePane();
+  // Through setCodeOpen, not by setting the flag here. Opening the column takes 547px of the drawing's
+  // width, and this path used to change the layout without re-framing the drawing: the diagram kept the
+  // transform it had at full width and ran on underneath the code viewer. Measured on MCP Hero's "Create
+  // an organization" flow — content 1442px wide left sitting in an 892px box, overflowing the right edge,
+  // while the same column opened by the toggle rescaled to 900px and fitted.
+  setCodeOpen(true);
 }
 // The title and the question every card list, card grid and details page leads with. The question is
 // the SAME string the info pane used to hold (VIEW_Q), read from one place, so a view cannot answer one

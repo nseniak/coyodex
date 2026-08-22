@@ -974,9 +974,16 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "codeOpen || treePinned" in js, "a pinned file browser still keeps the column"
     # …and it runs for every state, before render's early returns, exactly like syncInfoPane.
     assert "syncCodePane(s);" in js[js.index("async function render(sArg, transient) {"):][:1400]
-    # A file anchor is a request for code, wherever it is clicked.
+    # A file anchor is a request for code, wherever it is clicked — and it opens the column through the
+    # SAME door the toggle does. It used to set the flag itself, which changed the layout without
+    # re-framing the drawing: measured on MCP Hero's "Create an organization" flow, the diagram kept the
+    # 1442px-wide transform it had at full width and ran on underneath the code viewer in an 892px box,
+    # while the same column opened by the toggle rescaled to 900px and fitted.
     assert "noteCodeAsked();" in js[js.index("async function loadCode(path, line) {"):][:900]
     assert "noteCodeAsked();" in js[js.index("function openInCodeViewer(file, line) {"):][:900]
+    asked = js[js.index("function noteCodeAsked() {"): js.index("\n}", js.index("function noteCodeAsked() {"))]
+    assert "setCodeOpen(true);" in asked, "one door, so one re-frame"
+    assert "codeOpen = true;" not in asked, "…and no second copy of it that forgets to re-frame"
     # A SELECTION is not. It remembers the file so the toggle can open on it.
     view = js[js.index("function syncCodeView(file, line, files) {"):
               js.index("\n}", js.index("function syncCodeView(file, line, files) {"))]
