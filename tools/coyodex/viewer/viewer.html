@@ -147,14 +147,17 @@
                  `component` machinery are kept dormant so the tab can be restored by re-adding this button.
                  Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
           </span>
-          <span id="viewq" hidden></span>
         </nav>
         <!-- The breadcrumb is the path INSIDE the open view, and its last item is the page's own h1 —
              so the content draws no heading of its own. Its left padding is 17px on purpose: 10px of
              row padding plus the active tab's 7px inner padding, which lands the first crumb directly
              under that tab's label. The repeated view name then reads as the tab continuing downward
              rather than as an accident. -->
-        <nav class="hint" id="crumbrow" aria-label="You are here"><span id="crumb"></span></nav>
+        <!-- The view's question rides the TRAIL row, not the tab row: on a view's own landing screen
+             the trail is a single word and the rest of the row was empty, while the question sat one
+             row up beside the tabs. Shown ONLY at that top level — one level in, the trail itself
+             fills the row and the reader is past asking what the view is for. -->
+        <nav class="hint" id="crumbrow" aria-label="You are here"><span id="crumb"></span><span id="viewq" hidden></span></nav>
       </div>
       <div id="diagram"></div>
       <div id="legend"></div>

@@ -549,9 +549,12 @@ function elementCardGroupsHtml(groups, opts) {
   if (!live.length) return '';
   const body = (opts && opts.grid) ? elementCardGridHtml : elementCardListHtml;
   if (live.length === 1) return body(live[0].ids, live[0].per);
+  // A count and a description are OFFERED, not automatic. A count that only restates how many cards
+  // follow it says nothing a reader cannot see, and a heading that needs a sentence to explain it is
+  // usually the wrong heading. Callers that have something to add still pass `count` / `desc`.
   return `<div class="csec-list">${live.map((g) => '<section class="csec">'
     + `<div class="csec-head"><h3 class="csec-title">${esc(g.title)}</h3>`
-    + `<span class="csec-count">${esc(g.count || String(g.ids.length))}</span></div>`
+    + (g.count ? `<span class="csec-count">${esc(g.count)}</span>` : '') + '</div>'
     + (g.desc ? `<p class="csec-desc">${esc(g.desc)}</p>` : '')
     + body(g.ids, g.per) + '</section>').join('')}</div>`;
 }
@@ -5455,13 +5458,25 @@ function renderChrome(s) {
   // A state whose top view has no BUTTON has no group either (the dormant flat Components map is one).
   // Left alone that emptied the whole switcher at once — no group lit AND every sub tab hidden — so the
   // reader lost both rows. Keep the rows as they were instead: a stale group beats no rows at all.
-  // The question of the view you are in, at whatever depth. Part of the navigation, not the content.
-  const q = viewQuestion(tv);
+  // The view's question, on the TRAIL row rather than the tab row, and only on the view's own landing
+  // screen — where the trail is a single word and the rest of that row was empty, while the question
+  // sat one row up with 725-915px of tab row empty beside it. Two half-empty rows became one full one.
+  //
+  // `chain.length === 1` IS "the view's own landing screen": every trail starts at its view, so a
+  // one-item trail is the view itself. One level in, the trail fills the row on its own and the reader
+  // has already answered what the view is for by choosing something on it.
+  //
+  // Still the VIEW's sentence, never the page's: it is read from VIEW_Q by the top view, so it cannot
+  // change as the reader drills, and it never lands in the content — the row is navigation, above the
+  // page and outside its scroll. That is what separates it from the two placements the spec undid: the
+  // info pane (half the views have none, and it vanished on the first click) and the first block of the
+  // page (read as a caption, and every page began inventing its own).
+  const q = chain.length === 1 ? viewQuestion(tv) : '';
   viewq.textContent = q;
   viewq.hidden = !q;
-  // The rule belongs to the TAB GROUP, not to the question: it marks where the controls stop, so it is
-  // drawn only when there is something after them to separate from.
-  viewsw.classList.toggle('has-after', !!q);
+  // No dividing rule any more. It existed because the question sat among the TABS, at their size and
+  // weight, where it read as a fifth disabled one. Beside a 16px bold page title it is a 12.5px grey
+  // italic sentence, and nothing about it can be mistaken for a control, so a gap is separation enough.
   const tg = GROUP_OF_VIEW[tv];
   if (tg) {
     groupLast[tg] = tv;
@@ -6216,12 +6231,14 @@ function actorCardsHtml() {
   // A person and a piece of software are not the same kind of driver — one signs in, the other runs on
   // its own — so the set is cut in two. The cards are a GRID: every one of them is a door to that
   // actor's use cases, which is the same job a feature card and a decision-area card do.
+  // The two headings name what is under them and nothing else. Each carried a count and a sentence
+  // defining the word; both went. The count repeats what the cards below it already show — four cards
+  // is four — and "Humans" and "Software services" need no gloss, so the sentence was a paragraph of
+  // chrome above every screen that said less than the heading it explained.
   const of = (kind) => all.filter((n) => n.kind === kind).map((n) => n.id);
   return elementCardGroupsHtml([
-    { title: 'People', ids: of('human'), per,
-      desc: 'Someone who signs in and asks the product for something.' },
-    { title: 'Software', ids: of('service'), per,
-      desc: 'A caller with no person behind it: a script, a schedule, another service.' },
+    { title: 'Humans', ids: of('human'), per },
+    { title: 'Software services', ids: of('service'), per },
   ], { grid: true });
 }
 // An actor's card opens what that actor can do, one level down inside THIS view. It used to drill

@@ -164,21 +164,17 @@ body.vresizing #stage { pointer-events: none; }
                  flex: 0 0 auto; white-space: nowrap; border-bottom: 2px solid transparent; }
 #viewsw button:hover { color: #3730a3; }
 #viewsw button.active { color: #4338ca; border-bottom-color: #6366f1; }
-/* The view's question. Right of the tabs while there is room; below them, left aligned, when there is
-   not — never truncated, because a half-shown question answers nothing. */
-/* Immediately right of the tabs, not pushed to the far edge: it belongs to them. Wide apart it read as
-   an unrelated caption floating at the other end of the row.
-   ITALIC, and behind a rule. Set upright at tab size it read as a fifth, disabled tab — the ambiguity
-   was what made it invisible, not the contrast. Nothing else in this app is italic, so one glance says
-   this is a sentence and not a control; the rule says where the controls stopped. */
-#viewsw.has-after { border-right: 1px solid #e5e7eb; padding-right: 14px; margin-right: 0; }
+/* The view's question. It lives on the TRAIL row (see .hint below), beside the page title, and only on
+   the view's own landing screen. ITALIC, because nothing else in this app is — one glance says sentence,
+   not control. It needs no dividing rule: it used to sit among the tabs, at their size and weight, where
+   it read as a fifth disabled one, and the rule was what said "the controls stopped here". Beside a 16px
+   bold page title a 12.5px grey italic sentence cannot be mistaken for a control, and a rule that wrapped
+   onto a second line would sit at the start of it as a stray tick. */
 #viewq { font-size: 12.5px; font-weight: 500; font-style: italic; color: #6b7280; line-height: 1.35;
-         padding: 4px 0; }
-@media (max-width: 480px) {
-  /* Wrapped onto its own line the rule would sit under the tabs as a stray tick, so it goes. */
-  #viewsw.has-after { border-right: 0; padding-right: 0; }
-  #viewq { flex: 1 0 100%; padding: 0 0 6px; }
-}
+         flex: 0 1 auto; min-width: 0; }
+/* A dash joins it to the title: "Features — what this view answers". Drawn, not stored, so the string
+   stays the pure question for a screen reader and for the one table that holds it. */
+#viewq::before { content: "\2014"; margin-right: 7px; font-style: normal; color: #9ca3af; }
 /* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
    whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab
    reads as "you are here", so this one has to read as "you are inside here": the pill hollows out to an
@@ -925,7 +921,14 @@ body.altmod .opensrc, body.altmod .opensrc * {
    active tab's 7px inner padding — so the first crumb starts exactly under that tab's LABEL. The view
    name then appears twice on purpose and reads as the tab continuing downward, which is why the first
    segment is set quiet: it is a continuation, not a second claim. */
-.hint { background: #fbfbfe; border-bottom: 1px solid #e5e7eb; padding: 6px 12px 7px 17px; }
+/* One ROW, two things: where you are, and (at the top of a view only) what the view answers. They were
+   two half-empty rows — a one-word trail with the rest of the row blank, and the question one row up
+   with 725-915px of tab row empty beside it.
+   NO wrap on the row itself: the sentence always begins on the title's line, joined to it by a dash.
+   At a narrow window it shrinks and its own text wraps underneath, rather than the whole sentence
+   dropping to a line of its own — that would read as a caption again, which is what this replaced. */
+.hint { display: flex; align-items: baseline; column-gap: 9px;
+        background: #fbfbfe; border-bottom: 1px solid #e5e7eb; padding: 6px 12px 7px 17px; }
 /* At the top of a view there is no path to show, so the row takes no space at all. It stays in the
    document because it still carries the page's heading, for anyone who cannot see the tabs. */
 .hint.hint-empty { padding: 0; border-bottom: 0; }

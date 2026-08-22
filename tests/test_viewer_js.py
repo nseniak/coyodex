@@ -643,26 +643,40 @@ def test_no_control_outlives_the_view_that_drew_it() -> None:
     assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
 
-def test_the_question_belongs_to_the_view_and_rides_the_view_row() -> None:
-    """A view's question is the same sentence at every depth inside that view, so it is a property of
-    the VIEW. It spent a round in the content, where it read as a caption for whatever sat below it and
-    changed as the reader drilled, and a round before that in the info pane, where only diagrams had one.
+def test_the_question_rides_the_trail_row_and_only_at_the_top_of_a_view() -> None:
+    """A view's question is the same sentence at every depth inside that view, read from ONE table by
+    the top view, so it is a property of the VIEW and can never change as the reader drills. Where it
+    is DRAWN has moved three times: the info pane (only diagrams have one, and it vanished on the first
+    click), the first block of the page (read as a caption, and each page began inventing its own),
+    then beside the view tabs.
 
-    It rides the view-tab row now, right of the tabs — the same row, because it names the same thing
-    those tabs select. At a narrow column it wraps below them rather than truncating: half a question
-    answers nothing."""
+    It rides the TRAIL row now, joined to the page title by a dash: `Features — What can this product
+    do, feature by feature?`. Measured on the three maps at 1440px, the two rows it replaces were both
+    mostly empty — a one-word trail with 96% of its row blank, and the question one row up with 725 to
+    915px of tab row empty beside it.
+
+    Shown ONLY on the view's own landing screen, which is exactly a one-item trail: every trail starts
+    at its view. One level in, the trail fills the row on its own, and a reader who has chosen something
+    on the view has already answered what the view is for. The row itself does not wrap: the sentence
+    always begins on the title's line, and at a narrow window it shrinks and its own text runs on
+    underneath rather than the whole sentence dropping to a line of its own, which would read as the
+    caption this replaced."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert '<span id="viewq" hidden></span>' in html
+    crumbrow = html[html.index('<nav class="hint" id="crumbrow"'):
+                    html.index("</nav>", html.index('<nav class="hint" id="crumbrow"'))]
+    assert 'id="viewq"' in crumbrow, "the question is IN the trail row"
     sub = html[html.index('<nav id="stagesubrow"'): html.index("</nav>", html.index('<nav id="stagesubrow"'))]
-    assert 'id="viewq"' in sub, "the question is IN the view-tab row"
-    q = css[css.index("#viewq {"): css.index("}", css.index("#viewq {"))]
-    assert "margin-left" not in q, "beside the tabs it belongs to, not pushed to the far edge"
-    assert "#viewq { flex: 1 0 100%;" in css, "and below them when the column is narrow"
+    assert 'id="viewq"' not in sub, "and no longer among the tabs"
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
-    assert "const q = viewQuestion(tv);" in chrome and "viewq.hidden = !q;" in chrome
+    assert "const q = chain.length === 1 ? viewQuestion(tv) : '';" in chrome, \
+        "a one-item trail IS the view's own landing screen"
+    assert "viewq.hidden = !q;" in chrome
+    hint = css[css.index("\n.hint {"): css.index("}", css.index("\n.hint {"))]
+    assert "display: flex" in hint and "align-items: baseline" in hint
+    assert "flex-wrap" not in hint, "the sentence must begin on the title's line, never below it"
     intro = js[js.index("function viewIntroHtml(view) {"):
                js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
     assert "viewQuestion" not in intro
@@ -1032,6 +1046,10 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
     body = js[js.index("function elementCardGroupsHtml(groups, opts) {"):
               js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups, opts) {") + 10)]
     assert "csec" in body and "body(g.ids, g.per)" in body
+    # A count and a description are OFFERED, not automatic. Actors passes neither: "4" only restates
+    # how many cards follow it, and "Humans" / "Software services" need no sentence to explain them.
+    # The two callers that DO pass a count give it a noun ("8 rules"), which is information.
+    assert "(g.count ? `<span class=\"csec-count\">${esc(g.count)}</span>` : '')" in body
     assert "const body = (opts && opts.grid) ? elementCardGridHtml : elementCardListHtml;" in body
     assert "mcard" not in js and "mcard" not in css, "the boxed section is gone, not shadowed"
     sec = css[css.index(".csec-head {"): css.index("}", css.index(".csec-head {"))]
@@ -1105,6 +1123,8 @@ def test_a_screen_you_choose_from_is_a_grid_wherever_it_is() -> None:
     actors = js[js.index("function actorCardsHtml() {"):
                 js.index("\nfunction ", js.index("function actorCardsHtml() {") + 10)]
     assert "], { grid: true });" in actors, "the Actors page must be a grid"
+    assert "'Humans'" in actors and "'Software services'" in actors, "the headings name what is under them"
+    assert "desc:" not in actors and "count:" not in actors, "no gloss and no bare count on the headings"
     # …and the two screens that really are read, not chosen from, stay lists.
     for caller in ("function featRulesHtml(ids) {", "function unreachedHtml() {"):
         fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
@@ -1396,24 +1416,23 @@ def test_a_page_never_repeats_the_tab_it_was_opened_from() -> None:
     assert "return desc ?" in head
 
 
-def test_the_question_reads_as_a_sentence_and_not_as_a_fifth_tab() -> None:
+def test_the_question_reads_as_a_sentence_and_not_as_a_control() -> None:
     """Set upright at the tabs' own size, right after them, the question read as a fifth disabled tab —
-    and the ambiguity is what made it invisible, not the contrast. Italic fixes what it IS before
-    fixing how loud it is: nothing else in this app is italic, so one glance says sentence, not control.
-    A rule after the last tab says where the controls stopped.
+    and the ambiguity is what made it invisible, not the contrast. Italic fixes what it IS before fixing
+    how loud it is: nothing else in this app is italic, so one glance says sentence, not control.
 
-    The rule belongs to the TAB GROUP, so it is drawn only when something follows the tabs — and it
-    goes when the question wraps to its own line, where it would sit under them as a stray tick."""
+    The dividing rule that used to follow the last tab is GONE with the move. It existed to say "the
+    controls stopped here", and there are no controls beside the question any more — it sits next to a
+    16px bold page title, at 12.5px grey italic, which nothing can read as a button. A dash joins the
+    two instead, drawn in CSS so the stored string stays the pure question."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "viewsw.classList.toggle('has-after', !!q);" in js
-    rule = css[css.index("#viewsw.has-after {"): css.index("}", css.index("#viewsw.has-after {"))]
-    assert "border-right: 1px solid #e5e7eb" in rule
+    assert "has-after" not in js and "has-after" not in css, "the tab-row rule is gone, not shadowed"
     q = css[css.index("#viewq {"): css.index("}", css.index("#viewq {"))]
     assert "font-style: italic" in q
-    narrow = css[css.index("@media (max-width: 480px) {", css.index("#viewq {")):]
-    assert "#viewsw.has-after { border-right: 0;" in narrow[:400], "no stray tick under the tabs"
-
+    dash = css[css.index("#viewq::before {"): css.index("}", css.index("#viewq::before {"))]
+    assert "\\2014" in dash, "an em dash joins the question to the title"
+    assert "viewq.textContent = q;" in js, "the string itself carries no dash"
 
 def test_the_app_name_is_a_working_way_back_to_all_maps() -> None:
     """It was an <h1> with a click handler, and became a plain span when the page's one heading moved to
