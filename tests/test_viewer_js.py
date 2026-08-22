@@ -1071,26 +1071,32 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     """The card said `SERVICE`; the actor's own page, one click later, said `service` + `STAFF-OWNED`
     about the same actor, and never printed a side on the card at all. Both now read ONE function.
 
-    Four readings, and only two print a side:
-        person  + user      ->  (nothing)      a person on the customer's side is the ordinary case
+    Four readings:
+        person  + user      ->  (nothing)          a person on the customer's side is the ordinary case
         person  + internal  ->  STAFF
-        program + internal  ->  SERVICE        the usual case for a machine, so it says nothing extra
-        program + user      ->  USER SERVICE   the exception: a machine the CUSTOMER set up
+        program + internal  ->  INTERNAL SERVICE   a machine the company runs, or pays a vendor to run
+        program + user      ->  USER SERVICE       a machine the CUSTOMER set up
 
-    Which side stays silent is measured per SET, the rule a pill has to pass everywhere. Among people
-    `user` is 7 of 11 on the reference maps, so `staff` prints. Among programs it inverts: once a bought
-    service counts as the company's, 3 of 5 services are the company's, so `user service` prints.
+    Two words for one stored value, on purpose, and the rule that picks between them is THE READER'S
+    WORD MUST FIT THE THING IT LABELS. `staff` is right about a person and wrong about a scheduler or a
+    bought payment provider, which is exactly why the model stopped storing it. `internal` is right
+    about all three. So the model stores `internal` and each card prints the word that fits what it
+    describes. `staff service` was proposed and dropped: it says a program is staff, which is the one
+    thing the rename fixed. The two words never meet on one card, and each says "ours".
 
-    Two words for one stored value, on purpose. `internal` is the MODEL's word: it is answerable for a
-    person, a scheduler and a payment provider alike, which `staff` was not. `staff` is the READER's
-    word wherever the side is about people, which is a person and a feature (a feature's audience is
-    voted for by its human roles only). The same split the map already makes between `capability` and
-    the reader's word `feature`."""
+    A PROGRAM always prints its side. Leaving the company's own machines silent hides the single thing
+    the vendor rule exists to settle: Mio Coworker's Stripe webhook was authored as the customer's, and
+    a card reading plain `SERVICE` looks the same whether that is right or wrong.
+
+    A PERSON stays silent on the customer's side, where `user` is 7 of the 11 people on the reference
+    maps — a word that is nearly always there distinguishes nothing. `staff` is also the reader's word
+    on a FEATURE, whose audience only its human roles vote for."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     fn = js[js.index("function actorSidePills(kind, audience) {"):
             js.index("\nfunction ", js.index("function actorSidePills(kind, audience) {") + 10)]
-    assert "'user service' : 'service'" in fn and "text: 'staff'" in fn
+    assert "text: side ? `${side} service` : 'service'" in fn, "a program always prints its side"
+    assert "text: 'staff'" in fn and "staff service" not in fn, "a program is never called staff"
     # Colour says WHAT it is, the words say whose: both program readings keep the one program colour.
     assert fn.count("ecard-pill-service") == 1 and "uc-aud-internal" in fn
     assert "side === 'internal'" in fn, "a person prints a side only when it is the company's"

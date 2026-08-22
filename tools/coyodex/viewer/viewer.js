@@ -385,28 +385,31 @@ const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process'])
 // the page one click later said `service` + `STAFF-OWNED`, about the same actor.
 //
 // Four readings, and only two of them print a side:
-//   person  + user      ->  (nothing)         an actor is a person on the customer's side unless it says otherwise
-//   person  + internal  ->  STAFF             the reader's word for a person on the company's side
-//   program + internal  ->  SERVICE           whose machine it usually is, so the word would not vary
-//   program + user      ->  USER SERVICE      the exception: a machine the CUSTOMER set up
+//   person  + user      ->  (nothing)          an actor is a person on the customer's side unless it says otherwise
+//   person  + internal  ->  STAFF              the reader's word for a person on the company's side
+//   program + internal  ->  INTERNAL SERVICE   a machine the company runs, or pays a vendor to run
+//   program + user      ->  USER SERVICE       a machine the CUSTOMER set up
 //
-// Two words for one stored value, because the reader's word depends on what it is labelling. `staff`
-// is right about a person and wrong about a scheduler or a bought payment provider; `internal` is
-// right about all three but stiff on a person. So the MODEL stores `internal` — one word, one meaning,
-// answerable for a vendor — and the reader sees the word that fits the thing in front of them. The same
-// split the map already makes between `capability` and the reader's word `feature`.
+// Two words for one stored value, because THE READER'S WORD MUST FIT THE THING IT LABELS. `staff` is
+// right about a person and wrong about a scheduler or a bought payment provider — which is exactly why
+// the model stopped storing it. `internal` is right about all three and only stiff on a person. So the
+// MODEL stores `internal`, one word answerable for a vendor, and each card prints the word that fits
+// what it is describing. The same split the map already makes between `capability` and `feature`.
+// The two words never meet on one card, and a reader needs no rule joining them: each says "ours".
 //
-// Which side is silent follows the measured rule, per SET. Among people, `user` is 7 of 11 on the
-// reference maps, so `staff` is the exception that prints. Among programs it is the other way round:
-// once a bought service counts as the company's (Stripe's webhook is nobody's customer), 3 of the 5
-// services are the company's own, so `service` alone carries that and `user service` is the exception.
+// A PROGRAM always prints its side. Leaving the company's own machines silent would have hidden the
+// one thing the vendor rule exists to settle: Mio Coworker's Stripe webhook was authored as the
+// customer's, and a card reading plain `SERVICE` looks identical whether that is right or wrong.
+// A PERSON stays silent on the customer's side, where `user` is 7 of the 11 people on the reference
+// maps — a word that is nearly always there distinguishes nothing.
 function actorSidePills(kind, audience) {
   const side = String(audience || '').trim().toLowerCase();
   // COLOUR says what the thing IS; the WORDS say whose it is. So both program readings keep the one
   // program colour and differ only in the word, and `staff` takes the audience colour a feature card
   // already uses for the same word — one word, one colour, wherever it appears.
+  // A program with no side recorded falls back to the bare kind word rather than inventing one.
   if (kind === 'service') {
-    return [{ text: side === 'user' ? 'user service' : 'service', cls: 'ecard-pill-service' }];
+    return [{ text: side ? `${side} service` : 'service', cls: 'ecard-pill-service' }];
   }
   if (kind === 'human' && side === 'internal') {
     return [{ text: 'staff', cls: 'uc-aud-internal' }];
