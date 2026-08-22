@@ -440,7 +440,10 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #panel .pane-card .ecard { border-color: transparent; padding: 0; background: transparent; }
 #panel .pane-card .ecard:hover { background: transparent; box-shadow: none; border-color: transparent; }
 #panel .pane-card .ecard:hover .ecard-name { text-decoration: underline; }
-#panel .pane-card .ecard-name { font-size: 15px; }
+/* No size bump. It was set when the pane was a 300px band under the diagram and the card in it was the
+   only thing there; now the card floats and a reader meets the SAME use case in a grid and over a
+   drawing, so a 15px name against a 14px one is one of the six differences that made them read as two
+   designs. The card is the card, at one size, everywhere. */
 /* An element's DETAILS page: the same field rows the pane used to hold, given a page to sit on. */
 .edetail dl { margin: 0; }
 .edetail dt { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;

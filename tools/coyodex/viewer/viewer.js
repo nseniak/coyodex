@@ -2269,13 +2269,24 @@ function bindFlowRefs() {
 function showUseCaseSummary(uc) {
   const n = uc ? GRAPH.nodes[uc] : null;
   if (!n) { panel.innerHTML = EMPTY_PANEL; return; }
-  const f = n.fields || {};
-  const actor = f.Actor || '';
-  const to = f['Trigger → Outcome'] || '';
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(n.name) + '</h2>'
-    + '<span class="badge kind">use case</span>'
-    + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
-    + (to ? '<p class="explain">' + mdInline(to) + '</p>' : '');
+  // THE SAME CARD a grid shows. It used to be a second design built here by hand, and the same use case
+  // read six ways apart: 14px name against 16px, a grey type word against an indigo one, a 13px sentence
+  // against 14px, and the other axis as a bare slate badge instead of a labelled line you can click.
+  // The overlay was the poorer of the two — it had neither the label nor the door.
+  //
+  // The foot line names the FEATURE, not the actor. On both sequence views the actor is already drawn as
+  // a participant on the diagram behind this card, and the feature is the fact that is nowhere on screen.
+  panel.innerHTML = `<div class="pane-card">${elementCardHtml(uc, { foot: useCaseFeatureFootHtml(uc) })}</div>`;
+  bindElementCards(panel);
+}
+// The `In feature …` line, wherever a use-case card is drawn away from a feature's own page. One builder,
+// so the line reads the same in a grid and in the card floating over a diagram.
+function useCaseFeatureFootHtml(uc) {
+  const cap = CAP_OF_UC[uc];
+  if (!cap) return '';
+  return `<p class="ecard-extra"><span class="ecard-lbl">In feature</span> `
+    + `<button type="button" data-card-own class="ecard-pill ecard-pill-link" `
+    + `data-gofeat="${esc(cap.id)}" title="Everything this feature can do">${esc(cap.name)}</button></p>`;
 }
 // Selecting a Happy Path step (plain click on the overview) shows that use case's summary — the same
 // facts as its row in the Use Cases list. The mechanism (T6 flow) is behind the drill.
@@ -2743,17 +2754,23 @@ function showFlowStep(uc, i) {
 // service healthy` — so the title is the same words twice, and the row goes back to being a sentence.
 // That is the whole point of the prefix: one shape everywhere, and it needs no label to be understood.
 function actorPanelHtml(a, drives) {
-  const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
+  const driveRows = drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '';
+  // THE SAME CARD a list shows, then the one thing the card does not carry: which steps of THIS walk the
+  // actor drives. That is real extra content, and it needed no second card design to hold it — a process
+  // already answers the same shape of question the same way, card first, its own detail under it.
+  const id = actorNodeId(a.name);
+  if (id) return `<div class="pane-card">${elementCardHtml(id)}</div>` + driveRows;
+  // An actor a sequence view names but the graph has no node for: no card to draw, so the name and the
+  // sentence stand in for one rather than inventing a second card shape for the exception.
   const wants = a.wants ? '<p class="uc-wants">' + mdInline(wantsSentence(a.wants)) + '</p>' : '';
-  const driveRows = drives ? '<dt>Drives</dt>' + drives : '';
   return '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
-    + '<span class="badge kind">actor</span>' + kindBadge + '</div>'
-    + wants + (driveRows ? '<dl>' + driveRows + '</dl>' : '');
+    + '<span class="badge kind">actor</span></div>' + wants + driveRows;
 }
 // The Happy Path's actor card: the steps it drives are that walk's own positions.
 function showHPActor(a) {
   panel.innerHTML = actorPanelHtml(a, (a.steps || []).map((st) =>
     '<dd>' + esc(st.title || st.id) + '</dd>').join(''));
+  bindElementCards(panel);
 }
 // A flow-level actor's card — the same card, scoped to one flow: which of THIS flow's own steps it
 // drives. Reads those steps straight out of FLOWS_NARR by index rather than duplicating their text in
@@ -2762,6 +2779,7 @@ function showFlowActor(uc, a) {
   const flowSteps = FLOWS_NARR[uc] || [];
   panel.innerHTML = actorPanelHtml(a, a.stepIdx.map((i) => flowSteps[i]).filter(Boolean)
     .map((st) => '<dd>' + esc(st.src) + ' <em>' + esc(st.verb) + '</em> ' + esc(st.dst) + '</dd>').join(''));
+  bindElementCards(panel);
 }
 
 // --- hover tooltip --------------------------------------------------------------
@@ -6387,11 +6405,7 @@ function renderUseCases(sel) {
           ? `<button type="button" data-card-own class="ecard-pill ecard-pill-link ecard-pill-${esc(roleKindOf(n))}" `
             + `data-goactor="${esc(actorText)}" title="Everything this actor can do">${esc(actorText)}</button>`
           : `<span class="ecard-pill ecard-pill-${esc(roleKindOf(n))}">${esc(actorText)}</span>`) + `</p>`
-      : (CAP_OF_UC[id]
-        ? `<p class="ecard-extra"><span class="ecard-lbl">In feature</span> `
-          + `<button type="button" data-card-own class="ecard-pill ecard-pill-link" `
-          + `data-gofeat="${esc(CAP_OF_UC[id].id)}" title="Everything this feature can do">`
-          + `${esc(CAP_OF_UC[id].name)}</button></p>` : '');
+      : useCaseFeatureFootHtml(id);
     const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(id))
       ? '<span class="badge modified">changed</span>' : '';
     const untraced = FLOWS_MM && FLOWS_MM[id] ? ''

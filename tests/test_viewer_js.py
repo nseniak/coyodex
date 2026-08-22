@@ -1456,8 +1456,13 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     ucs = js[js.index("function renderUseCases(sel) {"):
              js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
     assert '<span class="ecard-lbl">Driven by</span>' in ucs
-    assert '<span class="ecard-lbl">In feature</span>' in ucs
     assert "foot: cross" in ucs, "it is the card's FOOT line, under the sentence — not a title-line pill"
+    # The `In feature` line has ONE builder, because it is drawn in two places: a grid, and the card
+    # floating over a diagram. Two copies would eventually word it two ways.
+    foot = js[js.index("function useCaseFeatureFootHtml(uc) {"):
+              js.index("\n}", js.index("function useCaseFeatureFootHtml(uc) {"))]
+    assert '<span class="ecard-lbl">In feature</span>' in foot
+    assert js.count("useCaseFeatureFootHtml(") == 3, "one definition, two callers"
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\n}", js.index("function elementCardHtml(id, opts) {"))]
     assert "(o.foot || '')" in card and card.index("o.foot") > card.index("ecard-desc"), \
@@ -1468,7 +1473,7 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     # …and the NAME on that line is a door: the feature's own list of use cases, or the actor's. It earns
     # the click by the rule every pill is held to — it goes where neither the card's own click nor the
     # page already open goes.
-    assert 'data-gofeat="' in ucs and 'data-goactor="' in ucs
+    assert 'data-gofeat="' in foot and 'data-goactor="' in ucs
     assert "ecard-pill-link" in ucs and "ecard-pill-link" in css
     binder = js[js.index("function bindElementCards(root, onDrill) {"):
                 js.index("\n}", js.index("function bindElementCards(root, onDrill) {"))]
@@ -1480,6 +1485,39 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     # that looks live and goes nowhere teaches a reader to distrust the ones that work.
     assert "const actorPage = actorNodeId(actorText);" in ucs
     assert "actorPage" in ucs and "<span class=\"ecard-pill ecard-pill-${esc(roleKindOf(n))}\">" in ucs
+
+def test_one_card_design_reaches_the_card_that_floats_over_a_diagram() -> None:
+    """The spec asks for one card design in every place an element appears, and for a card's actions to be
+    the same whether it sits in a list or beside a diagram. Two element kinds had quietly kept a second
+    design of their own, built by hand in the info pane: a USE CASE and an ACTOR.
+
+    Measured on the same use case, in a grid and in the overlay: 14px name against 16px, the type word
+    grey-on-near-white against indigo-on-pale-indigo, a 13px sentence against 14px, and the other axis as
+    a bare slate badge instead of a labelled line you could click. Six differences, and the overlay was
+    the poorer of the two — it had neither the label nor the door.
+
+    Both read `elementCardHtml` now. An actor's overlay keeps the one thing a card does not carry — which
+    steps of THIS walk it drives — as its own block UNDER the card, the shape a process already used.
+
+    The remaining hand-built panels are not elements and have no card to reuse: an arrow, a bridge, a flow
+    step, and the Libraries / bucket folds."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    uc = js[js.index("function showUseCaseSummary(uc) {"):
+            js.index("\n}", js.index("function showUseCaseSummary(uc) {"))]
+    assert "elementCardHtml(uc," in uc and "pane-card" in uc, "the same card a grid draws"
+    assert "bindElementCards(panel);" in uc, "…with the same actions"
+    assert "badge kind" not in uc and "class=\"explain\"" not in uc, "the hand-built design is gone"
+    ap = js[js.index("function actorPanelHtml(a, drives) {"):
+            js.index("\n}", js.index("function actorPanelHtml(a, drives) {"))]
+    assert "elementCardHtml(id)" in ap and "pane-card" in ap
+    assert "Drives" in ap and ap.index("driveRows") < ap.index("elementCardHtml"), \
+        "what it drives here is a block under the card, not a second card design"
+    # The pane must not resize the card either: one card, one size, wherever a reader meets it.
+    assert "#panel .pane-card .ecard-name { font-size" not in css
+    # The panels that stay hand-built are the ones with no card to reuse.
+    for fn in ("showContextEdge", "showBridge", "flowStepInfoHtml", "showLibsFold", "showBucketFold"):
+        assert f"function {fn}(" in js, fn
 
 def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     """A role's page used to open with a bordered block whose heading was the page's own title, with the
