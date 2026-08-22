@@ -1095,6 +1095,26 @@ def _run_js_region(start_marker: str, end_marker: str, snippet: str) -> str:
     return r.stdout.strip()
 
 
+def _run_js_regions(regions: list[tuple[str, str]], snippet: str) -> str:
+    """`_run_js_region` for a function whose helpers live elsewhere in the file: lift SEVERAL slices,
+    in the order given, and run the snippet against all of them. Same marker discipline."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed — skipping viewer JS behaviour gate")
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    lifted = []
+    for start, end in regions:
+        part = js[js.index(start): js.index(end)]
+        assert part.strip(), f"the region {start!r} lifted nothing — fix the markers"
+        lifted.append(part)
+    with tempfile.TemporaryDirectory() as td:
+        f = Path(td) / "probe.mjs"
+        f.write_text("\n".join(lifted) + "\n" + snippet, encoding="utf-8")
+        r = subprocess.run([node, str(f)], capture_output=True, text=True)
+    assert r.returncode == 0, f"probe failed:\n{r.stderr}"
+    return r.stdout.strip()
+
+
 def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     """A feature was a label on a use case: to answer "what does Billing & credits do, decide, know and
     run on?" you read four other views and joined them by hand. The first page that answered it put all
@@ -1679,3 +1699,106 @@ def test_the_app_name_is_a_working_way_back_to_all_maps() -> None:
     assert "e.key === 'Enter' || e.key === ' '" in block
     assert "brand.addEventListener('click', home);" in block
     assert "header .brand.home-link { cursor: pointer; }" in css
+
+
+def test_an_arrow_from_a_box_to_itself_is_one_arrow_made_of_three_pieces() -> None:
+    """A flow step where one box acts on itself draws a loop. Mermaid does not draw that loop as one
+    line: it routes it through two invisible helper boxes and emits THREE paths, named
+    `<diagram>-<box>-cyclic-special-1 | -mid | -2` — none of which spells `L_<src>_<dst>_<i>`. The
+    viewer read only that one spelling, so the loop was painted and then never picked up: no hover, no
+    click, no highlight, and the step player froze on the step it carried.
+
+    The reader now reports the loop ONCE (on `-mid`, the piece Mermaid keeps the label on) as an arrow
+    whose two ends are the same box, and hands over all three pieces so everything that paints or
+    hit-tests an arrow covers the whole loop. The two arrows after it pin the other half of the bug
+    class: Mermaid emits one label per PATH — two of them empty — so the index pairing that gives every
+    LATER arrow its label must count all three pieces, not one."""
+    out = _run_js_region(
+        "function eachEdge(root, fn) {",
+        "// Stroke an edge's path + glow its label",
+        """
+const mk = (id) => ({ id, style: {} });
+const paths = ['g-C50-cyclic-special-1', 'g-C50-cyclic-special-mid', 'g-C50-cyclic-special-2',
+               'g-L_C50_E55_0', 'g-L_U_0_U_15_0'].map(mk);
+const labels = ['', '6', '', '7', '8'].map((text) => ({ text }));
+const root = { querySelectorAll: (sel) => (sel.includes('edgePaths') ? paths : labels) };
+const seen = [];
+eachEdge(root, (p, label, m) => seen.push(
+  { label: label && label.text, src: m[1], dst: m[2], i: m[3], segs: (p._segs || [p]).map((s) => s.id) }));
+console.log(JSON.stringify(seen));
+""",
+    )
+    seen = json.loads(out)
+    assert [(s["src"], s["dst"]) for s in seen] == [("C50", "C50"), ("C50", "E55"), ("U_0", "U_15")]
+    loop = seen[0]
+    assert loop["label"] == "6" and loop["i"] == "0"
+    assert loop["segs"] == ["g-C50-cyclic-special-1", "g-C50-cyclic-special-mid",
+                            "g-C50-cyclic-special-2"], "all three pieces travel with the arrow"
+    # The arrows drawn AFTER the loop still get their own labels — the pairing counted three, not one.
+    assert [s["label"] for s in seen[1:]] == ["7", "8"]
+    # An ordinary arrow is still one piece, so nothing else pays for the loop.
+    assert seen[1]["segs"] == ["g-L_C50_E55_0"]
+
+
+def test_a_step_the_diagram_cannot_draw_never_traps_the_walk() -> None:
+    """Pressing Next used to sit on one step for ever. A step whose arrow this rendering did not draw
+    has no selector, so the player resets the diagram — and the reset also SUSPENDS the player. A
+    suspended player answers the next press by re-entering the SAME index, so the counter stopped
+    dead and every further press repeated the same nothing.
+
+    The step keeps its number and shows nothing, but the walk goes on. Run against the real
+    flowGoto/flowStepBy with the middle step of three left undrawn: the counter must reach the last
+    step and wrap, not stick at the undrawn one."""
+    out = _run_js_region(
+        "function flowGoto(i) {",
+        "// Called from render() once svg-pan-zoom exists.",
+        """
+let flowPlay = { uc: 'UC1', steps: [{}, {}, {}], msgEls: [[], [], []], cur: -1, active: false };
+// Selecting a drawn step ends in flowSyncCur, which is what re-activates the player after the
+// selClear inside flowGoto. Step 2 of 3 (index 1) has NO selector: undrawn in this rendering.
+const flowSyncCur = () => { flowPlay.active = true; };
+const mainScene = { selectors: { 'flowstep:UC1:0': flowSyncCur, 'flowstep:UC1:2': flowSyncCur } };
+function flowSuspend() { flowPlay.active = false; }
+function selClear() { flowSuspend(); }
+function resetScene() { selClear(); }
+function flowReveal() {}
+function flowCounter() {}
+const walked = [];
+for (let k = 0; k < 6; k++) { flowStepBy(1); walked.push(flowPlay.cur); }
+console.log(JSON.stringify(walked));
+""",
+    )
+    assert json.loads(out) == [0, 1, 2, 0, 1, 2], "the walk must pass the undrawn step, not sit on it"
+
+
+def test_the_domain_view_reads_a_self_arrow_through_the_same_one_reader() -> None:
+    """The same bug, one view over: an entity related to ITSELF (a parent/child link) is drawn by the
+    class diagram as the same three pieces, under the same id spelling — which matches neither the
+    flowchart's `L_<src>_<dst>_<i>` nor the class diagram's own `id_<src>_<dst>_<i>`. Found by sweeping
+    for the bug class after fixing the flow map, and confirmed against a real Mermaid 11 render.
+
+    So both views read the loop through ONE function. This runs the Domain view's real edge reader over
+    a class diagram holding a self relation and two ordinary ones: the loop must come back once, as a
+    relation whose two ends are the same entity, and the relations after it must keep their own
+    labels."""
+    out = _run_js_regions(
+        [("function selfArrowParts(paths) {", "// An arrow's screen box:"),
+         ("function eachClassEdge(root, fn) {", "// Mermaid's classDiagram markers default")],
+        """
+const mk = (id) => ({ id });
+const paths = ['d-E1-cyclic-special-1', 'd-E1-cyclic-special-mid', 'd-E1-cyclic-special-2',
+               'd-id_E1_E2_2', 'd-id_E2_E1_3'].map(mk);
+const labels = ['', 'parent', '', 'holds', 'lives in'].map((text) => ({ text }));
+const root = { querySelectorAll: (sel) => (sel.includes('relation') ? paths : labels) };
+const seen = [];
+eachClassEdge(root, (p, label, src, dst) => seen.push(
+  { label: label && label.text, src, dst, segs: (p._segs || [p]).map((s) => s.id) }));
+console.log(JSON.stringify(seen));
+""",
+    )
+    seen = json.loads(out)
+    assert [(s["src"], s["dst"]) for s in seen] == [("E1", "E1"), ("E1", "E2"), ("E2", "E1")]
+    assert seen[0]["label"] == "parent"
+    assert seen[0]["segs"] == ["d-E1-cyclic-special-1", "d-E1-cyclic-special-mid",
+                               "d-E1-cyclic-special-2"]
+    assert [s["label"] for s in seen[1:]] == ["holds", "lives in"]

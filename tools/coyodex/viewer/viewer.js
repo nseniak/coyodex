@@ -845,7 +845,7 @@ function applyFocus(scene, keepNode, keepEdge) {
   }
   for (const x of scene.edgeEls) {
     const on = keepEdge(x.e);
-    x.path.style.opacity = on ? '' : DIM;
+    for (const seg of edgeSegs(x.path)) seg.style.opacity = on ? '' : DIM;
     if (x.label) x.label.style.opacity = on ? '' : DIM;
   }
   refreshAllPills();  // a box that just became dimmed must drop its pill even if it's under the cursor
@@ -1518,7 +1518,7 @@ function decorateActionIcons(scene, s) {
 }
 function clearFocus(scene) {
   for (const nid in scene.nodeEls) { scene.nodeEls[nid].style.opacity = ''; scene.nodeEls[nid].classList.remove('dim'); }
-  for (const x of scene.edgeEls) { x.path.style.opacity = ''; if (x.label) x.label.style.opacity = ''; }
+  for (const x of scene.edgeEls) { for (const seg of edgeSegs(x.path)) seg.style.opacity = ''; if (x.label) x.label.style.opacity = ''; }
   for (const el of scene.dimEls) el.style.opacity = '';
   refreshAllPills();  // un-dimming restores hover-reveal for a box the cursor is still over
 }
@@ -2582,7 +2582,12 @@ function flowGoto(i) {
   // leave both of the others standing, so it takes the full reset (glow + focus + panel) to make the
   // absence honest.
   if (sel) { selClear(mainScene); sel(); }
-  else resetScene(mainScene);
+  // No selector: this rendering could not draw the step's arrow. The reset above is what makes the
+  // absence honest, but it also SUSPENDS the player (resetScene -> selClear -> flowSuspend), and a
+  // suspended player answers the next press by re-entering the same index — the walk would sit on this
+  // step for ever. Re-assert `active` after the reset: the step keeps its number, shows nothing, and
+  // the next press moves on.
+  else { resetScene(mainScene); flowPlay.active = true; }
   flowReveal(flowPlay.msgEls[i] || [], i);
   flowCounter();
 }
@@ -3347,7 +3352,7 @@ function selectNodeFromCanvas(el, id, e) {
 function applyZoomAndCenter(el, scale) {
   const stageRect = diagram.getBoundingClientRect();
   const stageCx = stageRect.left + stageRect.width / 2, stageCy = stageRect.top + stageRect.height / 2;
-  const elRect = el.getBoundingClientRect();
+  const elRect = rectOf(el);
   let elCx = elRect.left + elRect.width / 2, elCy = elRect.top + elRect.height / 2;
   if (scale !== 1) {
     mainPz.zoom(mainPz.getZoom() * scale);
@@ -3419,7 +3424,7 @@ function matchTextSize(el) {
 // it works the same whether or not the arrow carries a label — every arrow type frames identically.
 function frameArrow(el) {
   if (!mainPz || !el) return;
-  const r = el.getBoundingClientRect();
+  const r = rectOf(el);
   const stage = diagram.getBoundingClientRect();
   if ((r.width < 1 && r.height < 1) || !stage.width) return;
   // Fit the arrow's bounding box into ~70% of the viewport in BOTH axes (the tighter axis binds), so a
@@ -3596,7 +3601,8 @@ function edgeLabelHasContent(label) {
 // is what should show/hide the pill, so listeners go on it, not on `p`. `isSelected` (from
 // bindSelectEdge, matching hpGlow's selection guard) is what lets the pill stay up after a direct
 // selection even once the cursor leaves. Flow-step callers narrow it when a stepper owns the selection.
-function bindEdgeActionIcon(p, hit, label, action, isSelected) {
+// `hits` is one overlay per drawn segment — three for a self-arrow — so the pill answers the whole shape.
+function bindEdgeActionIcon(p, hits, label, action, isSelected) {
   const id = p.id || ('edgepill' + (EDGE_ICON_SEQ++));
   const isDim = () => p.style.opacity === DIM || (label && label.style.opacity === DIM);
   const hide = () => { if (!isSelected || !isSelected()) hideIcon(icon); };
@@ -3621,8 +3627,7 @@ function bindEdgeActionIcon(p, hit, label, action, isSelected) {
   }
   icon.addEventListener('mouseenter', showAt);
   icon.addEventListener('mouseleave', hide);
-  hit.addEventListener('mouseenter', showAt);
-  hit.addEventListener('mouseleave', hide);
+  for (const h of hits) { h.addEventListener('mouseenter', showAt); h.addEventListener('mouseleave', hide); }
   if (label) { label.addEventListener('mouseenter', showAt); label.addEventListener('mouseleave', hide); }
   p._actionIcon = icon;
 }
@@ -3631,18 +3636,23 @@ function bindEdgeActionIcon(p, hit, label, action, isSelected) {
 // `onDrill` (falsy for a non-drillable edge) controls the ⌘-held cursor and direct drill gesture.
 // `action` can instead put another explicit action on the arrow, such as Locate on a flow relationship.
 function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected, action) {
-  const hit = p.cloneNode(false);
-  hit.removeAttribute('id'); hit.removeAttribute('marker-end'); hit.removeAttribute('class');
-  hit.style.setProperty('stroke', 'transparent', 'important');
-  hit.style.setProperty('stroke-width', '14px', 'important');
-  hit.style.setProperty('fill', 'none', 'important');
-  hit.style.setProperty('marker-end', 'none', 'important');
-  hit.style.pointerEvents = 'stroke'; hit.style.cursor = 'pointer';
-  if (onDrill) hit.classList.add('drill');  // ⌘-held cursor affordance
-  hit.addEventListener('click', onClick);
-  hit.addEventListener('mouseenter', hoverOn);
-  hit.addEventListener('mouseleave', hoverOff);
-  p.parentNode.appendChild(hit);
+  // ONE overlay per segment: a self-arrow is three paths, and an overlay on only one of them would leave
+  // two thirds of the loop unclickable — the exact "hovering it does nothing" the loop had before.
+  const hits = edgeSegs(p).map((seg) => {
+    const h = seg.cloneNode(false);
+    h.removeAttribute('id'); h.removeAttribute('marker-end'); h.removeAttribute('class');
+    h.style.setProperty('stroke', 'transparent', 'important');
+    h.style.setProperty('stroke-width', '14px', 'important');
+    h.style.setProperty('fill', 'none', 'important');
+    h.style.setProperty('marker-end', 'none', 'important');
+    h.style.pointerEvents = 'stroke'; h.style.cursor = 'pointer';
+    if (onDrill) h.classList.add('drill');  // ⌘-held cursor affordance
+    h.addEventListener('click', onClick);
+    h.addEventListener('mouseenter', hoverOn);
+    h.addEventListener('mouseleave', hoverOff);
+    seg.parentNode.appendChild(h);
+    return h;
+  });
   if (label) {
     label.style.cursor = 'pointer';
     label.style.setProperty('pointer-events', 'all', 'important');
@@ -3651,9 +3661,9 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
     label.addEventListener('mouseenter', hoverOn);
     label.addEventListener('mouseleave', hoverOff);
   }
-  if (actionFn) { attachTip(hit, actionFn); if (label) attachTip(label, actionFn); }
+  if (actionFn) { for (const h of hits) attachTip(h, actionFn); if (label) attachTip(label, actionFn); }
   const edgeAction = action || (onDrill ? { kind: 'drill', run: onDrill } : null);
-  if (edgeAction) bindEdgeActionIcon(p, hit, label, edgeAction, isSelected);
+  if (edgeAction) bindEdgeActionIcon(p, hits, label, edgeAction, isSelected);
 }
 
 // Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
@@ -3662,6 +3672,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
 function eachEdge(root, fn) {
   const paths = [...root.querySelectorAll('.edgePaths path.flowchart-link')];
   const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
+  const loops = selfArrowParts(paths);
   paths.forEach((p, i) => {
     // Mermaid edge id: `<graph>-L_<src>_<dst>_<index>` — so the pattern stays UNANCHORED at the front
     // (the diagram-name prefix is not ours to match). Both endpoints are spelled out as EITHER a
@@ -3670,9 +3681,54 @@ function eachEdge(root, fn) {
     // view draws process->process channel arrows, `L_U_0_U_15_0` -> (U_0, U_15, 0). A greedy `.+`
     // source would mis-split the latter into src=`U_0_U`, dst=`15`. A lane-to-lane arrow
     // (`L_L_proc_L_subs_0`) matches nothing and is skipped — scaffolding with no node behind it.
+    // A self-arrow: report it ONCE, on the `-mid` piece — the one Mermaid keeps the label on, so the
+    // index pairing hands it the right label. Its two siblings ride along on `_segs`.
+    const loop = loops[i];
+    if (loop) {
+      if (loop.part !== 'mid') return;
+      p._segs = loop.segs;
+      fn(p, labels[i] || null, [p.id, loop.node, loop.node, '0']);
+      return;
+    }
     const m = p.id.match(/L_(U_\d+|[^_]+)_(U_\d+|[^_]+)_(\d+)$/);
     if (m) fn(p, labels[i] || null, m);
   });
+}
+// Every path that makes up ONE drawn arrow: three for a self-arrow, one for every other arrow. Everything
+// that paints or hit-tests an arrow goes through this, so a self-arrow is never a third lit and two thirds
+// dead — which is exactly how it behaved before it was recognised at all.
+function edgeSegs(p) { return (p && p._segs) || [p]; }
+// A SELF-ARROW (a box acting on itself: `X -->|"5"| X`, `E1 --> E1 : parent`) is not one path. Mermaid
+// routes it through two invisible 10px helper boxes and draws THREE, `<diagram>-X-cyclic-special-1 |
+// -mid | -2` — a spelling that matches NEITHER the flowchart's `L_<src>_<dst>_<i>` nor the class
+// diagram's `id_<src>_<dst>_<i>`, which is why such an arrow was drawn and then never bound. ONE reader
+// for both diagram types: per path, null for an ordinary arrow, or { node, part, segs } for a piece of
+// a loop. The node id is matched strictly (letters/digits/underscore — every id this viewer draws) so a
+// diagram name carrying a dash cannot be swallowed into it. Mermaid emits one label per PATH, two of
+// them empty, so pairing labels by index stays right for the arrows AFTER a loop only if all three
+// pieces are counted — which is why this walks the path list rather than filtering it.
+function selfArrowParts(paths) {
+  const segsByNode = {};
+  const parts = paths.map((p) => {
+    const c = (p.id || '').match(/-([A-Za-z0-9_]+)-cyclic-special-(1|mid|2)$/);
+    if (!c) return null;
+    (segsByNode[c[1]] = segsByNode[c[1]] || []).push(p);
+    return { node: c[1], part: c[2] };
+  });
+  return parts.map((c) => (c ? { ...c, segs: segsByNode[c.node] } : null));
+}
+// An arrow's screen box: the union of its segments (a self-arrow's loop is three of them), so framing and
+// centering aim at the whole shape. A node — or any element without segments — keeps its own box.
+function rectOf(el) {
+  const segs = el && el._segs;
+  if (!segs) return el.getBoundingClientRect();
+  let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+  for (const s of segs) {
+    const q = s.getBoundingClientRect();
+    l = Math.min(l, q.left); t = Math.min(t, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom);
+  }
+  if (!(r > l || b > t)) return el.getBoundingClientRect();
+  return { left: l, top: t, right: r, bottom: b, width: r - l, height: b - t };
 }
 
 // Stroke an edge's path + glow its label (selection highlight); returns a cleanup fn.
@@ -3680,18 +3736,25 @@ function glowEdge(p, label, revealAction = true) {
   // Preserve any BASE inline stroke/width the arrow already carries (a synthetic arrow sets its own thick
   // dashed base — see markSyntheticEdge) so deselecting restores it, not Mermaid's default. dasharray is
   // never touched here, so a dashed synthetic arrow stays dashed through the whole select cycle.
-  const s0 = p.style.getPropertyValue('stroke'), sp0 = p.style.getPropertyPriority('stroke');
-  const w0 = p.style.getPropertyValue('stroke-width'), wp0 = p.style.getPropertyPriority('stroke-width');
-  p.style.setProperty('stroke', '#2563eb', 'important');
-  p.style.setProperty('stroke-width', '3px', 'important');
+  const saved = edgeSegs(p).map((seg) => ({
+    seg,
+    s0: seg.style.getPropertyValue('stroke'), sp0: seg.style.getPropertyPriority('stroke'),
+    w0: seg.style.getPropertyValue('stroke-width'), wp0: seg.style.getPropertyPriority('stroke-width'),
+  }));
+  for (const { seg } of saved) {
+    seg.style.setProperty('stroke', '#2563eb', 'important');
+    seg.style.setProperty('stroke-width', '3px', 'important');
+  }
   if (label) label.style.filter = HILITE;
   if (p._actionIcon) {
     p._actionIcon._selected = !!revealAction;
     if (revealAction) showIcon(p._actionIcon); else hideIcon(p._actionIcon);
   }
   return () => {
-    if (s0) p.style.setProperty('stroke', s0, sp0); else p.style.removeProperty('stroke');
-    if (w0) p.style.setProperty('stroke-width', w0, wp0); else p.style.removeProperty('stroke-width');
+    for (const k of saved) {
+      if (k.s0) k.seg.style.setProperty('stroke', k.s0, k.sp0); else k.seg.style.removeProperty('stroke');
+      if (k.w0) k.seg.style.setProperty('stroke-width', k.w0, k.wp0); else k.seg.style.removeProperty('stroke-width');
+    }
     if (label) label.style.filter = '';
     if (p._actionIcon) { p._actionIcon._selected = false; hideIcon(p._actionIcon); }
   };
@@ -3706,8 +3769,10 @@ const SYN_EDGE_THICK = true;      // B: dashed + medium weight. Flip to false fo
 const SYN_EDGE_WIDTH = '2px';     // between a normal arrow and the 2.5px container border (tune to taste)
 function markSyntheticEdge(p) {
   if (!p) return;
-  p.style.setProperty('stroke-dasharray', '6 3', 'important');
-  if (SYN_EDGE_THICK) p.style.setProperty('stroke-width', SYN_EDGE_WIDTH, 'important');
+  for (const seg of edgeSegs(p)) {
+    seg.style.setProperty('stroke-dasharray', '6 3', 'important');
+    if (SYN_EDGE_THICK) seg.style.setProperty('stroke-width', SYN_EDGE_WIDTH, 'important');
+  }
 }
 
 // Wire one edge for the SELECT model (highlight + focus + panel) — context, components, internal edges.
@@ -3727,8 +3792,9 @@ function edgeDesc(scene, p, label, e, selKey, showFn) {
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
   const desc = edgeDesc(scene, p, label, e, selKey, showFn);
-  const hoverOn = () => { if (!selHas(scene, selKey)) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
-  const hoverOff = () => { if (!selHas(scene, selKey)) { p.style.filter = ''; if (label) label.style.filter = ''; } };
+  const setFilter = (v) => { for (const seg of edgeSegs(p)) seg.style.filter = v; if (label) label.style.filter = v; };
+  const hoverOn = () => { if (!selHas(scene, selKey)) setFilter(HOVER); };
+  const hoverOff = () => { if (!selHas(scene, selKey)) setFilter(''); };
   scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward can restore this edge selection
   const onClick = (ev) => {
     if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
@@ -4433,7 +4499,7 @@ function applyEnvDim(scene) {
   // An arrow is only as live as its ends: dim it when either endpoint is out of this environment.
   for (const e of scene.edgeEls) {
     const off = out.has(e.e.src) || out.has(e.e.dst);
-    e.path.classList.toggle('envout', off);
+    for (const seg of edgeSegs(e.path)) seg.classList.toggle('envout', off);
     if (e.label) e.label.classList.toggle('envout', off);
   }
 }
@@ -4664,7 +4730,7 @@ function bindFlowMap(uc) {
   steps.forEach((st, i) => {
     const a = flowMapBoxId(uc, st.srcId, st.src), b = flowMapBoxId(uc, st.dstId, st.dst);
     const arrow = arrows[a + '>' + b];
-    msgEls[i] = arrow ? [arrow.path, arrow.label].filter(Boolean) : [];
+    msgEls[i] = arrow ? [...edgeSegs(arrow.path), arrow.label].filter(Boolean) : [];
     if (!arrow) return;                    // a step whose pair was not drawn: no glow, but it still counts
     const desc = { key: 'flowstep:' + uc + ':' + i,
                    glow: (reveal) => glowEdge(arrow.path, arrow.label, reveal),
@@ -4922,7 +4988,17 @@ function eachClassEdge(root, fn) {
   const paths = [...root.querySelectorAll('path.relation')];
   const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
   const aligned = labels.length === paths.length;
+  const loops = selfArrowParts(paths);
   paths.forEach((p, i) => {
+    // An entity related to ITSELF (a parent/child link) is drawn as the same three pieces, with the
+    // same unmatchable id — so the Domain view reads it through the same one reader.
+    const loop = loops[i];
+    if (loop) {
+      if (loop.part !== 'mid') return;
+      p._segs = loop.segs;
+      fn(p, aligned ? labels[i] || null : null, loop.node, loop.node, i);
+      return;
+    }
     // Match entity (E), subdomain (SD), subsystem (S), component (C) and dep (D) endpoints. SD before S
     // so a subdomain id never reads as a subsystem. Needed by the subdomain card (`id_E1_SD2`, `id_S1_E1`)
     // and the bridge card's component→entity arrows (`id_C1_E1`); the flat Domain view + edge cards are
