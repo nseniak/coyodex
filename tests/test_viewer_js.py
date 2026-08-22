@@ -710,6 +710,46 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     block = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
     assert 'id="pageq"' in block, "the question is above the shadow, with the tabs and the trail"
 
+def test_the_card_reaches_its_source_from_the_panels_bar_not_from_the_card() -> None:
+    """An element card shows what an element IS, and never how to open its code. The way to the source
+    sits on the floating panel's own BAR, beside its close button, the way a window's title bar carries
+    the window's actions.
+
+    Not on the card, because the card is one design in a grid, in a list and floating over a diagram, and
+    a link on it would have to say either one filename or a count. One filename is a lie for most
+    elements: measured across the three maps, a SUBSYSTEM owns a median of 18 to 49 files and up to 367,
+    and a COMPONENT up to 122, with only 51 of 382 components owning exactly one. A count is a fact the
+    card did not ask to carry, and the code viewer's own header already holds the switcher.
+
+    Which element the bar acts on is read from the card itself, not remembered by each of the dozen
+    functions that write the panel. A multi-selection stacks one card per element and renders the primary
+    LAST, so the last card is the one the bar acts on.
+
+    Hidden when the element has no source. Measured: a use case, a business rule, a feature, a decision
+    area, an actor and a process have none at all — 422 elements of 1287 — so on those the button would be
+    a control that goes nowhere."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert 'id="panelsrc"' in js and "#panelsrc" in css
+    assert "&lt;/&gt;</button>" in js, "the label is escaped: a literal </> is a malformed end tag"
+    which = js[js.index("function paneCardElementId() {"):
+               js.index("\n}", js.index("function paneCardElementId() {"))]
+    assert "PANEL_HOST.querySelectorAll('.ecard[data-id]')" in which, "read from the card, not remembered"
+    assert "cards[cards.length - 1]" in which, "a multi-selection's primary is rendered last"
+    src = js[js.index("function elementSource(id) {"): js.index("\n}", js.index("function elementSource(id) {"))]
+    assert "n.file && localRef(n.file)" in src and "files.length ? { file: files[0]" in src, \
+        "the anchor if it has one, else the first file it owns"
+    sync = js[js.index("function syncPaneSourceBtn() {"):
+              js.index("\n}", js.index("function syncPaneSourceBtn() {"))]
+    assert "btn.hidden = !SERVED || !elementSource(paneCardElementId());" in sync
+    opener = js[js.index("function openPaneSource() {"): js.index("\n}", js.index("function openPaneSource() {"))]
+    assert "setCodeOpen(true);" in opener and "syncCodeView(src.file, src.line, src.files);" in opener
+    assert "pendingCode = null;" in opener, "the click names its own element"
+    # A card carries no source link of its own — that is what keeps one card design.
+    card = js[js.index("function elementCardHtml(id, opts) {"):
+              js.index("\n}", js.index("function elementCardHtml(id, opts) {"))]
+    assert "srclink" not in card and "localRef" not in card
+
 def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
     """A card puts an element's name and its pills on ONE line. Its own page split them across two rows
     with a rule between, so the page drew the element in a shape no card uses. Measured over the three

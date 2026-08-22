@@ -830,6 +830,16 @@ body.panel-dragging { user-select: none; }
 #panelclose { position: absolute; top: 1px; right: 4px; border: 0; background: transparent;
               font-size: 17px; line-height: 1; color: #9ca3af; cursor: pointer; padding: 2px 4px; }
 #panelclose:hover { color: #374151; }
+/* …and beside it, the way to this element's source. It sits on the BAR, not on the card: the card is one
+   design in a grid, in a list and floating over a diagram, and a link on it would have to say either one
+   filename — a lie for a subsystem, which owns 18 to 49 files and up to 367 — or a count, which is a fact
+   the card did not ask to carry. The bar is the panel's own chrome, like a window's title bar.
+   Hidden when the element has no source, so it is never a control that goes nowhere. */
+#panelsrc { position: absolute; top: 2px; right: 26px; border: 0; background: transparent;
+            font-family: ui-monospace, monospace; font-size: 11px; line-height: 1; color: #9ca3af;
+            cursor: pointer; padding: 3px 4px; }
+#panelsrc:hover { color: #4338ca; }
+#panelsrc[hidden] { display: none; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }
 /* name + kind tag (and any change badge) on one line — the identity a box/edge keeps even once its

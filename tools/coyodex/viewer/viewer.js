@@ -5522,9 +5522,47 @@ function paneSync() {
     PANEL_HOST.insertAdjacentHTML('afterbegin',
       '<div id="panelbar" title="Drag to move \u00b7 double-click to put it back">'
       + '<span class="grip" aria-hidden="true"></span>'
+      // `&lt;/&gt;`, not the characters: this string is parsed as HTML, and a literal `</>` inside a
+      // button is read as a malformed end tag and silently dropped — the button rendered empty.
+      + '<button id="panelsrc" type="button" hidden title="Show this element\u2019s source">'
+      + '&lt;/&gt;</button>'
       + '<button id="panelclose" type="button" title="Close (Esc)">\u00d7</button></div>');
   }
+  syncPaneSourceBtn();
   applyPanelBox();
+}
+// WHICH ELEMENT the card is showing, read from the card itself rather than remembered by each of the
+// dozen functions that write the panel. A multi-selection stacks one card per element and renders the
+// primary LAST (see renderSelPanel), so the last card is the one the bar's controls act on.
+function paneCardElementId() {
+  const cards = PANEL_HOST.querySelectorAll('.ecard[data-id]');
+  return cards.length ? cards[cards.length - 1].getAttribute('data-id') : null;
+}
+// An element's own source: its anchor if it has one, else the first file it owns. A SUBSYSTEM has a
+// median of 18 to 49 files and up to 367, and a component up to 122, so this is a way IN to that list,
+// never a claim that the element is one file — the code viewer's own header carries the switcher.
+function elementSource(id) {
+  const n = id ? GRAPH.nodes[id] : null;
+  if (!n) return null;
+  const files = (n.files || []).filter((f) => localRef(f));
+  if (n.file && localRef(n.file)) return { file: n.file, line: n.line || null, files };
+  return files.length ? { file: files[0], line: null, files } : null;
+}
+// The card's own way to the code, on the card's bar rather than on the card. The card is one design in a
+// grid, in a list and floating over a diagram, and it stays that way: this is the PANEL's control, beside
+// the panel's close button, the way a window's title bar carries the window's actions.
+// Hidden when the element has no source — a control that looks live and does nothing is worse than none.
+function syncPaneSourceBtn() {
+  const btn = PANEL_HOST.querySelector('#panelsrc');
+  if (!btn) return;
+  btn.hidden = !SERVED || !elementSource(paneCardElementId());
+}
+function openPaneSource() {
+  const src = elementSource(paneCardElementId());
+  if (!src) return;
+  pendingCode = null;        // this click names its own element; a stale selection must not win
+  setCodeOpen(true);
+  syncCodeView(src.file, src.line, src.files);
 }
 // --- where the card sits, and how big ---------------------------------------------
 // The card floats, so the one place it lands cannot be right for every reader on every map: a wide
@@ -9153,7 +9191,7 @@ PANEL_HOST.addEventListener('click', (ev) => {
 let panelDrag = null;
 PANEL_HOST.addEventListener('pointerdown', (ev) => {
   const bar = ev.target && ev.target.closest && ev.target.closest('#panelbar');
-  if (!bar || (ev.target.closest && ev.target.closest('#panelclose'))) return;
+  if (!bar || (ev.target.closest && ev.target.closest('button'))) return;
   const wrap = document.getElementById('diagwrap');
   if (!wrap) return;
   const r = PANEL_HOST.getBoundingClientRect(), w = wrap.getBoundingClientRect();
@@ -9210,6 +9248,7 @@ function storePanelBox() {
                  w: st.width ? Math.round(r.width) : 0, h: st.height ? Math.round(r.height) : 0 });
 }
 PANEL_HOST.addEventListener('click', (ev) => {
+  if (ev.target && ev.target.closest && ev.target.closest('#panelsrc')) { ev.stopPropagation(); openPaneSource(); return; }
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;
   ev.stopPropagation();
   if (mainScene && mainScene.selection && mainScene.selection.length) resetScene(mainScene);
