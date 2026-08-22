@@ -1012,21 +1012,27 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
 
 
 def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
-    """A third list shape, between the flat card list and the card grid: the SAME card list, cut into
-    sections by a heading. It earns its place where a list has a natural cut that is not a level — a
-    person and a piece of software are both actors, and putting either behind a drill would hide half
-    the list to say what a heading says for free. Three screens had hand-rolled the shape, which is the
-    drift the spec's "centralize the card designs" exists to stop.
+    """A third shape, between the flat card list and the card grid: the SAME cards, cut into sections by
+    a heading. It earns its place where a set has a natural cut that is not a level — a person and a
+    piece of software are both actors, and putting either behind a drill would hide half the set to say
+    what a heading says for free. Three screens had hand-rolled the shape, which is the drift the spec's
+    "centralize the card designs" exists to stop.
+
+    The cut and the SHAPE are two separate questions, so the component takes both: the heading says
+    "these belong together", and list-or-grid says whether the reader is reading the set or choosing one
+    out of it. Actors is grouped AND chosen from; a feature page's rules by area, and the four groups of
+    unreached components, are grouped and read.
 
     The section is NOT a card. It was, in a tinted frame containing its members, and two nested card
     shapes on one screen read as two levels of thing when there is only one — the reader had to work out
-    whether the frame was itself something to click. So the cards keep the plain list's look and width,
-    and the break is carried by a heading, space and a hairline."""
+    whether the frame was itself something to click. So the cards keep the plain look and width, and the
+    break is carried by a heading, space and a hairline."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    body = js[js.index("function elementCardGroupsHtml(groups) {"):
-              js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups) {") + 10)]
-    assert "csec" in body and "elementCardListHtml(g.ids, g.per)" in body
+    body = js[js.index("function elementCardGroupsHtml(groups, opts) {"):
+              js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups, opts) {") + 10)]
+    assert "csec" in body and "body(g.ids, g.per)" in body
+    assert "const body = (opts && opts.grid) ? elementCardGridHtml : elementCardListHtml;" in body
     assert "mcard" not in js and "mcard" not in css, "the boxed section is gone, not shadowed"
     sec = css[css.index(".csec-head {"): css.index("}", css.index(".csec-head {"))]
     assert "border-bottom" in sec
@@ -1036,12 +1042,41 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
     # An empty group is dropped, and a lone group draws no frame: one heading repeating the page title
     # says nothing.
     assert "filter((g) => g.ids && g.ids.length)" in body
-    assert "if (live.length === 1) return elementCardListHtml(live[0].ids, live[0].per);" in body
+    assert "if (live.length === 1) return body(live[0].ids, live[0].per);" in body
     for caller in ("function actorCardsHtml() {", "function featRulesHtml(ids) {",
                    "function unreachedHtml() {"):
         fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
+
+def test_a_screen_you_choose_from_is_a_grid_wherever_it_is() -> None:
+    """A list is the shape for a set to be READ; a grid is the shape for a set to be CHOSEN between.
+    Features and Rules were grids. Actors was a list, and every card on it is a door to that actor's use
+    cases — exactly what a feature card and a decision-area card are.
+
+    The reason it was a list had expired. Actor cards used to exist twice: as a GRID on the Features
+    view's actor axis, to choose from, and as a LIST on the Actors view, to read, whose cards drilled
+    ACROSS into that axis. Removing the axis deleted the grid copy and handed the choosing job to the
+    list, which kept its shape. Measured after that: an actor card ran the full 1060px width one per row
+    while its sentence used 650px, so 39% of every row was empty, and the counts never justified a
+    second shape (8-10 features, 9-12 decision areas, 4-6 actors on the three real maps).
+
+    The People / Software cut stays: the cut and the shape are different questions. This does not bring
+    back the boxed section — the break is still a heading, a hairline and space, never a frame.
+
+    One more thing fell out of the grid: `.ecard-grid .ecard-name` gives the name the whole first line,
+    so an actor card is now the same shape as every other card in a grid."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function cardGridHtml(cards) {" in js and "function elementCardGridHtml(ids, per) {" in js
+    # The grid class is typed ONCE. Five screens each wrote the div themselves before.
+    assert js.count('class="ecard-grid"') == 1, "a hand-rolled card grid is back"
+    actors = js[js.index("function actorCardsHtml() {"):
+                js.index("\nfunction ", js.index("function actorCardsHtml() {") + 10)]
+    assert "], { grid: true });" in actors, "the Actors page must be a grid"
+    # …and the two screens that really are read, not chosen from, stay lists.
+    for caller in ("function featRulesHtml(ids) {", "function unreachedHtml() {"):
+        fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
+        assert "grid: true" not in fn, caller
 
 def test_no_kind_quietly_joins_the_pill_repeats_the_drill_set() -> None:
     """`TYPE_PILL_REPEATS_DRILL` is a fact ABOUT two other functions: the kinds where the pill's

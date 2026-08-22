@@ -485,6 +485,18 @@ function elementCardListHtml(ids, per) {
     elementCardHtml(id, per ? per(id) : null)).join('')}</div>`;
 }
 
+// A CARD GRID: cards across then down. The list is the shape for a set to be READ; the grid is the
+// shape for a set to be CHOSEN between, which is what every card on it is — a door to one page.
+// This is the grid the spec's "one builder for the card, one for a list, one for a grid, one for a
+// grouped list" asks for, and it was the missing member: five screens each typed the class themselves.
+// It takes rendered cards, not ids, because a real grid can mix element cards with plain ones (a
+// System collection, the use cases belonging to no feature) that are not map elements at all.
+function cardGridHtml(cards) { return cards ? `<div class="ecard-grid">${cards}</div>` : ''; }
+// …and the common case: a plain run of element ids.
+function elementCardGridHtml(ids, per) {
+  return cardGridHtml((ids || []).map((id) => elementCardHtml(id, per ? per(id) : null)).join(''));
+}
+
 // A GROUPED CARD LIST: the plain card list, cut into sections by a heading. The third list shape,
 // between the flat card list (one run) and the card grid (across then down, for choosing). It exists
 // because some lists have a natural cut that is not a level: humans and services are both actors, and
@@ -497,15 +509,20 @@ function elementCardListHtml(ids, per) {
 //
 // `groups` = [{ title, count, desc, ids, per }]. Empty groups are dropped, and a single group draws no
 // heading at all — one section title repeating the page title says nothing.
-function elementCardGroupsHtml(groups) {
+//
+// `opts.grid` cuts a card GRID into the same sections instead of a card list. The cut and the shape are
+// two separate questions: the heading says "these belong together", and list-or-grid says whether the
+// reader is reading the set or choosing one out of it. Actors is grouped AND chosen from.
+function elementCardGroupsHtml(groups, opts) {
   const live = (groups || []).filter((g) => g.ids && g.ids.length);
   if (!live.length) return '';
-  if (live.length === 1) return elementCardListHtml(live[0].ids, live[0].per);
+  const body = (opts && opts.grid) ? elementCardGridHtml : elementCardListHtml;
+  if (live.length === 1) return body(live[0].ids, live[0].per);
   return `<div class="csec-list">${live.map((g) => '<section class="csec">'
     + `<div class="csec-head"><h3 class="csec-title">${esc(g.title)}</h3>`
     + `<span class="csec-count">${esc(g.count || String(g.ids.length))}</span></div>`
     + (g.desc ? `<p class="csec-desc">${esc(g.desc)}</p>` : '')
-    + elementCardListHtml(g.ids, g.per) + '</section>').join('')}</div>`;
+    + body(g.ids, g.per) + '</section>').join('')}</div>`;
 }
 
 
@@ -6161,15 +6178,16 @@ function actorCardsHtml() {
     return { homeType: true,
              extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>` };
   };
-  // A thing to READ, and a person and a piece of software are not the same kind of driver — one signs
-  // in, the other runs on its own. So the list is cut in two.
+  // A person and a piece of software are not the same kind of driver — one signs in, the other runs on
+  // its own — so the set is cut in two. The cards are a GRID: every one of them is a door to that
+  // actor's use cases, which is the same job a feature card and a decision-area card do.
   const of = (kind) => all.filter((n) => n.kind === kind).map((n) => n.id);
   return elementCardGroupsHtml([
     { title: 'People', ids: of('human'), per,
       desc: 'Someone who signs in and asks the product for something.' },
     { title: 'Software', ids: of('service'), per,
       desc: 'A caller with no person behind it: a script, a schedule, another service.' },
-  ]);
+  ], { grid: true });
 }
 // An actor's card opens what that actor can do, one level down inside THIS view. It used to drill
 // across into a Features axis, so the Actors view could not answer its own question without handing
@@ -6215,9 +6233,8 @@ function renderOverview() {
   // element, so they get the card's SHAPE without its element actions.
   const looseCard = loose ? plainCardHtml({ key: '-', name: 'Not assigned to a feature',
     count: `${loose.ucs.length} use case${loose.ucs.length === 1 ? '' : 's'}` }) : '';
-  const grid = ids.length || looseCard
-    ? `<div class="ecard-grid">${ids.map((id) => elementCardHtml(id, per(id))).join('')}${looseCard}</div>`
-    : '<p class="empty">No features recorded.</p>';
+  const grid = cardGridHtml(ids.map((id) => elementCardHtml(id, per(id))).join('') + looseCard)
+    || '<p class="empty">No features recorded.</p>';
   // The cards get a label of their own, in the same shape as the description above them: the page
   // holds two blocks now, and without a second label the grid read as a continuation of the prose.
   diagram.innerHTML = '<div class="usecases-wrap">'
@@ -6508,7 +6525,7 @@ function renderSystem() {
       plainCardHtml({ key: s.id, name: s.title, desc: s.blurb, count: s.count })).join('');
     // With only one band there is nothing to tell it apart from, so its label would be noise.
     const head = live.length > 1 ? `<h3 class="sys-band">${esc(title)}</h3>` : '';
-    return head + `<div class="ecard-grid">${cards}</div>`;
+    return head + cardGridHtml(cards);
   }).join('');
   diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
     + viewHeadHtml('System')
@@ -6528,7 +6545,7 @@ function renderSystemSection(sysId, epk) {
       count: `${k.count} way${k.count === 1 ? '' : 's'} in` })).join('');
     diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
       + viewHeadHtml(found.title, found.blurb)
-      + `<div class="ecard-grid">${cards}</div></div>`;
+      + cardGridHtml(cards) + '</div>';
     bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: sysId, epk: key }));
     return;
   }
@@ -7004,8 +7021,7 @@ function renderRules(s) {
                           count: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}` });
     }).join('');
     diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Rules')
-      + '<div class="ecard-grid">'
-      + (cards || '<p class="empty">No business rules recorded.</p>') + '</div></div>';
+      + (cardGridHtml(cards) || '<p class="empty">No business rules recorded.</p>') + '</div>';
     bindElementCards(diagram, (id) => go({ kind: 'rules', blk: id }));
     bindPlainCards(diagram, (key) => go({ kind: 'rules', blk: key }));
     return;
