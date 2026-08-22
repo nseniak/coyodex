@@ -638,6 +638,17 @@ function bindElementCards(root, onDrill) {
     ev.stopPropagation();               // the pill's action is not the card's
     showInContext(b.getAttribute('data-ctx'));
   }));
+  // The card's CONTEXT line names the other axis, and that name is a door of its own: the feature's own
+  // list of use cases, or the actor's. Bound here rather than at each screen, so a card that grows this
+  // line anywhere else is live without its caller having to remember.
+  root.querySelectorAll('[data-gofeat]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    go({ kind: 'capability', cap: b.getAttribute('data-gofeat') });
+  }));
+  root.querySelectorAll('[data-goactor]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    go({ kind: 'actor', act: b.getAttribute('data-goactor') });
+  }));
   root.querySelectorAll('.ecard[data-id]').forEach((card) => {
     const open = (ev) => {
       // The pill has its own action, and so does anything the CALLER put in the card (a Happy-Path
@@ -6359,12 +6370,28 @@ function renderUseCases(sel) {
     // reader meeting the map for the first time could not tell a feature's name from the word for what
     // the card is. `In feature` and `Driven by` each say what the name that follows is, and which of the
     // two appears says which axis this screen is NOT already sorted by.
+    // …and the name is a CONTROL, because it goes somewhere the card does not: the card opens this use
+    // case's flow, the pill opens the feature (or the actor) it names. That is exactly the condition the
+    // type pill has to meet to keep its click, and this slot meets it on both screens — a feature's page
+    // is not where an actor's list is, and an actor's page is not where a feature's list is.
+    // `data-card-own` is the marker bindElementCards reads: a click here is not the card's drill.
+    // The ACTOR name is only a door when it names exactly ONE actor. A use case driven by a pair reads
+    // `Team member and Organization admin`, and a use case whose actor the map never declared reads
+    // `Other`; neither is a page, and a pill that looks live and goes nowhere teaches a reader to
+    // distrust the ones that work. Those stay plain text in the same slot.
+    const actorText = actorTextOf(n);
+    const actorPage = actorNodeId(actorText);
     const cross = byCapability
       ? `<p class="ecard-extra"><span class="ecard-lbl">Driven by</span> `
-        + `<span class="ecard-pill ecard-pill-${esc(roleKindOf(n))}">${esc(actorTextOf(n))}</span></p>`
+        + (actorPage
+          ? `<button type="button" data-card-own class="ecard-pill ecard-pill-link ecard-pill-${esc(roleKindOf(n))}" `
+            + `data-goactor="${esc(actorText)}" title="Everything this actor can do">${esc(actorText)}</button>`
+          : `<span class="ecard-pill ecard-pill-${esc(roleKindOf(n))}">${esc(actorText)}</span>`) + `</p>`
       : (CAP_OF_UC[id]
         ? `<p class="ecard-extra"><span class="ecard-lbl">In feature</span> `
-          + `<span class="ecard-pill">${esc(CAP_OF_UC[id].name)}</span></p>` : '');
+          + `<button type="button" data-card-own class="ecard-pill ecard-pill-link" `
+          + `data-gofeat="${esc(CAP_OF_UC[id].id)}" title="Everything this feature can do">`
+          + `${esc(CAP_OF_UC[id].name)}</button></p>` : '');
     const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(id))
       ? '<span class="badge modified">changed</span>' : '';
     const untraced = FLOWS_MM && FLOWS_MM[id] ? ''

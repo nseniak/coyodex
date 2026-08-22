@@ -1465,6 +1465,21 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     grid = css[css.index(".ecard-grid .ecard-name"):]
     grid = grid[: grid.index("\n\n")] if "\n\n" in grid else grid[:600]
     assert "margin-top: auto" in grid, "one height for the labelled line across a row"
+    # …and the NAME on that line is a door: the feature's own list of use cases, or the actor's. It earns
+    # the click by the rule every pill is held to — it goes where neither the card's own click nor the
+    # page already open goes.
+    assert 'data-gofeat="' in ucs and 'data-goactor="' in ucs
+    assert "ecard-pill-link" in ucs and "ecard-pill-link" in css
+    binder = js[js.index("function bindElementCards(root, onDrill) {"):
+                js.index("\n}", js.index("function bindElementCards(root, onDrill) {"))]
+    assert "data-gofeat" in binder and "data-goactor" in binder, \
+        "bound where every card is bound, not per screen"
+    assert binder.count("ev.stopPropagation();") >= 3, "a click on the door is not the card's drill"
+    # An ACTOR name is a door only when it names ONE actor. A use case driven by a pair reads "Team member
+    # and Organization admin" and one the map never declared reads "Other"; neither is a page, and a pill
+    # that looks live and goes nowhere teaches a reader to distrust the ones that work.
+    assert "const actorPage = actorNodeId(actorText);" in ucs
+    assert "actorPage" in ucs and "<span class=\"ecard-pill ecard-pill-${esc(roleKindOf(n))}\">" in ucs
 
 def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     """A role's page used to open with a bordered block whose heading was the page's own title, with the
