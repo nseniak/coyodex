@@ -425,7 +425,11 @@ body.vresizing #stage { pointer-events: none; }
 /* WHO a feature is for. `happy_path` (must the walk reach it) is deliberately NOT drawn: it is an
    authoring decision the Coverage rule reads, and a reader of the map has no use for it. */
 .uc-aud-user { background: #e0e7ff; color: #4338ca; }
-.uc-aud-staff { background: #fef3c7; color: #92400e; }
+.uc-aud-internal { background: #fef3c7; color: #92400e; }
+/* An actor's side, on the card pill rather than the feature hero's label: same two colours, the card's
+   own shape. A program fuses its side INTO its kind word ("user service"), so this class also carries
+   what `.ecard-pill-service` used to — see actorSidePills. */
+.ecard-pill-side { text-transform: uppercase; letter-spacing: .03em; font-weight: 700; }
 /* The info pane holds ONE card — the same card a list holds. The pane's own padding already frames it,
    so the card drops its border there and reads as the pane's content rather than as a box in a box. */
 #panel .pane-card .ecard { border-color: transparent; padding: 0; background: transparent; }

@@ -228,16 +228,22 @@ def order_buckets(names: Iterable[str], is_library: bool) -> list[str]:
 # `kind`. Lets a reader answer "what runs with no user?" at a glance.
 ACTIVATIONS = ("self", "external")
 
-# A ROLE's AUDIENCE — a closed vocabulary, authored on the role. "staff" = this person works for the
-# company that ships the product; "user" = everyone else, including someone who has not bought it
-# yet. This is the ONE authored answer to "who is this for" in the whole map: a capability's audience
-# is DERIVED from it (`capability_audience`), never authored, so the two can never contradict.
+# A ROLE's AUDIENCE — a closed vocabulary, authored on the role. WHICH SIDE of the product this actor
+# sits on: "internal" = the side of the company that ships it; "user" = everyone else, including
+# someone who has not bought it yet. This is the ONE authored answer to "who is this for" in the whole
+# map: a capability's audience is DERIVED from it (`capability_audience`), never authored, so the two
+# can never contradict.
 #
-# Authored on the ROLE rather than on the capability because the role is the stable element. Measured
-# across 21 rebuilds of one repo: the capability set churned every build (9 → 8 → 9, names and labels
-# moving, one feature flipping between two label values), while the same four roles appeared in
-# nearly every build and never once changed side.
-ROLE_AUDIENCE = ("user", "staff")
+# The side is asked the same way of a person and of a program, but answered from different evidence:
+#   * a PERSON  — do they work for the company that ships the product?
+#   * a PROGRAM — whose machine is it? The customer set it up -> `user`; the company runs it, or pays
+#                 a vendor to run it -> `internal`. NOT whose work it happens to be doing.
+#
+# The word was `staff` until a count showed it naming the wrong thing: across the reference maps it
+# printed in 12 places and only 4 of them were people. A scheduler is not staff, and neither is a
+# payment provider the company pays, so the viewer had grown a second form (`staff-owned`) just to
+# make the word usable on a machine. One word that fits every actor beats two that fit half each.
+ROLE_AUDIENCE = ("user", "internal")
 
 # A CAPABILITY's HAPPY_PATH expectation — a closed vocabulary, authored on the capability (never on a
 # subsystem or a subdomain, which `validate` blocks). "expected" = the walk must reach at least one
@@ -249,7 +255,7 @@ ROLE_AUDIENCE = ("user", "staff")
 # audience question in one word. Two of its three values had no definition anywhere and no branch in
 # this codebase ever distinguished them, so the audience half was unenforced and drifted: the same
 # feature was `platform` in one rebuild and `supporting` in the next. Splitting the two questions
-# also gave the missing 2x2 cell a name — staff work the walk shows on purpose — which is what six
+# also gave the missing 2x2 cell a name — internal work the walk shows on purpose — which is what six
 # per-step records on the live maps existed only to excuse.
 #
 # Deliberately NOT derived from the walk. A field that always agrees with `happy_path[]` could never

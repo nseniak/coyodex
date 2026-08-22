@@ -52,10 +52,11 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "goal":   "<T0 prose — the problem the project solves and for whom>",
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
-  "roles":       [ { "id": "Rn", "name", "kind": "human|service", "audience": "user|staff",
-                     "wants", "drives" } ],       // audience: staff = works for the company that
-                                                  // ships the product. A capability's audience is
-                                                  // DERIVED from it, never authored.
+  "roles":       [ { "id": "Rn", "name", "kind": "human|service", "audience": "user|internal",
+                     "wants", "drives" } ],       // audience: which SIDE. internal = the company
+                                                  // that ships the product. On a program: whose
+                                                  // machine — a bought service is internal too.
+                                                  // A capability's audience is DERIVED from it.
   "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>" } ],
   "capabilities": [ { "id": "CAPn", "name", "purpose", "parent": "CAPn|null",
                       "happy_path": "expected|excluded" } ],    // capability-only; blocked on S/SD

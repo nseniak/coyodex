@@ -28,7 +28,7 @@
       "id": "R3",
       "name": "Method maintainer",
       "kind": "human",
-      "audience": "staff",
+      "audience": "internal",
       "wants": "evidence that a change to coyodex's own method or tooling made the maps it produces better rather than worse",
       "drives": "UC9"
     }

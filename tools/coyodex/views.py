@@ -326,9 +326,10 @@ def model_to_markdown(m: ProjectModel) -> str:
                        [[f"**{g.term}**", g.meaning, _anchor_link(g.source)] for g in m.glossary]))
     if m.roles:
         section("Roles (actors)",
-                ["`Audience` says WHO this role is: `staff` = the person works for the company that "
-                 "ships the product,", "`user` = everyone else. Every capability's audience is "
-                 "derived from it.", ""]
+                ["`Audience` says WHICH SIDE this actor is on: `internal` = the side of the company "
+                 "that ships the product,", "`user` = everyone else. On a program it is whose "
+                 "machine it is, so a bought service is `internal`.",
+                 "Every capability's audience is derived from it.", ""]
                 + _table(["Role", "Kind", "Audience", "What they want", "Use cases they drive"],
                          [[f"**{r.name}**", r.kind, r.audience, r.wants, r.drives]
                           for r in m.roles]))

@@ -380,6 +380,38 @@ const CARD_DESC_FIELD = {
 // carrying a pill that repeated its own click.
 const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process']);
 
+// An actor's nature (person or program) and its SIDE (whose it is), as the pills BOTH the card and the
+// actor's own page draw. One function, because the two used to disagree: the card said `SERVICE` and
+// the page one click later said `service` + `STAFF-OWNED`, about the same actor.
+//
+// Four readings, and only two of them print a side:
+//   person  + user      ->  (nothing)         an actor is a person on the customer's side unless it says otherwise
+//   person  + internal  ->  STAFF             the reader's word for a person on the company's side
+//   program + internal  ->  SERVICE           whose machine it usually is, so the word would not vary
+//   program + user      ->  USER SERVICE      the exception: a machine the CUSTOMER set up
+//
+// Two words for one stored value, because the reader's word depends on what it is labelling. `staff`
+// is right about a person and wrong about a scheduler or a bought payment provider; `internal` is
+// right about all three but stiff on a person. So the MODEL stores `internal` — one word, one meaning,
+// answerable for a vendor — and the reader sees the word that fits the thing in front of them. The same
+// split the map already makes between `capability` and the reader's word `feature`.
+//
+// Which side is silent follows the measured rule, per SET. Among people, `user` is 7 of 11 on the
+// reference maps, so `staff` is the exception that prints. Among programs it is the other way round:
+// once a bought service counts as the company's (Stripe's webhook is nobody's customer), 3 of the 5
+// services are the company's own, so `service` alone carries that and `user service` is the exception.
+function actorSidePills(kind, audience) {
+  const side = String(audience || '').trim().toLowerCase();
+  if (kind === 'service') {
+    return side === 'user'
+      ? [{ text: 'user service', cls: 'ecard-pill-side uc-aud-user' }]
+      : [{ text: 'service', cls: 'ecard-pill-service' }];
+  }
+  if (kind === 'human' && side === 'internal') {
+    return [{ text: 'staff', cls: 'ecard-pill-side uc-aud-internal' }];
+  }
+  return [];
+}
 function cardFacts(id) {
   const n = GRAPH.nodes[id];
   if (!n) return null;
@@ -394,13 +426,12 @@ function cardFacts(id) {
   // carry BOTH audience words, so this is a set and never a single "mixed" one.
   if (n.kind === 'capability') {
     for (const a of shownAudience((f.Audience || '').split(',').map((s) => s.trim()).filter(Boolean))) {
-      pills.push({ text: a, cls: 'uc-aud-' + a.toLowerCase() });
+      // stored `internal`, read as `staff` — a feature's audience is voted for by its HUMAN roles only
+      pills.push({ text: audienceWord(a), cls: 'uc-aud-' + a.toLowerCase() });
     }
   }
-  // `service` only. A person is what an actor USUALLY is, so the word sits on nearly every card and
-  // tells the reader nothing; `service` is the exception worth a pill, because it says this one runs
-  // with nobody watching. Same argument the actor cards already make for dropping the type pill.
-  if (n.kind === 'service') pills.push({ text: n.kind, cls: 'ecard-pill-service' });
+  // An actor's nature and its SIDE, in one pill each — see actorSidePills for the four readings.
+  for (const p of actorSidePills(n.kind, n.audience)) pills.push(p);
   if (n.kind === 'dep' && f.Kind) pills.push({ text: f.Kind, cls: '' });
   return { id, kind: n.kind, name: n.name || id, type: elementLabel(n.kind), desc, pills };
 }
@@ -5633,8 +5664,15 @@ function renderGlossary() {
 // implied. The same argument the actor cards make for dropping their type pill, and `human` for
 // dropping its kind pill: a word that is nearly always there distinguishes nothing.
 //
-// It survives BESIDE `staff`, because "both sides act here" is the one thing this pair exists to say,
-// and a lone `staff` pill would read as "staff only". So the rule is about the SET, not the word.
+// It survives BESIDE `internal`, because "both sides act here" is the one thing this pair exists to
+// say, and a lone `internal` pill would read as "internal only". The rule is about the SET, not the
+// word — and it is the same rule actorSidePills applies to a person.
+// The reader's word for a stored side. The model says `internal` — one word that is answerable for a
+// person, a scheduler and a bought vendor alike. A reader meets that side only where it is about
+// PEOPLE (an actor who is a person, a feature whose audience its human roles voted for), and there the
+// English word is `staff`. A program never reaches this: it says `service` or `user service` instead.
+// Same split the map already makes between `capability` and the reader's word `feature`.
+function audienceWord(side) { return String(side) === 'internal' ? 'staff' : String(side); }
 function shownAudience(list) {
   return (list.length === 1 && list[0] === 'user') ? [] : list;
 }
@@ -5871,8 +5909,10 @@ function featureHeadHtml(capId) {
     ? f.roles.map((rid) => `<button type="button" class="featrole" data-act="${esc(roleName(rid))}">`
         + `${esc(roleName(rid))}</button>`).join('')
     : '<span class="feat-empty">not recorded</span>';
+  // `internal` is stored; `staff` is what a reader sees, because a feature's audience is derived from
+  // its HUMAN roles alone (a machine never votes) and so it is always a word about people.
   const capPill = (v, kind) => (v
-    ? `<span class="uc-caplabel uc-${kind}-${esc(v.toLowerCase())}">${esc(v)}</span>` : '');
+    ? `<span class="uc-caplabel uc-${kind}-${esc(v.toLowerCase())}">${esc(audienceWord(v))}</span>` : '');
   return pageHeroHtml({
     name: f.name,
     pills: shownAudience(f.audience || []).map((a) => capPill(a, 'aud')).join(''),
@@ -5940,17 +5980,12 @@ function actorHeadHtml(actorName) {
   // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
   const role = g && g.roles.length === 1 ? g.roles[0] : null;
   const kind = ((role || {}).kind || '').trim().toLowerCase();
-  // Whose side this actor is on rides beside whether it is a person or a program. The two are
-  // independent: a customer's own bot is service+user, the product's upkeep job is service+staff.
-  // On a PROGRAM the word is possessive — a bare `staff` on a scheduler reads as "this program is a
-  // person", which is the one thing the stored word does not mean. The model keeps `staff`; only
-  // the reading changes, so there is no second vocabulary to drift.
-  const aud = ((role || {}).audience || '').trim().toLowerCase();
-  const audText = aud && kind === 'service' ? `${aud}-owned` : aud;
+  // The SAME pills the actor's card carries, from the one function that decides them. The page used to
+  // compute its own — `service` + `staff-owned` where the card said only `SERVICE` — so the same actor
+  // read two ways, one click apart.
   return pageHeroHtml({
-    pills: (kind === 'service'
-      ? `<span class="ecard-pill ecard-pill-service">${esc(kind)}</span>` : '')
-      + (aud ? `<span class="uc-caplabel uc-aud-${esc(aud)}">${esc(audText)}</span>` : ''),
+    pills: actorSidePills(kind, (role || {}).audience)
+      .map((p) => `<span class="ecard-pill ${esc(p.cls)}">${esc(p.text)}</span>`).join(''),
     desc: role && role.wants ? mdInline(role.wants) : '',
     noDesc: 'This map does not say what this actor wants.',
   });

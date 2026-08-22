@@ -44,7 +44,7 @@
       "id": "R5",
       "name": "Superadmin",
       "kind": "human",
-      "audience": "staff",
+      "audience": "internal",
       "wants": "Step into orgs for support, end sessions, clear stuck connections without seeing secrets",
       "drives": "UC23"
     }

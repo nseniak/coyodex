@@ -41,12 +41,15 @@ class Role:
     id: str                   # Rn — a role is a first-class element, referenced by id (not by name)
     name: str
     kind: str = ""            # human | service (free text preserved; the viewer normalizes)
-    audience: str = ""        # user | staff (grammar.ROLE_AUDIENCE) — WHO this role is. "staff" = the
-                              # person works for the company that ships the product. The map's one
-                              # authored answer to "who is this for": a capability's audience is
-                              # DERIVED from the roles driving its use cases (`capability_audience`),
-                              # so the two can never contradict each other. Orthogonal to `kind`: a
-                              # customer's own bot is service+user, an upkeep job is service+staff.
+    audience: str = ""        # user | internal (grammar.ROLE_AUDIENCE) — WHICH SIDE of the product
+                              # this actor sits on. A PERSON: does the person work for the company
+                              # that ships it? A PROGRAM: whose machine is it — the customer set it
+                              # up (user), or the company runs it or pays a vendor to run it
+                              # (internal)? The map's one authored answer to "who is this for": a
+                              # capability's audience is DERIVED from the roles driving its use
+                              # cases (`capability_audience`), so the two can never contradict each
+                              # other. Orthogonal to `kind`: a customer's own bot is service+user,
+                              # an upkeep job is service+internal.
     wants: str = ""
     drives: str = ""          # the "Use cases they drive" cell (UC ids inside)
 
@@ -896,7 +899,7 @@ _RENAME_NOTES: dict[str, str] = {
     "label": ("It was a THREE-value word (core | supporting | platform) carrying two questions at "
               "once, and two of its values had no definition anywhere. Split them: `happy_path` "
               "(expected | excluded) on the CAPABILITY says whether the walk must reach it, and "
-              "`audience` (user | staff) on the ROLE says who it is for — a capability's audience is "
+              "`audience` (user | internal) on the ROLE says which side it is on — a capability's audience is "
               "derived from its actors. Old value → new: core → happy_path 'expected'; supporting / "
               "platform → 'excluded' UNLESS a walk step already reaches it, in which case "
               "'expected'. There is no mechanical rule for the audience half; read the roles."),

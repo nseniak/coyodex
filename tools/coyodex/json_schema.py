@@ -45,12 +45,19 @@ _EXTRA_DESC = ("freeform authored columns — any JSON value, agent-chosen keys.
 # encode the constraint itself where one is actually enforced (by `coyodex validate` or the loader).
 FIELD_META: dict[tuple[str, str], dict] = {
     ("Role", "kind"): {"description": "human | service, free text (not a closed vocabulary)."},
-    ("Role", "audience"): {"enum": ["", *grammar.ROLE_AUDIENCE], "description": "WHO this role is: "
-                            "`staff` = the person works for the company that ships the product; "
-                            "`user` = everyone else, including someone who has not bought it yet. "
-                            "The map's ONE authored answer to 'who is this for' — a capability's "
-                            "audience is DERIVED from the roles driving its use cases, never "
-                            "authored, so the two can never contradict. Orthogonal to `kind`."},
+    ("Role", "audience"): {"enum": ["", *grammar.ROLE_AUDIENCE], "description": "WHICH SIDE of the "
+                            "product this actor sits on. `internal` = the side of the company that "
+                            "ships it; `user` = everyone else, including someone who has not bought "
+                            "it yet. Same question of a person and of a program, answered from "
+                            "different evidence: a PERSON is `internal` when they work for that "
+                            "company; a PROGRAM is judged by WHOSE MACHINE IT IS, never by whose "
+                            "work it happens to be doing — the customer set it up (`user`), or the "
+                            "company runs it OR PAYS A VENDOR to run it (`internal`). A payment "
+                            "provider, an email sender or any other bought service is `internal`: "
+                            "no customer configured it. The map's ONE authored answer to 'who is "
+                            "this for' — a capability's audience is DERIVED from the roles driving "
+                            "its use cases, never authored, so the two can never contradict. "
+                            "Orthogonal to `kind`."},
     ("Role", "drives"): {"description": "the use cases this role drives — free text, ids inside."},
     ("GlossaryRow", "source"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
                                "(where it is defined); null when the concept has no single code home "

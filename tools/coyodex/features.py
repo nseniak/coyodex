@@ -52,7 +52,7 @@ class FeatureFacts:
     purpose: str = ""
     # `happy_path` is deliberately NOT carried: it is an authoring decision the Coverage rule reads,
     # and no view draws it, so shipping it would be a field nothing consumes.
-    audience: list[str] = field(default_factory=list)        # user and/or staff — DERIVED from the
+    audience: list[str] = field(default_factory=list)        # user and/or internal — DERIVED from the
                                                              # roles driving its use cases, never
                                                              # authored, so the two cannot disagree.
                                                              # A SET: a surface both sides act in

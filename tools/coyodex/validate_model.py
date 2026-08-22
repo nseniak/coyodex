@@ -1615,7 +1615,7 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
     not become.
 
     AUDIENCE IS NOT READ HERE. `happy_path` answers "must the walk reach this?" and nothing else. A
-    staff capability may legitimately sit on the walk — the story has to show the operator and the
+    internal capability may legitimately sit on the walk — the story has to show the operator and the
     upkeep job at work somewhere — and it needs no per-step excuse for doing so. The previous
     three-value `label` had no word for that case, which is the whole reason six per-step records
     existed on the live maps.
@@ -2882,7 +2882,7 @@ def _check_group_happy_path(m: ProjectModel) -> list[str]:
 
 
 def _check_role_audience(m: ProjectModel) -> list[str]:
-    """`audience` (user | staff) on every role — the map's ONE authored answer to "who is this for".
+    """`audience` (user | internal) on every role — the map's ONE authored answer to "who is this for".
 
     BLOCKING on an unknown value, the way every closed vocabulary here is."""
     return [f"{r.id} has an unknown `audience` '{r.audience.strip()}' — one of "
@@ -2920,7 +2920,7 @@ def _check_capability_audience(m: ProjectModel) -> list[str]:
     recorded = records.recorded_keys(m, "Audience exceptions")
     caps = {c.id: c for c in m.capabilities}
     warnings += [
-        f"{cid} ({caps[cid].name}) is driven by both `user` and `staff` roles — usually two goals in "
+        f"{cid} ({caps[cid].name}) is driven by both `user` and `internal` roles — usually two goals in "
         "one capability, so re-read its goal first; check too that each use case names the actor who "
         "really initiates it. Split it, move the odd use case to the capability that fits, correct "
         f"the actor, or — if the surface genuinely serves both sides — record '{cid}: <why>' under "

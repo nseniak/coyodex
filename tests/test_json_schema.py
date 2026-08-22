@@ -75,7 +75,7 @@ def test_the_capability_pointer_fields_carry_their_id_patterns():
     walk = schema["$defs"]["Group"]["properties"]["happy_path"]
     assert set(walk["enum"]) == {"", "expected", "excluded"}
     aud = schema["$defs"]["Role"]["properties"]["audience"]
-    assert set(aud["enum"]) == {"", "user", "staff"}
+    assert set(aud["enum"]) == {"", "user", "internal"}
 
 
 if __name__ == "__main__":

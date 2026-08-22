@@ -1049,6 +1049,38 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
 
+def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
+    """The card said `SERVICE`; the actor's own page, one click later, said `service` + `STAFF-OWNED`
+    about the same actor, and never printed a side on the card at all. Both now read ONE function.
+
+    Four readings, and only two print a side:
+        person  + user      ->  (nothing)      a person on the customer's side is the ordinary case
+        person  + internal  ->  STAFF
+        program + internal  ->  SERVICE        the usual case for a machine, so it says nothing extra
+        program + user      ->  USER SERVICE   the exception: a machine the CUSTOMER set up
+
+    Which side stays silent is measured per SET, the rule a pill has to pass everywhere. Among people
+    `user` is 7 of 11 on the reference maps, so `staff` prints. Among programs it inverts: once a bought
+    service counts as the company's, 3 of 5 services are the company's, so `user service` prints.
+
+    Two words for one stored value, on purpose. `internal` is the MODEL's word: it is answerable for a
+    person, a scheduler and a payment provider alike, which `staff` was not. `staff` is the READER's
+    word wherever the side is about people, which is a person and a feature (a feature's audience is
+    voted for by its human roles only). The same split the map already makes between `capability` and
+    the reader's word `feature`."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function actorSidePills(kind, audience) {"):
+            js.index("\nfunction ", js.index("function actorSidePills(kind, audience) {") + 10)]
+    assert "text: 'user service'" in fn and "text: 'service'" in fn and "text: 'staff'" in fn
+    assert "side === 'internal'" in fn, "a person prints a side only when it is the company's"
+    # The card and the page draw the SAME pills — the page must not compute its own.
+    code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+    assert "-owned" not in code, "the page's second form for a machine is back"
+    assert js.count("actorSidePills(") >= 3, "card, page and the helper itself"
+    # The reader's word is applied in ONE place, and only where the side is about people.
+    assert "function audienceWord(side) {" in js
+    assert "audienceWord(a)" in js and "audienceWord(v)" in js, "the feature card and its page hero"
+
 def test_a_screen_you_choose_from_is_a_grid_wherever_it_is() -> None:
     """A list is the shape for a set to be READ; a grid is the shape for a set to be CHOSEN between.
     Features and Rules were grids. Actors was a list, and every card on it is a door to that actor's use

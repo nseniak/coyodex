@@ -60,8 +60,9 @@ who want a curated, governed set of MCP tools shared across their AI assistants.
 
 ## Roles (actors)
 
-`Audience` says WHO this role is: `staff` = the person works for the company that ships the product,
-`user` = everyone else. Every capability's audience is derived from it.
+`Audience` says WHICH SIDE this actor is on: `internal` = the side of the company that ships the product,
+`user` = everyone else. On a program it is whose machine it is, so a bought service is `internal`.
+Every capability's audience is derived from it.
 
 | Role | Kind | Audience | What they want | Use cases they drive |
 |---|---|---|---|---|
@@ -69,7 +70,7 @@ who want a curated, governed set of MCP tools shared across their AI assistants.
 | **Org admin** | human | user | Add/configure upstreams, define roles and per-tool access, manage the team, mint tokens, read audit | UC2, UC3, UC4, UC5, UC6, UC9, UC10, UC13, UC14, UC15, UC16, UC18, UC19, UC20, UC21, UC22, UC24, UC25 |
 | **Team member** | human | user | Connect their AI client through the gateway and call the tools their role allows | UC7, UC8, UC12 |
 | **Headless agent** | service | user | Connect without a browser sign-in and call tools under a least-privilege role | UC11 |
-| **Superadmin** | human | staff | Step into orgs for support, end sessions, clear stuck connections without seeing secrets | UC23 |
+| **Superadmin** | human | internal | Step into orgs for support, end sessions, clear stuck connections without seeing secrets | UC23 |
 
 ---
 
@@ -85,7 +86,7 @@ The use-case grouping. `Audience` is DERIVED from the roles driving its use case
 | **CAP4** | Tool access via gateway | user | The runtime path a client takes to list and call tools through the gateway. |  |
 | **CAP5** | Secrets & variables | user | Template variables, passwords and sandbox credential files behind upstream config. |  |
 | **CAP6** | Audit & oversight | user | Reading back what happened in an org. |  |
-| **CAP7** | Admin surfaces & ops | user, staff | Alternative management channels and operator support paths. |  |
+| **CAP7** | Admin surfaces & ops | user, internal | Alternative management channels and operator support paths. |  |
 
 ---
 

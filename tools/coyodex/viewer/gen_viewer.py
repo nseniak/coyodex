@@ -1548,7 +1548,11 @@ def add_context_nodes(g: dict[str, Any], graph: GraphDict) -> None:
                          "fields": {"Overview": graph["goal"]} if graph.get("goal") else {}}
     for i, r in enumerate(graph["roles"]):
         rid = _actor_id(i)
+        # `audience` rides on the NODE, not only on graph.roles: an actor card is drawn from the node
+        # alone, and joining role-by-name in the browser would be the second implementation of a join
+        # this project keeps paying for. Derived once, here.
         g["nodes"][rid] = {"id": rid, "kind": r["kind"], "name": r["name"], "file": None, "line": None,
+                           "audience": r.get("audience") or "",
                            "fields": ({"Wants": r["wants"]} if r["wants"] else {})}
     # The collapsed Libraries box is a synthetic node so bindNodes binds it (it skips ids absent from
     # the graph) and the click bridge resolves it; its panel/tooltip are driven by FOLDED_LIBS, not fields.

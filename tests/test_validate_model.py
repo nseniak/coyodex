@@ -3352,15 +3352,15 @@ def make_audience_model() -> ProjectModel:
     """A customer feature and a staff feature, plus one machine actor that serves BOTH sides."""
     m = make_capability_model()
     m.roles = [Role(id="R1", name="Customer", kind="human", audience="user"),
-               Role(id="R2", name="Operator", kind="human", audience="staff"),
-               Role(id="R3", name="Scheduler", kind="service", audience="staff")]
+               Role(id="R2", name="Operator", kind="human", audience="internal"),
+               Role(id="R3", name="Scheduler", kind="service", audience="internal")]
     m.use_cases[2].actors = ["R2"]                        # UC3 (CAP2) is the staff one
     return m
 
 
 def test_a_capabilitys_audience_is_derived_from_the_roles_driving_its_use_cases() -> None:
     m = make_audience_model()
-    assert validate_model_mod.capability_audience(m) == {"CAP1": ["user"], "CAP2": ["staff"]}
+    assert validate_model_mod.capability_audience(m) == {"CAP1": ["user"], "CAP2": ["internal"]}
     assert not any("audiences" in w for w in warnings_of(m))
 
 
@@ -3373,7 +3373,7 @@ def test_only_human_roles_vote_and_machines_are_the_fallback() -> None:
     assert validate_model_mod.capability_audience(m)["CAP1"] == ["user"]
     m.use_cases[0].actors = ["R3"]                        # no human left: the machine answers
     m.use_cases[1].actors = ["R3"]
-    assert validate_model_mod.capability_audience(m)["CAP1"] == ["staff"]
+    assert validate_model_mod.capability_audience(m)["CAP1"] == ["internal"]
 
 
 def test_a_capability_driven_by_both_sides_warns_and_can_be_recorded() -> None:
@@ -3383,11 +3383,11 @@ def test_a_capability_driven_by_both_sides_warns_and_can_be_recorded() -> None:
     m.use_cases[1].actors = ["R2"]                        # CAP1 now holds a user AND a staff use case
     # BOTH words, never a "mixed" sentinel: the views show two pills, and a surface that really does
     # serve both sides keeps an honest answer after the operator records it.
-    assert validate_model_mod.capability_audience(m)["CAP1"] == ["user", "staff"]
-    assert any("CAP1" in w and "both `user` and `staff`" in w for w in warnings_of(m))
+    assert validate_model_mod.capability_audience(m)["CAP1"] == ["user", "internal"]
+    assert any("CAP1" in w and "both `user` and `internal`" in w for w in warnings_of(m))
     m.extras = [ExtraSection(heading="Audience exceptions",
                              body="CAP1: the status page is the one surface both sides read")]
-    assert not any("CAP1" in w and "both `user` and `staff`" in w for w in warnings_of(m))
+    assert not any("CAP1" in w and "both `user` and `internal`" in w for w in warnings_of(m))
 
 
 def test_an_audience_outside_the_closed_vocabulary_blocks() -> None:
@@ -3437,12 +3437,12 @@ def test_a_staff_capability_on_the_walk_costs_no_record() -> None:
     read as "not core", so a spine step in staff work demanded a written excuse — six of them across
     the three live maps. Audience is not read by the Coverage rule at all now."""
     m = make_capability_model()
-    m.roles = [Role(id="R1", name="Operator", kind="human", audience="staff")]
+    m.roles = [Role(id="R1", name="Operator", kind="human", audience="internal")]
     m.capabilities[1].happy_path = "expected"
     m.happy_path.append(HappyStep(id="HP2", title="Read", uc="UC3"))
     ws = warnings_of(m)
     assert not any("HP2" in w for w in ws)
-    assert validate_model_mod.capability_audience(m)["CAP2"] == ["staff"]
+    assert validate_model_mod.capability_audience(m)["CAP2"] == ["internal"]
 
 
 def test_an_excluded_capability_holding_off_spine_use_cases_needs_one_record() -> None:

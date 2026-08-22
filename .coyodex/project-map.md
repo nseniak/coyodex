@@ -55,14 +55,15 @@ coyodex is for a developer whose AI coding agent has written more code than they
 
 ## Roles (actors)
 
-`Audience` says WHO this role is: `staff` = the person works for the company that ships the product,
-`user` = everyone else. Every capability's audience is derived from it.
+`Audience` says WHICH SIDE this actor is on: `internal` = the side of the company that ships the product,
+`user` = everyone else. On a program it is whose machine it is, so a bought service is `internal`.
+Every capability's audience is derived from it.
 
 | Role | Kind | Audience | What they want | Use cases they drive |
 |---|---|---|---|---|
 | **Developer** | human | user | to understand and oversee a codebase they have lost track of — top-down, without reading all of it, drilling into the code only where it matters | UC1, UC3, UC4, UC5, UC10, UC11 |
 | **Coding agent** | service | user | to turn a repo it has read into a grounded, gate-passing map, and to keep that map in step with the code as the developer changes it | UC2, UC6, UC7, UC8 |
-| **Method maintainer** | human | staff | evidence that a change to coyodex's own method or tooling made the maps it produces better rather than worse | UC9 |
+| **Method maintainer** | human | internal | evidence that a change to coyodex's own method or tooling made the maps it produces better rather than worse | UC9 |
 
 ---
 

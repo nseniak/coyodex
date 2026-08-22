@@ -32,8 +32,9 @@ trapdoor is a synthetic ticketing service that exists to be MAPPED WRONG. Every 
 
 ## Roles (actors)
 
-`Audience` says WHO this role is: `staff` = the person works for the company that ships the product,
-`user` = everyone else. Every capability's audience is derived from it.
+`Audience` says WHICH SIDE this actor is on: `internal` = the side of the company that ships the product,
+`user` = everyone else. On a program it is whose machine it is, so a bought service is `internal`.
+Every capability's audience is derived from it.
 
 | Role | Kind | Audience | What they want | Use cases they drive |
 |---|---|---|---|---|
