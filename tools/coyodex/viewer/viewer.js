@@ -5438,30 +5438,59 @@ function syncInfoPane(_s, transient) {
 // window saying "Select a node or file to view its source", with nothing on the page able to fill it.
 // On the Storage table the same 542px pushed two columns off the right edge.
 //
-// So a text page starts without the column, and the first code link the reader clicks brings it back
-// (loadCode). It then stays for as long as they are inside that view, and the code viewer's × closes it.
-// A DIAGRAM page is untouched: there a click on a shape loads that shape's file, so the pane is live.
-// A PINNED file browser also keeps the column, because pinning is an explicit choice the reader saved.
-let codeAsked = false;      // the reader opened a file from a text page…
-let codeAskedView = null;   // …inside this top-level view; leaving the view drops the request
-function syncCodePane(s) {
-  const text = TEXT_PAGES.has(s.kind);
-  if (codeAsked && topView(s.kind, s.id) !== codeAskedView) codeAsked = false;
-  document.body.classList.toggle('code-hidden', text && !codeAsked && !treePinned);
+// The column is OPTIONAL EVERYWHERE now, diagrams included. It used to be permanent on a diagram, on the
+// grounds that a click on a shape loaded that shape's file so the pane was live — but that made the
+// reader's LAST priority take 547px of a 1440px window, 38% of the screen, on every diagram page whether
+// or not they had asked for code. The diagram had 51% of the area under the tabs; it now has 82%.
+//
+// Three ways in, and the choice is REMEMBERED (lsSet) rather than dropped when the reader changes view:
+// the column is about what this reader wants to see, not about which screen they are on.
+//   * the title bar's own toggle, the one control that works the same on every page;
+//   * any file anchor they click, which opens the column on the file they clicked (loadCode);
+//   * a PINNED file browser, an explicit choice they already saved.
+// A SELECTION is deliberately not one of them — see syncCodeView.
+// `false` here, restored from storage further down: LS and lsGet are declared with the other saved
+// settings, long after this point, and reading them here would run before they exist.
+let codeOpen = false;
+function codePaneOpen() { return codeOpen || treePinned; }
+function syncCodePane(_s) {
+  document.body.classList.toggle('code-hidden', !codePaneOpen());
   const close = document.getElementById('cvclose');
-  if (close) close.hidden = !text;   // offered only where the pane is optional
+  if (close) close.hidden = false;   // the column is optional everywhere, so × is offered everywhere
+  const btn = document.getElementById('codebtn');
+  if (btn) {
+    btn.classList.toggle('on', codePaneOpen());
+    btn.setAttribute('aria-pressed', codePaneOpen() ? 'true' : 'false');
+  }
 }
+// Open or close the column, remember the choice, and — on opening — show whatever the reader had
+// SELECTED while it was shut. Without that last part the column opens on whichever file it happened to
+// hold last, which is never the box the reader is looking at.
+function setCodeOpen(on) {
+  codeOpen = !!on;
+  lsSet(LS.codeOpen, codeOpen ? '1' : '');
+  resyncCodePane();
+  if (!codeOpen || !pendingCode) return;
+  const p = pendingCode; pendingCode = null;
+  if (p.file) loadCode(p.file, p.line);
+  else if (p.files && p.files.length) loadCode(p.files[0], null);
+}
+// What the reader selected while the column was shut, kept so opening it lands on that element's file.
+let pendingCode = null;
 // Re-run the rule for the page already on screen, after something OTHER than a navigation changed the
 // answer (the reader pinned the file browser, or closed the column).
 function resyncCodePane() { const s = history[hi]; if (s) syncCodePane(s); }
 // Called by loadCode: a file was requested. Only a request made FROM a text page opens the column —
 // on a diagram the column is already there, and remembering that click would re-open it on the card
 // page the reader drilled from.
+// A file anchor was clicked. That is a request for the source wherever it happens — on a page of prose or
+// over a diagram — so it opens the column and the choice is remembered like any other.
 function noteCodeAsked() {
-  const s = history[hi];
-  if (!s || !TEXT_PAGES.has(s.kind)) return;
-  codeAsked = true; codeAskedView = topView(s.kind, s.id);
-  syncCodePane(s);
+  if (codeOpen) return;
+  pendingCode = null;   // the click names its own file; it must not be overridden by a stale selection
+  codeOpen = true;
+  lsSet(LS.codeOpen, '1');
+  resyncCodePane();
 }
 // The title and the question every card list, card grid and details page leads with. The question is
 // the SAME string the info pane used to hold (VIEW_Q), read from one place, so a view cannot answer one
@@ -8438,10 +8467,12 @@ if (cvopen) cvopen.addEventListener('click', () => { if (cvPath) openSource({ fi
 // × — gives the page back the whole window on a card page the source column was opened over. Shown only
 // there (syncCodePane): on a diagram the column is the view's other half and there is nothing to close.
 const cvCloseBtn = document.getElementById('cvclose');
-if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => {
-  codeAsked = false; codeAskedView = null;
-  resyncCodePane();
-});
+if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => setCodeOpen(false));
+const codeBtn = document.getElementById('codebtn');
+if (codeBtn) {
+  if (!SERVED) codeBtn.hidden = true;   // a static map has no code column to show
+  codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));
+}
 // The ruler's viewport band tracks the scroll live, and the ruler doubles as a scrollbar: press or drag
 // anywhere on it (except a dot, which jumps to its line) scrubs the source, centring the view on the
 // pointer. Listeners wired once — updateViewport / scrollCodeToLine are hoisted.
@@ -9047,6 +9078,10 @@ async function loadCode(path, line) {
 function syncCodeView(file, line, files) {
   if (Array.isArray(files)) cvFiles = files;
   const anchor = (file && localRef(file) && !isDirRef(file, line)) ? cleanPath(file, line) : null;
+  // SELECTING A SHAPE IS NOT A REQUEST FOR CODE. It used to be, which is why the column had to be
+  // permanent on a diagram: every click would otherwise have flung it open. Selecting says "tell me about
+  // this box", and the card answers that. The file is remembered instead, so the toggle opens on it.
+  if (!codePaneOpen()) { pendingCode = { file: anchor, line: line || null, files: (cvFiles || []).slice() }; return; }
   // Keep a file the reader opened DIRECTLY from the browser (cvPinned) even though this element (its
   // container) doesn't list it in `files` — an unmapped-file click must not override to the container's
   // own source. The file belongs to no element, so its switcher lists only itself: drop the container's
@@ -9220,7 +9255,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
@@ -9467,6 +9502,9 @@ if (savedTreeW) tree.style.width = clampTreeW(savedTreeW) + 'px';
 // browsing (the browser filling the code slot); the browser's pin button pins it to its own pane, or
 // unpins it away. Both re-fit the diagram since the stage width changes when a pane appears/disappears.
 treePinned = lsGet(LS.treePinned) === '1';
+// …and whether the source column was left open. Remembered across views and across reloads, because it
+// says what this reader wants to see rather than which screen they are on.
+codeOpen = lsGet(LS.codeOpen) === '1';
 applyTreeState();
 if (cvFilesBtn) cvFilesBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(!treeBrowsing); } });
 if (treeCodeBtn) treeCodeBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(false); } });

@@ -1085,6 +1085,10 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #legendclose:hover { color: #374151; }
 /* Same: a title-bar utility, with an ON state because the legend it toggles stays on screen. */
 #legendbtn.on { background: rgba(255,255,255,.22); color: #fff; }
+/* The source toggle, lit the same way as the legend's: one idiom for "this panel is open". */
+#codebtn { font-family: ui-monospace, monospace; font-size: 12px; }
+#codebtn.on { background: rgba(255,255,255,.22); color: #fff; }
+#codebtn[hidden] { display: none; }
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 

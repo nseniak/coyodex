@@ -41,6 +41,12 @@
   <!-- The legend toggle sits with the other utilities rather than in the group row, which now holds
        nothing but the groups. Its own glyph, not a second "?": two identical question marks side by
        side named two different things. -->
+  <!-- The source column's toggle. The column used to be permanent on a diagram, taking 547px of a 1440px
+       window whether or not the reader had asked for code — 38% of the screen for what the spec calls
+       the reader's LAST priority. It is optional everywhere now, so it needs one visible control that
+       works the same on a diagram and on a page of prose. -->
+  <button id="codebtn" type="button" aria-pressed="false" aria-label="Show or hide the source"
+          title="Show or hide the source">&#60;/&#62;</button>
   <button id="legendbtn" type="button" aria-pressed="true" aria-label="Show or hide the legend"
           title="Show or hide the legend — what the shapes and colours mean">&#9636;</button>
   <!-- Impact explorer (design: impact-and-update-design.md): project ANY diff — any base/target,

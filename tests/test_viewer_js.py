@@ -903,39 +903,54 @@ def test_the_selection_card_can_be_moved_and_resized_and_remembers_it() -> None:
     bar = css[css.index("#panelbar {"): css.index("}", css.index("#panelbar {"))]
     assert "position: sticky" in bar, "the handle and the close button stay reachable in a scrolled card"
 
-def test_a_text_view_drops_the_source_pane_until_a_code_link_asks_for_it() -> None:
-    """The same rule, one step further out, for the whole right-hand column (file browser + code viewer).
+def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> None:
+    """Code is the reader's LAST priority — the spec's reading order is the narrative, then the
+    implementation facts, then the code — so it does not get a fixed column on a screen the reader never
+    asked it for.
 
-    Measured on three real maps at a 1440px window: the column held 542px — 38% — on EVERY view, and on
-    the seven text views nothing on the page could ever fill it, so the screen the map lands on spent
-    more than a third of itself on "Select a node or file to view its source." On the Storage table the
-    same 542px pushed two of its six columns off the right edge. Code is the reader's LAST priority
-    (narrative, then the implementation facts, then the code), so it does not get the widest fixed
-    column on the landing screen.
+    Text pages lost the standing column first. Measured on three maps at 1440px: it held 542px, 38% of the
+    window, on EVERY view, and on the seven text views nothing on the page could fill it, so the screen the
+    map lands on spent more than a third of itself on "Select a node or file to view its source".
 
-    A text page therefore starts with no column; the first code link the reader clicks (loadCode, which
-    every path funnels through) brings it back, and the code viewer's × sends it away again. A DIAGRAM
-    page is untouched — there a click on a shape loads that shape's file — and a PINNED file browser
-    keeps the column anywhere, because pinning is a choice the reader saved.
+    A DIAGRAM kept it, on the grounds that a click on a shape loaded that shape's file so the pane was
+    live. That reason was the problem: SELECTING A SHAPE IS NOT A REQUEST FOR CODE. It says "tell me about
+    this box", and the card answers that. So the column is optional everywhere now, and a selection only
+    REMEMBERS the file — the diagram went from 893px wide to the full 1440.
 
-    The two rules read ONE list of text pages: a second list of "which views are prose" is the drift
-    that left the legend keyed to a stale one."""
+    Three ways in, and one of them has to be visible on every page, so the title bar carries a toggle
+    beside the legend's. The others are any file anchor the reader clicks (loadCode / openInCodeViewer),
+    and a pinned file browser, which is a choice they already saved.
+
+    Opening it shows what was SELECTED while it was shut, or it opens on whichever file it happened to
+    hold last, which is never the box the reader is looking at. And the choice is remembered across views
+    and across reloads: it says what this reader wants to see, not which screen they are on."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
-    assert "function syncCodePane(s) {" in js
-    fn = js[js.index("function syncCodePane(s) {"): js.index("\nfunction ", js.index("function syncCodePane(s) {") + 10)]
-    assert "TEXT_PAGES.has(s.kind)" in fn, "the source pane must read the SAME list as the info pane"
-    assert "!treePinned" in fn, "a pinned file browser keeps the column"
-    assert "document.body.classList.toggle('code-hidden'" in fn
+    fn = js[js.index("function syncCodePane(_s) {"): js.index("\n}", js.index("function syncCodePane(_s) {"))]
+    assert "TEXT_PAGES" not in fn, "a diagram's column is optional too"
+    assert "document.body.classList.toggle('code-hidden', !codePaneOpen());" in fn
+    assert "close.hidden = false;" in fn, "the way out is offered everywhere the column can be open"
+    assert "codeOpen || treePinned" in js, "a pinned file browser still keeps the column"
     # …and it runs for every state, before render's early returns, exactly like syncInfoPane.
     assert "syncCodePane(s);" in js[js.index("async function render(sArg, transient) {"):][:1400]
-    # The one door back in: every way of showing a file goes through loadCode / openInCodeViewer.
+    # A file anchor is a request for code, wherever it is clicked.
     assert "noteCodeAsked();" in js[js.index("async function loadCode(path, line) {"):][:900]
     assert "noteCodeAsked();" in js[js.index("function openInCodeViewer(file, line) {"):][:900]
-    # The way back out, offered only where the column is optional.
+    # A SELECTION is not. It remembers the file so the toggle can open on it.
+    view = js[js.index("function syncCodeView(file, line, files) {"):
+              js.index("\n}", js.index("function syncCodeView(file, line, files) {"))]
+    assert "if (!codePaneOpen()) { pendingCode =" in view
+    opener = js[js.index("function setCodeOpen(on) {"): js.index("\n}", js.index("function setCodeOpen(on) {"))]
+    assert "lsSet(LS.codeOpen" in opener, "the choice is remembered"
+    assert "pendingCode" in opener and "loadCode(p.file, p.line)" in opener, \
+        "opening shows what was selected while it was shut"
+    assert "codeOpen = lsGet(LS.codeOpen) === '1';" in js, "…and it survives a reload"
+    # The two visible ways out, and the one visible way in.
     assert 'id="cvclose"' in html and "#cvclose[hidden] { display: none; }" in css
-    assert "getElementById('cvclose')" in js
+    assert 'id="codebtn"' in html and "#codebtn.on" in css
+    assert "codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));" in js
+    assert "if (!SERVED) codeBtn.hidden = true;" in js, "a static map has no column to toggle"
     # Hiding is the same set of panes degraded mode hides, plus the column's width going back to the page.
     for pane in ("#tree", "#treeresizer", "#codeview", "#resizer"):
         assert f"body.code-hidden {pane}" in css, pane
