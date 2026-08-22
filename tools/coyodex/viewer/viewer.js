@@ -7839,7 +7839,10 @@ async function render(sArg, transient) {
   // ⌘-click that just misses an element while building a multi-selection can't wipe what's selected.
   if (svgEl) svgEl.addEventListener('click', (e) => {
     if (isDrag(e)) return;
-    if (e.shiftKey) { if (mainPz) { mainPz.reset(); updateZoomLevel(); } return; }  // fit + center the whole diagram
+    // Shift-click on empty canvas = fit + centre the whole diagram, the same act as the header's own
+    // button, so it goes through the same path: `reset()` restores the fit svg-pan-zoom recorded when it
+    // was CONSTRUCTED, which is stale on any view whose box has changed size since.
+    if (e.shiftKey) { if (mainPz) refitStage(); return; }
     if (isMultiSelectClick(e)) return;
     resetScene(mainScene);
   });
@@ -10100,7 +10103,12 @@ navback.addEventListener('click', back);
 navfwd.addEventListener('click', fwd);
 zoomin.addEventListener('click', () => { if (mainPz) { mainPz.zoomIn(); updateZoomLevel(); } });
 zoomout.addEventListener('click', () => { if (mainPz) { mainPz.zoomOut(); updateZoomLevel(); } });
-zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); updateZoomLevel(); } });  // fit to screen
+// FIT TO SCREEN, and it has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and
+// pan back to the values svg-pan-zoom recorded when it was CONSTRUCTED — so on any view whose box has
+// changed size since (a column opened, a window resized, a breadcrumb wrapped) it restored a stale fit
+// rather than computing a new one. Measured on a use-case flow: the content stood at 102% of the box
+// height, clipped at the bottom, and pressing this button changed nothing at all.
+zoomlevel.addEventListener('click', () => { if (mainPz) refitStage(); });  // fit to screen
 diagram.addEventListener('wheel', wheelNavigate, { passive: false });  // scroll=pan, Ctrl/Cmd/pinch=zoom
 flowprev.addEventListener('click', () => flowStepBy(-1));  // step player: previous / next flow action
 flownext.addEventListener('click', () => flowStepBy(1));

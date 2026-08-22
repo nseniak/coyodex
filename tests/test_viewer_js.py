@@ -998,6 +998,13 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "codePaneResized();" in opener2
     assert "setPinned(!treePinned); codePaneResized();" in js, "pinning changes the width too"
     assert "window.addEventListener('resize', applyPanelBox);" in js, "so does the window itself"
+    # FIT TO SCREEN has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and pan
+    # back to the values svg-pan-zoom recorded when it was CONSTRUCTED, so on any view whose box has since
+    # changed size — a column opened, a window resized — it restored a stale fit rather than computing a
+    # new one. Measured on the Subsystems map: the content stood at 107% of the box height and pressing
+    # the button left it there; it now comes back at 101%.
+    assert "zoomlevel.addEventListener('click', () => { if (mainPz) refitStage(); });" in js
+    assert "mainPz.reset()" not in js, "reset restores the fit from construction time, not the current one"
     box = js[js.index("function applyPanelBox() {"): js.index("\n}", js.index("function applyPanelBox() {"))]
     assert "if (PANEL_HOST.hidden) return;" in box, \
         "a hidden card measures zero, and clamping against zero pins it to the edge"
