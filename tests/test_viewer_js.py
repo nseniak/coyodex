@@ -643,121 +643,50 @@ def test_no_control_outlives_the_view_that_drew_it() -> None:
     assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
 
-def test_the_question_leads_a_text_page_and_rides_the_trail_row_on_a_diagram() -> None:
+def test_one_question_in_one_place_on_every_view() -> None:
     """A view's question is the same sentence at every depth inside that view, read from ONE table by
-    the top view, so it is a property of the VIEW and can never change as the reader drills. Where it
-    is DRAWN has moved four times: the info pane (only diagrams have one, and it vanished on the first
+    the top view, so it is a property of the VIEW and can never change as the reader drills. Where it is
+    DRAWN has moved five times: the info pane (only diagrams had one, and it vanished on the first
     click), the first block of the page (read as a caption, and each page began inventing its own),
-    beside the view tabs (upright at tab size, it read as a fifth disabled tab), then the trail row
-    beside the page title.
+    beside the view tabs (upright at tab size, it read as a fifth disabled tab), the trail row beside the
+    page title, and then two places at once — beside the title on a diagram, leading the page on prose.
 
-    It now takes TWO places, and TEXT_PAGES — the one list answering "is this page prose" — decides
-    which. On a page of prose the question LEADS the page, at the page's own 14px text size and on the
-    page's own left edge, where it reads as the opening sentence of what follows. Beside the title it
-    was a 12.5px grey line hung off a dash, which is chrome about the page rather than the page's own
-    first words. On a DIAGRAM it stays beside the title: a diagram is not prose, it has no opening line
-    to be, and its info pane already occupies the slot a leading sentence would take.
+    Two places was the mistake this fixes. One sentence looked like two different things depending on
+    which tab you were on: 12.5px hung off an em dash next to a diagram's title, 14px on its own line
+    over a page of cards. Nothing about a diagram or a page explained the difference, and beside the
+    title it read as chrome ABOUT the page rather than as the page's own opening words.
 
-    What the caption failure taught still holds, and is what `#pageq` keeps: the sentence is outside the
-    page's SCROLL. A question that scrolls away with the content becomes a caption for whichever block
-    happens to sit under it, and cannot be the view's fixed answer once it is gone.
+    It is one line under the header block now, on every view: the content's own text size, the content's
+    own left edge and reading cap, italic because nothing else in this app is. Below the header's shadow,
+    so it belongs to the content; outside the content's scroll, so it can never become a caption for
+    whichever block ends up under it — which is what the spec undid.
 
-    Shown ONLY on the view's own landing screen, which is exactly a one-item trail: every trail starts
-    at its view. One level in, the reader has chosen something on the view and is past asking what the
-    view is for."""
+    Shown ONLY on the view's own landing screen, which is exactly a one-item trail: every trail starts at
+    its view. One level in, the reader has chosen something and is past asking what the view is for."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
+    # ONE element, and the trail row is back to carrying nothing but the trail.
+    assert "viewq" not in js and "viewq" not in html, "the second copy is deleted, not hidden"
+    assert "#viewq" not in css
     crumbrow = html[html.index('<nav class="hint" id="crumbrow"'):
                     html.index("</nav>", html.index('<nav class="hint" id="crumbrow"'))]
-    assert 'id="viewq"' in crumbrow, "the diagram question is IN the trail row"
-    sub = html[html.index('<nav id="stagesubrow"'): html.index("</nav>", html.index('<nav id="stagesubrow"'))]
-    assert 'id="viewq"' not in sub, "and no longer among the tabs"
-    # The page question leads the page, and sits OUTSIDE it: between the trail row and #diagram, so it
-    # never scrolls away with the content it introduces.
-    assert html.index('<p id="pageq" hidden></p>') > html.index('id="crumbrow"'), \
-        "the page question comes after the trail row"
-    assert html.index('<p id="pageq" hidden></p>') < html.index('<div id="diagram">'), \
-        "…and before the page, outside its scroll"
+    assert 'id="crumb"' in crumbrow and 'id="pageq"' not in crumbrow, "the trail row is the trail alone"
+    assert html.index('<p id="pageq" hidden></p>') > html.index('id="crumbrow"'), "the question is below the header"
+    assert html.index('<p id="pageq" hidden></p>') < html.index('<div id="diagwrap">'), "…and above the content"
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
     assert "const q = chain.length === 1 ? viewQuestion(tv) : '';" in chrome, \
         "a one-item trail IS the view's own landing screen"
-    assert "const onPage = !!q && TEXT_PAGES.has(s.kind);" in chrome, \
-        "ONE list decides which of the two places the sentence takes"
-    assert "viewq.hidden = !q || onPage;" in chrome, "a text page's title carries no question beside it"
-    assert "pageq.hidden = !onPage;" in chrome
+    assert "pageq.textContent = q;" in chrome and "pageq.hidden = !q;" in chrome
     pq = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
-    assert "font-size: 14px" in pq, "the page's own text size, not the trail row's 12.5px"
+    assert "font-size: 14px" in pq, "the content's own text size, not the trail row's 12.5px"
     assert "font-style: italic" in pq
-    assert "padding: 14px 20px 0" in pq, "the page's own left edge"
-    assert "#pageq::before" not in css, "no dash on a sentence that has no title to join"
-    hint = css[css.index("\n.hint {"): css.index("}", css.index("\n.hint {"))]
-    assert "display: flex" in hint and "align-items: baseline" in hint
-    assert "flex-wrap" not in hint, "the sentence must begin on the title's line, never below it"
+    assert "padding: 14px 20px 0" in pq, "the content's own left edge"
+    assert "#pageq::before" not in css, "no dash on a sentence with no title to join"
     intro = js[js.index("function viewIntroHtml(view) {"):
                js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
     assert "viewQuestion" not in intro
-
-def test_an_actor_says_what_it_is_after_in_its_own_sentence() -> None:
-    """An actor's card carried the map's `wants` field raw, so the sentence never said what it was:
-    "To keep stored credentials, connections and sandboxes valid without anyone asking." reads as a
-    description of the actor rather than as what the actor is after. The same fact was then drawn in
-    FOUR places in THREE shapes — bare on the card and on the actor's own page, a titled `Wants` row in
-    the Happy Path pane, a bold `Wants:` label on a section header — so a reader met one sentence under
-    three names.
-
-    One function builds the reader's sentence now, and all four call it: `Wants to <verb phrase>`.
-
-    PROSE, not a label, and the maps decide that. Across the three reference maps the 16 actors are
-    written three ways: `to be told what changed` (4), `To use the MCP tools their role allows.` (6),
-    and a bare command, `Ask Mio for answers` (6). A `WANTS` tag in front of the third shape reads as a
-    broken sentence, and WANTS, GOAL, ROLE, PURPOSE and NEEDS each break on at least one of the three.
-    All three ARE verb phrases sharing one stem, so the prefix fits all sixteen once a leading `to` is
-    dropped and the first letter lowered. Prose is also what a card asks for: one sentence, no new line.
-
-    Two guards, both with a real input behind them. `to` is matched on a word boundary, or a map whose
-    sentence begins `Today the run starts` loses its first word — and a lone `to` came out as `Wants to
-    to`. An ALL-CAPS first word is left alone, so `MCP tools` is not lowered to `mCP tools`."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "function wantsSentence(wants) {" in js
-    fn = js[js.index("function wantsSentence(wants) {"):
-            js.index("\n}", js.index("function wantsSentence(wants) {"))]
-    assert "'Wants to '" in fn, "prose, not a label"
-    assert "/^to\\b\\s*/i" in fn, "a word boundary, or `Today …` loses its first word"
-    assert "first === first.toUpperCase()" in fn, "an ALL-CAPS first word survives"
-    # All four drawing sites read the ONE function; none of them keeps a label of its own.
-    facts = js[js.index("function cardFacts(id) {"):
-               js.index("\n}", js.index("function cardFacts(id) {"))]
-    assert "if (n.kind === 'human' || n.kind === 'service') desc = wantsSentence(desc);" in facts
-    panel = js[js.index("function actorPanelHtml(a, drives) {"):
-               js.index("\n}", js.index("function actorPanelHtml(a, drives) {"))]
-    assert "wantsSentence(a.wants)" in panel
-    assert "<dt>Wants</dt>" not in js, "the titled row is the same word twice now"
-    head = js[js.index("function actorHeadHtml(actorName) {"):
-              js.index("\n}", js.index("function actorHeadHtml(actorName) {"))]
-    assert "wantsSentence(role.wants)" in head
-    assert 'uc-wants-lbl">Wants:' not in js, "and so is the bold label on a section header"
-
-def test_the_customers_side_leads_each_actor_section() -> None:
-    """The Actors page took the map's own order, which is the order the analysis happened to record and
-    means nothing to a reader. Measured on the three reference maps, two of them put a company-side
-    actor above a customer-side one inside the same section: Meerbot listed Administrator (staff) above
-    Website visitor, and MCP Hero listed Service operator (staff) above Prospective customer.
-
-    A reader opening Actors is asking who this product is for, and the answer is the people and programs
-    outside the company. `staff` and `internal service` are the exceptions, and an exception reads as
-    one when it comes after the rule instead of in the middle of it. So each section leads with the
-    customer's side. The sort is STABLE, so within each half the map's own order survives untouched, and
-    a map that already reads correctly does not move at all.
-
-    It reads the SAME `audience` value the side pill reads, so the order and the words can never
-    disagree: every card without a `staff` or `internal service` pill sits above every card with one."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    fn = js[js.index("function actorCardsHtml() {"):
-            js.index("\n}", js.index("function actorCardsHtml() {"))]
-    assert "(a.n.audience === 'internal') - (b.n.audience === 'internal') || a.i - b.i" in fn, \
-        "the customer's side first, and the map's own order inside each half"
 
 def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_says_something() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
@@ -1638,23 +1567,18 @@ def test_the_question_reads_as_a_sentence_and_not_as_a_control() -> None:
     and the ambiguity is what made it invisible, not the contrast. Italic fixes what it IS before fixing
     how loud it is: nothing else in this app is italic, so one glance says sentence, not control.
 
-    The dividing rule that used to follow the last tab is GONE with the move. It existed to say "the
-    controls stopped here", and there are no controls beside the question any more — it sits next to a
-    16px bold page title, at 12.5px grey italic, which nothing can read as a button. A dash joins the
-    two instead, drawn in CSS so the stored string stays the pure question."""
+    Everything that framed it is gone with the places it used to sit. The dividing rule after the last
+    tab went when it left the tab row. The em dash went when it left the page title's line: a dash joins
+    two things on one line, and alone at the start of a line it is a stray tick. It has no rule, no
+    background and no border either — anything that boxes a sentence turns it back into a bar."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "has-after" not in js and "has-after" not in css, "the tab-row rule is gone, not shadowed"
-    q = css[css.index("#viewq {"): css.index("}", css.index("#viewq {"))]
+    q = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
     assert "font-style: italic" in q
-    dash = css[css.index("#viewq::before {"): css.index("}", css.index("#viewq::before {"))]
-    assert "\\2014" in dash, "an em dash joins the question to the title"
-    # Leading a text page it is italic for the SAME reason, and bigger rather than louder: it is the
-    # page's opening sentence, so it takes the page's text size. The dash goes with the title it joined.
-    pq = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
-    assert "font-style: italic" in pq
-    assert "viewq.textContent = onPage ? '' : q;" in js, "the string itself carries no dash"
-    assert "pageq.textContent = onPage ? q : '';" in js
+    assert "border" not in q and "background" not in q, "nothing may box the opening sentence"
+    assert "\\2014" not in q and "#pageq::before" not in css, "no dash on a line of its own"
+    assert "pageq.textContent = q;" in js, "the stored string is the pure question"
 
 def test_the_app_name_is_a_working_way_back_to_all_maps() -> None:
     """It was an <h1> with a click handler, and became a plain span when the page's one heading moved to

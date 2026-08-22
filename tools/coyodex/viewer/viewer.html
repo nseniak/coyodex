@@ -153,19 +153,16 @@
              row padding plus the active tab's 7px inner padding, which lands the first crumb directly
              under that tab's label. The repeated view name then reads as the tab continuing downward
              rather than as an accident. -->
-        <!-- The view's question rides the TRAIL row, not the tab row: on a view's own landing screen
-             the trail is a single word and the rest of the row was empty, while the question sat one
-             row up beside the tabs. Shown ONLY at that top level — one level in, the trail itself
-             fills the row and the reader is past asking what the view is for. -->
-        <nav class="hint" id="crumbrow" aria-label="You are here"><span id="crumb"></span><span id="viewq" hidden></span></nav>
+        <nav class="hint" id="crumbrow" aria-label="You are here"><span id="crumb"></span></nav>
       </div>
-      <!-- The view's question, on a TEXT page: it leads the page instead of riding the trail row beside
-           the title. Set at the page's own text size and left edge, so it reads as the page's opening
-           sentence rather than as one more strip of chrome. It stays OUTSIDE the page's scroll, which is
-           what separates it from the placement the spec undid: a sentence that scrolls away read as a
-           caption for whatever block sat under it, and every page began inventing its own.
-           A DIAGRAM page still uses #viewq in the trail row above — a diagram has no page of prose to
-           lead, and its info pane already sits where this line would go. -->
+      <!-- The view's question, on EVERY view. It leads the content, on its own line, at the content's own
+           text size and left edge, so it reads as the opening sentence of what follows. It sat beside the
+           page title for a while, at 12.5px hung off a dash, and read as chrome about the page rather than
+           as the page's own first words — and it made the sentence look different on a diagram from how it
+           looked on a page of prose, for no reason a reader could name.
+           It is BELOW the header block's shadow, so it belongs to the content, and OUTSIDE the content's
+           scroll, so it cannot become a caption for whichever block happens to sit under it. Shown only on
+           a view's own landing screen, which is exactly a one-item trail. -->
       <p id="pageq" hidden></p>
       <!-- THE DIAGRAM AREA. Everything that floats over a diagram positions against this box rather
            than against #stage, so "bottom: 12px" means the bottom of the drawing and not the bottom of
