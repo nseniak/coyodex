@@ -716,8 +716,15 @@ def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
     records a purpose bucket and the roles derived from its incoming edges. Five words hung off a trail
     is a wall rather than a trail, so those two stay on the page, below.
 
-    TEXT pages only. A drilled diagram is about one element too, but its card already floats over the
-    drawing a few pixels away, and printing the same two pills in the trail is the same words twice.
+    EVERY page about one element, diagram or prose. A drilled diagram was excluded for one round, on the
+    grounds that its card already floats over the drawing — but that card can be closed and moved, and
+    once it is, the page said nothing about what it was showing. `Features › Organizations and team ›
+    Create an organization` never said the last item was a use case, while every other page of the trail
+    did. One rule with no exception beats a rule the reader has to learn the edge of.
+
+    A page about a PAIR (an arrow, a bridge) or a FOLD (Libraries, a dependency bucket) is not about one
+    element and gets nothing: there is no card to read, and a fold's stored kind is a way of drawing
+    rather than a word the map records.
 
     Plain text, never a control. Clicking a type pill means "show this in context", and the context of
     the page you are already on is the page you are already on."""
@@ -725,10 +732,12 @@ def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
     which = js[js.index("function pageElementId(s) {"):
                js.index("\n}", js.index("function pageElementId(s) {"))]
-    assert "if (!s || !TEXT_PAGES.has(s.kind)) return null;" in which, \
-        "a diagram's card already floats beside the shape"
-    for kind in ("element", "capability", "rule", "rules", "actor"):
+    assert "TEXT_PAGES" not in which, "a drilled diagram is a page about one element too"
+    for kind in ("element", "capability", "rule", "rules", "actor",
+                 "usecase", "subsystem", "domsub", "deploymentUnit"):
         assert f"'{kind}'" in which, kind
+    for pair in ("edge", "domedge", "bridge", "depedge", "libs", "bucketfold"):
+        assert f"'{pair}'" not in which, f"{pair} is a pair or a fold, not one element"
     pills = js[js.index("function crumbPillsHtml(id) {"):
                js.index("\n}", js.index("function crumbPillsHtml(id) {"))]
     assert "cardFacts(id)" in pills, "the same pills the card shows, from the same function"

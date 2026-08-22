@@ -5462,18 +5462,28 @@ function topView(kind, id) {  // which top-level button a state lives under (con
   if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
   return 'container';
 }
-// WHICH ELEMENT a page is about, when the page is one page of prose about one element. The breadcrumb's
-// last item is that element's name, so the pills that ride beside it are read from here.
+// WHICH ELEMENT a page is about, when the page is about exactly one. The breadcrumb's last item is that
+// element's name, so the pills that ride beside it are read from here.
 //
-// TEXT pages only. A drilled diagram (a subsystem, a use case's flow) is about one element too, but its
-// card is already floating over the drawing a few pixels away, and printing the same two pills in the
-// trail is the same words twice — the repeat the trail exists to avoid.
+// EVERY page about one element, diagram or prose. A drilled diagram was excluded for one round, on the
+// grounds that its card already floats over the drawing — but that card can be closed and moved, and once
+// it is, the page said nothing about what it was showing. `Features › Organizations and team › Create an
+// organization` never says the last item is a use case, while every other page of the trail does. One
+// rule with no exception beats a rule the reader has to learn the edge of.
+//
+// A page about a PAIR (an arrow, a bridge) or about a FOLD (Libraries, a dependency bucket) is not about
+// one element, so it gets nothing: cardFacts has no card to read, and a fold's stored kind is a way of
+// drawing rather than a word the map records.
 function pageElementId(s) {
-  if (!s || !TEXT_PAGES.has(s.kind)) return null;
+  if (!s) return null;
   if (s.kind === 'element') return s.id;
   if (s.kind === 'capability') return s.cap && s.cap !== '-' ? s.cap : null;
   if (s.kind === 'rule') return s.br;
   if (s.kind === 'rules') return s.blk || null;
+  if (s.kind === 'usecase') return s.uc;
+  if (s.kind === 'subsystem') return s.sid;
+  if (s.kind === 'domsub') return s.sd;
+  if (s.kind === 'deploymentUnit') return unitProcessNodeId(s.unit);
   // An actor's page is keyed by NAME (that is what its card's click carries), and an actor's node id is
   // not its role id — the Roles table numbers them R1.., the graph numbers them ACT0.. — so the lookup
   // goes through the node, which is also what the card on the Actors page is built from.
