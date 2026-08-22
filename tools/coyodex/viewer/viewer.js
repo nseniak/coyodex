@@ -5257,10 +5257,6 @@ function topLevelView(s) {
   const tv = topView(s.kind, s.id);
   return s.kind === tv ? tv : null;
 }
-// A table view (Glossary / Features / System / Storage / Tests) renders no diagram and builds no scene,
-// so it never reaches applyDefaultPanel. It has no card either: syncInfoPane already emptied the host,
-// and the view's name and question are in the trail row and on the page.
-function showViewIntro(_s) { PANEL_HOST.innerHTML = ''; PANEL_HOST.hidden = true; }
 // The views that are TEXT, not a diagram: a card list, a grid of cards, or an element's details. Per
 // the spec these carry no info pane — they put their title and their question at the top of the page
 // itself, and the pane beside a page of prose only ever repeated it.
@@ -5271,11 +5267,19 @@ function showViewIntro(_s) { PANEL_HOST.innerHTML = ''; PANEL_HOST.hidden = true
 // distinction is exactly what it got wrong — see the comment on syncLegend.
 const TEXT_PAGES = new Set(['actors', 'usecases', 'capability', 'actor',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge']);
-// A TEXT page has no selection card at all: there is nothing on it to select, and the page carries its
-// own cards in the reading column. Cleared as well as hidden, so a card from the diagram you came from
-// cannot reappear when you go back to it.
-function syncInfoPane(s) {
-  if (!TEXT_PAGES.has(s.kind)) return;
+// A CARD BELONGS TO THE PAGE THAT IS ON SCREEN. Every navigation therefore starts with no card, and the
+// page then puts one back only if it has one to show: its own subject (a drilled subsystem, a use case's
+// flow, one arrow's pair) or whatever the reader had selected and history is restoring.
+//
+// One rule, enforced by construction, instead of a check per navigation path. Without it a card outlived
+// the page it described: you selected a box, moved to a screen that does not draw it, and its card was
+// still floating over the new diagram describing something no longer there. A text page needs no special
+// case either — nothing on it refills the card, so it simply stays away.
+//
+// NOT on a transient render. Those are the intermediate frames of a drill animation, and clearing on each
+// one makes the card blink off and back for a single navigation the reader has not finished making.
+function syncInfoPane(_s, transient) {
+  if (transient) return;
   PANEL_HOST.innerHTML = '';
   PANEL_HOST.hidden = true;
 }
@@ -7354,7 +7358,7 @@ async function render(sArg, transient) {
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   const s = sArg || history[hi];
-  syncInfoPane(s);   // a text view has no info pane; a diagram view does (one rule, before any return)
+  syncInfoPane(s, transient);   // every navigation starts with no card (one rule, before any return)
   syncCodePane(s);   // …and no source pane either, until the reader asks for a file
   // Hide the floating over-the-diagram control HERE, before the HTML-tab early returns below.
   // syncFlowPicker runs at the END of render, which the table views (Glossary / Use Cases / System /
@@ -7365,33 +7369,31 @@ async function render(sArg, transient) {
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
-  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
+  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Features tab is an HTML catalog, not a mermaid diagram — same shape as Glossary. Its landing
   // level is the feature cards; a map that records no features keeps the flat use-case list instead.
   if (s.kind === 'usecases') {
     if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();
-    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+    mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // The two views the product leads with: what it is for, and who drives it.
   if (s.kind === 'element') {
     renderElementDetails(s.id); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   if (s.kind === 'actors') { renderActors(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
-  // One feature's use cases — the drill out of those cards ('*' = all of them). The right pane keeps the
-  // TAB's question, as one rule's page does: the feature's own name and purpose head the list itself.
+  // One feature's use cases — the drill out of those cards ('*' = all of them). The feature's own name
+  // and purpose head the list itself; the view's question is one level up, on the view's own screen.
   if (s.kind === 'capability' || s.kind === 'actor') {
     renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });
-    // Each keeps ITS OWN view's question: an actor's list answers "what can this one do", which is the
-    // Actors view's question, and it stopped being the Features view's business when the axis went.
-    mainScene = null; showViewIntro({ kind: s.kind === 'actor' ? 'actors' : 'usecases' });
+    mainScene = null;
     renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // The System tab is HTML, not a mermaid diagram — same shape as Glossary. Its landing level is the
-  // collection cards; one collection is the drill out of them, and keeps the TAB's question, as one
+  // collection cards; one collection is the drill out of them, and heads itself with its own name, as one
   // rule's page does: the collection's own name and blurb head the page itself.
-  if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
+  if (s.kind === 'system') { renderSystem(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   if (s.kind === 'sysSection') {
-    renderSystemSection(s.sys, s.epk); mainScene = null; showViewIntro({ kind: 'system' }); renderChrome(s);
+    renderSystemSection(s.sys, s.epk); mainScene = null; renderChrome(s);
     restoreTextScroll(s); return;
   }
   // One Deployment arrow, as a page: the list of everything it stands for. Same shape as the System
@@ -7400,18 +7402,18 @@ async function render(sArg, transient) {
     renderDeploymentEdgePage(s); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
-  if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
+  if (s.kind === 'data') { renderData(s); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
-  if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
+  if (s.kind === 'tests') { renderTests(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Business rules tab is the block rail + rule panes (HTML) — the same shape as Data.
   if (s.kind === 'rules') {
     renderRules(s);   // the area cards, or one area's rules when `s.blk` names it
-    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+    mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
-  // One rule's page — the drill out of that list. The right pane keeps the TAB's question: everything
-  // the map holds about this rule is on the page itself, and repeating it beside itself said nothing.
+  // One rule's page — the drill out of that list. Everything the map holds about this rule is on the
+  // page itself, so nothing floats beside it.
   if (s.kind === 'rule') {
-    renderRule(s); mainScene = null; showViewIntro({ kind: 'rules' }); renderChrome(s);
+    renderRule(s); mainScene = null; renderChrome(s);
     restoreTextScroll(s); return;
   }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,

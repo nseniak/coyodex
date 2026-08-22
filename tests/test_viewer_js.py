@@ -712,12 +712,20 @@ def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_sa
 
     What you selected floats over the drawing instead, and `paneSync` is the ONE place that decides
     whether it is on screen: it is there when it has something to say and gone when it has not. Every
-    caller just writes; nothing has to remember to show or hide."""
+    caller just writes; nothing has to remember to show or hide.
+
+    And a card belongs to the page on screen, so EVERY navigation starts with no card: `syncInfoPane`
+    clears it before the page renders, and the page puts one back only if it has one to show — its own
+    subject, or the selection history is restoring. Enforced by construction rather than by a check per
+    navigation path, because a card that outlives its page describes something no longer on screen.
+    A transient render is exempt: those are the intermediate frames of a drill animation, and clearing on
+    each one blinks the card off and back for one navigation the reader has not finished making."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "function syncInfoPane(s) {" in js
-    assert "if (!TEXT_PAGES.has(s.kind)) return;" in js, "a text page clears and hides the card outright"
-    assert "syncInfoPane(s);" in js[js.index("async function render(sArg, transient) {"):][:1200]
+    assert "function syncInfoPane(_s, transient) {" in js
+    assert "  if (transient) return;" in js, "a drill animation's own frames must not blink the card"
+    assert "syncInfoPane(s, transient);" in js[js.index("async function render(sArg, transient) {"):][:1200]
+    assert "showViewIntro" not in js, "one mechanism clears the card, not two"
     pages = js[js.index("const TEXT_PAGES = new Set(["):]
     pages = pages[: pages.index("]);")]
     for kind in ("actors", "usecases", "capability", "actor", "rules", "system", "glossary"):
