@@ -1071,8 +1071,8 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     """The card said `SERVICE`; the actor's own page, one click later, said `service` + `STAFF-OWNED`
     about the same actor, and never printed a side on the card at all. Both now read ONE function.
 
-    Four readings, and EVERY actor card prints one:
-        person  + user      ->  USER
+    Four readings:
+        person  + user      ->  (nothing)          a person on the customer's side is the ordinary case
         person  + internal  ->  STAFF
         program + internal  ->  INTERNAL SERVICE   a machine the company runs, or pays a vendor to run
         program + user      ->  USER SERVICE       a machine the CUSTOMER set up
@@ -1088,23 +1088,20 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     Mio Coworker's Stripe webhook was authored as the customer's, and a card reading plain `SERVICE`
     looks the same whether that is right or wrong.
 
-    `user` on a PERSON was silent for a round, on the reading that it is the ordinary case. Two things
-    undid it. The number is not there — `user` is 7 of the 11 people on the reference maps, 64%, where
-    the cases that earned silence were `user` on a feature at 22 of 27 and `human` on nearly every
-    actor. And these cards are a GRID, read ACROSS: eight of the sixteen carried a side word and eight
-    carried a blank to decode, while every program beside them stated its own. An axis complete for
-    machines and half missing for people is not a rule, it is an exception nobody can hold.
+    A PERSON stays silent on the customer's side. An actor is a person on the customer's side unless it
+    says otherwise — the same rule that drops `human` from every actor card and `user` from a feature
+    card. Printing `USER` on every person was tried for one round and undone: it makes the axis look
+    complete beside the programs, but the cure is a word on eleven cards that only restates the default.
 
-    A FEATURE keeps the silence: there `user` really is 22 of 27, and its cards do not sit beside a set
-    that always speaks. `staff` is the reader's word there too, since only human roles vote."""
+    `staff` is the reader's word on a FEATURE too, since only human roles vote for its audience."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     fn = js[js.index("function actorSidePills(kind, audience) {"):
             js.index("\nfunction ", js.index("function actorSidePills(kind, audience) {") + 10)]
     assert "text: side ? `${side} service` : 'service'" in fn, "a program always prints its side"
     assert "audienceWord(side)" in fn and "staff service" not in fn, "a program is never called staff"
-    assert "kind === 'human' && side" in fn and "side === 'internal'" not in fn, \
-        "every actor card prints its side, including a person on the customer's"
+    assert "kind === 'human' && side === 'internal'" in fn, \
+        "a person prints a side only when it is the company's"
     # Colour says WHAT it is, the words say whose: both program readings keep the one program colour.
     assert fn.count("ecard-pill-service") == 1 and "cls: `uc-aud-${side}`" in fn
     # The card and the page draw the SAME pills — the page must not compute its own.

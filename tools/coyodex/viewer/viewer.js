@@ -385,7 +385,7 @@ const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process'])
 // the page one click later said `service` + `STAFF-OWNED`, about the same actor.
 //
 // Four readings, and only two of them print a side:
-//   person  + user      ->  USER               a person on the customer's side
+//   person  + user      ->  (nothing)          a person on the customer's side is the ordinary case
 //   person  + internal  ->  STAFF              the reader's word for a person on the company's side
 //   program + internal  ->  INTERNAL SERVICE   a machine the company runs, or pays a vendor to run
 //   program + user      ->  USER SERVICE       a machine the CUSTOMER set up
@@ -397,16 +397,15 @@ const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process'])
 // what it is describing. The same split the map already makes between `capability` and `feature`.
 // The two words never meet on one card, and a reader needs no rule joining them: each says "ours".
 //
-// EVERY actor card prints its side, and that is the whole rule. `user` on a person was silent for a
-// while, on the reading that it is the ordinary case. Two things undid it. The number is not there:
-// `user` is 7 of the 11 people on the reference maps, 64%, where the cases that earned silence were
-// `user` on a feature at 22 of 27 and `human` on nearly every actor. And these cards are a GRID, read
-// ACROSS: eight of the sixteen carried a side word and eight carried a blank the reader had to decode,
-// while every program beside them stated its own. An axis that is complete for machines and half
-// missing for people is not a rule, it is an exception nobody can hold in their head.
+// A PROGRAM always prints its side. Leaving the company's own machines silent hid the one thing the
+// vendor rule exists to settle: Mio Coworker's Stripe webhook was authored as the customer's, and a
+// card reading plain `SERVICE` looks identical whether that is right or wrong.
 //
-// A FEATURE is different and keeps the silence: there `user` is 22 of 27, and its cards do not sit
-// beside a set that always speaks (see shownAudience).
+// A PERSON stays silent on the customer's side. `user` is 7 of the 11 people on the reference maps, and
+// an actor is a person on the customer's side unless it says otherwise — the same rule that drops
+// `human` from every actor card and `user` from a feature card (see shownAudience). Printing it on
+// every person was tried for one round and undone: the axis reads as incomplete beside the programs,
+// but the cure is a word on eleven cards that only ever restates the default.
 function actorSidePills(kind, audience) {
   const side = String(audience || '').trim().toLowerCase();
   // COLOUR says what the thing IS; the WORDS say whose it is. So both program readings keep the one
@@ -416,7 +415,7 @@ function actorSidePills(kind, audience) {
   if (kind === 'service') {
     return [{ text: side ? `${side} service` : 'service', cls: 'ecard-pill-service' }];
   }
-  if (kind === 'human' && side) {
+  if (kind === 'human' && side === 'internal') {
     return [{ text: audienceWord(side), cls: `uc-aud-${side}` }];
   }
   return [];
