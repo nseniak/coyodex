@@ -680,6 +680,54 @@ def test_a_text_view_drops_the_info_pane() -> None:
         assert f"'{kind}'" in pages, kind
     assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram keeps its pane"
 
+def test_a_text_view_drops_the_source_pane_until_a_code_link_asks_for_it() -> None:
+    """The same rule, one step further out, for the whole right-hand column (file browser + code viewer).
+
+    Measured on three real maps at a 1440px window: the column held 542px — 38% — on EVERY view, and on
+    the seven text views nothing on the page could ever fill it, so the screen the map lands on spent
+    more than a third of itself on "Select a node or file to view its source." On the Storage table the
+    same 542px pushed two of its six columns off the right edge. Code is the reader's LAST priority
+    (narrative, then the implementation facts, then the code), so it does not get the widest fixed
+    column on the landing screen.
+
+    A text page therefore starts with no column; the first code link the reader clicks (loadCode, which
+    every path funnels through) brings it back, and the code viewer's × sends it away again. A DIAGRAM
+    page is untouched — there a click on a shape loads that shape's file — and a PINNED file browser
+    keeps the column anywhere, because pinning is a choice the reader saved.
+
+    The two rules read ONE list of text pages: a second list of "which views are prose" is the drift
+    that left the legend keyed to a stale one."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    assert "function syncCodePane(s) {" in js
+    fn = js[js.index("function syncCodePane(s) {"): js.index("\nfunction ", js.index("function syncCodePane(s) {") + 10)]
+    assert "TEXT_PAGES.has(s.kind)" in fn, "the source pane must read the SAME list as the info pane"
+    assert "!treePinned" in fn, "a pinned file browser keeps the column"
+    assert "document.body.classList.toggle('code-hidden'" in fn
+    # …and it runs for every state, before render's early returns, exactly like syncInfoPane.
+    assert "syncCodePane(s);" in js[js.index("async function render(sArg, transient) {"):][:1400]
+    # The one door back in: every way of showing a file goes through loadCode / openInCodeViewer.
+    assert "noteCodeAsked();" in js[js.index("async function loadCode(path, line) {"):][:900]
+    assert "noteCodeAsked();" in js[js.index("function openInCodeViewer(file, line) {"):][:900]
+    # The way back out, offered only where the column is optional.
+    assert 'id="cvclose"' in html and "#cvclose[hidden] { display: none; }" in css
+    assert "getElementById('cvclose')" in js
+    # Hiding is the same set of panes degraded mode hides, plus the column's width going back to the page.
+    for pane in ("#tree", "#treeresizer", "#codeview", "#resizer"):
+        assert f"body.code-hidden {pane}" in css, pane
+    assert "body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }" in css
+
+def test_a_page_and_its_title_share_one_left_edge() -> None:
+    """The reading-width cap on a card page only bites once the source column is closed and the page has
+    the whole window. Centring the remainder put the content 153px right of the breadcrumb — and the
+    breadcrumb IS the page's title, since no page draws a heading of its own. A title floating 153px
+    from the thing it titles reads as belonging to nothing, so the capped wrappers are pinned left."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    for block in ("max-width: 1100px; margin: 0;", "max-width: 1100px; margin: 0 0 14px;"):
+        assert block in css, block
+    assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
+
 def test_the_system_tab_is_cards_over_one_builder() -> None:
     """It used to stack every collection on one scrolling page under a chip bar: on a real map that is
     664 entry points, 43 commands, 48 config keys, 32 types and 8 notes in a single scroll, and the

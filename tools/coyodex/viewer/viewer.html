@@ -205,6 +205,9 @@
       <button id="cvfilesbtn" type="button" title="Show the file browser">&#9776; Files</button>
       <span id="cvpath"></span>
       <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
+      <!-- Closes the whole source column again. Shown only on a card list, a card grid or a details
+           page, where the column is opened by a code link rather than owned by the view (syncCodePane). -->
+      <button id="cvclose" type="button" hidden title="Hide the source pane" aria-label="Hide the source pane">&times;</button>
     </div>
     <div id="cvbody">
       <div id="cvscroll"><p class="cvempty">Select a node or file to view its source.</p></div>

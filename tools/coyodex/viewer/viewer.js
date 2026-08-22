@@ -5109,6 +5109,37 @@ function syncInfoPane(s) {
   const split = document.getElementById('vsplit');
   if (split) split.hidden = text;
 }
+// The SOURCE pane — the file browser and the code viewer, the whole right-hand column — follows the same
+// rule one step further out. Code is the reader's LAST priority (the spec's reading order is narrative,
+// then the implementation facts, then the code), yet on a card page that column held 542px of a 1440px
+// window saying "Select a node or file to view its source", with nothing on the page able to fill it.
+// On the Storage table the same 542px pushed two columns off the right edge.
+//
+// So a text page starts without the column, and the first code link the reader clicks brings it back
+// (loadCode). It then stays for as long as they are inside that view, and the code viewer's × closes it.
+// A DIAGRAM page is untouched: there a click on a shape loads that shape's file, so the pane is live.
+// A PINNED file browser also keeps the column, because pinning is an explicit choice the reader saved.
+let codeAsked = false;      // the reader opened a file from a text page…
+let codeAskedView = null;   // …inside this top-level view; leaving the view drops the request
+function syncCodePane(s) {
+  const text = TEXT_PAGES.has(s.kind);
+  if (codeAsked && topView(s.kind, s.id) !== codeAskedView) codeAsked = false;
+  document.body.classList.toggle('code-hidden', text && !codeAsked && !treePinned);
+  const close = document.getElementById('cvclose');
+  if (close) close.hidden = !text;   // offered only where the pane is optional
+}
+// Re-run the rule for the page already on screen, after something OTHER than a navigation changed the
+// answer (the reader pinned the file browser, or closed the column).
+function resyncCodePane() { const s = history[hi]; if (s) syncCodePane(s); }
+// Called by loadCode: a file was requested. Only a request made FROM a text page opens the column —
+// on a diagram the column is already there, and remembering that click would re-open it on the card
+// page the reader drilled from.
+function noteCodeAsked() {
+  const s = history[hi];
+  if (!s || !TEXT_PAGES.has(s.kind)) return;
+  codeAsked = true; codeAskedView = topView(s.kind, s.id);
+  syncCodePane(s);
+}
 // The title and the question every card list, card grid and details page leads with. The question is
 // the SAME string the info pane used to hold (VIEW_Q), read from one place, so a view cannot answer one
 // question in its pane and another on its page.
@@ -7070,6 +7101,7 @@ async function render(sArg, transient) {
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   const s = sArg || history[hi];
   syncInfoPane(s);   // a text view has no info pane; a diagram view does (one rule, before any return)
+  syncCodePane(s);   // …and no source pane either, until the reader asks for a file
   // Hide the floating over-the-diagram control HERE, before the HTML-tab early returns below.
   // syncFlowPicker runs at the END of render, which the table views (Glossary / Use Cases / System /
   // Data / Tests) and the degraded "could not render" branch never reach — so a control shown on a
@@ -7317,6 +7349,7 @@ function setPinned(on) {
   treeBrowsing = on ? false : !cvPath;
   lsSet(LS.treePinned, on ? '1' : '0');
   applyTreeState();
+  resyncCodePane();  // a pinned browser keeps the column even on a card page; unpinning gives it back
 }
 // After an active selection (showNodeDetailSynced): auto-open browsing for a folder element, or end it for
 // one that shows a real file (or the suppress flag, when the reader just picked a file). No-op while pinned.
@@ -7913,6 +7946,13 @@ const cvminimap = document.getElementById('cvminimap');  // the overview ruler b
 const cvpath = document.getElementById('cvpath');
 const cvopen = document.getElementById('cvopen');  // ↗ opens the shown file in the external editor / on GitHub
 if (cvopen) cvopen.addEventListener('click', () => { if (cvPath) openSource({ file: cvPath, line: cvLine }); });
+// × — gives the page back the whole window on a card page the source column was opened over. Shown only
+// there (syncCodePane): on a diagram the column is the view's other half and there is nothing to close.
+const cvCloseBtn = document.getElementById('cvclose');
+if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => {
+  codeAsked = false; codeAskedView = null;
+  resyncCodePane();
+});
 // The ruler's viewport band tracks the scroll live, and the ruler doubles as a scrollbar: press or drag
 // anywhere on it (except a dot, which jumps to its line) scrubs the source, centring the view on the
 // pointer. Listeners wired once — updateViewport / scrollCodeToLine are hoisted.
@@ -8460,6 +8500,7 @@ async function loadCode(path, line) {
   // runs first (loading its first file) and updateFolderPeek re-opens browsing right after; for a leaf,
   // an edge, or a Happy-Path step it stays off, so their source isn't hidden behind the browser.
   setBrowsing(false);
+  noteCodeAsked();  // on a card page the source column is closed — this click is what opens it
   cvLine = line || null;
   const asDiff = wantDiffFor(path);
   const diffKey = diffKeyFor(asDiff);
@@ -8531,6 +8572,12 @@ function openInCodeViewer(file, line) {
   if (!file) return;
   if (SERVED && localRef(file)) {
     cvElement = null;  // a standalone / glossary open isn't tied to one element -> no header pill
+    // Open the source column FIRST. On a card page it starts closed, and both the row highlight and the
+    // scroll that reveals it measure zero while their pane is display:none — so revealing has to come
+    // after the pane exists. A DIRECTORY home has no source to show, only a row to reveal, so it also
+    // needs the file browser up; without it that click lands on nothing the reader can see.
+    noteCodeAsked();
+    if (isDirRef(file, line)) setBrowsing(true);
     highlightTreePath(refTreePath(file, line));  // highlights the file's row (or its folder, for a dir home)
     syncCodeView(file, line, []);                // shows the file; a no-op for a directory ref
     return;
@@ -9279,7 +9326,11 @@ function setSearchOpen(on) {
   if (on === wasOpen) { if (on) { sbInput.focus(); sbInput.select(); } return; }
   const served = document.body.classList.contains('served');
   const before = stageBaseline();  // diagram state BEFORE the column resizes
-  const anchorRight = served ? resizer.getBoundingClientRect().left : null;
+  // Where the right-hand group starts, so the sidebar's width can be taken out of the middle column and
+  // leave it put. With the source column closed (a card page) there IS no right-hand group: the handle is
+  // display:none and measures zero, so skip the compensation and let the page column simply give way.
+  const codeHidden = document.body.classList.contains('code-hidden');
+  const anchorRight = (served && !codeHidden) ? resizer.getBoundingClientRect().left : null;
   searchbar.hidden = !on;
   document.body.classList.toggle('search-open', on);
   lsSet(LS.searchOpen, on ? '1' : '0');

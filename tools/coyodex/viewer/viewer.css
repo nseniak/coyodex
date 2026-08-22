@@ -266,7 +266,7 @@ body.vresizing #stage { pointer-events: none; }
    mermaid diagram). Scrolls inside the fixed-size stage (already below the header, so just a small
    top padding set inline). */
 .glossary-wrap { height: 100%; overflow: auto; box-sizing: border-box; padding: 0 20px 24px; }
-.glossary { border-collapse: collapse; width: 100%; max-width: 1100px; margin: 0 auto; font-size: 13px; }
+.glossary { border-collapse: collapse; width: 100%; max-width: 1100px; margin: 0; font-size: 13px; }  /* left edge shared with the breadcrumb, as .usecases-wrap */
 .glossary thead th { position: sticky; top: 0; background: #fff; text-align: left; padding: 8px 12px;
                      border-bottom: 2px solid #c7d2fe; color: #4338ca; font-weight: 600; z-index: 1; }
 .glossary tbody th { text-align: left; font-weight: 600; color: #111827; white-space: nowrap;
@@ -367,7 +367,7 @@ body.vresizing #stage { pointer-events: none; }
                                          height: 6px; pointer-events: none;
                                          background: linear-gradient(rgba(15, 23, 42, .16), rgba(15, 23, 42, 0)); }
 /* Tests tab: the honesty note reads as a callout above the gap table; the Tested? cell is a coloured pill. */
-.tests-note { max-width: 1100px; margin: 0 auto 14px; padding: 10px 14px; font-size: 13px;
+.tests-note { max-width: 1100px; margin: 0 0 14px; padding: 10px 14px; font-size: 13px;
               color: #713f12; background: #fef9c3; border: 1px solid #fde68a; border-radius: 8px; line-height: 1.5; }
 .tst-pill { font-size: 11px; font-weight: 600; border-radius: 9px; padding: 1px 8px; white-space: nowrap; }
 .tst-tested { background: #dcfce7; color: #15803d; }
@@ -375,8 +375,11 @@ body.vresizing #stage { pointer-events: none; }
 .tst-untested { background: #fee2e2; color: #b91c1c; }
 /* Use Cases tab: the actor-grouped catalog (a non-diagram HTML view, like the glossary). Each actor
    section header IS the Role; each row is a use case with its trigger→outcome and an optional HPn pill. */
+/* Capped at a reading width and pinned LEFT, not centred. The cap only bites once the source column is
+   closed and the page has the whole window; centring the remainder then pushed the content 153px right
+   of the breadcrumb, which is the page's own title — a title and its page must share one left edge. */
 .usecases-wrap { height: 100%; overflow: auto; box-sizing: border-box; padding: 16px 20px 28px;
-                 max-width: 1100px; margin: 0 auto; background: #f8fafc;
+                 max-width: 1100px; margin: 0; background: #f8fafc;
                  /* ZERO by default, and measured for real by bindTabIndex when a page HAS an index
                     bar. A non-zero default was wrong on every page without one: the sticky column
                     headers pinned 40px down from the top and floated over the rows with an empty
@@ -635,6 +638,18 @@ body:not(.served) #tree,
 body:not(.served) #treeresizer,
 body:not(.served) #codeview,
 body:not(.served) #resizer { display: none; }
+
+/* A card list, a card grid or a details page starts with NO source column: code is the reader's last
+   priority, and an empty "Select a node or file to view its source." was taking 542px of a 1440px
+   window on the screen the map lands on. A code link puts the column back (syncCodePane in viewer.js).
+   `!important` on the width beats the inline px the #resizer drag leaves behind, so the page takes the
+   whole window WITHOUT the reader's drag being forgotten: it applies again the moment the column
+   returns. Same list of panes as the degraded-mode rule above, which hides them for a different reason. */
+body.code-hidden #tree,
+body.code-hidden #treeresizer,
+body.code-hidden #codeview,
+body.code-hidden #resizer { display: none; }
+body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
 
 /* --- file browser ---------------------------------------------------------------------------------
    A repo tree shaded by map coverage. Shown PINNED (its own pane, left of the code viewer) or while
@@ -1047,6 +1062,12 @@ body.altmod .opensrc, body.altmod .opensrc * {
           border-radius: 4px; padding: 1px 6px; font-size: 13px; line-height: 1.2; }
 #cvopen:hover { background: #e0e7ff; }
 #cvopen[hidden] { display: none; }
+/* the × that closes the whole source column — quieter than the ↗ beside it, because it undoes a thing the
+   reader opened rather than reaching outside the app. Shown only on the card pages (syncCodePane). */
+#cvclose { flex: 0 0 auto; cursor: pointer; border: 0; background: none; color: #9ca3af;
+           border-radius: 4px; padding: 1px 6px; font-size: 15px; line-height: 1.2; }
+#cvclose:hover { background: #f3f4f6; color: #374151; }
+#cvclose[hidden] { display: none; }
 /* the code body is a flex row: the scrolling source on the left, a thin overview ruler pinned on the right */
 #cvbody { flex: 1; min-height: 0; overflow: hidden; background: #fbfbfd; display: flex; }
 #cvscroll { flex: 1 1 auto; min-width: 0; overflow: auto; }
