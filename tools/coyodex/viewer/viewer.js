@@ -5269,10 +5269,13 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   }
   if (s.kind === 'actors') return [{ kind: 'actors' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
-  // One feature's use cases, under the axis that listed it (a grid cell also carries the role)…
-  if (s.kind === 'capability') return [{ kind: 'usecases', by: 'capability' }, { kind: 'capability', cap: s.cap, act: s.act }];
+  // One feature's use cases, under the view and then the axis that listed it (a grid cell also
+  // carries the role)…
+  if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'usecases', by: 'capability' },
+                                       { kind: 'capability', cap: s.cap, act: s.act }];
   // …and one actor's, whose parent crumb reopens the Features view on the axis that lists them.
-  if (s.kind === 'actor') return [{ kind: 'usecases', by: 'actor' }, { kind: 'actor', act: s.act }];
+  if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'usecases', by: 'actor' },
+                                  { kind: 'actor', act: s.act }];
   // A use case sits UNDER the card it was listed on, so the trail reads Features › that card › the use
   // case — the same overview → group → member shape Subsystems and Entities already use. WHICH card is
   // not fixed: the overview has two axes, and a use case belongs to exactly one group on each. So the
@@ -5295,7 +5298,8 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     // No middle card means no axis was walked, so the top crumb stays the plain view state and drops
     // out — claiming "by capability" above a use case that sits under no card would be a trail the
     // reader never took.
-    return mid ? [{ kind: 'usecases', by: mid.kind === 'actor' ? 'actor' : 'capability' },
+    return mid ? [{ kind: 'usecases' },
+                  { kind: 'usecases', by: mid.kind === 'actor' ? 'actor' : 'capability' },
                   mid, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
   }
@@ -5392,24 +5396,22 @@ function renderChrome(s) {
   }
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
-  // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it.
-  // Only show the bar once it actually branches (a `›` between crumbs) — a lone crumb (a tab's own
-  // overview) is just the tab name repeated, so hide the whole bar there.
+  // breadcrumb: the structural nesting from the VIEW down to this page; each ancestor crumb zooms out
+  // to it. The bar is always there, because its first segment is always the view.
   crumb.innerHTML = '';
-  // The path INSIDE the open view: the sub-tab's own name is dropped, because the tab above already
-  // says it, and the group is never here at all — "Product" is a set of tabs, not a page you can be on.
-  // What is left is where you went after choosing the view. Nothing to show means no row: at the top of
-  // a view there is no path, and an empty strip is furniture.
+  // The path from the open view down. The GROUP is never here — "Product" is a set of tabs, not a page
+  // you can be on — but the view itself is: it is a page, it is where the trail starts, and clicking
+  // it is the way up that does not read as leaving.
   //
   // The LAST item is the page's own name, so it is the document's h1 and no page draws a heading. When
   // the row collapses that h1 would go with it, leaving the document untitled — so the view's name
   // takes its place, readable by a screen reader and invisible on screen, where the tab already has it.
+  // The view's own name LEADS the trail, always. It used to be dropped as an echo of the lit tab,
+  // but the tab is a control and the trail is a place: a page one level in then began mid-path, and
+  // the reader's way back to the view's own landing screen was the tab, which reads as "leave" rather
+  // than "go up". Every chain therefore starts at its view, and the row never collapses.
   const chain = ancestors(s);
-  // The view's own name goes, because the tab above already says it — but NOT when it carries an
-  // axis (`by`), which is a level inside the view and the only thing naming which list you came
-  // through.
-  if (chain.length && !chain[0].by && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();
-  const empty = !chain.length;
+  const empty = !chain.length;   // no chain is empty today; the guard keeps the document titled
   if (crumb.parentElement) crumb.parentElement.classList.toggle('hint-empty', empty);
   if (empty) {
     const h = document.createElement('h1');

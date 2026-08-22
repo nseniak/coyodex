@@ -524,10 +524,12 @@ def test_features_keeps_both_axes_and_actors_drills_across_into_one() -> None:
     opener = js[js.index("function openActor(id) {"): js.index("\nfunction ", js.index("function openActor(id) {") + 10)]
     assert "UC_GROUP_BY = 'actor';" in opener and "go({ kind: 'actor', act: n.name });" in opener
     # Both axis crumbs name the axis, so a feature's page and an actor's page no longer read
-    # identically one level down, and each goes back to the cards it was opened from.
-    assert ("if (s.kind === 'actor') return [{ kind: 'usecases', by: 'actor' },"
-            " { kind: 'actor', act: s.act }];") in js
-    assert ("if (s.kind === 'capability') return [{ kind: 'usecases', by: 'capability' },") in js
+    # identically one level down, and each goes back to the cards it was opened from. The view leads
+    # the trail, then the axis, then the card.
+    assert ("if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'usecases', by: 'actor' },"
+            "\n                                  { kind: 'actor', act: s.act }];") in js
+    assert ("if (s.kind === 'capability') return [{ kind: 'usecases' }, "
+            "{ kind: 'usecases', by: 'capability' },") in js
     assert "kind === 'actor'" in js[js.index("function topView(kind, id) {"):]
 
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
@@ -1131,23 +1133,18 @@ def test_a_component_says_how_many_features_it_serves() -> None:
     assert "selectFromTree(b.getAttribute('data-id'))" in js[js.index("function bindNodeDetailHandlers(root) {"):]
 
 
-def test_the_path_shows_only_where_you_went_after_choosing_the_view() -> None:
-    """The tabs identify the view; the breadcrumb identifies the path INSIDE it. So the path never
-    repeats the sub-tab that opened it, and never shows the group at all — "Product" is a set of tabs,
-    not a page you can be on. At the top of a view there is no path, and the row takes no space: an
-    empty strip is furniture.
+def test_the_path_starts_at_the_view_and_never_at_a_level_inside_it() -> None:
+    """The trail always begins with the view. It briefly dropped that first item as an echo of the lit
+    tab, and the cost showed one level in: a page began mid-path, and the only way back to the view's
+    own landing screen was the tab — which reads as leaving the trail rather than going up it. The
+    GROUP is still never here ("Product" is a set of tabs, not a page you can be on).
 
-    Its last item is the page's own name, rendered as the document's h1, so NO page draws a heading of
-    its own — the duplication every earlier arrangement kept reintroducing somewhere else. When the row
-    collapses, that h1 would vanish with it and leave the document untitled, so the view's name stands
-    in, readable by a screen reader and invisible on screen where the tab already carries it."""
+    The last item is the page's own name, rendered as the document's h1, so NO page draws a heading of
+    its own — the duplication every earlier arrangement kept reintroducing somewhere else."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     crumbs = js[js.index("  crumb.innerHTML = '';"):]
     crumbs = crumbs[: crumbs.index("\n}")]
-    # …with ONE exception: the Features view lands on a choice of axis, so a first crumb carrying
-    # `by` is a level INSIDE the view, not the view's own name, and it stays.
-    assert ("if (chain.length && !chain[0].by "
-            "&& topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();") in crumbs
+    assert "chain.shift()" not in crumbs, "the view's own name leads the trail; nothing trims it"
     assert "const empty = !chain.length;" in crumbs
     assert "classList.toggle('hint-empty', empty)" in crumbs
     assert "h.className = 'sr-only';" in crumbs
