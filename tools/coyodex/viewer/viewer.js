@@ -1639,7 +1639,8 @@ function persistedInHtml(id) {
   // `collection` is the default mode (a plain table/collection/bucket) — showing it adds no info and
   // reads as Mongo-flavoured to SQL users ("table"), so only surface a mode that says something else.
   if (st.mode && st.mode !== 'collection') parts.push(`<span class="dv-tag">${esc(st.mode)}</span>`);
-  if (st.notes) parts.push(`<span class="dv-tag">${esc(st.notes)}</span>`);
+  // The note is a SENTENCE, not a tag — as a pill it could not wrap. See .dv-note in viewer.css.
+  if (st.notes) parts.push(`<span class="dv-note">${esc(st.notes)}</span>`);
   if (!parts.length) return '';
   let dd = parts.join(' ');
   if (HAS_DATA) dd += ` <a href="#" class="dv-seelink" data-store="${esc(st.dep)}" data-entity="${esc(id)}">See in Storage →</a>`;
@@ -6643,13 +6644,14 @@ function renderData(s) {
       const rows = st.rows.map((r) => {
         const notes = [];
         if (r.mode && r.mode !== 'collection') notes.push(`<span class="dv-tag">${esc(r.mode)}</span>`);
-        if (r.notes) notes.push(`<span class="dv-tag">${esc(r.notes)}</span>`);
+        // Same rule as the info pane: `mode` is one word and keeps its pill, the note is prose.
+        if (r.notes) notes.push(`<span class="dv-note">${esc(r.notes)}</span>`);
         const a = access[r.entity] || {};
         const readers = (a.readers || []).concat(a.other || []);
         return `<tr><td class="dv-coll">${r.container ? esc(r.container) : '<span class="dv-none">—</span>'}</td>`
           + `<td>${dvChip(r.entity, r.name, 'dv-ent', '', true)}</td>`
           + `<td class="dv-meaning">${mdInline(r.meaning || '')}</td>`
-          + `<td>${notes.join(' ')}</td>`
+          + `<td class="dv-notes">${notes.join(' ')}</td>`
           + `<td>${rwCell(a.writers, 'dv-write', 'no mapped writers')}</td>`
           + `<td>${rwCell(readers, 'dv-read', 'no mapped readers')}</td></tr>`;
       }).join('');

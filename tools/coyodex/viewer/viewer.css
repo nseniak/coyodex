@@ -1272,7 +1272,12 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .dv-table tbody tr:last-child td { border-bottom: 0; }
 .dv-table tbody tr:hover td { background: #f9fafb; }
 .dv-coll { font-family: ui-monospace, monospace; font-size: 12px; white-space: nowrap; font-weight: 600; color: #334155; }
-.dv-meaning { color: #6b7280; font-size: 12.5px; max-width: 34ch; }
+/* The two SENTENCE columns. Both carry a floor as well as a cap: with `table-layout: auto` a column is
+   sized by what it contains, so the widest cell in another column decides how little these get. Measured
+   over three real maps (135 collection rows): the Meaning sentence runs to a median 86 characters and was
+   being handed 99px — one word per line — while the Notes pill beside it took 513px. */
+.dv-meaning { color: #6b7280; font-size: 12.5px; min-width: 24ch; max-width: 40ch; }
+.dv-notes { min-width: 22ch; max-width: 40ch; }
 .dv-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .dv-chip { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11px; line-height: 1.3;
            padding: 2px 7px; border-radius: 10px; border: 0; cursor: pointer; white-space: nowrap; }
@@ -1282,8 +1287,12 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .dv-read { background: transparent; color: #475569; box-shadow: inset 0 0 0 1px #cbd5e1; }
 .dv-chip.dv-persist { background: #6d28d9; color: #f5f3ff; font-weight: 600; }
 .dv-none { font-size: 11px; color: #9ca3af; font-style: italic; }
+/* A TAG is one word (a collection's storage `mode`), so it is a pill and never wraps. */
 .dv-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
           background: #f1f5f9; color: #475569; white-space: nowrap; }
+/* A NOTE is a sentence — a median 78 characters over three real maps, longest 221. It used to be set with
+   .dv-tag, and a sentence that cannot wrap is what starved the Meaning column beside it. Quiet prose. */
+.dv-note { font-size: 11.5px; line-height: 1.45; color: #64748b; }
 .dv-tag-warn { background: #fef3c7; color: #92400e; }
 .dv-chan { margin: 0 0 14px; overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; }
 #diagram .dv-chan svg { width: auto; max-width: 100%; height: auto; }

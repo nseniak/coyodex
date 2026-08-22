@@ -728,6 +728,29 @@ def test_a_page_and_its_title_share_one_left_edge() -> None:
         assert block in css, block
     assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
 
+def test_a_sentence_is_never_set_as_a_pill() -> None:
+    """A collection's NOTE was rendered with `.dv-tag`, the pill class, which is `white-space: nowrap`
+    because a tag is one word. A note is not: over the three real maps its 135 rows run to a median 78
+    characters and a longest of 221. So on the Storage table one un-wrappable note demanded 513px and
+    the browser paid for it out of the MEANING column beside it, which fell to 99px — the plain-English
+    sentence the reader came for, set one word per line, while two further columns were pushed off the
+    right edge. The same pill wrapped the same note in the entity info pane.
+
+    Notes are prose (`.dv-note`); only `mode`, which really is one word, keeps a pill. And both sentence
+    columns carry a min-width, because with `table-layout: auto` the widest cell in ANOTHER column is
+    otherwise free to decide how little they get."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert 'class="dv-tag">${esc(st.notes)}' not in js and 'class="dv-tag">${esc(r.notes)}' not in js, \
+        "a note is back in a pill that cannot wrap"
+    assert 'class="dv-note">${esc(st.notes)}' in js and 'class="dv-note">${esc(r.notes)}' in js
+    assert 'class="dv-tag">${esc(st.mode)}' in js and 'class="dv-tag">${esc(r.mode)}' in js, \
+        "a one-word mode is a real tag and keeps its pill"
+    assert "white-space: nowrap" not in css[css.index(".dv-note {"): css.index(".dv-note {") + 200]
+    assert "min-width: 24ch" in css[css.index(".dv-meaning {"): css.index(".dv-meaning {") + 140]
+    assert "min-width: 22ch" in css[css.index(".dv-notes {"): css.index(".dv-notes {") + 140]
+    assert 'class="dv-notes"' in js, "the notes column needs its own class to carry that floor"
+
 def test_the_system_tab_is_cards_over_one_builder() -> None:
     """It used to stack every collection on one scrolling page under a chip bar: on a real map that is
     664 entry points, 43 commands, 48 config keys, 32 types and 8 notes in a single scroll, and the
