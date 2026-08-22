@@ -1071,8 +1071,8 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     """The card said `SERVICE`; the actor's own page, one click later, said `service` + `STAFF-OWNED`
     about the same actor, and never printed a side on the card at all. Both now read ONE function.
 
-    Four readings:
-        person  + user      ->  (nothing)          a person on the customer's side is the ordinary case
+    Four readings, and EVERY actor card prints one:
+        person  + user      ->  USER
         person  + internal  ->  STAFF
         program + internal  ->  INTERNAL SERVICE   a machine the company runs, or pays a vendor to run
         program + user      ->  USER SERVICE       a machine the CUSTOMER set up
@@ -1084,22 +1084,29 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     describes. `staff service` was proposed and dropped: it says a program is staff, which is the one
     thing the rename fixed. The two words never meet on one card, and each says "ours".
 
-    A PROGRAM always prints its side. Leaving the company's own machines silent hides the single thing
-    the vendor rule exists to settle: Mio Coworker's Stripe webhook was authored as the customer's, and
-    a card reading plain `SERVICE` looks the same whether that is right or wrong.
+    Leaving the company's own machines silent hid the single thing the vendor rule exists to settle:
+    Mio Coworker's Stripe webhook was authored as the customer's, and a card reading plain `SERVICE`
+    looks the same whether that is right or wrong.
 
-    A PERSON stays silent on the customer's side, where `user` is 7 of the 11 people on the reference
-    maps — a word that is nearly always there distinguishes nothing. `staff` is also the reader's word
-    on a FEATURE, whose audience only its human roles vote for."""
+    `user` on a PERSON was silent for a round, on the reading that it is the ordinary case. Two things
+    undid it. The number is not there — `user` is 7 of the 11 people on the reference maps, 64%, where
+    the cases that earned silence were `user` on a feature at 22 of 27 and `human` on nearly every
+    actor. And these cards are a GRID, read ACROSS: eight of the sixteen carried a side word and eight
+    carried a blank to decode, while every program beside them stated its own. An axis complete for
+    machines and half missing for people is not a rule, it is an exception nobody can hold.
+
+    A FEATURE keeps the silence: there `user` really is 22 of 27, and its cards do not sit beside a set
+    that always speaks. `staff` is the reader's word there too, since only human roles vote."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     fn = js[js.index("function actorSidePills(kind, audience) {"):
             js.index("\nfunction ", js.index("function actorSidePills(kind, audience) {") + 10)]
     assert "text: side ? `${side} service` : 'service'" in fn, "a program always prints its side"
-    assert "text: 'staff'" in fn and "staff service" not in fn, "a program is never called staff"
+    assert "audienceWord(side)" in fn and "staff service" not in fn, "a program is never called staff"
+    assert "kind === 'human' && side" in fn and "side === 'internal'" not in fn, \
+        "every actor card prints its side, including a person on the customer's"
     # Colour says WHAT it is, the words say whose: both program readings keep the one program colour.
-    assert fn.count("ecard-pill-service") == 1 and "uc-aud-internal" in fn
-    assert "side === 'internal'" in fn, "a person prints a side only when it is the company's"
+    assert fn.count("ecard-pill-service") == 1 and "cls: `uc-aud-${side}`" in fn
     # The card and the page draw the SAME pills — the page must not compute its own.
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
     assert "-owned" not in code, "the page's second form for a machine is back"
