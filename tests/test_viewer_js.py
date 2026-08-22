@@ -1425,15 +1425,24 @@ def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
     assert "pills:" not in head, "the feature's page draws no pills of its own"
 
 
-def test_a_grid_of_cards_keeps_one_shape_whatever_the_name_is_long() -> None:
-    """A card puts its name and its pills on one wrapping row. Read DOWN a list that is the denser
-    shape, but read ACROSS a grid it means a long name pushes the pills to a second line and that one
-    card grows taller than the four beside it. In the grid the name takes the whole first line, so
-    every card's pills sit in the same place."""
+def test_a_cards_name_takes_the_whole_first_line_everywhere() -> None:
+    """It began as a GRID rule. Cards in a grid are read ACROSS, so a name taking only the width of its
+    own words put the pills beside a short name and under a long one: one card in a row grew a line and
+    stood taller than the four beside it, with its pill at a different height.
+
+    It is not a grid rule any more. The same use case is met in a grid AND in the card that floats over a
+    diagram, and there the card was outside the grid, so the same card had a 47px title block in one place
+    and a 22px one in the other. A reader can see that, and did.
+
+    The cost of dropping the prefix is small, because a long name already forced the wrap: of the 40 cards
+    on the two card lists that remain — a feature's page and a decision area — 27 already wrapped, since a
+    business rule's name is a whole sentence. Thirteen gained a line, and every card in the app now has
+    one title height."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert ".ecard-grid .ecard-name { flex-basis: 100%; }" in css
+    assert ".ecard-name { flex-basis: 100%; }" in css
+    assert ".ecard-grid .ecard-name" not in css, "not a grid rule any more"
     head = css[css.index(".ecard-head {"): css.index("}", css.index(".ecard-head {"))]
-    assert "flex-wrap: wrap" in head, "the list shape is unchanged: one row, wrapping only if it must"
+    assert "flex-wrap: wrap" in head, "the pills still wrap among themselves when there are many"
 
 
 def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
@@ -1467,7 +1476,7 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
               js.index("\n}", js.index("function elementCardHtml(id, opts) {"))]
     assert "(o.foot || '')" in card and card.index("o.foot") > card.index("ecard-desc"), \
         "the labelled line comes after the sentence"
-    grid = css[css.index(".ecard-grid .ecard-name"):]
+    grid = css[css.index(".ecard-grid .ecard {"):]
     grid = grid[: grid.index("\n\n")] if "\n\n" in grid else grid[:600]
     assert "margin-top: auto" in grid, "one height for the labelled line across a row"
     # …and the NAME on that line is a door: the feature's own list of use cases, or the actor's. It earns

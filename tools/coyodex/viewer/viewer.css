@@ -541,11 +541,18 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 /* A CARD LIST reads down the page; a CARD GRID is for choosing between groups, across then down. */
 .ecard-list { display: flex; flex-direction: column; gap: 8px; }
 .ecard-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-/* In a GRID the cards are read across, so they must all be the same shape. On one row the pills sat
-   beside a short name and under a long one, and the card grew a line — one card taller than the four
-   beside it. Giving the name the whole first line puts every card's pills in the same place. A card
-   LIST is read down instead, where one compact line each is the denser read. */
-.ecard-grid .ecard-name { flex-basis: 100%; }
+/* THE NAME TAKES THE WHOLE FIRST LINE, on every card, everywhere.
+   It began as a GRID rule: cards there are read across, so if the name took only the width of its own
+   words the pills sat beside a short name and under a long one, and one card in a row grew a line and
+   stood taller than the four beside it.
+   It is not a grid rule any more, because the same use case is met in a grid AND in the card that floats
+   over a diagram, and a two-line title in one place against a one-line title in the other is a difference
+   a reader can see. Measured before removing the prefix: the title block was 47px in a grid and 22px in
+   the popup, for the same card.
+   The cost is small, because a long name already forced the wrap: of the 40 cards on the two card lists
+   that still exist (a feature's page, a decision area), 27 already wrapped — a business rule's name is a
+   whole sentence. Thirteen gained a line, and every card in the app now has one title height. */
+.ecard-name { flex-basis: 100%; }
 /* …and so does the labelled line at the FOOT. Cards in a row are already the same height, but their
    sentences are not the same length, so the line under them landed at a different y in every card and
    the row read as ragged. Pushed to the bottom, `IN FEATURE` starts at one height across the row, which
