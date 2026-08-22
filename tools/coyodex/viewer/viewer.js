@@ -368,6 +368,37 @@ const CARD_DESC_FIELD = {
   system: ['Overview'],
 };
 
+// The reader's sentence for what an actor is AFTER, built from the map's `wants`. ONE function, because
+// the same fact was drawn in four places in three different shapes: a bare sentence on the actor's card
+// and again on the actor's own page, a titled `Wants` row in the Happy Path pane, and a `Wants:` label
+// on a section header. A reader met the same sentence named three ways.
+//
+// The maps do not agree on how to WRITE it either. Across the three reference maps the 16 actors take
+// three shapes: `to be told what changed` (4), `To use the MCP tools their role allows.` (6), and a bare
+// command, `Ask Mio for answers` (6). All three are verb phrases sharing one stem, so one prefix fits
+// all sixteen once a leading `to` is dropped and the first letter lowered: `Wants to be told what
+// changed`, `Wants to use the MCP tools their role allows`, `Wants to ask Mio for answers`.
+//
+// PROSE, not a label. `WANTS` set as a tag in front of `Ask Mio for answers` reads as a broken sentence,
+// and 6 of the 16 are that shape; WANTS, GOAL, ROLE, PURPOSE and NEEDS each break on at least one of the
+// three. Prose is also what a card asks for: one sentence, no second line, nothing new to style.
+//
+// The word fits a program as well as a person. It is the map's own name for this field, and `Stripe
+// billing wants to tell Mio when a subscription is paid` is plain English.
+//
+// The first letter is left alone when the first word is ALL CAPS, so an acronym survives (`MCP tools`).
+// A merely capitalised proper noun (`Slack sends …`) would still be lowered; none of the sixteen opens
+// that way, and this field is meant to hold what the actor is after rather than a name.
+function wantsSentence(wants) {
+  const s = String(wants || '').trim();
+  if (!s) return '';
+  const body = s.replace(/^to\b\s*/i, '').trim();   // `\b`, or a lone `to` survives as `Wants to to`
+  if (!body) return '';
+  const first = body.split(/\s/)[0];
+  const keep = first === first.toUpperCase() && /[A-Z]/.test(first);
+  return 'Wants to ' + (keep ? body : body[0].toLowerCase() + body.slice(1));
+}
+
 // What a card SAYS about one element: title, the reader's word for its type, the one sentence, and the
 // few extra pills its type earns.
 // Kinds whose type pill would go exactly where clicking the CARD goes. `selectTargetFor` (the pill:
@@ -429,6 +460,8 @@ function cardFacts(id) {
   // A map that gives a rule no short name of its own uses the whole statement as the title, and the
   // description field then holds the same words. One copy, not two.
   if (desc.trim() === (n.name || '').trim()) desc = '';
+  // An actor's sentence says what they are AFTER, and says so in words — see wantsSentence.
+  if (n.kind === 'human' || n.kind === 'service') desc = wantsSentence(desc);
   const pills = [];
   // A feature's audience, an actor's nature and a dependency's kind each change how the rest of the
   // card reads, so each rides beside the type pill rather than eating the description. A feature can
@@ -2606,17 +2639,19 @@ function showFlowStep(uc, i) {
   if (local) syncCodeView(wn.file, wn.line, []);
 }
 // One actor's card, in ANY view that draws an actor. `drives` is the only part that differs by view (the
-// Happy Path lists step titles, a flow lists its own steps), so everything else lives here once — and
-// `Wants` is a TITLED row, exactly as the Dependencies view's actor panel renders it. It was an untitled
-// paragraph here, which reads as a description of the actor rather than as what they are after; the same
-// fact should not change its name between two views.
+// Happy Path lists step titles, a flow lists its own steps), so everything else lives here once.
+//
+// `Wants` used to be a TITLED row here, because an untitled paragraph read as a description of the actor
+// rather than as what they are after. The sentence now says that itself — `Wants to keep the hosted
+// service healthy` — so the title is the same words twice, and the row goes back to being a sentence.
+// That is the whole point of the prefix: one shape everywhere, and it needs no label to be understood.
 function actorPanelHtml(a, drives) {
   const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
-  const wants = a.wants ? '<dt>Wants</dt><dd>' + mdInline(a.wants) + '</dd>' : '';
+  const wants = a.wants ? '<p class="uc-wants">' + mdInline(wantsSentence(a.wants)) + '</p>' : '';
   const driveRows = drives ? '<dt>Drives</dt>' + drives : '';
   return '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
     + '<span class="badge kind">actor</span>' + kindBadge + '</div>'
-    + (wants || driveRows ? '<dl>' + wants + driveRows + '</dl>' : '');
+    + wants + (driveRows ? '<dl>' + driveRows + '</dl>' : '');
 }
 // The Happy Path's actor card: the steps it drives are that walk's own positions.
 function showHPActor(a) {
@@ -6020,7 +6055,7 @@ function actorHeadHtml(actorName) {
   return pageHeroHtml({
     pills: actorSidePills(kind, (role || {}).audience)
       .map((p) => `<span class="ecard-pill ${esc(p.cls)}">${esc(p.text)}</span>`).join(''),
-    desc: role && role.wants ? mdInline(role.wants) : '',
+    desc: role && role.wants ? mdInline(wantsSentence(role.wants)) : '',
     noDesc: 'This map does not say what this actor wants.',
   });
 }
@@ -6087,7 +6122,7 @@ function renderUseCases(sel) {
     const badge = kind === 'service'
       ? `<span class="ecard-pill ecard-pill-service">${esc(kind)}</span>` : '';
     const w = (g.roles || []).length === 1 ? g.roles[0].wants : '';
-    const wants = w ? `<p class="uc-wants"><span class="uc-wants-lbl">Wants:</span> ${mdInline(w)}</p>` : '';
+    const wants = w ? `<p class="uc-wants">${mdInline(wantsSentence(w))}</p>` : '';
     secs.push({ id: secId, title: g.actor });
     return `<section class="uc-group" id="${secId}">`
       + `<h3 class="uc-actor">${esc(g.actor)}${badge}<span class="uc-actor-wants">${count}</span></h3>`

@@ -699,6 +699,46 @@ def test_the_question_leads_a_text_page_and_rides_the_trail_row_on_a_diagram() -
                js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
     assert "viewQuestion" not in intro
 
+def test_an_actor_says_what_it_is_after_in_its_own_sentence() -> None:
+    """An actor's card carried the map's `wants` field raw, so the sentence never said what it was:
+    "To keep stored credentials, connections and sandboxes valid without anyone asking." reads as a
+    description of the actor rather than as what the actor is after. The same fact was then drawn in
+    FOUR places in THREE shapes — bare on the card and on the actor's own page, a titled `Wants` row in
+    the Happy Path pane, a bold `Wants:` label on a section header — so a reader met one sentence under
+    three names.
+
+    One function builds the reader's sentence now, and all four call it: `Wants to <verb phrase>`.
+
+    PROSE, not a label, and the maps decide that. Across the three reference maps the 16 actors are
+    written three ways: `to be told what changed` (4), `To use the MCP tools their role allows.` (6),
+    and a bare command, `Ask Mio for answers` (6). A `WANTS` tag in front of the third shape reads as a
+    broken sentence, and WANTS, GOAL, ROLE, PURPOSE and NEEDS each break on at least one of the three.
+    All three ARE verb phrases sharing one stem, so the prefix fits all sixteen once a leading `to` is
+    dropped and the first letter lowered. Prose is also what a card asks for: one sentence, no new line.
+
+    Two guards, both with a real input behind them. `to` is matched on a word boundary, or a map whose
+    sentence begins `Today the run starts` loses its first word — and a lone `to` came out as `Wants to
+    to`. An ALL-CAPS first word is left alone, so `MCP tools` is not lowered to `mCP tools`."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function wantsSentence(wants) {" in js
+    fn = js[js.index("function wantsSentence(wants) {"):
+            js.index("\n}", js.index("function wantsSentence(wants) {"))]
+    assert "'Wants to '" in fn, "prose, not a label"
+    assert "/^to\\b\\s*/i" in fn, "a word boundary, or `Today …` loses its first word"
+    assert "first === first.toUpperCase()" in fn, "an ALL-CAPS first word survives"
+    # All four drawing sites read the ONE function; none of them keeps a label of its own.
+    facts = js[js.index("function cardFacts(id) {"):
+               js.index("\n}", js.index("function cardFacts(id) {"))]
+    assert "if (n.kind === 'human' || n.kind === 'service') desc = wantsSentence(desc);" in facts
+    panel = js[js.index("function actorPanelHtml(a, drives) {"):
+               js.index("\n}", js.index("function actorPanelHtml(a, drives) {"))]
+    assert "wantsSentence(a.wants)" in panel
+    assert "<dt>Wants</dt>" not in js, "the titled row is the same word twice now"
+    head = js[js.index("function actorHeadHtml(actorName) {"):
+              js.index("\n}", js.index("function actorHeadHtml(actorName) {"))]
+    assert "wantsSentence(role.wants)" in head
+    assert 'uc-wants-lbl">Wants:' not in js, "and so is the bold label on a section header"
+
 def test_a_text_view_drops_the_info_pane() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
     of prose only repeated it, and it stole a third of the height from the content it described. A

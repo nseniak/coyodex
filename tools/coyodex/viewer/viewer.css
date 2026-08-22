@@ -409,6 +409,9 @@ body.vresizing #stage { pointer-events: none; }
 .uc-actor-wants { font-size: 12px; font-weight: 400; color: #6b7280; }
 /* What an actor is after — its own line under the section heading (never trailing the name, where a
    long one wrapped and a short one did not, so no two headers aligned). The label is the bolder part. */
+/* A short labelled line under a heading. An ACTOR's line no longer takes the label: its sentence says
+   `Wants to …` itself, so a bold `Wants:` in front of it was the same word twice. A rule's page still
+   uses the label, where the words that follow it name a thing rather than finish a sentence. */
 .uc-wants { margin: -2px 0 10px; font-size: 12px; font-weight: 400; color: #6b7280; line-height: 1.45; }
 .uc-wants-lbl { font-weight: 700; color: #374151; }
 .uc-list { list-style: none; margin: 0 0 8px; padding: 0; }
