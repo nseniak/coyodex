@@ -221,7 +221,8 @@ body.vresizing #stage { pointer-events: none; }
                color: #6b7280; }
 /* The use-case flow's control card: the Map/Sequence switch + the step player. Floats like the
    environment picker above (never on screen at the same time as it: that one is the Deployment
-   overview, this one a flow). The segmented control reuses `.uc-seg`, the Use Cases group-by switch.
+   overview, this one a flow). `.uc-seg` is the segmented control it now owns outright: the Features
+   group-by switch that first defined the shape is gone, along with the second axis it switched.
    `.cappick-lbl` is its label style, kept from the removed capability picker. */
 #flowpicker { position: absolute; left: 12px; bottom: 12px; z-index: 6; background: #fff;
               border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 10px;
@@ -405,9 +406,7 @@ body.vresizing #stage { pointer-events: none; }
 /* --- capability grouping (plan/60-capabilities) ------------------------------------------------
    The catalog groups by capability OR by actor — both kept, because "what does this product do?"
    and "what can this role do?" are different questions and neither derives the other. */
-.uc-groupby { display: flex; align-items: baseline; gap: 9px; margin: 0 0 14px; }
 
-.uc-groupby-why { font-size: 12px; color: #6b7280; }
 .uc-seg { display: inline-flex; border: 1px solid #c7d2fe; border-radius: 6px; overflow: hidden; }
 .uc-seg button { font: inherit; font-size: 12px; padding: 3px 11px; border: 0; background: transparent;
                  color: #4338ca; cursor: pointer; }
@@ -450,10 +449,9 @@ body.vresizing #stage { pointer-events: none; }
    narrower measure it left a column of empty space beside itself that read as a missing second column. */
 .view-lead { margin: 0 0 18px; }
 .view-lead-body { font-size: 14.5px; line-height: 1.6; color: #374151; }
-/* One small-caps label for the blocks of a page — the product overview, the Group-by switch. */
-.block-lbl, .uc-groupby-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase;
-                              letter-spacing: .05em; color: #6b7280; }
-.block-lbl { margin: 0 0 7px; }
+/* One small-caps label for the blocks of a page — the product overview, then the feature cards. */
+.block-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase;
+             letter-spacing: .05em; color: #6b7280; margin: 0 0 7px; }
 /* A REFERENCE TABLE is the one thing that stays a table: its rows are not map elements, and columns
    are what let a reader compare forty of them down a page. It borrows the card's frame so the two sit
    together on a screen — same border, same radius, same quiet header. */

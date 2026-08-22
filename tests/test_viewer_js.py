@@ -499,37 +499,34 @@ def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
     assert "g.ucs.some((x) => usecaseDiffState(x.id))" in feat
 
 
-def test_features_keeps_both_axes_and_actors_drills_across_into_one() -> None:
-    """"What does this product do?" and "what can this role do?" are different questions and neither
-    derives the other, so the Features view keeps both axes on one switch. (The third setting it briefly
-    had — the two crossed as a matrix — is gone.) The ACTORS view is the list of actors themselves, and
-    its card drills ACROSS: it sets the actor axis and opens that actor's use cases under Features, so
-    the crumb above the list goes back to the cards the reader just clicked."""
+def test_features_shows_features_and_actors_own_their_own_drill() -> None:
+    """"What does this product do?" and "what can this role do?" are different questions, and they had
+    a view each AND a switch on one of them. So a tab named Features could show no feature, and the
+    Actors view could not answer its own question without handing the reader to another tab: its cards
+    drilled ACROSS into the Features view's actor axis.
+
+    One question per view now. The switch is gone, the Features view has one axis, and an actor's use
+    cases sit under Actors, where the cards that open them are."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "let UC_GROUP_BY = 'capability';" in js and "function ucGroupBy() {" in js
+    assert "UC_GROUP_BY" not in js and "ucGroupBy" not in js, "the axis is gone, not defaulted"
+    assert "bindOverviewAxis" not in js and "uc-groupby" not in js
+    assert "if (kind === 'actor') return 'actors';" in js, "an actor's page lives under its own view"
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    # The axis is named `Capability`, the word the method uses. It read `Category` for one round —
-    # the only place in the viewer that called a capability something else, matching nothing a reader
-    # could look up.
-    assert "seg('capability', 'Capability')" in over and "seg('actor', 'Actor')" in over
-    assert "'Category'" not in js, "one word per thing; `Category` named a capability twice over"
-    assert "Features grouped by" in over, "the label says what is being grouped, not just that it is"
+    # Two words for a capability, then three: `Category`, then `Capability` beside a tab already
+    # saying Features. Both were the label of a switch that should not have existed.
+    assert "'Category'" not in js and "Features grouped by" not in js
     assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
-    # Both settings draw actor cards from ONE builder, shared with the Actors view.
-    assert over.count("actorCardsHtml(true)") == 1
+    # One builder, one shape: the grid variant existed only for the Features view's actor axis.
     actors = js[js.index("function renderActors() {"): js.index("\nfunction ", js.index("function renderActors() {") + 10)]
-    assert "actorCardsHtml(false)" in actors
-    # The drill across, and the tab it lands on.
+    assert "actorCardsHtml()" in actors
+    # The drill stays inside the Actors view now.
     opener = js[js.index("function openActor(id) {"): js.index("\nfunction ", js.index("function openActor(id) {") + 10)]
-    assert "UC_GROUP_BY = 'actor';" in opener and "go({ kind: 'actor', act: n.name });" in opener
-    # Both axis crumbs name the axis, so a feature's page and an actor's page no longer read
-    # identically one level down, and each goes back to the cards it was opened from. The view leads
-    # the trail, then the axis, then the card.
-    assert ("if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'usecases', by: 'actor' },"
-            "\n                                  { kind: 'actor', act: s.act }];") in js
+    assert "go({ kind: 'actor', act: n.name });" in opener and "UC_GROUP_BY" not in opener
+    # Each page sits under ITS OWN view, so the two trails differ from their first word.
+    assert "if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];" in js
     assert ("if (s.kind === 'capability') return [{ kind: 'usecases' }, "
-            "{ kind: 'usecases', by: 'capability' },") in js
+            "{ kind: 'capability', cap: s.cap, act: s.act }];") in js
     assert "kind === 'actor'" in js[js.index("function topView(kind, id) {"):]
 
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
@@ -549,33 +546,20 @@ def test_every_state_field_survives_a_right_pane_navigation() -> None:
 
 
 def test_a_use_cases_crumb_names_the_card_it_was_listed_on() -> None:
-    """The overview has two axes, so a use case belongs to one group on each. Naming its FEATURE while
-    the reader arrived through an ACTOR put a card they never opened in the trail, and clicking that
-    crumb navigated them to a screen they had never seen. The middle crumb follows the axis the
-    overview is on. A use case in no feature still gets one, or that drill is the only one in the
-    viewer no breadcrumb can undo."""
+    """A use case has TWO homes — its feature, and every actor who drives it — and the reader's own
+    path picks one. The row carries the actor whose list it was opened from, so the trail runs through
+    Actors; otherwise it runs through the feature. A use case in no feature still gets a card crumb, or
+    that drill is the only one in the viewer no breadcrumb can undo.
+
+    A THIRD case went with the axis: the trail used to GUESS an actor from a global switch for a use
+    case reached some other way (a search, a Happy Path step), which put a card the reader never opened
+    into their trail."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     anc = js[js.index("if (s.kind === 'usecase') {"):]
     anc = anc[: anc.index("\n  }")]
-    assert "s.act ||" in anc and "actorGroupOf(s.uc)" in anc
+    assert "if (s.act) return [{ kind: 'actors' }, { kind: 'actor', act: s.act }," in anc
     assert "CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-'" in anc
-    assert "function actorGroupOf(ucId) {" in js and "actorGroups().find(" in js
-
-
-def test_the_features_axis_is_a_crumb_of_its_own() -> None:
-    """The Features view lands on a CHOICE — the same use cases cut by capability or by actor — and
-    that choice is a real level. Without it a feature's page carried a one-item crumb with no way back
-    to the cards, and the same page reached through an actor read exactly the same.
-
-    The view's own landing state names no axis, so clicking the crumb goes to the same screen the tab
-    does, with the axis it names already set."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "return s.by ? 'by ' + (s.by === 'actor' ? 'actor' : 'capability') : 'Features';" in js
-    assert "if (s.kind === 'usecases') return [{ kind: 'usecases' }];" in js, \
-        "the landing state must carry NO axis, or the crumb lands somewhere the tab never does"
-    assert "if (s.by) UC_GROUP_BY = s.by === 'actor' ? 'actor' : 'capability';" in js
-    assert "'by'" in js[js.index("const STATE_FIELDS = ["):js.index("function stateKey(s) {")], \
-        "a state field the right pane does not carry is a crumb that forgets its axis"
+    assert "actorGroupOf" not in js, "no guessing an actor the reader never chose"
 
 
 def test_a_feature_found_by_search_lands_on_its_card() -> None:
@@ -608,26 +592,22 @@ def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     # One undeclared name still sends the whole use case to Other: a half-known pair has no per-role home.
     assert "known ? names.map((nm, i) =>" in body and "[[OTHER, 'Other', null]]" in body
     assert "(id) => go({ kind: 'usecase', uc: id, act: oneActor })" in js
-    assert "const act = s.act || (ucGroupBy() === 'actor' ? actorGroupOf(s.uc) : '');" in js
 
 
-def test_the_group_by_switch_sits_with_the_list_it_switches() -> None:
-    """It spent two rounds in the header — a strip of its own, then beside the view tabs — and in both
-    it was a control floating away from the thing it controls, in a band the reader had learned to read
-    as navigation. It is emitted with the cards now, directly above them: the row that changes the rows.
+def test_the_group_by_switch_and_the_slot_it_lived_in_are_both_gone() -> None:
+    """It moved twice — a header strip of its own, then beside the view tabs, then down with the cards —
+    and each move made it a smaller problem without making it the right thing. It switched between
+    features and actors on a view named Features, and both already had a view of their own.
 
-    The header slot it used to live in is gone with it. It existed to host one control, that control
-    left, and an empty slot nothing fills is chrome pretending to be a feature."""
+    The header slot it once lived in went first, and stays gone: a slot that exists to host one control
+    is chrome pretending to be a feature."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     assert "viewextra" not in js and "viewextra" not in html
-    over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    # …and it is emitted immediately before the cards, on BOTH settings of the axis.
-    assert over.count("+ switchHtml") == 2
-    assert "productLeadHtml() + switchHtml + grid" in over
-    bind = js[js.index("function bindOverviewAxis() {"):
-              js.index("\nfunction ", js.index("function bindOverviewAxis() {") + 10)]
-    assert "diagram.querySelectorAll('.uc-groupby .uc-seg button')" in bind
+    assert "switchHtml" not in js and "data-gb" not in js
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".uc-groupby" not in css, "the switch's styling goes with the switch"
+    assert ".uc-seg" in css, "…but the segmented control it shaped is still worn by the Happy Path"
 
 def test_the_breadcrumb_starts_under_the_active_tabs_label() -> None:
     """The alignment IS the design. The view row pads 10px and each tab pads 7px inside that, so the
@@ -959,7 +939,7 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
     # says nothing.
     assert "filter((g) => g.ids && g.ids.length)" in body
     assert "if (live.length === 1) return elementCardListHtml(live[0].ids, live[0].per);" in body
-    for caller in ("function actorCardsHtml(grid) {", "function featRulesHtml(ids) {",
+    for caller in ("function actorCardsHtml() {", "function featRulesHtml(ids) {",
                    "function unreachedHtml() {"):
         fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
         assert "elementCardGroupsHtml(" in fn, caller
@@ -1007,8 +987,8 @@ def test_a_card_drops_its_type_pill_on_that_types_own_view() -> None:
     assert "return { noType: true," in over
     # The actor cards too: the Actors view and the Features view's actor axis both hold nothing else,
     # and ONE builder draws the card for both, so the pill cannot come back on one of them.
-    actors = js[js.index("function actorCardsHtml(grid) {"):
-                js.index("\nfunction ", js.index("function actorCardsHtml(grid) {") + 10)]
+    actors = js[js.index("function actorCardsHtml() {"):
+                js.index("\nfunction ", js.index("function actorCardsHtml() {") + 10)]
     assert "return { noType: true," in actors
     # A use-case list opts in only where the screen holds nothing but use cases. A FEATURE'S PAGE draws
     # rules, entities and component cards below the same list, so there the word still tells them apart.
@@ -1097,9 +1077,10 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     assert "HAS_HP ? 'hp'" in landing and "HAS_ACTORS ? 'actors'" in landing
     assert "(HAS_DIFF && HAS_GROUPING) ? 'container'" in landing   # a diff still opens on the overlay
     assert "'goal'" not in js and "renderGoal" not in js, "the Goal tab is gone, not hidden"
-    # …and the description leads the Features page, on either setting of the axis.
+    # …and the description leads the Features page, above a labelled block of feature cards.
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert over.count("productLeadHtml()") == 2
+    assert over.count("productLeadHtml()") == 1
+    assert "'<p class=\"block-lbl\">Product features</p>' + grid" in over
     assert "GRAPH.nodes.SYS" in js[js.index("function productLeadHtml() {"):]
 
 
