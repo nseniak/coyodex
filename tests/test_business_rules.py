@@ -1949,7 +1949,7 @@ def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
     html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
     assert 'data-view="rules"' in html
     assert "HAS_RULES = !!b.hasBusinessRules" in VIEWER_JS               # applyBundle
-    assert "'tests', 'rules'" in VIEWER_JS                              # TEXT_VIEWS
+    assert "'rules', 'rule'," in VIEWER_JS                              # TEXT_PAGES
     assert "kind === 'rules'" in VIEWER_JS                              # topView
     assert "if (!s.blk) return 'Rules';" in VIEWER_JS                  # stateTitle, the tab itself
     assert "const g = ruleBlockGroups().find((x) => x.id === s.blk);" in VIEWER_JS  # …and one area

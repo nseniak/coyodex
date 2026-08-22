@@ -2990,14 +2990,28 @@ function setLegendOpen(on) {
   lsSet(LS.legend, on ? 'on' : 'off');
   syncLegend(history[hi]);
 }
-// The text tabs render HTML tables, not diagrams — nothing there has a shape or a colour to look up.
-const TEXT_VIEWS = new Set(['glossary', 'usecases', 'system', 'data', 'tests', 'rules']);
+// Everything in the title bar that acts on a DIAGRAM: the legend, and the three zoom controls. A card
+// list, a card grid or a details page draws no shapes, so a colour key explains nothing there and the
+// zoom buttons have nothing to zoom. Both read TEXT_PAGES — the ONE list answering "is this page prose",
+// shared with the info pane (syncInfoPane) and the source column (syncCodePane).
+//
+// The list this replaced was a second one, keyed by TOP-LEVEL VIEW, and it had drifted from what the
+// views actually draw. It named `usecases`, so the legend was suppressed on a use-case FLOW — a diagram
+// of boxes, cylinders and an actor figure that happens to live under the Features tab. And it never
+// learned about `actors`, so on Mio Coworker the legend opened over the actor cards and hid two of them.
+// One question, one answer, in one place.
 function syncLegend(s) {
-  const on = legendOpen() && !!s && !TEXT_VIEWS.has(topView(s.kind, s.id));
+  const text = !s || TEXT_PAGES.has(s.kind);
+  const on = legendOpen() && !text;
   legend.classList.toggle('on', on);
   legendbtn.classList.toggle('on', legendOpen());
   legendbtn.setAttribute('aria-pressed', String(legendOpen()));
+  legendbtn.disabled = text;
   if (on && legend.dataset.mode !== mode) buildLegend();   // rebuilt only when the diff section changes
+  // Measured: on 7 of the 12 tabs clicking + moved nothing and the reading stayed at 100%, because
+  // mainPz is null on a page that renders HTML. A control that looks live and does nothing teaches the
+  // reader to distrust the ones that work, so it is dimmed and out of the tab order instead.
+  for (const b of [zoomout, zoomlevel, zoomin]) if (b) b.disabled = text;
 }
 
 // --- diff overlay on the Subsystems views ---------------------------------------
@@ -5098,9 +5112,11 @@ function showViewIntro(s) {
 // The views that are TEXT, not a diagram: a card list, a grid of cards, or an element's details. Per
 // the spec these carry no info pane — they put their title and their question at the top of the page
 // itself, and the pane beside a page of prose only ever repeated it.
-// NOT the legend's `TEXT_VIEWS` above, which asks a different question ("does this view draw shapes
-// worth a legend") and is keyed by TOP-LEVEL view. This one is keyed by STATE KIND, because a use-case
-// FLOW lives under the Features tab and is a diagram with a pane, while its sibling states are pages.
+// THE list: the info pane (below), the source column (syncCodePane) and the legend + zoom controls
+// (syncLegend) all read it, so "is this page prose" has one answer. It is keyed by STATE KIND, never by
+// top-level view: a use-case FLOW lives under the Features tab and IS a diagram, while its sibling
+// states under the same tab are pages. The legend used to keep a second list, keyed by view, and that
+// distinction is exactly what it got wrong — see the comment on syncLegend.
 const TEXT_PAGES = new Set(['actors', 'usecases', 'capability', 'actor',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element']);
 // Show or hide the info pane (and the handle that resizes it) for the state being rendered.

@@ -728,6 +728,26 @@ def test_a_page_and_its_title_share_one_left_edge() -> None:
         assert block in css, block
     assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
 
+def test_a_diagram_control_is_dead_on_a_page_with_no_diagram() -> None:
+    """The legend and the three zoom controls act on the diagram's pan-zoom, which a page of HTML has
+    none of. Measured on Mio Coworker: on 7 of the 12 tabs clicking + moved nothing and the reading
+    stayed at 100%, while the legend button lit and unlit with nothing happening. A control that looks
+    live and does nothing teaches the reader to distrust the ones that work, and costs a keyboard stop.
+
+    They were kept apart by a SECOND list of "which views are prose", keyed by top-level view, and it had
+    drifted both ways. It named `usecases`, so a use-case FLOW — boxes, cylinders and an actor figure,
+    under the Features tab — drew no legend. It never learned about `actors`, so the legend opened over
+    the actor cards and hid two of them. One question deserves one answer: everything now reads
+    TEXT_PAGES, the same list the info pane and the source column read."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "TEXT_VIEWS" not in js, "the second list of text views is back"
+    fn = js[js.index("function syncLegend(s) {"): js.index("\n\n", js.index("function syncLegend(s) {"))]
+    assert "TEXT_PAGES.has(s.kind)" in fn, "the legend must read the one list, keyed by state kind"
+    assert "legendbtn.disabled = text;" in fn
+    assert "for (const b of [zoomout, zoomlevel, zoomin]) if (b) b.disabled = text;" in fn
+    assert "header button:disabled { opacity: .35; cursor: default; }" in css
+
 def test_a_sentence_is_never_set_as_a_pill() -> None:
     """A collection's NOTE was rendered with `.dv-tag`, the pill class, which is `white-space: nowrap`
     because a tag is one word. A note is not: over the three real maps its 135 rows run to a median 78

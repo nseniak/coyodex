@@ -24,6 +24,12 @@ header button { font: inherit; font-size: 12.5px; line-height: 1; width: 26px; h
                 display: inline-flex; align-items: center; justify-content: center; padding: 0;
                 border: 0; border-radius: 6px; background: transparent; color: #e0e7ff; cursor: pointer; }
 header button:hover { background: rgba(255,255,255,.12); color: #fff; }
+/* A title-bar control that acts on the diagram is dimmed on a page that has none (syncLegend). It used
+   to stay fully lit: on 7 of the 12 tabs clicking + moved nothing, and a control that looks live and
+   does nothing teaches the reader to distrust the ones that work. `disabled` also drops it from the
+   tab order, so keyboard reading of a card page no longer stops on three buttons that do nothing. */
+header button:disabled { opacity: .35; cursor: default; }
+header button:disabled:hover { background: transparent; color: #e0e7ff; }
 /* At a narrow column the bar wraps into two lines: who you are looking at, then what you can do to it.
    `flex-basis: 100%` on the identity forces the break rather than letting the controls squeeze. */
 @media (max-width: 480px) {
