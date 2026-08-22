@@ -529,6 +529,13 @@ function elementCardHtml(id, opts) {
     + '</div>'
     + (desc ? `<p class="ecard-desc">${mdInline(desc)}</p>` : '')
     + cardExtraHtml(id)
+    // A LABELLED line under the sentence, for a fact that is about this card's CONTEXT rather than about
+    // the element — which feature a use case belongs to, who drives it. It used to ride the title line as
+    // a bare pill, and there `CONVERSATIONAL ASSISTANCE` sat beside `use case` in the same grey at the
+    // same size: nothing said one was what the thing IS and the other a feature's name. Measured: the two
+    // differed by 4% of background and nothing else. The label is what makes the word readable, and it
+    // only fits below, so this is the line it earns.
+    + (o.foot || '')
     + '</article>';
 }
 
@@ -6347,9 +6354,17 @@ function renderUseCases(sel) {
   // Context, not identity, which is why none of it is baked into the shared card.
   const per = (id) => {
     const n = GRAPH.nodes[id] || {};
+    // The OTHER axis, on its own labelled line under the sentence. The label is the point: a bare
+    // `CONVERSATIONAL ASSISTANCE` beside `use case` on the title line was two greys 4% apart, and a
+    // reader meeting the map for the first time could not tell a feature's name from the word for what
+    // the card is. `In feature` and `Driven by` each say what the name that follows is, and which of the
+    // two appears says which axis this screen is NOT already sorted by.
     const cross = byCapability
-      ? `<span class="ecard-pill ecard-pill-${esc(roleKindOf(n))}">${esc(actorTextOf(n))}</span>`
-      : (CAP_OF_UC[id] ? `<span class="ecard-pill">${esc(CAP_OF_UC[id].name)}</span>` : '');
+      ? `<p class="ecard-extra"><span class="ecard-lbl">Driven by</span> `
+        + `<span class="ecard-pill ecard-pill-${esc(roleKindOf(n))}">${esc(actorTextOf(n))}</span></p>`
+      : (CAP_OF_UC[id]
+        ? `<p class="ecard-extra"><span class="ecard-lbl">In feature</span> `
+          + `<span class="ecard-pill">${esc(CAP_OF_UC[id].name)}</span></p>` : '');
     const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(id))
       ? '<span class="badge modified">changed</span>' : '';
     const untraced = FLOWS_MM && FLOWS_MM[id] ? ''
@@ -6357,7 +6372,7 @@ function renderUseCases(sel) {
     // The type pill goes only where the screen holds nothing but use cases: a role's list, the flat
     // catalog, the use cases in no feature. A FEATURE'S PAGE keeps it, because rules, entities and
     // components have cards on that same page and there the word tells the reader which is which.
-    return { homeType: !page, extra: cross + changed + untraced };
+    return { homeType: !page, extra: changed + untraced, foot: cross };
   };
   // USE CASE cards are a GRID wherever they are listed. Every one of them is a door to that use case's
   // flow, which is exactly what a grid is for — the same job an actor card, a feature card and a

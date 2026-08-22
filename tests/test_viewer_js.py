@@ -1436,6 +1436,36 @@ def test_a_grid_of_cards_keeps_one_shape_whatever_the_name_is_long() -> None:
     assert "flex-wrap: wrap" in head, "the list shape is unchanged: one row, wrapping only if it must"
 
 
+def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
+    """A use-case card carries the OTHER axis: which feature it belongs to on an actor's page, who drives
+    it on a feature's page. It rode the title line as a bare pill, and there `CONVERSATIONAL ASSISTANCE`
+    sat beside `use case` in the same grey at the same size — measured, the two differed by 4% of
+    background and nothing else. Nothing said one was what the card IS and the other a feature's name, and
+    a reader meeting the map for the first time could not tell.
+
+    The fix is the LABEL, and a label only fits below, so the fact earns a line of its own: `In feature`
+    on an actor's page, `Driven by` on a feature's page. Which of the two appears also says which axis the
+    screen is not already sorted by.
+
+    In a GRID the line is pushed to the bottom of the card. Cards in a row are the same height but their
+    sentences are not the same length, so the line landed at a different y in every card and the row read
+    as ragged. Same rule as the name and the pills: in a grid you compare across, so a fact has to be
+    findable in the same place on every card."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    ucs = js[js.index("function renderUseCases(sel) {"):
+             js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
+    assert '<span class="ecard-lbl">Driven by</span>' in ucs
+    assert '<span class="ecard-lbl">In feature</span>' in ucs
+    assert "foot: cross" in ucs, "it is the card's FOOT line, under the sentence — not a title-line pill"
+    card = js[js.index("function elementCardHtml(id, opts) {"):
+              js.index("\n}", js.index("function elementCardHtml(id, opts) {"))]
+    assert "(o.foot || '')" in card and card.index("o.foot") > card.index("ecard-desc"), \
+        "the labelled line comes after the sentence"
+    grid = css[css.index(".ecard-grid .ecard-name"):]
+    grid = grid[: grid.index("\n\n")] if "\n\n" in grid else grid[:600]
+    assert "margin-top: auto" in grid, "one height for the labelled line across a row"
+
 def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     """A role's page used to open with a bordered block whose heading was the page's own title, with the
     use-case cards inside it: the name twice (breadcrumb, then heading) and a card containing cards.
