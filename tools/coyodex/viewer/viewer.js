@@ -6289,7 +6289,17 @@ function actorCardsHtml() {
   // defining the word; both went. The count repeats what the cards below it already show — four cards
   // is four — and "Humans" and "Software services" need no gloss, so the sentence was a paragraph of
   // chrome above every screen that said less than the heading it explained.
-  const of = (kind) => all.filter((n) => n.kind === kind).map((n) => n.id);
+  // The CUSTOMER'S side leads each section. A reader opening Actors is asking who this product is for,
+  // and the answer is the people and programs outside the company: `staff` and `internal service` are
+  // the exceptions, and an exception reads as one when it comes after the rule rather than in the
+  // middle of it. Measured on the three maps, the map's own order put an internal actor above a
+  // customer-side one in two of them — Meerbot listed Administrator above Website visitor, MCP Hero
+  // listed Service operator above Prospective customer — so the section had no order a reader could
+  // name. Within each half the map's own order is kept: the sort is stable, and it moves nothing else.
+  const of = (kind) => all.filter((n) => n.kind === kind)
+    .map((n, i) => ({ n, i }))
+    .sort((a, b) => (a.n.audience === 'internal') - (b.n.audience === 'internal') || a.i - b.i)
+    .map((x) => x.n.id);
   return elementCardGroupsHtml([
     { title: 'Humans', ids: of('human'), per },
     { title: 'Software services', ids: of('service'), per },

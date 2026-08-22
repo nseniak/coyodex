@@ -739,6 +739,26 @@ def test_an_actor_says_what_it_is_after_in_its_own_sentence() -> None:
     assert "wantsSentence(role.wants)" in head
     assert 'uc-wants-lbl">Wants:' not in js, "and so is the bold label on a section header"
 
+def test_the_customers_side_leads_each_actor_section() -> None:
+    """The Actors page took the map's own order, which is the order the analysis happened to record and
+    means nothing to a reader. Measured on the three reference maps, two of them put a company-side
+    actor above a customer-side one inside the same section: Meerbot listed Administrator (staff) above
+    Website visitor, and MCP Hero listed Service operator (staff) above Prospective customer.
+
+    A reader opening Actors is asking who this product is for, and the answer is the people and programs
+    outside the company. `staff` and `internal service` are the exceptions, and an exception reads as
+    one when it comes after the rule instead of in the middle of it. So each section leads with the
+    customer's side. The sort is STABLE, so within each half the map's own order survives untouched, and
+    a map that already reads correctly does not move at all.
+
+    It reads the SAME `audience` value the side pill reads, so the order and the words can never
+    disagree: every card without a `staff` or `internal service` pill sits above every card with one."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function actorCardsHtml() {"):
+            js.index("\n}", js.index("function actorCardsHtml() {"))]
+    assert "(a.n.audience === 'internal') - (b.n.audience === 'internal') || a.i - b.i" in fn, \
+        "the customer's side first, and the map's own order inside each half"
+
 def test_a_text_view_drops_the_info_pane() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
     of prose only repeated it, and it stole a third of the height from the content it described. A
