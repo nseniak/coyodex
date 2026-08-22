@@ -934,8 +934,8 @@ def test_the_selection_card_can_be_moved_and_resized_and_remembers_it() -> None:
     assert "function applyPanelBox() {" in js and "applyPanelBox();" in js[js.index("function paneSync() {"):
                                                                           js.index("\n}", js.index("function paneSync() {"))]
     assert "closest('#panelbar')" in js, "the bar is the handle"
-    assert "if (!PANEL_HOST.style.width && !PANEL_HOST.style.height) return;" in js, \
-        "a content-driven height change is not a resize"
+    assert "  if (!w && !h) return;" in js, \
+        "a card the reader never touched keeps following the stylesheet"
     assert "savePanelBox(null);" in js, "double-click puts the card home"
     pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
     assert "resize: both" in pane and "overflow: auto" in pane, "the corner grip needs a clipped overflow"
@@ -1015,6 +1015,19 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     box = js[js.index("function applyPanelBox() {"): js.index("\n}", js.index("function applyPanelBox() {"))]
     assert "if (PANEL_HOST.hidden) return;" in box, \
         "a hidden card measures zero, and clamping against zero pins it to the edge"
+    # A CLAMP IS NOT A GESTURE. Opening the column takes 547px of the drawing, and a card wider than what
+    # is left is shrunk to stay on screen. A ResizeObserver could not tell that shrink from a resize and
+    # saved it, so the reader's own box was overwritten: measured, a card parked at 459 and 950 wide came
+    # back at 24 and 868 wide and never returned. The size is read on mouseup instead and compared with
+    # what applyPanelBox last WROTE.
+    assert "let appliedBox = null;" in js and "appliedBox = { w: st.width, h: st.height };" in js
+    assert "ResizeObserver(() =>" not in js, "an observer cannot tell a clamp from a gesture"
+    assert "if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;" in js
+    # …and each gesture saves ONLY what it changed, or dragging a clamped card bakes the clamped width in.
+    store = js[js.index("function storePanelBox(what) {"):
+               js.index("\n}", js.index("function storePanelBox(what) {"))]
+    assert "const moved = what !== 'size';" in store and "const resized = what !== 'position';" in store
+    assert "storePanelBox('position');" in js and "storePanelBox('size');" in js
     # The two visible ways out, and the one visible way in.
     # The × lives in BOTH panes of the column, because either can be the only one on screen: browsing
     # hides the code viewer outright, and opening the column with nothing selected lands exactly there —

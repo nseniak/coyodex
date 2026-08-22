@@ -5587,11 +5587,19 @@ function openPaneSource() {
 // never been moved belongs.
 function panelBox() { try { return JSON.parse(lsGet(LS.panelBox) || 'null') || null; } catch (_) { return null; } }
 function savePanelBox(b) { lsSet(LS.panelBox, b ? JSON.stringify(b) : ''); }
+// The last inline size applyPanelBox WROTE. A clamp is not a gesture: when the column opens and the card
+// no longer fits, the card is made smaller to stay on screen, and that must not be mistaken for the reader
+// resizing it — see the mouseup handler below.
+let appliedBox = null;
 function applyPanelBox() {
   const wrap = document.getElementById('diagwrap');
   const b = panelBox();
   const st = PANEL_HOST.style;
-  if (!wrap || !b) { st.left = st.top = st.width = st.height = ''; st.right = ''; return; }
+  if (!wrap || !b) {
+    st.left = st.top = st.width = st.height = ''; st.right = '';
+    appliedBox = { w: '', h: '' };
+    return;
+  }
   // A hidden card measures zero, and clamping against a zero width would pin it to the right edge and
   // leave it there when it comes back. Nothing to place until there is a card on screen.
   if (PANEL_HOST.hidden) return;
@@ -5602,6 +5610,7 @@ function applyPanelBox() {
   st.right = 'auto';
   st.left = Math.max(0, Math.min(b.left, W - Math.min(r.width, W) )) + 'px';
   st.top = Math.max(0, Math.min(b.top, H - Math.min(r.height, H))) + 'px';
+  appliedBox = { w: st.width, h: st.height };
 }
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
@@ -9242,7 +9251,7 @@ const endPanelDrag = () => {
   if (!panelDrag) return;
   panelDrag = null;
   document.body.classList.remove('panel-dragging');
-  storePanelBox();
+  storePanelBox('position');
 };
 PANEL_HOST.addEventListener('pointerup', endPanelDrag);
 PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
@@ -9254,25 +9263,42 @@ PANEL_HOST.addEventListener('dblclick', (ev) => {
   applyPanelBox();
 });
 // The corner grip is the browser's own (CSS `resize: both`), which writes the size straight onto the
-// element and fires no event — so watch the element instead of trying to catch the drag.
-if (window.ResizeObserver) {
-  let t = null;
-  new ResizeObserver(() => {
-    // It fires for CONTENT too — every new card is a height change — and a card that was never touched
-    // must keep following the stylesheet. An inline width or height is the only proof a reader dragged
-    // the corner, since the default size comes from the stylesheet and leaves both empty.
-    if (PANEL_HOST.hidden || panelDrag) return;
-    if (!PANEL_HOST.style.width && !PANEL_HOST.style.height) return;
-    clearTimeout(t); t = setTimeout(storePanelBox, 250);   // one write per gesture, not per frame
-  }).observe(PANEL_HOST);
-}
-function storePanelBox() {
+// element and fires no event, so the size is read back when the pointer is released — on the document,
+// because a resize drag often ends outside the card.
+//
+// This replaced a ResizeObserver, which could not tell a GESTURE from a CLAMP. Opening the column makes
+// the drawing 547px narrower, and a card wider than what is left is shrunk to stay on screen. The
+// observer saw that shrink as a resize and saved it, so the reader's own size and position were
+// overwritten by the clamp: measured, a card parked at 459 and 950 wide came back at 24 and 868 wide
+// after the column had been opened and closed, and never returned.
+//
+// So the size is compared against what applyPanelBox last WROTE. An inline width or height is also still
+// required: a card the reader never touched must keep following the stylesheet.
+document.addEventListener('mouseup', () => {
+  if (PANEL_HOST.hidden || panelDrag) return;
+  const w = PANEL_HOST.style.width, h = PANEL_HOST.style.height;
+  if (!w && !h) return;
+  if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;
+  storePanelBox('size');
+});
+// EACH GESTURE SAVES WHAT IT CHANGED, and nothing else. A drag saves where the card sits; a resize saves
+// how big it is. Saving both from either one lets a CLAMP leak into the reader's choice: dragging a card
+// that had been shrunk to fit the narrowed drawing baked that smaller size in as if they had chosen it,
+// and their own width never came back when the column closed.
+function storePanelBox(what) {
   const wrap = document.getElementById('diagwrap');
   if (!wrap || PANEL_HOST.hidden) return;
   const r = PANEL_HOST.getBoundingClientRect(), w = wrap.getBoundingClientRect();
   const st = PANEL_HOST.style;
-  savePanelBox({ left: Math.round(r.left - w.left), top: Math.round(r.top - w.top),
-                 w: st.width ? Math.round(r.width) : 0, h: st.height ? Math.round(r.height) : 0 });
+  const prev = panelBox() || {};
+  const moved = what !== 'size';
+  const resized = what !== 'position';
+  savePanelBox({
+    left: moved ? Math.round(r.left - w.left) : (prev.left || 0),
+    top: moved ? Math.round(r.top - w.top) : (prev.top || 0),
+    w: resized ? (st.width ? Math.round(r.width) : 0) : (prev.w || 0),
+    h: resized ? (st.height ? Math.round(r.height) : 0) : (prev.h || 0),
+  });
 }
 PANEL_HOST.addEventListener('click', (ev) => {
   if (ev.target && ev.target.closest && ev.target.closest('#panelsrc')) { ev.stopPropagation(); openPaneSource(); return; }
