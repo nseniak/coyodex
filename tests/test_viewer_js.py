@@ -688,6 +688,18 @@ def test_one_question_in_one_place_on_every_view() -> None:
                js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
     assert "viewQuestion" not in intro
 
+def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
+    """The tab rows and the trail stay put while everything under them scrolls, pans and zooms. A
+    hairline alone did not say so: it read as one more divider in a page full of them, and on a diagram
+    the shapes simply slid under it with nothing to mark the boundary they passed.
+
+    So the block casts a shadow onto whatever passes beneath it. Everything below that shadow is content
+    — the view's question included, which is exactly why the question left the trail row."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    head = css[css.index("#stagehead {"): css.index("}", css.index("#stagehead {"))]
+    assert "box-shadow" in head, "the fixed block has to say it is fixed"
+    assert "z-index" in head, "…and sit above what passes under it"
+
 def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_says_something() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
     of prose only repeated it, and it stole a third of the height from the content it described.

@@ -129,8 +129,11 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    at the top; the diagram area takes the rest, and svg-pan-zoom fits/centers into that box
    (applyZoomAndCenter in viewer.js measures #diagram for the same reason). */
 #diagram { flex: 1 1 auto; min-width: 0; min-height: 0; }
-/* View selector + breadcrumb, a normal-flow bar at the top of the graph pane. */
-#stagehead { flex: 0 0 auto; z-index: 6; }
+/* View selector + breadcrumb, a normal-flow bar at the top of the graph pane. It is FIXED: the tabs and
+   the trail stay put while the content under them scrolls, pans and zooms. A hairline alone did not say
+   so — it read as one more divider in a page full of them — so the block casts a shadow onto whatever
+   passes beneath it. Everything below the shadow is content, the question included. */
+#stagehead { flex: 0 0 auto; z-index: 6; box-shadow: 0 3px 8px rgba(15, 23, 42, .09); }
 #stageheadrow { display: flex; align-items: center; gap: 8px; background: #fbfbfe; padding: 4px 10px;
                 border-bottom: 1px solid #e5e7eb; min-height: 34px; }
 /* Neither row may ever SQUEEZE its buttons. Both used to be one nowrap flex row with `overflow:hidden`,
