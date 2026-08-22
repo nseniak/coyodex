@@ -831,6 +831,36 @@ def test_an_arrow_card_holds_three_calls_and_drills_for_the_rest() -> None:
         "the arrow's own page is never cut"
     assert "closest('.xmore[data-drill]')" in js, "the way to the rest is delegated, not wired per render"
 
+def test_a_deployment_arrow_has_a_page_like_every_other_arrow() -> None:
+    """A Deployment arrow was the last kind with nowhere to drill. Subsystem pairs, entity pairs and
+    subsystem-to-subdomain bridges each already had a page; a Deployment arrow's list of calls existed
+    only in the pane. So its card was the one that could not be cut, and about 25 of the 78 deployment
+    arrows in the three maps stand for more than three calls — the worst for 25.
+
+    It gets a page now, and the page is PROSE, not a diagram: the thing it shows is a list. That is why
+    `depedge` joins TEXT_PAGES, which is also what takes the floating card, the legend and the zoom
+    controls off it.
+
+    ONE function builds the rows for both the card and the page. They were written twice before, for the
+    two arrow shapes a Deployment view draws (process to process, process to infrastructure), and the two
+    copies had already drifted on their count line."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function deploymentEdgeRows(a, b) {" in js
+    for fn in ("function showDeploymentEdge(a, b, full) {",
+               "function showDeploymentInfraEdge(a, b, full) {",
+               "function renderDeploymentEdgePage(s) {"):
+        assert fn in js, fn
+        body = js[js.index(fn): js.index("\n}", js.index(fn))]
+        assert "deploymentEdgeRows(" in body, fn
+    for card in ("function showDeploymentEdge(a, b, full) {", "function showDeploymentInfraEdge(a, b, full) {"):
+        body = js[js.index(card): js.index("\n}", js.index(card))]
+        assert "drill: { kind: 'depedge', a, b }" in body, card
+    pages = js[js.index("const TEXT_PAGES = new Set(["):]
+    assert "'depedge'" in pages[: pages.index("]);")], "an arrow's list is a page of prose"
+    assert "if (s.kind === 'depedge') return [{ kind: 'deployment' }, { kind: 'depedge', a: s.a, b: s.b }];" in js, \
+        "the trail reads Deployment > A to B; an arrow joins two processes and belongs under neither"
+    assert "kind === 'depedge') return 'deployment'" in js, "and it lives under the Deployment tab"
+
 def test_a_text_view_drops_the_source_pane_until_a_code_link_asks_for_it() -> None:
     """The same rule, one step further out, for the whole right-hand column (file browser + code viewer).
 

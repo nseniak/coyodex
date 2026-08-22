@@ -837,6 +837,17 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
    order, each separated from the previous by a rule so it reads as its own distinct element. */
 #panel .sel-card + .sel-card { margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb; }
 #panel .xcount { color: #6b7280; margin-bottom: 10px; }
+/* The same crossing rows, on a PAGE rather than in the floating card. The card's rules are all scoped to
+   `#panel`, so the page restates the few that carry the shape: no bullets, one row under the next, and
+   the row's own indent for the line under the pair. Colours and sizes come from the page, not the card. */
+.xlist-page { list-style: none; margin: 8px 0 0; padding: 0; max-width: 900px; }
+.xlist-page li.xrow { padding: 12px 0; border-top: 1px solid #e5e7eb; }
+.xlist-page li.xrow:first-child { border-top: 0; }
+.xlist-page .xpair { font-weight: 600; color: #111827; }
+.xlist-page .xwhy { margin-top: 3px; color: #4b5563; line-height: 1.5; }
+.xlist-page .tb-kind { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
+                       letter-spacing: .03em; color: #0e7490; background: #ecfeff; border-radius: 8px;
+                       padding: 0 6px; margin-right: 5px; vertical-align: 1px; }
 /* The way out of a card that was cut to three rows. A link, not a button chip: it goes somewhere, and
    the card is small enough that a filled control would be the loudest thing in it. */
 #panel .xmore { display: inline-block; margin-top: 12px; padding: 0; border: 0; background: none;

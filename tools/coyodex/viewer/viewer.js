@@ -4260,14 +4260,14 @@ function markDeploymentEdge(scene, p, label, a, b) {
   if (chans.length || xproc.length) {   // process→process: one arrow, either or both mechanisms
     const drill = channelDrillFor(chans);
     bindSelectEdge(scene, p, label, { src: a, dst: b }, 'uedge:' + a + '>' + b,
-      () => showDeploymentEdge(a, b, chans, xproc),
+      () => showDeploymentEdge(a, b),
       drill ? { onDrill: () => go(drill), actionFn: () => actionTipChannels(chans) } : undefined);
     return;
   }
   if (calls.length) {   // a coupling-point arrow: it stands for real call sites, so it is selectable too
     const drill = dataDrillFor(b);
     bindSelectEdge(scene, p, label, { src: a, dst: b }, 'uedge:' + a + '>' + b,
-      () => showDeploymentInfraEdge(a, b, calls),
+      () => showDeploymentInfraEdge(a, b),
       drill ? { onDrill: () => go(drill), actionFn: () => actionTipNode(b) } : undefined);
     return;
   }
@@ -4277,47 +4277,69 @@ function actionTipChannels(chans) {
   const nm = channelDrillBroker(chans);
   return '<div class="tt">Open data</div>' + (nm ? '<div class="tm">' + esc(nm) + '</div>' : '');
 }
-// Selecting a process→process arrow: list the async channels it stands for — name, kind, the broker
-// they ride and the line that declares each — so the wiring between two processes is readable without
-// leaving the map. Mirrors showContainerEdge's shape (title + count + one uniform list).
-function showDeploymentEdge(a, b, chans, calls) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  chans = chans || []; calls = calls || [];
-  // Async rows lead with the channel; sync rows lead with `caller → callee`, since both ends vary.
-  const chanRows = chans.map((c) => '<li class="xrow"><div class="xpair">' + esc(c.name) + '</div>'
+// Everything a Deployment arrow stands for, as ready-made rows. ONE function, because the card floating
+// over the diagram and the arrow's own page must list the same links in the same words — the two used to
+// be written twice and drifted on the count line alone.
+// An arrow is process→process (async channels, cross-process calls, or both) or process→infrastructure
+// (the call sites inside this process that reach the store or broker). Never both, so one pass covers it.
+function deploymentEdgeRows(a, b) {
+  const chans = deploymentEdgeList(a, b);
+  const xproc = (DEPLOYMENT_CALL_EDGES && DEPLOYMENT_CALL_EDGES[a + '>' + b]) || [];
+  const infra = (DEPLOYMENT_INFRA_EDGES && DEPLOYMENT_INFRA_EDGES[a + '>' + b]) || [];
+  // Async rows lead with the CHANNEL; a call row leads with `caller → callee`, since both ends vary; an
+  // infra row leads with the component inside this process that reaches out.
+  const chanRow = (c) => '<li class="xrow"><div class="xpair">' + esc(c.name) + '</div>'
     + '<div class="xwhy"><span class="tb-kind">' + esc(c.kind || 'channel') + '</span>'
     + (c.brokerName ? 'via ' + esc(c.brokerName) + ' ' : '') + srcCell(c.source || '')
-    + '</div></li>').join('');
-  const callRows = calls.map((c) => '<li class="xrow">'
+    + '</div></li>';
+  const callRow = (c) => '<li class="xrow">'
     + '<div class="xpair">' + esc(c.srcName) + ' &rarr; ' + esc(c.dstName) + '</div>'
     + '<div class="xwhy">' + (c.verb ? '<span class="tb-kind">' + esc(c.verb) + '</span>' : '')
-    + (c.why ? mdInline(c.why) + ' ' : '') + srcCell(c.where || '')
-    + '</div></li>').join('');
-  const n = (k, one) => k + ' ' + one + (k === 1 ? '' : 's');
-  const badge = (chans.length && calls.length) ? 'links' : (chans.length ? 'channels' : 'calls');
-  let body = '';
-  if (chans.length) body += '<div class="xcount">' + n(chans.length, 'channel') + '</div>'
-    + '<ul class="xlist">' + chanRows + '</ul>';
-  if (calls.length) body += '<div class="xcount"' + (chans.length ? ' style="margin-top:16px"' : '') + '>'
-    + n(calls.length, 'call') + '</div><ul class="xlist">' + callRows + '</ul>';
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</h2>'
-    + '<span class="badge edge">' + badge + '</span></div>' + body;
-}
-// Selecting a coupling-point arrow (process → shared infrastructure): list the components INSIDE that
-// process which actually reach the store/broker — each with its verb, its reason and its call site — so
-// "why does this process need this" is answered on the spot. Same shape as showDeploymentEdge, its
-// sibling arrow in this view: the thing the arrow stands for as the lead, its detail beneath.
-function showDeploymentInfraEdge(a, b, calls) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  const items = calls.map((c) => '<li class="xrow"><div class="xpair">' + esc(c.srcName) + '</div>'
+    + (c.why ? mdInline(c.why) + ' ' : '') + srcCell(c.where || '') + '</div></li>';
+  const infraRow = (c) => '<li class="xrow"><div class="xpair">' + esc(c.srcName) + '</div>'
     + '<div class="xwhy">' + (c.verb ? '<span class="tb-kind">' + esc(c.verb) + '</span>' : '')
-    + (c.why ? mdInline(c.why) + ' ' : '') + srcCell(c.where || '')
-    + '</div></li>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</h2>'
-    + '<span class="badge edge">connections</span></div>'
-    + '<div class="xcount">' + calls.length + ' connection' + (calls.length === 1 ? '' : 's')
-    + ' from the code this process runs</div>'
-    + '<ul class="xlist">' + items + '</ul>';
+    + (c.why ? mdInline(c.why) + ' ' : '') + srcCell(c.where || '') + '</div></li>';
+  const rows = chans.map(chanRow).concat(xproc.map(callRow)).concat(infra.map(infraRow));
+  // The badge names what the arrow IS, so a mixed arrow says neither of its halves.
+  const badge = (chans.length && (xproc.length || infra.length)) ? 'links'
+    : chans.length ? 'channels' : 'connections';
+  return { rows, badge, noun: badge === 'links' ? 'link' : badge === 'channels' ? 'channel' : 'connection' };
+}
+// Selecting a process→process arrow: the channels and cross-process calls it stands for, three at a
+// time, with the rest on the arrow's own page. Same card as every other arrow.
+function showDeploymentEdge(a, b, full) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const r = deploymentEdgeRows(a, b);
+  panel.innerHTML = arrowCardHtml({ a: nm(a), b: nm(b), badge: r.badge, noun: r.noun, rows: r.rows,
+    full, drill: { kind: 'depedge', a, b } });
+}
+// Selecting a coupling-point arrow (process → shared infrastructure): the components INSIDE this process
+// that actually reach the store or broker, each with its verb, its reason and its call site — so "why
+// does this process need this" is answered where the reader clicked. Same card, same three-row cut.
+function showDeploymentInfraEdge(a, b, full) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const r = deploymentEdgeRows(a, b);
+  panel.innerHTML = arrowCardHtml({ a: nm(a), b: nm(b), badge: r.badge, noun: r.noun, rows: r.rows,
+    full, drill: { kind: 'depedge', a, b } });
+}
+// ONE Deployment arrow, as its own page: every channel and every call it stands for. It is a LIST, so it
+// is a page of prose and not a diagram — a Deployment arrow was the last kind with nowhere to drill, and
+// its card was the only one that had to show up to 25 rows because there was no page to send them to.
+function renderDeploymentEdgePage(s) {
+  const r = deploymentEdgeRows(s.a, s.b);
+  const count = r.rows.length + ' ' + r.noun + (r.rows.length === 1 ? '' : 's');
+  // The pair IS the page's title, drawn once by the breadcrumb, so the hero carries only what hung off
+  // it: what kind of link this arrow is, and how many it stands for. Printing `a \u2192 b` here again was
+  // the same words twenty pixels below themselves.
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + pageHeroHtml({
+      pills: '<span class="ecard-pill">' + esc(r.badge) + '</span>',
+      desc: '', noDesc: false,
+      meta: esc(count),
+    })
+    + (r.rows.length ? '<ul class="xlist xlist-page">' + r.rows.join('') + '</ul>'
+                     : '<p class="empty">Nothing recorded for this arrow.</p>')
+    + '</div>';
 }
 // `focalUnit` (set on a process card) is the process you're already zoomed into: it drills nowhere
 // further, so it gets no drill affordance/icon — only the OTHER boxes (subsystems it runs) drill.
@@ -5249,7 +5271,7 @@ function showViewIntro(_s) { PANEL_HOST.innerHTML = ''; PANEL_HOST.hidden = true
 // states under the same tab are pages. The legend used to keep a second list, keyed by view, and that
 // distinction is exactly what it got wrong — see the comment on syncLegend.
 const TEXT_PAGES = new Set(['actors', 'usecases', 'capability', 'actor',
-  'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element']);
+  'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge']);
 // A TEXT page has no selection card at all: there is nothing on it to select, and the page carries its
 // own cards in the reading column. Cleared as well as hidden, so a card from the diagram you came from
 // cannot reappear when you go back to it.
@@ -5384,7 +5406,7 @@ function topView(kind, id) {  // which top-level button a state lives under (con
   if (kind === 'actor') return 'actors';
   if (kind === 'usecases' || kind === 'capability' || kind === 'usecase') return 'usecases';
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
-  if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup') return 'deployment';  // a process/container card lives under the Deployment tab
+  if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup' || kind === 'depedge') return 'deployment';  // a process/container card, and one arrow's page, live under the Deployment tab
   if (kind === 'hp') return 'hp';
   if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
   return 'container';
@@ -5425,6 +5447,7 @@ function stateTitle(s) {
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
   if (s.kind === 'deploymentUnit') return s.unit;
+  if (s.kind === 'depedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
   if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
@@ -5500,6 +5523,9 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     trail.push({ kind: 'deploymentUnit', unit: s.unit });
     return trail;
   }
+  // One Deployment arrow's page sits directly under the overview that drew it, like a pair does under
+  // Subsystems. It has no middle level: the arrow belongs to no process, it joins two.
+  if (s.kind === 'depedge') return [{ kind: 'deployment' }, { kind: 'depedge', a: s.a, b: s.b }];
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
   if (s.kind === 'bucketfold') return bucketFoldParent(s.bkid) === 'libs'   // library bucket: Context › Libraries › <bucket>
     ? [{ kind: 'context' }, { kind: 'libs' }, { kind: 'bucketfold', bkid: s.bkid }]
@@ -7343,6 +7369,11 @@ async function render(sArg, transient) {
   if (s.kind === 'sysSection') {
     renderSystemSection(s.sys, s.epk); mainScene = null; showViewIntro({ kind: 'system' }); renderChrome(s);
     restoreTextScroll(s); return;
+  }
+  // One Deployment arrow, as a page: the list of everything it stands for. Same shape as the System
+  // collection above — HTML, no mermaid, no scene.
+  if (s.kind === 'depedge') {
+    renderDeploymentEdgePage(s); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
   if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
