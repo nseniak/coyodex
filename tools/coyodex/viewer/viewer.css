@@ -859,9 +859,6 @@ body.panel-dragging { user-select: none; }
 .xlist-page li.xrow:first-child { border-top: 0; }
 .xlist-page .xpair { font-weight: 600; color: #111827; }
 .xlist-page .xwhy { margin-top: 3px; color: #4b5563; line-height: 1.5; }
-.xlist-page .tb-kind { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
-                       letter-spacing: .03em; color: #0e7490; background: #ecfeff; border-radius: 8px;
-                       padding: 0 6px; margin-right: 5px; vertical-align: 1px; }
 /* The way out of a card that was cut to three rows. A link, not a button chip: it goes somewhere, and
    the card is small enough that a filled control would be the loudest thing in it. */
 #panel .xmore { display: inline-block; margin-top: 12px; padding: 0; border: 0; background: none;
@@ -870,23 +867,32 @@ body.panel-dragging { user-select: none; }
 #panel .xlist { margin: 0; padding-left: 18px; }
 #panel .xlist li { margin-top: 12px; }
 #panel .xlist li:first-child { margin-top: 0; }
-/* "Triggered by" — a component's entry points in the info pane. Each entry point is a SELECTABLE
-   paragraph (mirrors the arrow/crossing rows): a small kind chip + the trigger, no source pill. Hover +
-   selected states match .xrow so the two read as one idiom; selecting reveals the source in the code viewer. */
-#panel .tb-list { list-style: none; margin: 4px 0 0; padding: 0; }
-#panel .tb-ep { line-height: 1.4; cursor: pointer; border-radius: 4px; padding: 3px 6px;
-                margin: 4px 0 0 -6px; transition: background .1s; }
-#panel .tb-ep:first-child { margin-top: 0; }
-#panel .tb-ep:hover { background: #f3f4f6; }
-#panel .tb-ep.sel { background: #e0e7ff; box-shadow: inset 3px 0 0 #4f46e5; }
-#panel .tb-kind { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
-                  letter-spacing: .03em; color: #0e7490; background: #ecfeff; border-radius: 8px;
-                  padding: 0 6px; margin-right: 5px; vertical-align: 1px; }
+/* "Triggered by" — a component's entry points. Each one is a selectable paragraph (mirrors the
+   arrow/crossing rows): a kind chip, the trigger, and its call site as the shared source pill. Hover +
+   selected states match .xrow so the two read as one idiom; selecting also reveals the source.
+   NOT scoped to #panel. The block is written by nodeDetailBodyHtml, which renders on a component's own
+   details PAGE (inside #diagram) as well as in the info pane, and while these rules named #panel the
+   page got none of them: the kind chip lost its box and ran straight into the trigger
+   (`http-routeDELETE /api/…`), the rows lost the pointer that says they can be clicked, and a selected
+   row lit up nothing at all. On today's maps the page is in fact the ONLY place the block appears, so
+   every one of these rules was dead where it was needed. */
+.tb-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.tb-ep { line-height: 1.4; cursor: pointer; border-radius: 4px; padding: 3px 6px;
+         margin: 4px 0 0 -6px; transition: background .1s; }
+.tb-ep:first-child { margin-top: 0; }
+.tb-ep:hover { background: #f3f4f6; }
+.tb-ep.sel { background: #e0e7ff; box-shadow: inset 3px 0 0 #4f46e5; }
+.tb-kind { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
+           letter-spacing: .03em; color: #0e7490; background: #ecfeff; border-radius: 8px;
+           padding: 0 6px; margin-right: 5px; vertical-align: 1px; }
+/* The call site, last on the row and set apart from the trigger, so a long HTTP route and the file it
+   lives in never read as one string. */
+.tb-src { margin-left: 8px; white-space: nowrap; }
 /* Self-starting entry points (timer/loop/boot/signal/queue consumer) read in a warm amber, distinct from
    the cyan of externally-triggered ones; the left accent persists even when the row is unselected. */
-#panel .tb-kind--self { color: #b45309; background: #fff7ed; }
-#panel .tb-ep--self { box-shadow: inset 3px 0 0 #f59e0b; }
-#panel .tb-ep--self.sel { box-shadow: inset 3px 0 0 #b45309; }
+.tb-kind--self { color: #b45309; background: #fff7ed; }
+.tb-ep--self { box-shadow: inset 3px 0 0 #f59e0b; }
+.tb-ep--self.sel { box-shadow: inset 3px 0 0 #b45309; }
 #panel .xwhy { padding-left: 14px; margin-top: 2px; }
 /* A crossing row that carries a call site is selectable: click reveals its location in the code viewer.
    A hover tint + pointer signal the affordance; the selected row keeps an indigo tint + left accent.

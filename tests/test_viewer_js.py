@@ -1866,3 +1866,98 @@ console.log(JSON.stringify([
     assert 'class="src srclink"' in pill
     shown2 = re.search(r">([^<>]*)</button>", noline)
     assert shown2 and shown2.group(1) == "README.md", "an anchor with no line still reads as a name"
+
+
+def test_an_entry_point_row_says_what_it_is_and_where_it_lives() -> None:
+    """A component's entry points render in TWO places: the info pane, and the component's own details
+    page. Every rule that gave the rows their shape named `#panel`, so the PAGE got none of them. The
+    kind chip lost its box and ran into the trigger — one live map printed `http-routeDELETE
+    /api/admin/gateway/users/{email}` — the rows lost the pointer that says they can be clicked, and a
+    selected row lit up nothing.
+
+    The rows also carried no call site at all, on the reasoning that selecting one reveals the source.
+    Nothing on screen said so, and the very same fact is already a pill in the Deployment card's
+    "Threads / loops" table. On one map that is 188 entry points, all 188 holding an anchor and none
+    showing it. Each row now ends with the shared pill, and selecting the row still works."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    for rule in (".tb-list {", ".tb-ep {", ".tb-ep:hover {", ".tb-ep.sel {", ".tb-kind {"):
+        assert rule in css, f"{rule} must exist unscoped, so the page gets it too"
+        assert "#panel " + rule not in css, f"{rule} may not be scoped to the info pane"
+    # The crossings page hand-copied one of those rules; one rule, one home.
+    assert ".xlist-page .tb-kind" not in css
+    tb = js[js.index("function triggeredByHtml(id) {"):
+            js.index("\nfunction ", js.index("function triggeredByHtml(id) {") + 10)]
+    assert "srcCell(e.source)" in tb, "the row's call site is the shared pill"
+    assert "data-where=" in tb, "…and the row itself stays selectable, as it was"
+
+
+def test_a_field_that_is_nothing_but_a_code_anchor_becomes_a_code_link() -> None:
+    """The `Entry point` field held `backend/src/.../roles.py:63` and printed it as prose — the last
+    place in the viewer where a link to code did not look like one. A field whose WHOLE value is an
+    anchor is now the shared pill.
+
+    The test that matters is what it REFUSES. The rule reads a field value with no idea what the field
+    means, so it must never turn a version number or a pair of words into a link to a file that does not
+    exist. It fires only on one token that ends in `:<line>` after a file extension, or ends in `/`."""
+    out = _run_js_region(
+        "function bareAnchor(v) {",
+        "// A node's full detail as an HTML string",
+        """
+const localRef = (f) => !!f && !/^[a-z][a-z0-9+.-]*:\\/\\//i.test(String(f));
+const cases = ['backend/src/mcpolis/entrypoints/routes/dashboard/roles.py:63', 'roles.py:63',
+               'roles.py:63-70', 'roles.py#L63',
+               'backend/src/mcpolis/adapters/', '1.2.3', 'read/write', 'app.py', 'v2.0',
+               'https://example.com/a.py:1', 'see roles.py:63 for the detail', '', null];
+console.log(JSON.stringify(cases.map((c) => [c, bareAnchor(c)])));
+""",
+    )
+    got = dict((k or "", v) for k, v in json.loads(out))
+    # Fires on a real anchor, with or without folders, and on a directory ref.
+    assert got["backend/src/mcpolis/entrypoints/routes/dashboard/roles.py:63"]
+    assert got["roles.py:63"] == "roles.py:63"
+    assert got["backend/src/mcpolis/adapters/"]
+    # Every line-marker spelling the rest of the viewer reads (whereNode), so one anchor cannot be a
+    # pill in a Source cell and prose in a field.
+    assert got["roles.py:63-70"] == "roles.py:63-70"
+    assert got["roles.py#L63"] == "roles.py#L63"
+    # …and on nothing else.
+    for never in ("1.2.3", "read/write", "app.py", "v2.0", "https://example.com/a.py:1",
+                  "see roles.py:63 for the detail", ""):
+        assert got[never] == "", f"{never!r} is not a code link"
+
+
+def test_a_self_arrow_is_framed_as_the_whole_loop_and_not_as_one_third_of_it() -> None:
+    """Jumping straight to one step of a flow — a rule's "enforced at" chip does this — selects the
+    step's arrow AND moves the camera onto it, or the arrow is a thin line lost somewhere in a big map.
+
+    A self-arrow is three paths, and the step's element list carries all three so the reveal pan can see
+    the whole loop. Framing must take the piece that carries the other two (`_segs`), whose measured box
+    is the union of the three. Taking the first drawn piece instead measured a third of the loop and
+    zoomed to 1214%: the window filled with one blue band and the deep link arrived on a picture of
+    nothing. 12 steps in one live map are reachable by such a chip.
+
+    Runs the real frameFlowStep over a step whose three pieces are listed in drawing order, so the
+    representative is NOT first."""
+    out = _run_js_region(
+        "function frameFlowStep(i) {",
+        "// Every taggable item in the shown file",
+        """
+const box = (w, h) => ({ getBoundingClientRect: () => ({ width: w, height: h }) });
+const seg1 = { name: 'seg1', ...box(112, 37) };
+const mid  = { name: 'mid',  ...box(112, 37) };
+const seg2 = { name: 'seg2', ...box(112, 37) };
+mid._segs = [seg1, mid, seg2];              // only the representative carries the loop's other pieces
+const label = { name: 'label', ...box(20, 12) };
+const plain = { name: 'plain', ...box(181, 58) };
+const nothing = { name: 'undrawn', ...box(0, 0) };
+let mainPz = {}, framed = [];
+function frameArrow(el) { framed.push(el.name); }
+let flowPlay = { msgEls: [[seg1, mid, seg2, label], [plain, label], [nothing], []] };
+[0, 1, 2, 3].forEach(frameFlowStep);
+console.log(JSON.stringify(framed));
+""",
+    )
+    # The loop frames its representative, never the first piece. An ordinary arrow is unchanged. A step
+    # with nothing drawn moves no camera at all.
+    assert json.loads(out) == ["mid", "plain"]

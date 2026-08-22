@@ -1665,9 +1665,12 @@ function decidesHtml(id) {
   return '<dt>How it decides</dt><dd class="used-by-cap">' + html + '</dd>';
 }
 // The "Triggered by" forward view for a component: its T4 entry points — how the outside world reaches
-// it (an HTTP route, a CLI command, a cron, an event). Like the arrow/crossing rows, each entry point is
-// a SELECTABLE paragraph (no source pill): selecting it highlights the paragraph and — when it has a
-// local source — reveals that source in the code viewer (see bindTriggeredBy). '' when none. The same
+// it (an HTTP route, a CLI command, a cron, an event). Each entry point is a selectable paragraph — a
+// kind chip, the trigger, and its CALL SITE as the same pill every code link in the product wears.
+// The row used to carry no pill at all, on the reasoning that selecting it reveals the source anyway.
+// Nothing on screen said so, and the very same fact is already a pill in the Deployment card's
+// "Threads / loops" table (threadRowsHtml) — one entry point's call site, shown two ways. Selecting the
+// row still reveals the source, so the pill adds a visible affordance and takes none away. The same
 // entry points also appear (grouped by kind) on the System tab, and a search hit / a System component
 // link selects the exact row here (selectEntryPoint).
 function triggeredByHtml(id) {
@@ -1679,7 +1682,8 @@ function triggeredByHtml(id) {
     const kind = e.kind ? `<span class="tb-kind${self ? ' tb-kind--self' : ''}">${esc(e.kind)}</span>` : '';
     const trig = e.trigger ? `<span class="tb-trig">${mdInline(e.trigger)}</span>` : '<span class="muted">(entry point)</span>';
     const where = (e.source && localRef(e.source)) ? ` data-where="${esc(e.source)}"` : '';
-    return `<li class="tb-ep${self ? ' tb-ep--self' : ''}" data-ep-idx="${i}"${where}>${kind}${trig}</li>`;
+    const src = e.source ? `<span class="tb-src">${srcCell(e.source)}</span>` : '';
+    return `<li class="tb-ep${self ? ' tb-ep--self' : ''}" data-ep-idx="${i}"${where}>${kind}${trig}${src}</li>`;
   }).join('');
   return `<dt>Triggered by</dt><dd><ul class="tb-list" data-comp="${esc(id)}">${rows}</ul></dd>`;
 }
@@ -1815,6 +1819,26 @@ function kindPillsExtra(n) {
     + roles.map((r) => ROLE_LABEL[r] || r).filter((w) => w !== kind).map((w) =>
       `<span class="badge role" title="derived from this dependency's incoming edge verbs">${esc(w)}</span>`).join('');
 }
+// A field whose WHOLE value is a code anchor is a code link, and must read as one: the `Entry point`
+// field printed `backend/src/.../roles.py:63` as prose, the last place in the product where a link to
+// code did not look like a link. Returns the anchor, or '' for anything else.
+//
+// Deliberately narrow: ONE token, no spaces, either a file with a line marker in any spelling the rest
+// of the viewer reads (`:42`, `:42-50`, `#L42` — see whereNode) or a directory ref ending in `/`. So a
+// version string (`1.2.3`) and a word pair (`read/write`) can never be mistaken for a file.
+//
+// KNOWN LIMIT, accepted on purpose: `example.com:8080` has exactly the shape of `README.md:26`, and a
+// root-level anchor with no folder is common in real maps (56 of them in one). No test on the shape
+// alone can separate a host and port from a file and line, so the only tighter rule would be a closed
+// list of file extensions — which would silently drop real anchors to buy a case that occurs nowhere:
+// across three live maps, all 65 field values of this shape were genuine code anchors.
+function bareAnchor(v) {
+  const t = String(v == null ? '' : v).trim();
+  if (!t || /\s/.test(t)) return '';
+  const looks = /^[\w.@\-/]+\.[A-Za-z0-9]{1,8}(?::\d+(?:-L?\d+)?|#L\d+)$/.test(t)
+             || /^[\w.@\-][\w.@\-/]*\/$/.test(t);
+  return looks && localRef(t) ? t : '';
+}
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
 // writes, no handler wiring. Used by showNode to fill the panel with a single element's detail.
 function nodeDetailBodyHtml(id) {
@@ -1833,7 +1857,7 @@ function nodeDetailBodyHtml(id) {
     .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>` + (lifecycle(k)
       ? `<ul class="st-list">${n.states_lines.map((t) => `<li>${mdInline(t)}</li>`).join('')}</ul>`
-      : mdInline(v)) + '</dd>').join('');
+      : (bareAnchor(v) ? srcCell(bareAnchor(v)) : mdInline(v))) + '</dd>').join('');
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
   return explain
@@ -8597,10 +8621,17 @@ let pendingFrameStep = false;
 function frameFlowStep(i) {
   if (!flowPlay || !mainPz) return;
   const els = (flowPlay.msgEls || [])[i] || [];
+  const drawn = (e) => e && e.getBoundingClientRect
+                  && (e.getBoundingClientRect().width >= 1 || e.getBoundingClientRect().height >= 1);
   // The arrow's PATH, not its label: the label is a small box that would over-zoom, and `frameArrow`
   // fits what it is given. Skip anything with no geometry (a step whose pair was not drawn).
-  const el = els.find((e) => e && e.getBoundingClientRect
-                        && (e.getBoundingClientRect().width >= 1 || e.getBoundingClientRect().height >= 1));
+  //
+  // A SELF-ARROW is three paths, and `msgEls` lists all three so the reveal pan can see the whole loop.
+  // Framing must take the one carrying `_segs` — the representative, whose `rectOf` is the union of the
+  // three. Taking the first drawn piece instead measured a third of the loop and zoomed to 1214%, which
+  // filled the window with one blue band: a deep link to such a step (a rule's step chip lands on 12 of
+  // them in one live map) arrived on a picture of nothing.
+  const el = els.find((e) => e && e._segs && drawn(e)) || els.find(drawn);
   if (el) frameArrow(el);
 }
 // Every taggable item in the shown file — structural elements anchored here AND use-case steps that pass
