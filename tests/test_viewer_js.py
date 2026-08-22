@@ -1802,3 +1802,57 @@ console.log(JSON.stringify(seen));
     assert seen[0]["segs"] == ["d-E1-cyclic-special-1", "d-E1-cyclic-special-mid",
                                "d-E1-cyclic-special-2"]
     assert [s["label"] for s in seen[1:]] == ["holds", "lives in"]
+
+
+def test_a_code_link_has_exactly_one_shape_and_one_builder() -> None:
+    """A code link is a pill: the file's NAME plus its line, as one clickable button. The flow step
+    card was the single exception in the product. It hand-rolled its own `<a>` and printed the whole
+    path, so the most-read card in the viewer was the one place a code link looked unlike every other.
+
+    Two gates, so the exception cannot come back by a different route. First, the step card goes
+    through the shared builder and never prints its raw anchor again. Second, `srcCell` stays the ONLY
+    place that emits a source-link button, which is also what makes the one delegated pane listener
+    enough to serve every link in the app."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    step = js[js.index("function flowStepInfoHtml(uc, i, numbered) {"):
+              js.index("\nfunction ", js.index("function flowStepInfoHtml(uc, i, numbered) {") + 10)]
+    assert "srcCell(st.where)" in step, "the step card's Source row is the shared pill"
+    assert "esc(st.where)" not in step, "the step card never prints its raw anchor"
+    # The hand-rolled link and its per-render click handler are gone, markup and stylesheet alike.
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    assert "stepwhere" not in js and "stepwhere" not in css
+    # ONE builder emits a source-link button. A second one would also escape the delegated listener's
+    # contract, which is what silently broke a row of manifest anchors once before.
+    assert js.count('class="src srclink"') == 1
+    emitter = js[js.index("function srcCell(where) {"):
+                 js.index("\nfunction ", js.index("function srcCell(where) {") + 10)]
+    assert 'class="src srclink"' in emitter, "that one emitter is srcCell"
+
+
+def test_the_source_pill_names_the_file_not_the_path() -> None:
+    """What the pill actually says, run against the real builder: the file's own name and its line,
+    never the folders above it. Pinned because the whole point of the shared shape is that a reader
+    recognises a code link by its shape, and a full path reads as prose."""
+    out = _run_js_region(
+        "function srcCell(where) {",
+        "function srcListCell(joined) {",
+        """
+function whereNode(w) { const m = String(w).match(/^(.*?):(\\d+)$/); return m ? { file: m[1], line: +m[2] } : { file: String(w), line: null }; }
+function localRef(w) { return !String(w).startsWith('http'); }
+function cleanPath(file) { return file; }
+const esc = (s) => String(s);
+console.log(JSON.stringify([
+  srcCell('backend/src/mcpolis/adapters/event_stream_redis.py:47'),
+  srcCell('README.md'),
+]));
+""",
+    )
+    pill, noline = json.loads(out)
+    shown = re.search(r">([^<>]*)</button>", pill)
+    assert shown and shown.group(1) == "event_stream_redis.py:47", pill
+    assert "/" not in shown.group(1), "no folder reaches the words on screen"
+    # The whole anchor is still carried, on the attribute the delegated listener reads.
+    assert 'data-where="backend/src/mcpolis/adapters/event_stream_redis.py:47"' in pill
+    assert 'class="src srclink"' in pill
+    shown2 = re.search(r">([^<>]*)</button>", noline)
+    assert shown2 and shown2.group(1) == "README.md", "an anchor with no line still reads as a name"

@@ -2624,12 +2624,12 @@ function flowInit(s) {
 function flowStepInfoHtml(uc, i, numbered) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) return EMPTY_PANEL;
-  const wn = st.where ? whereNode(st.where) : null;
-  const local = !!(wn && localRef(wn.file));
-  const srcRow = st.where
-    ? '<dl><dt>Source</dt><dd>' + (local
-        ? '<a href="#" class="stepwhere">' + esc(st.where) + '</a>' : esc(st.where)) + '</dd></dl>'
-    : '';
+  // The step's call site wears the SAME pill every other code link in the product wears (`srcCell`:
+  // name + line, a `.srclink` button the delegated pane listener already serves). This card used to
+  // print the raw `path/to/file.py:47` as its own hand-rolled link, which made the most-read card in
+  // the product the one place a code link looked different. The folder is not lost: opening the link
+  // shows the whole path in the code pane's header.
+  const srcRow = st.where ? '<dl><dt>Source</dt><dd>' + srcCell(st.where) + '</dd></dl>' : '';
   // The step's action is the title (a full sentence for actor steps — too long for a pill). Its arrow
   // owns structural navigation, so the pane stays focused on the step's authored facts and call site.
   const stepBadge = numbered ? '<span class="badge edge">Step ' + (i + 1) + '</span>' : '';
@@ -2668,12 +2668,6 @@ function stepRulesHtml(uc, st) {
 function bindFlowStepInfo(host, uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) return;
-  const sw = host.querySelector('a.stepwhere');
-  if (sw) sw.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    const wn = whereNode(st.where);
-    openInCodeViewer(wn.file, wn.line);
-  });
   // The "Decides" rows deep-link to the rule's own page under the Business rules tab.
   host.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
