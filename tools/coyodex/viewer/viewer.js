@@ -5466,10 +5466,22 @@ function syncCodePane(_s) {
 // Open or close the column, remember the choice, and — on opening — show whatever the reader had
 // SELECTED while it was shut. Without that last part the column opens on whichever file it happened to
 // hold last, which is never the box the reader is looking at.
+// THE COLUMN'S WIDTH CHANGED, so the drawing's box changed with it. Re-frame it exactly as the drag bar
+// does — keep the reader's zoom, and keep the point that was under the centre under the centre — rather
+// than snapping to a fresh fit. Opening the column is the same size change as dragging it wider; a reader
+// who has zoomed into one corner should not be thrown back to the whole map for pressing a toggle.
+// The floating card is measured in the drawing's own box, so a card the reader parked on the right can
+// end up outside it: applyPanelBox re-clamps without overwriting where they put it, so it returns there
+// as soon as there is room again.
+function codePaneResized() {
+  if (mainPz) resizeStagePreserve();
+  applyPanelBox();
+}
 function setCodeOpen(on) {
   codeOpen = !!on;
   lsSet(LS.codeOpen, codeOpen ? '1' : '');
   resyncCodePane();
+  codePaneResized();
   if (!codeOpen || !pendingCode) return;
   const p = pendingCode; pendingCode = null;
   if (p.file) loadCode(p.file, p.line);
@@ -5480,9 +5492,6 @@ let pendingCode = null;
 // Re-run the rule for the page already on screen, after something OTHER than a navigation changed the
 // answer (the reader pinned the file browser, or closed the column).
 function resyncCodePane() { const s = history[hi]; if (s) syncCodePane(s); }
-// Called by loadCode: a file was requested. Only a request made FROM a text page opens the column —
-// on a diagram the column is already there, and remembering that click would re-open it on the card
-// page the reader drilled from.
 // A file anchor was clicked. That is a request for the source wherever it happens — on a page of prose or
 // over a diagram — so it opens the column and the choice is remembered like any other.
 function noteCodeAsked() {
@@ -5580,6 +5589,9 @@ function applyPanelBox() {
   const b = panelBox();
   const st = PANEL_HOST.style;
   if (!wrap || !b) { st.left = st.top = st.width = st.height = ''; st.right = ''; return; }
+  // A hidden card measures zero, and clamping against a zero width would pin it to the right edge and
+  // leave it there when it comes back. Nothing to place until there is a card on screen.
+  if (PANEL_HOST.hidden) return;
   const W = wrap.clientWidth, H = wrap.clientHeight;
   if (b.w) st.width = Math.min(b.w, Math.max(240, W - 24)) + 'px';
   if (b.h) st.height = Math.min(b.h, Math.max(90, H - 24)) + 'px';
@@ -8459,7 +8471,7 @@ async function initServerMode() {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); home(); }
     });
   }
-  refitStage();  // the diagram column just narrowed to make room for the browser + code panes
+  codePaneResized();  // the diagram column just narrowed to make room for the browser + code panes
   loadServerTree();
 }
 async function loadServerTree() {
@@ -8513,7 +8525,7 @@ if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => setCodeOpen(false));
 const treeCloseBtn = document.getElementById('treeclose');
 if (treeCloseBtn) treeCloseBtn.addEventListener('click', () => {
   if (treePinned) { treePinned = false; lsSet(LS.treePinned, ''); applyTreeState(); }
-  setCodeOpen(false);
+  setCodeOpen(false);   // …which re-frames the drawing and re-clamps the card, once, for both changes
 });
 const codeBtn = document.getElementById('codebtn');
 if (codeBtn) {
@@ -9272,6 +9284,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Alt') setDrillMod(t
 document.addEventListener('keyup', (e) => { if (e.key === 'Alt') setDrillMod(false); });
 window.addEventListener('blur', () => setDrillMod(false));
 window.addEventListener('resize', refitStage);  // keep the diagram fitted when the window itself resizes
+window.addEventListener('resize', applyPanelBox);  // …and keep the floating card inside the smaller box
 window.addEventListener('resize', updateAllPillFades);  // and re-evaluate the pill-box edge fades
 
 // --- open source in an external editor / on GitHub -------------------------------
@@ -9556,7 +9569,7 @@ codeOpen = lsGet(LS.codeOpen) === '1';
 applyTreeState();
 if (cvFilesBtn) cvFilesBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(!treeBrowsing); } });
 if (treeCodeBtn) treeCodeBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(false); } });
-if (treePinBtn) treePinBtn.addEventListener('click', () => { setPinned(!treePinned); refitStage(); });
+if (treePinBtn) treePinBtn.addEventListener('click', () => { setPinned(!treePinned); codePaneResized(); });
 let treeResizing = false;
 treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });
 document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX - tree.getBoundingClientRect().left) + 'px'; resizeStagePreserve(); updateAllPillFades(); } });

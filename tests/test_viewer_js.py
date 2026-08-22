@@ -986,6 +986,21 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "pendingCode" in opener and "loadCode(p.file, p.line)" in opener, \
         "opening shows what was selected while it was shut"
     assert "codeOpen = lsGet(LS.codeOpen) === '1';" in js, "…and it survives a reload"
+    # Opening or closing the column is the SAME size change as dragging its bar, so the drawing is
+    # re-framed the same way: the reader's zoom kept, and the point under the centre kept under it. A
+    # fresh fit would throw a reader who had zoomed into one corner back to the whole map for pressing a
+    # toggle. The floating card is measured in the drawing's own box, so it is re-clamped too — without
+    # overwriting where the reader parked it, so it returns there when there is room again.
+    resized = js[js.index("function codePaneResized() {"):
+                 js.index("\n}", js.index("function codePaneResized() {"))]
+    assert "resizeStagePreserve();" in resized and "applyPanelBox();" in resized
+    opener2 = js[js.index("function setCodeOpen(on) {"): js.index("\n}", js.index("function setCodeOpen(on) {"))]
+    assert "codePaneResized();" in opener2
+    assert "setPinned(!treePinned); codePaneResized();" in js, "pinning changes the width too"
+    assert "window.addEventListener('resize', applyPanelBox);" in js, "so does the window itself"
+    box = js[js.index("function applyPanelBox() {"): js.index("\n}", js.index("function applyPanelBox() {"))]
+    assert "if (PANEL_HOST.hidden) return;" in box, \
+        "a hidden card measures zero, and clamping against zero pins it to the edge"
     # The two visible ways out, and the one visible way in.
     # The × lives in BOTH panes of the column, because either can be the only one on screen: browsing
     # hides the code viewer outright, and opening the column with nothing selected lands exactly there —
