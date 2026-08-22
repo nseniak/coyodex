@@ -3678,7 +3678,7 @@ const tabLast = {};
 // Every field `stateKey` distinguishes states by. Anything added here is automatically carried by
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
-const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
+const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br', 'by',
                       'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'id'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
@@ -3690,6 +3690,9 @@ function stateKey(s) {
     + (s.br ? '#' + s.br : '')      // …and a rule row inside it
     + (s.cap ? ':' + s.cap : '')   // one FEATURE's use cases ('-' = the ones assigned to none)
     + (s.act ? ':' + s.act : '')   // …or one ACTOR's, the overview's other axis
+    + (s.by ? ':by' + s.by : '')   // the Features overview on a NAMED axis (an axis crumb reopening
+                                   // the cards the reader drilled from), distinct from the tab's own
+                                   // landing state, which names no axis
     + (s.bkid ? ':' + s.bkid : '')  // bucketfold drills are keyed by their BKF id
     + (s.gid ? ':' + s.gid : '')   // …and a deployment container card by its group id
     + (s.epk ? ':' + s.epk : '')   // …and one entry-point KIND inside the Entry points collection
@@ -5207,7 +5210,12 @@ function stateTitle(s) {
   }
   if (s.kind === 'data') return 'Storage';  // user-facing label; internal kind stays `data`
   if (s.kind === 'tests') return 'Tests';
-  if (s.kind === 'usecases') return 'Features';  // user-facing label; internal kind stays `usecases`
+  // The Features view LANDS on a choice of axis, so the axis is a real level in the trail: the tab
+  // says Features, and the crumb says which of its two lists you came through. Without it a feature's
+  // page had a one-item crumb and no way back to the cards, and the same page reached through an
+  // actor read identically. `by` is absent on the view's own landing state, which the tab already
+  // names — that is what keeps clicking the crumb from landing on a different screen than the tab.
+  if (s.kind === 'usecases') return s.by ? 'by ' + (s.by === 'actor' ? 'actor' : 'capability') : 'Features';
   if (s.kind === 'capability') {
     if (s.cap === '-') return 'Not assigned to a feature';
     const nm = GRAPH.nodes[s.cap] ? GRAPH.nodes[s.cap].name : s.cap;
@@ -5261,9 +5269,10 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   }
   if (s.kind === 'actors') return [{ kind: 'actors' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
-  if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap, act: s.act }];  // one feature's use cases (a grid cell also carries the role)
+  // One feature's use cases, under the axis that listed it (a grid cell also carries the role)…
+  if (s.kind === 'capability') return [{ kind: 'usecases', by: 'capability' }, { kind: 'capability', cap: s.cap, act: s.act }];
   // …and one actor's, whose parent crumb reopens the Features view on the axis that lists them.
-  if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];
+  if (s.kind === 'actor') return [{ kind: 'usecases', by: 'actor' }, { kind: 'actor', act: s.act }];
   // A use case sits UNDER the card it was listed on, so the trail reads Features › that card › the use
   // case — the same overview → group → member shape Subsystems and Entities already use. WHICH card is
   // not fixed: the overview has two axes, and a use case belongs to exactly one group on each. So the
@@ -5283,7 +5292,11 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     const mid = ucGroupBy() === 'actor'
       ? (act ? { kind: 'actor', act } : null)
       : (cap ? { kind: 'capability', cap } : null);
-    return mid ? [{ kind: 'usecases' }, mid, { kind: 'usecase', uc: s.uc }]
+    // No middle card means no axis was walked, so the top crumb stays the plain view state and drops
+    // out — claiming "by capability" above a use case that sits under no card would be a trail the
+    // reader never took.
+    return mid ? [{ kind: 'usecases', by: mid.kind === 'actor' ? 'actor' : 'capability' },
+                  mid, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
   }
   if (s.kind === 'deployment') return [{ kind: 'deployment' }];
@@ -5392,7 +5405,10 @@ function renderChrome(s) {
   // the row collapses that h1 would go with it, leaving the document untitled — so the view's name
   // takes its place, readable by a screen reader and invisible on screen, where the tab already has it.
   const chain = ancestors(s);
-  if (chain.length && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();
+  // The view's own name goes, because the tab above already says it — but NOT when it carries an
+  // axis (`by`), which is a level inside the view and the only thing naming which list you came
+  // through.
+  if (chain.length && !chain[0].by && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();
   const empty = !chain.length;
   if (crumb.parentElement) crumb.parentElement.classList.toggle('hint-empty', empty);
   if (empty) {
@@ -7102,6 +7118,9 @@ async function render(sArg, transient) {
   // The Features tab is an HTML catalog, not a mermaid diagram — same shape as Glossary. Its landing
   // level is the feature cards; a map that records no features keeps the flat use-case list instead.
   if (s.kind === 'usecases') {
+    // Arriving from an axis crumb: set the axis it names, so the reader lands on the very cards they
+    // drilled from rather than on whichever axis was last used.
+    if (s.by) UC_GROUP_BY = s.by === 'actor' ? 'actor' : 'capability';
     if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();
     mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }

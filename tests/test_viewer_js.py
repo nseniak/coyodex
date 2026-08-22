@@ -523,7 +523,11 @@ def test_features_keeps_both_axes_and_actors_drills_across_into_one() -> None:
     # The drill across, and the tab it lands on.
     opener = js[js.index("function openActor(id) {"): js.index("\nfunction ", js.index("function openActor(id) {") + 10)]
     assert "UC_GROUP_BY = 'actor';" in opener and "go({ kind: 'actor', act: n.name });" in opener
-    assert "if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];" in js
+    # Both axis crumbs name the axis, so a feature's page and an actor's page no longer read
+    # identically one level down, and each goes back to the cards it was opened from.
+    assert ("if (s.kind === 'actor') return [{ kind: 'usecases', by: 'actor' },"
+            " { kind: 'actor', act: s.act }];") in js
+    assert ("if (s.kind === 'capability') return [{ kind: 'usecases', by: 'capability' },") in js
     assert "kind === 'actor'" in js[js.index("function topView(kind, id) {"):]
 
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
@@ -554,6 +558,22 @@ def test_a_use_cases_crumb_names_the_card_it_was_listed_on() -> None:
     assert "s.act ||" in anc and "actorGroupOf(s.uc)" in anc
     assert "CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-'" in anc
     assert "function actorGroupOf(ucId) {" in js and "actorGroups().find(" in js
+
+
+def test_the_features_axis_is_a_crumb_of_its_own() -> None:
+    """The Features view lands on a CHOICE — the same use cases cut by capability or by actor — and
+    that choice is a real level. Without it a feature's page carried a one-item crumb with no way back
+    to the cards, and the same page reached through an actor read exactly the same.
+
+    The view's own landing state names no axis, so clicking the crumb goes to the same screen the tab
+    does, with the axis it names already set."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "return s.by ? 'by ' + (s.by === 'actor' ? 'actor' : 'capability') : 'Features';" in js
+    assert "if (s.kind === 'usecases') return [{ kind: 'usecases' }];" in js, \
+        "the landing state must carry NO axis, or the crumb lands somewhere the tab never does"
+    assert "if (s.by) UC_GROUP_BY = s.by === 'actor' ? 'actor' : 'capability';" in js
+    assert "'by'" in js[js.index("const STATE_FIELDS = ["):js.index("function stateKey(s) {")], \
+        "a state field the right pane does not carry is a crumb that forgets its axis"
 
 
 def test_a_feature_found_by_search_lands_on_its_card() -> None:
@@ -1124,7 +1144,10 @@ def test_the_path_shows_only_where_you_went_after_choosing_the_view() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     crumbs = js[js.index("  crumb.innerHTML = '';"):]
     crumbs = crumbs[: crumbs.index("\n}")]
-    assert "if (chain.length && topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();" in crumbs
+    # …with ONE exception: the Features view lands on a choice of axis, so a first crumb carrying
+    # `by` is a level INSIDE the view, not the view's own name, and it stays.
+    assert ("if (chain.length && !chain[0].by "
+            "&& topView(chain[0].kind, chain[0].id) === chain[0].kind) chain.shift();") in crumbs
     assert "const empty = !chain.length;" in crumbs
     assert "classList.toggle('hint-empty', empty)" in crumbs
     assert "h.className = 'sr-only';" in crumbs
