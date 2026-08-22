@@ -109,9 +109,10 @@ body:not(.search-open) #sbresizer { display: none; }
 .glossary tr.sb-flash > * { background: #fef9c3; transition: background .25s ease; }
 /* No server (static map): the file browser + code panes are hidden, but the search sidebar still works
    over elements + glossary, so it stays available. */
-/* Left column (dominant): diagram on top, info pane below, stacked vertically and split by #vsplit.
-   Fixed default width (persisted); the file browser + code viewer share the remaining width. When the
-   map is opened statically (no server), the browser + code panes are hidden and this column fills. */
+/* Left column (dominant): the tab rows, then the diagram or the page filling the rest. What you select
+   floats OVER the diagram; nothing is banded under it. Fixed default width (persisted); the file browser
+   + code viewer share the remaining width. When the map is opened statically (no server), the browser +
+   code panes are hidden and this column fills. */
 /* flex-shrink 1 (not 0) so the diagram column YIELDS space when the search sidebar opens — the code
    viewer's basis is 0, so it stays put and this column absorbs the sidebar's width instead of the row
    overflowing the viewport. min-width keeps the diagram usable at the shrink limit. */
@@ -119,15 +120,14 @@ body:not(.search-open) #sbresizer { display: none; }
 body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow: hidden; background: #fafafa;
          display: flex; flex-direction: column; }
-/* Horizontal drag bar between the diagram and the info pane (sets the info pane's height). */
-#vsplit { flex: 0 0 5px; cursor: row-resize; background: #e5e7eb; }
-#vsplit:hover, body.vresizing #vsplit { background: #818cf8; }
-body.vresizing { cursor: row-resize; user-select: none; }
-body.vresizing #stage { pointer-events: none; }
-/* The map fills the space LEFT UNDER the header (a flex child of #stage), so the header never overlaps
-   the fitted/centered diagram — the view-selector row is not part of the viewable area. #stagehead takes
-   its natural height at the top; #diagram takes the rest, and svg-pan-zoom fits/centers into that box
-   (applyZoomAndCenter in viewer.js measures #diagram, not #stage, for the same reason). */
+/* THE DIAGRAM AREA: everything below the tab rows. It is the positioning box for the four things that
+   float over a drawing — the legend, the environment filter, the flow controls and the selection card —
+   so "bottom: 12px" means the bottom of the drawing rather than the bottom of the whole column. */
+#diagwrap { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
+/* The map fills the space LEFT UNDER the header, so the header never overlaps the fitted/centered
+   diagram — the view-selector row is not part of the viewable area. #stagehead takes its natural height
+   at the top; the diagram area takes the rest, and svg-pan-zoom fits/centers into that box
+   (applyZoomAndCenter in viewer.js measures #diagram for the same reason). */
 #diagram { flex: 1 1 auto; min-width: 0; min-height: 0; }
 /* View selector + breadcrumb, a normal-flow bar at the top of the graph pane. */
 #stagehead { flex: 0 0 auto; z-index: 6; }
@@ -772,10 +772,26 @@ body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #cvfilesbtn { displa
 body.tree-browsing:not(.tree-pinned) #tree { flex: 1 1 0; width: auto; }
 body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 
-/* Info pane: now the BOTTOM of the left column (was a fixed-width side pane). Full column width; its
-   HEIGHT is the resizable dimension (dragged via #vsplit, persisted). */
-#panel { flex: 0 0 auto; height: 300px; min-height: 0; padding: 16px; overflow-y: auto;
-         background: #fbfbfe; border-top: 1px solid #e5e7eb; }
+/* WHAT YOU SELECTED, floating over the drawing rather than banded under it.
+   It was a fixed 300px row of every diagram page, there whether or not anything was selected. Measured
+   over 60 states on the three maps: nothing selected held 76px of content on four of the five views, and
+   one selected shape held 67-184px, so about three quarters of it stood empty nearly all the time. The
+   diagram was left with 447px of an 860px window, which is 32% of the screen for the thing the page is
+   about. It is now hidden until something is selected, and the diagram keeps the whole area.
+   TOP-RIGHT: the other two floaters own the bottom corners already (#envpicker bottom-left, #legend
+   bottom-right), and a card that covered either of them would hide a control rather than a shape.
+   Capped and scrollable, because a few states run long: a process with its threads, an actor with every
+   step it drives, an arrow standing for 33 calls. */
+#panel { position: absolute; top: 12px; right: 12px; z-index: 4; width: 380px; max-width: calc(100% - 24px);
+         max-height: calc(100% - 24px); padding: 14px 16px; overflow-y: auto;
+         background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+         box-shadow: 0 6px 22px rgba(15, 23, 42, .16); }
+#panel[hidden] { display: none; }
+/* The card's own close button, in the same corner idiom as the legend's. Selecting something else
+   replaces the card; this is how you put it away without deselecting on the canvas. */
+#panelclose { position: absolute; top: 4px; right: 6px; border: 0; background: transparent;
+              font-size: 17px; line-height: 1; color: #9ca3af; cursor: pointer; padding: 2px 4px; }
+#panelclose:hover { color: #374151; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }
 /* name + kind tag (and any change badge) on one line — the identity a box/edge keeps even once its
@@ -821,6 +837,11 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
    order, each separated from the previous by a rule so it reads as its own distinct element. */
 #panel .sel-card + .sel-card { margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb; }
 #panel .xcount { color: #6b7280; margin-bottom: 10px; }
+/* The way out of a card that was cut to three rows. A link, not a button chip: it goes somewhere, and
+   the card is small enough that a filled control would be the loudest thing in it. */
+#panel .xmore { display: inline-block; margin-top: 12px; padding: 0; border: 0; background: none;
+                font: inherit; font-size: 13px; color: #2563eb; cursor: pointer; }
+#panel .xmore:hover { text-decoration: underline; }
 #panel .xlist { margin: 0; padding-left: 18px; }
 #panel .xlist li { margin-top: 12px; }
 #panel .xlist li:first-child { margin-top: 0; }

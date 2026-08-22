@@ -89,14 +89,14 @@
   </aside>
   <!-- Drag handle to resize the search sidebar (width persisted; present only while it's open). -->
   <div id="sbresizer" title="Drag to resize"></div>
-  <!-- Left column (dominant): the diagram on top, the details/info pane below it, split by a
-       horizontal drag bar (#vsplit). The diagram is the centrepiece, so this column takes the lion's
-       share of the width; the file browser + code viewer are the narrower right-hand panes. -->
+  <!-- Left column (dominant): the tab rows, then the diagram or the page, filling the rest. What you
+       select floats OVER the diagram (#panel) rather than taking a band under it. The diagram is the
+       centrepiece, so this column takes the lion's share of the width; the file browser + code viewer
+       are the narrower right-hand panes. -->
   <div id="leftcol">
     <div id="stage">
-      <!-- Fixed header overlaid on the graph pane: the view selector, with the breadcrumb directly below
-           it. Absolutely positioned (like #legend/#drillhint) so it stays put while the diagram itself
-           pans/zooms underneath — #diagram still fills the whole #stage box regardless. -->
+      <!-- The view selector, with the breadcrumb directly below it. A normal-flow bar at the top of the
+           stage: it takes its own height, and the diagram area below it takes everything left. -->
       <div id="stagehead">
         <!-- TWO rows, because eleven flat tabs did not fit: at a 1280px window the last of them had
              ZERO visible width and could not be clicked. Row 1 (#groupsw) is the five GROUPS, built at
@@ -167,6 +167,12 @@
            A DIAGRAM page still uses #viewq in the trail row above — a diagram has no page of prose to
            lead, and its info pane already sits where this line would go. -->
       <p id="pageq" hidden></p>
+      <!-- THE DIAGRAM AREA. Everything that floats over a diagram positions against this box rather
+           than against #stage, so "bottom: 12px" means the bottom of the drawing and not the bottom of
+           a column that also held the info pane. The info pane is one of those floating things now: it
+           took 300px of every diagram page even when it held 76px of content, and the diagram was left
+           with 447px of an 860px window. -->
+      <div id="diagwrap">
       <div id="diagram"></div>
       <div id="legend"></div>
       <!-- Deployment environment filter. Floats over the diagram (bottom-left, mirroring #legend) rather
@@ -189,10 +195,17 @@
           <button id="flownext" aria-label="Next step">&#9654;</button>
         </div>
       </div>
+      <!-- WHAT YOU SELECTED, as a card floating over the drawing. It used to be a 300px band under the
+           diagram, present whether or not anything was selected. Measured over 60 states on the three
+           maps: with nothing selected it held 76px of content, and one selected shape held 67-184px, so
+           roughly three quarters of it was empty nearly all the time. It is now absent until you select
+           something, and the diagram keeps the whole area.
+           Top-right, because the other two floaters already own the bottom corners: #envpicker
+           bottom-left and #legend bottom-right. Capped in height and scrollable, since a few states
+           (a process and its threads, an actor and every step it drives) run long. -->
+      <aside id="panel" hidden></aside>
+      </div>
     </div>
-    <!-- Horizontal drag handle: sets the info pane's HEIGHT (the diagram takes the rest). -->
-    <div id="vsplit" title="Drag to resize"></div>
-    <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
   </div>
   <!-- Vertical drag handle: sets the whole left column's WIDTH (the browser + code viewer share the rest). -->
   <div id="resizer" title="Drag to resize"></div>

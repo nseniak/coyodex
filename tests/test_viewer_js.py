@@ -759,18 +759,77 @@ def test_the_customers_side_leads_each_actor_section() -> None:
     assert "(a.n.audience === 'internal') - (b.n.audience === 'internal') || a.i - b.i" in fn, \
         "the customer's side first, and the map's own order inside each half"
 
-def test_a_text_view_drops_the_info_pane() -> None:
+def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_says_something() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
-    of prose only repeated it, and it stole a third of the height from the content it described. A
-    DIAGRAM still has one, because there the pane is where a selected shape's card goes."""
+    of prose only repeated it, and it stole a third of the height from the content it described.
+
+    A DIAGRAM no longer keeps a standing pane either. It was a fixed 300px band under every diagram,
+    there whether or not anything was selected. Measured over 60 states on the three maps: with nothing
+    selected it held 76px of content on four of the five views, and one selected shape held 67-184px, so
+    about three quarters of it stood empty nearly all the time. The diagram was left with 447px of an
+    860px window, which is 32% of the screen for the thing the page is about. It is now 752px.
+
+    What you selected floats over the drawing instead, and `paneSync` is the ONE place that decides
+    whether it is on screen: it is there when it has something to say and gone when it has not. Every
+    caller just writes; nothing has to remember to show or hide."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "function syncInfoPane(s) {" in js and "panel.hidden = text;" in js
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "function syncInfoPane(s) {" in js
+    assert "if (!TEXT_PAGES.has(s.kind)) return;" in js, "a text page clears and hides the card outright"
     assert "syncInfoPane(s);" in js[js.index("async function render(sArg, transient) {"):][:1200]
     pages = js[js.index("const TEXT_PAGES = new Set(["):]
     pages = pages[: pages.index("]);")]
     for kind in ("actors", "usecases", "capability", "actor", "rules", "system", "glossary"):
         assert f"'{kind}'" in pages, kind
-    assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram keeps its pane"
+    assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram is not a page of prose"
+    # ONE rule, called from both paths that fill the card: a selection, and a page's own default.
+    sync = js[js.index("function paneSync() {"): js.index("\n}", js.index("function paneSync() {"))]
+    assert "PANEL_HOST.hidden = !has;" in sync
+    assert "#panelclose" in sync, "the close button is stamped from the one place, so no card is stuck open"
+    assert "paneSync();" in js[js.index("function renderSelPanel(scene) {"):
+                                js.index("\n}", js.index("function renderSelPanel(scene) {"))]
+    assert "paneSync();" in js[js.index("function applyDefaultPanel(s) {"):
+                                js.index("\n}", js.index("function applyDefaultPanel(s) {"))]
+    # It floats over the drawing, and #diagwrap is what it floats in.
+    pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
+    assert "position: absolute" in pane and "top: 12px" in pane and "right: 12px" in pane, \
+        "top-right: #envpicker owns bottom-left and #legend bottom-right"
+    assert "max-height" in pane, "a few states run long and must scroll rather than fill the screen"
+    assert '<div id="diagwrap">' in (VIEWER_DIR / "viewer.html").read_text()
+    # The 300px band, its drag handle and its stored height are gone, not merely hidden.
+    assert "vsplit" not in js and "vsplit" not in css
+    assert "panelH" not in js, "there is no pane height left to remember"
+
+def test_an_arrow_card_holds_three_calls_and_drills_for_the_rest() -> None:
+    """An arrow stands for anything from one call to 33. In the old 300px pane its list ran from 73px to
+    1983px, and 16 of the 32 arrows sampled were taller than the pane they were drawn in.
+
+    Measured across the three maps: 873 drawn arrows, of which 481 (55%) stand for exactly ONE call and
+    718 (82%) for three or fewer. So the card holds three, which finishes four arrows in five where the
+    reader clicked, and the 155 that hold more offer a drill to the arrow's own page.
+
+    ONE builder, because four panels drew this shape by hand and each capped it differently, which is to
+    say none of them capped it.
+
+    Two cases are never cut. The arrow's OWN page passes `full`, since there the list IS the subject and
+    a drill would lead to the page already open. And an arrow with no page to drill to (a Deployment
+    arrow has none yet) shows everything, because a card that hides rows and offers no way to them would
+    be worse than a long card."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "const ARROW_CARD_ROWS = 3;" in js
+    fn = js[js.index("function arrowCardHtml(o) {"): js.index("\n}", js.index("function arrowCardHtml(o) {"))]
+    assert "const full = o.full || !o.drill;" in fn, "no page to go to means nothing is hidden"
+    assert "rows.slice(0, ARROW_CARD_ROWS)" in fn
+    assert "class=\"xmore\" data-drill=" in fn
+    for caller in ("function showContainerEdge(a, b, drawn, full) {",
+                   "function showDomainContainerEdge(a, b, drawn, full) {",
+                   "function showBridgeEdge(drawn, full) {"):
+        assert caller in js, caller
+        body = js[js.index(caller): js.index("\n}", js.index(caller))]
+        assert "arrowCardHtml({" in body, caller
+    assert "showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);" in js, \
+        "the arrow's own page is never cut"
+    assert "closest('.xmore[data-drill]')" in js, "the way to the rest is delegated, not wired per render"
 
 def test_a_text_view_drops_the_source_pane_until_a_code_link_asks_for_it() -> None:
     """The same rule, one step further out, for the whole right-hand column (file browser + code viewer).

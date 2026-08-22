@@ -169,7 +169,10 @@ const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // 
 const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "clickable" without competing with HILITE
 const HP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Happy-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
 const DIM = '0.15';  // opacity for non-focused elements
-const EMPTY_PANEL = '<p class="empty">Click a node or edge to see details.</p>';
+// The degraded state of ONE card: you selected something the map records nothing about. It is no longer
+// a resting state for a whole pane — "Click a node or edge to see details" was an instruction that held
+// 300px of four of the five diagram views open, and the card is simply absent now until you click.
+const EMPTY_PANEL = '<p class="empty">Nothing recorded for this.</p>';
 // Shown when a use case has no T6 flow yet, so the flow view still renders (the panel explains it)
 // instead of degrading to the generic "could not be rendered" card.
 const EMPTY_FLOW_MM = 'sequenceDiagram\n  participant System\n  Note over System: No T6 flow recorded';
@@ -895,6 +898,7 @@ function renderSelPanel(scene) {
     panel = card;
     try { d.show(); } finally { panel = PANEL_HOST; }
   }
+  paneSync();
 }
 // Paint a rect with a kind's injected fill/stroke (ELEMENT_TINT). Shared by the two spots Mermaid
 // renders a box kind-agnostically — cluster frames and flow participant boxes. No-op if the rect or the
@@ -2067,6 +2071,33 @@ function arrowRowInner(srcName, dstName, whyHtml, extra) {
 function arrowRow(srcName, dstName, whyHtml, sel, extra) {
   return '<li class="xrow' + (sel ? ' sel' : '') + '">' + arrowRowInner(srcName, dstName, whyHtml, extra) + '</li>';
 }
+// ONE builder for every arrow card: the pair, what kind of link it is, how many it stands for, and the
+// first few of them. Four panels drew this shape by hand and each capped it differently, which is to say
+// none of them capped it.
+//
+// THREE ROWS, then a drill. Measured across the three maps: 873 drawn arrows, of which 481 (55%) stand
+// for exactly ONE call and 718 (82%) for three or fewer. So three rows finish four arrows in five on the
+// spot, and the drill exists for the 155 that need a page. The worst arrow stands for 33 calls and ran
+// 1983px of rows in a 300px pane — a list that long is a page, not a card floating over the drawing.
+//
+// `full` is the arrow's OWN page asking for everything: there the list IS the subject, so nothing is cut.
+// No drill target means no cut either (a Deployment arrow has no page yet): a card that hides rows and
+// offers no way to them would be worse than a long card.
+const ARROW_CARD_ROWS = 3;
+function arrowCardHtml(o) {
+  const rows = o.rows || [];
+  const noun = (n) => n + ' ' + o.noun + (n === 1 ? '' : 's');
+  const full = o.full || !o.drill;
+  const shown = full ? rows : rows.slice(0, ARROW_CARD_ROWS);
+  const rest = rows.length - shown.length;
+  return '<div class="pane-title"><h2>' + esc(o.a) + ' \u2192 ' + esc(o.b) + '</h2>'
+    + '<span class="badge edge">' + esc(o.badge) + '</span></div>'
+    + '<div class="xcount">' + esc(noun(rows.length)) + '</div>'
+    + (shown.length ? '<ul class="xlist">' + shown.join('') + '</ul>'
+                    : '<p class="empty">no ' + esc(o.noun) + 's recorded</p>')
+    + (rest > 0 ? '<button type="button" class="xmore" data-drill=\'' + esc(JSON.stringify(o.drill))
+        + '\'>Show all ' + esc(noun(rows.length)) + ' \u2192</button>' : '');
+}
 // Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
 // `from → to:` with its explanation (and a link to its call site) indented below — one uniform font, no
 // verb — so the wiring is readable without leaving the map.
@@ -2101,28 +2132,28 @@ function bundleAtoms(list) {
   for (const r of list) { const k = r.src + '>' + r.dst; if (!seen.has(k)) { seen.add(k); atoms.push({ src: r.src, dst: r.dst }); } }
   return atoms;
 }
-function showContainerEdge(a, b, drawn) {
+function showContainerEdge(a, b, drawn, full) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const list = containerEdgeList(a, b, drawn);
-  const items = list.map((r) => arrowRow(r.srcName, r.dstName, r.why ? mdInline(r.why) : '')).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
-    + '<span class="badge edge">connections</span></div>'
-    + '<div class="xcount">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
-    + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no connections recorded</p>');
+  panel.innerHTML = arrowCardHtml({
+    a: nm(headA), b: nm(headB), badge: 'connections', noun: 'connection', full,
+    rows: list.map((r) => arrowRow(r.srcName, r.dstName, r.why ? mdInline(r.why) : '')),
+    drill: { kind: 'edge', a, b },
+  });
 }
 // Selecting an inter-subdomain arrow (Domain overview): list every entity→entity relation it bundles as
 // `from → to:` with its verb (+ kind) below — the domain analog of showContainerEdge.
-function showDomainContainerEdge(a, b, drawn) {
+function showDomainContainerEdge(a, b, drawn, full) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const list = domainContainerEdgeList(a, b, drawn);
-  const items = list.map((r) => arrowRow(r.srcName, r.dstName,
-    esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''))).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
-    + '<span class="badge edge">relations</span></div>'
-    + '<div class="xcount">' + list.length + ' relation' + (list.length === 1 ? '' : 's') + '</div>'
-    + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no relations recorded</p>');
+  panel.innerHTML = arrowCardHtml({
+    a: nm(headA), b: nm(headB), badge: 'relations', noun: 'relation', full,
+    rows: list.map((r) => arrowRow(r.srcName, r.dstName,
+      esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''))),
+    drill: { kind: 'domedge', a, b },
+  });
 }
 // Selecting a BRIDGE arrow (structure↔domain): the component↔subdomain arrow in a subsystem card, or the
 // subsystem↔entity arrow in a subdomain/domain view. It bundles component→entity edges; list each as
@@ -2145,15 +2176,22 @@ function bridgeEdgeList(drawn) {
             : true;
   }));
 }
-function showBridgeEdge(drawn) {
+function showBridgeEdge(drawn, full) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const kindOf = (id) => (GRAPH.nodes[id] || {}).kind;
   const list = bridgeEdgeList(drawn);
-  const items = list.map((r) => arrowRow(r.srcName, r.dstName,
-    esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : ''))).join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(drawn.src)) + ' → ' + esc(nm(drawn.dst)) + '</h2>'
-    + '<span class="badge edge">bridge</span></div>'
-    + '<div class="xcount">' + list.length + ' link' + (list.length === 1 ? '' : 's') + '</div>'
-    + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no links recorded</p>');
+  // The bridge card is keyed by the SUBSYSTEM and the SUBDOMAIN, and the arrow can be drawn either way
+  // round — so read the ends by kind rather than by position. A component↔entity arrow (both ends are
+  // leaves) has no card of its own, so it gets no drill and its card is never cut.
+  const ends = [drawn.src, drawn.dst];
+  const sid = ends.find((id) => kindOf(id) === 'subsystem');
+  const sd = ends.find((id) => kindOf(id) === 'subdomain');
+  panel.innerHTML = arrowCardHtml({
+    a: nm(drawn.src), b: nm(drawn.dst), badge: 'bridge', noun: 'link', full,
+    rows: list.map((r) => arrowRow(r.srcName, r.dstName,
+      esc(r.verb) + (r.why ? ' \u2014 ' + mdInline(r.why) : ''))),
+    drill: (sid && sd) ? { kind: 'bridge', sid, sd } : null,
+  });
 }
 
 // --- Happy Path + use-case panels -----------------------------------------------
@@ -4326,7 +4364,7 @@ function showDeployment() {
     panel.innerHTML = `<section class="uc-group"><h3 class="uc-actor">Unplaced (${unplaced.length})</h3>`
       + `<div class="gloss-plain">These start themselves, but nothing records which process runs `
       + `them — so they appear on no process box below.</div>${threadRowsHtml(unplaced)}</section>`;
-  } else if (GRAPH.nodes['SYS']) { showNode('SYS'); } else { panel.innerHTML = EMPTY_PANEL; }
+  } else { panel.innerHTML = ''; }   // nothing unplaced -> no card; the overview is the whole answer
 }
 // The environment picker (deployment variants). Present only when the map declares `environments`;
 // selecting one filters the overview to that variant (empty variants = shared, shown in every env).
@@ -5198,12 +5236,10 @@ function topLevelView(s) {
   const tv = topView(s.kind, s.id);
   return s.kind === tv ? tv : null;
 }
-// The pane for a table view (Glossary / Use Cases / System / Data / Tests): it renders no diagram and
-// builds no scene, so it never reaches applyDefaultPanel — it sets its own pane to the view intro.
-function showViewIntro(s) {
-  const top = topLevelView(s);
-  panel.innerHTML = top ? viewIntroHtml(top) : EMPTY_PANEL;
-}
+// A table view (Glossary / Features / System / Storage / Tests) renders no diagram and builds no scene,
+// so it never reaches applyDefaultPanel. It has no card either: syncInfoPane already emptied the host,
+// and the view's name and question are in the trail row and on the page.
+function showViewIntro(_s) { PANEL_HOST.innerHTML = ''; PANEL_HOST.hidden = true; }
 // The views that are TEXT, not a diagram: a card list, a grid of cards, or an element's details. Per
 // the spec these carry no info pane — they put their title and their question at the top of the page
 // itself, and the pane beside a page of prose only ever repeated it.
@@ -5214,12 +5250,13 @@ function showViewIntro(s) {
 // distinction is exactly what it got wrong — see the comment on syncLegend.
 const TEXT_PAGES = new Set(['actors', 'usecases', 'capability', 'actor',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element']);
-// Show or hide the info pane (and the handle that resizes it) for the state being rendered.
+// A TEXT page has no selection card at all: there is nothing on it to select, and the page carries its
+// own cards in the reading column. Cleared as well as hidden, so a card from the diagram you came from
+// cannot reappear when you go back to it.
 function syncInfoPane(s) {
-  const text = TEXT_PAGES.has(s.kind);
-  panel.hidden = text;
-  const split = document.getElementById('vsplit');
-  if (split) split.hidden = text;
+  if (!TEXT_PAGES.has(s.kind)) return;
+  PANEL_HOST.innerHTML = '';
+  PANEL_HOST.hidden = true;
 }
 // The SOURCE pane — the file browser and the code viewer, the whole right-hand column — follows the same
 // rule one step further out. Code is the reader's LAST priority (the spec's reading order is narrative,
@@ -5268,37 +5305,47 @@ function viewHeadHtml(_title, desc) {
   // the signature because every caller reads better naming the page it draws.
   return desc ? `<div class="view-head"><p class="view-desc">${esc(desc)}</p></div>` : '';
 }
+// THE ONE RULE for whether the selection card is on screen: it is there when it has something to say,
+// and gone when it has not. Called after anything writes the pane, so no caller has to remember.
+//
+// It also stamps the close button on, once, from here — so a card cannot be dismissable in one code path
+// and stuck in another. Selecting something else replaces the card; the × is how you put it away without
+// having to find empty canvas to click.
+function paneSync() {
+  const has = !!PANEL_HOST.innerHTML.trim();
+  PANEL_HOST.hidden = !has;
+  if (!has || PANEL_HOST.querySelector('#panelclose')) return;
+  PANEL_HOST.insertAdjacentHTML('afterbegin',
+    '<button id="panelclose" type="button" title="Close (Esc)">\u00d7</button>');
+}
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
-  // Prepended AFTER the body so it leads the pane whatever the body wrote (including the deployment
-  // env picker, which inserts itself at the top too).
-  const top = topLevelView(s);
-  if (top) panel.insertAdjacentHTML('afterbegin', viewIntroHtml(top));
+  // No view intro any more. A pane holding the view's name and "Click a node or edge to see details"
+  // was the state the reader met on four of the five diagram views, and it cost 300px of screen to say
+  // what the lit tab and the trail already said. The card is simply absent until something is selected.
+  paneSync();
 }
 function applyDefaultPanelBody(s) {
   setTreeSelection(null);  // a default panel / canvas deselect drops pill emphasis + selection pills
   if (s.kind === 'subsystem') showNode(s.sid);
   else if (s.kind === 'domsub') showNode(s.sd);
-  else if (s.kind === 'edge') showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b });
-  else if (s.kind === 'domedge') showDomainContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b });
+  // `true` = the arrow's OWN page. There the list IS the page's subject, so nothing is cut and no drill
+  // is offered: it would lead to the page the reader is already on.
+  else if (s.kind === 'edge') showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);
+  else if (s.kind === 'domedge') showDomainContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
   else if (s.kind === 'usecase') showUseCase(s.uc);
   else if (s.kind === 'deployment') { showDeployment(); return; }        // overview: surfaces unplaced threads
   else if (s.kind === 'deploymentUnit') { showDeploymentUnit(s.unit); return; }  // card: process detail + its threads
   else if (s.kind === 'libs') showLibsFold();
   else if (s.kind === 'bucketfold') showBucketFold(s.bkid);
-  // The Happy Path overview (nothing selected) opens on the project goal — the SYS node carries the
-  // title + T0 goal (fields.Overview). Selecting a step/actor then replaces it with that detail.
-  else if (s.kind === 'hp' && GRAPH.nodes['SYS']) showNode('SYS');
   // The Subsystems overview in diff mode leads with the change-impact summary (which subsystems/elements
   // changed), since that is the whole point of opening a diff render.
   else if (s.kind === 'container' && mode === 'diff' && hasDiff()) (IMPACT ? showImpactSummary() : showDiffSummary());
-  // An overview with no more specific default is the view intro alone (added by applyDefaultPanel).
-  // It used to open on the System's card, which repeated the same project description under every tab;
-  // the Happy Path branch above keeps it where it belongs — on the view that tells the whole story.
-  else if (topLevelView(s)) panel.innerHTML = '';
-  else if (GRAPH.nodes['SYS']) showNode('SYS');
-  else panel.innerHTML = EMPTY_PANEL;
+  // Anything else with nothing selected draws NOTHING, and paneSync then takes the card off the screen.
+  // The Happy Path used to open on the product's own card here, 257px of the project description. The
+  // Features page already leads with the same text at full width, so the diagram keeps the room instead.
+  else panel.innerHTML = '';
 }
 function bindFor(s) {
   if (s.kind === 'context') bindContext();
@@ -8758,6 +8805,26 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape' && mainScene) resetScene(mainScene);
 });
+// The selection card's ×. It floats over the drawing now, so putting it away must not require hunting
+// for a patch of empty canvas to click. With something selected it does what Escape does — the card and
+// the diagram's dimming belong to one selection and go together. On a drilled page with nothing selected
+// (a subsystem, an arrow, a process) the card is the page's own subject, so × just closes it.
+// "Show all N connections": the card was cut to three rows, and this is the way to the rest. Delegated,
+// like the source links above, so a panel writer cannot forget to wire it.
+PANEL_HOST.addEventListener('click', (ev) => {
+  const more = ev.target && ev.target.closest && ev.target.closest('.xmore[data-drill]');
+  if (!more) return;
+  ev.stopPropagation();
+  let to = null;
+  try { to = JSON.parse(more.getAttribute('data-drill')); } catch (_) { return; }
+  if (to) go(to);
+});
+PANEL_HOST.addEventListener('click', (ev) => {
+  if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;
+  ev.stopPropagation();
+  if (mainScene && mainScene.selection && mainScene.selection.length) resetScene(mainScene);
+  else { PANEL_HOST.innerHTML = ''; PANEL_HOST.hidden = true; }
+});
 // While ⌥ (Option / Alt) is held, flag the body so drillable subsystems/arrows show the drill-in cursor
 // (see .drill in the CSS) and the hover tip previews the drill/open action. (⌘/⌃ is now the multi-select
 // modifier — see isMultiSelectClick — so the drill affordance moved to ⌥.) Clear on key-up and on blur so
@@ -8798,7 +8865,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
@@ -9013,10 +9080,9 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.h
 if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once
 
 // --- resizable left column (diagram + info) -------------------------------------
-// The left column holds the diagram (top) and the info pane (bottom). #resizer sets the whole
-// column's WIDTH (the file browser + code viewer share the rest); #vsplit sets the info pane's
-// HEIGHT within the column (the diagram takes what's left). Both persist and clamp; the drag starts
-// on a handle (not the svg) so svg-pan-zoom never pans.
+// The left column holds the tab rows and the diagram. #resizer sets the whole column's WIDTH (the file
+// browser + code viewer share the rest). It persists and clamps; the drag starts on a handle (not the
+// svg) so svg-pan-zoom never pans.
 const leftcol = document.getElementById('leftcol');
 const clampLeftW = (w) => Math.min(Math.max(w, 360), Math.round(window.innerWidth * 0.85));
 const savedLeftW = parseInt(lsGet(LS.leftW) || '', 10);
@@ -9031,19 +9097,9 @@ document.addEventListener('mouseup', () => {
   lsSet(LS.leftW, String(parseInt(leftcol.style.width, 10) || ''));
 });
 
-// Vertical split: the info pane's height is the distance from the cursor up to the column's bottom.
-const vsplit = document.getElementById('vsplit');
-const clampPanelH = (h) => Math.min(Math.max(h, 120), Math.round(window.innerHeight * 0.7));
-const savedPanelH = parseInt(lsGet(LS.panelH) || '', 10);
-if (savedPanelH) panel.style.height = clampPanelH(savedPanelH) + 'px';
-let vresizing = false;
-vsplit.addEventListener('mousedown', (e) => { e.preventDefault(); vresizing = true; document.body.classList.add('vresizing'); });
-document.addEventListener('mousemove', (e) => { if (vresizing) { panel.style.height = clampPanelH(leftcol.getBoundingClientRect().bottom - e.clientY) + 'px'; resizeStagePreserve(); } });
-document.addEventListener('mouseup', () => {
-  if (!vresizing) return;
-  vresizing = false; document.body.classList.remove('vresizing');
-  lsSet(LS.panelH, String(parseInt(panel.style.height, 10) || ''));
-});
+// No vertical split any more. The selection card floats over the drawing at a fixed width and a capped
+// height, so there is no boundary between it and the diagram for a reader to drag — and the height they
+// used to drag was the symptom, not the setting: the pane was 300px whatever it held.
 
 // --- file browser: build + toggle + resize --------------------------------------
 // The pane folds away via the header toggle; both its width and folded state survive reloads. #treeresizer
