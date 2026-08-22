@@ -154,16 +154,15 @@
              under that tab's label. The repeated view name then reads as the tab continuing downward
              rather than as an accident. -->
         <nav class="hint" id="crumbrow" aria-label="You are here"><span id="crumb"></span></nav>
+        <!-- The view's question, on EVERY view. It belongs to the fixed block, not to the content: the
+             question names the VIEW, and the view is what the tabs and the trail above it name too. So it
+             sits INSIDE #stagehead and the block's shadow falls below it. On a diagram this is the whole
+             point — the shadow marks where the fixed chrome ends and the drawing begins, and a question
+             stranded under that line read as a caption floating over the map.
+             It keeps the content's text size and left edge, so it still reads as a sentence rather than
+             as a control. Shown only on a view's own landing screen, which is exactly a one-item trail. -->
+        <p id="pageq" hidden></p>
       </div>
-      <!-- The view's question, on EVERY view. It leads the content, on its own line, at the content's own
-           text size and left edge, so it reads as the opening sentence of what follows. It sat beside the
-           page title for a while, at 12.5px hung off a dash, and read as chrome about the page rather than
-           as the page's own first words — and it made the sentence look different on a diagram from how it
-           looked on a page of prose, for no reason a reader could name.
-           It is BELOW the header block's shadow, so it belongs to the content, and OUTSIDE the content's
-           scroll, so it cannot become a caption for whichever block happens to sit under it. Shown only on
-           a view's own landing screen, which is exactly a one-item trail. -->
-      <p id="pageq" hidden></p>
       <!-- THE DIAGRAM AREA. Everything that floats over a diagram positions against this box rather
            than against #stage, so "bottom: 12px" means the bottom of the drawing and not the bottom of
            a column that also held the info pane. The info pane is one of those floating things now: it

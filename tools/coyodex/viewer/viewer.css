@@ -129,11 +129,14 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    at the top; the diagram area takes the rest, and svg-pan-zoom fits/centers into that box
    (applyZoomAndCenter in viewer.js measures #diagram for the same reason). */
 #diagram { flex: 1 1 auto; min-width: 0; min-height: 0; }
-/* View selector + breadcrumb, a normal-flow bar at the top of the graph pane. It is FIXED: the tabs and
-   the trail stay put while the content under them scrolls, pans and zooms. A hairline alone did not say
-   so — it read as one more divider in a page full of them — so the block casts a shadow onto whatever
-   passes beneath it. Everything below the shadow is content, the question included. */
-#stagehead { flex: 0 0 auto; z-index: 6; box-shadow: 0 3px 8px rgba(15, 23, 42, .09); }
+/* View selector, breadcrumb and the view's question: a normal-flow bar at the top of the graph pane. It
+   is FIXED: all three stay put while the content under them scrolls, pans and zooms. A hairline alone did
+   not say so — it read as one more divider in a page full of them — so the block casts a shadow onto
+   whatever passes beneath it. The question is INSIDE the block, so the shadow falls below it: all three
+   name the VIEW, and everything under the shadow is the page. */
+#stagehead { flex: 0 0 auto; z-index: 6; box-shadow: 0 3px 8px rgba(15, 23, 42, .09);
+             background: #fbfbfe; }  /* on the BLOCK, so the question's reading cap never leaves a
+                                        pale strip beside it on a wide window */
 #stageheadrow { display: flex; align-items: center; gap: 8px; background: #fbfbfe; padding: 4px 10px;
                 border-bottom: 1px solid #e5e7eb; min-height: 34px; }
 /* Neither row may ever SQUEEZE its buttons. Both used to be one nowrap flex row with `overflow:hidden`,
@@ -176,7 +179,10 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    It used to take TWO forms: 12.5px beside the page title on a diagram, and this on a page of prose. One
    sentence looked like two different things depending on which tab you were on, and nothing about a
    diagram or a page explained the difference. */
-#pageq { margin: 0; padding: 14px 20px 0; max-width: 1100px; font-size: 14px; font-weight: 400;
+/* Last line of the fixed block, so it closes the block with its own bottom padding — without that the
+   shadow would be cast straight off the words. `max-width` caps the SENTENCE's reading width only; the
+   background belongs to #stagehead, which is full width. */
+#pageq { margin: 0; padding: 10px 20px 12px; max-width: 1100px; font-size: 14px; font-weight: 400;
          font-style: italic; color: #6b7280; line-height: 1.5; }
 /* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
    whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab

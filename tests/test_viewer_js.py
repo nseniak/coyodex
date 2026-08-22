@@ -656,10 +656,12 @@ def test_one_question_in_one_place_on_every_view() -> None:
     over a page of cards. Nothing about a diagram or a page explained the difference, and beside the
     title it read as chrome ABOUT the page rather than as the page's own opening words.
 
-    It is one line under the header block now, on every view: the content's own text size, the content's
-    own left edge and reading cap, italic because nothing else in this app is. Below the header's shadow,
-    so it belongs to the content; outside the content's scroll, so it can never become a caption for
-    whichever block ends up under it — which is what the spec undid.
+    It is the last line OF the header block now, on every view: the content's own text size, left edge
+    and reading cap, italic because nothing else in this app is. Inside the fixed block, so the block's
+    shadow falls below it: the tabs, the trail and the question all name the VIEW, and everything under
+    the shadow is the page. On a diagram that is the whole point — a question stranded under the shadow
+    read as a caption floating over the map. It is still outside the content's scroll, so it can never
+    become a caption for whichever block ends up under it, which is what the spec undid.
 
     Shown ONLY on the view's own landing screen, which is exactly a one-item trail: every trail starts at
     its view. One level in, the reader has chosen something and is past asking what the view is for."""
@@ -672,8 +674,10 @@ def test_one_question_in_one_place_on_every_view() -> None:
     crumbrow = html[html.index('<nav class="hint" id="crumbrow"'):
                     html.index("</nav>", html.index('<nav class="hint" id="crumbrow"'))]
     assert 'id="crumb"' in crumbrow and 'id="pageq"' not in crumbrow, "the trail row is the trail alone"
-    assert html.index('<p id="pageq" hidden></p>') > html.index('id="crumbrow"'), "the question is below the header"
-    assert html.index('<p id="pageq" hidden></p>') < html.index('<div id="diagwrap">'), "…and above the content"
+    head = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
+    assert '<p id="pageq" hidden></p>' in head, "the question is INSIDE the fixed block, under its shadow"
+    assert head.index('<p id="pageq" hidden></p>') > head.index('id="crumbrow"'), "…as its last line"
+    assert head.index("</div>") > head.index('<p id="pageq" hidden></p>'), "…and the block closes after it"
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
     assert "const q = chain.length === 1 ? viewQuestion(tv) : '';" in chrome, \
@@ -682,7 +686,7 @@ def test_one_question_in_one_place_on_every_view() -> None:
     pq = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
     assert "font-size: 14px" in pq, "the content's own text size, not the trail row's 12.5px"
     assert "font-style: italic" in pq
-    assert "padding: 14px 20px 0" in pq, "the content's own left edge"
+    assert "padding: 10px 20px 12px" in pq, "the content's own left edge, and a bottom that closes the block"
     assert "#pageq::before" not in css, "no dash on a sentence with no title to join"
     intro = js[js.index("function viewIntroHtml(view) {"):
                js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
@@ -693,12 +697,18 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     hairline alone did not say so: it read as one more divider in a page full of them, and on a diagram
     the shapes simply slid under it with nothing to mark the boundary they passed.
 
-    So the block casts a shadow onto whatever passes beneath it. Everything below that shadow is content
-    — the view's question included, which is exactly why the question left the trail row."""
+    So the block casts a shadow onto whatever passes beneath it. The view's question is part of that
+    block, not of the page: the tabs, the trail and the question all name the VIEW, so the shadow falls
+    below all three and everything under it is content. The block therefore paints its own background
+    across the full width, or the question's reading cap would leave a pale strip beside it."""
     css = (VIEWER_DIR / "viewer.css").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
     head = css[css.index("#stagehead {"): css.index("}", css.index("#stagehead {"))]
     assert "box-shadow" in head, "the fixed block has to say it is fixed"
     assert "z-index" in head, "…and sit above what passes under it"
+    assert "background:" in head, "…and paint the whole block, not just the rows that set their own"
+    block = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
+    assert 'id="pageq"' in block, "the question is above the shadow, with the tabs and the trail"
 
 def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
     """A card puts an element's name and its pills on ONE line. Its own page split them across two rows

@@ -5757,10 +5757,11 @@ function renderChrome(s) {
   // info pane (half the views have none, and it vanished on the first click) and the first block of the
   // page (read as a caption, and every page began inventing its own).
   const q = chain.length === 1 ? viewQuestion(tv) : '';
-  // ONE place, on every view. The sentence leads the content, on its own line, below the header block's
-  // shadow and above the content's own scroll. It used to take two places — beside the title on a diagram
-  // and leading the page on prose — which made one sentence look like two different things depending on
-  // which tab you were on, for no reason a reader could name.
+  // ONE place, on every view: the last line of the fixed header block, so the block's shadow falls below
+  // the question rather than between the trail and it. Tabs, trail and question all name the VIEW. It used
+  // to take two places — beside the title on a diagram and leading the page on prose — which made one
+  // sentence look like two different things depending on which tab you were on, for no reason a reader
+  // could name.
   // Outside the SCROLL is what still separates it from the placement the spec undid: a sentence that
   // scrolls with the content becomes a caption for whichever block ends up under it.
   pageq.textContent = q;
