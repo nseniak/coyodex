@@ -481,6 +481,11 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
               letter-spacing: .04em; padding: 1px 7px; border-radius: 9px; cursor: pointer;
               border: 1px solid #e5e7eb; background: #f9fafb; color: #6b7280; }
 .ecard-type:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
+/* …except on the type's OWN view, where "show it in its home view" is the page already open. Same
+   word in the same slot, so the card keeps one shape everywhere; it simply stops inviting a click it
+   cannot answer. */
+.ecard-type-plain { cursor: default; }
+.ecard-type-plain:hover { border-color: #e5e7eb; background: #f9fafb; color: #6b7280; }
 .ecard-pill { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
               padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }
 .ecard-pill-human { background: #fff7ed; color: #9a3412; }
@@ -504,6 +509,11 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 /* A CARD LIST reads down the page; a CARD GRID is for choosing between groups, across then down. */
 .ecard-list { display: flex; flex-direction: column; gap: 8px; }
 .ecard-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+/* In a GRID the cards are read across, so they must all be the same shape. On one row the pills sat
+   beside a short name and under a long one, and the card grew a line — one card taller than the four
+   beside it. Giving the name the whole first line puts every card's pills in the same place. A card
+   LIST is read down instead, where one compact line each is the denser read. */
+.ecard-grid .ecard-name { flex-basis: 100%; }
 /* --- a page about ONE element: the hero, shared by the feature page and the decision-area page ------------------------------------------------
    Three levels, and the CSS is what makes them read as three. A hero that answers "what is this", the
    use cases as the page's body, and the rest of the map under section headings the pinned chip index

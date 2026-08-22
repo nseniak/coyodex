@@ -384,9 +384,7 @@ function cardFacts(id) {
   // actors), `Happy Path` is whether the guided walk must reach it. One word carrying both is what
   // the old three-value label did, and its middle value ended up meaning neither.
   if (n.kind === 'capability') {
-    // One pill PER audience. A feature both sides act in says `user` and `staff`, which is the
-    // honest answer; a single "mixed" word would be an alarm on a feature already accepted.
-    for (const a of (f.Audience || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+    for (const a of shownAudience((f.Audience || '').split(',').map((s) => s.trim()).filter(Boolean))) {
       pills.push({ text: a, cls: 'uc-aud-' + a.toLowerCase() });
     }
   }
@@ -424,11 +422,17 @@ function elementCardHtml(id, opts) {
   // so each card's title is its whole statement. Thirty words set bold is a wall, so a long title drops
   // to normal weight. Measured by length rather than by kind: any element can carry a long name.
   const nm = o.name || c.name;
-  // `noType` drops the type pill, for a card sitting on its own type's HOME VIEW. There the tab has
-  // already named the type, so the pill is the word repeated once per card — and its action, show
-  // this element in context, would land on the page the reader is already reading. It also costs a
-  // slot on the title line: with it, four of the ten feature cards on one live map wrapped.
-  const typeHtml = o.noType ? ''
+  // The type is on EVERY card, everywhere. It is the card's identity line, and a card without one
+  // reads as a different kind of object than the cards beside it — the consistency is the
+  // information, not the word.
+  //
+  // `homeType` says this card sits on its own type's HOME VIEW, and there the word is PLAIN. The
+  // pill's action is "go to where this thing lives and point at it", which on the home view is a trip
+  // to the page you are on: it would ring the card your finger is still on. A control that looks
+  // clickable and does nothing teaches a reader to distrust the ones that work, and it costs a
+  // keyboard stop per card. So the word stays and only the action goes.
+  const typeHtml = o.homeType
+    ? `<span class="ecard-type ecard-type-plain">${esc(c.type)}</span>`
     : `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
       + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`;
   return `<article class="ecard" data-id="${esc(id)}" tabindex="0">`
@@ -5548,6 +5552,17 @@ function renderGlossary() {
 // role). Both are kept because "what does this product do?" and "what can this role do?" are different
 // questions and neither derives the other. A map with no capabilities has only one axis to be on.
 
+// WHICH audience words a view prints. `user` alone is dropped: measured across the three reference
+// maps it is 22 of 27 features, so the pill sat on eight cards in nine saying what the ninth already
+// implied. The same argument the actor cards make for dropping their type pill, and `human` for
+// dropping its kind pill: a word that is nearly always there distinguishes nothing.
+//
+// It survives BESIDE `staff`, because "both sides act here" is the one thing this pair exists to say,
+// and a lone `staff` pill would read as "staff only". So the rule is about the SET, not the word.
+function shownAudience(list) {
+  return (list.length === 1 && list[0] === 'user') ? [] : list;
+}
+
 function actorTextOf(n) {
   return ((n.fields && n.fields.Actor) || (n.actors || []).join(', ') || 'Other').trim();
 }
@@ -5781,7 +5796,7 @@ function featureHeadHtml(capId) {
     ? `<span class="uc-caplabel uc-${kind}-${esc(v.toLowerCase())}">${esc(v)}</span>` : '');
   return pageHeroHtml({
     name: f.name,
-    pills: (f.audience || []).map((a) => capPill(a, 'aud')).join(''),
+    pills: shownAudience(f.audience || []).map((a) => capPill(a, 'aud')).join(''),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
     meta: `<span class="page-hero-lbl">Used by</span> ${roles}`,
@@ -5893,7 +5908,7 @@ function renderUseCases(sel) {
     // The type pill goes only where the screen holds nothing but use cases: a role's list, the flat
     // catalog, the use cases in no feature. A FEATURE'S PAGE keeps it, because rules, entities and
     // components have cards on that same page and there the word tells the reader which is which.
-    return { noType: !page, extra: cross + changed + untraced };
+    return { homeType: !page, extra: cross + changed + untraced };
   };
   // A page about ONE thing draws no section for that thing. The breadcrumb is already the page's
   // title, so a heading repeating it is the name twice, and the frame around the cards is a card
@@ -6081,7 +6096,7 @@ function actorCardsHtml() {
   // the reader nothing. How many use cases the actor drives is the fact that earns the slot instead.
   const per = (id) => {
     const n = counts[(GRAPH.nodes[id] || {}).name] || 0;
-    return { noType: true,
+    return { homeType: true,
              extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>` };
   };
   // A thing to READ, and a person and a piece of software are not the same kind of driver — one signs
@@ -6129,7 +6144,7 @@ function renderOverview() {
     // hide every "changed" badge behind a click.
     const changed = (mode === 'diff' && hasDiff() && g && g.ucs.some((x) => usecaseDiffState(x.id)))
       ? '<span class="badge modified">changed</span>' : '';
-    return { noType: true,
+    return { homeType: true,
              extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>${changed}` };
   };
   const ids = groups.filter((g) => g.cap).map((g) => g.cap.id);

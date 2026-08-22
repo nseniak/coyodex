@@ -945,6 +945,33 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
 
+def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
+    """`user` is 22 of the 27 features on the three reference maps, so the pill sat on eight cards in
+    nine saying what the ninth already implied. It is the same argument the actor cards make for
+    dropping their type pill and `human` for dropping its kind pill: a word that is nearly always
+    there distinguishes nothing.
+
+    The rule is about the SET, not the word. `user` survives BESIDE `staff`, because "both sides act
+    here" is the one thing this pair exists to say, and a lone `staff` would read as "staff only"."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function shownAudience(list) {"):
+            js.index("\n}", js.index("function shownAudience(list) {"))]
+    assert "list.length === 1 && list[0] === 'user'" in fn and "? [] : list" in fn
+    # Both surfaces that draw it read the same rule: the card, and one feature's page hero.
+    assert js.count("shownAudience(") == 3, "one definition, two callers"
+
+
+def test_a_grid_of_cards_keeps_one_shape_whatever_the_name_is_long() -> None:
+    """A card puts its name and its pills on one wrapping row. Read DOWN a list that is the denser
+    shape, but read ACROSS a grid it means a long name pushes the pills to a second line and that one
+    card grows taller than the four beside it. In the grid the name takes the whole first line, so
+    every card's pills sit in the same place."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".ecard-grid .ecard-name { flex-basis: 100%; }" in css
+    head = css[css.index(".ecard-head {"): css.index("}", css.index(".ecard-head {"))]
+    assert "flex-wrap: wrap" in head, "the list shape is unchanged: one row, wrapping only if it must"
+
+
 def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     """A role's page used to open with a bordered block whose heading was the page's own title, with the
     use-case cards inside it: the name twice (breadcrumb, then heading) and a card containing cards.
@@ -969,34 +996,31 @@ def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     assert "g.roles.length === 1 ? g.roles[0] : null" in head
 
 
-def test_a_card_drops_its_type_pill_on_that_types_own_view() -> None:
-    """The type pill names what an element IS and, clicked, shows it in context. On the view that is
-    that type's home both jobs are already done: the tab said the word, and "in context" is the page
-    the reader is on. So the Features grid asks for the card WITHOUT it — nine cards on one live map
-    stopped printing "feature" nine times, and eight of them fit their pills on one line again.
+def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
+    """The type pill names what an element IS and, clicked, shows it in its home view. It used to be
+    DROPPED on that home view, which left the feature cards as the one card shape in the viewer with
+    no identity line, on the very screen a reader meets first.
 
-    It is an OPT-IN on the shared card, not a rule the card guesses: the same feature card in a search
-    hit or an info pane is somewhere else, and there the type is the thing the reader lacks."""
+    Both jobs are separable. The WORD is the card's identity and belongs on every card everywhere: a
+    card without it reads as a different kind of object than the cards beside it. The ACTION is dead
+    at home — "go where this lives and point at it" would ring the card the reader just clicked — so
+    at home the word is plain text: no hover, no pointer, no keyboard stop."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\nfunction ", js.index("function elementCardHtml(id, opts) {") + 10)]
-    assert "const typeHtml = o.noType ? ''" in card
-    assert 'class="ecard-type"' in card and "+ typeHtml" in card
-    over = js[js.index("function renderOverview() {"):
-              js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "return { noType: true," in over
-    # The actor cards too: the Actors view and the Features view's actor axis both hold nothing else,
-    # and ONE builder draws the card for both, so the pill cannot come back on one of them.
-    actors = js[js.index("function actorCardsHtml() {"):
-                js.index("\nfunction ", js.index("function actorCardsHtml() {") + 10)]
-    assert "return { noType: true," in actors
-    # A use-case list opts in only where the screen holds nothing but use cases. A FEATURE'S PAGE draws
-    # rules, entities and component cards below the same list, so there the word still tells them apart.
+    assert "const typeHtml = o.homeType" in card and "+ typeHtml" in card
+    assert 'class="ecard-type ecard-type-plain"' in card, "same word, same slot"
+    assert "<span" in card.split("o.homeType")[1].split(":")[0], "plain text, not a button"
+    assert 'data-ctx="${esc(id)}"' in card, "…and everywhere else it still acts"
+    for caller in ("function renderOverview() {", "function actorCardsHtml() {"):
+        body = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
+        assert "return { homeType: true," in body, caller
     ucs = js[js.index("function renderUseCases(sel) {"):
              js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
-    assert "return { noType: !page, extra:" in ucs
-    # Nowhere else. A feature card in a search hit or an info pane still shows what it is.
-    assert js.count("noType") == 5, "one reader in the card, and three callers that opt in"
+    assert "return { homeType: !page, extra:" in ucs
+    assert "noType" not in js, "the word never goes now; only its action does"
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".ecard-type-plain { cursor: default; }" in css
 
 
 def test_the_coverage_line_reports_reach_and_never_certainty() -> None:
