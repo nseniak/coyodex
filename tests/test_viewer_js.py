@@ -1442,13 +1442,21 @@ def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     Both shapes were removed everywhere else in this viewer, and this page had kept them.
 
     What the role IS moves to the SHARED page hero — the same one a feature's page and a decision area's
-    page use — and the cards become a plain list. Sections survive where they are a real cut: one per
-    role on the flat catalog a map with no features falls back to."""
+    page use. Sections survive where they are a real cut: one per role on the flat catalog a map with no
+    features falls back to.
+
+    The cards are a GRID, wherever use cases are listed. Every one of them is a door to that use case's
+    flow, which is what a grid is for, and it is the same job the actor, feature and decision-area cards
+    do on the three screens the reader lands on. A list made the shape flip at the drill for no reason a
+    reader could name, and it cost room: measured on Mio Coworker, a use-case card ran 1060px one per row
+    while its sentence used 769-917px, so a quarter of every row stood empty and Workspace member's twenty
+    cards ran 1674px of scroll. As a grid the same twenty run 1388px."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     ucs = js[js.index("function renderUseCases(sel) {"):
              js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
     assert "const solo = !!oneActor || one === '-';" in ucs
-    assert "if (solo) return elementCardListHtml(ids, per);" in ucs
+    assert "if (solo) return elementCardGridHtml(ids, per);" in ucs
+    assert "elementCardListHtml(" not in ucs, "every use-case list on this screen is a grid"
     assert "oneActor ? actorHeadHtml(oneActor)" in ucs
     # …and the flat catalog still cuts by role, so the guard is not "always drop the section".
     assert "const kinds = new Set((g.roles || []).map" in ucs

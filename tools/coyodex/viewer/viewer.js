@@ -6359,6 +6359,13 @@ function renderUseCases(sel) {
     // components have cards on that same page and there the word tells the reader which is which.
     return { homeType: !page, extra: cross + changed + untraced };
   };
+  // USE CASE cards are a GRID wherever they are listed. Every one of them is a door to that use case's
+  // flow, which is exactly what a grid is for — the same job an actor card, a feature card and a
+  // decision-area card already do on the three screens the reader lands on. A LIST here made the shape
+  // flip at the drill for no reason a reader could name, and it cost room: measured on Mio Coworker, a
+  // use-case card ran 1060px one per row while its sentence used 769-917px, so a quarter of every row
+  // stood empty and Workspace member's twenty cards ran 1674px of scroll.
+  //
   // A page about ONE thing draws no section for that thing. The breadcrumb is already the page's
   // title, so a heading repeating it is the name twice, and the frame around the cards is a card
   // containing cards — both shapes this viewer removed everywhere else. What the thing IS moves to the
@@ -6369,7 +6376,7 @@ function renderUseCases(sel) {
     const ids = g.ucs.map((n) => n.id);
     const secId = 'ucsec-' + gi;
     const count = `${ids.length} use case${ids.length === 1 ? '' : 's'}`;
-    if (solo) return elementCardListHtml(ids, per);
+    if (solo) return elementCardGridHtml(ids, per);
     if (byCapability) {
       // ONE feature, opened from a card: this is the PAGE's body, not a list with the feature's name on
       // it again. The hero above carries the name, the label and the purpose, so the heading here names
@@ -6378,7 +6385,7 @@ function renderUseCases(sel) {
       secs.push({ id: secId, title });
       return `<section class="uc-group" id="${secId}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
         + `<h3 class="uc-actor">${esc(title)}<span class="uc-actor-wants">${count}</span></h3>`
-        + elementCardListHtml(ids, per) + '</section>';
+        + elementCardGridHtml(ids, per) + '</section>';
     }
     // An actor's section, or one section per actor on the flat fallback. Several INTERCHANGEABLE actors
     // agree on their kind or the header shows none, and "wants" is only shown for a lone role, because
@@ -6392,7 +6399,7 @@ function renderUseCases(sel) {
     secs.push({ id: secId, title: g.actor });
     return `<section class="uc-group" id="${secId}">`
       + `<h3 class="uc-actor">${esc(g.actor)}${badge}<span class="uc-actor-wants">${count}</span></h3>`
-      + wants + elementCardListHtml(ids, per) + '</section>';
+      + wants + elementCardGridHtml(ids, per) + '</section>';
   }).join('');
   // A page's own title comes from its hero. Every other list is a CARD LIST view, so it leads with its
   // title and the question it answers, and carries no info pane beside it.
