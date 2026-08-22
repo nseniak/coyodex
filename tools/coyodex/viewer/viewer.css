@@ -998,6 +998,19 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #crumb h1.crumbseg.cur { font-size: 16px; font-weight: 600; color: #111827; line-height: 22px;
                          margin: 0; cursor: default; }
 #crumb h1.crumbseg.cur:hover { text-decoration: none; }
+/* The page's own element, said the way every card says it: the name, then its pills, on ONE line. The
+   pills used to sit in a row of their own below, with a rule between — on an entity, a component or a
+   process that row held one word and nothing else. Plain text, never a control: "show in context" from
+   the page you are already on goes nowhere, and an inert-looking control teaches distrust of the live
+   ones. Same size and shape as a card's pill so the two read as one idiom. */
+#crumb .crumbpill { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                    color: #475569; background: #eef2f7; border: 1px solid #e2e8f0; border-radius: 999px;
+                    padding: 1px 7px; line-height: 15px; white-space: nowrap; align-self: center; }
+#crumb .crumbpill-type { color: #3730a3; background: #eef2ff; border-color: #e0e7ff; }
+/* The two words that vary keep the colour they carry on a card, so one word means one thing wherever a
+   reader meets it. */
+#crumb .crumbpill.uc-aud-internal { color: #92400e; background: #fef3c7; border-color: #fde68a; }
+#crumb .crumbpill.ecard-pill-service { color: #3730a3; background: #e0e7ff; border-color: #c7d2fe; }
 /* hover tooltip: previews an element's meaning without selecting it. pointer-events:none so it
    never steals the hover or the click. Kept in flow (opacity, not display) so offsetWidth is valid
    for the overflow-flip in moveTip. */

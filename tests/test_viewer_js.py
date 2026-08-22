@@ -700,6 +700,48 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     assert "box-shadow" in head, "the fixed block has to say it is fixed"
     assert "z-index" in head, "…and sit above what passes under it"
 
+def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
+    """A card puts an element's name and its pills on ONE line. Its own page split them across two rows
+    with a rule between, so the page drew the element in a shape no card uses. Measured over the three
+    maps: of the 1189 pages whose last breadcrumb item is one element, 796 drew a pill block, and on 629
+    of them (every entity, component and process) that block held ONE word and nothing else — a 48px
+    strip saying `entity` between the page's title and its first sentence.
+
+    The pills now ride the breadcrumb after the name, and the block is not drawn when nothing is left in
+    it. The breadcrumb's last item IS the page's title, so this is the name and its pills on one line,
+    exactly as a card reads.
+
+    THE SAME PILLS THE CARD SHOWS, from `cardFacts` — its type, and the few extras its type earns. Not
+    the page's full detail: a dependency's card says `dependency` and `service`, while its page also
+    records a purpose bucket and the roles derived from its incoming edges. Five words hung off a trail
+    is a wall rather than a trail, so those two stay on the page, below.
+
+    TEXT pages only. A drilled diagram is about one element too, but its card already floats over the
+    drawing a few pixels away, and printing the same two pills in the trail is the same words twice.
+
+    Plain text, never a control. Clicking a type pill means "show this in context", and the context of
+    the page you are already on is the page you are already on."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    which = js[js.index("function pageElementId(s) {"):
+               js.index("\n}", js.index("function pageElementId(s) {"))]
+    assert "if (!s || !TEXT_PAGES.has(s.kind)) return null;" in which, \
+        "a diagram's card already floats beside the shape"
+    for kind in ("element", "capability", "rule", "rules", "actor"):
+        assert f"'{kind}'" in which, kind
+    pills = js[js.index("function crumbPillsHtml(id) {"):
+               js.index("\n}", js.index("function crumbPillsHtml(id) {"))]
+    assert "cardFacts(id)" in pills, "the same pills the card shows, from the same function"
+    assert "<button" not in pills, "plain text: the pill's destination is the page you are on"
+    assert "crumbPillsHtml(pageElementId(s))" in js, "drawn on the LAST crumb, which is the page's title"
+    # …and the body no longer draws what the trail carries.
+    extra = js[js.index("function kindPillsExtra(n) {"):
+               js.index("\n}", js.index("function kindPillsExtra(n) {"))]
+    assert "n.kind !== 'dep'" in extra, "only a dependency has axes its card does not carry"
+    assert ".filter((w) => w !== kind)" in extra, \
+        "a role whose word IS the kind says nothing twice — 32 of the 153 dependencies"
+    assert "extra ? `<div class=\"page-hero\">" in js, "no hero at all when nothing is left in it"
+
 def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_says_something() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
     of prose only repeated it, and it stole a third of the height from the content it described.
@@ -1252,10 +1294,16 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
         "a person prints a side only when it is the company's"
     # Colour says WHAT it is, the words say whose: both program readings keep the one program colour.
     assert fn.count("ecard-pill-service") == 1 and "cls: `uc-aud-${side}`" in fn
-    # The card and the page draw the SAME pills — the page must not compute its own.
+    # The card and the page draw the SAME pills — the page must not compute its own. It draws none at all
+    # now: an element page's pills ride the breadcrumb beside the name, read from cardFacts, so there is
+    # exactly ONE caller of this helper and the two surfaces cannot disagree by construction.
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
     assert "-owned" not in code, "the page's second form for a machine is back"
-    assert js.count("actorSidePills(") >= 3, "card, page and the helper itself"
+    assert js.count("actorSidePills(") == 2, "the helper itself, and cardFacts — nothing else"
+    head = js[js.index("function actorHeadHtml(actorName) {"):
+              js.index("\n}", js.index("function actorHeadHtml(actorName) {"))]
+    head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
+    assert "pills:" not in head, "the actor's page draws no pills of its own"
     # The reader's word is applied in ONE place, and only where the side is about people.
     assert "function audienceWord(side) {" in js
     # `.ecard-pill` sets a grey background LATER in the file than `.uc-aud-*` sets its own, so a
@@ -1263,7 +1311,7 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     # it — present, and easy to read as absent. Both classes, or it silently has no colour.
     assert ".ecard-pill.uc-aud-internal {" in css and ".ecard-pill.uc-aud-user {" in css
     assert "ecard-pill-side" not in css and "ecard-pill-side" not in js
-    assert "audienceWord(a)" in js and "audienceWord(v)" in js, "the feature card and its page hero"
+    assert "audienceWord(a)" in js, "the feature card, which is now the only place that draws the word"
 
 def test_a_screen_you_choose_from_is_a_grid_wherever_it_is() -> None:
     """A list is the shape for a set to be READ; a grid is the shape for a set to be CHOSEN between.
@@ -1328,8 +1376,14 @@ def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
     fn = js[js.index("function shownAudience(list) {"):
             js.index("\n}", js.index("function shownAudience(list) {"))]
     assert "list.length === 1 && list[0] === 'user'" in fn and "? [] : list" in fn
-    # Both surfaces that draw it read the same rule: the card, and one feature's page hero.
-    assert js.count("shownAudience(") == 3, "one definition, two callers"
+    # ONE surface draws it now: the card. A feature's page used to call this too, for a pill row of its
+    # own; those pills ride the breadcrumb beside the name, read from cardFacts, so the page and the card
+    # cannot print different sets.
+    assert js.count("shownAudience(") == 2, "one definition, one caller"
+    head = js[js.index("function featureHeadHtml(capId) {"):
+              js.index("\n}", js.index("function featureHeadHtml(capId) {"))]
+    head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
+    assert "pills:" not in head, "the feature's page draws no pills of its own"
 
 
 def test_a_grid_of_cards_keeps_one_shape_whatever_the_name_is_long() -> None:

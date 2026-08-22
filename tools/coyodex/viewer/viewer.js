@@ -1793,14 +1793,27 @@ const ROLE_LABEL = { datastore: 'store', messaging: 'bus', service: 'service', s
 function kindPills(n) {
   const type = elementLabel(n.kind);
   const sub = n.kind === 'dep' && n.fields ? n.fields.Kind : '';
-  const bucket = n.kind === 'dep' && n.fields ? n.fields.Bucket : '';
-  const roles = (n.kind === 'dep' && Array.isArray(n.roles)) ? n.roles : [];
-  const roleBadges = roles.map((r) =>
-    `<span class="badge role" title="derived from this dependency's incoming edge verbs">${esc(ROLE_LABEL[r] || r)}</span>`).join('');
   return `<span class="badge kind">${esc(type)}</span>`
     + (sub ? `<span class="badge kind">${esc(sub)}</span>` : '')
-    + (bucket ? `<span class="badge kind">${esc(bucket)}</span>` : '')
-    + roleBadges;
+    + kindPillsExtra(n);
+}
+// The axes a dependency has that its CARD does not carry: the purpose bucket it clusters into, and the
+// role(s) read off its incoming edge verbs. They stay on the page while the type and the kind ride the
+// breadcrumb, because five words hung off a trail is a wall and these two are the ones a reader looks up
+// rather than reads in passing. Every other element kind has none, so its page draws no pill row at all.
+function kindPillsExtra(n) {
+  if (!n || n.kind !== 'dep') return '';
+  const bucket = n.fields ? n.fields.Bucket : '';
+  const kind = ((n.fields || {}).Kind || '').trim();
+  const roles = Array.isArray(n.roles) ? n.roles : [];
+  // A ROLE whose word is already the KIND says nothing twice. Measured on the three maps: 32 of the 153
+  // dependencies carry a role that reads exactly as their kind does — Sentry is a `service` whose derived
+  // role is `service` — so the word appeared once in the trail and again a line below it, about one
+  // thing. Compared on the READER'S word, not the stored one, since that is what is printed: `datastore`
+  // stored as a role reads `store`, which is a second fact rather than an echo.
+  return (bucket ? `<span class="badge kind">${esc(bucket)}</span>` : '')
+    + roles.map((r) => ROLE_LABEL[r] || r).filter((w) => w !== kind).map((w) =>
+      `<span class="badge role" title="derived from this dependency's incoming edge verbs">${esc(w)}</span>`).join('');
 }
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
 // writes, no handler wiring. Used by showNode to fill the panel with a single element's detail.
@@ -1835,8 +1848,14 @@ function renderElementDetails(id) {
   const n = GRAPH.nodes[id];
   if (!n) { diagram.innerHTML = '<p class="empty">This element is not in the map.</p>'; return; }
   const chg = n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '';
+  // The type (and a dependency's kind) now ride the breadcrumb beside the name, so the hero holds only
+  // what is left: a dependency's bucket and roles, and a change badge in diff mode. For an entity, a
+  // component or a process nothing is left, and the hero is not drawn at all — it was a 48px strip
+  // holding the single word `entity` with a rule under it, between the page's title and its first
+  // sentence.
+  const extra = kindPillsExtra(n) + chg;
   diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">'
-    + `<div class="page-hero"><p class="page-hero-pills">${kindPills(n)}${chg}</p></div>`
+    + (extra ? `<div class="page-hero"><p class="page-hero-pills">${extra}</p></div>` : '')
     + `<div class="edetail">${nodeDetailBodyHtml(id)}</div></div>`;
   bindNodeDetailHandlers(diagram);
   bindElementCards(diagram);
@@ -5443,6 +5462,43 @@ function topView(kind, id) {  // which top-level button a state lives under (con
   if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
   return 'container';
 }
+// WHICH ELEMENT a page is about, when the page is one page of prose about one element. The breadcrumb's
+// last item is that element's name, so the pills that ride beside it are read from here.
+//
+// TEXT pages only. A drilled diagram (a subsystem, a use case's flow) is about one element too, but its
+// card is already floating over the drawing a few pixels away, and printing the same two pills in the
+// trail is the same words twice — the repeat the trail exists to avoid.
+function pageElementId(s) {
+  if (!s || !TEXT_PAGES.has(s.kind)) return null;
+  if (s.kind === 'element') return s.id;
+  if (s.kind === 'capability') return s.cap && s.cap !== '-' ? s.cap : null;
+  if (s.kind === 'rule') return s.br;
+  if (s.kind === 'rules') return s.blk || null;
+  // An actor's page is keyed by NAME (that is what its card's click carries), and an actor's node id is
+  // not its role id — the Roles table numbers them R1.., the graph numbers them ACT0.. — so the lookup
+  // goes through the node, which is also what the card on the Actors page is built from.
+  if (s.kind === 'actor') return actorNodeId(s.act);
+  return null;
+}
+function actorNodeId(name) {
+  const n = Object.values(GRAPH.nodes || {}).find((x) =>
+    (x.kind === 'human' || x.kind === 'service') && x.name === name);
+  return n ? n.id : null;
+}
+// The pills that ride the breadcrumb, as HTML. THE SAME PILLS THE ELEMENT'S CARD SHOWS, from the same
+// function — its type, and the few extras its type earns. Not its full detail: a dependency's card says
+// `dependency` and `service`, while its page also records a bucket and its derived roles, and five words
+// hung off a breadcrumb is a wall rather than a trail. Those stay on the page, below.
+//
+// Plain text, never a control. Clicking a type pill means "show this in context", and the context of the
+// page you are already on is the page you are already on. A control that looks live and does nothing
+// teaches a reader to distrust the ones that work.
+function crumbPillsHtml(id) {
+  const c = id ? cardFacts(id) : null;
+  if (!c) return '';
+  return `<span class="crumbpill crumbpill-type">${esc(c.type)}</span>`
+    + (c.pills || []).map((p) => `<span class="crumbpill ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('');
+}
 function stateTitle(s) {
   if (s.kind === 'context') return 'Dependencies';
   if (s.kind === 'container') return 'Subsystems';
@@ -5703,6 +5759,15 @@ function renderChrome(s) {
     seg.textContent = stateTitle(node);
     if (!cur) seg.addEventListener('click', () => go(node));
     crumb.appendChild(seg);
+    // …and on a page about ONE element, its card's pills ride beside the name. The name and its pills sit
+    // on one line on every card in the viewer; on the element's own page they used to be split across two
+    // rows with a rule between them, so the page drew the element in a shape no card uses. On the 629
+    // entity, component and process pages the row below held ONE word and nothing else — a 48px strip
+    // whose whole job was to say `entity`.
+    if (cur) {
+      const pills = crumbPillsHtml(pageElementId(s));
+      if (pills) seg.insertAdjacentHTML('afterend', pills);
+    }
   });
 }
 
@@ -6079,13 +6144,11 @@ function featureHeadHtml(capId) {
     ? f.roles.map((rid) => `<button type="button" class="featrole" data-act="${esc(roleName(rid))}">`
         + `${esc(roleName(rid))}</button>`).join('')
     : '<span class="feat-empty">not recorded</span>';
-  // `internal` is stored; `staff` is what a reader sees, because a feature's audience is derived from
-  // its HUMAN roles alone (a machine never votes) and so it is always a word about people.
-  const capPill = (v, kind) => (v
-    ? `<span class="uc-caplabel uc-${kind}-${esc(v.toLowerCase())}">${esc(audienceWord(v))}</span>` : '');
+  // The feature's card words — `feature`, and `staff` where it varies — ride the breadcrumb beside the
+  // name now, which is where a card puts them. So this page draws none of its own, and the helper that
+  // built them here went with them: one function decides that set, and the card owns it.
   return pageHeroHtml({
     name: f.name,
-    pills: shownAudience(f.audience || []).map((a) => capPill(a, 'aud')).join(''),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
     meta: `<span class="page-hero-lbl">Used by</span> ${roles}`,
@@ -6149,13 +6212,10 @@ function actorHeadHtml(actorName) {
   // A group is one role, or the "Other" bucket for an actor this map never declared. Other has no
   // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
   const role = g && g.roles.length === 1 ? g.roles[0] : null;
-  const kind = ((role || {}).kind || '').trim().toLowerCase();
-  // The SAME pills the actor's card carries, from the one function that decides them. The page used to
-  // compute its own — `service` + `staff-owned` where the card said only `SERVICE` — so the same actor
-  // read two ways, one click apart.
+  // No pills here: the actor's card pills — `actor`, and `staff` / `internal service` where the side
+  // varies — ride the breadcrumb beside the name, read from the one function that decides them. The page
+  // used to compute its own set, and said `service` + `staff-owned` where the card said only `SERVICE`.
   return pageHeroHtml({
-    pills: actorSidePills(kind, (role || {}).audience)
-      .map((p) => `<span class="ecard-pill ${esc(p.cls)}">${esc(p.text)}</span>`).join(''),
     desc: role && role.wants ? mdInline(wantsSentence(role.wants)) : '',
     noDesc: 'This map does not say what this actor wants.',
   });
