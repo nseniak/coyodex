@@ -945,6 +945,26 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
 
+def test_no_kind_quietly_joins_the_pill_repeats_the_drill_set() -> None:
+    """`TYPE_PILL_REPEATS_DRILL` is a fact ABOUT two other functions: the kinds where the pill's
+    destination and the card's destination are the same page. Nothing stopped a later edit to either
+    switch from adding a fifth such kind while the Set stayed at four, and the symptom is silent — a
+    pill that looks live and repeats a click the reader already made.
+
+    So the Set is checked against the code it describes: every kind it names must resolve the same way
+    in both switches, and the four `{ state: { kind:` lines it rests on must still be there."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    sel = js[js.index("function selectTargetFor(id) {"):
+             js.index("\nfunction ", js.index("function selectTargetFor(id) {") + 10)]
+    drill = js[js.index("function drillInto(id) {"):
+               js.index("\nfunction ", js.index("function drillInto(id) {") + 10)]
+    for kind, target in (("usecase", "{ kind: 'usecase', uc: id }"), ("block", "{ kind: 'rules', blk: id }"),
+                         ("rule", "{ kind: 'rule', br: id }"),
+                         ("process", "{ kind: 'deploymentUnit', unit: n.unit }")):
+        assert f"case '{kind}':" in sel and target in sel, kind
+        assert f"case '{kind}':" in drill and target in drill, kind
+
+
 def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
     """`user` is 22 of the 27 features on the three reference maps, so the pill sat on eight cards in
     nine saying what the ninth already implied. It is the same argument the actor cards make for
@@ -1002,13 +1022,18 @@ def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
     no identity line, on the very screen a reader meets first.
 
     Both jobs are separable. The WORD is the card's identity and belongs on every card everywhere: a
-    card without it reads as a different kind of object than the cards beside it. The ACTION is dead
-    at home — "go where this lives and point at it" would ring the card the reader just clicked — so
-    at home the word is plain text: no hover, no pointer, no keyboard stop."""
+    card without it reads as a different kind of object than the cards beside it. The ACTION is a
+    control only where it goes somewhere the CARD does not, and it fails that two ways: structurally,
+    for four kinds whose pill and whose drill open the same page (a decision area's card was found
+    carrying one), and positionally, when the card already sits on the page the pill travels to. Both
+    render the word as plain text: no hover, no pointer, no keyboard stop."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\nfunction ", js.index("function elementCardHtml(id, opts) {") + 10)]
-    assert "const typeHtml = o.homeType" in card and "+ typeHtml" in card
+    assert "const typeHtml = (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))" in card
+    assert "+ typeHtml" in card
+    # The four are exactly the kinds whose `selectTargetFor` and `drillInto` answer the same page.
+    assert "const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process']);" in js
     assert 'class="ecard-type ecard-type-plain"' in card, "same word, same slot"
     assert "<span" in card.split("o.homeType")[1].split(":")[0], "plain text, not a button"
     assert 'data-ctx="${esc(id)}"' in card, "…and everywhere else it still acts"

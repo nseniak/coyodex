@@ -369,6 +369,17 @@ const CARD_DESC_FIELD = {
 
 // What a card SAYS about one element: title, the reader's word for its type, the one sentence, and the
 // few extra pills its type earns.
+// Kinds whose type pill would go exactly where clicking the CARD goes. `selectTargetFor` (the pill:
+// "show this in its home view") and `drillInto` (the card: "open this") answer with the same page for
+// these four, because their own page IS where they live — a use case's flow, a decision area's rules,
+// a rule's page, a process's card. The other kinds have a real second home: a component's own page is
+// one thing, the subsystem card that DRAWS it as a box is another, and the pill is the only way to
+// that second one.
+//
+// Checked by comparing the two switch statements kind by kind, after a decision area's card was found
+// carrying a pill that repeated its own click.
+const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process']);
+
 function cardFacts(id) {
   const n = GRAPH.nodes[id];
   if (!n) return null;
@@ -378,11 +389,9 @@ function cardFacts(id) {
   // description field then holds the same words. One copy, not two.
   if (desc.trim() === (n.name || '').trim()) desc = '';
   const pills = [];
-  // A feature's two words, an actor's nature and a dependency's kind each change how the rest of the
-  // card reads, so each rides beside the type pill rather than eating the description. A feature's
-  // pair is deliberately two pills and not one: `Audience` is who it is for (derived from its
-  // actors), `Happy Path` is whether the guided walk must reach it. One word carrying both is what
-  // the old three-value label did, and its middle value ended up meaning neither.
+  // A feature's audience, an actor's nature and a dependency's kind each change how the rest of the
+  // card reads, so each rides beside the type pill rather than eating the description. A feature can
+  // carry BOTH audience words, so this is a set and never a single "mixed" one.
   if (n.kind === 'capability') {
     for (const a of shownAudience((f.Audience || '').split(',').map((s) => s.trim()).filter(Boolean))) {
       pills.push({ text: a, cls: 'uc-aud-' + a.toLowerCase() });
@@ -426,12 +435,14 @@ function elementCardHtml(id, opts) {
   // reads as a different kind of object than the cards beside it — the consistency is the
   // information, not the word.
   //
-  // `homeType` says this card sits on its own type's HOME VIEW, and there the word is PLAIN. The
-  // pill's action is "go to where this thing lives and point at it", which on the home view is a trip
-  // to the page you are on: it would ring the card your finger is still on. A control that looks
-  // clickable and does nothing teaches a reader to distrust the ones that work, and it costs a
-  // keyboard stop per card. So the word stays and only the action goes.
-  const typeHtml = o.homeType
+  // Its ACTION is a separate question, and it is a control only when it goes somewhere the CARD does
+  // not. Two ways it can fail that, and the word goes plain for both:
+  //   * the pill repeats the card's own drill — `TYPE_PILL_REPEATS_DRILL`, structural, always;
+  //   * `homeType`, the caller saying this card sits on the page the pill would travel to, so the
+  //     click would ring the card the reader's finger is still on.
+  // A control that looks live and does nothing teaches a reader to distrust the ones that work, and
+  // it costs a keyboard stop per card.
+  const typeHtml = (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))
     ? `<span class="ecard-type ecard-type-plain">${esc(c.type)}</span>`
     : `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
       + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`;
