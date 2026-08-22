@@ -422,10 +422,7 @@ body.vresizing #stage { pointer-events: none; }
    authoring decision the Coverage rule reads, and a reader of the map has no use for it. */
 .uc-aud-user { background: #e0e7ff; color: #4338ca; }
 .uc-aud-internal { background: #fef3c7; color: #92400e; }
-/* An actor's side, on the card pill rather than the feature hero's label: same two colours, the card's
-   own shape. A program fuses its side INTO its kind word ("user service"), so this class also carries
-   what `.ecard-pill-service` used to — see actorSidePills. */
-.ecard-pill-side { text-transform: uppercase; letter-spacing: .03em; font-weight: 700; }
+
 /* The info pane holds ONE card — the same card a list holds. The pane's own padding already frames it,
    so the card drops its border there and reads as the pane's content rather than as a box in a box. */
 #panel .pane-card .ecard { border-color: transparent; padding: 0; background: transparent; }
@@ -497,6 +494,12 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
               padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }
 .ecard-pill-human { background: #fff7ed; color: #9a3412; }
 .ecard-pill-service { background: #eef2ff; color: #3730a3; }
+/* The AUDIENCE colours on a card pill. Written with both classes because `.ecard-pill` sets a grey
+   background further down the file than `.uc-aud-*` does its own, so a single-class rule lost the
+   cascade and every side pill came out the same grey as the `ACTOR` beside it — present, and easy to
+   read as absent. One rule fixes it on an actor card and on a feature card at once. */
+.ecard-pill.uc-aud-internal { background: #fef3c7; color: #92400e; }
+.ecard-pill.uc-aud-user { background: #e0e7ff; color: #4338ca; }
 .ecard-desc { margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: #4b5563; }
 .ecard-extra { margin: 5px 0 0; font-size: 12px; color: #6b7280; }
 .ecard-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px;

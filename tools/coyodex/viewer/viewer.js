@@ -402,13 +402,14 @@ const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process'])
 // services are the company's own, so `service` alone carries that and `user service` is the exception.
 function actorSidePills(kind, audience) {
   const side = String(audience || '').trim().toLowerCase();
+  // COLOUR says what the thing IS; the WORDS say whose it is. So both program readings keep the one
+  // program colour and differ only in the word, and `staff` takes the audience colour a feature card
+  // already uses for the same word — one word, one colour, wherever it appears.
   if (kind === 'service') {
-    return side === 'user'
-      ? [{ text: 'user service', cls: 'ecard-pill-side uc-aud-user' }]
-      : [{ text: 'service', cls: 'ecard-pill-service' }];
+    return [{ text: side === 'user' ? 'user service' : 'service', cls: 'ecard-pill-service' }];
   }
   if (kind === 'human' && side === 'internal') {
-    return [{ text: 'staff', cls: 'ecard-pill-side uc-aud-internal' }];
+    return [{ text: 'staff', cls: 'uc-aud-internal' }];
   }
   return [];
 }

@@ -1087,9 +1087,12 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     voted for by its human roles only). The same split the map already makes between `capability` and
     the reader's word `feature`."""
     js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
     fn = js[js.index("function actorSidePills(kind, audience) {"):
             js.index("\nfunction ", js.index("function actorSidePills(kind, audience) {") + 10)]
-    assert "text: 'user service'" in fn and "text: 'service'" in fn and "text: 'staff'" in fn
+    assert "'user service' : 'service'" in fn and "text: 'staff'" in fn
+    # Colour says WHAT it is, the words say whose: both program readings keep the one program colour.
+    assert fn.count("ecard-pill-service") == 1 and "uc-aud-internal" in fn
     assert "side === 'internal'" in fn, "a person prints a side only when it is the company's"
     # The card and the page draw the SAME pills — the page must not compute its own.
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
@@ -1097,6 +1100,11 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     assert js.count("actorSidePills(") >= 3, "card, page and the helper itself"
     # The reader's word is applied in ONE place, and only where the side is about people.
     assert "function audienceWord(side) {" in js
+    # `.ecard-pill` sets a grey background LATER in the file than `.uc-aud-*` sets its own, so a
+    # single-class rule loses the cascade and the side pill comes out the same grey as `ACTOR` beside
+    # it — present, and easy to read as absent. Both classes, or it silently has no colour.
+    assert ".ecard-pill.uc-aud-internal {" in css and ".ecard-pill.uc-aud-user {" in css
+    assert "ecard-pill-side" not in css and "ecard-pill-side" not in js
     assert "audienceWord(a)" in js and "audienceWord(v)" in js, "the feature card and its page hero"
 
 def test_a_screen_you_choose_from_is_a_grid_wherever_it_is() -> None:
