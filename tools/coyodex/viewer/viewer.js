@@ -5466,6 +5466,10 @@ function syncCodePane(_s) {
     btn.classList.toggle('on', codePaneOpen());
     btn.setAttribute('aria-pressed', codePaneOpen() ? 'true' : 'false');
   }
+  // …and the rail on the right edge, which stands exactly where the column will appear. It is there when
+  // the column is shut and gone when it is up, so the edge of the window always says one of two things.
+  const rail = document.getElementById('srcrail');
+  if (rail) rail.hidden = !SERVED || codePaneOpen();
 }
 // Open or close the column, remember the choice, and — on opening — show whatever the reader had
 // SELECTED while it was shut. Without that last part the column opens on whichever file it happened to
@@ -5538,47 +5542,9 @@ function paneSync() {
     PANEL_HOST.insertAdjacentHTML('afterbegin',
       '<div id="panelbar" title="Drag to move \u00b7 double-click to put it back">'
       + '<span class="grip" aria-hidden="true"></span>'
-      // `&lt;/&gt;`, not the characters: this string is parsed as HTML, and a literal `</>` inside a
-      // button is read as a malformed end tag and silently dropped — the button rendered empty.
-      + '<button id="panelsrc" type="button" hidden title="Show this element\u2019s source">'
-      + '&lt;/&gt;</button>'
       + '<button id="panelclose" type="button" title="Close (Esc)">\u00d7</button></div>');
   }
-  syncPaneSourceBtn();
   applyPanelBox();
-}
-// WHICH ELEMENT the card is showing, read from the card itself rather than remembered by each of the
-// dozen functions that write the panel. A multi-selection stacks one card per element and renders the
-// primary LAST (see renderSelPanel), so the last card is the one the bar's controls act on.
-function paneCardElementId() {
-  const cards = PANEL_HOST.querySelectorAll('.ecard[data-id]');
-  return cards.length ? cards[cards.length - 1].getAttribute('data-id') : null;
-}
-// An element's own source: its anchor if it has one, else the first file it owns. A SUBSYSTEM has a
-// median of 18 to 49 files and up to 367, and a component up to 122, so this is a way IN to that list,
-// never a claim that the element is one file — the code viewer's own header carries the switcher.
-function elementSource(id) {
-  const n = id ? GRAPH.nodes[id] : null;
-  if (!n) return null;
-  const files = (n.files || []).filter((f) => localRef(f));
-  if (n.file && localRef(n.file)) return { file: n.file, line: n.line || null, files };
-  return files.length ? { file: files[0], line: null, files } : null;
-}
-// The card's own way to the code, on the card's bar rather than on the card. The card is one design in a
-// grid, in a list and floating over a diagram, and it stays that way: this is the PANEL's control, beside
-// the panel's close button, the way a window's title bar carries the window's actions.
-// Hidden when the element has no source — a control that looks live and does nothing is worse than none.
-function syncPaneSourceBtn() {
-  const btn = PANEL_HOST.querySelector('#panelsrc');
-  if (!btn) return;
-  btn.hidden = !SERVED || !elementSource(paneCardElementId());
-}
-function openPaneSource() {
-  const src = elementSource(paneCardElementId());
-  if (!src) return;
-  pendingCode = null;        // this click names its own element; a stale selection must not win
-  setCodeOpen(true);
-  syncCodeView(src.file, src.line, src.files);
 }
 // --- where the card sits, and how big ---------------------------------------------
 // The card floats, so the one place it lands cannot be right for every reader on every map: a wide
@@ -8555,6 +8521,10 @@ const codeBtn = document.getElementById('codebtn');
 if (codeBtn) {
   codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));
 }
+// The rail only OPENS. Putting the column away is the job of the two × buttons inside it and of the title
+// bar's toggle, which is also the one control that shows whether it is open at all.
+const srcRail = document.getElementById('srcrail');
+if (srcRail) srcRail.addEventListener('click', () => setCodeOpen(true));
 // The ruler's viewport band tracks the scroll live, and the ruler doubles as a scrollbar: press or drag
 // anywhere on it (except a dot, which jumps to its line) scrubs the source, centring the view on the
 // pointer. Listeners wired once — updateViewport / scrollCodeToLine are hoisted.
@@ -9309,7 +9279,6 @@ function storePanelBox(what) {
   });
 }
 PANEL_HOST.addEventListener('click', (ev) => {
-  if (ev.target && ev.target.closest && ev.target.closest('#panelsrc')) { ev.stopPropagation(); openPaneSource(); return; }
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;
   ev.stopPropagation();
   if (mainScene && mainScene.selection && mainScene.selection.length) resetScene(mainScene);

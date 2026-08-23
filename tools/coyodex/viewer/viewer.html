@@ -246,6 +246,15 @@
       <div id="cvminimap" aria-hidden="true"></div>
     </div>
   </section>
+  <!-- THE SOURCE RAIL: a strip down the right edge, where the source column itself will appear, so the
+       click shows its own result before you make it. Present exactly when the column is shut, so the
+       edge of the window always says one of two things — "the source is here" or the source itself.
+       The title bar's toggle stays: it is the one control that shows STATE and can also put the column
+       away, which the rail cannot, since the rail is gone while the column is up. -->
+  <button id="srcrail" type="button" hidden title="Show the source" aria-label="Show the source">
+    <span class="srcrail-glyph" aria-hidden="true">&lt;/&gt;</span>
+    <span class="srcrail-word">Source</span>
+  </button>
 </main>
 <div id="tip"></div>
 <div id="modal" class="modal" hidden>

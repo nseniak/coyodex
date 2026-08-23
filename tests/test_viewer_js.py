@@ -710,42 +710,35 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     block = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
     assert 'id="pageq"' in block, "the question is above the shadow, with the tabs and the trail"
 
-def test_the_card_reaches_its_source_from_the_panels_bar_not_from_the_card() -> None:
-    """An element card shows what an element IS, and never how to open its code. The way to the source
-    sits on the floating panel's own BAR, beside its close button, the way a window's title bar carries
-    the window's actions.
+def test_the_source_is_one_control_on_the_edge_and_none_on_the_cards() -> None:
+    """An element card shows what an element IS. It carries no way to open the code, and neither does the
+    panel its card floats in: code is the reader's LAST priority, and a per-element control put it on
+    every card in the app to say once per box what one control says once per screen.
 
-    Not on the card, because the card is one design in a grid, in a list and floating over a diagram, and
-    a link on it would have to say either one filename or a count. One filename is a lie for most
-    elements: measured across the three maps, a SUBSYSTEM owns a median of 18 to 49 files and up to 367,
-    and a COMPONENT up to 122, with only 51 of 382 components owning exactly one. A count is a fact the
-    card did not ask to carry, and the code viewer's own header already holds the switcher.
+    A `</>` on the panel's bar was tried and removed. It was the lightest thing on the screen — 11px, grey
+    #9ca3af, 28px wide, against a 14px name and a 10px bold type pill — a symbol rather than a word, and
+    it existed only in the popup, never in a grid or a list.
 
-    Which element the bar acts on is read from the card itself, not remembered by each of the dozen
-    functions that write the panel. A multi-selection stacks one card per element and renders the primary
-    LAST, so the last card is the one the bar acts on.
+    THE RAIL replaces it: a 30px strip down the right edge of the window, standing exactly where the
+    source column appears when it opens, so the control shows its own result before the click. It is there
+    when the column is shut and gone when it is up, so the edge of the window always says one of two
+    things — "the source is here", or the source.
 
-    Hidden when the element has no source. Measured: a use case, a business rule, a feature, a decision
-    area, an actor and a process have none at all — 422 elements of 1287 — so on those the button would be
-    a control that goes nowhere."""
+    The title bar's toggle stays beside it. It is the one control that shows STATE and can also put the
+    column away, which the rail cannot: the rail is gone while the column is up."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert 'id="panelsrc"' in js and "#panelsrc" in css
-    assert "&lt;/&gt;</button>" in js, "the label is escaped: a literal </> is a malformed end tag"
-    which = js[js.index("function paneCardElementId() {"):
-               js.index("\n}", js.index("function paneCardElementId() {"))]
-    assert "PANEL_HOST.querySelectorAll('.ecard[data-id]')" in which, "read from the card, not remembered"
-    assert "cards[cards.length - 1]" in which, "a multi-selection's primary is rendered last"
-    src = js[js.index("function elementSource(id) {"): js.index("\n}", js.index("function elementSource(id) {"))]
-    assert "n.file && localRef(n.file)" in src and "files.length ? { file: files[0]" in src, \
-        "the anchor if it has one, else the first file it owns"
-    sync = js[js.index("function syncPaneSourceBtn() {"):
-              js.index("\n}", js.index("function syncPaneSourceBtn() {"))]
-    assert "btn.hidden = !SERVED || !elementSource(paneCardElementId());" in sync
-    opener = js[js.index("function openPaneSource() {"): js.index("\n}", js.index("function openPaneSource() {"))]
-    assert "setCodeOpen(true);" in opener and "syncCodeView(src.file, src.line, src.files);" in opener
-    assert "pendingCode = null;" in opener, "the click names its own element"
-    # A card carries no source link of its own — that is what keeps one card design.
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    assert 'id="srcrail"' in html and "#srcrail {" in css
+    assert "srcRail.addEventListener('click', () => setCodeOpen(true));" in js
+    assert "rail.hidden = !SERVED || codePaneOpen();" in js, \
+        "there when the column is shut, gone when it is up"
+    rail = css[css.index("#srcrail {"): css.index("}", css.index("#srcrail {"))]
+    assert "flex: 0 0 30px" in rail, "the strip stands where the column will"
+    assert "writing-mode: vertical-rl" in css, "a word on an edge, not a symbol"
+    # …and nothing on the card, nor on the panel that holds it.
+    assert "panelsrc" not in js and "panelsrc" not in css, "the bar's button is gone"
+    assert "data-gosrc" not in js, "and the card grew none of its own"
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\n}", js.index("function elementCardHtml(id, opts) {"))]
     assert "srclink" not in card and "localRef" not in card

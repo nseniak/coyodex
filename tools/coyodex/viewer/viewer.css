@@ -688,6 +688,25 @@ body:not(.served) #resizer { display: none; }
    `!important` on the width beats the inline px the #resizer drag leaves behind, so the page takes the
    whole window WITHOUT the reader's drag being forgotten: it applies again the moment the column
    returns. Same list of panes as the degraded-mode rule above, which hides them for a different reason. */
+/* THE SOURCE RAIL. A 30px strip on the right edge of the window, in the place the source column takes
+   when it opens, so the control stands where its own result will appear. Shown exactly when the column is
+   shut, so the edge always says one of two things: "the source is here", or the source.
+   It replaced a `</>` button on every card. Code is the reader's LAST priority, and a per-element control
+   put it on every card in the app; one strip says the same thing once, and says it about the whole
+   screen rather than about one box. */
+/* CENTRED, not top-aligned: a full-height strip with its label bunched at the top reads as an accident
+   rather than as one control, and centred it is beside the content wherever the reader is looking. */
+#srcrail { flex: 0 0 30px; display: flex; flex-direction: column; align-items: center;
+           justify-content: center; gap: 12px; padding: 14px 0; cursor: pointer;
+           border: 0; border-left: 1px solid #e5e7eb; background: #f3f4f6; color: #4b5563;
+           font: inherit; }
+#srcrail:hover { background: #eef2ff; color: #3730a3; border-left-color: #c7d2fe; }
+#srcrail[hidden] { display: none; }
+#srcrail .srcrail-glyph { font-family: ui-monospace, monospace; font-size: 11px; line-height: 1; }
+/* Vertical, reading upward — the usual direction for a label on a right-hand edge. */
+#srcrail .srcrail-word { writing-mode: vertical-rl; transform: rotate(180deg);
+                         font-size: 11px; font-weight: 700; text-transform: uppercase;
+                         letter-spacing: .12em; }
 body.code-hidden #tree,
 body.code-hidden #treeresizer,
 body.code-hidden #codeview,
@@ -835,16 +854,6 @@ body.panel-dragging { user-select: none; }
 #panelclose { position: absolute; top: 1px; right: 4px; border: 0; background: transparent;
               font-size: 17px; line-height: 1; color: #9ca3af; cursor: pointer; padding: 2px 4px; }
 #panelclose:hover { color: #374151; }
-/* …and beside it, the way to this element's source. It sits on the BAR, not on the card: the card is one
-   design in a grid, in a list and floating over a diagram, and a link on it would have to say either one
-   filename — a lie for a subsystem, which owns 18 to 49 files and up to 367 — or a count, which is a fact
-   the card did not ask to carry. The bar is the panel's own chrome, like a window's title bar.
-   Hidden when the element has no source, so it is never a control that goes nowhere. */
-#panelsrc { position: absolute; top: 2px; right: 26px; border: 0; background: transparent;
-            font-family: ui-monospace, monospace; font-size: 11px; line-height: 1; color: #9ca3af;
-            cursor: pointer; padding: 3px 4px; }
-#panelsrc:hover { color: #4338ca; }
-#panelsrc[hidden] { display: none; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }
 /* name + kind tag (and any change badge) on one line — the identity a box/edge keeps even once its
