@@ -162,6 +162,17 @@
              It keeps the content's text size and left edge, so it still reads as a sentence rather than
              as a control. Shown only on a view's own landing screen, which is exactly a one-item trail. -->
         <p id="pageq" hidden></p>
+        <!-- THE PAGE HERO: what the page you drilled into IS — its pills, its one sentence, and one line
+             of context. It does NOT carry the name; the breadcrumb two lines above it is the page's h1,
+             and printing the name again here would say it twice.
+             It used to be the SELECTION CARD's content: a page with nothing selected filled the floating
+             card with its own subject. One floating card then meant two different things — "the page you
+             are on" and "the box you clicked" — with nothing in it saying which, and closing it was undone
+             by the next navigation. The card is now only ever what you clicked.
+             LAST line of the fixed block, so #stagehead's shadow falls below it: the hero belongs with the
+             tabs and the trail (all of them say where you are), and everything under the shadow is the
+             drawing. Empty and hidden on a view's own landing screen, where #pageq is the last line. -->
+        <div id="pagehero" hidden></div>
       </div>
       <!-- THE DIAGRAM AREA. Everything that floats over a diagram positions against this box rather
            than against #stage, so "bottom: 12px" means the bottom of the drawing and not the bottom of

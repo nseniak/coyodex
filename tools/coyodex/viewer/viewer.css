@@ -184,6 +184,32 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    background belongs to #stagehead, which is full width. */
 #pageq { margin: 0; padding: 10px 20px 12px; max-width: 1100px; font-size: 14px; font-weight: 400;
          font-style: italic; color: #6b7280; line-height: 1.5; }
+/* THE PAGE HERO, on a page you have DRILLED into: what this page's subject is. It replaces the state
+   where the floating selection card filled itself with the page's own element — one card that meant
+   "the page" on one screen and "the box you clicked" on the next, with nothing in it saying which.
+   Inside #stagehead, and its LAST line, for the same reason the question is: the tabs, the trail and
+   the hero all say WHERE YOU ARE, and the block's shadow is the line where that ends and the drawing
+   begins. So it takes the block's own bottom padding and casts NO border of its own — a rule here would
+   sit a hairline above a shadow saying the same thing.
+   Never on screen at the same time as #pageq: the question is drawn on a view's landing screen only,
+   and the hero only once you are below it. Same left edge as the question, so the two states of the
+   block's last line start at the same x.
+   The pills and the sentence reuse the element page's own hero classes (.page-hero-pills /
+   .page-hero-purpose), so a subsystem reads the same here as on its own page. */
+/* FULL WIDTH, unlike every other place the hero is drawn. On an element's page the sentence is the first
+   line of a page of prose, and prose needs a reading cap or the eye loses the start of the next line.
+   Here it is ONE line of chrome above a drawing: capped at 68ch it wrapped to three short lines and left
+   two thirds of the strip empty, which cost the diagram height for nothing. So both caps come off — the
+   block's own, and the shared hero's 68ch. */
+#pagehero { padding: 9px 20px 12px; }
+#pagehero[hidden] { display: none; }
+/* The shared hero draws its own closing rule, for a page where the body scrolls on under it. Here the
+   block's SHADOW is that line, and a hairline sitting one pixel above a shadow says the same thing
+   twice — so the wrapper keeps only its contents. */
+#pagehero .page-hero { padding: 0; border-bottom: 0; margin-bottom: 0; }
+#pagehero .page-hero-pills { margin: 0; }
+#pagehero .page-hero-purpose { margin: 6px 0 0; font-size: 13.5px; color: #4b5563; max-width: none; }
+#pagehero .ecard-extra { margin: 6px 0 0; }
 /* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
    whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab
    reads as "you are here", so this one has to read as "you are inside here": the pill hollows out to an

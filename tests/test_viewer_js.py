@@ -710,6 +710,74 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     block = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
     assert 'id="pageq"' in block, "the question is above the shadow, with the tabs and the trail"
 
+def test_the_page_you_drilled_into_says_what_it_is_in_the_header_not_in_the_card() -> None:
+    """A page you have drilled into is ABOUT one element, and that element used to be shown by filling
+    the floating selection card with it whenever nothing was selected. One floating card then carried
+    two meanings — "the page you are on" and "the box you just clicked" — with nothing inside it saying
+    which; deselecting swapped the content silently, and the card's close button was undone by the next
+    navigation.
+
+    So the subject moved into a PAGE HERO in the fixed header block, where the tabs and the trail already
+    say where you are, and the card was left meaning exactly one thing: what you clicked.
+
+    Its place is the block's LAST line, so #stagehead's shadow falls below it — the hero is chrome, and
+    everything under the shadow is the drawing. It draws no rule of its own: a hairline one pixel above
+    that shadow says the same thing twice. It never shares the line with the view's question, which is
+    the landing screen's alone.
+
+    Three subjects, and only three. The other default cards are CONTENT, not an echo of the page title:
+    an arrow page's card is the list of concrete arrows it bundles, a process card carries its fields and
+    its threads, the Deployment overview surfaces unplaced threads, a diff overview leads with the change
+    summary. Moving those into a strip above the diagram would only shrink the drawing."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    # STUCK TO THE NAVIGATION HEADER: inside #stagehead, and its last line.
+    head = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
+    assert '<div id="pagehero" hidden></div>' in head, "the hero is part of the fixed block"
+    assert head.index('id="pagehero"') > head.index('<p id="pageq" hidden></p>'), \
+        "…and its last line, so the block's shadow falls below it"
+    # THE SHADE IS THE BLOCK'S. The hero adds no border of its own, and the shared hero's closing rule
+    # is switched off here.
+    hero = css[css.index("#pagehero {"): css.index("#pagehero .ecard-extra")]
+    assert "border-bottom" not in hero.split("#pagehero .page-hero {")[0], \
+        "the block's shadow is the line under the hero"
+    assert "#pagehero .page-hero { padding: 0; border-bottom: 0;" in css, \
+        "the shared hero's own rule would sit a hairline above the shadow"
+    assert "padding: 9px 20px 12px" in hero, "the question's left edge, and a bottom that closes the block"
+    # ONE hero builder for the whole app: the header hero calls the same one the element pages call.
+    sub = js[js.index("function heroSubjectHtml(id, chain) {"):
+             js.index("\n}", js.index("function heroSubjectHtml(id, chain) {"))]
+    assert "pageHeroHtml({" in sub, "one hero design, not a second one built by hand"
+    assert "cardFacts(id)" in sub, "…reading the same sentence the element's own card reads"
+    assert "kindPillsExtra(n)" in sub, "only what the breadcrumb's own pills did not already say"
+    assert "c.type" not in sub and "cardPillsHtml" not in sub, \
+        "the type rides the breadcrumb; printing it here says `subsystem` twice"
+    assert "o.name" not in sub and "c.name" not in sub, "the breadcrumb is the page's title, not the hero"
+    # THREE subjects, named in one place.
+    subj = js[js.index("function heroSubjectId(s) {"):
+              js.index("\n}", js.index("function heroSubjectId(s) {"))]
+    for kind in ("subsystem", "domsub", "usecase"):
+        assert f"'{kind}'" in subj
+    for kind in ("edge", "bridge", "deployment", "libs", "bucketfold"):
+        assert f"s.kind === '{kind}'" not in subj, "an arrow list and a thread list are content, not a title"
+    # …and the card no longer draws them.
+    body = js[js.index("function applyDefaultPanelBody(s) {"):
+              js.index("\n}", js.index("function applyDefaultPanelBody(s) {"))]
+    assert "if (hero) {" in body and "panel.innerHTML = ''; return; }" in body, \
+        "nothing selected on those three pages means no card at all"
+    assert "showNode(s.sid)" not in body and "showUseCase(s.uc)" not in body, \
+        "the page's own subject is the hero's job now"
+    assert "syncTreeToNode(hero)" in body, \
+        "…but a drilled subsystem must still light its own folder in the file browser"
+    # Redrawn by the same call that redraws the tabs and the trail, so it cannot outlive its page.
+    chrome = js[js.index("function renderChrome(s) {"):
+                js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
+    assert "syncPageHero(s, chain);" in chrome
+    # The `In feature` line is dropped when the trail already names that feature — which it does on every
+    # use case reached through a feature card. Under the crumb it would print the same words twice.
+    assert "inTrail ? '' : useCaseFeatureFootHtml(id)" in sub
+
 def test_a_code_link_looks_the_same_on_every_screen_that_draws_one() -> None:
     """`srcCell` builds one code link and eight screens call it: the Glossary, the Storage table, an
     entity's page, the System reference tables, a flow step's call site, the deployment rows. Its style
@@ -1657,7 +1725,7 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     foot = js[js.index("function useCaseFeatureFootHtml(uc) {"):
               js.index("\n}", js.index("function useCaseFeatureFootHtml(uc) {"))]
     assert '<span class="ecard-lbl">In feature</span>' in foot
-    assert js.count("useCaseFeatureFootHtml(") == 3, "one definition, two callers"
+    assert js.count("useCaseFeatureFootHtml(") == 4, "one definition, three callers"
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\n}", js.index("function elementCardHtml(id, opts) {"))]
     assert "(o.foot || '')" in card and card.index("o.foot") > card.index("ecard-desc"), \

@@ -210,6 +210,7 @@ const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
 const pageq = document.getElementById('pageq');          // the open view's question, leading the content
+const pagehero = document.getElementById('pagehero');    // what the page you drilled into IS (syncPageHero)
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
@@ -5578,6 +5579,69 @@ function applyPanelBox() {
   st.top = Math.max(0, Math.min(b.top, H - Math.min(r.height, H))) + 'px';
   appliedBox = { w: st.width, h: st.height };
 }
+// ── THE PAGE HERO ────────────────────────────────────────────────────────────────────────────────
+// A page you have DRILLED into is ABOUT one element, and that element used to be shown by filling the
+// floating selection card with it whenever nothing was selected. One floating card then carried two
+// different meanings — "the page you are on" and "the box you just clicked" — and nothing inside it said
+// which; deselecting swapped the content silently, and the card's × was undone by the next navigation.
+//
+// So the page's subject moved OUT of the card and into the fixed header block, where the tabs and the
+// trail already say where you are, and the card was left meaning exactly one thing: what you clicked.
+//
+// The subject is only these three. The other default panels are not an echo of the page's title — an
+// arrow page's card is the LIST of concrete arrows it bundles, a process card carries its fields and its
+// threads, the Deployment overview surfaces unplaced threads, and a diff overview leads with the change
+// summary. Those are content, and moving them into a strip above the diagram would only shrink the
+// drawing. They keep their card.
+function heroSubjectId(s) {
+  if (!s) return null;
+  const id = s.kind === 'subsystem' ? s.sid
+           : s.kind === 'domsub' ? s.sd
+           : s.kind === 'usecase' ? s.uc : null;
+  return id && GRAPH.nodes[id] ? id : null;
+}
+// WHAT the hero says: the pills, the one sentence, and one line of context. NOT the name — the
+// breadcrumb two lines above is the page's title, and a second copy here says it twice.
+//
+// THE SAME BUILDER the element pages use (pageHeroHtml), and the SAME division of labour: the type and
+// the pills it earns ride the BREADCRUMB two lines above (crumbPillsHtml), so the hero holds only what is
+// left. Print them here too and the reader meets `subsystem` twice, twenty pixels apart, about one thing.
+// What is left is a dependency's bucket and roles, and a change badge in diff mode — for a subsystem or a
+// use case that is nothing at all, and the hero is its sentence alone.
+//
+// The sentence comes from `cardFacts`, which is what the element's own CARD reads — so what the hero says
+// here is what the card said one click ago.
+//
+// `noDesc: false` — a subject with no sentence recorded says nothing rather than "Nothing recorded.":
+// the hero is a strip above a diagram, not a page, and a line admitting a gap belongs on the element's
+// own page where there is room to act on it.
+//
+// The context line rides AFTER the hero, not inside it: both builders emit a `<p>`, and `page-hero-meta`
+// is a `<p>` too. Each returns '' for a kind that has neither, so one call covers all three subjects.
+//
+// …and a use case's `In feature` line is dropped when THE TRAIL ALREADY NAMES THAT FEATURE, which it does
+// on every use case reached through a feature card. In the floating card that repetition was two panels
+// apart; in the header the line lands directly under the crumb holding the same words, and the feature's
+// name reads twice in twenty pixels. It survives on the one path where the trail runs through Actors
+// instead, which is exactly where the feature is the fact nowhere else on screen.
+function heroSubjectHtml(id, chain) {
+  const n = GRAPH.nodes[id];
+  const c = n ? cardFacts(id) : null;
+  if (!c) return '';
+  const pills = kindPillsExtra(n) + (n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '');
+  const inTrail = (chain || []).some((a) => a.kind === 'capability');
+  return pageHeroHtml({ pills, desc: c.desc ? mdInline(c.desc) : '', noDesc: false })
+    + cardExtraHtml(id) + (inTrail ? '' : useCaseFeatureFootHtml(id));
+}
+// Drawn on every navigation, from renderChrome — so it is refreshed by the same call that repaints the
+// tabs and the trail, and can never survive onto a page that is about something else.
+function syncPageHero(s, chain) {
+  const id = heroSubjectId(s);
+  const html = id ? heroSubjectHtml(id, chain) : '';
+  pagehero.innerHTML = html;
+  pagehero.hidden = !html;
+  if (html) bindElementCards(pagehero);   // the `In feature …` line is a door, here as on a card
+}
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
   // No view intro any more. A pane holding the view's name and "Click a node or edge to see details"
@@ -5587,14 +5651,17 @@ function applyDefaultPanel(s) {
 }
 function applyDefaultPanelBody(s) {
   setTreeSelection(null);  // a default panel / canvas deselect drops pill emphasis + selection pills
-  if (s.kind === 'subsystem') showNode(s.sid);
-  else if (s.kind === 'domsub') showNode(s.sd);
+  // The page's own subject is the PAGE HERO's job now (see heroSubjectId), so the card stays away until
+  // the reader selects something. The tree + code viewer still follow the subject, which is what
+  // `showNode` was doing here besides filling the card — a drilled subsystem must still light its own
+  // folder in the file browser.
+  const hero = heroSubjectId(s);
+  if (hero) { if (s.kind !== 'usecase') syncTreeToNode(hero); panel.innerHTML = ''; return; }
   // `true` = the arrow's OWN page. There the list IS the page's subject, so nothing is cut and no drill
   // is offered: it would lead to the page the reader is already on.
-  else if (s.kind === 'edge') showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);
+  if (s.kind === 'edge') showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);
   else if (s.kind === 'domedge') showDomainContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
-  else if (s.kind === 'usecase') showUseCase(s.uc);
   else if (s.kind === 'deployment') { showDeployment(); return; }        // overview: surfaces unplaced threads
   else if (s.kind === 'deploymentUnit') { showDeploymentUnit(s.unit); return; }  // card: process detail + its threads
   else if (s.kind === 'libs') showLibsFold();
@@ -5883,6 +5950,9 @@ function renderChrome(s) {
   // scrolls with the content becomes a caption for whichever block ends up under it.
   pageq.textContent = q;
   pageq.hidden = !q;
+  // …and the block's OTHER last line: what the page you drilled into is. The two never show together —
+  // the question is the landing screen's, the hero is every screen below it.
+  syncPageHero(s, chain);
   // No dividing rule any more. It existed because the question sat among the TABS, at their size and
   // weight, where it read as a fifth disabled one. Beside a 16px bold page title it is a 12.5px grey
   // italic sentence, and nothing about it can be mistaken for a control, so a gap is separation enough.
