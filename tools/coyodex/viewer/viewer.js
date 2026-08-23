@@ -910,6 +910,7 @@ function renderSelPanel(scene) {
   PANEL_HOST.innerHTML = '';
   if (!scene.selection.length) { scene.defaultPanel(); return; }
   for (const d of scene.selection) {
+    if (!d.show) continue;  // a synthetic arrow: selected and lit, but with no card of its own
     const card = document.createElement('section');
     card.className = 'sel-card';  // multi vs single is styled by `.sel-card + .sel-card` (a divider), no host class
     PANEL_HOST.appendChild(card);
@@ -1897,9 +1898,12 @@ function renderElementDetails(id) {
   // holding the single word `entity` with a rule under it, between the page's title and its first
   // sentence.
   const extra = kindPillsExtra(n) + chg;
+  // A PROCESS closes with the threads it hosts. That table is read off the map's entry points rather than
+  // off the element's own fields, so the generic body cannot build it — and this page is where all of a
+  // process's depth lives now that its page on the Deployment view carries only a hero.
   diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">'
     + (extra ? `<div class="page-hero"><p class="page-hero-pills">${extra}</p></div>` : '')
-    + `<div class="edetail">${nodeDetailBodyHtml(id)}</div></div>`;
+    + `<div class="edetail">${nodeDetailBodyHtml(id)}${unitThreadsHtml(n.unit)}</div></div>`;
   bindNodeDetailHandlers(diagram);
   bindElementCards(diagram);
 }
@@ -2104,22 +2108,9 @@ function bindBucketFold() {
   markDataDrill();
 }
 
-// Subsystems edge: the panel shows both subsystems (name + Purpose); the concrete A→B wiring is the
-// diagram itself (the edge view we navigated to).
-function subsystemBlock(id) {
-  const n = GRAPH.nodes[id];
-  if (!n) return '';
-  const purpose = n.fields && (n.fields.Purpose || n.fields.purpose);
-  return '<h3>' + esc(n.name) + '</h3>'
-    + (purpose ? '<p class="explain">' + mdInline(purpose) + '</p>' : '');
-}
-// The bridge-card default panel — the subsystem and subdomain being framed (the structure↔domain pair).
-function showBridge(sid, sd) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(sid)) + ' → ' + esc(nm(sd)) + '</h2>'
-    + '<span class="badge edge">bridge</span></div>'
-    + subsystemBlock(sid) + '<hr>' + subsystemBlock(sd);
-}
+// The bridge page's default card is gone (see applyDefaultPanelBody), and it was the only caller of the
+// two builders that stood here: one that printed a subsystem's name and purpose, and one that printed a
+// pair of them under a `bridge` badge. Both said what the page's two framed boxes and the breadcrumb say.
 // One crossings-list row: the from→to pair + a why line. INERT text by design: an arrow's `where` is
 // only an EXAMPLE call site (a witness among possibly many), so rows deliberately do NOT link to code —
 // no click, no hover glow — to never present the example as "the" location of the interaction. Precise
@@ -2141,14 +2132,15 @@ function arrowRow(srcName, dstName, whyHtml, sel, extra) {
 // spot, and the drill exists for the 155 that need a page. The worst arrow stands for 33 calls and ran
 // 1983px of rows in a 300px pane — a list that long is a page, not a card floating over the drawing.
 //
-// `full` is the arrow's OWN page asking for everything: there the list IS the subject, so nothing is cut.
-// No drill target means no cut either (a Deployment arrow has no page yet): a card that hides rows and
-// offers no way to them would be worse than a long card.
+// ONE case is never cut: an arrow with no page to go to (a Deployment arrow has none yet). A card that
+// hides rows and offers no way to them would be worse than a long card. The other case this used to have
+// — the arrow's OWN page asking for everything — is gone with that page's card: the page IS a drawing of
+// the very arrows the list enumerated, so the list restated the drawing over the top of it.
 const ARROW_CARD_ROWS = 3;
 function arrowCardHtml(o) {
   const rows = o.rows || [];
   const noun = (n) => n + ' ' + o.noun + (n === 1 ? '' : 's');
-  const full = o.full || !o.drill;
+  const full = !o.drill;
   const shown = full ? rows : rows.slice(0, ARROW_CARD_ROWS);
   const rest = rows.length - shown.length;
   return '<div class="pane-title"><h2>' + esc(o.a) + ' \u2192 ' + esc(o.b) + '</h2>'
@@ -2193,24 +2185,24 @@ function bundleAtoms(list) {
   for (const r of list) { const k = r.src + '>' + r.dst; if (!seen.has(k)) { seen.add(k); atoms.push({ src: r.src, dst: r.dst }); } }
   return atoms;
 }
-function showContainerEdge(a, b, drawn, full) {
+function showContainerEdge(a, b, drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const list = containerEdgeList(a, b, drawn);
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
   panel.innerHTML = arrowCardHtml({
-    a: nm(headA), b: nm(headB), badge: 'connections', noun: 'connection', full,
+    a: nm(headA), b: nm(headB), badge: 'connections', noun: 'connection',
     rows: list.map((r) => arrowRow(r.srcName, r.dstName, r.why ? mdInline(r.why) : '')),
     drill: { kind: 'edge', a, b },
   });
 }
 // Selecting an inter-subdomain arrow (Domain overview): list every entity→entity relation it bundles as
 // `from → to:` with its verb (+ kind) below — the domain analog of showContainerEdge.
-function showDomainContainerEdge(a, b, drawn, full) {
+function showDomainContainerEdge(a, b, drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const list = domainContainerEdgeList(a, b, drawn);
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
   panel.innerHTML = arrowCardHtml({
-    a: nm(headA), b: nm(headB), badge: 'relations', noun: 'relation', full,
+    a: nm(headA), b: nm(headB), badge: 'relations', noun: 'relation',
     rows: list.map((r) => arrowRow(r.srcName, r.dstName,
       esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''))),
     drill: { kind: 'domedge', a, b },
@@ -2237,7 +2229,7 @@ function bridgeEdgeList(drawn) {
             : true;
   }));
 }
-function showBridgeEdge(drawn, full) {
+function showBridgeEdge(drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const kindOf = (id) => (GRAPH.nodes[id] || {}).kind;
   const list = bridgeEdgeList(drawn);
@@ -2248,7 +2240,7 @@ function showBridgeEdge(drawn, full) {
   const sid = ends.find((id) => kindOf(id) === 'subsystem');
   const sd = ends.find((id) => kindOf(id) === 'subdomain');
   panel.innerHTML = arrowCardHtml({
-    a: nm(drawn.src), b: nm(drawn.dst), badge: 'bridge', noun: 'link', full,
+    a: nm(drawn.src), b: nm(drawn.dst), badge: 'bridge', noun: 'link',
     rows: list.map((r) => arrowRow(r.srcName, r.dstName,
       esc(r.verb) + (r.why ? ' \u2014 ' + mdInline(r.why) : ''))),
     drill: (sid && sd) ? { kind: 'bridge', sid, sd } : null,
@@ -3824,6 +3816,10 @@ const SYN_EDGE_THICK = true;      // B: dashed + medium weight. Flip to false fo
 const SYN_EDGE_WIDTH = '2px';     // between a normal arrow and the 2.5px container border (tune to taste)
 function markSyntheticEdge(p) {
   if (!p) return;
+  // …and remembered on the element, so "is this arrow a bundle?" has ONE answer that every later pass can
+  // read. Six binders mark an arrow synthetic; without this, a rule about synthetic arrows would have to
+  // be repeated in all six and would be missed by the seventh.
+  p.setAttribute('data-syn', '1');
   for (const seg of edgeSegs(p)) {
     seg.style.setProperty('stroke-dasharray', '6 3', 'important');
     if (SYN_EDGE_THICK) seg.style.setProperty('stroke-width', SYN_EDGE_WIDTH, 'important');
@@ -3846,7 +3842,13 @@ function edgeDesc(scene, p, label, e, selKey, showFn) {
 // the arrow's ordinary click behavior.
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
-  const desc = edgeDesc(scene, p, label, e, selKey, showFn);
+  // A SYNTHETIC ARROW SHOWS NO CARD. It stands for several real links, so its card was the LIST of them —
+  // and a list is a page, not something to float over the drawing it is about. Selecting one still lights
+  // it and dims the rest, which is the answer to "which one did I click"; ⌥-click opens what it stands for.
+  // Read off the arrow itself (markSyntheticEdge), so the rule is stated once for all six binders that
+  // draw a bundle rather than once per binder.
+  const show = p && p.getAttribute('data-syn') ? null : showFn;
+  const desc = edgeDesc(scene, p, label, e, selKey, show);
   const setFilter = (v) => { for (const seg of edgeSegs(p)) seg.style.filter = v; if (label) label.style.filter = v; };
   const hoverOn = () => { if (!selHas(scene, selKey)) setFilter(HOVER); };
   const hoverOff = () => { if (!selHas(scene, selKey)) setFilter(''); };
@@ -3885,7 +3887,13 @@ function bindContainerEdge(scene, p, label, a, b, focusE) {
   // so the list is narrowed to just that member's crossings; a box↔box arrow lists the whole pair. `sels`
   // pre-selects, in the edge card, exactly the real arrows this one synthetic arrow stood for.
   const edge = focusComp ? { kind: 'edge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'edge', a, b };
-  edge.selCover = bundleAtoms(containerEdgeList(a, b, drawn));
+  // NO PRE-SELECTION. The drill used to carry `selCover` — the real arrows this one synthetic arrow stood
+  // for — so the card opened with them selected and their cards stacked over the drawing. Measured on one
+  // pair: 2 of the 2 arrow groups on the page were selected, and selecting everything on a page marks
+  // nothing out; the stack ran 9 connections deep, taking 26% of the drawing area and 97% of its height.
+  // The page is ABOUT this arrow, so opening it is not a request to pick something on it out.
+  // `sels`, the reader's OWN selection coming back through history, and the `selCover` a LOCATE carries
+  // (which exists to point at one thing among many) are untouched.
   // Key the selection by the DRAWN endpoints, not the collapsed pair: a card can draw several arrows to
   // the same neighbour (one per member component), and each is its own selectable arrow with its own
   // filtered panel.
@@ -3907,11 +3915,11 @@ function bindBridgeEdge(scene, p, label, a, b, target) {
   // the bridge analog of the container drill focusing its member. pendingCenter centres it on arrival.
   const leaf = (kindOf(a) === 'component' || kindOf(a) === 'entity') ? a
     : (kindOf(b) === 'component' || kindOf(b) === 'entity') ? b : null;
-  // Pre-select, in the bridge card, the arrows that cover the component→entity links this one synthetic
-  // arrow stood for (`selCover` — resolved against whatever the card drew, individual or re-bundled); the
-  // leaf `sel` stays as a fallback if the card drew none of them.
-  const tgt = { ...target, selCover: bundleAtoms(bridgeEdgeList(drawn)) };
-  if (leaf) tgt.sel = 'node:' + leaf;
+  // No pre-selection, for the reason bindContainerEdge gives: the page is the arrow. Every caller of this
+  // binder targets a bridge card, so that is the only page this drill can land on. The leaf is still
+  // CENTRED on arrival (pendingCenter below) — putting the reader in front of what they opened is not the
+  // same as choosing something for them.
+  const tgt = { ...target };
   bindSelectEdge(scene, p, label, drawn, 'bridge:' + a + '>' + b,
     () => showBridgeEdge(drawn),
     { onDrill: () => { if (leaf) pendingCenter = leaf; go(tgt); }, actionFn: () => actionTipEdge(a, b, drawn) });
@@ -4839,17 +4847,22 @@ function showDeploymentGroup(gid) {
     + `<table class="glossary"><tbody>${rows}</tbody></table></section>`;
   bindNodeDetailHandlers(panel);
 }
-function showDeploymentUnit(unit) {
-  const uid = unitProcessNodeId(unit);
+// THE THREADS A PROCESS HOSTS — the loops and listeners it starts for itself. The one fact about a process
+// that lives outside its own fields, so it is the one thing an element's generic details body cannot build:
+// it is read off the map's entry points, by the unit each one runs in.
+//
+// It used to close the floating card on the process page. That card is gone (the process's sentence is the
+// page hero now), so this rides the process's DETAILS page instead, under its fields — which is where the
+// rest of its depth already was.
+//
+// A clear gap above it: the fields end with no bottom margin, so without one the table reads as glued to
+// the last field.
+function unitThreadsHtml(unit) {
+  if (!unit) return '';
   const eps = (GRAPH.entry_points || []).filter((e) => e.activation === 'self' && threadHostUnits(e).includes(unit));
-  let html = uid ? (`<div class="pane-card">${elementCardHtml(uid)}</div>` + nodeDetailBodyHtml(uid))
-                 : `<section class="uc-group"><h3 class="uc-actor">${esc(unit)}</h3></section>`;
-  // A clear gap between the process's own detail (dl + impact) and the threads it hosts — the node
-  // detail ends with no bottom margin, so without this the box reads as glued to the fields above it.
-  if (eps.length) html += `<section class="uc-group" style="margin-top:20px"><h3 class="uc-actor">Threads / loops (${eps.length})</h3>${threadRowsHtml(eps)}</section>`;
-  panel.innerHTML = html;
-  bindNodeDetailHandlers(panel);
-  if (uid) syncTreeToNode(uid);
+  if (!eps.length) return '';
+  return `<section class="uc-group" style="margin-top:20px"><h3 class="uc-actor">Threads / loops (${eps.length})</h3>`
+    + `${threadRowsHtml(eps)}</section>`;
 }
 // The Domain Subdomains overview: a subdomain box ⌘-drills to its per-subdomain card; an
 // inter-subdomain arrow selects to the crossing entity→entity relations (no further drill).
@@ -4869,7 +4882,7 @@ function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
   // the whole pair for a box↔box arrow (see bindContainerEdge for the same shape). `sels` pre-selects the
   // real relation arrows this synthetic arrow stood for, in the domain edge card.
   const dom = focusEnt ? { kind: 'domedge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'domedge', a, b };
-  dom.selCover = bundleAtoms(domainContainerEdgeList(a, b, drawn));
+  // No pre-selection, for the reason bindContainerEdge gives: the page is the arrow.
   bindSelectEdge(scene, p, label, drawn, 'dctxedge:' + drawn.src + '>' + drawn.dst,
     () => showDomainContainerEdge(a, b, drawn),
     { onDrill: () => go(dom), actionFn: () => actionTipEdge(a, b, drawn) });
@@ -5593,13 +5606,26 @@ function applyPanelBox() {
 // threads, the Deployment overview surfaces unplaced threads, and a diff overview leads with the change
 // summary. Those are content, and moving them into a strip above the diagram would only shrink the
 // drawing. They keep their card.
+// WHICH pages get one — and the lookup itself is `pageElementId`, the one function answering "which
+// element is this page about", which the breadcrumb's own pills already read. Naming the kinds twice is
+// how the trail and the hero would end up disagreeing about what a page is showing.
+const HERO_KINDS = new Set(['subsystem', 'domsub', 'usecase', 'deploymentUnit']);
 function heroSubjectId(s) {
-  if (!s) return null;
-  const id = s.kind === 'subsystem' ? s.sid
-           : s.kind === 'domsub' ? s.sd
-           : s.kind === 'usecase' ? s.uc : null;
+  if (!s || !HERO_KINDS.has(s.kind)) return null;
+  const id = pageElementId(s);
   return id && GRAPH.nodes[id] ? id : null;
 }
+// THE TWO FOLDED GROUPS are the one kind of page whose subject is not a map element at all: a fold is a
+// drawing decision, not a thing the map records, so it has no node, no pills and no code. What it does
+// have is a sentence saying what was folded and out of which view, and that sentence is the whole hero.
+//
+// It is NOT the sentence the collapsed BOX shows on the Dependencies view. That one ends "⌥-click to
+// drill in", which is an instruction for a box you are looking at — and on this page you have already
+// drilled in, so the reader was being told to do the thing they had just done.
+const FOLD_NARRATIVE = {
+  libs: 'Frameworks and libraries linked into the process, folded out of the Dependencies view.',
+  bucketfold: 'External systems grouped by purpose, folded out of the Dependencies view.',
+};
 // WHAT the hero says: the pills, the one sentence, and one line of context. NOT the name — the
 // breadcrumb two lines above is the page's title, and a second copy here says it twice.
 //
@@ -5624,23 +5650,36 @@ function heroSubjectId(s) {
 // apart; in the header the line lands directly under the crumb holding the same words, and the feature's
 // name reads twice in twenty pixels. It survives on the one path where the trail runs through Actors
 // instead, which is exactly where the feature is the fact nowhere else on screen.
+// A PROCESS is the one subject with more to say than a hero can hold — where it runs, what it is exposed
+// as, where its config comes from, which environments it varies by, and every thread it hosts. That depth
+// used to sit in the floating card, which is where nothing belongs any more, so it moved to the element's
+// own details page and the hero carries the door to it. Every other subject's depth was already there.
+function heroDetailsLinkHtml(id) {
+  return `<button type="button" class="hero-details" data-goelement="${esc(id)}">All details</button>`;
+}
 function heroSubjectHtml(id, chain) {
   const n = GRAPH.nodes[id];
   const c = n ? cardFacts(id) : null;
   if (!c) return '';
   const pills = kindPillsExtra(n) + (n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '');
   const inTrail = (chain || []).some((a) => a.kind === 'capability');
-  return pageHeroHtml({ pills, desc: c.desc ? mdInline(c.desc) : '', noDesc: false })
+  return pageHeroHtml({ pills, desc: c.desc ? mdInline(c.desc) : '', noDesc: false,
+                        meta: n.kind === 'process' ? heroDetailsLinkHtml(id) : '' })
     + cardExtraHtml(id) + (inTrail ? '' : useCaseFeatureFootHtml(id));
 }
 // Drawn on every navigation, from renderChrome — so it is refreshed by the same call that repaints the
 // tabs and the trail, and can never survive onto a page that is about something else.
 function syncPageHero(s, chain) {
   const id = heroSubjectId(s);
-  const html = id ? heroSubjectHtml(id, chain) : '';
+  const fold = FOLD_NARRATIVE[s && s.kind] || '';
+  const html = id ? heroSubjectHtml(id, chain)
+             : fold ? pageHeroHtml({ desc: esc(fold), noDesc: false }) : '';
   pagehero.innerHTML = html;
   pagehero.hidden = !html;
-  if (html) bindElementCards(pagehero);   // the `In feature …` line is a door, here as on a card
+  if (!html) return;
+  bindElementCards(pagehero);   // the `In feature …` line is a door, here as on a card
+  pagehero.querySelectorAll('[data-goelement]').forEach((b) =>
+    b.addEventListener('click', () => go({ kind: 'element', id: b.getAttribute('data-goelement') })));
 }
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
@@ -5657,15 +5696,20 @@ function applyDefaultPanelBody(s) {
   // folder in the file browser.
   const hero = heroSubjectId(s);
   if (hero) { if (s.kind !== 'usecase') syncTreeToNode(hero); panel.innerHTML = ''; return; }
-  // `true` = the arrow's OWN page. There the list IS the page's subject, so nothing is cut and no drill
-  // is offered: it would lead to the page the reader is already on.
-  if (s.kind === 'edge') showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);
-  else if (s.kind === 'domedge') showDomainContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);
-  else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
-  else if (s.kind === 'deployment') { showDeployment(); return; }        // overview: surfaces unplaced threads
-  else if (s.kind === 'deploymentUnit') { showDeploymentUnit(s.unit); return; }  // card: process detail + its threads
-  else if (s.kind === 'libs') showLibsFold();
-  else if (s.kind === 'bucketfold') showBucketFold(s.bkid);
+  // AN ARROW PAGE opens with no card either. Its card was the list of the concrete arrows the drawn arrow
+  // bundles — and the page IS a diagram of exactly those arrows, drawn between the two boxes opened up.
+  // The list restated the drawing, over the top of it, and each arrow still says its own detail when the
+  // reader clicks it. The three arrow pages (subsystem pair, subdomain pair, subsystem × subdomain) all
+  // lose it, since all three drew the same restatement.
+  //
+  // THE TWO FOLDED GROUPS lose theirs for the same reason: the card listed the members, and the page
+  // draws every member as a box. What was not on the drawing is the sentence saying what was folded, and
+  // that is in the hero now (FOLD_NARRATIVE).
+  //
+  // What is left here are the two pages whose card is neither the page's title nor the page's drawing:
+  // the Deployment overview surfaces the threads that landed on NO process box, and a diff render leads
+  // with what changed. Both are facts the reader cannot get by looking, so both keep their card.
+  if (s.kind === 'deployment') { showDeployment(); return; }        // overview: surfaces unplaced threads
   // The Subsystems overview in diff mode leads with the change-impact summary (which subsystems/elements
   // changed), since that is the whole point of opening a diff render.
   else if (s.kind === 'container' && mode === 'diff' && hasDiff()) (IMPACT ? showImpactSummary() : showDiffSummary());
@@ -5795,7 +5839,14 @@ function stateTitle(s) {
   }
   if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
   if (s.kind === 'actors') return 'Actors';
-  if (s.kind === 'element') return elName(s.id);
+  // A PROCESS is the one element whose details page hangs under a page about that SAME element — its own
+  // page on the Deployment view, which draws where it runs. Both crumbs printed the process's name, so the
+  // trail read `Deployment › api › api`: two crumbs, one word, and nothing saying which was which. The
+  // second one says what it adds instead. Every other element hangs under a DIFFERENT element (a component
+  // under its subsystem), where the name is the right title and the trail reads as a path.
+  if (s.kind === 'element') {
+    return (GRAPH.nodes[s.id] || {}).kind === 'process' ? 'Details' : elName(s.id);
+  }
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
   if (s.kind === 'deploymentUnit') return s.unit;

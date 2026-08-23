@@ -210,6 +210,15 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #pagehero .page-hero-pills { margin: 0; }
 #pagehero .page-hero-purpose { margin: 6px 0 0; font-size: 13.5px; color: #4b5563; max-width: none; }
 #pagehero .ecard-extra { margin: 6px 0 0; }
+#pagehero .page-hero-meta { margin: 7px 0 0; }
+/* THE DOOR TO A PROCESS'S DETAILS PAGE. A link, not a button: it goes somewhere, it does not act on what
+   is on screen — and every button in this header block (a tab, a group, a crumb) already means "switch
+   what you are looking at". Set in the trail's own quiet indigo so it reads as one more step of the path
+   rather than as a control competing with the sentence above it. */
+.hero-details { font: inherit; font-size: 12px; font-weight: 600; padding: 0; border: 0;
+                background: none; color: #4338ca; cursor: pointer; }
+.hero-details:hover { text-decoration: underline; }
+.hero-details::after { content: " \203a"; }
 /* THE THIRD STATE: open, but you are somewhere BELOW this view. It is the way back up, and on a page
    whose breadcrumb is empty (a feature's page — its parent is this tab) it is the ONLY way. A lit tab
    reads as "you are here", so this one has to read as "you are inside here": the pill hollows out to an

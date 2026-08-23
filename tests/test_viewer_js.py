@@ -754,22 +754,174 @@ def test_the_page_you_drilled_into_says_what_it_is_in_the_header_not_in_the_card
     assert "c.type" not in sub and "cardPillsHtml" not in sub, \
         "the type rides the breadcrumb; printing it here says `subsystem` twice"
     assert "o.name" not in sub and "c.name" not in sub, "the breadcrumb is the page's title, not the hero"
-    # THREE subjects, named in one place.
+    # FOUR element subjects, named in one place — and the lookup itself is the one the breadcrumb's pills
+    # already use, so the trail and the hero cannot disagree about what a page is showing.
+    kinds = js[js.index("const HERO_KINDS = new Set("):
+               js.index(");", js.index("const HERO_KINDS = new Set("))]
+    for kind in ("subsystem", "domsub", "usecase", "deploymentUnit"):
+        assert f"'{kind}'" in kinds
+    for kind in ("edge", "bridge", "deployment'"):
+        assert f"'{kind}'" not in kinds, "an arrow pair is not one element"
     subj = js[js.index("function heroSubjectId(s) {"):
               js.index("\n}", js.index("function heroSubjectId(s) {"))]
-    for kind in ("subsystem", "domsub", "usecase"):
-        assert f"'{kind}'" in subj
-    for kind in ("edge", "bridge", "deployment", "libs", "bucketfold"):
-        assert f"s.kind === '{kind}'" not in subj, "an arrow list and a thread list are content, not a title"
+    assert "pageElementId(s)" in subj, "one answer to `which element is this page about`"
     # …and the card no longer draws them.
     body = js[js.index("function applyDefaultPanelBody(s) {"):
               js.index("\n}", js.index("function applyDefaultPanelBody(s) {"))]
     assert "if (hero) {" in body and "panel.innerHTML = ''; return; }" in body, \
-        "nothing selected on those three pages means no card at all"
+        "nothing selected on those pages means no card at all"
     assert "showNode(s.sid)" not in body and "showUseCase(s.uc)" not in body, \
         "the page's own subject is the hero's job now"
     assert "syncTreeToNode(hero)" in body, \
         "…but a drilled subsystem must still light its own folder in the file browser"
+
+
+def test_a_process_details_page_does_not_print_the_process_name_twice() -> None:
+    """A process now has two pages: the one on the Deployment view, which draws where it runs, and its
+    details page, which holds everything the map records about it. The details page hangs under the page
+    its element lives on — which for a process is a page about that same process. So both crumbs printed
+    its name and the trail read `Deployment › api › api`: two crumbs, one word, nothing saying which is
+    which.
+
+    The second crumb says what it ADDS instead. Every other element hangs under a DIFFERENT element (a
+    component under its subsystem), where the name is the right title and the trail reads as a path."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    title = js[js.index("  if (s.kind === 'element') {"):
+               js.index("\n  }", js.index("  if (s.kind === 'element') {"))]
+    assert "'process' ? 'Details' : elName(s.id)" in title
+
+
+def test_a_page_that_draws_its_own_contents_does_not_also_list_them_in_a_card() -> None:
+    """Five more pages opened with a card that restated the page. An arrow page's card was the LIST of the
+    concrete arrows the drawn arrow bundles, and the page is a diagram of exactly those arrows between the
+    two boxes opened up. A folded group's card was the roster of its members, and the page draws every
+    member as a box. Both listed, over the top of the drawing, what the drawing was already saying.
+
+    So all five lose the card. Each arrow still says its own detail when the reader clicks it, and each
+    member still opens when its box is clicked.
+
+    What the drawing does NOT say about a fold is what was folded and out of which view, so that sentence
+    is the hero. It is not the sentence the collapsed box shows on the Dependencies view: that one ends
+    "⌥-click to drill in", which told a reader who had already drilled in to do it again.
+
+    TWO pages keep their card, because neither one's card is the page's title or the page's drawing: the
+    Deployment overview surfaces the threads that landed on NO process box, and a diff render leads with
+    what changed. Both are facts the reader cannot get by looking."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    body = js[js.index("function applyDefaultPanelBody(s) {"):
+              js.index("\n}", js.index("function applyDefaultPanelBody(s) {"))]
+    for gone in ("showContainerEdge(s.a", "showDomainContainerEdge(s.a", "showBridge(s.sid",
+                 "showDeploymentUnit(s.unit)", "showLibsFold()", "showBucketFold(s.bkid)"):
+        assert gone not in body, gone
+    assert "showDeployment(); return;" in body, "the unplaced threads are on no box, so they keep the card"
+    assert "showImpactSummary() : showDiffSummary()" in body, "a diff render leads with what changed"
+    # The three arrow builders live on: they are what a SELECTED arrow shows, which is the card's one job.
+    for kept in ("function showContainerEdge(", "function showDomainContainerEdge(", "function showBridgeEdge(",
+                 "function showLibsFold(", "function showBucketFold("):
+        assert kept in js, kept
+    # The fold's sentence, in one place, and without the instruction the box's own sentence carries.
+    fold = js[js.index("const FOLD_NARRATIVE = {"): js.index("};", js.index("const FOLD_NARRATIVE = {"))]
+    assert "libs:" in fold and "bucketfold:" in fold
+    assert "drill in" not in fold, "the reader is already inside"
+    assert "Dependencies view" in fold, "the reader's word for the tab, not the code's `Context`"
+    hero = js[js.index("function syncPageHero(s, chain) {"):
+              js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
+    assert "FOLD_NARRATIVE[s && s.kind]" in hero
+
+
+def test_an_arrow_page_opens_on_the_drawing_with_nothing_chosen_for_you() -> None:
+    """Opening a bundled arrow used to carry `selCover` — the real arrows that one drawn arrow stood for —
+    so the page arrived with them selected and their cards stacked over the drawing. Measured on one pair:
+    2 of the 2 arrow groups on the page were selected, which marks nothing out, and the stack ran 9
+    connections deep, taking 26% of the drawing area and 97% of its height.
+
+    The page is ABOUT that arrow, so opening it is not a request to pick something on it out. All three
+    arrow drills stop making a selection.
+
+    Two pre-selections are untouched, because both point at ONE thing among many: `sels`, the reader's own
+    selection coming back through history, and the `selCover` a LOCATE carries."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    for binder in ("function bindContainerEdge(", "function bindDomainContainerEdge(",
+                   "function bindBridgeEdge("):
+        body = js[js.index(binder): js.index("\n}", js.index(binder))]
+        # the ASSIGNMENT, not the word — each binder's comment says what it stopped doing, and why.
+        assert ".selCover =" not in body and "selCover:" not in body, binder
+        assert ".sel = 'node:" not in body, binder
+    # …and the two that stay.
+    keys = js[js.index("function selectionKeysFor(scene, s) {"):
+              js.index("\n}", js.index("function selectionKeysFor(scene, s) {"))]
+    assert "s.sels" in keys and "s.selCover" in keys, "history and locate still restore a selection"
+    loc = js[js.index("function relationshipLocateTarget(srcId, dstId) {"):
+             js.index("\nfunction ", js.index("function relationshipLocateTarget(srcId, dstId) {") + 10)]
+    assert "selCover: bundleAtoms(pairEdges)" in loc, "locate exists to point at one thing among many"
+    # The leaf is still CENTRED on a bridge drill — putting the reader in front of what they opened is
+    # not the same as choosing something for them.
+    bridge = js[js.index("function bindBridgeEdge("): js.index("\n}", js.index("function bindBridgeEdge("))]
+    assert "pendingCenter = leaf" in bridge
+
+
+def test_a_synthetic_arrow_shows_no_card() -> None:
+    """A synthetic arrow is one drawn arrow standing for several real links — the count-labelled bundles on
+    an overview, a card's cross arrows, a Deployment arrow's channels. Its card was the LIST of what it
+    stood for, and a list is a page rather than something to float over the drawing it is about.
+
+    Selecting one still lights it and dims the rest, which is the answer to "which one did I click", and
+    ⌥-click still opens what it stands for.
+
+    The rule is read off the ARROW (markSyntheticEdge already marks every one of them) rather than written
+    into each binder. Six binders draw a bundle; stating it six times is how the seventh gets missed.
+
+    The card must not merely be EMPTY: an empty section still counts as content to paneSync, which would
+    leave a blank card floating on screen. The selection stack skips the descriptor instead."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    mark = js[js.index("function markSyntheticEdge(p) {"):
+              js.index("\n}", js.index("function markSyntheticEdge(p) {"))]
+    assert "p.setAttribute('data-syn', '1')" in mark, "the marker records what it marked"
+    bind = js[js.index("function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {"):
+              js.index("\n}", js.index("function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {"))]
+    assert "p.getAttribute('data-syn') ? null : showFn" in bind, "one rule, for every binder that marks one"
+    assert "edgeDesc(scene, p, label, e, selKey, show)" in bind
+    stack = js[js.index("function renderSelPanel(scene) {"):
+               js.index("\n}", js.index("function renderSelPanel(scene) {"))]
+    assert "if (!d.show) continue;" in stack, "skip it, do not append an empty card"
+    assert stack.index("if (!d.show) continue;") < stack.index("document.createElement('section')")
+    # Every binder that draws a bundle marks it, which is what makes the one rule reach all of them.
+    assert js.count("markSyntheticEdge(p)") >= 6
+
+
+def test_a_process_keeps_all_its_depth_on_a_details_page() -> None:
+    """A process is the one page subject with more to say than a hero can hold: where it runs, what it is
+    exposed as, where its config comes from, which environments it varies by, and every thread it hosts.
+    That depth used to sit in the floating card, which is where nothing belongs any more.
+
+    So the hero carries the process's narrative — the `Runs on` sentence its card already led with — plus
+    one door, and everything else moved to the element's own details page. Every other subject's depth was
+    already on that page; a process simply had none.
+
+    The threads it hosts are read off the map's entry points rather than off the process's own fields, so
+    the generic details body cannot build them. They ride the details page under the fields, in the one
+    builder both the old card and the page share."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "function showDeploymentUnit(" not in js, "the process card is gone"
+    threads = js[js.index("function unitThreadsHtml(unit) {"):
+                 js.index("\n}", js.index("function unitThreadsHtml(unit) {"))]
+    assert "Threads / loops" in threads and "threadRowsHtml(eps)" in threads
+    assert "if (!eps.length) return '';" in threads, "no threads is not an empty heading"
+    det = js[js.index("function renderElementDetails(id) {"):
+             js.index("\n}", js.index("function renderElementDetails(id) {"))]
+    assert "${nodeDetailBodyHtml(id)}${unitThreadsHtml(n.unit)}" in det, "under the fields, on the same page"
+    # The door, and only for a process — every other subject's page is reached from its card elsewhere.
+    sub = js[js.index("function heroSubjectHtml(id, chain) {"):
+             js.index("\n}", js.index("function heroSubjectHtml(id, chain) {"))]
+    assert "n.kind === 'process' ? heroDetailsLinkHtml(id) : ''" in sub
+    link = js[js.index("function heroDetailsLinkHtml(id) {"):
+              js.index("\n}", js.index("function heroDetailsLinkHtml(id) {"))]
+    assert "data-goelement" in link
+    hero = js[js.index("function syncPageHero(s, chain) {"):
+              js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
+    assert "go({ kind: 'element', id: b.getAttribute('data-goelement') })" in hero
+    assert ".hero-details {" in css and "text-decoration: underline" in css
     # Redrawn by the same call that redraws the tabs and the trail, so it cannot outlive its page.
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
@@ -1000,24 +1152,23 @@ def test_an_arrow_card_holds_three_calls_and_drills_for_the_rest() -> None:
     ONE builder, because four panels drew this shape by hand and each capped it differently, which is to
     say none of them capped it.
 
-    Two cases are never cut. The arrow's OWN page passes `full`, since there the list IS the subject and
-    a drill would lead to the page already open. And an arrow with no page to drill to (a Deployment
-    arrow has none yet) shows everything, because a card that hides rows and offers no way to them would
-    be worse than a long card."""
+    ONE case is never cut: an arrow with no page to drill to (a Deployment arrow has none yet) shows
+    everything, because a card that hides rows and offers no way to them would be worse than a long card.
+    There used to be a second — the arrow's OWN page asked for the whole list — and it went with that
+    page's card, since the page draws the very arrows the list enumerated."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "const ARROW_CARD_ROWS = 3;" in js
     fn = js[js.index("function arrowCardHtml(o) {"): js.index("\n}", js.index("function arrowCardHtml(o) {"))]
-    assert "const full = o.full || !o.drill;" in fn, "no page to go to means nothing is hidden"
+    assert "const full = !o.drill;" in fn, "no page to go to means nothing is hidden"
+    assert "o.full" not in js, "nothing asks for the whole list any more"
     assert "rows.slice(0, ARROW_CARD_ROWS)" in fn
     assert "class=\"xmore\" data-drill=" in fn
-    for caller in ("function showContainerEdge(a, b, drawn, full) {",
-                   "function showDomainContainerEdge(a, b, drawn, full) {",
-                   "function showBridgeEdge(drawn, full) {"):
+    for caller in ("function showContainerEdge(a, b, drawn) {",
+                   "function showDomainContainerEdge(a, b, drawn) {",
+                   "function showBridgeEdge(drawn) {"):
         assert caller in js, caller
         body = js[js.index(caller): js.index("\n}", js.index(caller))]
         assert "arrowCardHtml({" in body, caller
-    assert "showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b }, true);" in js, \
-        "the arrow's own page is never cut"
     assert "closest('.xmore[data-drill]')" in js, "the way to the rest is delegated, not wired per render"
 
 def test_a_deployment_arrow_has_a_page_like_every_other_arrow() -> None:
@@ -1779,8 +1930,11 @@ def test_one_card_design_reaches_the_card_that_floats_over_a_diagram() -> None:
     # The pane must not resize the card either: one card, one size, wherever a reader meets it.
     assert "#panel .pane-card .ecard-name { font-size" not in css
     # The panels that stay hand-built are the ones with no card to reuse.
-    for fn in ("showContextEdge", "showBridge", "flowStepInfoHtml", "showLibsFold", "showBucketFold"):
+    for fn in ("showContextEdge", "flowStepInfoHtml", "showLibsFold", "showBucketFold"):
         assert f"function {fn}(" in js, fn
+    # `showBridge` was on that list until the bridge page stopped drawing a card by itself. It printed
+    # two subsystems' names and purposes, which the page's two framed boxes and the breadcrumb say.
+    assert "function showBridge(" not in js
 
 def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     """A role's page used to open with a bordered block whose heading was the page's own title, with the
