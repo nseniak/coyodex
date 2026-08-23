@@ -227,7 +227,6 @@
           <button id="srcsw-files" type="button" title="Show the file browser">&#9776; Files</button>
         </div>
         <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
-        <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
         <!-- A CHEVRON, not a ×. This does not close a thing in place, the way the card's × and the
              legend's × do: it folds a whole column back to the edge it came from, and the rail is waiting
              there. A right-pointing chevron says which way it goes, and the pair teaches itself. -->
@@ -239,6 +238,9 @@
       <div class="srchead-row" id="srcfile">
         <span id="cvpath"></span>
         <span id="srcdir"></span>
+        <!-- Opening the file elsewhere is about the FILE, so it rides the file's own row, at its far end.
+             It sat on the row above, beside the controls that act on the column. -->
+        <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
       </div>
     </div>
     <div id="srcpanes">

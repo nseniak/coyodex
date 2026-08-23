@@ -762,8 +762,16 @@ def test_the_source_column_has_one_header_over_both_panes() -> None:
     # the filename 266px of a 542px header, beside a switch and three icon buttons.
     assert 'id="srchead-top"' in html
     assert html.index('id="srchead-top"') < html.index('id="srcfile"'), "controls first, then the file"
-    for ctl in ('id="srcswitch"', 'id="cvopen"', 'id="cvclose"'):
+    # Each control rides the row of the thing it acts on: the switch and the fold-away chevron act on the
+    # COLUMN, so they are on the top row; open-externally acts on the FILE, so it is on the file's row.
+    for ctl in ('id="srcswitch"', 'id="cvclose"'):
         assert html.index(ctl) < html.index('id="srcfile"'), ctl
+    assert html.index('id="cvopen"') > html.index('id="srcfile"'), "open-externally rides the file's row"
+    # …and both icons sit at the far end of their own row. That push came from the pin button's
+    # `margin-left: auto` and went with it, so the two bunched up against the switch.
+    for btn in ("#cvclose {", "#cvopen {"):
+        blk = css[css.index(btn): css.index("}", css.index(btn))]
+        assert "margin-left: auto" in blk, btn
     # The file row belongs to the CODE pane, so it is not drawn while the browser is the pane on screen:
     # it would name a file the reader cannot see.
     assert "body.tree-browsing #srcfile { display: none; }" in css
