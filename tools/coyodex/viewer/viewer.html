@@ -227,7 +227,6 @@
           <button id="srcsw-files" type="button" title="Show the file browser">&#9776; Files</button>
         </div>
         <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
-        <button id="treepin" type="button" title="Pin the file browser beside the code">&#128204;</button>
         <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
         <!-- A CHEVRON, not a ×. This does not close a thing in place, the way the card's × and the
              legend's × do: it folds a whole column back to the edge it came from, and the rail is waiting
@@ -249,8 +248,6 @@
   <aside id="tree">
     <div id="treebody"></div>
   </aside>
-  <!-- Drag handle to resize the file browser (width persisted in localStorage). -->
-  <div id="treeresizer" title="Drag to resize"></div>
   <!-- Code viewer: the selected file's source, highlighted, scrolled to the current line. Its text comes
        from the server (git @ commit). -->
   <section id="codeview">

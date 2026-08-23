@@ -5452,7 +5452,7 @@ function syncInfoPane(_s, transient) {
 // `false` here, restored from storage further down: LS and lsGet are declared with the other saved
 // settings, long after this point, and reading them here would run before they exist.
 let codeOpen = false;
-function codePaneOpen() { return codeOpen || treePinned; }
+function codePaneOpen() { return codeOpen; }
 function syncCodePane(_s) {
   document.body.classList.toggle('code-hidden', !codePaneOpen());
   const close = document.getElementById('cvclose');
@@ -7839,12 +7839,10 @@ async function render(sArg, transient) {
 // Python (filetree.py): each entry carries `cov` (coverage shade), `node` (exact id), and `sel` (the id
 // a click selects — exact, else the nearest ancestor folder-node = the "finer grain" rule).
 const treeBody = document.getElementById('treebody');
-const treePinBtn = document.getElementById('treepin');      // pins the browser as its own pane / unpins (hides) it
 // The two halves of the one switch, in the one header. They used to be two separate buttons in two
 // separate headers, each visible only in the state it switched OUT of.
 const srcSwCode = document.getElementById('srcsw-code');
 const srcSwFiles = document.getElementById('srcsw-files');
-const treeResizer = document.getElementById('treeresizer');
 const rowByPath = {};   // path (no trailing slash) -> { row, kids, entry, depth, built }
 const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlight for a mapped node)
 // file path (no trailing slash) -> every element anchored there (node_path_index — filetree.py), primary
@@ -7870,44 +7868,27 @@ function treeKey(p) { return String(p || '').replace(/\/+$/, ''); }
 // Files button, or auto-opened when a selected element anchors a FOLDER (so the reader can drill).
 // Picking a file ends browsing (the code viewer returns with that file). Pinning subsumes browsing; while
 // pinned the browser is already visible, so the Files button is disabled and no auto-browse happens.
-let treePinned = false;
 let treeBrowsing = false;
 let suppressBrowse = false;  // one-shot: a file the reader just picked in the browser is loading — the
                              // owning-folder reselection that follows must NOT re-open browsing over it.
+// The column shows ONE pane at a time, and the switch says which. Showing both at once was a third state
+// with its own control, its own saved flag and its own guard in nine places — and it made the switch
+// meaningless, since there was then nothing to switch between.
 function applyTreeState() {
-  document.body.classList.toggle('tree-pinned', treePinned);
-  document.body.classList.toggle('tree-browsing', treeBrowsing && !treePinned);
-  // Both halves show which side is live. Disabled while PINNED, when both panes are on screen and there
-  // is nothing to switch between.
-  const browsing = treeBrowsing && !treePinned;
-  if (srcSwCode) { srcSwCode.classList.toggle('on', !browsing); srcSwCode.disabled = treePinned; }
-  if (srcSwFiles) { srcSwFiles.classList.toggle('on', browsing); srcSwFiles.disabled = treePinned; }
-  if (treePinBtn) {
-    treePinBtn.classList.toggle('pinned', treePinned);
-    treePinBtn.title = treePinned ? 'Unpin (hide) the file browser' : 'Pin the file browser beside the code';
-  }
+  document.body.classList.toggle('tree-browsing', treeBrowsing);
+  if (srcSwCode) srcSwCode.classList.toggle('on', !treeBrowsing);
+  if (srcSwFiles) srcSwFiles.classList.toggle('on', treeBrowsing);
 }
 function setBrowsing(on) {
-  on = !!on && !treePinned && !document.body.classList.contains('no-tree');  // no browsing when pinned or no tree
+  on = !!on && !document.body.classList.contains('no-tree');
   if (on === treeBrowsing) return;
   treeBrowsing = on;
   applyTreeState();
 }
-function setPinned(on) {
-  on = !!on;
-  if (on === treePinned) return;
-  treePinned = on;
-  // pinning subsumes browsing; unpinning falls back to the default — browse when the code slot has no file
-  // to show (nothing selected), else keep showing that file.
-  treeBrowsing = on ? false : !cvPath;
-  lsSet(LS.treePinned, on ? '1' : '0');
-  applyTreeState();
-  resyncCodePane();  // a pinned browser keeps the column even on a card page; unpinning gives it back
-}
 // After an active selection (showNodeDetailSynced): auto-open browsing for a folder element, or end it for
-// one that shows a real file (or the suppress flag, when the reader just picked a file). No-op while pinned.
+// one that shows a real file (or the suppress flag, when the reader just picked a file).
 function updateFolderPeek(id) {
-  if (!SERVED || treePinned) { return; }
+  if (!SERVED) { return; }
   const consumed = suppressBrowse; suppressBrowse = false;
   const n = GRAPH.nodes[id];
   const fileCount = (n && Array.isArray(n.files)) ? n.files.length : 0;
@@ -8498,7 +8479,6 @@ const cvCloseBtn = document.getElementById('cvclose');
 // Closing also UNPINS: a pinned browser holds the column open by itself, so leaving the pin set would make
 // the × look broken.
 if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => {
-  if (treePinned) { treePinned = false; lsSet(LS.treePinned, ''); applyTreeState(); }
   setCodeOpen(false);
 });
 // The file browser can be the only thing in the column (browsing hides the code viewer), so it carries the
@@ -9312,7 +9292,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', 
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
@@ -9548,32 +9528,16 @@ document.addEventListener('mouseup', () => {
 // height, so there is no boundary between it and the diagram for a reader to drag — and the height they
 // used to drag was the symptom, not the setting: the pane was 300px whatever it held.
 
-// --- file browser: build + toggle + resize --------------------------------------
-// The pane folds away via the header toggle; both its width and folded state survive reloads. #treeresizer
-// sits on the tree's RIGHT edge, so its width is the distance from the tree's own left edge to the cursor.
+// --- file browser: build + toggle -----------------------------------------------
+// It fills the column when the switch says Files, and is gone otherwise. There is no width to drag any
+// more: the browser and the code viewer never share the column, so there is no boundary between them.
 const tree = document.getElementById('tree');
-const clampTreeW = (w) => Math.min(Math.max(w, 180), Math.round(window.innerWidth * 0.5));
-const savedTreeW = parseInt(lsGet(LS.treeW) || '', 10);
-if (savedTreeW) tree.style.width = clampTreeW(savedTreeW) + 'px';
-// Restore the persisted pinned state, then wire the two controls. The code viewer's Files button toggles
-// browsing (the browser filling the code slot); the browser's pin button pins it to its own pane, or
-// unpins it away. Both re-fit the diagram since the stage width changes when a pane appears/disappears.
-treePinned = lsGet(LS.treePinned) === '1';
-// …and whether the source column was left open. Remembered across views and across reloads, because it
-// says what this reader wants to see rather than which screen they are on.
+// Whether the source column was left open. Remembered across views and across reloads, because it says
+// what this reader wants to see rather than which screen they are on.
 codeOpen = lsGet(LS.codeOpen) === '1';
 applyTreeState();
-if (srcSwFiles) srcSwFiles.addEventListener('click', () => { if (!treePinned) setBrowsing(true); });
-if (srcSwCode) srcSwCode.addEventListener('click', () => { if (!treePinned) setBrowsing(false); });
-if (treePinBtn) treePinBtn.addEventListener('click', () => { setPinned(!treePinned); codePaneResized(); });
-let treeResizing = false;
-treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX - tree.getBoundingClientRect().left) + 'px'; resizeStagePreserve(); updateAllPillFades(); } });
-document.addEventListener('mouseup', () => {
-  if (!treeResizing) return;
-  treeResizing = false; document.body.classList.remove('resizing');
-  lsSet(LS.treeW, String(parseInt(tree.style.width, 10) || ''));
-});
+if (srcSwFiles) srcSwFiles.addEventListener('click', () => setBrowsing(true));
+if (srcSwCode) srcSwCode.addEventListener('click', () => setBrowsing(false));
 // --- search sidebar: incremental "jump to anything" ------------------------------
 // One in-memory index over the whole map — element names, entity fields, glossary terms, and (in FULL
 // mode) every file + folder — fuzzy-matched incrementally as you type. A hit reuses the viewer's own
@@ -9909,9 +9873,9 @@ function sbSetActive(i) {
   if (sbRowEls[i]) { sbRowEls[i].classList.add('active'); sbRowEls[i].scrollIntoView({ block: 'nearest' }); }
 }
 
-// A folder result: reveal it in the file browser (open it in the code slot when it isn't pinned).
+// A folder result: reveal it in the file browser.
 function sbGotoDir(path) {
-  if (!treePinned) setBrowsing(true);
+  setBrowsing(true);
   const key = treeKey(path);
   highlightTreePath(key);   // expands ancestors, highlights the row, scrolls it into view
   expandDir(key);           // then open the folder itself

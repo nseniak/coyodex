@@ -55,7 +55,7 @@ body.search-open #searchbtn { background: rgba(255,255,255,.22); color: #fff; }
 #searchbar { flex: 0 0 auto; width: 300px; min-width: 0; display: flex; flex-direction: column;
              background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
 #searchbar[hidden] { display: none; }
-/* Drag handle on the sidebar's right edge (mirror of #resizer/#treeresizer); only while search is open. */
+/* Drag handle on the sidebar's right edge (mirror of #resizer); only while search is open. */
 #sbresizer { flex: 0 0 5px; cursor: col-resize; background: #e5e7eb; }
 #sbresizer:hover, body.resizing #sbresizer { background: #818cf8; }
 body:not(.search-open) #sbresizer { display: none; }
@@ -682,7 +682,6 @@ body.resizing #stage { pointer-events: none; }  /* no canvas hovers/pans mid-dra
 /* Server-only panes: hidden until the map is opened via `coyodex serve` (JS sets body.served after a
    health probe). Static/committed HTML then shows just the diagram + info pane. */
 body:not(.served) #tree,
-body:not(.served) #treeresizer,
 body:not(.served) #codeview,
 body:not(.served) #resizer { display: none; }
 
@@ -698,13 +697,11 @@ body:not(.served) #resizer { display: none; }
    It replaced a `</>` button on every card. Code is the reader's LAST priority, and a per-element control
    put it on every card in the app; one strip says the same thing once, and says it about the whole
    screen rather than about one box. */
-/* TOP-ALIGNED, level with the chevron that folds the column away. Centred first, on the grounds that a
-   full-height strip with its label bunched at the top reads as an accident — true while the strip was the
-   only control of its kind. It stopped being true when the × became a chevron: the two are now one pair,
-   the chevron folds the column back to this edge and the rail brings it out again, and they were 423px
-   apart in y while sharing the same x to within 3px. At the top they land in the same corner. */
+/* CENTRED down the strip. Top-aligning it to sit level with the chevron that folds the column away was
+   tried and undone: the pair reads fine without it, and a full-height strip with its label bunched in one
+   corner reads as an accident rather than as one control. */
 #srcrail { flex: 0 0 30px; display: flex; flex-direction: column; align-items: center;
-           justify-content: flex-start; gap: 10px; padding: 11px 0; cursor: pointer;
+           justify-content: center; gap: 12px; padding: 14px 0; cursor: pointer;
            border: 0; border-left: 1px solid #e5e7eb; background: #f3f4f6; color: #4b5563;
            font: inherit; }
 #srcrail:hover { background: #eef2ff; color: #3730a3; border-left-color: #c7d2fe; }
@@ -721,13 +718,8 @@ body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
 /* --- file browser ---------------------------------------------------------------------------------
    A repo tree shaded by map coverage. Shown PINNED (its own pane, left of the code viewer) or while
    BROWSING (filling the code viewer's slot); hidden otherwise. Width persists. */
-#tree { flex: 0 0 auto; width: 260px; display: flex; flex-direction: column; min-width: 0;
-        background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
-/* pin toggle, right-aligned in the one header: pins the browser to its own pane, or unpins it away */
-#treepin { flex: 0 0 auto; margin-left: auto; cursor: pointer; border: 1px solid #e5e7eb; background: #fff;
-           border-radius: 5px; padding: 1px 5px; font-size: 12px; line-height: 1.2; filter: grayscale(1) opacity(.55); }
-#treepin:hover { background: #f5f6ff; filter: grayscale(.3) opacity(.9); }
-#treepin.pinned { background: #eef2ff; border-color: #c7d2fe; filter: none; }
+#tree { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+        background: #fff; overflow: hidden; }
 #treebody { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 12px; font-size: 13px; }
 /* one row = caret + icon + name (+ a node-id chip when a node points exactly here). Depth is set
    inline via padding-left. The whole row is the click target. */
@@ -805,17 +797,15 @@ body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
 .tchildren.open { display: block; }
 .tempty { padding: 10px 12px; color: #9ca3af; font-size: 12px; }
 /* the file-browser's own resize handle (mirror of #resizer, on the pane's right edge) */
-#treeresizer { flex: 0 0 5px; cursor: col-resize; background: #e5e7eb; }
-#treeresizer:hover, body.resizing #treeresizer { background: #818cf8; }
 /* Hidden by default; the resizer exists only for the pinned pane. Absent entirely when the repo has no
    walkable tree. */
-body:not(.tree-pinned):not(.tree-browsing) #tree { display: none; }
-body:not(.tree-pinned) #treeresizer { display: none; }
-body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #srcswitch { display: none; }
+body:not(.tree-browsing) #tree { display: none; }
+body.no-tree #tree, body.no-tree #srcswitch { display: none; }
 /* Browsing: the browser takes over the code viewer's slot (only when not pinned) so the reader can drill
    a folder; picking a file ends browsing and the code viewer returns. It grows to fill; code steps aside. */
-body.tree-browsing:not(.tree-pinned) #tree { flex: 1 1 0; width: auto; }
-body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
+/* One pane at a time: the browser fills the column, or the code viewer does. */
+body.tree-browsing #tree { flex: 1 1 0; width: auto; }
+body.tree-browsing #codeview { display: none; }
 
 /* WHAT YOU SELECTED, floating over the drawing rather than banded under it.
    It was a fixed 300px row of every diagram page, there whether or not anything was selected. Measured
@@ -1186,7 +1176,7 @@ body.altmod .opensrc, body.altmod .opensrc * {
    folder is what gives way when the column is narrow. The name is what a reader recognises.
    Not drawn while the FILE BROWSER is the pane on screen: it would name a file you cannot see. */
 #srcfile { gap: 8px; }
-body.tree-browsing:not(.tree-pinned) #srcfile { display: none; }
+body.tree-browsing #srcfile { display: none; }
 /* Shrink factor 100 against the filename's 1: the FOLDER gives way first and only when it has nothing
    left does the name start to ellipse. Left equal, a narrow column truncated both — measured at 518px
    with the worst path on these maps, the name showed 200 of the 246 it needed while the folder still had

@@ -748,23 +748,25 @@ def test_the_source_column_has_one_header_over_both_panes() -> None:
     assert html.index('id="srchead"') < html.index('id="srcpanes"'), "the header is above both panes"
     for gone in ("cvhead", "treehead", "cvfilesbtn", "treecodebtn"):
         assert f'id="{gone}"' not in html, gone
-    # The switch: both halves, the live one lit, dead while pinned (both panes are up).
+    # The switch: both halves, the live one lit. ONE PANE AT A TIME — showing both at once was a third
+    # state with its own control, its own saved flag and its own guard in nine places, and it made the
+    # switch meaningless, since there was then nothing to switch between.
     assert 'id="srcsw-code"' in html and 'id="srcsw-files"' in html
     state = js[js.index("function applyTreeState() {"): js.index("\n}", js.index("function applyTreeState() {"))]
-    assert "srcSwCode.classList.toggle('on', !browsing)" in state
-    assert "srcSwFiles.classList.toggle('on', browsing)" in state
-    assert "srcSwCode.disabled = treePinned" in state and "srcSwFiles.disabled = treePinned" in state
+    assert "srcSwCode.classList.toggle('on', !treeBrowsing)" in state
+    assert "srcSwFiles.classList.toggle('on', treeBrowsing)" in state
+    assert "treePinned" not in js, "showing both panes at once was a third state with its own control"
     assert "#srcswitch button.on" in css, "the live half is lit, not merely un-dimmed"
     # TWO ROWS, because one row could not hold both jobs. The top row is about the COLUMN — which pane you
     # are looking at, and what to do with the column. The second is about the FILE. Sharing one row left
     # the filename 266px of a 542px header, beside a switch and three icon buttons.
     assert 'id="srchead-top"' in html
     assert html.index('id="srchead-top"') < html.index('id="srcfile"'), "controls first, then the file"
-    for ctl in ('id="srcswitch"', 'id="treepin"', 'id="cvopen"', 'id="cvclose"'):
+    for ctl in ('id="srcswitch"', 'id="cvopen"', 'id="cvclose"'):
         assert html.index(ctl) < html.index('id="srcfile"'), ctl
     # The file row belongs to the CODE pane, so it is not drawn while the browser is the pane on screen:
     # it would name a file the reader cannot see.
-    assert "body.tree-browsing:not(.tree-pinned) #srcfile { display: none; }" in css
+    assert "body.tree-browsing #srcfile { display: none; }" in css
     # And within that row the FOLDER gives way first. Left equal, a narrow column truncated both — measured
     # at 518px with the worst path on these maps, the name showed 200 of the 246 it needed while the folder
     # still had 293 of 354. The name is the thing the reader came for.
@@ -1031,7 +1033,7 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "TEXT_PAGES" not in fn, "a diagram's column is optional too"
     assert "document.body.classList.toggle('code-hidden', !codePaneOpen());" in fn
     assert "close.hidden = false;" in fn, "the way out is offered everywhere the column can be open"
-    assert "codeOpen || treePinned" in js, "a pinned file browser still keeps the column"
+    assert "function codePaneOpen() { return codeOpen; }" in js, "one flag, one answer"
     # …and it runs for every state, before render's early returns, exactly like syncInfoPane.
     assert "syncCodePane(s);" in js[js.index("async function render(sArg, transient) {"):][:1400]
     # A file anchor is a request for code, wherever it is clicked — and it opens the column through the
@@ -1063,7 +1065,7 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "resizeStagePreserve();" in resized and "applyPanelBox();" in resized
     opener2 = js[js.index("function setCodeOpen(on) {"): js.index("\n}", js.index("function setCodeOpen(on) {"))]
     assert "codePaneResized();" in opener2
-    assert "setPinned(!treePinned); codePaneResized();" in js, "pinning changes the width too"
+    assert "codePaneResized();" in js
     assert "window.addEventListener('resize', applyPanelBox);" in js, "so does the window itself"
     # FIT TO SCREEN has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and pan
     # back to the values svg-pan-zoom recorded when it was CONSTRUCTED, so on any view whose box has since
@@ -1095,12 +1097,12 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     # it but the title bar's toggle.
     # Closing also UNPINS: a pinned browser holds the column open by itself, so leaving the pin set would
     # make the × look broken.
-    assert "body.tree-browsing:not(.tree-pinned) #codeview { display: none; }" in css, \
+    assert "body.tree-browsing #codeview { display: none; }" in css, \
         "…which is why a × inside the code viewer was not enough"
     assert 'id="treeclose"' not in html, "one ×, not one per pane"
     cc = js[js.index("if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => {"):]
     cc = cc[: cc.index("\n});") + 4]
-    assert "treePinned = false" in cc and "setCodeOpen(false)" in cc
+    assert "setCodeOpen(false)" in cc
     assert 'id="cvclose"' in html
     # ONE way in: the rail. The title bar carried a `</>` toggle as well, from before the rail existed —
     # two controls for one thing, one of them a glyph among five other glyphs.
