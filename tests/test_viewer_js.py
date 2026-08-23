@@ -889,6 +889,196 @@ def test_a_synthetic_arrow_shows_no_card() -> None:
     assert js.count("markSyntheticEdge(p)") >= 6
 
 
+def test_a_line_joins_the_card_to_the_one_element_it_describes() -> None:
+    """Two things already join the card to its element: the card's title is the element's name, and the
+    selected element is the only bright thing left once the rest dims. Measured over 26 selections on two
+    pages, the gap between them ran 11px to 915px, with a middle value of 379px — so on a wide drawing the
+    reader has to carry the name across the screen. The line is the third link, for that case.
+
+    SINGLE SELECTION ONLY. Selecting five boxes stacks five cards; five lines fanning out of a panel that
+    already fills 97% of the drawing's height is worse than no line.
+
+    Screen coordinates throughout: the card lives in the page's pixels and the element in the diagram's,
+    so there is no shared space to draw in. Both are read back as client rects, and the layer is pinned
+    over the drawing area to make the two comparable.
+
+    The layer sits UNDER the card (z-index 3 against the card's 4) so the line ends at the card's edge
+    rather than crossing its face, and it catches no clicks."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    wrap = html[html.index('<div id="diagwrap">'): html.index("</div>\n    </div>", html.index('<div id="diagwrap">'))]
+    assert '<svg id="callout"' in wrap, "its own layer, inside the box both ends are measured in"
+    assert wrap.index('id="callout"') < wrap.index('id="panel"'), "…and under the card, not over it"
+    lay = css[css.index("#callout {"): css.index("}", css.index("#callout {"))]
+    assert "z-index: 3" in lay and "pointer-events: none" in lay
+    pan = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
+    assert "z-index: 4" in pan, "the card stays above the line that reaches it"
+    # ONE subject, or none. `.is-selected` is put on a box by glowNode and on an arrow by glowEdge, so
+    # one query covers both — an arrow selection could not answer this before.
+    sole = js[js.index("function soleSelectedEl() {"): js.index("\n}", js.index("function soleSelectedEl() {"))]
+    assert "diagram.querySelectorAll('.is-selected')" in sole and "els.length === 1 ? els[0] : null" in sole
+    edge = js[js.index("function glowEdge(p, label, revealAction = true) {"):
+              js.index("\n}", js.index("function glowEdge(p, label, revealAction = true) {"))]
+    assert "p.classList.add('is-selected')" in edge and "p.classList.remove('is-selected')" in edge
+    # The `hidden` PROPERTY does not exist on an SVG element, so the attribute is set on both sides.
+    hide = js[js.index("function hideCallout() {"): js.index("\n}", js.index("function hideCallout() {"))]
+    assert "callout.setAttribute('hidden', '')" in hide
+    draw = js[js.index("function syncCallout() {"): js.index("\n}", js.index("function syncCallout() {"))]
+    assert "callout.removeAttribute('hidden')" in draw, "`callout.hidden = false` leaves the attribute on"
+    assert "co-case" in draw and "co-line" in draw, "a white casing under the blue line, or it vanishes"
+    assert "hideCallout(); return;" in draw, "an element scrolled out of the drawing has no end to point at"
+    # It is redrawn wherever EITHER end can move — and a CAMERA move is measured a frame late on purpose.
+    assert "onPan: () => scheduleCallout(false)," in js, "the element end travels with the drawing"
+    zoom = js[js.index("function updateZoomLevel() {"): js.index("\n}", js.index("function updateZoomLevel() {"))]
+    assert "scheduleCallout(false);" in zoom
+    drag = js[js.index("PANEL_HOST.addEventListener('pointermove'"):
+              js.index("});", js.index("PANEL_HOST.addEventListener('pointermove'"))]
+    assert "syncCallout();" in drag and "dodgeCard" not in drag, \
+        "the line follows a drag directly; the dodge must not fight the hand that is dragging"
+    # The card end is pure DOM and needs no wait, which is why the drag calls syncCallout straight.
+    pane = js[js.index("function syncInfoPane(_s, transient) {"):
+              js.index("\n}", js.index("function syncInfoPane(_s, transient) {"))]
+    assert pane.index("hideCallout();") < pane.index("if (transient) return;"), \
+        "a drill animation's frames must not keep a line pointing into the diagram being replaced"
+
+
+def test_the_line_never_outlives_the_card() -> None:
+    """Three places took the card away and only ONE of them told the line, so deselecting left a line
+    hanging off the corner of the screen pointing at nothing: clicking empty canvas, the card's own ×, and
+    selecting a synthetic arrow (which has no card to show) all went through `paneSync`'s no-card return,
+    which drew nothing and cleared nothing.
+
+    They all come through one rule now. `paneSync` is the ONE function that hides the card, and it is what
+    hides the line with it — the × and the navigation reset route through it instead of hiding by hand.
+
+    Verified in the app for all three: after selecting a box, card and line both present; after a canvas
+    click, after the × and after Escape, both gone and the layer emptied."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function paneSync() {"): js.index("\n}", js.index("function paneSync() {"))]
+    assert "if (!has) { hideCallout(); return; }" in fn, "no card, no line — on the path every deselect takes"
+    # …and nothing else hides the card behind paneSync's back.
+    assert js.count("PANEL_HOST.hidden = true") == 0, "one rule: paneSync is what takes the card away"
+    close = js[js.index("if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;"):
+               js.index("});", js.index("if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;"))]
+    assert "PANEL_HOST.innerHTML = ''; paneSync();" in close
+    pane = js[js.index("function syncInfoPane(_s, transient) {"):
+              js.index("\n}", js.index("function syncInfoPane(_s, transient) {"))]
+    assert "paneSync();" in pane
+
+
+def test_a_camera_move_is_measured_after_it_is_painted() -> None:
+    """svg-pan-zoom calls onPan / onZoom from inside setCTM and only THEN schedules the frame that paints
+    the new transform — the trap `applyZoomAndCenter` already documents for zoom(). Measuring in that
+    callback reads the camera the reader has already left, and nothing came along to correct it.
+
+    Measured with the line drawn synchronously: after "Fit to screen" the dot sat 273px from the box it
+    pointed at, after a drag-pan 119px, after opening the source column 255px.
+
+    TWO frames, not one. The library registers ITS frame after ours, so a single requestAnimationFrame
+    still runs before the paint; the second frame is the first that can measure it.
+
+    The same lateness hit the DODGE: `window resize` schedules a refit and then places the card, so the
+    overlap test ran against the pre-refit layout, found none, and left the card sitting on the very
+    element it describes. So the deferred pass re-dodges as well as re-draws."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    sch = js[js.index("function scheduleCallout(alsoDodge) {"):
+             js.index("\n}", js.index("function scheduleCallout(alsoDodge) {"))]
+    assert sch.count("requestAnimationFrame") == 2, "one frame still lands before the library paints"
+    assert "if (calloutRaf) return;" in sch, "coalesced to one pass per burst of camera events"
+    assert "if (dodge) dodgeCard(soleSelectedEl());" in sch and "syncCallout();" in sch
+    place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
+    assert "scheduleCallout(true);" in place, "…so a refit scheduled beside this one is caught too"
+
+
+def test_a_click_on_the_cards_bar_is_not_a_drag() -> None:
+    """`pointerdown` on the grab bar arms the gesture with no movement threshold, so a bare CLICK on the
+    bar saved wherever the card happened to be — and after a dodge that is not where the reader put it.
+
+    Measured: six taps on the bar, each after selecting a covered box, walked the stored position from
+    top 60 to top 275 and left 300 to left 394. Exactly the accumulation `dodgeCard` refuses to cause,
+    arriving through the one path that does save."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    move = js[js.index("PANEL_HOST.addEventListener('pointermove'"):
+              js.index("});", js.index("PANEL_HOST.addEventListener('pointermove'"))]
+    assert "d.moved = true;" in move, "only an actual move marks the gesture as one"
+    end = js[js.index("const endPanelDrag = () => {"): js.index("\n};", js.index("const endPanelDrag = () => {"))]
+    assert "const moved = panelDrag.moved;" in end and "if (moved) storePanelBox('position');" in end
+
+
+def test_the_line_points_at_an_arrows_own_middle_not_its_boxs() -> None:
+    """A curve's bounding box is not the curve. A bowed arrow, and a self-arrow looping back to its own
+    box, both leave their box centre in empty canvas. Measured over six curved arrows on one page, the
+    box centre sat 3 to 88 pixels off the ink; walking the drawn geometry puts the dot on it exactly.
+
+    A self-loop is three separate paths, so the lengths are walked as ONE — the middle of the whole
+    shape, not of whichever piece comes first."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function arrowMidpoint(el) {"): js.index("\n}", js.index("function arrowMidpoint(el) {"))]
+    assert "getTotalLength" in fn and "getPointAtLength" in fn
+    assert "(el && el._segs) || [el]" in fn, "a self-arrow is three paths walked as one length"
+    assert "getScreenCTM()" in fn, "the path's own numbers are in the diagram's units, which pan and zoom"
+    assert "if (!total) return null;" in fn, "a box has no length — the caller falls back to its border"
+    draw = js[js.index("function syncCallout() {"): js.index("\n}", js.index("function syncCallout() {"))]
+    assert "const mid = arrowMidpoint(el);" in draw
+    assert "b = mid || borderPoint(e, pc)" in draw, "an arrow points at its middle, a box at its border"
+
+
+def test_the_sequence_views_get_a_line_too() -> None:
+    """The Happy Path and every use-case flow select through `hpHighlight`, which marked nothing — so
+    `soleSelectedEl` found nothing and the whole feature was silently absent on two of the twelve views.
+
+    One selection there lights SEVERAL parts: a step is its label, its arrow and any junction dots; an
+    actor is its figure, its lifeline and every step it drives. The mark goes on ONE of them, the first,
+    which each caller orders as the part that stands for the whole. Marking all of them would read as
+    several selections and take the line away again."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function hpHighlight(scene, els, revealAction = true) {"):
+            js.index("\n}", js.index("function hpHighlight(scene, els, revealAction = true) {"))]
+    assert "const lead = els[0];" in fn
+    assert "lead.classList.add('is-selected')" in fn and "lead.classList.remove('is-selected')" in fn
+    msg = js[js.index("function hpMsgEls(m) {"): js.index("\n", js.index("function hpMsgEls(m) {"))]
+    assert "m.text" in msg and msg.index("m.text") < msg.index("m.line"), \
+        "a step's own label leads, so that is what the line points at"
+
+
+def test_everything_that_floats_over_the_drawing_states_its_layer() -> None:
+    """The legend had no z-index at all, so the callout layer at 3 won by DOM order and drew its line
+    straight across the legend's rows. Everything that floats over the drawing needs a stated place in
+    the stack, or the last one added decides."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    layers = {}
+    for sel in ("#callout", "#panel", "#legend", "#envpicker", "#flowpicker"):
+        block = css[css.index(sel + " {"): css.index("}", css.index(sel + " {"))]
+        assert "z-index" in block, sel
+        layers[sel] = int(block.split("z-index:")[1].split(";")[0].strip())
+    assert layers["#callout"] < layers["#panel"], "the line ends at the card's edge, never across its face"
+    assert layers["#callout"] < layers["#legend"], "…and never across the legend's rows"
+
+
+def test_the_card_steps_aside_when_it_covers_its_own_element() -> None:
+    """A card that hides the thing it describes answers a question by covering it. The card is the half
+    that can move: the element is where the drawing put it, and shifting the drawing would move everything
+    else with it.
+
+    It slides along ONE axis, to whichever of the four sides has room, preferring the smallest move — so a
+    card that is nearly clear steps aside rather than jumping across the diagram. Verified in the app: a
+    card parked over a box at y 291-331 moved to y 342, which is that box's bottom plus the 12px margin.
+
+    NOT SAVED. The reader's stored position is where THEY put it; a dodge is the app getting out of the
+    way for one selection, and remembering it would slowly walk the card around the screen. The same rule
+    the width clamp follows — a clamp is not a gesture."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function dodgeCard(el) {"): js.index("\n}", js.index("function dodgeCard(el) {"))]
+    assert "if (!rectsOverlap(p, e)) return;" in fn, "a card that covers nothing is left alone"
+    assert "sort((a, b) => Math.abs(a.d) - Math.abs(b.d))" in fn, "the smallest move that clears it"
+    assert "if (!moves.length) return;" in fn, "nowhere to go beats a card pushed off screen"
+    assert "storePanelBox" not in fn and "savePanelBox" not in fn, "a dodge is not a gesture"
+    # The three steps happen in one order, from one function, so no caller can do them out of turn.
+    place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
+    assert place.index("applyPanelBox();") < place.index("dodgeCard(") < place.index("syncCallout();")
+
+
 def test_a_process_keeps_all_its_depth_on_a_details_page() -> None:
     """A process is the one page subject with more to say than a hero can hold: where it runs, what it is
     exposed as, where its config comes from, which environments it varies by, and every thread it hosts.
@@ -1220,7 +1410,7 @@ def test_the_selection_card_can_be_moved_and_resized_and_remembers_it() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "panelBox: 'coyodex.panelBox'" in js
-    assert "function applyPanelBox() {" in js and "applyPanelBox();" in js[js.index("function paneSync() {"):
+    assert "function applyPanelBox() {" in js and "placeCard();" in js[js.index("function paneSync() {"):
                                                                           js.index("\n}", js.index("function paneSync() {"))]
     assert "closest('#panelbar')" in js, "the bar is the handle"
     assert "  if (!w && !h) return;" in js, \
@@ -1289,11 +1479,15 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     # overwriting where the reader parked it, so it returns there when there is room again.
     resized = js[js.index("function codePaneResized() {"):
                  js.index("\n}", js.index("function codePaneResized() {"))]
-    assert "resizeStagePreserve();" in resized and "applyPanelBox();" in resized
+    assert "resizeStagePreserve();" in resized and "placeCard();" in resized
     opener2 = js[js.index("function setCodeOpen(on) {"): js.index("\n}", js.index("function setCodeOpen(on) {"))]
     assert "codePaneResized();" in opener2
     assert "codePaneResized();" in js
-    assert "window.addEventListener('resize', applyPanelBox);" in js, "so does the window itself"
+    assert "window.addEventListener('resize', placeCard);" in js, "so does the window itself"
+    # `placeCard` IS applyPanelBox plus the two steps that depend on where the card landed — it dodges the
+    # element it describes, then redraws the line to it. One order, so no caller can do them out of turn.
+    place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
+    assert place.index("applyPanelBox();") < place.index("dodgeCard(") < place.index("syncCallout();")
     # FIT TO SCREEN has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and pan
     # back to the values svg-pan-zoom recorded when it was CONSTRUCTED, so on any view whose box has since
     # changed size — a column opened, a window resized — it restored a stale fit rather than computing a

@@ -860,6 +860,20 @@ body.tree-browsing #codeview { display: none; }
          background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
          box-shadow: 0 6px 22px rgba(15, 23, 42, .16); }
 #panel[hidden] { display: none; }
+/* THE CALLOUT LAYER. Fills the drawing area, catches no clicks, and sits at z-index 3 — one below the
+   card (4) and above the diagram — so the line ends UNDER the card's edge and never crosses its face.
+   `overflow: visible` because the dot at the element end can sit on the very edge of the box.
+   Dashed and half-transparent on purpose: it is a pointer, not a relationship the map records, and it
+   must never be mistaken for an arrow the diagram drew. The dot marks the element end, so the line also
+   says WHICH way it is pointing. */
+#callout { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: visible; }
+#callout[hidden] { display: none; }
+/* TWO strokes, one line. The diagram under it is a wall of grey arrows and pale boxes, and a single thin
+   blue dash disappeared into it — the casing is a white gap the line rides in, so it reads over a box, an
+   arrow or the background alike. The same trick the diagram's own labels use to sit on top of a line. */
+#callout .co-case { stroke: #fff; stroke-width: 4; opacity: .85; fill: none; stroke-linecap: round; }
+#callout .co-line { stroke: #2563eb; stroke-width: 1.75; stroke-dasharray: 5 4; opacity: .85; fill: none; }
+#callout .co-dot { fill: #2563eb; stroke: #fff; stroke-width: 1.5; }
 /* The card's grab bar: the ONLY place a drag starts. Dragging on the card's own text would fight
    selecting that text, and a reader copying a call site out of a row should be able to. STICKY, so the
    close button and the handle stay reachable in a card that has been scrolled. The negative margins pull
@@ -1117,7 +1131,10 @@ body.altmod .opensrc, body.altmod .opensrc * {
             padding: 0 3px; border-radius: 3px; }
 
 /* bottom-RIGHT of the canvas so it never collides with the informational hint in the bottom-left */
-#legend { position: absolute; right: 12px; bottom: 12px; background: #fff; border: 1px solid #e5e7eb;
+/* z-index 5, with the other things that float over the drawing (#envpicker 5, #flowpicker 6, #panel 4).
+   It had none, so the callout layer at 3 won by DOM order and drew its line straight across the legend's
+   rows. Everything that floats needs a stated place in the stack, or the last one added decides. */
+#legend { position: absolute; right: 12px; bottom: 12px; z-index: 5; background: #fff; border: 1px solid #e5e7eb;
           border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: none; }
 #legend.on { display: block; }
 /* One legend for the whole map: it can get tall, so cap it and let it scroll rather than overrun the

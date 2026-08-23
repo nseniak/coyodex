@@ -211,6 +211,7 @@ const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
 const pageq = document.getElementById('pageq');          // the open view's question, leading the content
 const pagehero = document.getElementById('pagehero');    // what the page you drilled into IS (syncPageHero)
+const callout = document.getElementById('callout');      // the line from the card to what it describes
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
@@ -3793,6 +3794,10 @@ function glowEdge(p, label, revealAction = true) {
     seg.style.setProperty('stroke-width', '3px', 'important');
   }
   if (label) label.style.filter = HILITE;
+  // The same class glowNode puts on a selected box. Nothing styles it here — it exists so ONE query
+  // ('.is-selected' inside the diagram) answers "what on the drawing is selected", which is what the
+  // callout needs and what an arrow selection could not answer before.
+  p.classList.add('is-selected');
   if (p._actionIcon) {
     p._actionIcon._selected = !!revealAction;
     if (revealAction) showIcon(p._actionIcon); else hideIcon(p._actionIcon);
@@ -3803,6 +3808,7 @@ function glowEdge(p, label, revealAction = true) {
       if (k.w0) k.seg.style.setProperty('stroke-width', k.w0, k.wp0); else k.seg.style.removeProperty('stroke-width');
     }
     if (label) label.style.filter = '';
+    p.classList.remove('is-selected');
     if (p._actionIcon) { p._actionIcon._selected = false; hideIcon(p._actionIcon); }
   };
 }
@@ -5212,10 +5218,22 @@ function hpGlow(el, revealAction = true) {
 // not blank it). ADDITIVE, so several selected sequence elements can be lit at once (multi-select): each
 // call adds its els to the running lit set and its cleanup removes exactly those. selApply rebuilds the
 // whole set from scratch on every change, so a shared el (lit by two selections) can't be stranded.
+// One selection here lights SEVERAL parts — a step is its label, its arrow and any junction dots; an
+// actor is its figure, its lifeline and every step it drives. So the `is-selected` mark that answers
+// "what is the callout pointing at" goes on ONE of them, the first, which each caller orders as the part
+// that stands for the whole: a step's own label, an actor's own figure. Marking all of them would read as
+// several selections and take the line away, which is what having no mark at all already did — the
+// Happy Path and every use-case flow drew no line.
 function hpHighlight(scene, els, revealAction = true) {
   const undo = els.map((el) => hpGlow(el, revealAction));
   for (const el of els) scene.hpLit.add(el);
-  return () => { undo.forEach((f) => f()); for (const el of els) scene.hpLit.delete(el); };
+  const lead = els[0];
+  if (lead) lead.classList.add('is-selected');
+  return () => {
+    undo.forEach((f) => f());
+    if (lead) lead.classList.remove('is-selected');
+    for (const el of els) scene.hpLit.delete(el);
+  };
 }
 // The filter an element should rest at given the current selection: the HP_SEL glow if the selection
 // lit it, else none. Hover-off restores to this instead of blanking, so a selection glow survives a
@@ -5442,9 +5460,14 @@ const TEXT_PAGES = new Set(['actors', 'usecases', 'capability', 'actor',
 // NOT on a transient render. Those are the intermediate frames of a drill animation, and clearing on each
 // one makes the card blink off and back for a single navigation the reader has not finished making.
 function syncInfoPane(_s, transient) {
+  // A transient render is an intermediate frame of the drill animation. The card is deliberately left
+  // alone through it — the LINE is not, because it points into a diagram that is being replaced, and it
+  // hung over the animation aiming at a box that had gone (measured: still frozen on the old point 150ms
+  // in). Cleared FIRST, so the transient return below cannot skip it.
+  hideCallout();
   if (transient) return;
   PANEL_HOST.innerHTML = '';
-  PANEL_HOST.hidden = true;
+  paneSync();   // one rule for taking the card away, so the line always goes with it
 }
 // The SOURCE pane — the file browser and the code viewer, the whole right-hand column — follows the same
 // rule one step further out. Code is the reader's LAST priority (the spec's reading order is narrative,
@@ -5493,7 +5516,7 @@ function syncCodePane(_s) {
 // as soon as there is room again.
 function codePaneResized() {
   if (mainPz) resizeStagePreserve();
-  applyPanelBox();
+  placeCard();   // the drawing area changed width: re-clamp the card, re-dodge, re-draw the line
 }
 function setCodeOpen(on) {
   codeOpen = !!on;
@@ -5547,14 +5570,19 @@ function viewHeadHtml(_title, desc) {
 function paneSync() {
   const has = !!PANEL_HOST.innerHTML.trim();
   PANEL_HOST.hidden = !has;
-  if (!has) return;
+  // NO CARD, NO LINE. This return is the path taken by every deselect — clicking empty canvas, the card's
+  // own ×, selecting only a synthetic arrow (which has no card to show) — and it used to skip the callout
+  // entirely, leaving a line hanging off the corner of the screen pointing at nothing.
+  //
+  // Three places hid the card and only one of them told the line. They all come through here now.
+  if (!has) { hideCallout(); return; }
   if (!PANEL_HOST.querySelector('#panelbar')) {
     PANEL_HOST.insertAdjacentHTML('afterbegin',
       '<div id="panelbar" title="Drag to move \u00b7 double-click to put it back">'
       + '<span class="grip" aria-hidden="true"></span>'
       + '<button id="panelclose" type="button" title="Close (Esc)">\u00d7</button></div>');
   }
-  applyPanelBox();
+  placeCard();   // …placed, moved out of its element's way, and joined to it
 }
 // --- where the card sits, and how big ---------------------------------------------
 // The card floats, so the one place it lands cannot be right for every reader on every map: a wide
@@ -5680,6 +5708,177 @@ function syncPageHero(s, chain) {
   bindElementCards(pagehero);   // the `In feature …` line is a door, here as on a card
   pagehero.querySelectorAll('[data-goelement]').forEach((b) =>
     b.addEventListener('click', () => go({ kind: 'element', id: b.getAttribute('data-goelement') })));
+}
+// ── THE CALLOUT ───────────────────────────────────────────────────────────────────────────────────
+// A line from the card to the one element it describes. Two things already join the two — the card's
+// title is the element's name, and the selected element is the only bright thing left once the rest
+// dims — so this is the third, and it earns its place only where those two are hardest to use: a wide
+// drawing where the lit box is far from the card. Measured over 26 selections on two pages, the gap
+// between the card and its element ran 11px to 915px, with a middle value of 379px.
+//
+// SINGLE SELECTION ONLY. Selecting five boxes stacks five cards; five lines fanning out of a panel that
+// already fills 97% of the drawing's height is worse than no line at all.
+//
+// Screen coordinates throughout. The card lives in the page's pixels and the element in the diagram's,
+// so there is no shared space to draw in — both are read back as client rects and the layer is pinned
+// over the drawing area, which makes the two comparable.
+
+// WHERE ON THE ELEMENT THE LINE LANDS.
+//
+// A BOX takes its border, on the way in from the card — pointing at the edge you meet, not through to a
+// centre buried under the label.
+//
+// AN ARROW takes the point half way ALONG THE CURVE. Its bounding box is not the arrow: a curve that
+// bows out, and a self-arrow that loops back to its own box, both leave their box centre in empty
+// canvas. `getPointAtLength` walks the drawn geometry itself, so the dot lands on the line whatever
+// shape it took. A multi-part arrow (a self-loop is three paths) is walked as ONE length, so the middle
+// is the middle of the whole shape rather than of whichever piece happens to be first.
+//
+// Screen coordinates, via each segment's own CTM: the path's own numbers are in the diagram's units,
+// which pan and zoom slide around under the card.
+function arrowMidpoint(el) {
+  const segs = (el && el._segs) || [el];
+  const len = (sg) => { try { return sg && sg.getTotalLength ? sg.getTotalLength() : 0; } catch (_) { return 0; } };
+  const lens = segs.map(len);
+  const total = lens.reduce((a, b) => a + b, 0);
+  if (!total) return null;   // not a drawn path (a box) — the caller falls back to the border point
+  let want = total / 2;
+  for (let i = 0; i < segs.length; i++) {
+    if (want > lens[i] && i < segs.length - 1) { want -= lens[i]; continue; }
+    let pt, m;
+    try { pt = segs[i].getPointAtLength(Math.min(want, lens[i])); m = segs[i].getScreenCTM(); } catch (_) { return null; }
+    if (!pt || !m) return null;
+    return { x: pt.x * m.a + pt.y * m.c + m.e, y: pt.x * m.b + pt.y * m.d + m.f };
+  }
+  return null;
+}
+// Where a line from `r` towards `to` crosses r's border. Used at the CARD end always, and at the element
+// end for a box, so the line stops at the edge instead of running under the shape to its centre.
+function borderPoint(r, to) {
+  const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  const dx = to.x - cx, dy = to.y - cy;
+  if (!dx && !dy) return { x: cx, y: cy };
+  // How far along (cx,cy)->to the border lies: the smaller of the two axis crossings.
+  const tx = dx ? (r.width / 2) / Math.abs(dx) : Infinity;
+  const ty = dy ? (r.height / 2) / Math.abs(dy) : Infinity;
+  const t = Math.min(tx, ty);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+function rectsOverlap(a, b) {
+  return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+// THE ONE ELEMENT the card is about, when there is exactly one. `.is-selected` is put on a box by
+// glowNode and on an arrow by glowEdge, so this one query covers both. More than one, or none, and
+// there is no single subject to point at.
+function soleSelectedEl() {
+  const els = diagram.querySelectorAll('.is-selected');
+  return els.length === 1 ? els[0] : null;
+}
+// IF THE CARD COVERS WHAT IT DESCRIBES, MOVE THE CARD. The card is the thing that can move: the element
+// is where the drawing put it, and shifting the drawing instead would move everything else with it.
+//
+// It slides along ONE axis, to whichever of the four sides has room, preferring the smallest move — so a
+// card that is nearly clear steps aside rather than jumping across the diagram. The order breaks ties
+// towards leaving, which keeps the card near where the reader last saw it.
+//
+// NOT SAVED. The reader's stored position is where THEY put it; a dodge is the app getting out of the
+// way for one selection, and remembering it would slowly walk the card around the screen. Same rule as
+// the width clamp in applyPanelBox: a clamp is not a gesture.
+function dodgeCard(el) {
+  const wrap = document.getElementById('diagwrap');
+  if (!wrap || !el || PANEL_HOST.hidden) return;
+  const w = wrap.getBoundingClientRect();
+  const p = PANEL_HOST.getBoundingClientRect();
+  const e = rectOf(el);
+  if (!rectsOverlap(p, e)) return;
+  const M = 12;   // the same margin the card's default position keeps from the edge
+  const moves = [
+    { d: e.left - M - p.right,  x: true },   // left of the element
+    { d: e.right + M - p.left,  x: true },   // right of it
+    { d: e.top - M - p.bottom,  x: false },  // above it
+    { d: e.bottom + M - p.top,  x: false },  // below it
+  ].filter((m) => {
+    const l = p.left + (m.x ? m.d : 0), t = p.top + (m.x ? 0 : m.d);
+    return l >= w.left && l + p.width <= w.right && t >= w.top && t + p.height <= w.bottom;
+  }).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
+  if (!moves.length) return;   // nowhere it fits — a line to a covered element still beats a card off-screen
+  const m = moves[0];
+  const st = PANEL_HOST.style;
+  st.right = 'auto';
+  st.left = Math.round(p.left - w.left + (m.x ? m.d : 0)) + 'px';
+  st.top = Math.round(p.top - w.top + (m.x ? 0 : m.d)) + 'px';
+}
+// Draw it, or take it away. Called wherever either end can have moved: the card being placed, dragged or
+// resized, and the diagram being panned, zoomed or refitted.
+// `hidden` as a PROPERTY is an HTMLElement thing. On an SVG element `el.hidden = true` sets a plain JS
+// property and leaves the ATTRIBUTE alone — and the CSS rule keys off the attribute, so the layer stayed
+// display:none with a perfectly good line inside it. Attributes on both sides, so the two agree.
+function hideCallout() {
+  callout.setAttribute('hidden', '');
+  callout.innerHTML = '';
+}
+function syncCallout() {
+  if (!callout) return;
+  const wrap = document.getElementById('diagwrap');
+  const el = soleSelectedEl();
+  if (!wrap || !el || PANEL_HOST.hidden) { hideCallout(); return; }
+  const w = wrap.getBoundingClientRect();
+  const p = PANEL_HOST.getBoundingClientRect();
+  const e = rectOf(el);
+  // An element scrolled out of the drawing area has no end to point at, and a line to a point beyond the
+  // edge would run off the layer. The card's title still names it.
+  if (e.right <= w.left || e.left >= w.right || e.bottom <= w.top || e.top >= w.bottom) {
+    hideCallout(); return;
+  }
+  const pc = { x: (p.left + p.right) / 2, y: (p.top + p.bottom) / 2 };
+  // An arrow points at its own middle; a box points at the border you meet coming from the card.
+  const mid = arrowMidpoint(el);
+  const ec = mid || { x: (e.left + e.right) / 2, y: (e.top + e.bottom) / 2 };
+  const a = borderPoint(p, ec), b = mid || borderPoint(e, pc);
+  const ox = w.left, oy = w.top;   // the layer's own origin, so both ends are in its coordinates
+  callout.setAttribute('viewBox', `0 0 ${Math.round(w.width)} ${Math.round(w.height)}`);
+  callout.setAttribute('width', Math.round(w.width));
+  callout.setAttribute('height', Math.round(w.height));
+  const seg = `x1="${a.x - ox}" y1="${a.y - oy}" x2="${b.x - ox}" y2="${b.y - oy}"`;
+  // The casing goes down first, so the blue line rides in a white gap and reads over box, arrow or blank.
+  callout.innerHTML = `<line class="co-case" ${seg}></line><line class="co-line" ${seg}></line>`
+    + `<circle class="co-dot" cx="${b.x - ox}" cy="${b.y - oy}" r="3.5"></circle>`;
+  callout.removeAttribute('hidden');
+}
+// MEASURE AFTER THE PAINT, NOT BEFORE IT.
+//
+// svg-pan-zoom calls onPan / onZoom from inside setCTM and only THEN schedules the frame that paints the
+// new transform (`updateCTMOnNextFrame` in the vendored lib) — the same trap applyZoomAndCenter documents
+// for zoom(). Anything measuring the diagram in that callback reads the camera the reader has already
+// left, and nothing came along later to correct it. Measured: after "Fit to screen" the dot sat 273px
+// from the box it pointed at; after a drag-pan, 119px; after opening the source column, 255px.
+//
+// TWO frames, not one. The library registers ITS frame after ours, so a single requestAnimationFrame
+// still runs before the paint. The second frame is the first that can measure it.
+//
+// The same lateness bit the dodge: `window resize` schedules a refit and then places the card, so the
+// overlap test ran against the pre-refit layout, found nothing, and left the card sitting on top of the
+// very element it describes. So the deferred pass re-dodges as well as re-draws.
+let calloutRaf = 0;
+let calloutRedodge = false;
+function scheduleCallout(alsoDodge) {
+  calloutRedodge = calloutRedodge || !!alsoDodge;
+  if (calloutRaf) return;
+  calloutRaf = requestAnimationFrame(() => requestAnimationFrame(() => {
+    calloutRaf = 0;
+    const dodge = calloutRedodge; calloutRedodge = false;
+    if (dodge) dodgeCard(soleSelectedEl());
+    syncCallout();
+  }));
+}
+// The card is placed, then moved out of the element's way, then joined to it. One order, one caller.
+// Synchronously first, so the card never flickers through a wrong position — then again after the next
+// paint, because a refit or a camera move scheduled alongside this has not landed yet.
+function placeCard() {
+  applyPanelBox();
+  dodgeCard(soleSelectedEl());
+  syncCallout();
+  scheduleCallout(true);
 }
 function applyDefaultPanel(s) {
   applyDefaultPanelBody(s);
@@ -6125,6 +6324,7 @@ function updateZoomLevel() {  // reflect the current pan-zoom scale in the heade
   if (zoomlevel) zoomlevel.textContent = mainPz ? Math.round(mainPz.getZoom() * 100) + '%' : '100%';
   rescaleActionIcons();
   rescaleDiffBadges();
+  scheduleCallout(false);   // the element end moved with the drawing — measured once it is painted
 }
 
 // Keep the diagram fitted to the stage as the side bars (or the window) resize it. svg-pan-zoom caches
@@ -7906,6 +8106,7 @@ async function render(sArg, transient) {
       dblClickZoomEnabled: false,  // double-click is for selecting/reading nodes, not zooming
       mouseWheelZoomEnabled: false,  // wheel/trackpad-scroll pans; only Ctrl/Cmd/pinch zooms — see wheelNavigate
       onZoom: updateZoomLevel,
+      onPan: () => scheduleCallout(false),   // the element end travels with the drawing; the card end does not
     });
     // Restore the pan/zoom this diagram was last left at (zoom first, then absolute pan). `s.vp` is the
     // exact history slot (back/forward); `vpByView` catches the same diagram reached any other way — a
@@ -9312,12 +9513,23 @@ PANEL_HOST.addEventListener('pointermove', (ev) => {
   PANEL_HOST.style.right = 'auto';
   PANEL_HOST.style.left = Math.round(left) + 'px';
   PANEL_HOST.style.top = Math.round(top) + 'px';
+  d.moved = true;   // this gesture actually moved the card — see endPanelDrag
+  // The LINE follows the card, so it stays attached while the card travels. The DODGE deliberately does
+  // not run here: the reader is placing the card themselves, and a card that jumps out from under their
+  // own pointer is the app arguing with them. If they park it over the element, it stays there.
+  syncCallout();
 });
+// A DRAG THAT NEVER MOVED IS NOT A DRAG. `pointerdown` on the bar arms the gesture with no movement
+// threshold, so a bare CLICK on the bar used to save wherever the card happened to be — and after a dodge
+// that is not where the reader put it. Measured: six taps on the bar, each after selecting a covered box,
+// walked the stored position from top 60 to top 275 and left 300 to left 394. Exactly the accumulation
+// dodgeCard's own comment forbids, arriving through the one path that does save.
 const endPanelDrag = () => {
   if (!panelDrag) return;
+  const moved = panelDrag.moved;
   panelDrag = null;
   document.body.classList.remove('panel-dragging');
-  storePanelBox('position');
+  if (moved) storePanelBox('position');
 };
 PANEL_HOST.addEventListener('pointerup', endPanelDrag);
 PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
@@ -9326,7 +9538,7 @@ PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
 PANEL_HOST.addEventListener('dblclick', (ev) => {
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelbar')) return;
   savePanelBox(null);
-  applyPanelBox();
+  placeCard();
 });
 // The corner grip is the browser's own (CSS `resize: both`), which writes the size straight onto the
 // element and fires no event, so the size is read back when the pointer is released — on the document,
@@ -9346,6 +9558,7 @@ document.addEventListener('mouseup', () => {
   if (!w && !h) return;
   if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;
   storePanelBox('size');
+  syncCallout();   // a resize moved the card's edges, and the line meets one of them
 });
 // EACH GESTURE SAVES WHAT IT CHANGED, and nothing else. A drag saves where the card sits; a resize saves
 // how big it is. Saving both from either one lets a CLAMP leak into the reader's choice: dragging a card
@@ -9370,7 +9583,7 @@ PANEL_HOST.addEventListener('click', (ev) => {
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;
   ev.stopPropagation();
   if (mainScene && mainScene.selection && mainScene.selection.length) resetScene(mainScene);
-  else { PANEL_HOST.innerHTML = ''; PANEL_HOST.hidden = true; }
+  else { PANEL_HOST.innerHTML = ''; paneSync(); }   // paneSync is what takes the card AND its line away
 });
 // While ⌥ (Option / Alt) is held, flag the body so drillable subsystems/arrows show the drill-in cursor
 // (see .drill in the CSS) and the hover tip previews the drill/open action. (⌘/⌃ is now the multi-select
@@ -9381,7 +9594,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Alt') setDrillMod(t
 document.addEventListener('keyup', (e) => { if (e.key === 'Alt') setDrillMod(false); });
 window.addEventListener('blur', () => setDrillMod(false));
 window.addEventListener('resize', refitStage);  // keep the diagram fitted when the window itself resizes
-window.addEventListener('resize', applyPanelBox);  // …and keep the floating card inside the smaller box
+window.addEventListener('resize', placeCard);  // …and keep the floating card inside the smaller box
 window.addEventListener('resize', updateAllPillFades);  // and re-evaluate the pill-box edge fades
 
 // --- open source in an external editor / on GitHub -------------------------------

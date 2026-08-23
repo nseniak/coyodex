@@ -210,6 +210,12 @@
            Top-right, because the other two floaters already own the bottom corners: #envpicker
            bottom-left and #legend bottom-right. Capped in height and scrollable, since a few states
            (a process and its threads, an actor and every step it drives) run long. -->
+      <!-- THE CALLOUT: a thin line joining the card to the one thing it describes. Its own SVG layer over
+           the diagram and UNDER the card (see the z-index pair in viewer.css), so the line runs behind the
+           card's edge rather than across its face. Drawn only for a SINGLE selection — with several cards
+           stacked it would be a fan of lines across the drawing. `aria-hidden`: it repeats a link the
+           card's own title already states, so a screen reader gains nothing from it. -->
+      <svg id="callout" aria-hidden="true" hidden></svg>
       <aside id="panel" hidden></aside>
       </div>
     </div>
