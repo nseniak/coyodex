@@ -7843,10 +7843,11 @@ async function render(sArg, transient) {
 // Python (filetree.py): each entry carries `cov` (coverage shade), `node` (exact id), and `sel` (the id
 // a click selects — exact, else the nearest ancestor folder-node = the "finer grain" rule).
 const treeBody = document.getElementById('treebody');
-const treeHead = document.getElementById('treehead');      // browser header — hosts the selected-element pill
-const treePinBtn = document.getElementById('treepin');     // pins the browser as its own pane / unpins (hides) it
-const cvFilesBtn = document.getElementById('cvfilesbtn');  // code-viewer button: shows the browser in the code slot
-const treeCodeBtn = document.getElementById('treecodebtn'); // browser button: switches the code slot back to code
+const treePinBtn = document.getElementById('treepin');      // pins the browser as its own pane / unpins (hides) it
+// The two halves of the one switch, in the one header. They used to be two separate buttons in two
+// separate headers, each visible only in the state it switched OUT of.
+const srcSwCode = document.getElementById('srcsw-code');
+const srcSwFiles = document.getElementById('srcsw-files');
 const treeResizer = document.getElementById('treeresizer');
 const rowByPath = {};   // path (no trailing slash) -> { row, kids, entry, depth, built }
 const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlight for a mapped node)
@@ -7880,8 +7881,11 @@ let suppressBrowse = false;  // one-shot: a file the reader just picked in the b
 function applyTreeState() {
   document.body.classList.toggle('tree-pinned', treePinned);
   document.body.classList.toggle('tree-browsing', treeBrowsing && !treePinned);
-  if (cvFilesBtn) cvFilesBtn.disabled = treePinned;
-  if (treeCodeBtn) treeCodeBtn.disabled = treePinned;  // the browser's Code button: no-op (disabled) while pinned
+  // Both halves show which side is live. Disabled while PINNED, when both panes are on screen and there
+  // is nothing to switch between.
+  const browsing = treeBrowsing && !treePinned;
+  if (srcSwCode) { srcSwCode.classList.toggle('on', !browsing); srcSwCode.disabled = treePinned; }
+  if (srcSwFiles) { srcSwFiles.classList.toggle('on', browsing); srcSwFiles.disabled = treePinned; }
   if (treePinBtn) {
     treePinBtn.classList.toggle('pinned', treePinned);
     treePinBtn.title = treePinned ? 'Unpin (hide) the file browser' : 'Pin the file browser beside the code';
@@ -8308,24 +8312,10 @@ function updatePillFade(box) {
   box.classList.toggle('at-end', box.scrollLeft >= overflow - 1);
 }
 function updateAllPillFades() { treeBody.querySelectorAll('.tgroups').forEach(updatePillFade); }
-// The selected element's pill in the browser header — the same pill the code viewer shows beside the path,
-// so while browsing (code viewer hidden) the reader still sees what's selected. Cleared for no selection.
-function renderTreeHeadPill() {
-  const old = treeHead.querySelector('.treeheadpill');
-  if (old) old.remove();
-  const n = treeSelId && GRAPH.nodes[treeSelId];
-  if (!n || !(isContainerKind(n.kind) || LEAF_KINDS.has(n.kind))) return;  // real elements only (not the System node)
-  const pill = elementPill(treeSelId);
-  if (!pill) return;
-  pill.classList.add('treeheadpill');
-  if (selMemberFiles.size) {  // the element's total file count (same tally as the per-directory badges)
-    const c = document.createElement('span');
-    c.className = 'pillcount';
-    c.textContent = selMemberFiles.size;
-    pill.appendChild(c);
-  }
-  treeHead.insertBefore(pill, treePinBtn);
-}
+// The selected element's pill is GONE from the source column's header, on both sides. It named a thing the
+// floating card and the breadcrumb both name already, and it took 66 of the header's 542 pixels — width the
+// filename needed and did not have.
+function renderTreeHeadPill() {}
 // One entry point for "the diagram selection changed": remember it (for pill emphasis), paint a selected
 // leaf element's footprint bolding, re-emphasise matching pills, and refresh the header pill. `null` clears.
 function setTreeSelection(id) {
@@ -8502,21 +8492,24 @@ function showNoCodeNotice() {
 if (REPO_STATE !== 'ok') showNoCodeNotice();
 const cvminimap = document.getElementById('cvminimap');  // the overview ruler beside it
 const cvpath = document.getElementById('cvpath');
+const srcdir = document.getElementById('srcdir');   // the folder, muted, under the filename
 const cvopen = document.getElementById('cvopen');  // ↗ opens the shown file in the external editor / on GitHub
 if (cvopen) cvopen.addEventListener('click', () => { if (cvPath) openSource({ file: cvPath, line: cvLine }); });
 // × — gives the page back the whole window on a card page the source column was opened over. Shown only
 // there (syncCodePane): on a diagram the column is the view's other half and there is nothing to close.
 const cvCloseBtn = document.getElementById('cvclose');
-if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => setCodeOpen(false));
+// ONE × for the whole column, in the one header, so it is in the same place whichever pane is showing.
+// Closing also UNPINS: a pinned browser holds the column open by itself, so leaving the pin set would make
+// the × look broken.
+if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => {
+  if (treePinned) { treePinned = false; lsSet(LS.treePinned, ''); applyTreeState(); }
+  setCodeOpen(false);
+});
 // The file browser can be the only thing in the column (browsing hides the code viewer), so it carries the
 // same × — one way out, wherever the reader is looking, rather than one that comes and goes with a pane.
 // Closing UNPINS as well: a pinned browser keeps the column open by itself, so leaving the pin set would
 // make the × look broken.
-const treeCloseBtn = document.getElementById('treeclose');
-if (treeCloseBtn) treeCloseBtn.addEventListener('click', () => {
-  if (treePinned) { treePinned = false; lsSet(LS.treePinned, ''); applyTreeState(); }
-  setCodeOpen(false);   // …which re-frames the drawing and re-clamps the card, once, for both changes
-});
+
 const codeBtn = document.getElementById('codebtn');
 if (codeBtn) {
   codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));
@@ -8571,12 +8564,16 @@ function renderCvHeader() {
   const full = (cvPath || '') + (cvLine ? ':' + cvLine : '');
   const multi = SERVED && cvFiles.length > 1;
   cvpath.innerHTML = '';
+  if (srcdir) srcdir.textContent = cvPath ? (cvPath.split('/').slice(0, -1).join('/') || '') : '';
   const pathEl = document.createElement(multi ? 'button' : 'span');
   pathEl.className = 'cvpathtext' + (multi ? ' cvpathbtn' : '');
   const label = document.createElement('span');
   label.className = 'cvpathlabel';
-  label.textContent = full;
-  label.title = full;  // the path truncates on a narrow pane — hover shows it in full
+  // THE FILENAME, not the path. The whole path needed 477px in a 298px slot, so the end of it — the file
+  // — was the part that truncated, and the folders the reader had not asked for were the part that showed.
+  // The folder is on its own muted line underneath, where it is what gives way instead.
+  label.textContent = (cvPath || '').split('/').pop() + (cvLine ? ':' + cvLine : '');
+  label.title = full;  // the folder truncates on a narrow pane — hover shows the whole path
   pathEl.appendChild(label);
   if (multi) {
     pathEl.type = 'button';
@@ -8588,8 +8585,6 @@ function renderCvHeader() {
     pathEl.addEventListener('click', (ev) => { ev.stopPropagation(); toggleCvMenu(); });
   }
   cvpath.appendChild(pathEl);
-  const pill = elementPill(cvElement);           // the element that owns the shown file
-  if (pill) { pill.classList.add('cvpill'); cvpath.appendChild(pill); }
   if (cvopen) cvopen.hidden = !(cvPath && localRef(cvPath));  // the ↗ only shows once a local file is open
 }
 // The custom file switcher menu (replaces the native <select>): a floating list of the element's files,
@@ -9576,8 +9571,8 @@ treePinned = lsGet(LS.treePinned) === '1';
 // says what this reader wants to see rather than which screen they are on.
 codeOpen = lsGet(LS.codeOpen) === '1';
 applyTreeState();
-if (cvFilesBtn) cvFilesBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(!treeBrowsing); } });
-if (treeCodeBtn) treeCodeBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(false); } });
+if (srcSwFiles) srcSwFiles.addEventListener('click', () => { if (!treePinned) setBrowsing(true); });
+if (srcSwCode) srcSwCode.addEventListener('click', () => { if (!treePinned) setBrowsing(false); });
 if (treePinBtn) treePinBtn.addEventListener('click', () => { setPinned(!treePinned); codePaneResized(); });
 let treeResizing = false;
 treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });

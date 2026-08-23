@@ -710,6 +710,46 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     block = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
     assert 'id="pageq"' in block, "the question is above the shadow, with the tabs and the trail"
 
+def test_the_source_column_has_one_header_over_both_panes() -> None:
+    """It was two headers, one per pane, each visible only in one state. So the switch between them was
+    two different buttons, with two different names and two different icons, in two different places:
+    `☰ Files` in the code viewer's header, `</> Source` in the browser's. A control that changes its name,
+    its icon AND its location is not one control, and nothing on screen said the two were the same switch.
+
+    One header now, above both panes, and it never moves. It holds, left to right: the switch with BOTH
+    halves visible and the current one lit; the file; the pin; open-externally; and the one × for the
+    column. The switch doubles as the column's title, so opening from the rail lands on the rail's own two
+    words rather than on an unnamed pane.
+
+    THE FILE IS THE FILENAME, first, with its folder muted beneath it. The old single line held six things
+    in 542px and gave the path 298 of the 477 it needed — so the part that truncated was the END, which is
+    the filename, and what showed was the folders nobody asked for. Measured after: the name fits in full.
+
+    The element pill is gone from both sides. It named a thing the floating card and the breadcrumb name
+    already, and it took 66 of the header's 542 pixels — width the filename needed and did not have."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    # One header, one column, the panes under it.
+    for el in ("srccol", "srchead", "srcpanes", "srcswitch", "srcfile", "srcdir"):
+        assert f'id="{el}"' in html, el
+    assert html.index('id="srchead"') < html.index('id="srcpanes"'), "the header is above both panes"
+    for gone in ("cvhead", "treehead", "cvfilesbtn", "treecodebtn"):
+        assert f'id="{gone}"' not in html, gone
+    # The switch: both halves, the live one lit, dead while pinned (both panes are up).
+    assert 'id="srcsw-code"' in html and 'id="srcsw-files"' in html
+    state = js[js.index("function applyTreeState() {"): js.index("\n}", js.index("function applyTreeState() {"))]
+    assert "srcSwCode.classList.toggle('on', !browsing)" in state
+    assert "srcSwFiles.classList.toggle('on', browsing)" in state
+    assert "srcSwCode.disabled = treePinned" in state and "srcSwFiles.disabled = treePinned" in state
+    assert "#srcswitch button.on" in css, "the live half is lit, not merely un-dimmed"
+    # The FILENAME, not the path; the folder on its own muted line.
+    head = js[js.index("function renderCvHeader() {"): js.index("\n}", js.index("function renderCvHeader() {"))]
+    assert "(cvPath || '').split('/').pop()" in head, "the name, which is what a reader recognises"
+    assert "srcdir.textContent = cvPath ? (cvPath.split('/').slice(0, -1).join('/')" in head
+    assert "elementPill(cvElement)" not in head, "the pill took the width the filename needed"
+    assert "renderTreeHeadPill() {}" in js, "…and it is gone from the browser's side too"
+
 def test_the_source_is_one_control_on_the_edge_and_none_on_the_cards() -> None:
     """An element card shows what an element IS. It carries no way to open the code, and neither does the
     panel its card floats in: code is the reader's LAST priority, and a per-element control put it on
@@ -1022,19 +1062,19 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "const moved = what !== 'size';" in store and "const resized = what !== 'position';" in store
     assert "storePanelBox('position');" in js and "storePanelBox('size');" in js
     # The two visible ways out, and the one visible way in.
-    # The × lives in BOTH panes of the column, because either can be the only one on screen: browsing
-    # hides the code viewer outright, and opening the column with nothing selected lands exactly there —
-    # so the code viewer's × went with it and the title bar's toggle was the only way back out.
-    # Closing from the browser also UNPINS: a pinned browser holds the column open by itself, so leaving
-    # the pin set would make the × look broken.
-    assert 'id="treeclose"' in html and "#treeclose {" in css
-    assert "treeCloseBtn.addEventListener('click'" in js
-    tc = js[js.index("const treeCloseBtn = document.getElementById('treeclose');"):]
-    tc = tc[: tc.index("\n});") + 4]
-    assert "treePinned = false" in tc and "setCodeOpen(false)" in tc
+    # ONE × for the whole column, in the ONE header above both panes, so it is in the same place whichever
+    # pane is showing. It used to live in the code viewer's header only, and browsing hides the code viewer
+    # outright — so opening the column with nothing selected landed on the file browser with no way out of
+    # it but the title bar's toggle.
+    # Closing also UNPINS: a pinned browser holds the column open by itself, so leaving the pin set would
+    # make the × look broken.
     assert "body.tree-browsing:not(.tree-pinned) #codeview { display: none; }" in css, \
-        "…which is why one × in the code viewer was not enough"
-    assert 'id="cvclose"' in html and "#cvclose[hidden] { display: none; }" in css
+        "…which is why a × inside the code viewer was not enough"
+    assert 'id="treeclose"' not in html, "one ×, not one per pane"
+    cc = js[js.index("if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => {"):]
+    cc = cc[: cc.index("\n});") + 4]
+    assert "treePinned = false" in cc and "setCodeOpen(false)" in cc
+    assert 'id="cvclose"' in html
     assert 'id="codebtn"' in html and "#codebtn.on" in css
     assert "codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));" in js
     # A static map has no column to toggle, and SERVED is decided ASYNCHRONOUSLY — initServerMode awaits a
@@ -1044,8 +1084,9 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "btn.hidden = !SERVED;" in js, "a static map has no column to toggle"
     served = js[js.index("  SERVED = true;"):]
     assert "resyncCodePane();" in served[:700], "…and everything gated on it is decided again here"
-    # Hiding is the same set of panes degraded mode hides, plus the column's width going back to the page.
-    for pane in ("#tree", "#treeresizer", "#codeview", "#resizer"):
+    # Hiding is the whole column in one go — it is one element now, header and both panes — plus the
+    # width going back to the page.
+    for pane in ("#srccol", "#resizer"):
         assert f"body.code-hidden {pane}" in css, pane
     assert "body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }" in css
 

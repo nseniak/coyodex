@@ -707,9 +707,7 @@ body:not(.served) #resizer { display: none; }
 #srcrail .srcrail-word { writing-mode: vertical-rl; transform: rotate(180deg);
                          font-size: 11px; font-weight: 700; text-transform: uppercase;
                          letter-spacing: .12em; }
-body.code-hidden #tree,
-body.code-hidden #treeresizer,
-body.code-hidden #codeview,
+body.code-hidden #srccol,
 body.code-hidden #resizer { display: none; }
 body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
 
@@ -718,18 +716,11 @@ body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
    BROWSING (filling the code viewer's slot); hidden otherwise. Width persists. */
 #tree { flex: 0 0 auto; width: 260px; display: flex; flex-direction: column; min-width: 0;
         background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
-#treehead { flex: 0 0 auto; padding: 8px 10px; border-bottom: 1px solid #f3f4f6;
-            display: flex; align-items: center; gap: 8px; }
-/* pin toggle in the browser head (right-aligned): pins the browser to its own pane, or unpins it away */
+/* pin toggle, right-aligned in the one header: pins the browser to its own pane, or unpins it away */
 #treepin { flex: 0 0 auto; margin-left: auto; cursor: pointer; border: 1px solid #e5e7eb; background: #fff;
            border-radius: 5px; padding: 1px 5px; font-size: 12px; line-height: 1.2; filter: grayscale(1) opacity(.55); }
 #treepin:hover { background: #f5f6ff; filter: grayscale(.3) opacity(.9); }
 #treepin.pinned { background: #eef2ff; border-color: #c7d2fe; filter: none; }
-/* The column's × in the browser's head, styled as the code viewer's own so the two read as one control
-   in two places rather than two controls. */
-#treeclose { flex: 0 0 auto; cursor: pointer; border: 0; background: none; color: #9ca3af;
-             border-radius: 4px; padding: 1px 6px; font-size: 15px; line-height: 1.2; }
-#treeclose:hover { background: #f3f4f6; color: #374151; }
 #treebody { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 12px; font-size: 13px; }
 /* one row = caret + icon + name (+ a node-id chip when a node points exactly here). Depth is set
    inline via padding-left. The whole row is the click target. */
@@ -803,7 +794,6 @@ body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
           mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
 }
 /* the selected element's pill in the browser header (mirrors the code viewer's header pill) */
-.treeheadpill { flex: 0 1 auto; min-width: 0; }
 .tchildren { display: none; }
 .tchildren.open { display: block; }
 .tempty { padding: 10px 12px; color: #9ca3af; font-size: 12px; }
@@ -814,7 +804,7 @@ body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
    walkable tree. */
 body:not(.tree-pinned):not(.tree-browsing) #tree { display: none; }
 body:not(.tree-pinned) #treeresizer { display: none; }
-body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #cvfilesbtn { display: none; }
+body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #srcswitch { display: none; }
 /* Browsing: the browser takes over the code viewer's slot (only when not pinned) so the reader can drill
    a folder; picking a file ends browsing and the code viewer returns. It grows to fill; code steps aside. */
 body.tree-browsing:not(.tree-pinned) #tree { flex: 1 1 0; width: auto; }
@@ -1163,17 +1153,37 @@ body.altmod .opensrc, body.altmod .opensrc * {
    The selected file's source, read from the server (git @ the map's commit), highlighted with
    highlight.js (lazy-loaded from a CDN) and scrolled to the current line. A first pass — deliberately
    simple; richer navigation (go-to-def, search) is planned. */
-#codeview { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; background: #fff;
-            border-left: 1px solid #e5e7eb; }
-#cvhead { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-          border-bottom: 1px solid #f3f4f6; }
-/* the slot-switch buttons: the code viewer's "Files" (replaces the old "CODE" label) and the browser's
-   "Code" (replaces the "FILES" label) — same design, each swaps the code slot to the other view. Both are
-   disabled (dimmed) while pinned, since both panes are already visible then. `active` = browsing is on. */
-#cvfilesbtn, #treecodebtn { flex: 0 0 auto; cursor: pointer; border: 1px solid #c7d2fe; background: #eef2ff;
-   color: #4338ca; border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
-#cvfilesbtn:hover, #treecodebtn:hover { background: #e0e7ff; }
-#cvfilesbtn:disabled, #treecodebtn:disabled { cursor: default; opacity: .45; background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
+#codeview { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; background: #fff; }
+/* THE SOURCE COLUMN: one header over both panes, then the panes side by side. */
+#srccol { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+          background: #fff; border-left: 1px solid #e5e7eb; }
+#srcpanes { flex: 1 1 auto; min-height: 0; display: flex; }
+/* ONE header, and it never moves. Two rows' worth of content on one row before: `Files`, the path, the
+   file switcher, the element pill, `open externally` and `close`, in 542px — and the path needed 477px to
+   show 298, so what truncated was the END of it, which is the filename. */
+#srchead { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 7px 12px;
+           border-bottom: 1px solid #f3f4f6; }
+/* THE SWITCH: both halves always visible, the current one lit. It replaced two buttons in two headers,
+   each shown only in one state, with different names and different icons — nothing said they were the
+   same switch. Disabled while the browser is pinned, when both panes are on screen and there is nothing
+   to switch between. It doubles as the column's TITLE: opening from the rail lands on the rail's own two
+   words rather than on an unnamed pane. */
+#srcswitch { flex: 0 0 auto; display: inline-flex; border: 1px solid #e5e7eb; border-radius: 6px;
+             overflow: hidden; background: #f9fafb; }
+#srcswitch button { cursor: pointer; border: 0; background: transparent; color: #6b7280;
+                    padding: 3px 9px; font: inherit; font-size: 11px; font-weight: 600;
+                    letter-spacing: .02em; white-space: nowrap; }
+#srcswitch button + button { border-left: 1px solid #e5e7eb; }
+#srcswitch button:hover:not(:disabled):not(.on) { background: #eef2ff; color: #3730a3; }
+#srcswitch button.on { background: #4f46e5; color: #fff; }
+#srcswitch button:disabled { cursor: default; opacity: .5; }
+#srcswitch button.on:disabled { opacity: .65; }
+/* THE FILE, in two lines: its name, then its folder muted beneath. The name is what a reader recognises,
+   so it goes first and the folder is what gives way when the column is narrow. */
+#srcfile { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+#srcdir { font: 10.5px ui-monospace, monospace; color: #9ca3af; overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+#srcdir:empty { display: none; }
 /* the path area: a flex row holding the path (itself the file switcher) + the owning-element pill, and the
    anchor for the switcher menu (position:relative). Not clipped, so the menu can overflow it downward. */
 #cvpath { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
@@ -1185,8 +1195,6 @@ body.altmod .opensrc, body.altmod .opensrc * {
 .cvpathbtn:hover { background: #eef2ff; }
 .cvpathlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cvcaret { flex: 0 0 auto; font-size: 9px; color: #6b7280; }
-/* the owning-element pill: capped so a long element name can't crowd out the path (the primary content) */
-.cvpill { flex: 0 1 auto; max-width: 45%; }
 /* the custom file-switcher menu, anchored under the path trigger */
 .cvmenu { position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 50; min-width: 240px;
           max-width: 460px; max-height: 320px; overflow: auto; padding: 4px; background: #fff;

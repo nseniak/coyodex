@@ -214,16 +214,37 @@
   <!-- File browser: the mapped repo's real tree, shaded by map coverage. Fetched live from the coyodex
        server (git @ the map's commit). Selecting a graph element highlights its file here; clicking a
        file selects the matching component/subsystem AND shows the file in the code viewer. -->
-  <aside id="tree">
-    <div id="treehead">
-      <button id="treecodebtn" type="button" title="Show the source">&#60;/&#62; Source</button>
+  <!-- THE SOURCE COLUMN: ONE header over both panes, then the panes.
+       It used to be two headers, one per pane, each visible only in one state — and the switch between
+       them was two different buttons, with two different names, in two different places. A control that
+       changes its name, its icon and its location is not one control, and nothing on screen said the two
+       were the same switch. The header now sits above both panes and never moves. -->
+  <div id="srccol">
+    <div id="srchead">
+      <!-- Both halves always visible, the current one lit: this is the switch AND the title. Opening from
+           the rail lands on the same two words the rail carries, so the reader is not dropped somewhere
+           unnamed. -->
+      <div id="srcswitch" role="group" aria-label="Show the source or the files">
+        <button id="srcsw-code" type="button" title="Show the source">&#60;/&#62; Source</button>
+        <button id="srcsw-files" type="button" title="Show the file browser">&#9776; Files</button>
+      </div>
+      <!-- The FILE, first: its name on the top line and its folder muted beneath. The one line before
+           held six things in 542px, and the path needed 477px to show 298 — so what truncated was the
+           end of it, which is the filename, the one thing the reader came for. -->
+      <div id="srcfile">
+        <span id="cvpath"></span>
+        <span id="srcdir"></span>
+      </div>
       <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
       <button id="treepin" type="button" title="Pin the file browser beside the code">&#128204;</button>
-      <!-- The same × the code viewer's header carries. The browser can be the ONLY thing in the column —
-           browsing hides the code viewer entirely — and then the column's own close button went with it,
-           leaving the title bar's toggle as the only way out of a pane the reader had opened. -->
-      <button id="treeclose" type="button" title="Hide the source pane" aria-label="Hide the source pane">&times;</button>
+      <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
+      <button id="cvclose" type="button" title="Hide the source pane" aria-label="Hide the source pane">&times;</button>
     </div>
+    <div id="srcpanes">
+  <!-- File browser: the mapped repo's real tree, shaded by map coverage. Fetched live from the coyodex
+       server (git @ the map's commit). Selecting a graph element highlights its file here; clicking a
+       file selects the matching component/subsystem AND shows the file in the code viewer. -->
+  <aside id="tree">
     <div id="treebody"></div>
   </aside>
   <!-- Drag handle to resize the file browser (width persisted in localStorage). -->
@@ -231,14 +252,6 @@
   <!-- Code viewer: the selected file's source, highlighted, scrolled to the current line. Its text comes
        from the server (git @ commit). -->
   <section id="codeview">
-    <div id="cvhead">
-      <button id="cvfilesbtn" type="button" title="Show the file browser">&#9776; Files</button>
-      <span id="cvpath"></span>
-      <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
-      <!-- Closes the whole source column again. Shown only on a card list, a card grid or a details
-           page, where the column is opened by a code link rather than owned by the view (syncCodePane). -->
-      <button id="cvclose" type="button" hidden title="Hide the source pane" aria-label="Hide the source pane">&times;</button>
-    </div>
     <div id="cvbody">
       <div id="cvscroll"><p class="cvempty">Select a node or file to view its source.</p></div>
       <!-- Overview ruler: one tick per element / use-case anchored in the file, at its relative depth —
@@ -246,6 +259,8 @@
       <div id="cvminimap" aria-hidden="true"></div>
     </div>
   </section>
+    </div>
+  </div>
   <!-- THE SOURCE RAIL: a strip down the right edge, where the source column itself will appear, so the
        click shows its own result before you make it. Present exactly when the column is shut, so the
        edge of the window always says one of two things — "the source is here" or the source itself.
