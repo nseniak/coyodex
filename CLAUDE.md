@@ -50,11 +50,18 @@ design principles these come from)
 - **show in context** — click the type pill. On a diagram, select and centre
   the shape. On a card list, scroll to the card and briefly ring it.
 - **view question** — the one sentence a view answers. It belongs to the view,
-  not to any page, so it sits beside the view tabs and never changes as you
-  drill.
-- **the trail** — the group tabs, the view tabs and the breadcrumb, read as one
-  path. Where you are is the last item in it, and nothing else names it. The
-  breadcrumb's last item is the page's title, so no page draws its own heading.
+  not to any page, so it leads the content and never changes as you drill.
+- **group tab row** — the strip of group tabs: Product, Data, Under the hood,
+  Glossary. The first strip under the title bar.
+- **view tab row** — the strip of view tabs, under the group tab row. With
+  Product open it holds Features, Happy Path, Actors, Rules.
+- **the trail** — the group tab row, the view tab row and the breadcrumb, read
+  as one path. Where you are is the last item in it, and nothing else names it.
+  The breadcrumb's last item is the page's title, so no page draws its own
+  heading, and on a page about one element it carries that element's pills.
+- **source column** — the file browser and the code viewer, on the right. It is
+  optional on every screen. The **source rail**, a strip on the right edge,
+  opens it; the × in its header closes it.
 - **product overview** — the product description, leading the Features page.
 
 **How coyodex is delivered**

@@ -285,9 +285,13 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 .glossary td { vertical-align: top; padding: 8px 12px; color: #374151; line-height: 1.45; }
 .glossary tbody tr { border-bottom: 1px solid #eef2f7; }
 .glossary tbody tr:hover { background: #f5f7ff; }
-.glossary .src { font-family: ui-monospace, monospace; font-size: 12px; color: #2563eb; background: none;
-                 border: 0; padding: 0; cursor: pointer; text-align: left; white-space: nowrap; }
-.glossary .src:hover { text-decoration: underline; }
+/* A CODE LINK, wherever it is drawn. `srcCell` builds one, and eight screens call it: the Glossary, the
+   Storage table, an entity's page, the System reference tables, a flow step's call site, the deployment
+   rows. This rule was scoped to `.glossary`, so SEVEN of those eight rendered the raw browser button —
+   grey fill, a 2px bevelled border, 13.3px black text — while the eighth looked like a link. */
+.src { font-family: ui-monospace, monospace; font-size: 12px; color: #2563eb; background: none;
+       border: 0; padding: 0; cursor: pointer; text-align: left; white-space: nowrap; }
+.src:hover { text-decoration: underline; }
 .glossary .gloss-plain { font-family: ui-monospace, monospace; font-size: 12px; color: #6b7280; }
 .glossary .gloss-none { color: #9ca3af; }
 /* System tab: the operational reference tables, laid out as cards (reuses .usecases-wrap + .uc-group +
@@ -1099,10 +1103,6 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #legendclose:hover { color: #374151; }
 /* Same: a title-bar utility, with an ON state because the legend it toggles stays on screen. */
 #legendbtn.on { background: rgba(255,255,255,.22); color: #fff; }
-/* The source toggle, lit the same way as the legend's: one idiom for "this panel is open". */
-#codebtn { font-family: ui-monospace, monospace; font-size: 12px; }
-#codebtn.on { background: rgba(255,255,255,.22); color: #fff; }
-#codebtn[hidden] { display: none; }
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 

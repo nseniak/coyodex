@@ -5457,17 +5457,13 @@ function syncCodePane(_s) {
   document.body.classList.toggle('code-hidden', !codePaneOpen());
   const close = document.getElementById('cvclose');
   if (close) close.hidden = false;   // the column is optional everywhere, so × is offered everywhere
-  const btn = document.getElementById('codebtn');
-  if (btn) {
-    // SERVED is decided ASYNCHRONOUSLY — initServerMode awaits a fetch — so it cannot be read at boot,
-    // where the button is wired. It was, and the toggle stayed hidden on every served map. Read here
-    // instead, where every render passes, and initServerMode resyncs once the answer is settled.
-    btn.hidden = !SERVED;
-    btn.classList.toggle('on', codePaneOpen());
-    btn.setAttribute('aria-pressed', codePaneOpen() ? 'true' : 'false');
-  }
-  // …and the rail on the right edge, which stands exactly where the column will appear. It is there when
-  // the column is shut and gone when it is up, so the edge of the window always says one of two things.
+  // The rail on the right edge, which stands exactly where the column will appear. It is there when the
+  // column is shut and gone when it is up, so the edge of the window always says one of two things.
+  //
+  // It is the ONLY way in now. The title bar carried a `</>` toggle as well, from before the rail existed
+  // — two controls for one thing, one of them a glyph among five other glyphs. SERVED is decided
+  // ASYNCHRONOUSLY (initServerMode awaits a fetch), so it is read here, where every render passes, rather
+  // than once at boot, where it is still false on a served map.
   const rail = document.getElementById('srcrail');
   if (rail) rail.hidden = !SERVED || codePaneOpen();
 }
@@ -8510,10 +8506,6 @@ if (cvCloseBtn) cvCloseBtn.addEventListener('click', () => {
 // Closing UNPINS as well: a pinned browser keeps the column open by itself, so leaving the pin set would
 // make the × look broken.
 
-const codeBtn = document.getElementById('codebtn');
-if (codeBtn) {
-  codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));
-}
 // The rail only OPENS. Putting the column away is the job of the two × buttons inside it and of the title
 // bar's toggle, which is also the one control that shows whether it is open at all.
 const srcRail = document.getElementById('srcrail');

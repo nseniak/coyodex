@@ -710,6 +710,18 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     block = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
     assert 'id="pageq"' in block, "the question is above the shadow, with the tabs and the trail"
 
+def test_a_code_link_looks_the_same_on_every_screen_that_draws_one() -> None:
+    """`srcCell` builds one code link and eight screens call it: the Glossary, the Storage table, an
+    entity's page, the System reference tables, a flow step's call site, the deployment rows. Its style
+    rule was scoped to `.glossary`, so SEVEN of the eight rendered the raw browser button — grey fill, a
+    2px bevelled border, 13.3px black text — while the eighth looked like a link.
+
+    One unscoped rule now. Measured after: the Storage chip and the Glossary chip are both 12px
+    monospace, #2563eb, no background and no border."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "\n.src { font-family: ui-monospace" in css, "the rule is not scoped to one table"
+    assert ".glossary .src {" not in css
+
 def test_the_source_column_has_one_header_over_both_panes() -> None:
     """It was two headers, one per pane, each visible only in one state. So the switch between them was
     two different buttons, with two different names and two different icons, in two different places:
@@ -1090,13 +1102,13 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     cc = cc[: cc.index("\n});") + 4]
     assert "treePinned = false" in cc and "setCodeOpen(false)" in cc
     assert 'id="cvclose"' in html
-    assert 'id="codebtn"' in html and "#codebtn.on" in css
-    assert "codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));" in js
-    # A static map has no column to toggle, and SERVED is decided ASYNCHRONOUSLY — initServerMode awaits a
-    # fetch — so it cannot be read at boot where the button is wired. It was, and the toggle stayed hidden
-    # on every served map: the one control that opens the column from anywhere was never on screen. It is
-    # read where every render passes, and initServerMode resyncs once the answer is settled.
-    assert "btn.hidden = !SERVED;" in js, "a static map has no column to toggle"
+    # ONE way in: the rail. The title bar carried a `</>` toggle as well, from before the rail existed —
+    # two controls for one thing, one of them a glyph among five other glyphs.
+    assert 'id="codebtn"' not in html and "codebtn" not in css and "codeBtn" not in js
+    # A static map has no column to open, and SERVED is decided ASYNCHRONOUSLY — initServerMode awaits a
+    # fetch — so it cannot be read at boot. It was, and the control stayed hidden on every served map. It
+    # is read where every render passes, and initServerMode resyncs once the answer is settled.
+    assert "rail.hidden = !SERVED || codePaneOpen();" in js, "a static map has no column to open"
     served = js[js.index("  SERVED = true;"):]
     assert "resyncCodePane();" in served[:700], "…and everything gated on it is decided again here"
     # Hiding is the whole column in one go — it is one element now, header and both panes — plus the
