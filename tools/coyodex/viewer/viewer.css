@@ -1161,8 +1161,9 @@ body.altmod .opensrc, body.altmod .opensrc * {
 /* ONE header, and it never moves. Two rows' worth of content on one row before: `Files`, the path, the
    file switcher, the element pill, `open externally` and `close`, in 542px — and the path needed 477px to
    show 298, so what truncated was the END of it, which is the filename. */
-#srchead { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 7px 12px;
+#srchead { flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px; padding: 7px 12px 8px;
            border-bottom: 1px solid #f3f4f6; }
+.srchead-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 /* THE SWITCH: both halves always visible, the current one lit. It replaced two buttons in two headers,
    each shown only in one state, with different names and different icons — nothing said they were the
    same switch. Disabled while the browser is pinned, when both panes are on screen and there is nothing
@@ -1178,15 +1179,21 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #srcswitch button.on { background: #4f46e5; color: #fff; }
 #srcswitch button:disabled { cursor: default; opacity: .5; }
 #srcswitch button.on:disabled { opacity: .65; }
-/* THE FILE, in two lines: its name, then its folder muted beneath. The name is what a reader recognises,
-   so it goes first and the folder is what gives way when the column is narrow. */
-#srcfile { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-#srcdir { font: 10.5px ui-monospace, monospace; color: #9ca3af; overflow: hidden;
-          text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+/* THE FILE, on its own row at the full width: the name first, the folder after it and muted, so the
+   folder is what gives way when the column is narrow. The name is what a reader recognises.
+   Not drawn while the FILE BROWSER is the pane on screen: it would name a file you cannot see. */
+#srcfile { gap: 8px; }
+body.tree-browsing:not(.tree-pinned) #srcfile { display: none; }
+/* Shrink factor 100 against the filename's 1: the FOLDER gives way first and only when it has nothing
+   left does the name start to ellipse. Left equal, a narrow column truncated both — measured at 518px
+   with the worst path on these maps, the name showed 200 of the 246 it needed while the folder still had
+   293 of 354. The name is the thing the reader came for. */
+#srcdir { flex: 0 100 auto; min-width: 0; font: 10.5px ui-monospace, monospace; color: #9ca3af;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #srcdir:empty { display: none; }
 /* the path area: a flex row holding the path (itself the file switcher) + the owning-element pill, and the
    anchor for the switcher menu (position:relative). Not clipped, so the menu can overflow it downward. */
-#cvpath { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+#cvpath { position: relative; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
 /* the full path — a plain span for a single-file element, a dropdown trigger (button) when the element
    owns several files. Ellipsis lives on the inner label so a long path shrinks but the caret stays put. */
 .cvpathtext { flex: 1 1 auto; display: inline-flex; align-items: center; gap: 4px; min-width: 0;

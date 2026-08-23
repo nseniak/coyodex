@@ -220,25 +220,30 @@
        changes its name, its icon and its location is not one control, and nothing on screen said the two
        were the same switch. The header now sits above both panes and never moves. -->
   <div id="srccol">
+    <!-- TWO ROWS, because one row could not hold both jobs. The top row is about the COLUMN: which pane
+         you are looking at, and what to do with the column. The second is about the FILE. Sharing one row
+         left the filename 266px of a 542px header, beside a switch and three icon buttons. -->
     <div id="srchead">
-      <!-- Both halves always visible, the current one lit: this is the switch AND the title. Opening from
-           the rail lands on the same two words the rail carries, so the reader is not dropped somewhere
-           unnamed. -->
-      <div id="srcswitch" role="group" aria-label="Show the source or the files">
-        <button id="srcsw-code" type="button" title="Show the source">&#60;/&#62; Source</button>
-        <button id="srcsw-files" type="button" title="Show the file browser">&#9776; Files</button>
+      <div class="srchead-row" id="srchead-top">
+        <!-- Both halves always visible, the current one lit: this is the switch AND the title. Opening
+             from the rail lands on the same two words the rail carries, so the reader is not dropped
+             somewhere unnamed. -->
+        <div id="srcswitch" role="group" aria-label="Show the source or the files">
+          <button id="srcsw-code" type="button" title="Show the source">&#60;/&#62; Source</button>
+          <button id="srcsw-files" type="button" title="Show the file browser">&#9776; Files</button>
+        </div>
+        <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
+        <button id="treepin" type="button" title="Pin the file browser beside the code">&#128204;</button>
+        <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
+        <button id="cvclose" type="button" title="Hide the source pane" aria-label="Hide the source pane">&times;</button>
       </div>
-      <!-- The FILE, first: its name on the top line and its folder muted beneath. The one line before
-           held six things in 542px, and the path needed 477px to show 298 — so what truncated was the
-           end of it, which is the filename, the one thing the reader came for. -->
-      <div id="srcfile">
+      <!-- The FILE, on a row of its own and at the full width: its name first, then its folder muted
+           after it, so the folder is what gives way when the column is narrow. It belongs to the code
+           pane, so it is not drawn while the file browser is the pane on screen. -->
+      <div class="srchead-row" id="srcfile">
         <span id="cvpath"></span>
         <span id="srcdir"></span>
       </div>
-      <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
-      <button id="treepin" type="button" title="Pin the file browser beside the code">&#128204;</button>
-      <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
-      <button id="cvclose" type="button" title="Hide the source pane" aria-label="Hide the source pane">&times;</button>
     </div>
     <div id="srcpanes">
   <!-- File browser: the mapped repo's real tree, shaded by map coverage. Fetched live from the coyodex

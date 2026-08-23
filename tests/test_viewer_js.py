@@ -743,7 +743,22 @@ def test_the_source_column_has_one_header_over_both_panes() -> None:
     assert "srcSwFiles.classList.toggle('on', browsing)" in state
     assert "srcSwCode.disabled = treePinned" in state and "srcSwFiles.disabled = treePinned" in state
     assert "#srcswitch button.on" in css, "the live half is lit, not merely un-dimmed"
-    # The FILENAME, not the path; the folder on its own muted line.
+    # TWO ROWS, because one row could not hold both jobs. The top row is about the COLUMN — which pane you
+    # are looking at, and what to do with the column. The second is about the FILE. Sharing one row left
+    # the filename 266px of a 542px header, beside a switch and three icon buttons.
+    assert 'id="srchead-top"' in html
+    assert html.index('id="srchead-top"') < html.index('id="srcfile"'), "controls first, then the file"
+    for ctl in ('id="srcswitch"', 'id="treepin"', 'id="cvopen"', 'id="cvclose"'):
+        assert html.index(ctl) < html.index('id="srcfile"'), ctl
+    # The file row belongs to the CODE pane, so it is not drawn while the browser is the pane on screen:
+    # it would name a file the reader cannot see.
+    assert "body.tree-browsing:not(.tree-pinned) #srcfile { display: none; }" in css
+    # And within that row the FOLDER gives way first. Left equal, a narrow column truncated both — measured
+    # at 518px with the worst path on these maps, the name showed 200 of the 246 it needed while the folder
+    # still had 293 of 354. The name is the thing the reader came for.
+    d = css[css.index("#srcdir {"): css.index("}", css.index("#srcdir {"))]
+    assert "flex: 0 100 auto" in d, "the folder shrinks 100x faster than the filename"
+    # The FILENAME, not the path; the folder beside it, muted.
     head = js[js.index("function renderCvHeader() {"): js.index("\n}", js.index("function renderCvHeader() {"))]
     assert "(cvPath || '').split('/').pop()" in head, "the name, which is what a reader recognises"
     assert "srcdir.textContent = cvPath ? (cvPath.split('/').slice(0, -1).join('/')" in head
