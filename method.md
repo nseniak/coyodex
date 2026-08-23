@@ -228,7 +228,7 @@ the spine; built after harvest + at least one full trace.
 
   **What this deliberately gives up**: an individual core use case falling off the walk no longer
   warns, because its capability still passes. Those use cases are COUNTED instead
-  (`off_spine_in_core_capabilities`), so the trade stays visible rather than becoming a silent loss.
+  (`off_spine_in_expected_capabilities`), so the trade stays visible rather than becoming a silent loss.
   The old rule demanded a written record for each one, and a record that costs more to write than to
   skip is a record that gets skipped. **A map with no capabilities keeps the old per-use-case rule**
   — `UCn: <why>` for each off-spine use case — so the check is additive rather than a cliff.

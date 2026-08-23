@@ -194,9 +194,9 @@ def test_a_capability_naming_no_use_cases_is_empty_not_missing() -> None:
 def test_completeness_counts_on_the_fixture() -> None:
     """Frozen because every one of these was quoted wrongly at least once during the design.
 
-    `off_spine_in_core_capabilities` is the deliberate give-up made visible: moving the spine check
-    to capability altitude means six real use cases — "Remove a team member", "Edit or remove an
-    upstream" among them — no longer warn. Counting them is what keeps that a trade rather than a
+    `off_spine_in_expected_capabilities` is the deliberate give-up made visible: moving the spine
+    check to capability altitude means six real use cases — "Remove a team member", "Edit or remove
+    an upstream" among them — no longer warn. Counting them is what keeps that a trade rather than a
     silent loss."""
     from coyodex import validate_model as v
     c = v.completeness_counts(load_fixture())

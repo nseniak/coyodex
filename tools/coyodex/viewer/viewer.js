@@ -7059,7 +7059,7 @@ function systemSections() {
       tile('Self-started unclaimed', C.entry_points_unclaimed_self || 0, 0,
            'crons / workers / boot hooks — often a record, not a use case',
            (C.entry_points_unclaimed_self || 0) ? 'warn' : 'ok'),
-      HAS_CAPABILITIES ? tile('Off-spine in a core feature', C.off_spine_in_core_capabilities || 0, 0,
+      HAS_CAPABILITIES ? tile('Off-spine in a feature expected on the walk', C.off_spine_in_expected_capabilities || 0, 0,
            'reported, not warned — the feature-level check does not see these', '') : '',
     ].join('');
     sec('map', 'Map completeness', `<div class="sys-tiles">${tiles}</div>`);

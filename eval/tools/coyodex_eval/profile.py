@@ -110,9 +110,10 @@ class MapProfile:
     #                                            build, closing a 15-of-25 gap costs ~12 % of build
     #                                            tokens, so the shortfall is reported, never redefined
     #                                            as correct.
-    off_spine_in_core_capabilities: int | None = None  # the deliberate give-up of the capability-level
+    off_spine_in_expected_capabilities: int | None = None  # the deliberate give-up of the capability-level
     #                                            spine check, made countable: use cases off the walk
-    #                                            inside a CORE capability, which no longer warn.
+    #                                            inside a capability marked `happy_path: expected`,
+    #                                            which no longer warn.
     entities_in_flows: int | None = None       # distinct entities appearing as a flow-step
     #                                            endpoint (sub-flows expanded) — the flow-derived
     #                                            'Used in UC' coverage of the domain model
@@ -311,7 +312,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     n_caps = len(m.capabilities) or None      # None on a map that has not adopted the grouping
     caps_untraced = counts["capabilities_untraced"] if m.capabilities else None
     ucs_untraced = counts["use_cases_untraced"] if m.use_cases else None
-    off_spine_core = counts["off_spine_in_core_capabilities"] if m.capabilities and m.happy_path else None
+    off_spine_expected = counts["off_spine_in_expected_capabilities"] if m.capabilities and m.happy_path else None
 
     # Linkage, not coverage: how many declared units any component actually claims to run in.
     unit_names = [u.unit for u in m.deployment if u.unit]
@@ -378,7 +379,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         capabilities=n_caps,
         capabilities_untraced=caps_untraced,
         use_cases_untraced=ucs_untraced,
-        off_spine_in_core_capabilities=off_spine_core,
+        off_spine_in_expected_capabilities=off_spine_expected,
         entities_in_flows=e_in_flows,
         entities_in_flows_pct=(round(100 * e_in_flows / len(m.entities), 1)
                                if e_in_flows is not None else None),

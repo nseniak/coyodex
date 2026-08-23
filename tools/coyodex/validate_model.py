@@ -1389,10 +1389,11 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
       * **trace debt.** The target is every use case traced — measured on a real build, closing the
         gap costs ~12 % of build tokens, which does not justify a coverage rule that redefines the
         shortfall as correct. So the shortfall is a number you can see and act on.
-      * **off-spine use cases inside CORE capabilities.** Moving the spine check to capability
-        altitude gives up the per-use-case signal: on the reference map six use cases (including
-        "Remove a team member") sit off the walk inside a core capability and now warn about
-        nothing. Counting them keeps them visible without reinstating eleven written records.
+      * **off-spine use cases inside capabilities EXPECTED on the walk.** Moving the spine check to
+        capability altitude gives up the per-use-case signal: on the reference map six use cases
+        (including "Remove a team member") sit off the walk inside a capability marked
+        `happy_path: expected` and now warn about nothing. Counting them keeps them visible without
+        reinstating eleven written records.
 
     `capabilities_untraced` is the empty-capability signal — a whole part of the product nobody
     traced, which today is invisible."""
