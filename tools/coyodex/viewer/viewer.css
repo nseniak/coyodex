@@ -698,10 +698,13 @@ body:not(.served) #resizer { display: none; }
    It replaced a `</>` button on every card. Code is the reader's LAST priority, and a per-element control
    put it on every card in the app; one strip says the same thing once, and says it about the whole
    screen rather than about one box. */
-/* CENTRED, not top-aligned: a full-height strip with its label bunched at the top reads as an accident
-   rather than as one control, and centred it is beside the content wherever the reader is looking. */
+/* TOP-ALIGNED, level with the chevron that folds the column away. Centred first, on the grounds that a
+   full-height strip with its label bunched at the top reads as an accident — true while the strip was the
+   only control of its kind. It stopped being true when the × became a chevron: the two are now one pair,
+   the chevron folds the column back to this edge and the rail brings it out again, and they were 423px
+   apart in y while sharing the same x to within 3px. At the top they land in the same corner. */
 #srcrail { flex: 0 0 30px; display: flex; flex-direction: column; align-items: center;
-           justify-content: center; gap: 12px; padding: 14px 0; cursor: pointer;
+           justify-content: flex-start; gap: 10px; padding: 11px 0; cursor: pointer;
            border: 0; border-left: 1px solid #e5e7eb; background: #f3f4f6; color: #4b5563;
            font: inherit; }
 #srcrail:hover { background: #eef2ff; color: #3730a3; border-left-color: #c7d2fe; }
