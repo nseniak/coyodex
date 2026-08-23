@@ -5459,6 +5459,10 @@ function syncCodePane(_s) {
   if (close) close.hidden = false;   // the column is optional everywhere, so × is offered everywhere
   const btn = document.getElementById('codebtn');
   if (btn) {
+    // SERVED is decided ASYNCHRONOUSLY — initServerMode awaits a fetch — so it cannot be read at boot,
+    // where the button is wired. It was, and the toggle stayed hidden on every served map. Read here
+    // instead, where every render passes, and initServerMode resyncs once the answer is settled.
+    btn.hidden = !SERVED;
     btn.classList.toggle('on', codePaneOpen());
     btn.setAttribute('aria-pressed', codePaneOpen() ? 'true' : 'false');
   }
@@ -8469,6 +8473,11 @@ async function initServerMode() {
   } catch (_) { return; }  // no server — stay degraded
   SERVED = true;
   document.body.classList.add('served');
+  // Everything gated on SERVED that was decided BEFORE this point has to be decided again. The first
+  // render runs at boot, while this fetch is still in flight, so the source column's toggle was drawn
+  // hidden and stayed hidden: the one control that opens the column from anywhere was never on screen on
+  // a served map. One resync here, rather than a second copy of the rule at each gated control.
+  resyncCodePane();
   // The header title becomes a link back to the server's landing page (all maps) — only in FULL mode,
   // since a static file:// map has no server root to return to.
   // A <span>, not an <h1>, since the page's one heading is the current breadcrumb item — but it is a
@@ -8544,7 +8553,6 @@ if (treeCloseBtn) treeCloseBtn.addEventListener('click', () => {
 });
 const codeBtn = document.getElementById('codebtn');
 if (codeBtn) {
-  if (!SERVED) codeBtn.hidden = true;   // a static map has no code column to show
   codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));
 }
 // The ruler's viewport band tracks the scroll live, and the ruler doubles as a scrollbar: press or drag

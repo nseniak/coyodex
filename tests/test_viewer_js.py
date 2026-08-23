@@ -1044,7 +1044,13 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert 'id="cvclose"' in html and "#cvclose[hidden] { display: none; }" in css
     assert 'id="codebtn"' in html and "#codebtn.on" in css
     assert "codeBtn.addEventListener('click', () => setCodeOpen(!codePaneOpen()));" in js
-    assert "if (!SERVED) codeBtn.hidden = true;" in js, "a static map has no column to toggle"
+    # A static map has no column to toggle, and SERVED is decided ASYNCHRONOUSLY — initServerMode awaits a
+    # fetch — so it cannot be read at boot where the button is wired. It was, and the toggle stayed hidden
+    # on every served map: the one control that opens the column from anywhere was never on screen. It is
+    # read where every render passes, and initServerMode resyncs once the answer is settled.
+    assert "btn.hidden = !SERVED;" in js, "a static map has no column to toggle"
+    served = js[js.index("  SERVED = true;"):]
+    assert "resyncCodePane();" in served[:700], "…and everything gated on it is decided again here"
     # Hiding is the same set of panes degraded mode hides, plus the column's width going back to the page.
     for pane in ("#tree", "#treeresizer", "#codeview", "#resizer"):
         assert f"body.code-hidden {pane}" in css, pane
