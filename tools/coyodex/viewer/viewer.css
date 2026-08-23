@@ -1222,8 +1222,10 @@ body.tree-browsing:not(.tree-pinned) #srcfile { display: none; }
 #cvopen[hidden] { display: none; }
 /* the × that closes the whole source column — quieter than the ↗ beside it, because it undoes a thing the
    reader opened rather than reaching outside the app. Shown only on the card pages (syncCodePane). */
+/* Sized up from the × it replaced: a chevron at 15px is a hairline, and this is the control that puts a
+   whole column away. */
 #cvclose { flex: 0 0 auto; cursor: pointer; border: 0; background: none; color: #9ca3af;
-           border-radius: 4px; padding: 1px 6px; font-size: 15px; line-height: 1.2; }
+           border-radius: 4px; padding: 0 7px; font-size: 20px; line-height: 1.1; font-weight: 600; }
 #cvclose:hover { background: #f3f4f6; color: #374151; }
 #cvclose[hidden] { display: none; }
 /* the code body is a flex row: the scrolling source on the left, a thin overview ruler pinned on the right */
