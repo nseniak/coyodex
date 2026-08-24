@@ -159,13 +159,18 @@ def _count_label(n: int) -> str:
     "1". Dropping them takes 14% of every label off the diagrams and costs the reader nothing.
 
     2 and up stay. "33" is the difference between a glance and a sit-down, and it is the only place the
-    diagram says how much is folded into a line. The biggest on the reference maps is 33."""
-    return f"|{n}|" if n >= 2 else ""
+    diagram says how much is folded into a line. The biggest on the reference maps is 33.
+
+    Written "×33", never a bare "33": a bare number on an arrow already means something else in the
+    product — a step position on a use-case flow map — and a reader carries that habit between views.
+    "×" is the one marker that says "this many folded in" without a legend."""
+    return f"|×{n}|" if n >= 2 else ""
 
 
 def _count_suffix(n: int) -> str:
-    """The same rule for a classDiagram relation, whose label is a ` : n` suffix rather than a pipe."""
-    return f" : {n}" if n >= 2 else ""
+    """The same rule (and the same × marker) for a classDiagram relation, whose label is a ` : n`
+    suffix rather than a pipe."""
+    return f" : ×{n}" if n >= 2 else ""
 
 
 def _edge_label(text: str) -> str:

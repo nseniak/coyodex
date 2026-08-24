@@ -1603,7 +1603,7 @@ def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
     assert "C2" in s2 and "D1" in s2                    # Q1=B keeps the dep the component touches
     assert "C2 -->|\"reads\"| D1" in s2                     # ...with its component->dep edge (ground-level, real verb)
     assert "class S1 subsystem" in s2                   # the neighbour S1 box
-    assert "S1 -->|2| C2" in s2                         # inbound cross arrow, count 2 (C1->C2 + C3->C2)
+    assert "S1 -->|×2| C2" in s2                        # inbound cross arrow, ×2 folded (C1->C2 + C3->C2)
 
 
 def test_edge_card_has_both_subsystems_with_cross_and_inner_edges() -> None:
