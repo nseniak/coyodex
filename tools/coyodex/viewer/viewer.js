@@ -2515,11 +2515,38 @@ function flowAnimatePanBy(dx, dy) {
 // Only the overflowing side is nudged in, so an already-visible axis never moves; a fully-visible target
 // doesn't move at all. PAD keeps the target off the very edge.
 const FLOW_PAD = 36;
-function flowRect(items) {  // items: [{el, xOnly}] -> padded union rect in screen px, or null
+// The floor under the step-label's on-screen text, as a fraction of the pane's own text size. Below
+// it the walk zooms in instead of panning: a fit-to-width sequence diagram of 20 lifelines renders
+// its messages at ~4px, and a step player that pans an unreadable label into view shows nothing.
+const FLOW_READABLE = 0.8;
+// What the reader can actually SEE of the diagram: the diagram's box minus the overlays that float
+// over its edges — the flow controls card (top-left), the legend (left) and the info pane when it is
+// the bottom drawer. They all live INSIDE the diagram's rect, so "pan the step into the diagram"
+// could park it exactly under one of them and call it visible. Each overlay only shrinks the rect
+// when it really overlaps (a hidden card and a side-by-side pane cost nothing), and never past the
+// midline, so a degenerate window can't shrink the target area to nothing.
+function flowVisibleRect() {
+  const d = diagram.getBoundingClientRect();
+  let { left, top, right, bottom } = d;
+  const overlaps = (q) => q && q.width && q.height
+    && q.right > left && q.left < right && q.bottom > top && q.top < bottom;
+  const fp = document.getElementById('flowpicker').getBoundingClientRect();
+  if (overlaps(fp)) top = Math.min(fp.bottom, top + (bottom - top) / 2);
+  const lg = legend.classList.contains('on') ? legend.getBoundingClientRect() : null;
+  if (overlaps(lg)) left = Math.min(lg.right, left + (right - left) / 2);
+  const pr = panel.getBoundingClientRect();
+  if (overlaps(pr)) bottom = Math.max(pr.top, top + (bottom - top) / 2);
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+// items: [{el, xOnly}] -> padded union rect in screen px, or null. `xf` (optional) maps each element's
+// measured rect before the union — flowReveal passes the analytic post-zoom transform through it, so
+// one measuring pass serves the zoomed and the plain reveal alike.
+function flowRect(items, xf) {
   let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
   for (const { el, xOnly } of items) {
-    const q = el.getBoundingClientRect();
+    let q = el.getBoundingClientRect();
     if (!q || (!q.width && !q.height)) continue;
+    if (xf) q = xf(q);
     l = Math.min(l, q.left); r = Math.max(r, q.right);
     if (!xOnly) { t = Math.min(t, q.top); b = Math.max(b, q.bottom); }
   }
@@ -2527,7 +2554,28 @@ function flowRect(items) {  // items: [{el, xOnly}] -> padded union rect in scre
 }
 function flowReveal(els, i) {
   if (!mainPz || !els || !els.length) return;
-  const d = diagram.getBoundingClientRect();
+  // The label carries the step number and its text — the one part the walk is FOR. Mermaid names it
+  // differently per diagram type: `messageText` in a sequence diagram, `edgeLabel` in a flowchart.
+  const stepLabel = els.find((e) => e.classList
+    && (e.classList.contains('messageText') || e.classList.contains('edgeLabel')));
+  // Below the readability floor the reveal ZOOMS as well as pans: a fit-to-width sequence diagram
+  // renders its messages at ~4px, and panning an unreadable label into view shows nothing. The zoom
+  // factor is decided up front and every measurement below is passed through it analytically —
+  // svg-pan-zoom paints zoom() only on the NEXT frame (see applyZoomAndCenter), so re-measuring after
+  // zooming would read the old geometry. One shared path then pans the union of the arrow, its label
+  // and BOTH endpoint boxes into the unobstructed area, so the endpoints are steered clear of the
+  // legend and the pane in the zoomed case exactly as in the plain one.
+  const onPx = onScreenFontPx(stepLabel);
+  const panePx = parseFloat(getComputedStyle(panel).fontSize);
+  const scale = (onPx && panePx && onPx < FLOW_READABLE * panePx) ? panePx / onPx : 1;
+  // zoom() anchors on the svg's own centre, which is #diagram's centre (see applyZoomAndCenter) —
+  // every measured point moves toward/away from it by `scale`.
+  const stage = diagram.getBoundingClientRect();
+  const zx = (x) => stage.left + stage.width / 2 + (x - stage.left - stage.width / 2) * scale;
+  const zy = (y) => stage.top + stage.height / 2 + (y - stage.top - stage.height / 2) * scale;
+  const xf = scale === 1 ? null : (q) => ({ left: zx(q.left), right: zx(q.right),
+    top: zy(q.top), bottom: zy(q.bottom), width: q.width * scale, height: q.height * scale });
+  const d = flowVisibleRect();
   const st = flowPlay.steps[i];
   // Preferred target: the arrow + its label (full extent) plus both endpoints. What an "endpoint" is
   // depends on the rendering: a sequence lifeline is a tall column, so only its x matters (including its
@@ -2543,22 +2591,28 @@ function flowReveal(els, i) {
     for (const el of (flowPlay.partsById[end] || []))
       if (map) items.push({ el, xOnly: false });
       else if (el.tagName === 'line') items.push({ el, xOnly: true });
-  let box = flowRect(items);
-  if (!box) return;
-  if (box.r - box.l > d.width || box.b - box.t > d.height) {   // too big to show in full -> just the label
-    // The label carries the step number, so it is the one part worth keeping when the whole target
-    // cannot fit. Mermaid names it differently per diagram type: `messageText` in a sequence diagram,
-    // `edgeLabel` in a flowchart.
-    const label = els.find((e) => e.classList
-      && (e.classList.contains('messageText') || e.classList.contains('edgeLabel')));
-    box = label ? flowRect([{ el: label, xOnly: false }]) : null;
-    if (!box || box.r - box.l > d.width || box.b - box.t > d.height) return;  // even the label can't fit
+  let box = flowRect(items, xf);
+  if (!box && scale === 1) return;
+  if (box && (box.r - box.l > d.width || box.b - box.t > d.height)) {  // too big to show in full -> just the label
+    // The label is the one part worth keeping when the whole target cannot fit.
+    box = stepLabel ? flowRect([{ el: stepLabel, xOnly: false }], xf) : null;
+    if (box && (box.r - box.l > d.width || box.b - box.t > d.height)) box = null;  // even the label can't fit
   }
   let dx = 0, dy = 0;
-  if (box.l < d.left) dx = d.left - box.l; else if (box.r > d.right) dx = d.right - box.r;
-  if (box.t < d.top) dy = d.top - box.t; else if (box.b > d.bottom) dy = d.bottom - box.b;
-  if (!dx && !dy) return;   // already fully visible -> stay put
-  flowAnimatePanBy(dx, dy);
+  if (box) {
+    if (box.l < d.left) dx = d.left - box.l; else if (box.r > d.right) dx = d.right - box.r;
+    if (box.t < d.top) dy = d.top - box.t; else if (box.b > d.bottom) dy = d.bottom - box.b;
+  }
+  if (scale !== 1) {
+    // The zoom and its correcting pan must land in ONE paint, eased by the same brief transition
+    // applyZoomAndCenter uses (which prefers-reduced-motion disables) — a frame of zoom anchored on
+    // the centre with the pan still pending would flash the step somewhere it is not.
+    if (flowPanRAF) { cancelAnimationFrame(flowPanRAF); flowPanRAF = 0; }
+    const vp = diagram.querySelector('.svg-pan-zoom_viewport');
+    if (vp) { vp.classList.add('pan-anim'); setTimeout(() => vp.classList.remove('pan-anim'), 300); }
+    mainPz.zoom(mainPz.getZoom() * scale);
+    if (dx || dy) mainPz.panBy({ x: dx, y: dy });
+  } else if (dx || dy) flowAnimatePanBy(dx, dy);   // already fully visible -> stay put
 }
 // `cur` remembers the last step reached during THIS visit; `active` says whether that step is selected
 // now. Inactive shows an honest dash, disables Previous and leaves Next available. With no remembered
@@ -3456,15 +3510,20 @@ function matchTextSize(el) {
   // `.nodeLabel` span inside a `foreignObject` — not an SVG `<text>` element; `text` is only a fallback
   // for any collapsed-box rendering that draws its label directly in SVG.
   const textEl = el.querySelector('.nodeLabel') || el.querySelector('text');
-  const vp = diagram.querySelector('.svg-pan-zoom_viewport');
-  if (!textEl || !vp) return;
-  const rawScale = new DOMMatrixReadOnly(vp.style.transform).a;  // current SVG-unit -> CSS-px scale
-  // The label's OWN font-size is in SVG user units and unaffected by the pan/zoom transform (computed
-  // style ignores ancestor `transform`) — multiplying by rawScale gives its actual on-screen size.
-  const onScreenFontSize = parseFloat(getComputedStyle(textEl).fontSize) * rawScale;
+  const onScreenFontSize = onScreenFontPx(textEl);
   const targetFontSize = parseFloat(getComputedStyle(panel).fontSize);  // the sidebar's normal text size
   if (!onScreenFontSize || !targetFontSize) return;
   applyZoomAndCenter(el, targetFontSize / onScreenFontSize);
+}
+// A label's ACTUAL on-screen text size, in CSS px. Its own font-size is in SVG user units and
+// unaffected by the pan/zoom transform (computed style ignores ancestor `transform`) — multiplying by
+// the viewport's current scale gives what the reader sees. 0 when unmeasurable, so callers skip.
+// Shared by matchTextSize (a box's name label) and flowReveal (a step's arrow label).
+function onScreenFontPx(textEl) {
+  const vp = diagram.querySelector('.svg-pan-zoom_viewport');
+  if (!textEl || !vp) return 0;
+  const rawScale = new DOMMatrixReadOnly(vp.style.transform).a;  // current SVG-unit -> CSS-px scale
+  return (parseFloat(getComputedStyle(textEl).fontSize) || 0) * rawScale;
 }
 // The arrow analog of matchTextSize: a shift-click on ANY arrow (a flowchart edge, or a Happy Path /
 // use-case message) centers it and zooms so its extent fills a comfortable slice of the viewport. Unlike
