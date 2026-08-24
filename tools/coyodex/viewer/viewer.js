@@ -2722,7 +2722,7 @@ function flowInit(s) {
 }
 // One flow step's complete information. The sequence message and a single-step map arrow render this
 // verbatim; a bundled map arrow reuses it once per carried step, adding only a Step N badge.
-function flowStepInfoHtml(uc, i, numbered) {
+function flowStepInfoHtml(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) return EMPTY_PANEL;
   // The step's call site wears the SAME pill every other code link in the product wears (`srcCell`:
@@ -2733,7 +2733,9 @@ function flowStepInfoHtml(uc, i, numbered) {
   const srcRow = st.where ? '<dl><dt>Source</dt><dd>' + srcCell(st.where) + '</dd></dl>' : '';
   // The step's action is the title (a full sentence for actor steps — too long for a pill). Its arrow
   // owns structural navigation, so the pane stays focused on the step's authored facts and call site.
-  const stepBadge = numbered ? '<span class="badge edge">Step ' + (i + 1) + '</span>' : '';
+  // The Step pill is on EVERY card, not just a bundled arrow's sections: it is the one line tying the
+  // card to the diagram's numbers and the "Step n / N" counter, single-step selections included.
+  const stepBadge = '<span class="badge edge">Step ' + (i + 1) + '</span>';
   // The title names the doer, then the action in italics: "Team member *clicks Connect…*" — one
   // phrase, the emphasis carrying the split. On a big flow the lit arrow's endpoints
   // can sit outside the current framing, and then the card is the only place the step's subject exists
@@ -2787,7 +2789,7 @@ function bindFlowStepInfo(host, uc, i) {
 function showFlowStep(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
-  panel.innerHTML = flowStepInfoHtml(uc, i, false);
+  panel.innerHTML = flowStepInfoHtml(uc, i);
   bindFlowStepInfo(panel, uc, i);
   // Mirror the step's own anchor into the tree + code viewer — and degrade gracefully when the step
   // has none (`no_call_site`, or a map from before step anchors): clear the stale tree highlight so a
@@ -4800,7 +4802,7 @@ function showFlowPair(uc, a, b) {
   if (steps.length === 1) { showFlowStep(uc, steps[0].i); return; }
   panel.innerHTML = steps.map(({ i }, k) => (k ? '<hr class="flow-step-separator">' : '')
     + '<section class="flow-step-detail" data-step="' + i + '">'
-    + flowStepInfoHtml(uc, i, true) + '</section>').join('');
+    + flowStepInfoHtml(uc, i) + '</section>').join('');
   panel.querySelectorAll('.flow-step-detail').forEach((section) => {
     bindFlowStepInfo(section, uc, +section.getAttribute('data-step'));
   });

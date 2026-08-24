@@ -2188,7 +2188,7 @@ def test_same_tab_navigation_carries_the_pane_keys() -> None:
 
 
 def test_the_flow_step_pane_uses_a_new_class_and_keys_by_container() -> None:
-    start = VIEWER_JS.index("function flowStepInfoHtml(uc, i, numbered)")
+    start = VIEWER_JS.index("function flowStepInfoHtml(uc, i)")
     pane = VIEWER_JS[start:VIEWER_JS.index("\n// One actor's card", start)]
     assert "stepRulesHtml(uc, st)" in pane
     assert "(st.sf || uc)" in pane            # the AUTHORING container, not the use case

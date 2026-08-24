@@ -99,7 +99,7 @@ console.log(JSON.stringify({{ html, text }}));
 def test_flow_step_keeps_relationship_navigation_on_the_arrow() -> None:
     """The pane stays step-specific; its arrow owns structural relationship navigation."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    start = js.index("function flowStepInfoHtml(uc, i, numbered)")
+    start = js.index("function flowStepInfoHtml(uc, i)")
     end = js.index("\n// One actor's card", start)
     flow_step = js[start:end]
 
@@ -201,10 +201,12 @@ def test_flow_map_arrows_reuse_complete_sequence_step_info() -> None:
     pair = js[js.index("function showFlowPair"):js.index("function bindFlowMap")]
     binding = js[js.index("function bindFlowMap"):js.index("function syncEnvPicker")]
 
-    assert "flowStepInfoHtml(uc, i, false)" in step
+    assert "flowStepInfoHtml(uc, i)" in step
     assert "bindFlowStepInfo(panel, uc, i)" in step
     assert "if (steps.length === 1) { showFlowStep(uc, steps[0].i); return; }" in pair
-    assert "flowStepInfoHtml(uc, i, true)" in pair
+    assert "flowStepInfoHtml(uc, i)" in pair
+    # The Step pill is unconditional — the same card everywhere, single selection or bundled section.
+    assert "numbered ?" not in step
     assert 'class="flow-step-separator"' in pair
     assert "Steps on this arrow" not in pair
     assert "flowstepref" not in pair
@@ -2846,8 +2848,8 @@ def test_a_code_link_has_exactly_one_shape_and_one_builder() -> None:
     place that emits a source-link button, which is also what makes the one delegated pane listener
     enough to serve every link in the app."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
-    step = js[js.index("function flowStepInfoHtml(uc, i, numbered) {"):
-              js.index("\nfunction ", js.index("function flowStepInfoHtml(uc, i, numbered) {") + 10)]
+    step = js[js.index("function flowStepInfoHtml(uc, i) {"):
+              js.index("\nfunction ", js.index("function flowStepInfoHtml(uc, i) {") + 10)]
     assert "srcCell(st.where)" in step, "the step card's Source row is the shared pill"
     assert "esc(st.where)" not in step, "the step card never prints its raw anchor"
     # The hand-rolled link and its per-render click handler are gone, markup and stylesheet alike.
