@@ -877,8 +877,9 @@ body.tree-browsing #codeview { display: none; }
    tall at full width (the sentence stops wrapping) and covers 12.8%. It FLOATS over the drawing rather
    than taking height from it — a drawer that took height would refit and rescale the whole diagram on
    every single click, which is the most frequent thing anyone does here.
-   No drag and no resize: it has one place, which is the point of it. The grip goes; the × stays, because
-   putting the panel away without hunting for empty canvas is worth as much here as it is on the card. */
+   It cannot be MOVED — it has one place, which is the point of it — but its CEILING is the reader's to
+   set: drag the bar up or down. That is a maximum, never a height. A drawer holding one card is still
+   108px tall whatever the ceiling says; only content taller than the ceiling reaches it and scrolls. */
 body.card-drawer #panel {
   top: auto; bottom: 0; left: 0; right: 0; width: auto; max-width: none; min-width: 0;
   /* THE CONTENT SETS THE HEIGHT. No floor: the card's 90px minimum exists so a floating box never
@@ -887,7 +888,7 @@ body.card-drawer #panel {
      The ceiling is the last third of the drawing: past that the content scrolls instead, because a
      drawer that can cover the whole map stops being a drawer. It bit at four selections when the cap
      was 45%, which is exactly what "a fixed height" looked like. */
-  min-height: 0; max-height: 66%;
+  min-height: 0; max-height: var(--drawer-max, 66%);
   border-radius: 10px 10px 0 0; border-left: 0; border-right: 0; border-bottom: 0;
   resize: none; box-shadow: 0 -6px 22px rgba(15, 23, 42, .16);
   /* DOWN is the resting state, so the first appearance slides in like every later one. `visibility`
@@ -910,7 +911,10 @@ body.card-drawer #panel.drawer-up {
 /* `hidden` is what every other part of the app uses to put the panel away, and display:none cannot be
    animated — so in this shape the attribute stops meaning display and the transform does the hiding. */
 body.card-drawer #panel[hidden] { display: block; }
-body.card-drawer #panelbar .grip { display: none; }   /* nothing to drag */
+/* The grip is back, and it means something different here: not "move me" (a drawer has one place) but
+   "how tall may I get". So the bar takes the resize cursor rather than the grab one. */
+body.card-drawer #panelbar { cursor: ns-resize; }
+body.drawer-sizing, body.drawer-sizing #panelbar { cursor: ns-resize; user-select: none; }
 @media (prefers-reduced-motion: reduce) {
   body.card-drawer #panel, body.card-drawer #panel.drawer-up { transition: none; }
 }
@@ -932,8 +936,12 @@ body.card-drawer #panelbar .grip { display: none; }   /* nothing to drag */
    selecting that text, and a reader copying a call site out of a row should be able to. STICKY, so the
    close button and the handle stay reachable in a card that has been scrolled. The negative margins pull
    it out to the card's own edges, over the padding. */
+/* `min-height` is what keeps the closing rule BELOW the × rather than through it. The button rides the
+   bar absolutely and is taller than the grip the bar was sized for, so it hung out of the bottom and the
+   border crossed its face. The bar is now at least as tall as the button, and the button sits on the
+   bar's own centre line. */
 #panelbar { position: sticky; top: -14px; z-index: 2; display: flex; align-items: center;
-            justify-content: center; margin: -14px -16px 8px; padding: 5px 8px;
+            justify-content: center; margin: -14px -16px 8px; padding: 5px 8px; min-height: 24px;
             background: #fff; border-bottom: 1px solid #f1f5f9; border-radius: 10px 10px 0 0;
             cursor: grab; }
 body.panel-dragging #panelbar { cursor: grabbing; }
@@ -941,8 +949,9 @@ body.panel-dragging { user-select: none; }
 /* Three dots' worth of texture, centred: enough to read as a handle, quiet enough not to be a control. */
 #panelbar .grip { width: 34px; height: 4px; border-radius: 2px; background: #e2e8f0; }
 /* The close button, in the same corner idiom as the legend's, riding the bar so the two never overlap. */
-#panelclose { position: absolute; top: 1px; right: 4px; border: 0; background: transparent;
-              font-size: 17px; line-height: 1; color: #9ca3af; cursor: pointer; padding: 2px 4px; }
+#panelclose { position: absolute; top: 50%; transform: translateY(-50%); right: 4px; border: 0;
+              background: transparent; font-size: 17px; line-height: 1; color: #9ca3af; cursor: pointer;
+              padding: 2px 4px; }
 #panelclose:hover { color: #374151; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }

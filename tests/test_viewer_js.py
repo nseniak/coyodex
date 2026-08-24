@@ -1118,12 +1118,20 @@ def test_the_panel_has_two_shapes_and_the_reader_picks_one() -> None:
     assert "body.card-drawer #panel {" in css
     # A drawer has one place, so the card's placement machinery stands down.
     place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
-    assert "if (drawerMode) { hideCallout(); return; }" in place, \
-        "no remembered box to apply, nothing to step aside from, and no line to draw"
-    for guard in ("PANEL_HOST.addEventListener('pointerdown', (ev) => {\n  if (drawerMode) return;",
-                  "if (drawerMode || PANEL_HOST.hidden || panelDrag) return;",
+    assert "if (drawerMode) { hideCallout(); applyDrawerMax(); return; }" in place, \
+        "no remembered box, nothing to step aside from, no line — just its own ceiling"
+    # A drawer cannot be moved, resized by the corner grip, or sent back to its corner. The BAR still
+    # takes a drag there, but it drags the ceiling — see
+    # test_the_drawers_ceiling_is_dragged_and_is_a_maximum_not_a_height.
+    for guard in ("if (drawerMode || PANEL_HOST.hidden || panelDrag) return;",
                   "PANEL_HOST.addEventListener('dblclick', (ev) => {\n  if (drawerMode) return;"):
         assert guard in js, guard
+    down = js[js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"):
+              js.index("});", js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"))]
+    assert "if (drawerMode) {" in down and "drawerSizing = {" in down, \
+        "the drawer's own branch: the bar sets its ceiling instead of moving it"
+    assert "panelDrag = {" not in down.split("if (drawerMode) {")[1].split("return;\n  }")[0], \
+        "…and it never falls through into the card's move"
 
 
 def test_the_drawer_slides_and_keeps_its_close_button() -> None:
@@ -1147,7 +1155,8 @@ def test_the_drawer_slides_and_keeps_its_close_button() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "body.card-drawer #panel[hidden] { display: block; }" in css, "display:none cannot be animated"
-    assert "body.card-drawer #panelbar .grip { display: none; }" in css, "nothing to drag"
+    assert "body.card-drawer #panelbar { cursor: ns-resize; }" in css, \
+        "the grip is back, dragging the ceiling rather than the drawer"
     assert "@media (prefers-reduced-motion: reduce) {\n  body.card-drawer #panel," in css
     bar = js[js.index("function stampPanelBar() {"): js.index("\n}", js.index("function stampPanelBar() {"))]
     assert "id=\"panelclose\"" in bar, "the × is stamped for BOTH shapes"
@@ -1184,7 +1193,8 @@ def test_the_drawer_is_as_tall_as_what_is_in_it() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
     drawer = css[css.index("body.card-drawer #panel {"): css.index("}", css.index("body.card-drawer #panel {"))]
     assert "min-height: 0;" in drawer, "a band pinned to an edge cannot collapse, so it needs no floor"
-    assert "max-height: 66%;" in drawer, "…but it may not cover the whole map either"
+    assert "max-height: var(--drawer-max, 66%);" in drawer, \
+        "a ceiling the reader can drag, defaulting to two thirds until they do"
     assert "height:" not in drawer.replace("min-height:", "").replace("max-height:", ""), \
         "no fixed height anywhere — the content is what sets it"
     assert "--drawer-h" not in css, "the legend no longer shares the bottom edge with it"
@@ -1332,6 +1342,59 @@ def test_a_composite_deployment_arrow_opens_what_it_stands_for() -> None:
     assert "depEdgeStoreLinkHtml(s.b)" in page and "bindNodeDetailHandlers(diagram);" in page
     link = js[js.index("function depEdgeStoreLinkHtml(b) {"): js.index("\n}", js.index("function depEdgeStoreLinkHtml(b) {"))]
     assert "dataDrillFor(b)" in link and "dv-seelink" in link
+
+
+def test_the_drawers_ceiling_is_dragged_and_is_a_maximum_not_a_height() -> None:
+    """Dragging the drawer's bar sets how tall it MAY get, never how tall it is. A drawer holding one card
+    stays one card tall whatever the ceiling says; only content taller than the ceiling reaches it, and
+    then the drawer scrolls inside itself.
+
+    That is the difference from the card's corner grip, which sets a SIZE. A size here would mean a drawer
+    showing one line of prose in a 400px band, which is the empty-pane problem the floating card was built
+    to end.
+
+    Verified in the app on a 709px drawing: one card is 121px under the default 66% ceiling; six cards hit
+    that ceiling at 468px with 657px of content and scroll; dragging the bar up 150px moves the ceiling to
+    618px and the drawer grows to it, still scrolling; and one card is 121px again under that same raised
+    ceiling.
+
+    Stored in pixels and clamped on every apply rather than on save — the window it was dragged in is not
+    the window it comes back to, which is the rule applyPanelBox already follows."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    drawer = css[css.index("body.card-drawer #panel {"): css.index("}", css.index("body.card-drawer #panel {"))]
+    assert "max-height: var(--drawer-max, 66%)" in drawer, "a ceiling, and a default one until it is dragged"
+    assert "min-height: 0;" in drawer, "the content still sets the height under that ceiling"
+    panel = css[css.index("\n#panel {") + 1: css.index("}", css.index("\n#panel {"))]
+    assert "overflow: auto" in panel, "…and it scrolls when the content is taller"
+    ap = js[js.index("function applyDrawerMax() {"): js.index("\n}", js.index("function applyDrawerMax() {"))]
+    assert "Math.max(90, Math.min(px, h - 24))" in ap, "clamped on apply, against the window it is in now"
+    assert "if (!wrap || !drawerMode || !px)" in ap, "no stored ceiling, or the card shape: the default"
+    move = js[js.index("PANEL_HOST.addEventListener('pointermove'"):
+              js.index("});", js.index("PANEL_HOST.addEventListener('pointermove'"))]
+    assert "drawerSizing.h + (drawerSizing.y - ev.clientY)" in move, "dragging UP raises it"
+    end = js[js.index("const endDrawerSizing = () => {"): js.index("\n};", js.index("const endDrawerSizing = () => {"))]
+    assert "document.body.style.getPropertyValue('--drawer-max')" in end, \
+        "what the drag WROTE is what is saved, so a clamp cannot become the reader's choice"
+    assert "lsSet(LS.drawerMax," in end and "drawerMax: 'coyodex.drawerMax'," in js
+    down = js[js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"):
+              js.index("});", js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"))]
+    assert "ev.target.closest('#panelclose')" in down, "the × is a button, not a grab handle"
+    assert "body.card-drawer #panelbar { cursor: ns-resize; }" in css, "the grip means 'how tall', not 'where'"
+
+
+def test_the_bars_closing_rule_runs_under_its_close_button() -> None:
+    """The × rides the bar absolutely and is taller than the grip the bar was sized for, so it hung out of
+    the bottom and the bar's border-bottom crossed its face.
+
+    The bar is now at least as tall as the button, and the button sits on the bar's own centre line.
+    Measured in the app: a 24px bar holding a 21px button, top 782 to bottom 803 inside 781 to 805, and the
+    rule below both."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    bar = css[css.index("#panelbar { position: sticky"): css.index("}", css.index("#panelbar { position: sticky"))]
+    assert "min-height: 24px" in bar and "border-bottom" in bar
+    btn = css[css.index("#panelclose { position: absolute"): css.index("}", css.index("#panelclose { position: absolute"))]
+    assert "top: 50%; transform: translateY(-50%)" in btn, "on the bar's centre line, whatever its height"
 
 
 def test_a_process_keeps_all_its_depth_on_a_details_page() -> None:
@@ -1675,7 +1738,7 @@ def test_the_selection_card_can_be_moved_and_resized_and_remembers_it() -> None:
     pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
     assert "resize: both" in pane and "overflow: auto" in pane, "the corner grip needs a clipped overflow"
     assert "min-width" in pane and "min-height" in pane, "it must not shrink to an unreadable stub"
-    bar = css[css.index("#panelbar {"): css.index("}", css.index("#panelbar {"))]
+    bar = css[css.index("#panelbar { position: sticky"): css.index("}", css.index("#panelbar { position: sticky"))]
     assert "position: sticky" in bar, "the handle and the close button stay reachable in a scrolled card"
 
 def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> None:

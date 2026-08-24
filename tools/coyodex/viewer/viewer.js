@@ -5898,9 +5898,31 @@ function setDrawerMode(on) {
   const st = PANEL_HOST.style;
   st.left = st.top = st.right = st.width = st.height = '';
   PANEL_HOST.classList.remove('drawer-up');
+  applyDrawerMax();
   if (drawerTimer) { clearTimeout(drawerTimer); drawerTimer = 0; }
   if (!PANEL_HOST.hidden) paneSync();   // re-place whatever is on screen into the new shape
   else syncCallout();
+}
+// HOW TALL THE DRAWER MAY GET — a MAXIMUM the reader sets by dragging its bar, never a height. A drawer
+// holding one card stays 108px tall whatever the ceiling says; only content taller than the ceiling
+// reaches it, and then the drawer scrolls inside itself.
+//
+// That is the difference from the card's corner grip, which sets a SIZE. A size here would mean a drawer
+// showing one line of prose in a 400px band, which is the empty-pane problem the floating card was built
+// to end.
+//
+// Stored in pixels and clamped on every apply rather than on save, the same rule applyPanelBox follows:
+// the window it was dragged in is not the window it comes back to.
+function drawerMax() {
+  const n = parseInt(lsGet(LS.drawerMax) || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+function applyDrawerMax() {
+  const wrap = document.getElementById('diagwrap');
+  const px = drawerMax();
+  if (!wrap || !drawerMode || !px) { document.body.style.removeProperty('--drawer-max'); return; }
+  const h = wrap.getBoundingClientRect().height;
+  document.body.style.setProperty('--drawer-max', Math.max(90, Math.min(px, h - 24)) + 'px');
 }
 // SLIDING OUT NEEDS ITS CONTENT. Every caller empties the panel before paneSync decides to hide it, so a
 // drawer sliding away would be a blank white band. The last thing it showed is put back for the length of
@@ -5974,7 +5996,7 @@ function placeCard() {
   // Not a length argument: measured over nine selections the line is SHORTER in this shape than in the
   // card (275px against 338px in the middle, 568 against 832 at worst), because the drawer runs the full
   // width and its edge sits directly below whatever was clicked.
-  if (drawerMode) { hideCallout(); return; }
+  if (drawerMode) { hideCallout(); applyDrawerMax(); return; }
   applyPanelBox();
   dodgeCard(soleSelectedEl());
   syncCallout();
@@ -9592,8 +9614,22 @@ PANEL_HOST.addEventListener('click', (ev) => {
 // a reader who wants to copy a call site should be able to. Pointer events (not mouse) so a trackpad and
 // a touchscreen behave the same, and the capture keeps the drag alive when the cursor leaves the card.
 let panelDrag = null;
+// DRAGGING THE BAR IN A DRAWER sets the ceiling. Up is taller. The card's own drag moves it instead —
+// two shapes, one grip, and each drags the thing its shape can change.
+let drawerSizing = null;
 PANEL_HOST.addEventListener('pointerdown', (ev) => {
-  if (drawerMode) return;   // one place, so no gesture can move it
+  if (drawerMode) {
+    const bar = ev.target && ev.target.closest && ev.target.closest('#panelbar');
+    if (!bar || ev.target.closest('#panelclose')) return;
+    const wrap = document.getElementById('diagwrap');
+    if (!wrap) return;
+    drawerSizing = { y: ev.clientY, h: PANEL_HOST.getBoundingClientRect().height,
+                     max: wrap.getBoundingClientRect().height - 24 };
+    bar.setPointerCapture(ev.pointerId);
+    document.body.classList.add('drawer-sizing');
+    ev.preventDefault();
+    return;
+  }
   const bar = ev.target && ev.target.closest && ev.target.closest('#panelbar');
   if (!bar || (ev.target.closest && ev.target.closest('button'))) return;
   const wrap = document.getElementById('diagwrap');
@@ -9605,6 +9641,13 @@ PANEL_HOST.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
 });
 PANEL_HOST.addEventListener('pointermove', (ev) => {
+  if (drawerSizing) {
+    // Dragging UP raises the ceiling, so the delta is inverted. Clamped to the drawing area, and never
+    // below 90px — a ceiling under that would cut into the bar carrying the × that puts the drawer away.
+    const px = Math.max(90, Math.min(drawerSizing.h + (drawerSizing.y - ev.clientY), drawerSizing.max));
+    document.body.style.setProperty('--drawer-max', Math.round(px) + 'px');
+    return;
+  }
   if (!panelDrag) return;
   const d = panelDrag;
   // Clamped so the whole card stays inside the drawing area — a bar dragged past the edge is a card
@@ -9625,7 +9668,17 @@ PANEL_HOST.addEventListener('pointermove', (ev) => {
 // that is not where the reader put it. Measured: six taps on the bar, each after selecting a covered box,
 // walked the stored position from top 60 to top 275 and left 300 to left 394. Exactly the accumulation
 // dodgeCard's own comment forbids, arriving through the one path that does save.
+const endDrawerSizing = () => {
+  if (!drawerSizing) return;
+  drawerSizing = null;
+  document.body.classList.remove('drawer-sizing');
+  // What the drag WROTE, read back — the same shape the card's resize uses, and for the same reason: a
+  // clamp against a narrow window must never be saved as the reader's own choice.
+  const v = parseInt(document.body.style.getPropertyValue('--drawer-max') || '', 10);
+  if (Number.isFinite(v) && v > 0) lsSet(LS.drawerMax, String(v));
+};
 const endPanelDrag = () => {
+  endDrawerSizing();
   if (!panelDrag) return;
   const moved = panelDrag.moved;
   panelDrag = null;
@@ -9707,6 +9760,7 @@ document.addEventListener('keyup', (e) => { if (e.key === 'Alt') setDrillMod(fal
 window.addEventListener('blur', () => setDrillMod(false));
 window.addEventListener('resize', refitStage);  // keep the diagram fitted when the window itself resizes
 window.addEventListener('resize', placeCard);  // …and keep the floating card inside the smaller box
+window.addEventListener('resize', applyDrawerMax);  // …and the drawer's ceiling inside the shorter one
 window.addEventListener('resize', updateAllPillFades);  // and re-evaluate the pill-box edge fades
 
 // --- open source in an external editor / on GitHub -------------------------------
@@ -9738,7 +9792,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', 
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
