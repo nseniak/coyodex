@@ -433,14 +433,17 @@ def make_flow_map_model() -> ProjectModel:
     return m
 
 
-def test_flow_map_draws_one_box_per_element_with_its_group():
-    """The leaf-only map: a box per touched element, kind-shaped and kind-coloured, each naming the
-    top-level group it belongs to — and no subsystem FRAME (the containers are what it drops)."""
+def test_flow_map_draws_one_box_per_element_by_name_alone():
+    """The leaf-only map: a box per touched element, kind-shaped and kind-coloured, labelled with
+    JUST the element's name — no subsystem FRAME (the containers are what it drops) and no group
+    second line (tried and removed: it widened nearly every box while almost never showing a
+    cluster; the group lives in the element's own panel)."""
     g = model_to_graph(make_flow_map_model())
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
     assert mm.startswith("flowchart LR")
     assert "subgraph" not in mm                                   # leaf-only: no container frames
-    assert 'C1["Viewer<br/>Reading room"]' in mm                   # component + its subsystem subtitle
+    assert 'C1["Viewer"]' in mm                                   # the element's name, nothing else
+    assert "Reading room" not in mm                               # its group name stays off the box
     assert 'E1("Order")' in mm and 'D1[("Postgres")]' in mm        # entity and dep keep their shapes
     assert 'FA0([" <br/>Andy"])' in mm                             # the actor, as the Context stick figure
     assert mm.count("classDef") == 4                               # component / dep / entity / human

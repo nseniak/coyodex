@@ -2910,15 +2910,6 @@ FLOW_MAP_STYLE = {"component": COMPONENT_STYLE, "dep": DEP_STYLE, "entity": ENTI
                   "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE}
 
 
-def _flow_map_subtitle(graph: GraphDict, nid: str) -> str:
-    """The element's top-level group name as a second label line — the orientation the dropped
-    container frames used to carry ("which part of the system is this box from?"). Empty for an
-    ungrouped element; `<br/>` sits outside `_safe_label`, like every other intentional break."""
-    gid = _top_group(graph, nid)
-    name = str(graph["nodes"].get(gid, {}).get("name") or "") if gid else ""
-    return f"<br/>{_safe_label(name)}" if name else ""
-
-
 def _flow_map_arrow_label(ns: list[int]) -> str:
     """The step numbers riding one pair — the same 1-based positions the sequence diagram numbers its
     messages with, so a reader can carry a number from one rendering to the other.
@@ -2937,7 +2928,10 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     Two deliberate choices:
 
     * **No subsystem / subdomain frames.** Scoped to one use case, a container frames one or two
-      members and reads as noise; `_flow_map_subtitle` keeps the orientation on the box itself.
+      members and reads as noise. The box carries just the element's name — the group lives in the
+      element's own panel, a click away. (A group-name second line was tried and removed: on a live
+      map 94% of boxes carried one, each group repeating on ~2 boxes, so it widened every box while
+      almost never showing a cluster.)
     * **Arrows come from THIS FLOW'S STEPS, never the backbone edge list.** A step is what the
       scenario does; a backbone edge is the aggregate of every scenario. Drawing edges here would
       show relationships this use case never exercises — so the map is a re-rendering of the same
@@ -2987,7 +2981,7 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
         kind = str((node or {}).get("kind") or "component")
         if kind not in FLOW_MAP_SHAPE:
             kind = "component"
-        label = _safe_label(str((node or {}).get("name") or token)) + _flow_map_subtitle(graph, token)
+        label = _safe_label(str((node or {}).get("name") or token))
         open_b, close_b = FLOW_MAP_SHAPE[kind]
         pid[token] = token
         kinds.add(kind)
