@@ -3027,7 +3027,7 @@ const LEGEND_SECTIONS = [
 // language: "dashed" reads as provisional to most people, when here it means "there is more inside".
 const LEGEND_STROKES = [
   ['box', 'dashed border = collapsed; open it'],
-  ['edge', 'dashed arrow = several links bundled; open it'],
+
 ];
 // The hexagon outline as polygon points for a box — ONE definition, shared by the legend swatch and the
 // sequence-diagram service-actor figure, so the two can't drift into drawing different hexagons for the
@@ -3781,9 +3781,8 @@ function rectOf(el) {
 
 // Stroke an edge's path + glow its label (selection highlight); returns a cleanup fn.
 function glowEdge(p, label, revealAction = true) {
-  // Preserve any BASE inline stroke/width the arrow already carries (a synthetic arrow sets its own thick
-  // dashed base — see markSyntheticEdge) so deselecting restores it, not Mermaid's default. dasharray is
-  // never touched here, so a dashed synthetic arrow stays dashed through the whole select cycle.
+  // Preserve any BASE inline stroke/width the arrow already carries, so deselecting restores that rather
+  // than Mermaid's default.
   const saved = edgeSegs(p).map((seg) => ({
     seg,
     s0: seg.style.getPropertyValue('stroke'), sp0: seg.style.getPropertyPriority('stroke'),
@@ -3812,25 +3811,16 @@ function glowEdge(p, label, revealAction = true) {
     if (p._actionIcon) { p._actionIcon._selected = false; hideIcon(p._actionIcon); }
   };
 }
-// Synthetic (aggregated, count-labelled) arrows — the ones that bundle several sub-arrows and drill to a
-// card — take the same visual language as a container BOX border: dashed, and (SYN_EDGE_THICK) a medium
-// weight. So a dashed line reads as "a collapsed bundle, open it", mirroring a dashed box = "a collapsed
-// container". The width sits BETWEEN a normal arrow and the 2.5px container border, so a bundle stands
-// out without shouting like a frame. Set inline !important because an id-scoped Mermaid rule would
-// otherwise outrank a class; glowEdge save/restores the width across a selection.
-const SYN_EDGE_THICK = true;      // B: dashed + medium weight. Flip to false for A: dashed only.
-const SYN_EDGE_WIDTH = '2px';     // between a normal arrow and the 2.5px container border (tune to taste)
-function markSyntheticEdge(p) {
-  if (!p) return;
-  // …and remembered on the element, so "is this arrow a bundle?" has ONE answer that every later pass can
-  // read. Six binders mark an arrow synthetic; without this, a rule about synthetic arrows would have to
-  // be repeated in all six and would be missed by the seventh.
-  p.setAttribute('data-syn', '1');
-  for (const seg of edgeSegs(p)) {
-    seg.style.setProperty('stroke-dasharray', '6 3', 'important');
-    if (SYN_EDGE_THICK) seg.style.setProperty('stroke-width', SYN_EDGE_WIDTH, 'important');
-  }
-}
+// EVERY ARROW IS DRAWN THE SAME. A bundled arrow used to be dashed and a touch thicker, borrowing the
+// container box's language: "a collapsed thing, open it". Two things undid that.
+//
+// It was not true everywhere. On the Deployment view the dash went on before the code decided what kind
+// of arrow it was, so the same dash marked an arrow standing for 25 links, one standing for 1, and one
+// standing for nothing at all. A reader who met that view had already learned the dash means nothing.
+//
+// And it is no longer needed. Clicking ANY arrow now shows what it stands for, so "is there more inside
+// this one?" is answered by the click rather than by the stroke. What survives is the LABEL: a verb where
+// the arrow is one link, a count where it is several and that count is 2 or more.
 
 // Wire one edge for the SELECT model (highlight + focus + panel) — context, components, internal edges.
 // An edge's focus contribution: keep both endpoints + the edge itself lit. null when neither endpoint is
@@ -3848,13 +3838,11 @@ function edgeDesc(scene, p, label, e, selKey, showFn) {
 // the arrow's ordinary click behavior.
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
-  // A SYNTHETIC ARROW SHOWS NO CARD. It stands for several real links, so its card was the LIST of them —
-  // and a list is a page, not something to float over the drawing it is about. Selecting one still lights
-  // it and dims the rest, which is the answer to "which one did I click"; ⌥-click opens what it stands for.
-  // Read off the arrow itself (markSyntheticEdge), so the rule is stated once for all six binders that
-  // draw a bundle rather than once per binder.
-  const show = p && p.getAttribute('data-syn') ? null : showFn;
-  const desc = edgeDesc(scene, p, label, e, selKey, show);
+  // EVERY ARROW SHOWS ITS CARD, bundled or not. A bundled arrow was silent for a while, on the grounds
+  // that its card was a LIST and its page drew the same links — true of a subsystem pair, never true of a
+  // Deployment arrow, whose members are drawn nowhere. A click is also the easiest gesture on the thinnest
+  // target, so it is the one that should answer "what is this".
+  const desc = edgeDesc(scene, p, label, e, selKey, showFn);
   const setFilter = (v) => { for (const seg of edgeSegs(p)) seg.style.filter = v; if (label) label.style.filter = v; };
   const hoverOn = () => { if (!selHas(scene, selKey)) setFilter(HOVER); };
   const hoverOff = () => { if (!selHas(scene, selKey)) setFilter(''); };
@@ -3880,7 +3868,6 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
 // subsystem card the arrow is drawn component→neighbour, so the caller passes the DRAWN endpoints —
 // otherwise selecting the component wouldn't keep its own cross arrow + the neighbour box lit.
 function bindContainerEdge(scene, p, label, a, b, focusE) {
-  markSyntheticEdge(p);
   const drawn = focusE || { src: a, dst: b };
   const isComp = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'component';
   // When the clicked arrow is a single member component's cross arrow, ⌘-drill lands on the pair's edge
@@ -3913,7 +3900,6 @@ function bindContainerEdge(scene, p, label, a, b, focusE) {
 // a ⌘-click drills into `target` (that box's own card). The bridge has no `why`, so the default tip
 // shows nothing on hover — consistent with a why-less component edge.
 function bindBridgeEdge(scene, p, label, a, b, target) {
-  markSyntheticEdge(p);
   const drawn = { src: a, dst: b };
   const kindOf = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind;
   // Focus the LEAF end (the component or entity) on drill: it's a real, selectable node in the bridge
@@ -4405,26 +4391,48 @@ function channelDrillBroker(chans) {
 // idiom as an inter-subsystem arrow. A `runs`/infra arrow bundles nothing, so it stays inert: marked
 // synthetic and registered in the scene (src→dst) only so selecting a process dims to its
 // neighbourhood — its targets stay lit while the rest fades.
+// A COMPOSITE ARROW OPENS WHAT IT STANDS FOR, the way every other bundled arrow in the app does. This one
+// was the exception, and it cost the reader real facts: measured over three maps, 64 Deployment arrows
+// stand for 246 links, and 245 of those links carry a reason and 246 carry a code link. Unlike a subsystem
+// pair, whose page DRAWS the links it bundles, the Deployment view draws one arrow per pair and never
+// draws its members — so this page is the only place those 246 facts ever appear. Reaching it used to mean
+// a button inside the arrow's card, and a bundled arrow shows no card any more.
+//
+// COMPOSITE means two or more. An arrow standing for a single link keeps what it had: for a store arrow
+// that is a jump to the store's own section on the Data tab, which is a better destination than a page
+// with one row on it. Measured: of the 64, thirty stand for exactly one link.
+//
+// The page carries the store link onward for the ones that used to jump there, so nothing is lost —
+// what the arrow stands for first, where that store lives second.
 function markDeploymentEdge(scene, p, label, a, b) {
   const chans = deploymentEdgeList(a, b);
   const xproc = (DEPLOYMENT_CALL_EDGES && DEPLOYMENT_CALL_EDGES[a + '>' + b]) || [];
   const calls = (DEPLOYMENT_INFRA_EDGES && DEPLOYMENT_INFRA_EDGES[a + '>' + b]) || [];
-  markSyntheticEdge(p);
+  const page = { kind: 'depedge', a, b };
+  const composite = (n) => n >= 2;
   if (chans.length || xproc.length) {   // process→process: one arrow, either or both mechanisms
-    const drill = channelDrillFor(chans);
+    const drill = composite(chans.length + xproc.length) ? page : channelDrillFor(chans);
+    const tip = drill === page ? () => actionTipDepEdge(a, b) : () => actionTipChannels(chans);
     bindSelectEdge(scene, p, label, { src: a, dst: b }, 'uedge:' + a + '>' + b,
       () => showDeploymentEdge(a, b),
-      drill ? { onDrill: () => go(drill), actionFn: () => actionTipChannels(chans) } : undefined);
+      drill ? { onDrill: () => go(drill), actionFn: tip } : undefined);
     return;
   }
   if (calls.length) {   // a coupling-point arrow: it stands for real call sites, so it is selectable too
-    const drill = dataDrillFor(b);
+    const drill = composite(calls.length) ? page : dataDrillFor(b);
+    const tip = drill === page ? () => actionTipDepEdge(a, b) : () => actionTipNode(b);
     bindSelectEdge(scene, p, label, { src: a, dst: b }, 'uedge:' + a + '>' + b,
       () => showDeploymentInfraEdge(a, b),
-      drill ? { onDrill: () => go(drill), actionFn: () => actionTipNode(b) } : undefined);
+      drill ? { onDrill: () => go(drill), actionFn: tip } : undefined);
     return;
   }
   scene.edgeEls.push({ e: { src: a, dst: b }, path: p, label });  // `runs` lane arrow: nothing to show
+}
+// The ⌥-hover preview for a composite arrow: what the page it opens will hold, in the arrow's own words.
+function actionTipDepEdge(a, b) {
+  const r = deploymentEdgeRows(a, b);
+  const n = r.rows.length;
+  return '<div class="tt">Open ' + esc(n + ' ' + r.noun + (n === 1 ? '' : 's')) + '</div>';
 }
 function actionTipChannels(chans) {
   const nm = channelDrillBroker(chans);
@@ -4492,7 +4500,20 @@ function renderDeploymentEdgePage(s) {
     })
     + (r.rows.length ? '<ul class="xlist xlist-page">' + r.rows.join('') + '</ul>'
                      : '<p class="empty">Nothing recorded for this arrow.</p>')
+    + depEdgeStoreLinkHtml(s.b)
     + '</div>';
+  bindNodeDetailHandlers(diagram);
+}
+// WHERE THAT STORE LIVES, under the list of what the arrow stands for. A coupling-point arrow used to
+// jump straight to the store's section on the Data tab, and a composite one now opens this page instead —
+// so the destination it replaced rides along, one step further and in reading order.
+function depEdgeStoreLinkHtml(b) {
+  const to = dataDrillFor(b);
+  if (!to) return '';
+  const n = GRAPH.nodes[b];
+  return '<p class="ecard-extra"><span class="ecard-lbl">Stored in</span> '
+    + '<a href="#" class="dv-seelink" data-store="' + esc(to.store) + '">'
+    + esc((n && n.name) || b) + '</a></p>';
 }
 // `focalUnit` (set on a process card) is the process you're already zoomed into: it drills nowhere
 // further, so it gets no drill affordance/icon — only the OTHER boxes (subsystems it runs) drill.
@@ -4877,7 +4898,6 @@ function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', s
 // (the sidebar lists every entity→entity relation it bundles) and a ⌘-click drills into the
 // two-subdomain edge view. The domain analog of bindContainerEdge.
 function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
-  markSyntheticEdge(p);
   const drawn = focusE || { src: a, dst: b };
   const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
   // Mirror bindContainerEdge: ⌘-drill a single focal-entity relation arrow lands on the pair's edge
@@ -4964,7 +4984,6 @@ function disjointBoxes(x, y) { return x !== y && !isAncestorOf(x, y) && !isAnces
 // navigates to a single box: plain click shows that box's panel, ⌘-click opens its card (descend into a
 // child, or zoom out to an ancestor). Also the fallback when an edge card happens not to exist.
 function bindNavEdge(p, label, a, b, target) {
-  markSyntheticEdge(p);  // an overlapping-pair nav arrow is also an aggregate (count-labelled) bundle
   const k = GRAPH.nodes[target] && GRAPH.nodes[target].kind;
   const dest = k === 'subdomain' ? { kind: 'domsub', sd: target } : { kind: 'subsystem', sid: target };
   bindSelectEdge(mainScene, p, label, { src: a, dst: b }, 'navedge:' + a + '>' + b,
@@ -5569,6 +5588,13 @@ function viewHeadHtml(_title, desc) {
 // having to find empty canvas to click.
 function paneSync() {
   const has = !!PANEL_HOST.innerHTML.trim();
+  if (drawerMode) {
+    hideCallout();   // this shape draws no line, in either direction — see placeCard
+    if (!has) { drawerHide(); return; }
+    stampPanelBar();
+    drawerShow();
+    return;
+  }
   PANEL_HOST.hidden = !has;
   // NO CARD, NO LINE. This return is the path taken by every deselect — clicking empty canvas, the card's
   // own ×, selecting only a synthetic arrow (which has no card to show) — and it used to skip the callout
@@ -5576,13 +5602,19 @@ function paneSync() {
   //
   // Three places hid the card and only one of them told the line. They all come through here now.
   if (!has) { hideCallout(); return; }
-  if (!PANEL_HOST.querySelector('#panelbar')) {
-    PANEL_HOST.insertAdjacentHTML('afterbegin',
-      '<div id="panelbar" title="Drag to move \u00b7 double-click to put it back">'
-      + '<span class="grip" aria-hidden="true"></span>'
-      + '<button id="panelclose" type="button" title="Close (Esc)">\u00d7</button></div>');
-  }
+  stampPanelBar();
   placeCard();   // …placed, moved out of its element's way, and joined to it
+}
+// The bar carries the × in BOTH shapes — putting the panel away without hunting for a piece of empty
+// canvas is worth as much in a drawer as it is on a card. Only the grip is shape-specific, and the CSS
+// takes it away where there is nothing to drag.
+function stampPanelBar() {
+  if (PANEL_HOST.querySelector('#panelbar')) return;
+  PANEL_HOST.insertAdjacentHTML('afterbegin',
+    '<div id="panelbar" title="Drag to move \u00b7 double-click to put it back">'
+    + '<span class="grip" aria-hidden="true"></span>'
+    + '<button id="panelclose" type="button" '
+    + 'title="Close \u00b7 the selection stays; click it again to reopen">\u00d7</button></div>');
 }
 // --- where the card sits, and how big ---------------------------------------------
 // The card floats, so the one place it lands cannot be right for every reader on every map: a wide
@@ -5819,6 +5851,7 @@ function hideCallout() {
 }
 function syncCallout() {
   if (!callout) return;
+  if (drawerMode) { hideCallout(); return; }   // this shape draws no line — see placeCard
   const wrap = document.getElementById('diagwrap');
   const el = soleSelectedEl();
   if (!wrap || !el || PANEL_HOST.hidden) { hideCallout(); return; }
@@ -5844,6 +5877,60 @@ function syncCallout() {
   callout.innerHTML = `<line class="co-case" ${seg}></line><line class="co-line" ${seg}></line>`
     + `<circle class="co-dot" cx="${b.x - ox}" cy="${b.y - oy}" r="3.5"></circle>`;
   callout.removeAttribute('hidden');
+}
+// ── CARD OR DRAWER ────────────────────────────────────────────────────────────────────────────────
+// The same panel in two shapes: floating over the drawing, or a band that slides up from the bottom
+// edge. ONE element, so no builder of a card, a list or a stack knows which shape is on screen — the
+// difference is a class on the body and what this file skips while it is set.
+//
+// What the drawer does NOT do: it has one place, so there is nothing to drag, nothing to resize, no
+// remembered box and nothing to step aside from. The line to the selected element stays, and matters
+// more here than it did for the card, since the drawer sits at the far edge from most of the drawing.
+let drawerMode = false;
+function setDrawerMode(on) {
+  drawerMode = !!on;
+  // '0' for the card, not an empty string: unset has to mean the DRAWER, which is the default, and an
+  // empty value is indistinguishable from never having chosen.
+  lsSet(LS.drawer, drawerMode ? '1' : '0');
+  document.body.classList.toggle('card-drawer', drawerMode);
+  // Switching shape drops whatever the OTHER shape had written on the element: the card's remembered
+  // box is inline left/top/width/height, and the drawer's is a class. Neither may leak into the other.
+  const st = PANEL_HOST.style;
+  st.left = st.top = st.right = st.width = st.height = '';
+  PANEL_HOST.classList.remove('drawer-up');
+  if (drawerTimer) { clearTimeout(drawerTimer); drawerTimer = 0; }
+  if (!PANEL_HOST.hidden) paneSync();   // re-place whatever is on screen into the new shape
+  else syncCallout();
+}
+// SLIDING OUT NEEDS ITS CONTENT. Every caller empties the panel before paneSync decides to hide it, so a
+// drawer sliding away would be a blank white band. The last thing it showed is put back for the length of
+// the slide — inert, and replaced the moment anything is selected again.
+let drawerHtml = '';
+let drawerTimer = 0;
+const DRAWER_MS = 260;
+function drawerShow() {
+  drawerHtml = PANEL_HOST.innerHTML;
+  if (drawerTimer) { clearTimeout(drawerTimer); drawerTimer = 0; }
+  PANEL_HOST.hidden = false;
+  // Two frames before the class, or the browser has no "before" to animate from: the element has only
+  // just stopped being display:none, so its first computed transform is also its last.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    PANEL_HOST.classList.add('drawer-up');
+  }));
+}
+function drawerHide() {
+  if (!PANEL_HOST.classList.contains('drawer-up')) { PANEL_HOST.hidden = true; return; }
+  if (!PANEL_HOST.innerHTML.trim()) PANEL_HOST.innerHTML = drawerHtml;
+  PANEL_HOST.classList.remove('drawer-up');
+  if (drawerTimer) clearTimeout(drawerTimer);
+  // A timer, not `transitionend`: the event never fires when the motion is off (reduced motion, a
+  // background tab), and the panel would stay on screen for good.
+  drawerTimer = setTimeout(() => {
+    drawerTimer = 0;
+    if (PANEL_HOST.classList.contains('drawer-up')) return;   // something was selected again mid-slide
+    PANEL_HOST.hidden = true;
+    PANEL_HOST.innerHTML = '';
+  }, DRAWER_MS + 40);
 }
 // MEASURE AFTER THE PAINT, NOT BEFORE IT.
 //
@@ -5875,6 +5962,19 @@ function scheduleCallout(alsoDodge) {
 // Synchronously first, so the card never flickers through a wrong position — then again after the next
 // paint, because a refit or a camera move scheduled alongside this has not landed yet.
 function placeCard() {
+  // A DRAWER HAS ONE PLACE. No remembered box to apply, and nothing to step aside from — it is already
+  // at the edge, and moving it is the one thing this shape cannot do.
+  //
+  // AND NO LINE. The card floats over the drawing and can be anywhere, so a line saying which box it
+  // describes earns its ink. The drawer is an edge band that barely touches the drawing — so the line
+  // would be the ONLY thing the panel puts ON it, and without it this shape leaves the map completely
+  // clear. What the line said is still said twice: the drawer's own title names the element, and that
+  // element is the only bright thing left once the rest dims.
+  //
+  // Not a length argument: measured over nine selections the line is SHORTER in this shape than in the
+  // card (275px against 338px in the middle, 568 against 832 at worst), because the drawer runs the full
+  // width and its edge sits directly below whatever was clicked.
+  if (drawerMode) { hideCallout(); return; }
   applyPanelBox();
   dodgeCard(soleSelectedEl());
   syncCallout();
@@ -9493,6 +9593,7 @@ PANEL_HOST.addEventListener('click', (ev) => {
 // a touchscreen behave the same, and the capture keeps the drag alive when the cursor leaves the card.
 let panelDrag = null;
 PANEL_HOST.addEventListener('pointerdown', (ev) => {
+  if (drawerMode) return;   // one place, so no gesture can move it
   const bar = ev.target && ev.target.closest && ev.target.closest('#panelbar');
   if (!bar || (ev.target.closest && ev.target.closest('button'))) return;
   const wrap = document.getElementById('diagwrap');
@@ -9536,6 +9637,7 @@ PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
 // Double-click the bar to put the card back in its corner at its natural size. A floating thing needs a
 // way home, or one bad drag on a small window loses it for good.
 PANEL_HOST.addEventListener('dblclick', (ev) => {
+  if (drawerMode) return;   // it never left its corner
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelbar')) return;
   savePanelBox(null);
   placeCard();
@@ -9553,7 +9655,7 @@ PANEL_HOST.addEventListener('dblclick', (ev) => {
 // So the size is compared against what applyPanelBox last WROTE. An inline width or height is also still
 // required: a card the reader never touched must keep following the stylesheet.
 document.addEventListener('mouseup', () => {
-  if (PANEL_HOST.hidden || panelDrag) return;
+  if (drawerMode || PANEL_HOST.hidden || panelDrag) return;   // a drawer has no corner grip to read
   const w = PANEL_HOST.style.width, h = PANEL_HOST.style.height;
   if (!w && !h) return;
   if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;
@@ -9582,8 +9684,18 @@ function storePanelBox(what) {
 PANEL_HOST.addEventListener('click', (ev) => {
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;
   ev.stopPropagation();
-  if (mainScene && mainScene.selection && mainScene.selection.length) resetScene(mainScene);
-  else { PANEL_HOST.innerHTML = ''; paneSync(); }   // paneSync is what takes the card AND its line away
+  // CLOSING IS NOT DESELECTING. The × used to clear the whole selection, so putting the details away to
+  // look at the drawing underneath also lost the reader's place: the glow went, the dimming went, and the
+  // box they were reading about became one of forty again.
+  //
+  // It puts the PANEL away and leaves the selection standing. Clicking that same element brings it back —
+  // a plain click replaces the selection with itself (selReplace clears and re-adds), which rebuilds the
+  // panel exactly as the first click did.
+  //
+  // Escape is the gesture that clears the selection, and it still does. Two gestures, two meanings:
+  // × hides what the selection SAYS, Escape ends the selection itself.
+  PANEL_HOST.innerHTML = '';
+  paneSync();   // paneSync is what takes the card, or the drawer, away
 });
 // While ⌥ (Option / Alt) is held, flag the body so drillable subsystems/arrows show the drill-in cursor
 // (see .drill in the CSS) and the hover tip previews the drill/open action. (⌘/⌃ is now the multi-select
@@ -9626,7 +9738,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', 
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', 
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
@@ -9764,6 +9876,9 @@ const setGhRepo = document.getElementById('setGhRepo');
 const setGhRow = document.getElementById('setGhRow');
 const setHelp = document.getElementById('setHelp');
 const setGhHelp = document.getElementById('setGhHelp');
+const setPanel = document.getElementById('setPanel');   // which shape the selected element is shown in
+const setPanelRow = document.getElementById('setPanelRow');
+const setPanelHelp = document.getElementById('setPanelHelp');
 const setCancel = document.getElementById('setCancel');
 const setSave = document.getElementById('setSave');
 const modalErr = document.getElementById('modalErr');
@@ -9786,6 +9901,7 @@ const syncRows = () => {
   setHelp.hidden = !needsRoot(id);  // the {abspath}/{path}… blurb is editor-only
 };
 function openSettings(firstUse) {
+  if (setPanel) setPanel.value = drawerMode ? 'drawer' : 'card';
   setEditor.value = openTargetId();
   setCustom.value = customUri();
   setRoot.value = srcRoot();
@@ -9793,7 +9909,11 @@ function openSettings(firstUse) {
   syncRows();
   modalErr.hidden = true;
   const ref = (firstUse && pendingSrc) ? cleanPath(pendingSrc.file, pendingSrc.line) + (pendingSrc.line ? ':' + pendingSrc.line : '') : '';
-  modalTitle.textContent = firstUse ? 'How should source links open?' : 'Open source links';
+  // FIRST USE is about one thing — the source link the reader just clicked — so the dialog narrows to it
+  // and the panel-shape row stands down. Opened from the ⚙ it is the whole of Settings.
+  modalTitle.textContent = firstUse ? 'How should source links open?' : 'Settings';
+  if (setPanelRow) setPanelRow.hidden = !!firstUse;
+  if (setPanelHelp) setPanelHelp.hidden = !!firstUse;
   modalIntro.hidden = !firstUse;
   modalIntro.textContent = firstUse
     ? 'First time — choose how to open ' + ref + ' (your editor, or GitHub), then Save. Change it anytime with the ⚙ button.' : '';
@@ -9817,6 +9937,9 @@ function saveSettings() {
   }
   lsSet(LS.editor, id); lsSet(LS.custom, custom); lsSet(LS.root, setRoot.value.trim());
   lsSet(LS.repo, ghRepoVal); lsSet(LS.ok, '1');
+  // Applied through the same function the boot call uses, so switching here re-places whatever is on
+  // screen rather than waiting for the next selection.
+  if (setPanel && !setPanelRow.hidden) setDrawerMode(setPanel.value === 'drawer');
   const n = pendingSrc;
   closeSettings();
   if (n && id !== 'native') doOpenSource(n);   // first-use: continue the open the user asked for
@@ -9836,6 +9959,9 @@ const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
 document.getElementById('coachok').addEventListener('click', dismissCoach);
 document.getElementById('helpbtn').addEventListener('click', () => { coach.hidden = false; });
 legendbtn.addEventListener('click', () => setLegendOpen(!legendOpen()));
+// THE DRAWER IS THE DEFAULT, so anything but an explicit '0' is the drawer — a reader who has never
+// opened Settings gets it. Remembered like the legend and the source column.
+setDrawerMode(lsGet(LS.drawer) !== '0');
 coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
 if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once

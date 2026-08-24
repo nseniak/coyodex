@@ -1596,7 +1596,7 @@ def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
     assert "C1" in s1 and "C3" in s1                    # both S1 components present
     assert "C1 -->|\"routes\"| C3" in s1                    # internal wiring kept
     assert "class S2 subsystem" in s1                   # the neighbour S2 drawn as a collapsed box
-    assert "C1 -->|1| S2" in s1 and "C3 -->|1| S2" in s1  # cross arrows: component -> neighbour box, labelled by edge count
+    assert "C1 --> S2" in s1 and "C3 --> S2" in s1  # cross arrows: component -> neighbour box, labelled by edge count
     assert "C2" not in s1                               # the sibling's component itself is NOT drawn
     s2 = by_sub["S2"]
     assert "subgraph S2[" in s2
@@ -1637,7 +1637,7 @@ def test_nested_parent_card_shows_child_subsystem_box_not_flattened() -> None:
     assert "C1" in s1                       # direct member
     assert "class S2 subsystem" in s1       # child subsystem as a (drillable) collapsed box
     assert "C2" not in s1                   # grandchild NOT flattened into the parent card
-    assert "C1 -->|1| S2" in s1             # member -> child-subsystem box (aggregated, count-labelled, drills in)
+    assert "C1 --> S2" in s1             # member -> child-subsystem box (aggregated, count-labelled, drills in)
 
 
 def test_nested_crossing_resolves_at_card_level() -> None:
@@ -1646,10 +1646,10 @@ def test_nested_crossing_resolves_at_card_level() -> None:
     # to S3 is drawn directly.
     by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_nested_subsystem_map()))
     s1 = by_sub["S1"]
-    assert "S2 -->|1| S3" in s1
+    assert "S2 --> S3" in s1
     assert "class S3 subsystem" in s1       # the sibling neighbour box
     s2 = by_sub["S2"]
-    assert "C2" in s2 and "C2 -->|1| S3" in s2
+    assert "C2" in s2 and "C2 --> S3" in s2
 
 
 def test_container_overview_shows_only_top_level_subsystems() -> None:
@@ -1658,7 +1658,7 @@ def test_container_overview_shows_only_top_level_subsystems() -> None:
     cont = gen_viewer.gen_container_mermaid(parse_map(make_nested_subsystem_map()))
     assert 'S1["' in cont and 'S3["' in cont
     assert 'S2["' not in cont
-    assert "S1 -->|1| S3" in cont
+    assert "S1 --> S3" in cont
 
 
 def test_nested_edge_cards_for_disjoint_pairs_only() -> None:
@@ -1671,7 +1671,7 @@ def test_nested_edge_cards_for_disjoint_pairs_only() -> None:
     s2s3 = cards["S2>S3"]
     assert "subgraph S2[" in s2s3 and "subgraph S3[" in s2s3
     assert "C2 -->|\"calls\"| C3" in s2s3            # a direct-member crossing stays labelled (ground-level, real verb)
-    assert "S2 -->|1| C3" in cards["S1>S3"]      # a crossing reaching into child S2 is an aggregated box arrow, count-labelled
+    assert "S2 --> C3" in cards["S1>S3"]      # a crossing reaching into child S2 is an aggregated box arrow, count-labelled
 
 
 def test_nested_container_edges_keyed_per_level() -> None:
@@ -2638,22 +2638,22 @@ def test_nested_subdomain_card_shows_child_box_not_flattened() -> None:
     assert "E1" in sd1                    # direct entity
     assert "class SD2[" in sd1           # child subdomain as a (drillable) collapsed box
     assert "E2" not in sd1               # grandchild entity NOT flattened into the parent card
-    assert "E1 --> SD2 : 1" in sd1       # direct entity -> child-subdomain box (aggregated, count-labelled)
+    assert "E1 --> SD2" in sd1       # direct entity -> child-subdomain box (aggregated, count-labelled)
 
 
 def test_nested_subdomain_crossing_resolves_at_card_level() -> None:
     by_sd = gen_viewer.domain_subdomain_mermaids(parse_map(make_nested_subdomain_map()))
     sd1 = by_sd["SD1"]
-    assert "SD2 --> SD3 : 1" in sd1       # E2(in SD2) -> E3(in SD3) shows as child-box -> sibling box (count-labelled)
+    assert "SD2 --> SD3" in sd1       # E2(in SD2) -> E3(in SD3) shows as child-box -> sibling box (count-labelled)
     sd2 = by_sd["SD2"]
-    assert "E2" in sd2 and "E2 --> SD3 : 1" in sd2
+    assert "E2" in sd2 and "E2 --> SD3" in sd2
 
 
 def test_domain_overview_shows_only_top_level_subdomains() -> None:
     cont = gen_viewer.gen_domain_container_mermaid(parse_map(make_nested_subdomain_map()))
     assert 'SD1["' in cont and 'SD3["' in cont
     assert 'SD2["' not in cont
-    assert "SD1 -->|1| SD3" in cont       # nested E2->E3 aggregates to the top SD1->SD3 arrow
+    assert "SD1 --> SD3" in cont       # nested E2->E3 aggregates to the top SD1->SD3 arrow
 
 
 def test_nested_domain_edge_cards_for_disjoint_pairs_only() -> None:
@@ -2806,7 +2806,7 @@ def test_gen_domain_container_mermaid_boxes_and_crossing_arrow() -> None:
     assert mm.startswith("flowchart")
     assert 'SD1["Ordering (2)"]' in mm and 'SD2["Catalog (1)"]' in mm   # count = #entities in the context
     assert "class SD1 subdomain" in mm
-    assert "SD1 -->|1| SD2" in mm                                       # the one crossing relation
+    assert "SD1 --> SD2" in mm                                       # the one crossing relation
 
 
 def test_gen_domain_container_edges_list_crossing_relations() -> None:
@@ -2831,28 +2831,35 @@ def test_gen_domain_subdomain_card_frames_members_collapses_neighbour_subdomains
     assert 'class SD2["Catalog (1)"]' in cx1                            # neighbour drawn as ONE collapsed subdomain box
     assert 'class E4["Product"]' not in cx1                             # the neighbour's entity is NOT drawn (collapsed to SD)
     assert 'E1 "1" *-- "*" E2' in cx1                                   # intra-subdomain composition, full
-    assert "E1 --> SD2 : 1" in cx1                                      # cross arrow to the collapsed neighbour box (count-labelled)
+    assert "E1 --> SD2" in cx1                                      # cross arrow to the collapsed neighbour box (count-labelled)
     assert ": product" not in cx1                                       # the crossing is aggregated (count), not a labelled relation here
     # in SD2's card the roles flip: E4 is the framed member, SD1 the collapsed neighbour, arrow inbound
     cx2 = cards["SD2"]
     assert 'namespace SD2["Catalog"] {' in cx2
     assert 'class E4["Product"] {' in cx2 and 'class E1["Order"] {' not in cx2
-    assert 'class SD1["Ordering (2)"]' in cx2 and "SD1 --> E4 : 1" in cx2  # inbound cross arrow from the neighbour (count-labelled)
+    assert 'class SD1["Ordering (2)"]' in cx2 and "SD1 --> E4" in cx2  # inbound cross arrow from the neighbour (count-labelled)
 
 
-def test_gen_domain_edge_card_two_namespaces_with_inner_and_crossing() -> None:
-    # The subdomain edge card: BOTH subdomains framed as namespaces with ALL their entities full, each
-    # subdomain's inner relations, and the crossing relations drawn IN FULL (kind + backing-field label) —
-    # the entity analog of the subsystem edge card. Keyed by the crossing direction only.
+def test_gen_domain_edge_card_two_namespaces_with_the_crossing_entities() -> None:
+    # The subdomain edge card: BOTH subdomains framed as namespaces, holding the entities the crossing
+    # relations touch, with those relations drawn IN FULL (kind + backing-field label) — the entity analog
+    # of the subsystem edge card. Keyed by the crossing direction only.
+    #
+    # E2 (LineItem) is at neither end of the E1 → E4 crossing, so the card does not draw it, and SD1's
+    # inner E1 *-- E2 wiring goes with the box it points at. The card answers "what does this arrow stand
+    # for", and E2 was no part of that answer.
     g = parse_map(make_context_map())
     cards = gen_viewer.domain_edge_card_mermaids(g)
     assert set(cards) == {"SD1>SD2"}                                   # only the crossing direction (E1 → E4)
     card = cards["SD1>SD2"]
     assert card.startswith("classDiagram")
     assert 'namespace SD1["Ordering"] {' in card and 'namespace SD2["Catalog"] {' in card
-    assert 'class E1["Order"] {' in card and 'class E2["LineItem"] {' in card and 'class E4["Product"] {' in card
-    assert 'E1 "1" *-- "*" E2' in card                                 # SD1's inner wiring
+    assert 'class E1["Order"] {' in card and 'class E4["Product"] {' in card   # the crossing's two ends
     assert 'E1 "*" --> "1" E4 : product' in card                       # the crossing relation, drawn in full
+    assert 'class E2["LineItem"] {' not in card                        # at neither end -> not drawn
+    assert 'E1 "1" *-- "*" E2' not in card                             # …and neither is the wiring to it
+    # The subdomain's OWN card still draws every entity: there the frame is the subject, not the arrow.
+    assert 'class E2["LineItem"] {' in gen_viewer.domain_subdomain_mermaids(g)["SD1"]
 
 
 def test_subsystem_card_bridges_to_contexts_show_edge_count() -> None:
@@ -2860,20 +2867,27 @@ def test_subsystem_card_bridges_to_contexts_show_edge_count() -> None:
     s1 = by_sub["S1"]
     # The subsystem->subdomain bridge is a SYNTHESIZED arrow: it collapses a component's C→E edges into
     # its subdomain box, labelled by the COUNT of those edges (like the container arrows), never a verb.
-    assert "class SD1 subdomain" in s1 and "C1 -->|1| SD1" in s1   # C1 has 1 edge into SD1
+    assert "class SD1 subdomain" in s1 and "C1 --> SD1" in s1   # C1 has 1 edge into SD1
     s2 = by_sub["S2"]
-    assert "class SD1 subdomain" in s2 and "C2 -->|1| SD1" in s2   # C2 has 1 edge into SD1
+    assert "class SD1 subdomain" in s2 and "C2 --> SD1" in s2   # C2 has 1 edge into SD1
 
 
-def test_subdomain_card_bridges_to_subsystems_show_edge_count() -> None:
-    # The reverse of test_subsystem_card_bridges_to_contexts: a subdomain card draws every subsystem
-    # whose components touch its entities as a collapsed (amber) box with an arrow INTO the entity
-    # labelled by the count of underlying C→E edges — the structure↔domain bridge seen from the domain side.
-    sd1 = gen_viewer.domain_subdomain_mermaids(parse_map(make_bridge_map()))["SD1"]
-    assert 'namespace SD1[' in sd1 and 'class E1["Order"] {' in sd1
-    assert 'class S1["Edge"]' in sd1 and "S1 --> E1 : 1" in sd1    # S1 has 1 edge into E1
-    assert 'class S2["Core"]' in sd1 and "S2 --> E1 : 1" in sd1    # S2 has 1 edge into E1
-    assert "style S1 fill:" in sd1                                        # subsystem box styled (amber), distinct from entities
+def test_an_entity_diagram_draws_entities_and_subdomains_only() -> None:
+    # An entity diagram draws entities and the subdomains that hold them, and nothing else. The subdomain
+    # card and the entity-pair page each used to add a collapsed box for every subsystem whose components
+    # touch one of those entities, which put two kinds of thing on one canvas: a reader could not tell
+    # whether an arrow meant "this entity relates to that one" or "this code writes that entity".
+    #
+    # The fact is not lost. The subsystem card draws the same bridge from the structural side, and the
+    # subsystem × subdomain page is about nothing else.
+    g = parse_map(make_bridge_map())
+    sd1 = gen_viewer.domain_subdomain_mermaids(g)["SD1"]
+    assert 'namespace SD1[' in sd1 and 'class E1["Order"] {' in sd1     # its entities, still
+    assert 'class S1["Edge"]' not in sd1 and 'class S2["Core"]' not in sd1
+    assert "S1 --> E1" not in sd1 and "S2 --> E1" not in sd1
+    assert gen_viewer.SUBSYSTEM_STYLE not in sd1                       # no amber box on an entity canvas
+    # …and the structural side still carries it: the subsystem card draws the subdomain it writes into.
+    assert "class SD1 subdomain" in gen_viewer.subsystem_component_mermaids(g)["S1"]
 
 
 def test_subdomain_card_has_no_subsystem_box_without_bridges() -> None:
@@ -3190,10 +3204,10 @@ def test_container_overview_excludes_contexts() -> None:
     g = parse_map(make_both_groupings_map())
     mm = gen_viewer.gen_container_mermaid(g)
     assert "SD" not in mm                                  # no subdomain box / arrow leaks in
-    assert "S1 -->|1| S2" in mm                            # the real S→S crossing (C1->C2), count 1 (not inflated by C→E)
+    assert "S1 --> S2" in mm                            # the real S→S crossing (C1->C2), count 1 (not inflated by C→E)
     # the Domain overview is the mirror: contexts only, no subsystem leak
     dmm = gen_viewer.gen_domain_container_mermaid(g)
-    assert "SD1 -->|1| SD2" in dmm and "S1" not in dmm and "S2" not in dmm  # SD→SD present, no subsystem box leaks in
+    assert "SD1 --> SD2" in dmm and "S1" not in dmm and "S2" not in dmm  # SD→SD present, no subsystem box leaks in
 
 
 def test_container_edges_exclude_contexts() -> None:
@@ -3206,15 +3220,13 @@ def test_edge_cards_exclude_contexts() -> None:
     assert set(cards) == {"S1>S2"}                         # no spurious S>SD edge card
 
 
-def test_domain_edge_card_includes_subsystem_bridges() -> None:
-    # The domain edge card draws the reverse structure↔domain bridge too: each subsystem whose
-    # components touch either subdomain's entities, as a collapsed (amber) box with an arrow labelled
-    # by the count of underlying C→E edges (C1->E1 = 1; C2->E3 = 1). Mirrors the subdomain card.
+def test_the_entity_pair_page_draws_no_subsystem_boxes() -> None:
+    # The same rule on the entity-pair page — see test_an_entity_diagram_draws_entities_and_subdomains_only.
     card = gen_viewer.domain_edge_card_mermaids(parse_map(make_both_groupings_map()))["SD1>SD2"]
     assert 'namespace SD1[' in card and 'namespace SD2[' in card
-    assert 'class S1["Edge"]' in card and "S1 --> E1 : 1" in card
-    assert 'class S2["Core"]' in card and "S2 --> E3 : 1" in card
-    assert "style S1 fill:" in card                        # amber subsystem box, distinct from entities
+    assert 'class S1["Edge"]' not in card and 'class S2["Core"]' not in card
+    assert "S1 --> E1" not in card and "S2 --> E3" not in card
+    assert gen_viewer.SUBSYSTEM_STYLE not in card
 
 
 def test_bridge_card_pairs_subsystem_and_subdomain() -> None:

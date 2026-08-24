@@ -181,8 +181,16 @@
            with 447px of an 860px window. -->
       <div id="diagwrap">
       <div id="diagram"></div>
-      <div id="legend"></div>
-      <!-- Deployment environment filter. Floats over the diagram (bottom-left, mirroring #legend) rather
+      <!-- THE OVERLAY CONTROLS, in ONE column at the TOP-LEFT. They used to sit along the bottom edge,
+           which the drawer takes whole — so each of them had to step up by the drawer's height on every
+           selection, and three unrelated things moved every time the reader clicked a box.
+           Top-left is also the cheaper corner. Measured over four views, a legend-sized box covers 17 of
+           the drawn shapes at the bottom-right where the legend used to live, and 10 at the top-left. The
+           top-right is emptier still (7) but the card lives there, and this column has to work in both
+           shapes. A flex column, so whichever of them a view shows simply stack — no coordinate depends
+           on another control's height. A CONTROL you act on sits above a KEY you read. -->
+      <div id="overlays">
+      <!-- Deployment environment filter. Floats over the diagram (in the #overlays column) rather
            than living in the info pane: it filters what the DIAGRAM draws, so it belongs beside it — and
            in the pane it vanished the moment you selected a box, stranding you in a filtered view with
            no way back. Hidden on every view but the Deployment overview. -->
@@ -202,14 +210,16 @@
           <button id="flownext" aria-label="Next step">&#9654;</button>
         </div>
       </div>
+      <div id="legend"></div>
+      </div>
       <!-- WHAT YOU SELECTED, as a card floating over the drawing. It used to be a 300px band under the
            diagram, present whether or not anything was selected. Measured over 60 states on the three
            maps: with nothing selected it held 76px of content, and one selected shape held 67-184px, so
            roughly three quarters of it was empty nearly all the time. It is now absent until you select
            something, and the diagram keeps the whole area.
-           Top-right, because the other two floaters already own the bottom corners: #envpicker
-           bottom-left and #legend bottom-right. Capped in height and scrollable, since a few states
-           (a process and its threads, an actor and every step it drives) run long. -->
+           Top-right, opposite the #overlays column at the top-left, so the two never meet. Capped in
+           height and scrollable, since a few states (a process and its threads, an actor and every step
+           it drives) run long. -->
       <!-- THE CALLOUT: a thin line joining the card to the one thing it describes. Its own SVG layer over
            the diagram and UNDER the card (see the z-index pair in viewer.css), so the line runs behind the
            card's edge rather than across its face. Drawn only for a SINGLE selection — with several cards
@@ -292,8 +302,21 @@
 <div id="tip"></div>
 <div id="modal" class="modal" hidden>
   <div class="modal-card">
-    <h2 id="modalTitle">Open source links</h2>
+    <h2 id="modalTitle">Settings</h2>
     <p id="modalIntro" class="modal-help"></p>
+    <!-- WHERE THE SELECTION IS SHOWN: a drawer that slides up from the bottom edge, or a card floating
+         over the drawing with a line to the element it describes. Two shapes for ONE panel, not two
+         panels — the drawer is #panel restyled, so every card, list and stack it can hold is built by the
+         same code either way. It led the dialog because it is about the MAP; everything below it is about
+         source links. It was a header button first, which sat beside the legend's looking like it. -->
+    <label class="modal-row" id="setPanelRow">Selected element shown in
+      <select id="setPanel">
+        <option value="drawer">A drawer at the bottom</option>
+        <option value="card">A floating card, with a line to it</option>
+      </select>
+    </label>
+    <p class="modal-help" id="setPanelHelp">The drawer keeps the drawing clear; the card sits over it and
+       can be dragged. Stored only in this browser.</p>
     <label class="modal-row">Open in
       <select id="setEditor"></select>
     </label>
