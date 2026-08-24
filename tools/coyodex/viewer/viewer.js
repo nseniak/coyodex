@@ -2734,11 +2734,12 @@ function flowStepInfoHtml(uc, i, numbered) {
   // The step's action is the title (a full sentence for actor steps — too long for a pill). Its arrow
   // owns structural navigation, so the pane stays focused on the step's authored facts and call site.
   const stepBadge = numbered ? '<span class="badge edge">Step ' + (i + 1) + '</span>' : '';
-  // The title names the doer: "Team member: clicks Connect…". On a big flow the lit arrow's endpoints
+  // The title names the doer, then the action in italics: "Team member *clicks Connect…*" — one
+  // phrase, the emphasis carrying the split. On a big flow the lit arrow's endpoints
   // can sit outside the current framing, and then the card is the only place the step's subject exists
   // at all. A plain name, deliberately not a link: the pane stays step-specific, and structural
   // navigation belongs to the drawn arrow. (The receiver rides the action sentence itself.)
-  return '<div class="pane-title"><h2>' + esc(st.src) + ': ' + (st.verb ? mdInline(st.verb) : 'step') + '</h2>' + stepBadge + '</div>'
+  return '<div class="pane-title"><h2>' + esc(st.src) + ' <em>' + (st.verb ? mdInline(st.verb) : 'step') + '</em></h2>' + stepBadge + '</div>'
     + (st.sf ? '<dl><dt>Part of sub-flow</dt><dd>&#10216;' + esc(st.sfName || st.sf)
        + '&#10217; <span class="muted">(' + esc(st.sf) + ' — a shared sequence this flow includes)</span></dd></dl>' : '')
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
