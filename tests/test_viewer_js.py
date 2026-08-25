@@ -3293,3 +3293,13 @@ def test_hover_never_takes_the_picture_away_from_a_pin() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
     assert "card.addEventListener('mouseenter', () => { if (!selected) show(key, id); });" in bind
+
+
+def test_a_feature_card_counts_its_joined_rules_and_hides_a_zero() -> None:
+    """The rule join is a floor, not a total: "0 rules" would read as "decides nothing" when it can
+    only mean "nothing joined", so zero draws no pill. A count, not a control — the detail lives on
+    the feature page the use-case pill already opens."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    card = _story_fn(js, "storyFeatureCardHtml")
+    assert "const nr = (f.rules || []).length;" in card
+    assert "nr ? `<span class=\"story-pill\">${nr} rule${nr === 1 ? '' : 's'}</span>` : ''" in card

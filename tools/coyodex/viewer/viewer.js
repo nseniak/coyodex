@@ -7537,6 +7537,12 @@ function storyFeatureCardHtml(id, off) {
   // The audience pills the grid card carried, from the same derivation (see cardFacts).
   const aud = cardPillsHtml(shownAudience(f.audience || []).map((a) => (
     { text: audienceWord(a), cls: 'uc-aud-' + String(a).toLowerCase() })));
+  // The business rules the feature's use-case walks reach (the derived rule join, a floor rather
+  // than a total — see coyodex.features). A count, not a control: its detail lives on the feature
+  // page the use-case pill already opens. Zero draws nothing — on the join's floor, "0 rules"
+  // would read as "decides nothing" when it can only mean "nothing joined".
+  const nr = (f.rules || []).length;
+  const rules = nr ? `<span class="story-pill">${nr} rule${nr === 1 ? '' : 's'}</span>` : '';
   // The use-case pill is a DOOR to the feature's own details page — the card's click is the pin, so
   // the pill is the one control that leaves this screen, and it says where it goes.
   return `<article class="story-card story-feature${off ? ' story-offf' : ''}" `
@@ -7545,7 +7551,7 @@ function storyFeatureCardHtml(id, off) {
     + (f.purpose ? `<p class="story-desc">${mdInline(f.purpose)}</p>` : '')
     + `<div class="story-pills">${aud}<button type="button" class="story-pill story-ucpill" `
     + `data-cap="${esc(id)}" title="Open the details page of ${esc(name)}">`
-    + `${n} use case${n === 1 ? '' : 's'}</button></div>`
+    + `${n} use case${n === 1 ? '' : 's'}</button>${rules}</div>`
     + '</article>';
 }
 function storyActorCardHtml(rid) {
