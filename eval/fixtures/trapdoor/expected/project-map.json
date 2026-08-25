@@ -26,22 +26,30 @@
   {
    "term": "Tenant",
    "meaning": "the customer account a ticket belongs to; every read and write is scoped to one",
-   "source": "src/auth/gate.py:32"
+   "source": "src/auth/gate.py:32",
+   "aliases": [],
+   "no_autolink": false
   },
   {
    "term": "Lifecycle",
    "meaning": "the five declared ticket states and the transitions between them",
-   "source": "src/lifecycle/states.py:14"
+   "source": "src/lifecycle/states.py:14",
+   "aliases": [],
+   "no_autolink": false
   },
   {
    "term": "Channel",
    "meaning": "a named pub/sub topic the publisher writes and (sometimes) a consumer drains",
-   "source": "src/messaging/publisher.py:29"
+   "source": "src/messaging/publisher.py:29",
+   "aliases": [],
+   "no_autolink": false
   },
   {
    "term": "Trap",
    "meaning": "a defect deliberately planted in this tree, declared in traps.yaml, asserted by one regression layer",
-   "source": "traps.yaml:1"
+   "source": "traps.yaml:1",
+   "aliases": [],
+   "no_autolink": false
   }
  ],
  "capabilities": [],

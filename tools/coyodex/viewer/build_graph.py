@@ -127,8 +127,9 @@ class GraphDict(TypedDict):
     subflows: list[dict[str, object]]  # T6b named sub-flows: {id, name, steps} — shared step
                                        # sequences a flow step references via its `subflow` field
     roles: list[dict[str, str]]
-    glossary: list[dict[str, str]]  # ubiquitous-language terms: {term, meaning, where} (where = bare
-                                    # `path:line`/`path/` anchor, or "" when the term has no code home)
+    glossary: list[dict[str, object]]  # ubiquitous-language terms: {term, meaning, source, aliases?,
+                                    # no_autolink?} (source = bare `path:line`/`path/` anchor, or ""
+                                    # when the term has no code home; aliases/no_autolink only when set)
     # ── reference collections shown on the System / Tests tabs (rows the diagram doesn't hold) ──
     run_commands: list[dict[str, str]]      # T3: {action, command, source}
     entry_points: list[dict[str, object]]   # T4: {kind, trigger, source, component, index} (component = owning

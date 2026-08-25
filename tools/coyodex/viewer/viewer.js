@@ -274,6 +274,88 @@ const mdRefs = (s, refs) => {
   return out + swap(html.slice(last));
 };
 
+// ── Glossary term-linking: the fold/match engine ─────────────────────────────────────────────────
+// Every occurrence of a glossary term inside narrative prose becomes an in-place definition, so a
+// reader who meets "cloud mode" on their first page is not two clicks from its meaning. Matching is
+// FOLDED — case, plural, possessive, hyphen-vs-space all collapse — so "the sandbox's" still finds
+// the term "Sandbox", without any of those variants being authored as aliases. Pure functions here
+// (sliced out and exercised by tests/test_viewer_js.py, like esc/mdInline above); the DOM pass that
+// uses them lives with the other render wiring below.
+//
+// One word's fold: lowercase, outer quotes dropped, possessive 's dropped, plural folded by three
+// rules (ies→y, [sibilant]es→stem, s→stem — the sibilant guard keeps "modes" from folding to "mod"
+// while "boxes" still reaches "box"). Terms and prose fold through the SAME function, so the two
+// sides can never disagree about what a variant collapses to.
+const foldGlossWord = (w) => {
+  w = w.toLowerCase().replace(/^[’']+|[’']+$/g, '').replace(/[’']s$/, '');
+  if (w.length > 3 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
+  if (w.length > 3 && /(?:s|x|z|ch|sh)es$/.test(w)) return w.slice(0, -2);
+  if (w.length > 2 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+  return w;
+};
+// Word tokens with their positions in the original string. Hyphen and space are the same separator
+// ("cloud-mode" ≡ "cloud mode"); apostrophes stay inside a token so a possessive folds as one word.
+// UNDERSCORE is a word character on purpose: `tool_catalog` is a code identifier, not the prose
+// phrase "tool catalog", and keeping it one (never-matching) token is what stops every snake_case
+// name on the Storage view from sprouting a definition link (measured on the MCP Hero map).
+const _GLOSS_WORD = /[A-Za-z0-9_’']+/g;
+const glossTokens = (text) => {
+  const out = [];
+  for (const m of String(text || '').matchAll(_GLOSS_WORD)) {
+    const key = foldGlossWord(m[0]);
+    if (key) out.push({ key, start: m.index, end: m.index + m[0].length });
+  }
+  return out;
+};
+const foldGlossPhrase = (s) => glossTokens(s).map((t) => t.key).join(' ');
+// The matcher, built ONCE from the bundle's glossary: folded surface → its glossary row. A term
+// contributes its own name unless it opts out (`no_autolink` — the escape hatch for a term whose
+// name is a generic English word), and every alias contributes regardless. On a key collision the
+// first row keeps it, so a term and a later alias can never silently repoint each other's surface.
+function buildGlossMatcher(glossary) {
+  const index = new Map();
+  let maxWords = 0;
+  for (const g of glossary || []) {
+    const surfaces = g.no_autolink ? [] : [g.term];
+    surfaces.push(...(g.aliases || []));
+    for (const surface of surfaces) {
+      const words = glossTokens(surface).map((t) => t.key);
+      if (!words.length) continue;
+      if (!index.has(words.join(' '))) index.set(words.join(' '), g);
+      if (words.length > maxWords) maxWords = words.length;
+    }
+  }
+  return { index, maxWords };
+}
+// Scan one text span: at each word position try the LONGEST candidate first, and a match consumes
+// its words — "hosted stdio MCP" wins over the "upstream MCP" that a two-word try would find inside
+// it, and word-position scanning means matches only ever start and end at word boundaries. A
+// multiword match must also be joined by nothing but spaces or hyphens: `admin:<mcp>` holds the
+// words "admin" and "mcp", but a colon between them means it is a key format, not the term
+// "Admin MCP" — and the same guard keeps a phrase from matching across a sentence boundary.
+const _GLOSS_JOIN = /^[\s\-–—]+$/;
+function matchGlossTerms(text, matcher) {
+  const src = String(text || '');
+  const toks = glossTokens(src);
+  const joined = (i, n) => {
+    for (let k = 1; k < n; k++) {
+      if (!_GLOSS_JOIN.test(src.slice(toks[i + k - 1].end, toks[i + k].start))) return false;
+    }
+    return true;
+  };
+  const out = [];
+  for (let i = 0; i < toks.length;) {
+    let hit = null, n = Math.min(matcher.maxWords, toks.length - i);
+    for (; n >= 1; n--) {
+      if (!joined(i, n)) continue;
+      const g = matcher.index.get(toks.slice(i, i + n).map((t) => t.key).join(' '));
+      if (g) { hit = { g, start: toks[i].start, end: toks[i + n - 1].end }; break; }
+    }
+    if (hit) { out.push(hit); i += n; } else i++;
+  }
+  return out;
+}
+
 let mode = HAS_DIFF ? 'diff' : 'base';  // a diff render arms the change-impact overlay from the start
 // Live mechanical diff (fetched from api/diff for a chosen range), distinct from the baked AI-report
 // diff that may arrive in the bundle. When LIVE_DIFF is set it OWNS the overlay: DIFF_STATE is derived
@@ -297,6 +379,91 @@ let downX = 0, downY = 0;  // last mousedown, to tell a real click from a drag-p
 // Components view and the drilled diagrams, so an arrow resolves to its real component edge.
 const COMP_LOOKUP = {};
 for (const e of GRAPH.edges || []) (COMP_LOOKUP[e.src + '>' + e.dst] ||= []).push(e);
+
+// ── Glossary term-linking: the DOM pass ──────────────────────────────────────────────────────────
+// The engine above finds terms; this pass wraps them where prose actually lands. A MutationObserver
+// on the stage and the info pane (the only two places narrative prose renders) runs it after every
+// innerHTML write, whichever of the many render paths produced it — no per-renderer wiring, and a
+// lazily-rendered pane is covered the same as a full view. `takeRecords()` at the end of each batch
+// swallows the mutations the pass itself just made, so it never re-walks its own output.
+const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
+// Where a term must never link: inside any control or link (a chip, a crumb, a code link — `a` and
+// `button` cover them all), quoted literals (`code`/`pre`/`kbd`), SVG diagrams (box labels are
+// names, not prose), an entry-point trigger (an HTTP route is an address, not a sentence), a bare
+// file path (`.gloss-plain`), pills (labels, not prose), headings and card names (a title is a
+// label too — measured on the MCP Hero map, linking titles underlined half of every card list's
+// name column), and the Glossary view itself (the one page that IS the definitions).
+const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ecard-name, .tb-trig, '
+  + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
+  + '.dv-kindpill, .dv-coll';
+// A page about one element is not decorated with a link to itself: the page's subject is the
+// breadcrumb's last item (the trail names the page — one source of truth), folded the same way the
+// matcher folds terms, so on a details page whose subject IS a glossary term that term stays plain.
+function glossSubjectKey() {
+  const cur = crumb && crumb.querySelector('.crumbseg.cur');
+  return cur ? foldGlossPhrase(cur.textContent) : '';
+}
+// Link every glossary term in `root`'s prose — FIRST occurrence per card/row only (a card that says
+// "sandbox" three times gets one link, not three underlines). The card/row is the nearest table
+// row, list item or card article; a page with none (an element's details page) is one scope, which
+// is right: the whole page is one card about one subject.
+function autolinkTerms(root) {
+  if (!root || !root.isConnected || root.closest(GLOSS_SKIP)) return;
+  const subject = glossSubjectKey();
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
+  const seenByScope = new Map();
+  for (const node of nodes) {
+    const parent = node.parentElement;
+    if (!parent || parent.closest(GLOSS_SKIP)) continue;
+    const text = node.nodeValue || '';
+    if (text.length < 3) continue;
+    const matches = matchGlossTerms(text, GLOSS_MATCHER);
+    if (!matches.length) continue;
+    const scope = parent.closest('tr, li, article, section, dl') || root;
+    let seen = seenByScope.get(scope);
+    if (!seen) { seen = new Set(); seenByScope.set(scope, seen); }
+    const frag = document.createDocumentFragment();
+    let last = 0, linked = 0;
+    for (const m of matches) {
+      if (seen.has(m.g.term) || foldGlossPhrase(m.g.term) === subject) continue;
+      seen.add(m.g.term);
+      frag.appendChild(document.createTextNode(text.slice(last, m.start)));
+      const a = document.createElement('a');
+      a.href = '#';
+      a.className = 'gloss-link';
+      a.dataset.glossTerm = m.g.term;
+      a.title = m.g.term + ' — ' + (m.g.meaning || '');
+      a.textContent = text.slice(m.start, m.end);
+      frag.appendChild(a);
+      linked++;
+      last = m.end;
+    }
+    if (!linked) continue;
+    frag.appendChild(document.createTextNode(text.slice(last)));
+    node.replaceWith(frag);
+  }
+}
+if (HAS_GLOSSARY && GLOSS_MATCHER.maxWords) {
+  const glossMo = new MutationObserver((records) => {
+    for (const r of records) {
+      for (const n of r.addedNodes) if (n.nodeType === Node.ELEMENT_NODE) autolinkTerms(n);
+    }
+    glossMo.takeRecords();   // drop the records the pass itself just queued — see the block comment
+  });
+  glossMo.observe(diagram, { childList: true, subtree: true });
+  glossMo.observe(PANEL_HOST, { childList: true, subtree: true });
+  // Capture phase, because a term inside a card must open the GLOSSARY, not drill the card — the
+  // card's own (bubbling) click handler never sees a click this one consumed.
+  document.addEventListener('click', (ev) => {
+    const a = ev.target.closest && ev.target.closest('a.gloss-link');
+    if (!a) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    sbGotoGlossary(a.dataset.glossTerm);   // the search bar's glossary jump: switch view, flash the row
+  }, true);
+}
 
 // Happy Path step lookup 'HP1' -> step record (id, title, uc, why). The step IS a use case; its
 // detailed actions live in that use case's T6 flow (FLOWS_MM / FLOWS_NARR), opened when the step drills.

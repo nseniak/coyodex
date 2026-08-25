@@ -3770,7 +3770,8 @@ def _check_prose(m: ProjectModel) -> list[str]:
     map is not WRONG for holding a long sentence, and a gate that fires on every build teaches the
     lead to ignore the gate. Findings are grouped and counted by `prose.summarize`, so a map with
     two hundred long sentences produces one line, not two hundred."""
-    return prose.summarize(prose.scan(prose.iter_prose_fields(m)))
+    return prose.summarize(prose.scan(prose.iter_prose_fields(m),
+                                      terms=[g.term for g in m.glossary]))
 
 
 def _check_extra_conventions(m: ProjectModel) -> tuple[list[str], list[str]]:

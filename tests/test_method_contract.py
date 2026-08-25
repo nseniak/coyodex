@@ -1072,7 +1072,8 @@ _AUTHORING_CONTRACTS = (("harvest-contract.md", "components[].purpose"),
                         ("rules-contract.md", "rules[].statement and rules[].risk"))
 
 _WRITING_RULE_HEADS = ("One idea per sentence", "No em dash", "No code in plain text",
-                       "Never open with", "Use a glossary word", "Plain words at the SAME precision")
+                       "Every reference resolves inside the same box", "Use a glossary word",
+                       "Plain words at the SAME precision")
 
 
 def test_the_writing_rules_file_exists_and_carries_all_six_rules():

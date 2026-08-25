@@ -96,6 +96,103 @@ console.log(JSON.stringify({{ html, text }}));
     assert "C99 is long gone" in got["text"], "an undefined id was not left as written"
 
 
+def test_glossary_matching_folds_naming_variants_without_crossing_word_boundaries() -> None:
+    """The term-linking engine's whole contract: plural, possessive, case and hyphen-vs-space all
+    find the term, while a term hiding INSIDE a longer word ("sandboxing") never matches — the
+    difference between an in-place definition and underlined noise."""
+    out = _run_js("""
+const M = buildGlossMatcher([
+  { term: 'Upstream MCP', meaning: 'a mounted server' },
+  { term: 'Cloud mode', meaning: 'the hosted deployment' },
+  { term: 'Sandbox', meaning: 'the isolated box' },
+]);
+const spans = (t) => matchGlossTerms(t, M).map((m) => [m.g.term, t.slice(m.start, m.end)]);
+console.log(JSON.stringify({
+  plural: spans('Two Upstream MCPs are mounted.'),
+  possessive: spans("the sandbox\\u2019s files"),
+  hyphen: spans('runs in cloud-mode today'),
+  caseAndSpace: spans('CLOUD MODE only'),
+  inside: spans('sandboxing is unrelated'),
+  snake: spans('reads the tool_catalog collection'),
+  punct: spans('a key such as cloud:<mode> is parsed'),
+  sentence: spans('It runs in the cloud. Mode is not stored.'),
+}));
+""")
+    got = json.loads(out)
+    assert got["plural"] == [["Upstream MCP", "Upstream MCPs"]]
+    assert got["possessive"] == [["Sandbox", "sandbox’s"]]
+    assert got["hyphen"] == [["Cloud mode", "cloud-mode"]]
+    assert got["caseAndSpace"] == [["Cloud mode", "CLOUD MODE"]]
+    assert got["inside"] == [], "a term inside a longer word must not match"
+    # measured over-linking on the MCP Hero map, pinned: a snake_case identifier is a CODE name,
+    # never the prose phrase; and a multiword term never matches across punctuation or a sentence end
+    assert got["snake"] == [], "tool_catalog is an identifier, not the phrase 'tool catalog'"
+    assert got["punct"] == [], "words joined by ':<' are a key format, not a term"
+    assert got["sentence"] == [], "a phrase must not match across a sentence boundary"
+
+
+def test_glossary_matching_longest_match_wins_and_consumes_its_words() -> None:
+    """'Hosted stdio MCP' must beat both 'Upstream MCP' and a bare 'MCP' term at the same position —
+    and having matched, its words are consumed, so no shorter term re-fires inside it."""
+    out = _run_js("""
+const M = buildGlossMatcher([
+  { term: 'MCP', meaning: 'the protocol' },
+  { term: 'Upstream MCP', meaning: 'a mounted server' },
+  { term: 'Hosted stdio MCP', meaning: 'one kind of upstream' },
+]);
+const spans = (t) => matchGlossTerms(t, M).map((m) => m.g.term);
+console.log(JSON.stringify({
+  longest: spans('a hosted stdio MCP responds'),
+  middle: spans('each upstream MCP reconnects'),
+  bare: spans('the MCP handshake'),
+}));
+""")
+    got = json.loads(out)
+    assert got["longest"] == ["Hosted stdio MCP"]
+    assert got["middle"] == ["Upstream MCP"]
+    assert got["bare"] == ["MCP"]
+
+
+def test_glossary_no_autolink_and_aliases_control_which_surfaces_link() -> None:
+    """`no_autolink` takes a too-generic term name out of matching; `aliases` put real alternative
+    names in — through the same folding pipeline, with longest-match-first across both."""
+    out = _run_js("""
+const M = buildGlossMatcher([
+  { term: 'Tool', meaning: 'one callable action', no_autolink: true, aliases: ['catalog tool'] },
+  { term: 'Upstream MCP', meaning: 'a mounted server', aliases: ['upstream'] },
+]);
+const spans = (t) => matchGlossTerms(t, M).map((m) => [m.g.term, t.slice(m.start, m.end)]);
+console.log(JSON.stringify({
+  generic: spans('every tool is listed'),
+  viaAlias: spans('the catalog tools are listed'),
+  aliasWord: spans('each upstream reconnects'),
+  fullTermStillWins: spans('the upstream MCP reconnects'),
+}));
+""")
+    got = json.loads(out)
+    assert got["generic"] == [], "a no_autolink term's own name must not match"
+    assert got["viaAlias"] == [["Tool", "catalog tools"]]
+    assert got["aliasWord"] == [["Upstream MCP", "upstream"]]
+    assert got["fullTermStillWins"] == [["Upstream MCP", "upstream MCP"]]
+
+
+def test_glossary_autolink_skips_chrome_chips_code_and_the_glossary_view_itself() -> None:
+    """Source-read pins on the DOM pass: the skip list keeps links out of controls, quoted
+    literals, SVG box labels, route chips, bare file paths and the Glossary view; the click
+    handler runs in capture phase so a linked term opens the Glossary instead of drilling the
+    card it sits in; and the observer covers both prose hosts (the stage and the info pane)."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    pass_src = js[js.index("const GLOSS_MATCHER"):js.index("function glossSubjectKey")]
+    for needle in ("a, button", "code", "pre", "kbd", "svg", ".tb-trig", ".glossary-wrap",
+                   ".gloss-plain"):
+        assert needle in pass_src, f"skip list lost {needle!r}"
+    wiring = js[js.index("if (HAS_GLOSSARY && GLOSS_MATCHER.maxWords)"):][:2000]
+    assert "glossMo.observe(diagram" in wiring
+    assert "glossMo.observe(PANEL_HOST" in wiring
+    assert "}, true);" in wiring, "the gloss-link click handler must run in capture phase"
+    assert "sbGotoGlossary(a.dataset.glossTerm)" in wiring
+
+
 def test_flow_step_keeps_relationship_navigation_on_the_arrow() -> None:
     """The pane stays step-specific; its arrow owns structural relationship navigation."""
     js = (VIEWER_DIR / "viewer.js").read_text()

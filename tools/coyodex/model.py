@@ -61,6 +61,14 @@ class GlossaryRow:
     source: str | None = None  # the term's canonical code home: a bare `path:line` or `path/`
                                # anchor (like Component.source / Entity.source), or None when the
                                # concept has no single code home (a pure product-level term)
+    aliases: list[str] = field(default_factory=list)  # extra surface forms the viewer also turns
+                               # into in-place definitions. Real alternative NAMES only — the viewer
+                               # folds plural/possessive/case/hyphen variants on its own, so those
+                               # never belong here (see the Glossary deliverable in method.md).
+    no_autolink: bool = False  # True = the term's own name is excluded from automatic linking (it
+                               # links only via its aliases, or not at all). Escape hatch for a term
+                               # whose name is an ordinary English word ("Tool") that would link
+                               # every unrelated use of the word.
 
 
 @dataclass

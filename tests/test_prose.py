@@ -93,6 +93,59 @@ def test_a_pointer_word_inside_the_sentence_is_fine() -> None:
     assert prose.opens_with_bare_pointer("Items are priced when the shopper adds them.") == ""
 
 
+# --- unresolved references (rule 4 beyond the opening pointer) -------------------------------
+
+def test_a_split_the_box_never_names_is_flagged() -> None:
+    # the sentence that motivated the rule: which two kinds? The box never says.
+    assert prose.unresolved_references(
+        "Mounting the MCP servers a team shares, in either kind, and keeping each one configured "
+        "and running.") == ["either kind"]
+
+
+def test_every_reference_shape_is_recognized() -> None:
+    assert prose.unresolved_references("Configuration flows through both modes.") == ["both modes"]
+    assert prose.unresolved_references("Accepts such kinds without a check.") == ["such kinds"]
+    assert prose.unresolved_references("Falls back to the other way.") == ["the other way"]
+    assert prose.unresolved_references("The gateway prefers the latter.") == ["the latter"]
+    assert prose.unresolved_references("The former is cached.") == ["The former"]
+
+
+def test_a_reference_without_a_category_noun_is_not_flagged() -> None:
+    # "both servers" names WHAT the two are; only a category word ("kind", "mode") hides the split
+    assert prose.unresolved_references("Restarts both servers on deploy.") == []
+    assert prose.unresolved_references("The kind of MCP decides the mount.") == []
+
+
+def test_alternatives_named_in_an_earlier_sentence_resolve_the_reference() -> None:
+    assert prose.unresolved_references(
+        "The policy check and the argument check run first. Both checks must pass.") == []
+
+
+def test_the_same_sentences_own_and_is_not_an_enumeration() -> None:
+    # "Opens and holds" is the sentence's clause structure, not the two transports being named
+    assert prose.unresolved_references(
+        "Opens and holds the live connection to each upstream, in either transport, and keeps "
+        "its stored credentials valid.") == ["either transport"]
+
+
+def test_two_glossary_terms_before_the_reference_resolve_it() -> None:
+    text = "Serves Remote HTTP MCPs and Hosted stdio MCPs; either kind mounts the same way."
+    assert prose.unresolved_references(text, ["Remote HTTP MCP", "Hosted stdio MCP"]) == []
+    assert prose.unresolved_references(text, ["Remote HTTP MCP"]) == ["either kind"]
+
+
+def test_a_trailing_or_enumeration_in_the_same_sentence_resolves_it() -> None:
+    assert prose.unresolved_references("Runs in either mode: standalone or cloud.") == []
+
+
+def test_unresolved_reference_rides_field_findings_and_the_summary() -> None:
+    found = prose.field_findings("CAP2 purpose", "Mounting the shared servers, in either kind.")
+    assert [f.kind for f in found] == ["unresolved reference"]
+    line = prose.summarize(found)[0]
+    assert line.startswith("1 prose field with an unresolved reference")
+    assert "name the alternatives" in line
+
+
 # --- per-field findings ----------------------------------------------------------------------
 
 def test_a_clean_field_produces_nothing_and_an_empty_field_is_skipped() -> None:

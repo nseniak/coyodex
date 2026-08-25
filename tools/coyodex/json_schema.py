@@ -62,6 +62,15 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("GlossaryRow", "source"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
                                "(where it is defined); null when the concept has no single code home "
                                "(a pure product-level term)."},
+    ("GlossaryRow", "aliases"): {"description": "extra surface forms the viewer also links to this "
+                               "term's definition. Real alternative names only, unambiguous in this "
+                               "project's prose — never a bare generic English word, and never a "
+                               "plural/possessive/case/hyphen variant (the viewer folds those "
+                               "automatically). See the Glossary deliverable in method.md."},
+    ("GlossaryRow", "no_autolink"): {"description": "true = the term's own name is excluded from "
+                               "automatic in-prose linking; it links only via its aliases (or not "
+                               "at all). For a term whose name is an ordinary English word that "
+                               "would over-link."},
     ("HappyStep", "id"): {"pattern": r"^HP\d+$", "description": "this step's position in the "
                            "ordered walk."},
     ("HappyStep", "uc"): {"pattern": r"^UC\d+$", "description": "the use case this step realizes."},

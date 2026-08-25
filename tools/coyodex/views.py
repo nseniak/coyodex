@@ -1259,7 +1259,11 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         "roles": [{"id": r.id, "name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind),
                    "audience": r.audience}
                   for r in m.roles],
-        "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or ""}
+        # `aliases` / `no_autolink` ride along only when set, so a map without them serializes
+        # exactly as before (and the frontend treats absence as [] / false).
+        "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or "",
+                      **({"aliases": g.aliases} if g.aliases else {}),
+                      **({"no_autolink": True} if g.no_autolink else {})}
                      for g in m.glossary],
         # ── the capability overlay's data (plan/60-capabilities Step 6) ──
         # Computed HERE because the typed model is in hand and `validate_model` owns the one

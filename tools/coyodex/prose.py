@@ -1,10 +1,11 @@
 """Countable readability checks for the map's reader-facing prose.
 
 The map's plain-language fields are read ONE BOX AT A TIME, out of any surrounding paragraph, by
-someone who does not read code. Four properties of such a sentence can be COUNTED, which is why they
+someone who does not read code. Five properties of such a sentence can be COUNTED, which is why they
 belong here rather than in the method prompt: how long it is, whether it leans on an em dash instead
-of naming the link, whether it names CODE instead of the product, and whether it opens with a pointer
-word that has nothing to point at once the field is read alone.
+of naming the link, whether it names CODE instead of the product, whether it opens with a pointer
+word that has nothing to point at once the field is read alone, and whether it leans on a split it
+never names ("in either kind" with no kind named anywhere in the box).
 
 Everything fuzzy — is this jargon, is this a metaphor, is this sentence actually clear — stays in the
 method prompt and in the audit. This module never judges meaning. It counts shapes, so a finding is
@@ -43,6 +44,22 @@ _CODE_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 # A field that opens with one of these reads as a fragment once it is shown alone in a box.
 _BARE_POINTERS = ("It", "This", "That", "These", "Those", "They")
 _OPENS_BARE = re.compile(r"^(%s)\b" % "|".join(_BARE_POINTERS))
+
+# The checkable subset of writing rule 4 ("every reference resolves inside the same box") beyond the
+# opening pointer: a determiner that announces ALTERNATIVES ("either", "both", "such", "the other")
+# followed by a CATEGORY noun — a word naming the split instead of its sides ("in either kind") —
+# plus the bare pair words "the latter" / "the former". Such a phrase is fine when the box names the
+# sides; the sides being named is what `unresolved_references` checks for.
+_CATEGORY_NOUNS = ("kind", "kinds", "mode", "modes", "way", "ways", "transport", "transports",
+                   "form", "forms", "variant", "variants", "shape", "shapes")
+_INDIRECT_REF = re.compile(
+    r"\b(?:(?:either|both|such|the\s+other)\s+(?:%s)|the\s+latter|the\s+former)\b"
+    % "|".join(_CATEGORY_NOUNS), re.IGNORECASE)
+# "at least two concrete alternatives, named": approximated by an A-or-B / A-and-B join. Crude on
+# purpose (see `sentences`) — a POS tagger would make two runs disagree.
+_ENUM_JOIN = re.compile(r"\b(?:or|and)\b", re.IGNORECASE)
+_TRAILING_OR = re.compile(r"\bor\b", re.IGNORECASE)
+_SENTENCE_END = re.compile(r"[.!?]")
 
 
 def strip_literals(text: str) -> str:
@@ -90,6 +107,39 @@ def opens_with_bare_pointer(text: str) -> str:
     return match.group(1) if match else ""
 
 
+def unresolved_references(text: str, terms: Iterable[str] = ()) -> list[str]:
+    """Referring expressions whose alternatives the box never names — "in either kind" where no
+    sentence of the field says which kinds. Returns the offending phrases, in order.
+
+    A phrase is let through when the box plausibly names the sides: an A-or-B / A-and-B join in an
+    EARLIER SENTENCE of the field (rule 4 says a reference resolves to something named earlier —
+    and the same sentence's own "and" is usually its clause structure, "Opens and holds …, in
+    either transport", not an enumeration of the sides), two of the map's glossary terms anywhere
+    before the reference, or an "or" later in the same sentence (the "either kind: remote or
+    hosted" shape, where the enumeration trails the reference). All three outs are approximations;
+    the finding stays an advisory because of exactly that."""
+    scanned = strip_literals(text)
+    lowered = scanned.lower()
+    hits: list[str] = []
+    for match in _INDIRECT_REF.finditer(scanned):
+        prior = scanned[:match.start()]
+        last_end = None
+        for e in _SENTENCE_END.finditer(prior):
+            last_end = e
+        earlier_sentences = prior[:last_end.end()] if last_end else ""
+        if _ENUM_JOIN.search(earlier_sentences):
+            continue
+        named = [t for t in terms if t and t.lower() in lowered[:match.start()]]
+        if len(named) >= 2:
+            continue
+        rest = scanned[match.end():]
+        end = _SENTENCE_END.search(rest)
+        if _TRAILING_OR.search(rest[:end.start()] if end else rest):
+            continue
+        hits.append(re.sub(r"\s+", " ", match.group(0)))
+    return hits
+
+
 class Finding:
     """One readability observation about one field. `kind` groups findings for reporting so a map
     with 200 long sentences produces one counted line, never 200."""
@@ -110,9 +160,11 @@ class Finding:
         return (self.kind, self.where, self.detail) == (other.kind, other.where, other.detail)
 
 
-def field_findings(where: str, text: str, limit: int = SENTENCE_WORD_LIMIT) -> list[Finding]:
+def field_findings(where: str, text: str, limit: int = SENTENCE_WORD_LIMIT,
+                   terms: Iterable[str] = ()) -> list[Finding]:
     """Every countable readability finding for one prose field. `where` names the field to a reader
-    of the report ("C3 purpose"), never a code location."""
+    of the report ("C3 purpose"), never a code location. `terms` = the map's glossary terms, one of
+    the ways an "either kind" phrase can count as resolved (see `unresolved_references`)."""
     body = (text or "").strip()
     if not body:
         return []
@@ -130,14 +182,18 @@ def field_findings(where: str, text: str, limit: int = SENTENCE_WORD_LIMIT) -> l
     pointer = opens_with_bare_pointer(body)
     if pointer:
         found.append(Finding("bare pointer", where, f"opens with \"{pointer}\""))
+    for phrase in unresolved_references(body, terms):
+        found.append(Finding("unresolved reference", where, f"\"{phrase}\" in \"{clip(body)}\""))
     return found
 
 
-def scan(fields: Iterable[tuple[str, str]], limit: int = SENTENCE_WORD_LIMIT) -> list[Finding]:
+def scan(fields: Iterable[tuple[str, str]], limit: int = SENTENCE_WORD_LIMIT,
+         terms: Iterable[str] = ()) -> list[Finding]:
     """Run every field through `field_findings`, preserving order."""
+    term_list = tuple(terms)
     out: list[Finding] = []
     for where, text in fields:
-        out.extend(field_findings(where, text, limit))
+        out.extend(field_findings(where, text, limit, terms=term_list))
     return out
 
 
@@ -148,6 +204,8 @@ _REMEDY = {
     "em dash": "replace it with the word that says the link: because, but, so, for example",
     "code name": "say what it does in product words; the code link already carries the path",
     "bare pointer": "name the thing — a box is read alone, with no paragraph before it",
+    "unresolved reference": "name the alternatives in the same box — \"either kind\" must say "
+                            "which kinds, with the names or the glossary words",
 }
 
 

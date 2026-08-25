@@ -234,6 +234,23 @@ def test_glossary_where_renders_as_link_and_reaches_graph():
                              {"term": "Brand", "meaning": "the product itself", "source": ""}]
 
 
+def test_glossary_aliases_and_no_autolink_ride_into_the_graph_only_when_set():
+    """The viewer's term-linking reads `aliases` / `no_autolink` off the graph rows; a row without
+    them serializes exactly as before, so old bundles and the golden fixtures stay byte-stable."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.glossary = [GlossaryRow(term="Upstream MCP", meaning="a mounted server",
+                              aliases=["upstream"]),
+                  GlossaryRow(term="Tool", meaning="one callable action", no_autolink=True),
+                  GlossaryRow(term="Sandbox", meaning="the isolated box")]
+    g = model_to_graph(m)
+    assert g["glossary"] == [
+        {"term": "Upstream MCP", "meaning": "a mounted server", "source": "",
+         "aliases": ["upstream"]},
+        {"term": "Tool", "meaning": "one callable action", "source": "", "no_autolink": True},
+        {"term": "Sandbox", "meaning": "the isolated box", "source": ""},
+    ]
+
+
 def test_messaging_section_is_conditional_and_reaches_graph():
     """WS-A5: the md 'Messaging' section appears only when the catalog has rows, and the rows ride
     into the graph for the System-tab table."""

@@ -339,6 +339,13 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 .src:hover { text-decoration: underline; }
 .glossary .gloss-plain { font-family: ui-monospace, monospace; font-size: 12px; color: #6b7280; }
 .glossary .gloss-none { color: #9ca3af; }
+/* A glossary term linked in place, wherever prose renders. Deliberately quiet: the reader's eye
+   stays on the sentence, the dotted underline only offers the definition. `currentColor` + a
+   text-decoration underline keep it legible on any background and add zero height — a border-bottom
+   would push the line box. Hover firms the dot to say "this answers a click". */
+.gloss-link { color: inherit; text-decoration: underline dotted; text-decoration-color: #94a3b8;
+              text-underline-offset: 2px; cursor: pointer; }
+.gloss-link:hover { text-decoration-style: solid; text-decoration-color: #2563eb; }
 /* System tab: the operational reference tables, laid out as cards (reuses .usecases-wrap + .uc-group +
    .glossary). Tables sit flush inside each card; entry points are split into per-kind sub-tables. */
 .system-wrap .glossary { margin: 0; max-width: none; }

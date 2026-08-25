@@ -57,7 +57,12 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                                                   // that ships the product. On a program: whose
                                                   // machine — a bought service is internal too.
                                                   // A capability's audience is DERIVED from it.
-  "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>" } ],
+  "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>",
+                     "aliases": ["<name>", …], "no_autolink": false } ],
+                                                  // aliases (optional): real alternative names the
+                                                  // viewer also links to this term. no_autolink
+                                                  // (optional): exclude the term's own name from
+                                                  // linking. See the Glossary deliverable.
   "capabilities": [ { "id": "CAPn", "name", "purpose", "parent": "CAPn|null",
                       "happy_path": "expected|excluded" } ],    // capability-only; blocked on S/SD
                                                   // must the walk reach it? Says nothing about
