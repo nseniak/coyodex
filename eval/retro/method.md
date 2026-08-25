@@ -244,6 +244,47 @@ The ledger is git-ignored like everything else under `.coyodex-eval/`. Anything 
 
 Create the output directory `.coyodex-eval/retro/<YYYY-MM-DD_HHMM>/` and write everything there.
 
+### Step 0c — Run the retro-checks committed since the previous build
+
+Step 0b looks BACKWARD: it re-verifies what past retros found. This step looks FORWARD: it runs
+the checks that method and tool changes declared about themselves when they were committed. The
+convention lives in `COYODEX_HOME/method/retro-checks/README.md` — every commit that changes the
+method or the tools in a way that should change build behaviour also adds one check file there,
+stating the observable outcome the change promises. This step is what makes those promises come
+due. Without it, a method change is verified only if someone remembers it existed.
+
+Compute the commit range from data both ends already record:
+
+- **`old`** — the `tool_commit` of the PREVIOUS build: read it from the previous ledger
+  (`findings.json`, Step 0b) or, failing that, from the previous archived map. If neither exists,
+  there is no range: run every check file still active (not yet in `verified/`) and say so.
+- **`new`** — the `tool_commit` of the map being retro'd.
+
+```
+git -C COYODEX_HOME diff --diff-filter=AM --name-only <old>..<new> -- method/retro-checks/
+```
+
+Added files are the pending checks. A MODIFIED check file counts as re-armed: someone sharpened
+its expectations, so it runs again even if a past retro confirmed the old wording. Ignore paths
+under `method/retro-checks/verified/`.
+
+Run every pending check against THIS build. A check file is a prose checklist of observables;
+each item gets one of three verdicts, with the same discipline as Step 0b:
+
+- **confirmed** — the observable occurred, with the number and its noun.
+- **failed** — the observable did not occur, or its regression sign occurred. A failed check is a
+  FINDING: it enters the ledger with a `behaviour_probe`, and ranks with the rest.
+- **no opportunity** — the build never exercised the changed path. Mirror Step 0b rule 2: that is
+  `unproven`, never `confirmed`. Say what a build WOULD have to contain to arm the check.
+
+A check that names the eval as its escalation ("if X fails, run the eval") is not yours to run —
+report the trigger as fired and hand the line to the operator.
+
+The retro changes nothing, so retirement is a PROPOSAL, not an action: for every check where all
+items are confirmed, propose the commit that moves the file into `method/retro-checks/verified/`
+with a `verified in <project> build of <built_at>` line appended. The operator commits it, or
+declines and the check stays armed.
+
 ---
 
 ## Step 1 — Product signals (deterministic, free, no model)
@@ -717,6 +758,11 @@ the map, the transcript, and what could NOT be assessed
 landed and worse FIRST · landed but ineffective · open and worsening · open, reproduced
 (each with its `retros_open` count) · fixed and proven · accepted, not done yet ·
 unproven this build · probe broken · rejected (once, then quiet)
+
+## Retro-checks
+the commit range checked (`old..new` tool commits) · each pending check file with its per-item
+verdicts (confirmed with numbers / failed -> finding # / no opportunity) · retirement commits
+proposed · "no check files pending" stated explicitly when the range adds none
 
 ## Product signals
 blocking problems · advisories surviving · components vs E · grounding coverage
