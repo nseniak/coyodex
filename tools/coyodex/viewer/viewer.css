@@ -1689,11 +1689,10 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    1370px, and clipping it into its own scrollbar on a window that has the room hides the third
    column. Narrower windows still scroll the wrap alone. */
 .usecases-wrap:has(> .story-wrap), .usecases-wrap:has(> .journey-board) { max-width: 1440px; }
+/* ONE features column + the cast: every feature sits in the story column, walk order, off-walk
+   ones interleaved at their story anchor and marked — never a demoted third column. */
 .story-stage { position: relative; display: grid; width: max-content;
-               grid-template-columns: 400px 150px 330px 160px 330px; }
-/* No walk = no off column: the two remaining columns keep their widths, the stage stops reserving
-   the empty tracks. */
-.story-stage-2col { grid-template-columns: 400px 150px 330px; }
+               grid-template-columns: 400px 150px 330px; }
 svg.story-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* At rest a wire is thin, grey and unlabelled — the diagram is for choosing, not reading. Hover or
    pin makes ONE card's wires the picture: bold accent + label, everything else faded hard. */
@@ -1707,10 +1706,11 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 /* The cast spreads over the spine's height, so its six cards meet the seven features they drive at
    comparable heights instead of bunching at the top with every wire fanning down. */
 .story-col-cast { grid-column: 3; justify-content: space-between; }
-.story-col-off { grid-column: 5; }
 .story-colhead { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                  letter-spacing: .06em; color: #6b7280; }
-.story-offnote { margin: -6px 0 2px; font-size: 11.5px; font-style: italic; color: #9aa0b4; }
+/* The not-in-the-walk marker: the same pill shape as the card's other facts, quieter ink — a fact
+   about the walk, never a demotion of the card. */
+.story-walkoff { background: none; border: 1px dashed #c3c8d9; color: #6b7280; cursor: default; }
 .story-card { background: #fff; border: 1.5px solid #c7cdf9; border-radius: 10px;
               padding: 10px 14px 9px; cursor: pointer; box-shadow: 0 1px 2px rgba(30,34,53,.06); }
 .story-card:hover { border-color: #4f46e5; box-shadow: 0 2px 10px rgba(79,70,229,.16); }
@@ -1733,9 +1733,6 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 /* `#diagram svg` sizes every diagram to its pane (100%); the glyph is an icon, so it needs the
    same specificity to stay one. */
 #diagram .story-glyph { width: 17px; height: 17px; flex: 0 0 auto; }
-/* Off the story: visually quiet — dashed, greyed, but the same card (still real, just off the walk). */
-.story-offf { border-style: dashed; border-color: #e4e6ef; background: #fbfbfc; }
-.story-offf .story-name { color: #5a6072; }
 /* The stake label rides its wire's midpoint, shown only while its card's wires are the picture. */
 .story-elabel { position: absolute; background: #4f46e5; color: #fff; font-size: 10.5px;
                 padding: 2px 9px; border-radius: 99px; white-space: nowrap;
@@ -1752,8 +1749,9 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
    One horizontal rail: the actor's happy-path stations, zoned by feature (each zone tinted by
    featureTint — the one hue that feature gets anywhere), side stops under a zone-wide separator so
    they read as the ZONE's extras rather than the nearest station's sub-steps, an arrowhead ending
-   the rail, and the off-path / off-story features dashed beyond it. Ghost = the same person's
-   previous hat (a `becomes` predecessor), greyed before the rail starts. */
+   the rail, and the features the actor never enters on the walk following it as normal zones, in
+   story-column order. Ghost = the same person's previous hat (a `becomes` predecessor), greyed
+   before the rail starts. */
 .journey-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
                  overflow-x: auto; padding: 22px 18px 16px; margin: 14px 0 6px; }
 .journey-rail { display: flex; align-items: flex-start; min-width: max-content; }
@@ -1795,8 +1793,7 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .journey-side:hover .journey-o { color: #4f46e5; }
 .journey-endcap { align-self: flex-start; margin: 44px 14px 0 -6px; color: #4f46e5;
                   font-size: 19px; line-height: 1; }
-/* Off zones stand beyond the arrowhead: still real, not on this actor's walk. No rail, no tint. */
-.journey-offz { border: 1.5px dashed #e4e6ef; background: #fbfbfc; }
+/* Trailing zones (past the arrowhead) draw exactly like the rest: the arrow is the one separator. */
 /* The ghost: the same person, previous hat. Grey rail, grey dots, muted ink. */
 .journey-ghost { background: #f3f4f8; }
 .journey-ghost .journey-track::before { background: #c9cdde; }

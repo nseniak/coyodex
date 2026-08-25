@@ -28,6 +28,7 @@ from coyodex.model import (
     Role,
     RoleRelation,
     Store,
+    StoryAnchor,
     ProjectModel,
     TestRow as _TestRow,  # aliased: a bare `TestRow` name makes pytest try to collect it as a test class
     UseCase,
@@ -380,3 +381,14 @@ def test_a_role_without_relations_serializes_them_empty_not_absent():
         r.pop("relations")
     m2 = load_model(json.dumps(stripped))
     assert all(r.relations == [] for r in m2.roles)
+
+
+def test_story_anchor_round_trip():
+    m = make_related_roles_model()
+    m.capabilities = [Group(id="CAP1", name="Billing", purpose="p"),
+                      Group(id="CAP2", name="Marketing", purpose="p",
+                            story=StoryAnchor(place="before", feature="CAP1"))]
+    m2 = load_model(to_canonical_json(m))
+    assert m2.capabilities[1].story == StoryAnchor(place="before", feature="CAP1")
+    assert m2.capabilities[0].story is None
+    assert to_canonical_json(m2) == to_canonical_json(m)

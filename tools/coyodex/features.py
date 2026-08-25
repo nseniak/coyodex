@@ -96,15 +96,19 @@ class StoryEdge:
 
 @dataclass(frozen=True)
 class Story:
-    """The tripartite Features diagram's data: the walk's spine, the cast, and what stays off.
+    """The story diagram's data: ONE column holding every feature, the cast, and the edges.
 
     ALL ORDERS ARE DERIVED HERE, deterministically, never layout-computed in the browser:
     `spine` is the on-path features by their FIRST happy-path touch (a feature touched at several
     moments appears once, at its first); `off` is every feature the walk never touches, in map
-    order; `cast` is every role by the first step it drives, roles driving none last, in map
-    order."""
+    order — it survives as the SET the views mark "not in the walk", not as a column of its own;
+    `column` is the one merged order every screen draws: the spine, with each off feature
+    interleaved at its authored story anchor, or at the derived fallback (its actors' last walk
+    step), or at the end; `cast` is every role by the first step it drives, roles driving none
+    last, in map order."""
     spine: list[str] = field(default_factory=list)      # CAPn, first-touch order
-    off: list[str] = field(default_factory=list)        # CAPn, map order
+    off: list[str] = field(default_factory=list)        # CAPn, map order — the not-in-the-walk SET
+    column: list[str] = field(default_factory=list)     # CAPn, the one merged story order
     cast: list[str] = field(default_factory=list)       # Rn, order of first appearance
     edges: list[StoryEdge] = field(default_factory=list)
 
@@ -149,8 +153,68 @@ def _fallback_label(name: str) -> str:
     return s[0].lower() + s[1:]
 
 
+def _story_column(m: ProjectModel, spine: list[str], first_cap: dict[str, int],
+                  last_actor: dict[str, int]) -> list[str]:
+    """The ONE story order: the spine, with every off-walk feature interleaved.
+
+    An off feature's position, in priority order: its AUTHORED anchor (before/after another
+    feature, resolved recursively with a cycle guard — an anchor may name another off feature);
+    the DERIVED fallback (after the feature holding its actors' last walk step — right for
+    trailing features like ops or a chat variant of walked work, wrong for lead-in ones, which is
+    why the anchor exists); else the END, in map order. Ties (two features anchored to the same
+    spot, or a chain landing on a spine position) break walk-features-first, then map order —
+    deterministic, so the same map always draws the same column."""
+    caps = {c.id: c for c in m.capabilities}
+    role_ids = {r.id for r in m.roles}
+    map_pos = {c.id: i for i, c in enumerate(m.capabilities)}
+    key: dict[str, float] = {c: float(i) for i, c in enumerate(spine)}
+    # Each feature's "granularity": how far its OWN dependents sit from it. Halving per link keeps
+    # a realistic chain (B after A, A before CAP2) inside the gap its head claimed, whatever order
+    # the memoized resolution visits them in. Only a pathological chain of ~50+ "after" links can
+    # saturate the floats and spill past the next spine feature — deterministically, never wrongly
+    # ordered within itself.
+    gran: dict[str, float] = {c: 0.5 for c in key}
+    cap_roles: dict[str, set[str]] = {c: set() for c in caps}
+    for u in m.use_cases:
+        if u.capability in caps:
+            cap_roles[u.capability].update(a for a in u.actors if a in role_ids)
+    uc_by_id = {u.id: u for u in m.use_cases}
+    step_cap: list[str | None] = []          # walk position -> the feature its use case belongs to
+    for hp in m.happy_path:
+        u = uc_by_id.get(hp.uc or "")
+        step_cap.append(u.capability if u is not None and u.capability in caps else None)
+
+    def resolve(fid: str, seen: frozenset[str]) -> float | None:
+        if fid in key:
+            return key[fid]
+        if fid in seen:
+            return None                       # an anchor cycle: the caller falls back instead
+        a = caps[fid].story
+        if (a is not None and a.place in ("before", "after")
+                and a.feature in caps and a.feature != fid):
+            t = resolve(a.feature, seen | {fid})
+            if t is not None:
+                step = gran.get(a.feature, 0.5)
+                key[fid] = t + (step if a.place == "after" else -step)
+                gran[fid] = step / 2
+                return key[fid]
+        steps = [last_actor[r] for r in cap_roles.get(fid, ()) if r in last_actor]
+        anchors = [step_cap[i] for i in steps if step_cap[i] is not None]
+        if steps and anchors:
+            fc = step_cap[max(i for i in steps if step_cap[i] is not None)]
+            key[fid] = key[fc] + 0.5 if fc in key else float(len(spine))
+        else:
+            key[fid] = float(len(spine))     # nothing to hang on: the end, in map order
+        gran[fid] = 0.25                     # something anchored to THIS feature sits half as far
+        return key[fid]
+
+    for cid in caps:
+        resolve(cid, frozenset())
+    return sorted(caps, key=lambda cid: (key[cid], cid not in first_cap, map_pos[cid]))
+
+
 def build_story(m: ProjectModel) -> Story:
-    """The tripartite Features diagram's data, derived from the walk, the use cases and the roles.
+    """The story diagram's data, derived from the walk, the use cases and the roles.
 
     The label of an edge is the actor's authored STAKE when the capability carries one for that
     actor, else the FALLBACK: the pair's first use case's name as a verb phrase. Every existing map
@@ -161,6 +225,7 @@ def build_story(m: ProjectModel) -> Story:
 
     first_cap: dict[str, int] = {}          # capability -> its first happy-path touch (position)
     first_actor: dict[str, int] = {}        # role -> the first step it drives
+    last_actor: dict[str, int] = {}         # role -> the last step it drives (the fallback anchor)
     pair_step: dict[tuple[str, str], str] = {}   # (actor, capability) -> first HPn exercising it
     for i, hp in enumerate(m.happy_path):
         u = uc_by_id.get(hp.uc or "")
@@ -172,12 +237,14 @@ def build_story(m: ProjectModel) -> Story:
         for a in u.actors:
             if a in role_ids:
                 first_actor.setdefault(a, i)
+                last_actor[a] = i
                 if cap is not None:
                     pair_step.setdefault((a, cap), hp.id)
 
     spine = sorted(first_cap, key=lambda c: first_cap[c])
     off = [c.id for c in m.capabilities if c.id not in first_cap]
-    cap_pos = {c: i for i, c in enumerate(spine + off)}
+    column = _story_column(m, spine, first_cap, last_actor)
+    cap_pos = {c: i for i, c in enumerate(column)}
 
     # Roles in order of appearance; a role driving no step keeps its map position, after the cast.
     role_pos = {r.id: i for i, r in enumerate(m.roles)}
@@ -199,7 +266,7 @@ def build_story(m: ProjectModel) -> Story:
                        authored=(c, a) in stakes,
                        step=pair_step.get((a, c)))
              for a, c in sorted(pair_first_uc, key=lambda p: (cast.index(p[0]), cap_pos[p[1]]))]
-    return Story(spine=spine, off=off, cast=cast, edges=edges)
+    return Story(spine=spine, off=off, column=column, cast=cast, edges=edges)
 
 
 def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex:
@@ -350,6 +417,7 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
         "story": {
             "spine": ix.story.spine,
             "off": ix.story.off,
+            "column": ix.story.column,
             "cast": ix.story.cast,
             "edges": [{"actor": e.actor, "feature": e.feature, "label": e.label,
                        "authored": e.authored, "step": e.step}

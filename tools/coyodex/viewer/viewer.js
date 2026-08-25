@@ -403,7 +403,7 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 // name column), and the Glossary view itself (the one page that IS the definitions).
 const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ecard-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
-  + '.dv-kindpill, .dv-coll, .story-name, .story-pill, .story-colhead, .story-offnote, '
+  + '.dv-kindpill, .dv-coll, .story-name, .story-pill, .story-colhead, '
   + '.story-elabel, .journey-zkind, .journey-alsolbl, .journey-legend';
 // A page about one element is not decorated with a link to itself: the page's subject is the
 // breadcrumb's last item (the trail names the page — one source of truth), folded the same way the
@@ -7478,8 +7478,8 @@ function stationTitle(title, actorName) {
   return ofActor ? m[2] : s;
 }
 // One actor's rail, derived: the zones the walk drags them through (in first-station order), then
-// the features they only touch off the walk. `zones` draw ON the rail; `offZones` come after its
-// arrowhead, dashed. Side stops are the actor's OTHER use cases, under the zone of their feature.
+// the features they only touch off the walk. `zones` draw ON the rail; `offZones` follow its
+// arrowhead, drawn like the rest. Side stops are the actor's OTHER use cases, under their zone.
 function actorJourney(actorName) {
   const stations = actorStations(actorName);
   const g = actorGroups().find((x) => x.actor === actorName);
@@ -7495,14 +7495,12 @@ function actorJourney(actorName) {
     return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
   };
   for (const s of stations) zoneOf(featureOfUc(s.st.uc)).stations.push(s);
-  // Side stops join their feature's on-rail zone, or open an OFF zone for a feature the actor
-  // never enters on the walk. Off zones order as the story diagram orders features: spine first
-  // (still on the product's path, just not this actor's), then off-story, then the no-feature rest.
-  // WITHOUT a walk there is no path to be on or off — the same rule the story diagram applies —
-  // so every zone stays a plain band with a bare feature name, never a dashed "off" one.
+  // Side stops join their feature's on-rail zone, or open a TRAILING zone for a feature the actor
+  // never enters on the walk. Trailing zones follow the rail's arrowhead, drawn exactly like the
+  // others — a feature is not demoted for missing this actor's walk — and they order by the story
+  // column, the one derived order every screen agrees on; a no-feature zone comes last.
   const stationUcs = new Set(stations.map((s) => s.st.uc));
-  const st = FEATURES.story || {};
-  const walk = (GRAPH.happy_path || []).length > 0;
+  const column = (FEATURES.story || {}).column || [];
   const offZones = [];
   const offByFid = {};
   for (const uc of ucs) {
@@ -7510,27 +7508,21 @@ function actorJourney(actorName) {
     const fid = featureOfUc(uc.id);
     if (byFid[fid] && byFid[fid].stations.length) { byFid[fid].sides.push(uc); continue; }
     if (!offByFid[fid]) {
-      const kind = !walk ? ''
-        : (st.spine || []).includes(fid) ? 'off the path'
-        : fid ? 'off the story' : '';
-      offByFid[fid] = { fid, kind, sides: [] };
+      offByFid[fid] = { fid, sides: [] };
       offZones.push(offByFid[fid]);
     }
     offByFid[fid].sides.push(uc);
   }
   const pos = (fid) => {
-    const sp = (st.spine || []).indexOf(fid);
-    if (sp >= 0) return sp;
-    const off = (st.off || []).indexOf(fid);
-    if (off >= 0) return (st.spine || []).length + off;
-    return (st.spine || []).length + (st.off || []).length + (fid ? 0 : 1);
+    const at = column.indexOf(fid);
+    return at >= 0 ? at : column.length + (fid ? 0 : 1);
   };
   offZones.sort((a, b) => pos(a.fid) - pos(b.fid));
-  return { stations, zones, offZones, walk };
+  return { stations, zones, offZones };
 }
 
 // The page hero's context line: the actor's place in the story (read off the SAME derived cast
-// order the tripartite column uses — one function answers "actor order"), and the role relations
+// order the cast column uses — one function answers "actor order"), and the role relations
 // when the map carries them. Everything here is conditional on the map having it: with no walk
 // there is no appearance order, with no relations no history and no chip — the line simply says
 // less, never draws an empty slot.
@@ -7592,8 +7584,7 @@ function journeyZoneHtml(z, opts) {
   const o = opts || {};
   const name = z.fid ? featureName(z.fid) : '';
   const label = o.label || (name
-    ? (z.kind ? `<span class="journey-zkind">${esc(z.kind)} · </span>` : '')
-      + `<button type="button" class="journey-zname" data-cap="${esc(z.fid)}" `
+    ? `<button type="button" class="journey-zname" data-cap="${esc(z.fid)}" `
       + `title="Open the details page of ${esc(name)}">${esc(name)}</button>`
     : (z.stations || []).length || (z.sides || []).length
       ? '<span class="journey-zkind">not in any feature</span>' : '');
@@ -7609,14 +7600,14 @@ function journeyZoneHtml(z, opts) {
         + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`)
         .join('') + '</div>'
     : '';
-  const cls = 'journey-zone' + (o.ghost ? ' journey-ghost' : '') + (o.off ? ' journey-offz' : '');
-  const tint = (o.ghost || o.off || !z.fid) ? '' : ` style="background:${featureTint(z.fid)}"`;
+  const cls = 'journey-zone' + (o.ghost ? ' journey-ghost' : '');
+  const tint = (o.ghost || !z.fid) ? '' : ` style="background:${featureTint(z.fid)}"`;
   return `<div class="${cls}"${tint}><div class="journey-zlabel">${label}</div>`
     + (stations ? `<div class="journey-track">${stations}</div>` : '')
     + sides + '</div>';
 }
 function renderActorPage(actorName) {
-  const { stations, zones, offZones, walk } = actorJourney(actorName);
+  const { stations, zones, offZones } = actorJourney(actorName);
   const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
   // The greyed BEFORE-segment: the same person, wearing their previous hat — drawn only when the
   // map authors a `becomes` toward this role. One level only, on purpose: a chain (or a cycle,
@@ -7634,9 +7625,9 @@ function renderActorPage(actorName) {
     }
   }
   const onRail = zones.map((z) => journeyZoneHtml(z, { actor: actorName })).join('');
-  // Only a map WITH a walk draws its remaining features as dashed "off" zones — without one there
-  // is no path to be off, and they stay plain tinted bands (the story diagram's own rule).
-  const offHtml = offZones.map((z) => journeyZoneHtml(z, { off: walk, actor: actorName })).join('');
+  // The trailing zones draw exactly like the others — full tint, plain name. The arrowhead is the
+  // one separator: before it, where this actor's walk goes; after it, what else they can do.
+  const offHtml = offZones.map((z) => journeyZoneHtml(z, { actor: actorName })).join('');
   // The arrowhead ends the RAIL, so it only draws when a rail drew; the off zones stand beyond it.
   const rail = ghost + onRail
     + (onRail ? '<div class="journey-endcap" aria-hidden="true">▶</div>' : '')
@@ -7646,7 +7637,12 @@ function renderActorPage(actorName) {
       + '<p class="journey-legend">'
       + (stations.length ? '<b>●</b> a step on the happy path — click to open it&ensp;' : '')
       + '<b>○</b> also possible — click to open the use case'
-      + (zones.length > 1 ? '&ensp;zones are features, in the order this actor first enters them' : '')
+      // The zones sentence covers BOTH sides of the arrowhead, so it stays true for an actor
+      // whose page is mostly trailing zones (the ones their walk never enters).
+      + (zones.length + offZones.length > 1
+        ? '&ensp;zones are features — this actor’s walk in entry order, then, past the ▶, '
+          + 'the rest of what they can do'
+        : '')
       + '</p>'
     : '<p class="empty">This map records nothing this actor does.</p>';
   diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}</div>`;
@@ -7708,15 +7704,21 @@ function storyFeatureCardHtml(id, off) {
   const nr = (f.rules || []).length;
   const rules = nr ? `<button type="button" class="story-pill story-rulespill" data-cap="${esc(id)}" `
     + `title="Open what ${esc(name)} decides">${nr} rule${nr === 1 ? '' : 's'}</button>` : '';
+  // A feature the walk never reaches is a FACT on the card, never a demoted card: walk membership
+  // says nothing about importance (measured: both of mcpolis's off-walk features are user-side
+  // while a staff feature sits on the walk), and the old dashed third column read as a ranking.
+  const mark = off ? '<span class="story-pill story-walkoff" '
+    + 'title="The happy path never passes here: still real, just not on the walk">'
+    + 'not in the walk</span>' : '';
   // The use-case pill is a DOOR to the feature's own details page — the card's click is the pin, so
   // the pill is the one control that leaves this screen, and it says where it goes.
-  return `<article class="story-card story-feature${off ? ' story-offf' : ''}" `
+  return `<article class="story-card story-feature" `
     + `data-sfeat="${esc(id)}" tabindex="0">`
     + `<span class="story-name">${esc(name)}</span>`
     + (f.purpose ? `<p class="story-desc">${mdInline(f.purpose)}</p>` : '')
     + `<div class="story-pills">${aud}<button type="button" class="story-pill story-ucpill" `
     + `data-cap="${esc(id)}" title="Open the details page of ${esc(name)}">`
-    + `${n} use case${n === 1 ? '' : 's'}</button>${rules}</div>`
+    + `${n} use case${n === 1 ? '' : 's'}</button>${rules}${mark}</div>`
     + '</article>';
 }
 function storyActorCardHtml(rid) {
@@ -7738,37 +7740,32 @@ function storyActorCardHtml(rid) {
     + (wants ? `<p class="story-desc">${mdInline(wants)}</p>` : '')
     + '</article>';
 }
-// Does the tripartite diagram draw on this map? ONE answer, read by the renderer, by renderOverview
+// Does the story diagram draw on this map? ONE answer, read by the renderer, by renderOverview
 // (which hides the duplicate card grid when it does), and by the search / "show in context"
 // landings that pin a card in it. A walk is NOT required: the arrows derive from the use cases
-// alone, so any map recording features draws — a walk only adds the spine order and the off
-// column. A map recording no features keeps the flat page it always had.
+// alone, so any map recording features draws — a walk only adds the story order and the
+// not-in-the-walk markers. A map recording no features keeps the flat page it always had.
 function storyDiagramDraws() {
-  const st = FEATURES.story || {};
-  return ((st.spine || []).length + (st.off || []).length) > 0;
+  return ((FEATURES.story || {}).column || []).length > 0;
 }
 function storyDiagramHtml() {
   const st = FEATURES.story || {};
   if (!storyDiagramDraws()) return '';
-  // With a walk: the spine in first-touch order, the untouched features quiet on the right. Without
-  // one there is no story to be on or off, so every feature stands in one plain "Features" column
-  // and the cast keeps map order — its header stops claiming an appearance order it cannot have.
+  // ONE features column: every feature, in the story order the server derived (`column` — the
+  // walk's first-touch order, off-walk features interleaved at their authored anchor or the
+  // fallback). A feature the walk skips keeps a full card and gains only a marker pill; the old
+  // demoted third column read as an importance ranking, which walk membership never was. Without
+  // a walk the column is map order and the headers stop claiming an order they cannot have.
   const walk = (st.spine || []).length > 0;
-  const spineIds = walk ? st.spine : (st.off || []);
-  const off = walk ? (st.off || []) : [];
-  return `<div class="story-wrap"><div class="story-stage${off.length ? '' : ' story-stage-2col'}" id="storystage">`
+  const offSet = new Set(st.off || []);
+  return `<div class="story-wrap"><div class="story-stage" id="storystage">`
     + '<svg class="story-wires" aria-hidden="true"><defs>'
     + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
     + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
-    + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'Features · happy-path order' : 'Features'}</p>`
-    + spineIds.map((id) => storyFeatureCardHtml(id, false)).join('') + '</div>'
+    + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'Features · story order' : 'Features'}</p>`
+    + (st.column || []).map((id) => storyFeatureCardHtml(id, walk && offSet.has(id))).join('') + '</div>'
     + `<div class="story-col story-col-cast"><p class="story-colhead">${walk ? 'Actors · in order of appearance' : 'Actors'}</p>`
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
-    + (off.length
-      ? '<div class="story-col story-col-off"><p class="story-colhead">Off the happy path</p>'
-        + '<p class="story-offnote">the happy path never passes here: still real, just not on the walk</p>'
-        + off.map((id) => storyFeatureCardHtml(id, true)).join('') + '</div>'
-      : '')
     + '</div></div>';
 }
 function bindStoryDiagram(root) {
@@ -7797,10 +7794,12 @@ function bindStoryDiagram(root) {
     const a = actorEl[e.actor];
     const f = featEl[e.feature];
     if (!a || !f) continue;
-    const toOff = f.classList.contains('story-offf');
-    const [ax, ay] = side(a, toOff ? 'right' : 'left');
-    const [fx, fy] = side(f, toOff ? 'left' : 'right');
-    const dx = (toOff ? 1 : -1) * 60;
+    // Every feature sits in the one left column now, so every wire leaves the cast's left edge
+    // and lands on the feature's right edge — the off column that once pulled wires rightward is
+    // gone with its demotion.
+    const [ax, ay] = side(a, 'left');
+    const [fx, fy] = side(f, 'right');
+    const dx = -60;
     const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     p.setAttribute('d', `M ${ax} ${ay} C ${ax + dx} ${ay}, ${fx - dx} ${fy}, ${fx} ${fy}`);
     p.setAttribute('marker-end', 'url(#story-arr)');

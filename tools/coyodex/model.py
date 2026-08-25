@@ -128,6 +128,20 @@ class Stake:
 
 
 @dataclass
+class StoryAnchor:
+    """CAPABILITY-ONLY: where a feature the walk never reaches SITS in the one product story.
+
+    The viewer draws ONE story column — every feature, walk order — and a feature with no walk
+    step has no derived position in it. The anchor is the authored answer: this feature reads
+    `before` or `after` that one. Without it the viewer falls back to a guess (the feature's
+    actors' last walk step), which mis-places lead-in features like a marketing page. Validation
+    stops at shape + referential integrity: `place` is the exact pair, `feature` must resolve and
+    not be the capability itself; whether the placement reads well is the author's judgement."""
+    place: str                # before | after
+    feature: str              # CAPn — the feature this one reads beside
+
+
+@dataclass
 class Group:
     """A subsystem (S), a subdomain (SD), or a capability (CAP) — same shape, three forests."""
     id: str
@@ -146,6 +160,10 @@ class Group:
                                # CAPABILITY-ONLY: one entry per driving actor, saying what THAT actor
                                # comes to this capability to do (see Stake). `validate` blocks it on
                                # the other forests, and advises when a derived driving actor has none.
+    story: StoryAnchor | None = None
+                               # CAPABILITY-ONLY: where a feature the walk never reaches sits in the
+                               # one story column (see StoryAnchor). None = derive (actors' last walk
+                               # step) — right for trailing features, wrong for lead-in ones.
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""

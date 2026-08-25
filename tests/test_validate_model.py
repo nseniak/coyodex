@@ -47,6 +47,7 @@ from coyodex.model import (
     RuleSite,
     SecurityRow,
     Stake,
+    StoryAnchor,
     StateMachine,
     StateTransition,
     Store,
@@ -3951,3 +3952,44 @@ def test_relation_semantics_are_not_over_constrained() -> None:
                             RoleRelation(kind="includes", role="R1")]   # symmetric with R1? fine
     m.roles[0].relations.append(RoleRelation(kind="includes", role="R2"))
     assert not any("relations" in p for p in problems_of(m))
+
+
+# --- story anchors: a capability field, shape + referential integrity and nothing more -----------
+
+def make_story_anchored_model() -> ProjectModel:
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Billing", purpose="p", happy_path="expected"),
+                      Group(id="CAP2", name="Marketing", purpose="p", happy_path="excluded",
+                            story=StoryAnchor(place="before", feature="CAP1"))]
+    m.use_cases[0].capability = "CAP1"
+    return m
+
+
+def test_a_resolving_story_anchor_passes_clean() -> None:
+    assert not any("story" in p or "undefined IDs" in p for p in problems_of(make_story_anchored_model()))
+
+
+def test_a_story_anchor_is_blocked_off_the_capability_forest() -> None:
+    m = make_story_anchored_model()
+    m.subsystems = [Group(id="S1", name="Core", purpose="p",
+                          story=StoryAnchor(place="after", feature="CAP1"))]
+    m.components[0].subsystem = "S1"
+    assert any("S1 carries `story`" in p and "subsystem" in p for p in problems_of(m))
+
+
+def test_an_unknown_place_and_a_self_anchor_are_blocking() -> None:
+    m = make_story_anchored_model()
+    m.capabilities[1].story = StoryAnchor(place="Before", feature="CAP2")
+    joined = " ".join(problems_of(m))
+    assert "unknown `place` 'Before'" in joined
+    assert "CAP2.story anchors the feature to itself" in joined
+
+
+def test_an_anchor_to_anything_but_a_defined_capability_is_blocking() -> None:
+    """One check owns the target: an undefined id AND a defined-but-wrong-kind id (`UC1` exists,
+    but the derivation would silently drop the anchor) both block, each reported once."""
+    m = make_story_anchored_model()
+    for bad in ("CAP9", "UC1"):
+        m.capabilities[1].story = StoryAnchor(place="after", feature=bad)
+        hits = [p for p in problems_of(m) if bad in p]
+        assert len(hits) == 1 and "not a defined capability" in hits[0], (bad, hits)

@@ -3136,26 +3136,34 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
     assert "+ story + below + '</div>';" in over
     html = _story_fn(js, "storyDiagramHtml")
     assert "if (!storyDiagramDraws()) return '';" in html
-    # The three columns, and the off column drawn quiet under its one-line explanation.
-    assert "Features · happy-path order" in html
+    # ONE features column in the derived story order, the cast beside it — and a feature the walk
+    # skips keeps a full card with only a marker pill. The demoted third column read as an
+    # importance ranking, which walk membership never was.
+    assert "Features · story order" in html
     assert "Actors · in order of appearance" in html
-    assert "Off the happy path" in html and "story-offnote" in html
+    assert "(st.column || []).map((id) => storyFeatureCardHtml(id, walk && offSet.has(id)))" in html
+    assert "Off the happy path" not in html and "story-offnote" not in js
+    card = _story_fn(js, "storyFeatureCardHtml")
+    assert "story-walkoff" in card and "not in the walk" in card
+    assert "story-offf" not in js, "the demoted card styling is gone, not shadowed"
 
 
 def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
     """The arrows never needed the happy path — they derive from the use cases — so a map with no
-    walk draws one plain "Features" column and the cast in map order, with no off column and no
-    header claiming an appearance order. The labels then explain instead of navigating."""
+    walk draws one plain "Features" column (the derived column is map order there), no
+    not-in-the-walk markers (there is no walk to be in), and no header claiming an appearance
+    order. The labels then explain instead of navigating."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = _story_fn(js, "storyDiagramHtml")
     assert "const walk = (st.spine || []).length > 0;" in html
-    assert "${walk ? 'Features · happy-path order' : 'Features'}" in html
+    assert "${walk ? 'Features · story order' : 'Features'}" in html
     assert "${walk ? 'Actors · in order of appearance' : 'Actors'}" in html
-    assert "story-stage-2col" in html
+    assert "walk && offSet.has(id)" in html, "no marker without a walk"
     bind = _story_fn(js, "bindStoryDiagram")
     assert "'This map has no happy path'" in bind
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert ".story-stage-2col { grid-template-columns: 400px 150px 330px; }" in css
+    assert "grid-template-columns: 400px 150px 330px;" in css
+    assert "story-stage-2col" not in css and "story-stage-2col" not in js
 
 
 def test_the_use_case_pill_is_a_door_that_does_not_steal_the_pin() -> None:
@@ -3223,7 +3231,7 @@ def test_story_chrome_never_term_links_but_card_prose_does() -> None:
     sentences (purpose, wants) stay linkable like every other card's."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     skip = js[js.index("const GLOSS_SKIP ="): js.index(";", js.index("const GLOSS_SKIP ="))]
-    for cls in (".story-name", ".story-pill", ".story-colhead", ".story-offnote", ".story-elabel"):
+    for cls in (".story-name", ".story-pill", ".story-colhead", ".story-elabel"):
         assert cls in skip, f"{cls} must not term-link"
     assert ".story-desc" not in skip, "card prose participates in term-linking"
 

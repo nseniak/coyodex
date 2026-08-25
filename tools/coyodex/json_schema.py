@@ -114,6 +114,18 @@ FIELD_META: dict[tuple[str, str], dict] = {
                           "('mounts, configures and runs the servers'). Must read correctly after "
                           "the actor's name; writing rules apply (one idea, plain words, no code, "
                           "no step numbers)."},
+    ("Group", "story"): {"description": "CAPABILITY-ONLY, and only worth authoring on a feature the "
+                          "walk never reaches: where that feature sits in the ONE story column the "
+                          "viewer draws. Absent = the viewer guesses from the feature's actors' "
+                          "last walk step — right for trailing features (ops, a chat variant of "
+                          "work already walked), wrong for lead-in ones (a marketing page belongs "
+                          "BEFORE the first step). `validate` blocks it on the other forests."},
+    ("StoryAnchor", "place"): {"enum": ["before", "after"], "description": "exactly `before` or "
+                                "`after` (lowercase) — the derivation and `validate` compare "
+                                "strictly."},
+    ("StoryAnchor", "feature"): {"pattern": r"^CAP\d+$", "description": "the feature this one reads "
+                                  "beside — must be a defined capability id, never the capability "
+                                  "itself."},
     ("Group", "source"): {"description": _DIR_OR_FILE_DESC + " The group's home directory (or a "
                            "representative file)."},
     ("UseCase", "id"): {"pattern": r"^UC\d+$"},

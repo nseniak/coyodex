@@ -363,6 +363,10 @@
           },
           "description": "CAPABILITY-ONLY: one entry per driving actor, saying what THAT actor comes to this capability to do. The Features diagram labels each actor\u2192feature arrow with the actor's stake; a capability's purpose alone is written from one chair and hides the other roles. `validate` blocks it on the other forests, and advises when a derived driving actor has no entry."
         },
+        "story": {
+          "$ref": "#/$defs/StoryAnchor",
+          "description": "CAPABILITY-ONLY, and only worth authoring on a feature the walk never reaches: where that feature sits in the ONE story column the viewer draws. Absent = the viewer guesses from the feature's actors' last walk step \u2014 right for trailing features (ops, a chat variant of work already walked), wrong for lead-in ones (a marketing page belongs BEFORE the first step). `validate` blocks it on the other forests."
+        },
         "source": {
           "type": [
             "string",
@@ -410,6 +414,29 @@
       },
       "required": [
         "actor"
+      ],
+      "additionalProperties": false
+    },
+    "StoryAnchor": {
+      "type": "object",
+      "properties": {
+        "place": {
+          "type": "string",
+          "enum": [
+            "before",
+            "after"
+          ],
+          "description": "exactly `before` or `after` (lowercase) \u2014 the derivation and `validate` compare strictly."
+        },
+        "feature": {
+          "type": "string",
+          "pattern": "^CAP\\d+$",
+          "description": "the feature this one reads beside \u2014 must be a defined capability id, never the capability itself."
+        }
+      },
+      "required": [
+        "place",
+        "feature"
       ],
       "additionalProperties": false
     },

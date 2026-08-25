@@ -352,10 +352,69 @@ def test_the_story_ships_in_the_bundle():
     b = as_bundle(index_of(make_story_map()))
     st = b["story"]
     assert isinstance(st, dict)
-    assert sorted(st) == ["cast", "edges", "off", "spine"]
+    assert sorted(st) == ["cast", "column", "edges", "off", "spine"]
     assert st["spine"] == ["CAP2", "CAP1"]
+    assert st["column"] == ["CAP2", "CAP1", "CAP3", "CAP4"]
     e = next(x for x in st["edges"] if (x["actor"], x["feature"]) == ("R2", "CAP1"))
     assert (e["label"], e["authored"], e["step"]) == ("pay", False, "HP2")
+
+
+# --- the one story column: off-walk features interleave at an anchor or the fallback -------------
+
+def test_the_column_is_the_spine_with_off_features_at_the_derived_fallback():
+    """No anchors authored: Marketing's only actor (R1) last drives HP2, whose feature is Billing,
+    so Marketing reads after Billing; Cleanup has no use cases, so no actors, so it falls to the
+    end. The spine's own order never moves."""
+    st = story_of(make_story_map())
+    assert st.column == ["CAP2", "CAP1", "CAP3", "CAP4"]
+
+
+def test_an_authored_before_anchor_beats_the_fallback():
+    """The lead-in case the anchor exists for: a marketing feature belongs BEFORE the first step,
+    and the fallback (the actor's last step) puts it after."""
+    doc = make_story_map()
+    doc["capabilities"][2]["story"] = {"place": "before", "feature": "CAP2"}
+    assert story_of(doc).column == ["CAP3", "CAP2", "CAP1", "CAP4"]
+
+
+def test_an_authored_after_anchor_places_beside_the_named_feature():
+    doc = make_story_map()
+    doc["capabilities"][3]["story"] = {"place": "after", "feature": "CAP2"}
+    assert story_of(doc).column == ["CAP2", "CAP4", "CAP1", "CAP3"]
+
+
+def test_an_anchor_may_name_another_off_feature_and_a_cycle_falls_back():
+    doc = make_story_map()
+    # CAP4 hangs off CAP3, which hangs off the spine: both resolve, in chain order.
+    doc["capabilities"][2]["story"] = {"place": "before", "feature": "CAP2"}
+    doc["capabilities"][3]["story"] = {"place": "after", "feature": "CAP3"}
+    assert story_of(doc).column == ["CAP3", "CAP4", "CAP2", "CAP1"]
+    # A cycle cannot fully resolve, and it never recurses: the member reached first with the cycle
+    # closed behind it (Cleanup, whose anchor IS the cycle) takes its non-anchor placement (the
+    # end), and the other's anchor then holds against that — "Marketing after Cleanup" survives.
+    doc["capabilities"][2]["story"] = {"place": "after", "feature": "CAP4"}
+    assert story_of(doc).column == ["CAP2", "CAP1", "CAP4", "CAP3"]
+
+
+def test_a_dangling_or_self_anchor_is_ignored_by_the_derivation():
+    """Resolution must not crash on what validate flags; the feature simply keeps its fallback."""
+    doc = make_story_map()
+    doc["capabilities"][2]["story"] = {"place": "after", "feature": "CAP99"}
+    doc["capabilities"][3]["story"] = {"place": "before", "feature": "CAP4"}
+    assert story_of(doc).column == ["CAP2", "CAP1", "CAP3", "CAP4"]
+
+
+def test_two_features_anchored_to_the_same_spot_keep_map_order():
+    doc = make_story_map()
+    doc["capabilities"][2]["story"] = {"place": "after", "feature": "CAP1"}
+    doc["capabilities"][3]["story"] = {"place": "after", "feature": "CAP1"}
+    assert story_of(doc).column == ["CAP2", "CAP1", "CAP3", "CAP4"]
+
+
+def test_a_map_with_no_walk_columns_in_map_order():
+    doc = make_story_map()
+    doc["happy_path"] = []
+    assert story_of(doc).column == ["CAP1", "CAP2", "CAP3", "CAP4"]
 
 
 # --- the view bundle ---------------------------------------------------------------

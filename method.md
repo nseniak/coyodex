@@ -144,6 +144,19 @@ one content family with no structure at all, and no screen answers *"what does t
   one of its use cases? `expected` = yes. `excluded` = no, and one record says why. This is what
   turns Happy-Path membership into a rule (see the Coverage rule below) instead of a written
   justification per off-spine use case.
+- **A capability the walk never reaches states its `story` anchor:**
+  `{ "place": "before"|"after", "feature": "CAPn" }` — the feature this one reads beside. WHY: the
+  viewer draws ONE story column, every feature in walk order, and a feature with no walk step has
+  no derived position in it; walk membership says nothing about importance, so an unanchored
+  feature must not fall to the bottom as if demoted. Without the anchor the viewer guesses from the
+  feature's actors' last walk step — right for trailing features (a chat variant of work already
+  walked reads after that work; ops reads at the end), wrong for lead-in ones (a marketing /
+  onboarding feature belongs BEFORE the first step, and the guess puts it after). Anchor to the
+  feature it genuinely reads beside in the product's story; never invent an anchor for a feature
+  the walk already reaches (its position is derived), and never author anchors that form a cycle
+  (A after B, B after A) — a cycle cannot resolve, and the viewer then drops one member's anchor.
+  `validate` blocks the field on the other forests, checks `place` is exactly `before`/`after`,
+  and that `feature` names a defined capability other than this one — nothing more.
 - **Each capability carries a `stakes[]` line per driving actor.** For every actor that drives at
   least one of the capability's use cases, write one stake: a short verb phrase with the actor as
   the implied subject ("mounts, configures and runs the servers"), saying what THAT actor comes to

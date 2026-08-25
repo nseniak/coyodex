@@ -77,6 +77,12 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                       "happy_path": "expected|excluded",        // capability-only; blocked on S/SD
                                                   // must the walk reach it? Says nothing about
                                                   // audience — that derives from the roles.
+                      "story": { "place": "before|after", "feature": "CAPn" },
+                                                  // capability-only, optional; author it ONLY on a
+                                                  // feature the walk never reaches: where it sits
+                                                  // in the one story column. Absent = the viewer
+                                                  // derives (the feature's actors' last walk
+                                                  // step, else the end).
                       "stakes": [ { "actor": "Rn", "stake": "<verb phrase>" }, … ] } ],
                                                   // capability-only; one entry per driving actor:
                                                   // what THAT actor comes to this feature to do,

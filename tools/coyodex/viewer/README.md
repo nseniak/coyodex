@@ -136,19 +136,24 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     note), each element link locating that element in its home view (its subsystem card, entity card, …).
     Navigate back with the breadcrumb (Happy Path › *this step*) or the **◀ ▶** arrows.
 - **Features** *(when the map records capabilities)* — the product on one screen, in three levels.
-  Level 1 is the **story diagram**: the features the Happy Path touches as a spine in first-touch
-  order, the actors as a cast in order of first appearance, the untouched features quiet on the
-  right, joined by derived actor→feature arrows. At rest the arrows are bare; hovering or pinning a
+  Level 1 is the **story diagram**: ONE column holding every feature in **story order** (the walk's
+  first-touch order, with each feature the walk never reaches interleaved at its authored
+  `story` anchor — before/after the feature it reads beside — or at a derived fallback, its
+  actors' last walk step), beside the actors as a cast in order of first appearance, joined by
+  derived actor→feature arrows. A feature the walk skips keeps a full card and carries only a
+  small "not in the walk" pill: walk membership says nothing about importance, and the demoted
+  third column this replaces read as a ranking. At rest the arrows are bare; hovering or pinning a
   card lights its arrows and shows each one's **stake label** (the authored `stakes[]` entry, or the
   pair's first use-case name), which links to that edge's first Happy-Path step. Each card's
   use-case pill is its door one level down. A cast card's actor NAME is the door to that **actor's
   own page** — the journey line: the actor's happy-path steps as stations on one rail, zoned by
   feature in the order the actor first enters each (zones tinted per feature), with the actor's
-  other use cases as side stops under their zone and the features they only touch off the walk
-  dashed past the rail's arrowhead. Its hero states the actor's place in the story and, when the
-  map authors role relations, who they were before ("becomes") and whose abilities they include.
+  other use cases as side stops under their zone; the features they never enter on the walk follow
+  the rail's arrowhead as normal zones, in the same story order. Its hero states the actor's place
+  in the story and, when the map authors role relations, who they were before ("becomes") and whose
+  abilities they include.
   There is no Actors tab: the cast column is the actors' home. A map with no walk draws the same
-  diagram two columns wide ("Features" · "Actors", map order); only a map with no capabilities
+  two columns in map order; only a map with no capabilities
   falls back to the flat card grid, which otherwise survives solely in diff mode for its "changed"
   badges. Search and "show in context" land here with the card pinned. Level 2 is that feature's use
   cases (the catalog rows, headed by the feature's own purpose); clicking a row drills to level 3, that

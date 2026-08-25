@@ -259,6 +259,8 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     for cap in m.capabilities:
         if cap.parent:
             refs.add(cap.parent)
+        # cap.story.feature is NOT gathered here: `_check_story_anchors` owns it entirely (it must
+        # be a CAPABILITY, and a bare existence scan would bless a defined-but-wrong-kind id).
     for blk in m.blocks:
         if blk.parent:
             refs.add(blk.parent)
@@ -2886,6 +2888,35 @@ def _check_group_happy_path(m: ProjectModel) -> list[str]:
     return problems
 
 
+def _check_story_anchors(m: ProjectModel) -> list[str]:
+    """`story` ({place, feature}) is a CAPABILITY field, like `happy_path` and `stakes`: only a
+    capability sits in the story column. Shape + the target being a real capability, both checked
+    HERE (this check owns `feature` entirely — it is not in `_referenced_ids`, so one mistake
+    reports once): an anchor to a defined-but-wrong-kind id (`UC1`, `R2`) would validate under a
+    bare existence scan and then render with the anchor silently dropped. EXACT spelling on
+    `place`, never folded — the derivation compares strictly, and a folded gate would validate a
+    map the screen then ignores."""
+    problems = [f"{g.id} carries `story` — the story anchor is a capability field (only a "
+                f"capability sits in the story column); drop it from this {kind}"
+                for arr, kind in ((m.subsystems, "subsystem"), (m.subdomains, "subdomain"),
+                                  (m.blocks, "block"))
+                for g in arr if g.story is not None]
+    cap_ids = {c.id for c in m.capabilities}
+    for c in m.capabilities:
+        if c.story is None:
+            continue
+        if c.story.place not in ("before", "after"):
+            problems.append(f"{c.id}.story has an unknown `place` '{c.story.place}' — exactly "
+                            "`before` or `after` (lowercase)")
+        if c.story.feature == c.id:
+            problems.append(f"{c.id}.story anchors the feature to itself — name the OTHER feature "
+                            "this one reads beside")
+        elif c.story.feature not in cap_ids:
+            problems.append(f"{c.id}.story anchors to '{c.story.feature}', which is not a defined "
+                            "capability — the anchor names the feature this one reads beside")
+    return problems
+
+
 def _check_capability_stakes(m: ProjectModel) -> list[str]:
     """`stakes` (one line per driving actor: what THAT actor comes to this capability to do) is a
     CAPABILITY field, policed like its siblings `happy_path` and `tech`: one `Group` dataclass backs
@@ -4353,6 +4384,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(tech_problems)
     warnings.extend(tech_warnings)
     problems.extend(_check_group_happy_path(m))
+    problems.extend(_check_story_anchors(m))
     problems.extend(_check_capability_stakes(m))
     warnings.extend(_stake_coverage_warnings(m))
     problems.extend(_check_role_audience(m))
