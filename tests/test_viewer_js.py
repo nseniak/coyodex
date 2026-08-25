@@ -116,6 +116,8 @@ console.log(JSON.stringify({
   snake: spans('reads the tool_catalog collection'),
   punct: spans('a key such as cloud:<mode> is parsed'),
   sentence: spans('It runs in the cloud. Mode is not stored.'),
+  dash: spans('the cloud \\u2014 mode is separate'),
+  quoted: spans('run \\u2018sandboxes\\u2019 now'),
 }));
 """)
     got = json.loads(out)
@@ -129,6 +131,9 @@ console.log(JSON.stringify({
     assert got["snake"] == [], "tool_catalog is an identifier, not the phrase 'tool catalog'"
     assert got["punct"] == [], "words joined by ':<' are a key format, not a term"
     assert got["sentence"] == [], "a phrase must not match across a sentence boundary"
+    assert got["dash"] == [], "an em dash is a clause break, not the hyphen inside a term"
+    # a quoted plural still matches, and the link span leaves the closing quote outside
+    assert got["quoted"] == [["Sandbox", "sandboxes"]]
 
 
 def test_glossary_matching_longest_match_wins_and_consumes_its_words() -> None:
@@ -186,11 +191,20 @@ def test_glossary_autolink_skips_chrome_chips_code_and_the_glossary_view_itself(
     for needle in ("a, button", "code", "pre", "kbd", "svg", ".tb-trig", ".glossary-wrap",
                    ".gloss-plain"):
         assert needle in pass_src, f"skip list lost {needle!r}"
-    wiring = js[js.index("if (HAS_GLOSSARY && GLOSS_MATCHER.maxWords)"):][:2000]
+    wiring = js[js.index("if (HAS_GLOSSARY && GLOSS_MATCHER.maxWords)"):][:2400]
     assert "glossMo.observe(diagram" in wiring
     assert "glossMo.observe(PANEL_HOST" in wiring
     assert "}, true);" in wiring, "the gloss-link click handler must run in capture phase"
     assert "sbGotoGlossary(a.dataset.glossTerm)" in wiring
+    # one seen-map per BATCH: a panel card written as several sibling fragments is one card, and a
+    # per-call map linked the same term once per fragment (found by the adversarial review)
+    assert "const seenByScope = new Map();" in wiring
+    # stopping propagation starves the document-level click-outside closers, so the handler closes
+    # those popovers itself (also from the review)
+    assert "hideUcPick();" in wiring and "closeImpactPop();" in wiring
+    # a scope's seen-set starts from links it already holds, so re-inserted linked HTML (the
+    # drawer's hide animation) cannot link the next occurrence on top of the first
+    assert "scope.querySelectorAll('a.gloss-link')" in js
 
 
 def test_flow_step_keeps_relationship_navigation_on_the_arrow() -> None:

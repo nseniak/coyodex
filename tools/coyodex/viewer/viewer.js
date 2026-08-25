@@ -303,7 +303,16 @@ const glossTokens = (text) => {
   const out = [];
   for (const m of String(text || '').matchAll(_GLOSS_WORD)) {
     const key = foldGlossWord(m[0]);
-    if (key) out.push({ key, start: m.index, end: m.index + m[0].length });
+    if (!key) continue;
+    // The span excludes a bare quote run at either edge (in `run ‘maps’ now` the term is `maps`,
+    // not `maps’` — an underlined closing quote reads as a typo). A possessive keeps its `’s`: the
+    // whole word is the term's surface there.
+    let start = m.index, end = m.index + m[0].length;
+    const lead = /^[’']+/.exec(m[0]);
+    const trail = /[’']+$/.exec(m[0]);
+    if (lead) start += lead[0].length;
+    if (trail) end -= trail[0].length;
+    if (start < end) out.push({ key, start, end });
   }
   return out;
 };
@@ -332,8 +341,9 @@ function buildGlossMatcher(glossary) {
 // it, and word-position scanning means matches only ever start and end at word boundaries. A
 // multiword match must also be joined by nothing but spaces or hyphens: `admin:<mcp>` holds the
 // words "admin" and "mcp", but a colon between them means it is a key format, not the term
-// "Admin MCP" — and the same guard keeps a phrase from matching across a sentence boundary.
-const _GLOSS_JOIN = /^[\s\-–—]+$/;
+// "Admin MCP" — and the same guard keeps a phrase from matching across a sentence boundary or an
+// en/em dash (a dash there is a clause break, not the hyphen inside a hyphenated term).
+const _GLOSS_JOIN = /^[\s-]+$/;
 function matchGlossTerms(text, matcher) {
   const src = String(text || '');
   const toks = glossTokens(src);
@@ -405,15 +415,19 @@ function glossSubjectKey() {
 }
 // Link every glossary term in `root`'s prose — FIRST occurrence per card/row only (a card that says
 // "sandbox" three times gets one link, not three underlines). The card/row is the nearest table
-// row, list item or card article; a page with none (an element's details page) is one scope, which
-// is right: the whole page is one card about one subject.
-function autolinkTerms(root) {
+// row, list item or card article; a page with none (an element's details page) falls back to
+// `scopeFallback`, the whole observed host, which is right: such a page is one card about one
+// subject. `seenByScope` is shared across one observer BATCH (a panel card written as several
+// sibling fragments is several added nodes but ONE card — a per-call set linked "sandbox" once per
+// fragment), and a scope's set starts from the gloss links it already holds, so re-inserting HTML
+// that was linked once (the drawer's hide animation restores captured innerHTML) cannot link the
+// next occurrence on top of the first.
+function autolinkTerms(root, seenByScope, scopeFallback) {
   if (!root || !root.isConnected || root.closest(GLOSS_SKIP)) return;
   const subject = glossSubjectKey();
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
-  const seenByScope = new Map();
   for (const node of nodes) {
     const parent = node.parentElement;
     if (!parent || parent.closest(GLOSS_SKIP)) continue;
@@ -421,9 +435,16 @@ function autolinkTerms(root) {
     if (text.length < 3) continue;
     const matches = matchGlossTerms(text, GLOSS_MATCHER);
     if (!matches.length) continue;
-    const scope = parent.closest('tr, li, article, section, dl') || root;
+    // NOT `dl`: a definition list is fact rows OF a card (the info pane writes one beside the
+    // card's prose), and counting it as its own scope linked the same term once in the prose and
+    // once in the rows — the adversarial review's repro.
+    const scope = parent.closest('tr, li, article, section') || scopeFallback || root;
     let seen = seenByScope.get(scope);
-    if (!seen) { seen = new Set(); seenByScope.set(scope, seen); }
+    if (!seen) {
+      seen = new Set();
+      for (const a of scope.querySelectorAll('a.gloss-link')) seen.add(a.dataset.glossTerm);
+      seenByScope.set(scope, seen);
+    }
     const frag = document.createDocumentFragment();
     let last = 0, linked = 0;
     for (const m of matches) {
@@ -447,20 +468,29 @@ function autolinkTerms(root) {
 }
 if (HAS_GLOSSARY && GLOSS_MATCHER.maxWords) {
   const glossMo = new MutationObserver((records) => {
+    const seenByScope = new Map();   // ONE map per batch, so sibling fragments of one card share it
     for (const r of records) {
-      for (const n of r.addedNodes) if (n.nodeType === Node.ELEMENT_NODE) autolinkTerms(n);
+      for (const n of r.addedNodes) {
+        if (n.nodeType !== Node.ELEMENT_NODE) continue;
+        autolinkTerms(n, seenByScope, PANEL_HOST.contains(n) ? PANEL_HOST : diagram);
+      }
     }
     glossMo.takeRecords();   // drop the records the pass itself just queued — see the block comment
   });
   glossMo.observe(diagram, { childList: true, subtree: true });
   glossMo.observe(PANEL_HOST, { childList: true, subtree: true });
   // Capture phase, because a term inside a card must open the GLOSSARY, not drill the card — the
-  // card's own (bubbling) click handler never sees a click this one consumed.
+  // card's own (bubbling) click handler never sees a click this one consumed. Stopping propagation
+  // also starves the document-level "click outside closes it" listeners, so the two popovers that
+  // close that way are closed here by hand — a gloss link is always outside both, so this is the
+  // outcome their own listeners would have produced.
   document.addEventListener('click', (ev) => {
     const a = ev.target.closest && ev.target.closest('a.gloss-link');
     if (!a) return;
     ev.preventDefault();
     ev.stopPropagation();
+    hideUcPick();
+    closeImpactPop();
     sbGotoGlossary(a.dataset.glossTerm);   // the search bar's glossary jump: switch view, flash the row
   }, true);
 }
