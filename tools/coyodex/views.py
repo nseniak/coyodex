@@ -1256,8 +1256,14 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         # keys a role by its id — `role_features` and `FeatureFacts.roles` are id lists — while
         # every other consumer here reads the name. Without it the frontend holds no way to turn
         # `R3` into "Workspace admin", and the who-can-do-what grid would print raw ids.
+        # `relations` rides along only when authored, so a map without them serializes exactly as
+        # before (the frontend treats absence as []). The actor page reads it for its hero meta
+        # ("was <role> until <use case>", the includes chip) and its greyed before-segment.
         "roles": [{"id": r.id, "name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind),
-                   "audience": r.audience}
+                   "audience": r.audience,
+                   **({"relations": [{"kind": rel.kind, "role": rel.role,
+                                      **({"at": rel.at} if rel.at else {})}
+                                     for rel in r.relations]} if r.relations else {})}
                   for r in m.roles],
         # `aliases` / `no_autolink` ride along only when set, so a map without them serializes
         # exactly as before (and the frontend treats absence as [] / false).

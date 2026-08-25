@@ -62,7 +62,6 @@ let HAS_SUBDOMAINS;  // domain model grouped into subdomains -> Domain view lead
 let HAS_HP;
 let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
 let HAS_USECASES;    // gates the Use Cases tab (any use-case node present)
-let HAS_ACTORS;      // gates the Actors tab (any actor node present)
 let HAS_SYSTEM;      // gates the System tab (any operational/reference collection present)
 let HAS_DATA;        // gates the Data tab (any physical store present in data_view)
 let DATA_VIEW;       // the store-centric Data-view payload (GRAPH.data_view)
@@ -114,7 +113,6 @@ function applyBundle(b) {
                                       // code-pane elements are bound.
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
-  HAS_ACTORS = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'human' || n.kind === 'service');
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
   // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
   COMPLETENESS = GRAPH.completeness || {};
@@ -406,7 +404,7 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ecard-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
   + '.dv-kindpill, .dv-coll, .story-name, .story-pill, .story-colhead, .story-offnote, '
-  + '.story-elabel';
+  + '.story-elabel, .journey-zkind, .journey-alsolbl, .journey-legend';
 // A page about one element is not decorated with a link to itself: the page's subject is the
 // breadcrumb's last item (the trail names the page — one source of truth), folded the same way the
 // matcher folds terms, so on a details page whose subject IS a glossary term that term stays plain.
@@ -772,8 +770,8 @@ function elementCardGridHtml(ids, per) {
 
 // A GROUPED CARD LIST: the plain card list, cut into sections by a heading. The third list shape,
 // between the flat card list (one run) and the card grid (across then down, for choosing). It exists
-// because some lists have a natural cut that is not a level: humans and services are both actors, and
-// putting either behind a drill would hide half the list to say what a heading says for free.
+// because some lists have a natural cut that is not a level: a rule's decision areas, the unreached
+// components' four groups — a heading says what a drill would hide half the list to say.
 //
 // The cards are the SAME cards, at the same width, flush with the page. A first attempt boxed each
 // section in a tinted frame that contained its members, and two nested card shapes on one screen read
@@ -782,14 +780,10 @@ function elementCardGridHtml(ids, per) {
 //
 // `groups` = [{ title, count, desc, ids, per }]. Empty groups are dropped, and a single group draws no
 // heading at all — one section title repeating the page title says nothing.
-//
-// `opts.grid` cuts a card GRID into the same sections instead of a card list. The cut and the shape are
-// two separate questions: the heading says "these belong together", and list-or-grid says whether the
-// reader is reading the set or choosing one out of it. Actors is grouped AND chosen from.
-function elementCardGroupsHtml(groups, opts) {
+function elementCardGroupsHtml(groups) {
   const live = (groups || []).filter((g) => g.ids && g.ids.length);
   if (!live.length) return '';
-  const body = (opts && opts.grid) ? elementCardGridHtml : elementCardListHtml;
+  const body = elementCardListHtml;
   if (live.length === 1) return body(live[0].ids, live[0].per);
   // A count and a description are OFFERED, not automatic. A count that only restates how many cards
   // follow it says nothing a reader cannot see, and a heading that needs a sentence to explain it is
@@ -3207,7 +3201,6 @@ const GROUP_LABEL = {};     // group id -> its label, from VIEW_GROUPS
 const groupLast = {};
 const VIEW_LABEL = {};   // view id -> its tab label, filled from the buttons at boot (one source)
 const VIEW_Q = {
-  actors: 'Who and what drives this product, and what can each of them do?',
   hp: 'What does this system do, end to end?',
   usecases: 'What can this product do, feature by feature?',
   container: 'How is the code organised, and what depends on what?',
@@ -5720,7 +5713,7 @@ function topLevelView(s) {
 // top-level view: a use-case FLOW lives under the Features tab and IS a diagram, while its sibling
 // states under the same tab are pages. The legend used to keep a second list, keyed by view, and that
 // distinction is exactly what it got wrong — see the comment on syncLegend.
-const TEXT_PAGES = new Set(['actors', 'usecases', 'capability', 'actor',
+const TEXT_PAGES = new Set(['usecases', 'capability', 'actor',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge']);
 // A CARD BELONGS TO THE PAGE THAT IS ON SCREEN. Every navigation therefore starts with no card, and the
 // page then puts one back only if it has one to show: its own subject (a drilled subsystem, a use case's
@@ -6061,8 +6054,8 @@ const FOLD_NARRATIVE = {
 // …and a use case's `In feature` line is dropped when THE TRAIL ALREADY NAMES THAT FEATURE, which it does
 // on every use case reached through a feature card. In the floating card that repetition was two panels
 // apart; in the header the line lands directly under the crumb holding the same words, and the feature's
-// name reads twice in twenty pixels. It survives on the one path where the trail runs through Actors
-// instead, which is exactly where the feature is the fact nowhere else on screen.
+// name reads twice in twenty pixels. It survives on the one path where the trail runs through an
+// actor's page instead, which is exactly where the feature is the fact nowhere else on screen.
 // A PROCESS is the one subject with more to say than a hero can hold — where it runs, what it is exposed
 // as, where its config comes from, which environments it varies by, and every thread it hosts. That depth
 // used to sit in the floating card, which is where nothing belongs any more, so it moved to the element's
@@ -6419,14 +6412,13 @@ function elementHomeView(id) {
 function topView(kind, id) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'element') return id ? elementHomeView(id) : 'container';
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules') return kind;
-  if (kind === 'actors') return kind;   // the Actors view is its own tab
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  // One actor's use cases live under ACTORS, where the cards that open them are. They used to live
-  // under Features, on an axis of that view — which meant a tab named Features could show no feature,
-  // and the Actors view handed the reader to another tab to answer its own question.
-  if (kind === 'actor') return 'actors';
+  // An actor's page lives under FEATURES: the story diagram's cast column is where its card is, and
+  // the page is the drill out of that card. The Actors tab it used to live under is gone — the cast
+  // column already showed every actor with more context, so the tab was the same answer twice.
+  if (kind === 'actor') return 'usecases';
   if (kind === 'usecases' || kind === 'capability' || kind === 'usecase') return 'usecases';
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup' || kind === 'depedge') return 'deployment';  // a process/container card, and one arrow's page, live under the Deployment tab
@@ -6458,7 +6450,7 @@ function pageElementId(s) {
   if (s.kind === 'deploymentUnit') return unitProcessNodeId(s.unit);
   // An actor's page is keyed by NAME (that is what its card's click carries), and an actor's node id is
   // not its role id — the Roles table numbers them R1.., the graph numbers them ACT0.. — so the lookup
-  // goes through the node, which is also what the card on the Actors page is built from.
+  // goes through the node, which is also what an actor's card facts are built from.
   if (s.kind === 'actor') return actorNodeId(s.act);
   return null;
 }
@@ -6512,7 +6504,6 @@ function stateTitle(s) {
     return s.act ? nm + ' · ' + s.act : nm;   // a grid cell names both axes it crossed
   }
   if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
-  if (s.kind === 'actors') return 'Actors';
   // A PROCESS is the one element whose details page hangs under a page about that SAME element — its own
   // page on the Deployment view, which draws where it runs. Both crumbs printed the process's name, so the
   // trail read `Deployment › api › api`: two crumbs, one word, and nothing saying which was which. The
@@ -6565,12 +6556,12 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     const base = t ? ancestors(t.state) : [];
     return base.concat([{ kind: 'element', id: s.id }]);
   }
-  if (s.kind === 'actors') return [{ kind: 'actors' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   // One feature's use cases, under the Features view…
   if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap, act: s.act }];
-  // …and one actor's, under the Actors view, whose cards opened it.
-  if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];
+  // …and one actor's page too: the cast card that opens it lives on the Features landing, so the
+  // trail reads Features › <actor>, the same overview → member shape a feature's page has.
+  if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];
   // A use case sits UNDER the card it was listed on, so the trail reads Features › that card › the use
   // case — the same overview → group → member shape Subsystems and Entities already use. WHICH card is
   // not fixed: the overview has two axes, and a use case belongs to exactly one group on each. So the
@@ -6579,13 +6570,13 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   // screen they had never seen. A use case in no feature still gets its crumb — the "not assigned"
   // card is a real level, and without it that one drill was the only one no breadcrumb could undo.
   if (s.kind === 'usecase') {
-    // A use case has TWO homes and the reader's own path picks one. `s.act` is set when the card was
-    // opened from an actor's list, and then the trail runs through Actors; otherwise it runs through
-    // the feature that holds it. A use case in NO feature still gets its card crumb — the "not
+    // A use case has TWO homes and the reader's own path picks one. `s.act` is set when it was
+    // opened from an actor's page, and then the trail runs through that page (under Features);
+    // otherwise it runs through the feature that holds it. A use case in NO feature still gets its card crumb — the "not
     // assigned" card is a real level, and without it that one drill is the only one no breadcrumb can
     // undo. It was a THIRD case before, guessing an actor from a global axis setting for a use case
     // reached some other way; the guess put a card the reader never opened into their trail.
-    if (s.act) return [{ kind: 'actors' }, { kind: 'actor', act: s.act }, { kind: 'usecase', uc: s.uc }];
+    if (s.act) return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }, { kind: 'usecase', uc: s.uc }];
     const cap = HAS_CAPABILITIES ? (CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-') : '';
     return cap ? [{ kind: 'usecases' }, { kind: 'capability', cap }, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
@@ -6637,9 +6628,8 @@ function renderChrome(s) {
   // and the cards badge their member components (via bindNodes).
   const diffHost = IMPACT ? true
     : (s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge');
-  // The lit tab is the ROOT OF THE TRAIL, not a lookup on this state's own kind. A use case opened
-  // from an actor's list belongs under Actors and one opened from a feature under Features — the same
-  // kind of page with two homes, which a kind-only lookup cannot express.
+  // The lit tab is the ROOT OF THE TRAIL, not a lookup on this state's own kind: the trail's own
+  // first item is the one answer to which view a page hangs under, however it was reached.
   const chain = ancestors(s);
   const tv = topView(chain[0].kind, chain[0].id);
   syncLegend(s);
@@ -7196,40 +7186,20 @@ function bindFeaturePage(root) {
       b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0)));
 }
 
-// The head of ONE role's page: the SHARED page hero, so a role, a feature and a decision area all
-// announce themselves the same way. The name is not in it — the breadcrumb carries that — so what is
-// left is whether it is a person or a piece of software, and the sentence saying what it is after.
-// Before this the role's page drew a bordered section whose heading was the page's own title, with the
-// cards inside it: the name twice, and a card containing cards.
-function actorHeadHtml(actorName) {
-  const g = actorGroups().find((x) => x.actor === actorName);
-  // A group is one role, or the "Other" bucket for an actor this map never declared. Other has no
-  // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
-  const role = g && g.roles.length === 1 ? g.roles[0] : null;
-  // No pills here: the actor's card pills — `actor`, and `staff` / `internal service` where the side
-  // varies — ride the breadcrumb beside the name, read from the one function that decides them. The page
-  // used to compute its own set, and said `service` + `staff-owned` where the card said only `SERVICE`.
-  return pageHeroHtml({
-    desc: role && role.wants ? mdInline(wantsSentence(role.wants)) : '',
-    noDesc: 'This map does not say what this actor wants.',
-  });
-}
-
-// The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says which
-// card — `{cap:<id>}` a feature, `{cap:'-'}` the use cases assigned to no feature, `{actor:<name>}` a
-// role — and `null` lists every use case, which is what a map recording no features falls back to.
+// The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says
+// which card — `{cap:<id>}` a feature, `{cap:'-'}` the use cases assigned to no feature — and `null`
+// lists every use case, which is what a map recording no features falls back to. One actor's page
+// used to be a third case here; it is the journey line now (renderActorPage), not a list.
 // One function for every case, so the row markup, the Happy-Path pill, the diff badge and the flow
 // click exist once and cannot drift between the lists.
 function renderUseCases(sel) {
   const groups = actorGroups();
-  // Which list this is. `{cap}` a feature's page, `{cap:'-'}` the use cases in no feature, `{actor}`
-  // one role's, and `null` the flat catalog a map with no features falls back to.
+  // Which list this is. `{cap}` a feature's page, `{cap:'-'}` the use cases in no feature, and
+  // `null` the flat catalog a map with no features falls back to.
   const one = sel && sel.cap ? sel.cap : null;
-  const oneActor = sel && sel.actor ? sel.actor : null;
   const byCapability = !!one;
   const page = (one && one !== '-' && FEAT_BY_ID[one]) ? one : null;
   const shown = one ? capabilityGroups().filter((g) => (one === '-' ? !g.cap : (g.cap && g.cap.id === one)))
-             : oneActor ? groups.filter((g) => g.actor === oneActor)
              : groups;
   // What a use-case card carries BEYOND the element itself: the other axis (who drives it here, or
   // which feature it belongs to), its change badge, its Happy-Path jump, and the honest "not traced".
@@ -7279,7 +7249,7 @@ function renderUseCases(sel) {
   // title, so a heading repeating it is the name twice, and the frame around the cards is a card
   // containing cards — both shapes this viewer removed everywhere else. What the thing IS moves to the
   // page hero above. Sections stay where they are a real cut: one per role on the flat catalog.
-  const solo = !!oneActor || one === '-';
+  const solo = one === '-';
   const secs = [];
   const sections = shown.map((g, gi) => {
     const ids = g.ucs.map((n) => n.id);
@@ -7313,7 +7283,6 @@ function renderUseCases(sel) {
   // A page's own title comes from its hero. Every other list is a CARD LIST view, so it leads with its
   // title and the question it answers, and carries no info pane beside it.
   const head = page ? featureHeadHtml(page)
-    : oneActor ? actorHeadHtml(oneActor)
     : one === '-' ? viewHeadHtml('Not assigned to a feature', 'Use cases that belong to no feature.')
     // A map recording no features falls back to the flat catalog, and the tab's own question ("feature
     // by feature") would then name something the page does not have. It leads with the product
@@ -7330,12 +7299,7 @@ function renderUseCases(sel) {
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
   bindProductLead();
   if (page) bindFeaturePage(diagram);
-  // Carry the actor whose list this is into the drill, so the crumb names the list the reader came
-  // through. A use case named by two roles appears under BOTH, so recomputing its group from the use
-  // case alone could send them back to a list they never opened.
-  bindElementCards(diagram, oneActor
-    ? (id) => go({ kind: 'usecase', uc: id, act: oneActor })
-    : null);
+  bindElementCards(diagram, null);
 }
 
 // FUNCTIONAL COVERAGE: how much of this code a feature or a rule actually reaches. One line on the
@@ -7448,58 +7412,258 @@ function productLeadHtml() {
     + `<div class="view-lead-body">${mdRefs(overview, GRAPH.nodes)}</div></div>`;
 }
 
-// The ACTORS view: everyone and everything that drives this product, as a card list. Each card opens
-// what that actor can do. This was a MODE of the Features screen, which meant "what can each person
-// do" was answered on a screen titled "Features", behind a switch most readers never touched.
-// Every actor as a card, with how many use cases they drive.
-function actorCardsHtml() {
-  const all = Object.values(GRAPH.nodes || {}).filter((n) => n.kind === 'human' || n.kind === 'service');
-  if (!all.length) return '';
-  const counts = {};
-  for (const g of actorGroups()) counts[g.actor] = g.ucs.length;
-  // No type pill: this screen holds nothing but actors, so the word would sit on every card and tell
-  // the reader nothing. How many use cases the actor drives is the fact that earns the slot instead.
-  const per = (id) => {
-    const n = counts[(GRAPH.nodes[id] || {}).name] || 0;
-    return { homeType: true,
-             extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>` };
+// ── The ACTOR PAGE: one actor's journey line ─────────────────────────────────────────────────────
+// The Actors view (a card grid split into Humans / Software services) is gone: the story diagram's
+// cast column shows every actor with more context — the kind pills keep the human/software split,
+// the use-case pill keeps the count — so the tab was the same answer twice. What remains is each
+// actor's own page, reached from a cast card, drawn as a JOURNEY LINE: the actor's happy-path steps
+// as stations on one rail, zoned by feature in the order this actor first enters each, with every
+// other thing they can do as a side stop under its zone. Every use case of the actor appears exactly
+// once — as a station when the walk exercises it with THIS actor driving, as a side stop otherwise.
+
+// A stable tint per feature, from a hash of its id into a fixed palette — the ONE answer to "what
+// colour is this feature", so any page that ever colours features agrees with this one. Pastel
+// backgrounds, because they sit behind ink text and a 3px rail.
+const FEATURE_TINTS = ['#eef0fd', '#e8f4ee', '#fdf3e4', '#f3e9f7', '#e9f2f9', '#fdeef0',
+                       '#eef7ea', '#f6efe4'];
+function featureTint(fid) {
+  let h = 0;
+  for (const ch of String(fid || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return FEATURE_TINTS[h % FEATURE_TINTS.length];
+}
+
+// The display fold gen_viewer._safe_msg applies to every diagram label. HP_ACTORS names live in
+// that space while the page is keyed by the AUTHORED role name — comparing across the two spaces
+// unfolded is the exact bug class the ROLE_BY_NAME comment records, so the fold exists here once.
+function safeMsgName(s) {
+  return String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')   // md link -> its text
+    .replace(/[`*]/g, '').replace(/\n/g, ' ').replace(/;/g, ',')
+    .replace(/#/g, '').replace(/</g, '(').replace(/>/g, ')').replace(/\s+/g, ' ').trim();
+}
+// The steps THIS actor drives on the walk, 1-based-numbered by walk position. Driven = the step's
+// DRAWN driver: the leftmost of its interchangeable actors, the same choice gen_hp_mermaid makes
+// (hp_step_source) — HP_ACTORS_OF_STEP lists a step's actors in participant order, so [0] is that
+// leftmost. A co-actor of a shared step gets the use case as a side stop instead: the walk narrates
+// one journey, and on the MCP Hero map "Admin signs the team into that MCP once" is the admin's
+// moment even though the member could equally start it.
+function actorStations(actorName) {
+  const key = safeMsgName(actorName);
+  const out = [];
+  (GRAPH.happy_path || []).forEach((st, i) => {
+    const drivers = HP_ACTORS_OF_STEP[st.id] || [];
+    if (drivers.length && drivers[0].name === key) out.push({ st, n: i + 1 });
+  });
+  return out;
+}
+// A station's label: the step's title with its leading actor designator dropped — on a page about
+// one actor, "Admin adds a remote HTTP MCP" says "Admin" once per station for nothing. Two forms,
+// because walk titles use both: the actor's FULL name ("Headless agent calls a tool…"), or a short
+// capitalized designator ("Admin adds…", "Prospect signs in…"). The short form only strips when
+// every one of its words is a word of the actor's name or a prefix of one ("Prospect" ⊂
+// "Prospective customer") — a leading capitalized run that is NOT the actor ("Ops on-call rotates
+// keys" on someone else's page) keeps every word, since dropping a stranger's name changes who acts.
+function stationTitle(title, actorName) {
+  const s = String(title || '').trim();
+  const full = String(actorName || '').trim();
+  if (full && s.toLowerCase().startsWith(full.toLowerCase() + ' ')) {
+    const rest = s.slice(full.length).trim();
+    if (rest) return rest;
+  }
+  const m = s.match(/^((?:[A-Z][^\s]*\s+){1,3})([a-z].*)$/);
+  if (!m) return s;
+  const actorWords = full.toLowerCase().split(/\s+/).filter(Boolean);
+  const runWords = m[1].trim().toLowerCase().split(/\s+/);
+  const ofActor = runWords.every((w) =>
+    actorWords.some((aw) => aw === w || (w.length >= 4 && aw.startsWith(w))));
+  return ofActor ? m[2] : s;
+}
+// One actor's rail, derived: the zones the walk drags them through (in first-station order), then
+// the features they only touch off the walk. `zones` draw ON the rail; `offZones` come after its
+// arrowhead, dashed. Side stops are the actor's OTHER use cases, under the zone of their feature.
+function actorJourney(actorName) {
+  const stations = actorStations(actorName);
+  const g = actorGroups().find((x) => x.actor === actorName);
+  const ucs = g ? g.ucs : [];
+  const zones = [];              // [{fid, stations:[{st,n}], sides:[ucNode]}], first-station order
+  const byFid = {};
+  const zoneOf = (fid) => {
+    if (!byFid[fid]) { byFid[fid] = { fid, stations: [], sides: [] }; zones.push(byFid[fid]); }
+    return byFid[fid];
   };
-  // A person and a piece of software are not the same kind of driver — one signs in, the other runs on
-  // its own — so the set is cut in two. The cards are a GRID: every one of them is a door to that
-  // actor's use cases, which is the same job a feature card and a decision-area card do.
-  // The two headings name what is under them and nothing else. Each carried a count and a sentence
-  // defining the word; both went. The count repeats what the cards below it already show — four cards
-  // is four — and "Humans" and "Software services" need no gloss, so the sentence was a paragraph of
-  // chrome above every screen that said less than the heading it explained.
-  // The CUSTOMER'S side leads each section. A reader opening Actors is asking who this product is for,
-  // and the answer is the people and programs outside the company: `staff` and `internal service` are
-  // the exceptions, and an exception reads as one when it comes after the rule rather than in the
-  // middle of it. Measured on the three maps, the map's own order put an internal actor above a
-  // customer-side one in two of them — Meerbot listed Administrator above Website visitor, MCP Hero
-  // listed Service operator above Prospective customer — so the section had no order a reader could
-  // name. Within each half the map's own order is kept: the sort is stable, and it moves nothing else.
-  const of = (kind) => all.filter((n) => n.kind === kind)
-    .map((n, i) => ({ n, i }))
-    .sort((a, b) => (a.n.audience === 'internal') - (b.n.audience === 'internal') || a.i - b.i)
-    .map((x) => x.n.id);
-  return elementCardGroupsHtml([
-    { title: 'Humans', ids: of('human'), per },
-    { title: 'Software services', ids: of('service'), per },
-  ], { grid: true });
+  const featureOfUc = (ucId) => {
+    const p = (GRAPH.nodes[ucId] || {}).parent;
+    return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
+  };
+  for (const s of stations) zoneOf(featureOfUc(s.st.uc)).stations.push(s);
+  // Side stops join their feature's on-rail zone, or open an OFF zone for a feature the actor
+  // never enters on the walk. Off zones order as the story diagram orders features: spine first
+  // (still on the product's path, just not this actor's), then off-story, then the no-feature rest.
+  // WITHOUT a walk there is no path to be on or off — the same rule the story diagram applies —
+  // so every zone stays a plain band with a bare feature name, never a dashed "off" one.
+  const stationUcs = new Set(stations.map((s) => s.st.uc));
+  const st = FEATURES.story || {};
+  const walk = (GRAPH.happy_path || []).length > 0;
+  const offZones = [];
+  const offByFid = {};
+  for (const uc of ucs) {
+    if (stationUcs.has(uc.id)) continue;
+    const fid = featureOfUc(uc.id);
+    if (byFid[fid] && byFid[fid].stations.length) { byFid[fid].sides.push(uc); continue; }
+    if (!offByFid[fid]) {
+      const kind = !walk ? ''
+        : (st.spine || []).includes(fid) ? 'off the path'
+        : fid ? 'off the story' : '';
+      offByFid[fid] = { fid, kind, sides: [] };
+      offZones.push(offByFid[fid]);
+    }
+    offByFid[fid].sides.push(uc);
+  }
+  const pos = (fid) => {
+    const sp = (st.spine || []).indexOf(fid);
+    if (sp >= 0) return sp;
+    const off = (st.off || []).indexOf(fid);
+    if (off >= 0) return (st.spine || []).length + off;
+    return (st.spine || []).length + (st.off || []).length + (fid ? 0 : 1);
+  };
+  offZones.sort((a, b) => pos(a.fid) - pos(b.fid));
+  return { stations, zones, offZones, walk };
 }
-// An actor's card opens what that actor can do, one level down inside THIS view. It used to drill
-// across into a Features axis, so the Actors view could not answer its own question without handing
-// the reader to another tab.
-function openActor(id) {
-  const n = GRAPH.nodes[id];
-  if (!n) return;
-  go({ kind: 'actor', act: n.name });
+
+// The page hero's context line: the actor's place in the story (read off the SAME derived cast
+// order the tripartite column uses — one function answers "actor order"), and the role relations
+// when the map carries them. Everything here is conditional on the map having it: with no walk
+// there is no appearance order, with no relations no history and no chip — the line simply says
+// less, never draws an empty slot.
+function ordinalWord(n) {
+  const tail = (n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th';
+  return n + tail;
 }
-function renderActors() {
-  const cards = actorCardsHtml();
-  diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Actors')
-    + (cards || '<p class="empty">This map records no actors.</p>') + '</div>';
-  bindElementCards(diagram, openActor);
+function actorHeroMetaHtml(actorName) {
+  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
+  if (!role) return '';
+  const parts = [];
+  const cast = (FEATURES.story || {}).cast || [];
+  // Only a role that actually drives (or co-drives) a walk step APPEARS in the story. The cast
+  // list alone cannot say: it holds EVERY role, the non-appearing ones sorted after the cast — so
+  // counting an off-walk role's position claimed an appearance it never makes. HP_ACTORS is the
+  // walk's own participant list, so membership there IS appearance.
+  const appears = HP_ACTORS.some((a) => a.name === safeMsgName(role.name));
+  const at = appears ? cast.indexOf(role.id) : -1;
+  if (at >= 0) parts.push(`<span>${ordinalWord(at + 1)} to appear in the story</span>`);
+  // "was <role> until <use case>" — read off the PREDECESSOR's `becomes`, so the fact is authored
+  // once, on the role that changes. A self-`becomes` is meaningless and stays undrawn.
+  for (const p of GRAPH.roles || []) {
+    if (p.id === role.id) continue;
+    for (const rel of p.relations || []) {
+      if (rel.kind !== 'becomes' || rel.role !== role.id) continue;
+      const uc = GRAPH.nodes[rel.at];
+      parts.push('<span>was <b>' + esc(p.name) + '</b>'
+        + (uc ? ' until “' + esc(uc.name) + '”' : '') + '</span>');
+    }
+  }
+  for (const rel of role.relations || []) {
+    if (rel.kind !== 'includes' || rel.role === role.id) continue;
+    const other = ROLE_BY_ID[rel.role];
+    if (!other) continue;
+    parts.push(`<button type="button" class="journey-incpill" data-act="${esc(other.name)}" `
+      + `title="Open ${esc(other.name)}">may also do everything a ${esc(other.name)} may do</button>`);
+  }
+  return parts.join('<span class="journey-metasep">·</span>');
+}
+function actorPageHeroHtml(actorName) {
+  const g = actorGroups().find((x) => x.actor === actorName);
+  // A group is one role, or the "Other" bucket for an actor this map never declared. Other has no
+  // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
+  const role = g && g.roles.length === 1 ? g.roles[0] : null;
+  // No pills here: the actor's card pills — `actor`, and `staff` / `user service` / `internal
+  // service` where the side varies — ride the breadcrumb beside the name, read from the one
+  // function that decides them (crumbPillsHtml via cardFacts).
+  return pageHeroHtml({
+    desc: role && role.wants ? mdInline(wantsSentence(role.wants)) : '',
+    noDesc: 'This map does not say what this actor wants.',
+    meta: actorHeroMetaHtml(actorName),
+  });
+}
+
+// One zone of the rail as HTML. Side stops belong to the ZONE, not to whichever station they land
+// under — the mockup hung them under the first station and they read as its sub-steps — so they sit
+// below a zone-wide separator behind an "also here:" micro-label.
+function journeyZoneHtml(z, opts) {
+  const o = opts || {};
+  const name = z.fid ? featureName(z.fid) : '';
+  const label = o.label || (name
+    ? (z.kind ? `<span class="journey-zkind">${esc(z.kind)} · </span>` : '')
+      + `<button type="button" class="journey-zname" data-cap="${esc(z.fid)}" `
+      + `title="Open the details page of ${esc(name)}">${esc(name)}</button>`
+    : (z.stations || []).length || (z.sides || []).length
+      ? '<span class="journey-zkind">not in any feature</span>' : '');
+  const stations = (z.stations || []).map((s) =>
+    `<button type="button" class="journey-station" data-step="${esc(s.st.id)}" `
+    + `title="Open the Happy Path: ${esc(s.st.title || 'this step')}">`
+    + `<span class="journey-dot"></span><span class="journey-n">${s.n}</span>`
+    + `<span class="journey-t">${esc(stationTitle(s.st.title, o.actor))}</span></button>`).join('');
+  const sides = (z.sides || []).length
+    ? `<div class="journey-sides">${(z.stations || []).length
+        ? '<span class="journey-alsolbl">also here:</span>' : ''}`
+      + z.sides.map((uc) => `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
+        + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`)
+        .join('') + '</div>'
+    : '';
+  const cls = 'journey-zone' + (o.ghost ? ' journey-ghost' : '') + (o.off ? ' journey-offz' : '');
+  const tint = (o.ghost || o.off || !z.fid) ? '' : ` style="background:${featureTint(z.fid)}"`;
+  return `<div class="${cls}"${tint}><div class="journey-zlabel">${label}</div>`
+    + (stations ? `<div class="journey-track">${stations}</div>` : '')
+    + sides + '</div>';
+}
+function renderActorPage(actorName) {
+  const { stations, zones, offZones, walk } = actorJourney(actorName);
+  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
+  // The greyed BEFORE-segment: the same person, wearing their previous hat — drawn only when the
+  // map authors a `becomes` toward this role. One level only, on purpose: a chain (or a cycle,
+  // which nothing forbids the data to hold) never recurses, each page shows its own one predecessor.
+  let ghost = '';
+  if (role) {
+    for (const p of GRAPH.roles || []) {
+      if (p.id === role.id) continue;
+      if (!(p.relations || []).some((rel) => rel.kind === 'becomes' && rel.role === role.id)) continue;
+      const pStations = actorStations(p.name);
+      if (!pStations.length) continue;
+      ghost += journeyZoneHtml({ fid: '', stations: pStations, sides: [] },
+        { ghost: true, actor: p.name,
+          label: `<span class="journey-zkind">before · as a ${esc(p.name)}</span>` });
+    }
+  }
+  const onRail = zones.map((z) => journeyZoneHtml(z, { actor: actorName })).join('');
+  // Only a map WITH a walk draws its remaining features as dashed "off" zones — without one there
+  // is no path to be off, and they stay plain tinted bands (the story diagram's own rule).
+  const offHtml = offZones.map((z) => journeyZoneHtml(z, { off: walk, actor: actorName })).join('');
+  // The arrowhead ends the RAIL, so it only draws when a rail drew; the off zones stand beyond it.
+  const rail = ghost + onRail
+    + (onRail ? '<div class="journey-endcap" aria-hidden="true">▶</div>' : '')
+    + offHtml;
+  const board = rail
+    ? `<div class="journey-board"><div class="journey-rail">${rail}</div></div>`
+      + '<p class="journey-legend">'
+      + (stations.length ? '<b>●</b> a step on the happy path — click to open it&ensp;' : '')
+      + '<b>○</b> also possible — click to open the use case'
+      + (zones.length > 1 ? '&ensp;zones are features, in the order this actor first enters them' : '')
+      + '</p>'
+    : '<p class="empty">This map records nothing this actor does.</p>';
+  diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}</div>`;
+  bindActorPage(diagram, actorName);
+}
+function bindActorPage(root, actorName) {
+  root.querySelectorAll('.journey-station').forEach((b) => b.addEventListener('click', () =>
+    // The station is a door to the WALK: the Happy Path view, arriving with this step selected —
+    // the same one-shot `sel` restore the story diagram's edge labels use.
+    go({ kind: 'hp', sel: 'hpstep:' + b.getAttribute('data-step') })));
+  root.querySelectorAll('.journey-side').forEach((b) => b.addEventListener('click', () =>
+    // Carry the actor into the drill, so the crumb reads Features › <actor> › <use case>.
+    go({ kind: 'usecase', uc: b.getAttribute('data-uc'), act: actorName })));
+  root.querySelectorAll('.journey-zname').forEach((b) => b.addEventListener('click', () =>
+    go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
+  root.querySelectorAll('.journey-incpill').forEach((b) => b.addEventListener('click', () =>
+    go({ kind: 'actor', act: b.getAttribute('data-act') })));
 }
 
 // ── The STORY DIAGRAM: the Features view's choosing layer ────────────────────────────────────────
@@ -7558,13 +7722,16 @@ function storyFeatureCardHtml(id, off) {
 function storyActorCardHtml(rid) {
   const r = ROLE_BY_ID[rid] || {};
   const wants = wantsSentence(r.wants || '');
-  // The actor's use-case pill is its door to the actor's own page — the mirror of the feature
-  // card's pill, and the diagram's only actor drill now that a pin stays on this page. The count
-  // comes from actorGroups, the same reader the Actors view counts with, so the two agree.
+  // TWO targets that must not fight: the NAME is the drill to the actor's own page (underlined on
+  // hover, so it reads as the door it is), the card BODY is the pin. The use-case pill keeps its
+  // own door to the same page — the mirror of the feature card's pill. The count comes from
+  // actorGroups, the same reader the journey page counts with, so the two agree.
   const g = actorGroups().find((x) => x.actor === r.name);
   const n = g ? g.ucs.length : 0;
   return `<article class="story-card story-actor" data-sactor="${esc(rid)}" tabindex="0">`
-    + `<span class="story-who">${storyGlyphSvg(r.kind)}<span class="story-name">${esc(r.name || rid)}</span>`
+    + `<span class="story-who">${storyGlyphSvg(r.kind)}<button type="button" `
+    + `class="story-name story-namelink" data-actor="${esc(r.name || '')}" `
+    + `title="Open the details page of ${esc(r.name || rid)}">${esc(r.name || rid)}</button>`
     + cardPillsHtml(actorSidePills(r.kind, r.audience))
     + `<button type="button" class="story-pill story-ucpill" data-actor="${esc(r.name || '')}" `
     + `title="Open the details page of ${esc(r.name || rid)}">${n} use case${n === 1 ? '' : 's'}</button></span>`
@@ -7727,6 +7894,13 @@ function bindStoryDiagram(root) {
     if (cap) go({ kind: 'capability', cap });
     else go({ kind: 'actor', act: b.getAttribute('data-actor') });
   }));
+  // The actor NAME is the card's drill (its own page); the card body around it stays the pin. A
+  // button, so Enter fires its click and the card's Enter-pins handler (gated on ev.target ===
+  // card) never sees it — the two targets cannot fire together.
+  root.querySelectorAll('.story-namelink').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    go({ kind: 'actor', act: b.getAttribute('data-actor') });
+  }));
   // The rules pill opens the same feature page, arrived at its "What it decides" section — the
   // section-scroll twin of pendingFlash, consumed after the page's own scroll restore.
   root.querySelectorAll('.story-rulespill').forEach((b) => b.addEventListener('click', (ev) => {
@@ -7755,8 +7929,9 @@ function bindStoryDiagram(root) {
 // each person do", and nobody could read the product off them.
 //
 // ONE axis, features. It used to carry a Group by switch with Actor and Grid settings, and both are
-// gone: actors have their own view now, and one question answered on two screens is one screen too
-// many. A card grid, a title and the question it answers — nothing else on the page.
+// gone: actors live in the story diagram's cast column now (and each has its own page), and one
+// question answered on two screens is one screen too many. A card grid, a title and the question it
+// answers — nothing else on the page.
 //
 // Above the grid rides the STORY DIAGRAM (see storyDiagramHtml): the diagram is the choosing layer,
 // the cards the reading layer, and the product overview leads both unchanged.
@@ -8727,11 +8902,17 @@ async function render(sArg, transient) {
   if (s.kind === 'element') {
     renderElementDetails(s.id); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
-  if (s.kind === 'actors') { renderActors(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // One feature's use cases — the drill out of those cards ('*' = all of them). The feature's own name
   // and purpose head the list itself; the view's question is one level up, on the view's own screen.
-  if (s.kind === 'capability' || s.kind === 'actor') {
-    renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });
+  if (s.kind === 'capability') {
+    renderUseCases({ cap: s.cap, actor: s.act });
+    mainScene = null;
+    renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+  }
+  // One actor's page — the journey line: their happy-path stations on one rail, zoned by feature,
+  // with everything else they can do as side stops. The drill out of a cast card.
+  if (s.kind === 'actor') {
+    renderActorPage(s.act);
     mainScene = null;
     renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }
@@ -9142,7 +9323,10 @@ function selectTargetFor(id) {
         return { state: { kind: 'usecases' }, selectId: null,
                  storyPin: { key: 'sactor', id: role.id } };
       }
-      return { state: { kind: 'actors' }, selectId: null, flashId: id };
+      // No cast card to pin (a map with no features draws no story diagram, and the Actors card
+      // grid that used to catch this is gone) — the actor's own page is the one place left that
+      // shows it, so context and drill meet there.
+      return { state: { kind: 'actor', act: n.name } };
     }
     case 'component': {
       // Open the component INSIDE its parent subsystem's card (the zoomed-in neighbourhood), where it's
@@ -11193,7 +11377,6 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'hp' && !HAS_HP) { b.style.display = 'none'; return; }
-  if (b.dataset.view === 'actors' && !HAS_ACTORS) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'usecases' && !HAS_USECASES) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'deployment' && !HAS_DEPLOYMENT) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
@@ -11501,12 +11684,12 @@ if (impactbtn) {
 
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise on
 // FEATURES, which leads with what the product is FOR and then lists everything it does. Each fallback
-// is the next thing down the product row: the Happy Path, then Actors, and only then the machine
-// (Subsystems, and Dependencies for a map with no grouping at all).
+// is the next thing down the product row: the Happy Path, and only then the machine (Subsystems, and
+// Dependencies for a map with no grouping at all). Actors left this chain with their tab: their home
+// is the Features diagram's cast column now, which the first fallback already lands on.
 const LANDING = (HAS_DIFF && HAS_GROUPING) ? 'container'
   : HAS_USECASES ? 'usecases'
   : HAS_HP ? 'hp'
-  : HAS_ACTORS ? 'actors'
   : HAS_GROUPING ? 'container'
   : 'context';
 go({ kind: LANDING });

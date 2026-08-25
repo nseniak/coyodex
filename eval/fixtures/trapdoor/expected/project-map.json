@@ -11,7 +11,8 @@
    "kind": "human",
    "audience": "",
    "wants": "to add context to a ticket they raised and see what happened to it",
-   "drives": "UC2, UC4"
+   "drives": "UC2, UC4",
+   "relations": []
   },
   {
    "id": "R2",
@@ -19,7 +20,8 @@
    "kind": "human",
    "audience": "",
    "wants": "to work a tenant's queue: find tickets, read them, and move them along the lifecycle",
-   "drives": "UC1, UC2, UC3, UC5"
+   "drives": "UC1, UC2, UC3, UC5",
+   "relations": []
   }
  ],
  "glossary": [

@@ -246,11 +246,49 @@
         "drives": {
           "type": "string",
           "description": "the use cases this role drives \u2014 free text, ids inside."
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RoleRelation"
+          },
+          "description": "optional links to other roles, for when one human typically holds several of the map's roles. Roles are permission hats the code recognizes; without a relation the viewer draws one person as several strangers. Empty/absent = no relation stated."
         }
       },
       "required": [
         "id",
         "name"
+      ],
+      "additionalProperties": false
+    },
+    "RoleRelation": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "becomes",
+            "includes"
+          ],
+          "description": "`becomes` = this role turns into `role` at the use case `at` (the transition is a real, mapped action \u2014 e.g. the prospect becomes the admin at 'sign in and name the organization'). `includes` = this role may do everything `role` may do (the admin includes the member)."
+        },
+        "role": {
+          "type": "string",
+          "pattern": "^R\\d+$",
+          "description": "the other role \u2014 must be a defined Role id."
+        },
+        "at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^UC\\d+$",
+          "description": "becomes only: the use case where the hat changes \u2014 must be a defined use-case id."
+        }
+      },
+      "required": [
+        "kind",
+        "role"
       ],
       "additionalProperties": false
     },

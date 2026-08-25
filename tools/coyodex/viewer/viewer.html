@@ -119,7 +119,9 @@
                  for a moment; three sentences are not a destination, so they lead the Features page. -->
             <button data-view="usecases" data-group="product">Features</button>  <!-- internal kind stays `usecases`; the product description, then a grid of feature cards, each drilling to that feature's page (hidden when no use cases) -->
             <button data-view="hp" data-group="product">Happy Path</button>  <!-- internal kind stays `hp` -->
-            <button data-view="actors" data-group="product">Actors</button>  <!-- card list of everyone and everything that drives it (hidden when none) -->
+            <!-- No Actors tab: the Features diagram's cast column IS the actors' home (kind pills keep
+                 the human/software split the old card grid drew), and each actor's own page hangs off
+                 it, under Features. -->
             <!-- The Rules view is a PRODUCT view, not a reference one: what the product decides is read
                  straight after what it does, and long before how it is built. -->
             <button data-view="rules" data-group="product">Rules</button>  <!-- T7: the decisions this product makes (hidden when the map states none) -->

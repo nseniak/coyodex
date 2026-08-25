@@ -39,6 +39,7 @@ from coyodex.model import (
     MessagingRow,
     ProjectModel,
     Role,
+    RoleRelation,
     StateMachine,
     StateTransition,
     Store,
@@ -674,3 +675,21 @@ def test_a_record_with_no_digest_says_it_cannot_be_confirmed():
     md = model_to_markdown(make_map_with_grounding(
         claims_total=10, claims_challenged=10, claims_confirmed=10))
     assert "No `live_claims_digest`" in md
+
+
+def test_graph_roles_carry_relations_only_when_authored():
+    """The actor page reads `relations` off the graph's roles; a map without them must serialize
+    exactly as before (absence, not an empty list — the frontend treats absence as [])."""
+    m = make_fixture_model()
+    g = model_to_graph(m)
+    assert all("relations" not in r for r in cast("list[dict[str, Any]]", g["roles"]))
+    m.roles[0].relations = [RoleRelation(kind="becomes", role=m.roles[-1].id,
+                                         at=m.use_cases[0].id),
+                            RoleRelation(kind="includes", role=m.roles[-1].id)]
+    g2 = model_to_graph(m)
+    roles = cast("list[dict[str, Any]]", g2["roles"])
+    assert roles[0]["relations"] == [
+        {"kind": "becomes", "role": m.roles[-1].id, "at": m.use_cases[0].id},
+        {"kind": "includes", "role": m.roles[-1].id},   # includes: no `at` key at all
+    ]
+    assert all("relations" not in r for r in roles[1:])

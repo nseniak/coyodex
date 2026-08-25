@@ -126,7 +126,8 @@ class GraphDict(TypedDict):
     flows: list[dict[str, object]]  # T6 use-case flows (one per use case): the ordered inside view
     subflows: list[dict[str, object]]  # T6b named sub-flows: {id, name, steps} — shared step
                                        # sequences a flow step references via its `subflow` field
-    roles: list[dict[str, str]]
+    roles: list[dict[str, object]]  # id/name/wants/kind/audience strings, plus `relations`
+                                    # (list of {kind, role, at?}) only when the map authors them
     glossary: list[dict[str, object]]  # ubiquitous-language terms: {term, meaning, source, aliases?,
                                     # no_autolink?} (source = bare `path:line`/`path/` anchor, or ""
                                     # when the term has no code home; aliases/no_autolink only when set)

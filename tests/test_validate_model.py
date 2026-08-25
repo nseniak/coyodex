@@ -43,6 +43,7 @@ from coyodex.model import (
     NonEntityType,
     ProjectModel,
     Role,
+    RoleRelation,
     RuleSite,
     SecurityRow,
     Stake,
@@ -3902,3 +3903,51 @@ def test_validate_names_the_writer_command_when_an_advisory_asks_for_a_record(ca
     quiet_out = capsys.readouterr().out
     if "extras heading" not in quiet_out:
         assert "coyodex record --map" not in quiet_out, quiet_out
+
+
+# --- role relations: referential integrity plus the closed kind pair, nothing more ---------------
+
+def make_related_roles_model() -> ProjectModel:
+    m = make_valid_model()
+    m.roles = [Role(id="R1", name="Prospect", kind="human", audience="user", wants="to start",
+                    relations=[RoleRelation(kind="becomes", role="R2", at="UC1")]),
+               Role(id="R2", name="Admin", kind="human", audience="user", wants="to run it",
+                    relations=[RoleRelation(kind="includes", role="R1")])]
+    m.use_cases[0].actors = ["R1"]
+    m.flows[0].steps[0].src = "R1"
+    return m
+
+
+def test_role_relations_that_resolve_pass_clean() -> None:
+    assert not any("relations" in p or "undefined IDs" in p
+                   for p in problems_of(make_related_roles_model()))
+
+
+def test_a_relation_naming_an_undefined_role_or_use_case_is_a_dangling_reference() -> None:
+    m = make_related_roles_model()
+    m.roles[0].relations = [RoleRelation(kind="becomes", role="R9", at="UC7")]
+    joined = " ".join(problems_of(m))
+    assert "References to undefined IDs" in joined
+    assert "R9" in joined and "UC7" in joined
+
+
+def test_an_unknown_relation_kind_is_blocking() -> None:
+    m = make_related_roles_model()
+    m.roles[0].relations = [RoleRelation(kind="supersedes", role="R2")]
+    assert any("unknown `kind` 'supersedes'" in p for p in problems_of(m))
+
+
+def test_a_becomes_without_its_transition_use_case_is_blocking() -> None:
+    m = make_related_roles_model()
+    m.roles[0].relations = [RoleRelation(kind="becomes", role="R2")]
+    assert any("R1.relations[0]" in p and "`at`" in p for p in problems_of(m))
+
+
+def test_relation_semantics_are_not_over_constrained() -> None:
+    """A `becomes` whose `at` use case does not list both roles, a self-reference and a symmetric
+    include pair are all the retro's business (or the author's), never validate's."""
+    m = make_related_roles_model()
+    m.roles[1].relations = [RoleRelation(kind="includes", role="R2"),   # self-reference
+                            RoleRelation(kind="includes", role="R1")]   # symmetric with R1? fine
+    m.roles[0].relations.append(RoleRelation(kind="includes", role="R2"))
+    assert not any("relations" in p for p in problems_of(m))

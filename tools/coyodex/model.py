@@ -37,6 +37,22 @@ class ModelError(ValueError):
 # ── the model ────────────────────────────────────────────────────────────────────────────────────
 
 @dataclass
+class RoleRelation:
+    """One authored link between two roles — the map's answer to 'is this the same person wearing
+    another hat'. Roles are permission hats the code recognizes; without a relation the viewer
+    draws one person as several strangers (the prospect who signs in IS the future admin).
+
+    `kind` is a closed pair: `becomes` (this role turns into `role` at the use case `at` — the
+    transition must be a real, mapped action) and `includes` (this role may do everything `role`
+    may do). Validation stops at referential integrity: `role` and `at` must resolve to defined
+    ids, and nothing more is checked — whether `at`'s use case lists both roles is the map
+    author's judgement, not a rule."""
+    kind: str                 # becomes | includes
+    role: str                 # Rn — the other role
+    at: str | None = None     # UCn — becomes only: the use case where the hat changes
+
+
+@dataclass
 class Role:
     id: str                   # Rn — a role is a first-class element, referenced by id (not by name)
     name: str
@@ -52,6 +68,7 @@ class Role:
                               # an upkeep job is service+internal.
     wants: str = ""
     drives: str = ""          # the "Use cases they drive" cell (UC ids inside)
+    relations: list[RoleRelation] = field(default_factory=list)  # optional; [] = no relation stated
 
 
 @dataclass

@@ -59,6 +59,19 @@ FIELD_META: dict[tuple[str, str], dict] = {
                             "its use cases, never authored, so the two can never contradict. "
                             "Orthogonal to `kind`."},
     ("Role", "drives"): {"description": "the use cases this role drives — free text, ids inside."},
+    ("Role", "relations"): {"description": "optional links to other roles, for when one human "
+                             "typically holds several of the map's roles. Roles are permission hats "
+                             "the code recognizes; without a relation the viewer draws one person as "
+                             "several strangers. Empty/absent = no relation stated."},
+    ("RoleRelation", "kind"): {"enum": ["becomes", "includes"], "description": "`becomes` = this "
+                                "role turns into `role` at the use case `at` (the transition is a "
+                                "real, mapped action — e.g. the prospect becomes the admin at 'sign "
+                                "in and name the organization'). `includes` = this role may do "
+                                "everything `role` may do (the admin includes the member)."},
+    ("RoleRelation", "role"): {"pattern": r"^R\d+$", "description": "the other role — must be a "
+                                "defined Role id."},
+    ("RoleRelation", "at"): {"pattern": r"^UC\d+$", "description": "becomes only: the use case "
+                              "where the hat changes — must be a defined use-case id."},
     ("GlossaryRow", "source"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
                                "(where it is defined); null when the concept has no single code home "
                                "(a pure product-level term)."},

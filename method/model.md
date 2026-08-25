@@ -53,10 +53,20 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
   "roles":       [ { "id": "Rn", "name", "kind": "human|service", "audience": "user|internal",
-                     "wants", "drives" } ],       // audience: which SIDE. internal = the company
+                     "wants", "drives",
+                     "relations": [ { "kind": "becomes", "role": "Rn", "at": "UCn" },
+                                    { "kind": "includes", "role": "Rn" } ] } ],
+                                                  // audience: which SIDE. internal = the company
                                                   // that ships the product. On a program: whose
                                                   // machine — a bought service is internal too.
                                                   // A capability's audience is DERIVED from it.
+                                                  // relations (optional): links between roles one
+                                                  // human typically holds. `becomes` = this role
+                                                  // turns into `role` at the use case `at` (a
+                                                  // real, mapped action). `includes` = this role
+                                                  // may do everything `role` may do. Validation
+                                                  // stops at referential integrity: `role`/`at`
+                                                  // must be defined ids, nothing more.
   "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>",
                      "aliases": ["<name>", …], "no_autolink": false } ],
                                                   // aliases (optional): real alternative names the

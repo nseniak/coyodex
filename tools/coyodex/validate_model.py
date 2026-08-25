@@ -302,6 +302,10 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
             refs.update(grammar.ID_TOKEN.findall(fld.type))    # entity-typed field, e.g. `auth:E7`
     for r in m.roles:
         refs.update(grammar.ID_TOKEN.findall(r.drives))        # `drives` holds the UC ids a role drives
+        for rel in r.relations:                                # role links: the other role + the
+            refs.add(rel.role)                                 # transition use case (becomes only)
+            if rel.at:
+                refs.add(rel.at)
     for tr in m.tests:
         refs.update(tr.targets)                                # test-completeness rows name element ids
     for s in _strings(m):                                      # deliberate prose cross-refs `[[ID]]`
@@ -2962,6 +2966,29 @@ def _check_role_audience(m: ProjectModel) -> list[str]:
             and r.audience.strip().lower() not in grammar.ROLE_AUDIENCE]
 
 
+def _check_role_relations(m: ProjectModel) -> list[str]:
+    """The SHAPE of `roles[].relations` — the closed `kind` pair, and `becomes` naming its
+    transition use case. Referential integrity (role/at resolving to defined ids) rides the shared
+    `_check_references` scan like every other typed id field.
+
+    Deliberately nothing more: whether a `becomes`'s `at` use case lists both roles' involvement is
+    the author's judgement, and a relation to oneself or a symmetric pair is a retro finding, not a
+    structural break."""
+    problems: list[str] = []
+    for r in m.roles:
+        for i, rel in enumerate(r.relations):
+            tag = f"{r.id}.relations[{i}]"
+            # EXACT spelling, never folded: the viewer compares `kind` strictly, so a `Becomes`
+            # that a folding gate waved through would validate clean and silently render nothing.
+            if rel.kind not in ("becomes", "includes"):
+                problems.append(f"{tag} has an unknown `kind` '{rel.kind}' — exactly `becomes` "
+                                "or `includes` (lowercase)")
+            elif rel.kind == "becomes" and not (rel.at or "").strip():
+                problems.append(f"{tag}: a `becomes` names the use case where the hat changes "
+                                "(`at`) — the transition must be a real, mapped action")
+    return problems
+
+
 def _check_capability_audience(m: ProjectModel) -> list[str]:
     """The derived half: a role left untagged, and the ONE cross-check the tag buys.
 
@@ -4329,6 +4356,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_capability_stakes(m))
     warnings.extend(_stake_coverage_warnings(m))
     problems.extend(_check_role_audience(m))
+    problems.extend(_check_role_relations(m))
     warnings.extend(_check_capability_audience(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))

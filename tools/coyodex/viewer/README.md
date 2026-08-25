@@ -141,15 +141,18 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   right, joined by derived actor→feature arrows. At rest the arrows are bare; hovering or pinning a
   card lights its arrows and shows each one's **stake label** (the authored `stakes[]` entry, or the
   pair's first use-case name), which links to that edge's first Happy-Path step. Each card's
-  use-case pill is its door one level down. A map with no walk draws the same diagram two columns
-  wide ("Features" · "The cast", map order); only a map with no capabilities falls back to the flat
-  card grid, which otherwise survives solely in diff mode for its "changed" badges. Search and
-  "show in context" land here with the card pinned. Level 2 is that feature's use
+  use-case pill is its door one level down. A cast card's actor NAME is the door to that **actor's
+  own page** — the journey line: the actor's happy-path steps as stations on one rail, zoned by
+  feature in the order the actor first enters each (zones tinted per feature), with the actor's
+  other use cases as side stops under their zone and the features they only touch off the walk
+  dashed past the rail's arrowhead. Its hero states the actor's place in the story and, when the
+  map authors role relations, who they were before ("becomes") and whose abilities they include.
+  There is no Actors tab: the cast column is the actors' home. A map with no walk draws the same
+  diagram two columns wide ("Features" · "Actors", map order); only a map with no capabilities
+  falls back to the flat card grid, which otherwise survives solely in diff mode for its "changed"
+  badges. Search and "show in context" land here with the card pinned. Level 2 is that feature's use
   cases (the catalog rows, headed by the feature's own purpose); clicking a row drills to level 3, that
-  use case's flow — the same flow a Happy Path step drills into, so a use case has one home. A **Show
-  all N use cases** button opens the full catalog, which is also the only level carrying the
-  **Group by Capability / Actor** switch: actors do not partition the catalog (a use case may name two)
-  and they divide it very unevenly, so they re-group a list rather than heading an overview. A map that
+  use case's flow — the same flow a Happy Path step drills into, so a use case has one home. A map that
   records no capabilities skips level 1 and keeps the flat catalog it always had.
 - **Rules** *(when the map states any business rule)* — the decisions this product makes, on the same
   cards: one card per **decision area**, with what that area covers and how many rules sit in it.

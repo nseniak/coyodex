@@ -1688,7 +1688,7 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 /* The page that carries the diagram earns a wider measure than a card list's 1100px: the stage is
    1370px, and clipping it into its own scrollbar on a window that has the room hides the third
    column. Narrower windows still scroll the wrap alone. */
-.usecases-wrap:has(> .story-wrap) { max-width: 1440px; }
+.usecases-wrap:has(> .story-wrap), .usecases-wrap:has(> .journey-board) { max-width: 1440px; }
 .story-stage { position: relative; display: grid; width: max-content;
                grid-template-columns: 400px 150px 330px 160px 330px; }
 /* No walk = no off column: the two remaining columns keep their widths, the stage stops reserving
@@ -1747,3 +1747,72 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 /* The rules pill is a door too: the feature page's "What it decides" section. */
 .story-rulespill { cursor: pointer; }
 .story-rulespill:hover { background: #4f46e5; color: #fff; }
+
+/* ── the actor page's JOURNEY LINE ─────────────────────────────────────────────────────────────────
+   One horizontal rail: the actor's happy-path stations, zoned by feature (each zone tinted by
+   featureTint — the one hue that feature gets anywhere), side stops under a zone-wide separator so
+   they read as the ZONE's extras rather than the nearest station's sub-steps, an arrowhead ending
+   the rail, and the off-path / off-story features dashed beyond it. Ghost = the same person's
+   previous hat (a `becomes` predecessor), greyed before the rail starts. */
+.journey-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
+                 overflow-x: auto; padding: 22px 18px 16px; margin: 14px 0 6px; }
+.journey-rail { display: flex; align-items: flex-start; min-width: max-content; }
+.journey-zone { position: relative; padding: 8px 16px 12px; border-radius: 10px;
+                margin-right: 14px; min-width: 150px; background: #f7f8fb; }
+/* In flow (not absolute) and single-line, so a long zone name WIDENS its zone instead of clipping,
+   and every zone's label is exactly one line high — which is what keeps the rail level across zones. */
+.journey-zlabel { white-space: nowrap; margin: 0 0 2px; }
+.journey-zname { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .03em;
+                 color: #1e2235; background: none; border: 0; padding: 0; cursor: pointer; }
+.journey-zname:hover { color: #4f46e5; text-decoration: underline; }
+.journey-zkind { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; color: #5a6072; }
+/* The rail runs at one height through every on-path zone, bridging the gaps between them. */
+.journey-track { position: relative; display: flex; gap: 30px; align-items: flex-start;
+                 padding: 12px 6px 4px; }
+.journey-track::before { content: ''; position: absolute; left: -24px; right: -24px; top: 21px;
+                         height: 3px; background: #4f46e5; border-radius: 2px; }
+.journey-zone:first-child .journey-track::before { left: 0; }
+.journey-station { font: inherit; background: none; border: 0; padding: 0; text-align: left;
+                   position: relative; width: 118px; cursor: pointer; display: block; color: inherit; }
+.journey-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
+               border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
+               margin: 2px 0 6px 4px; box-sizing: border-box; }
+.journey-station:hover .journey-dot { background: #4f46e5; }
+.journey-station:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+.journey-n { display: block; font-size: 10px; font-weight: 700; color: #4f46e5; }
+.journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; }
+.journey-station:hover .journey-t { color: #4f46e5; }
+/* Side stops belong to the ZONE: a zone-wide separator + "also here:" cuts them off the rail row. */
+.journey-sides { display: flex; flex-direction: column; gap: 4px; margin-top: 10px;
+                 border-top: 1px dashed #c9cdde; padding-top: 7px; }
+.journey-alsolbl { font-size: 10px; font-weight: 700; text-transform: uppercase;
+                   letter-spacing: .05em; color: #5a6072; }  /* dark enough on the zone tints */
+.journey-side { font: inherit; background: none; border: 0; padding: 0; text-align: left;
+                display: flex; gap: 7px; align-items: baseline; font-size: 11px; color: #5a6072;
+                cursor: pointer; max-width: 190px; }
+.journey-side:hover { color: #4f46e5; }
+.journey-o { font-size: 12px; color: #9aa0b4; line-height: 1; }
+.journey-side:hover .journey-o { color: #4f46e5; }
+.journey-endcap { align-self: flex-start; margin: 44px 14px 0 -6px; color: #4f46e5;
+                  font-size: 19px; line-height: 1; }
+/* Off zones stand beyond the arrowhead: still real, not on this actor's walk. No rail, no tint. */
+.journey-offz { border: 1.5px dashed #e4e6ef; background: #fbfbfc; }
+/* The ghost: the same person, previous hat. Grey rail, grey dots, muted ink. */
+.journey-ghost { background: #f3f4f8; }
+.journey-ghost .journey-track::before { background: #c9cdde; }
+.journey-ghost .journey-dot { border-color: #c9cdde; }
+.journey-ghost .journey-station:hover .journey-dot { background: #c9cdde; }
+.journey-ghost .journey-n { color: #9aa0b4; }
+.journey-ghost .journey-t { color: #5a6072; }
+.journey-legend { margin: 4px 2px 18px; color: #5a6072; font-size: 11.5px; }
+.journey-legend b { color: #1e2235; }
+.journey-metasep { margin: 0 2px; color: #9aa0b4; }
+.journey-incpill { font: inherit; font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+                   padding: 2px 9px; border-radius: 99px; border: 0; background: #e8f4ee;
+                   color: #1c6b45; cursor: pointer; }
+.journey-incpill:hover { background: #1c6b45; color: #fff; }
+/* The cast card's NAME is a door (the actor's page); the card body around it stays the pin. */
+.story-namelink { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+                  color: #111827; }
+.story-namelink:hover { color: #4f46e5; text-decoration: underline; }
+.story-namelink:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; border-radius: 3px; }

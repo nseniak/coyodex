@@ -1421,7 +1421,7 @@ def _context_head(graph: GraphDict) -> list[str]:
     lines = ["flowchart LR", f'  SYS["{title}"]:::cy-SYS', "  class SYS system"]
     for i, r in enumerate(graph["roles"]):
         rid = _actor_id(i)
-        label = _safe_label(r["name"])
+        label = _safe_label(str(r["name"]))
         if r["kind"] == "service":
             lines.append(f'  {rid}{{{{"{label}"}}}}:::cy-{rid}')   # hexagon = service actor
             lines.append(f"  class {rid} svc")

@@ -25,6 +25,8 @@ from coyodex.model import (
     HappyStep,
     Group,
     ModelError,
+    Role,
+    RoleRelation,
     Store,
     ProjectModel,
     TestRow as _TestRow,  # aliased: a bare `TestRow` name makes pytest try to collect it as a test class
@@ -341,3 +343,40 @@ def test_capabilities_are_an_id_array_and_entry_points_are_not() -> None:
     them here would make every pre-assembly fragment a shape error and every rebuild a false duplicate."""
     assert ID_ARRAYS["capabilities"] == "CAP"
     assert "entry_points" not in ID_ARRAYS
+
+
+# --- role relations (the "one human, several hats" links) -----------------------
+
+def make_related_roles_model() -> ProjectModel:
+    m = ProjectModel(title="Demo", goal="A demo project.")
+    m.use_cases = [UseCase(id="UC1", name="Sign in and name the organization", actors=["R1"])]
+    m.roles = [
+        Role(id="R1", name="Prospect", kind="human", audience="user",
+             relations=[RoleRelation(kind="becomes", role="R2", at="UC1")]),
+        Role(id="R2", name="Admin", kind="human", audience="user",
+             relations=[RoleRelation(kind="includes", role="R3")]),
+        Role(id="R3", name="Member", kind="human", audience="user"),
+    ]
+    return m
+
+
+def test_role_relations_round_trip():
+    m = make_related_roles_model()
+    m2 = load_model(to_canonical_json(m))
+    assert m2.roles[0].relations == [RoleRelation(kind="becomes", role="R2", at="UC1")]
+    assert m2.roles[1].relations == [RoleRelation(kind="includes", role="R3")]
+    assert m2.roles[2].relations == []
+    assert to_canonical_json(m2) == to_canonical_json(m)
+
+
+def test_a_role_without_relations_serializes_them_empty_not_absent():
+    # `relations` is an ordinary defaulted list field: the canonical serializer emits every field,
+    # so a bare role writes `"relations": []` and an old map without the key still loads.
+    m = make_related_roles_model()
+    j = to_canonical_json(m)
+    assert '"relations": []' in j
+    stripped = json.loads(j)
+    for r in stripped["roles"]:
+        r.pop("relations")
+    m2 = load_model(json.dumps(stripped))
+    assert all(r.relations == [] for r in m2.roles)

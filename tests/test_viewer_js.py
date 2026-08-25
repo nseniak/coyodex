@@ -604,43 +604,41 @@ def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();" in js
     assert "function renderUseCases(sel) {" in js
-    assert ("renderUseCases(s.kind === 'actor' ? { actor: s.act } : { cap: s.cap, actor: s.act });"
-            in js), "one feature's list, and a grid cell's, are the same renderer scoped differently"
+    assert ("renderUseCases({ cap: s.cap, actor: s.act });"
+            in js), "one feature's list and the flat catalog are the same renderer scoped differently"
     # In diff mode a card carries its members' change, or dropping the use cases one level down would
     # hide every "changed" badge behind a click.
     feat = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
     assert "g.ucs.some((x) => usecaseDiffState(x.id))" in feat
 
 
-def test_features_shows_features_and_actors_own_their_own_drill() -> None:
-    """"What does this product do?" and "what can this role do?" are different questions, and they had
-    a view each AND a switch on one of them. So a tab named Features could show no feature, and the
-    Actors view could not answer its own question without handing the reader to another tab: its cards
-    drilled ACROSS into the Features view's actor axis.
-
-    One question per view now. The switch is gone, the Features view has one axis, and an actor's use
-    cases sit under Actors, where the cards that open them are."""
+def test_features_owns_the_actor_page_and_the_actors_view_is_gone() -> None:
+    """The Actors tab is retired: the story diagram's cast column shows every actor with more
+    context (the kind pills keep the human/software split the card grid drew, the use-case pill
+    keeps the count), so the tab was the same answer twice. What remains is each actor's own page —
+    the journey line — reached from a cast card, hanging UNDER FEATURES: the trail reads
+    Features › <actor>, the same overview → member shape a feature's page has."""
     js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
     assert "UC_GROUP_BY" not in js and "ucGroupBy" not in js, "the axis is gone, not defaulted"
     assert "bindOverviewAxis" not in js and "uc-groupby" not in js
-    assert "if (kind === 'actor') return 'actors';" in js, "an actor's page lives under its own view"
+    # The view itself is gone everywhere a view exists: the tab, the state kind, the gate, the
+    # renderer, the question, the text-page list.
+    assert 'data-view="actors"' not in html, "the Actors tab is retired"
+    assert "HAS_ACTORS" not in js and "renderActors" not in js and "actorCardsHtml" not in js
+    assert "kind === 'actors'" not in js and "kind: 'actors'" not in js
+    # An actor's page lives under FEATURES now, and renders the journey line.
+    assert "if (kind === 'actor') return 'usecases';" in js
+    assert "renderActorPage(s.act);" in js and "function renderActorPage(actorName) {" in js
+    assert "if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];" in js
+    assert ("if (s.kind === 'capability') return [{ kind: 'usecases' }, "
+            "{ kind: 'capability', cap: s.cap, act: s.act }];") in js
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
     # Two words for a capability, then three: `Category`, then `Capability` beside a tab already
     # saying Features. Both were the label of a switch that should not have existed.
     assert "'Category'" not in js and "Features grouped by" not in js
     assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
-    # One builder, one shape: the grid variant existed only for the Features view's actor axis.
-    actors = js[js.index("function renderActors() {"): js.index("\nfunction ", js.index("function renderActors() {") + 10)]
-    assert "actorCardsHtml()" in actors
-    # The drill stays inside the Actors view now.
-    opener = js[js.index("function openActor(id) {"): js.index("\nfunction ", js.index("function openActor(id) {") + 10)]
-    assert "go({ kind: 'actor', act: n.name });" in opener and "UC_GROUP_BY" not in opener
-    # Each page sits under ITS OWN view, so the two trails differ from their first word.
-    assert "if (s.kind === 'actor') return [{ kind: 'actors' }, { kind: 'actor', act: s.act }];" in js
-    assert ("if (s.kind === 'capability') return [{ kind: 'usecases' }, "
-            "{ kind: 'capability', cap: s.cap, act: s.act }];") in js
-    assert "kind === 'actor'" in js[js.index("function topView(kind, id) {"):]
 
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
     """`pushContentPoint` rebuilds the current state field by field so opening a file keeps the screen
@@ -670,7 +668,8 @@ def test_a_use_cases_crumb_names_the_card_it_was_listed_on() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     anc = js[js.index("if (s.kind === 'usecase') {"):]
     anc = anc[: anc.index("\n  }")]
-    assert "if (s.act) return [{ kind: 'actors' }, { kind: 'actor', act: s.act }," in anc
+    # Both homes hang under Features now: through the actor's page, or through the feature's card.
+    assert "if (s.act) return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }," in anc
     assert "CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-'" in anc
     assert "actorGroupOf" not in js, "no guessing an actor the reader never chose"
 
@@ -680,12 +679,14 @@ def test_a_feature_found_by_search_lands_on_its_card() -> None:
     Without a case of its own it fell to the default and opened Dependencies, which is a confident wrong
     answer to a search hit the index itself labels a feature. Its home view is the card list that shows
     it, so a hit lands there and the card is scrolled to and ringed: the card-list half of "show in
-    context", where a diagram would select and centre a box. An actor resolves the same way."""
+    context", where a diagram would select and centre a box. An actor with no cast card to pin (a
+    map with no features draws no story diagram) resolves to its own page — the one place left that
+    shows it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     target = js[js.index("function selectTargetFor(id) {"):
                 js.index("\nfunction ", js.index("function selectTargetFor(id) {") + 10)]
     assert "return { state: { kind: 'usecases' }, selectId: null, flashId: id };" in target
-    assert "return { state: { kind: 'actors' }, selectId: null, flashId: id };" in target
+    assert "return { state: { kind: 'actor', act: n.name } };" in target
     # The flash survives the navigation: it is stashed, and consumed by the render that draws the card.
     assert "pendingFlash = t.flashId;" in js
     assert "function applyPendingFlash() {" in js and "flashCard(id);" in js
@@ -704,7 +705,8 @@ def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     assert "byActor[key].ucs.push(n)" in body
     # One undeclared name still sends the whole use case to Other: a half-known pair has no per-role home.
     assert "known ? names.map((nm, i) =>" in body and "[[OTHER, 'Other', null]]" in body
-    assert "(id) => go({ kind: 'usecase', uc: id, act: oneActor })" in js
+    # The carrier is the actor page's side stop now: the drill still says whose page it left from.
+    assert "go({ kind: 'usecase', uc: b.getAttribute('data-uc'), act: actorName })" in js
 
 
 def test_the_group_by_switch_and_the_slot_it_lived_in_are_both_gone() -> None:
@@ -1740,7 +1742,7 @@ def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_sa
     assert "showViewIntro" not in js, "one mechanism clears the card, not two"
     pages = js[js.index("const TEXT_PAGES = new Set(["):]
     pages = pages[: pages.index("]);")]
-    for kind in ("actors", "usecases", "capability", "actor", "rules", "system", "glossary"):
+    for kind in ("usecases", "capability", "actor", "rules", "system", "glossary"):
         assert f"'{kind}'" in pages, kind
     assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram is not a page of prose"
     # ONE rule, called from both paths that fill the card: a selection, and a page's own default.
@@ -2325,17 +2327,12 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
     assert "case 'capability':" in target
 
 
-def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
+def test_a_grouped_card_list_is_one_component_used_by_its_screens() -> None:
     """A third shape, between the flat card list and the card grid: the SAME cards, cut into sections by
-    a heading. It earns its place where a set has a natural cut that is not a level — a person and a
-    piece of software are both actors, and putting either behind a drill would hide half the set to say
-    what a heading says for free. Three screens had hand-rolled the shape, which is the drift the spec's
-    "centralize the card designs" exists to stop.
-
-    The cut and the SHAPE are two separate questions, so the component takes both: the heading says
-    "these belong together", and list-or-grid says whether the reader is reading the set or choosing one
-    out of it. Actors is grouped AND chosen from; a feature page's rules by area, and the four groups of
-    unreached components, are grouped and read.
+    a heading. It earns its place where a set has a natural cut that is not a level — a rule page's
+    decision areas, the unreached components' four groups. Three screens had hand-rolled the shape,
+    which is the drift the spec's "centralize the card designs" exists to stop. (The grid variant left
+    with its one user, the Actors card grid — the shape is a LIST again, full stop.)
 
     The section is NOT a card. It was, in a tinted frame containing its members, and two nested card
     shapes on one screen read as two levels of thing when there is only one — the reader had to work out
@@ -2343,14 +2340,12 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
     break is carried by a heading, space and a hairline."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    body = js[js.index("function elementCardGroupsHtml(groups, opts) {"):
-              js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups, opts) {") + 10)]
+    body = js[js.index("function elementCardGroupsHtml(groups) {"):
+              js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups) {") + 10)]
     assert "csec" in body and "body(g.ids, g.per)" in body
-    # A count and a description are OFFERED, not automatic. Actors passes neither: "4" only restates
-    # how many cards follow it, and "Humans" / "Software services" need no sentence to explain them.
-    # The two callers that DO pass a count give it a noun ("8 rules"), which is information.
+    # A count and a description are OFFERED, not automatic. The callers that DO pass a count give it
+    # a noun ("8 rules"), which is information.
     assert "(g.count ? `<span class=\"csec-count\">${esc(g.count)}</span>` : '')" in body
-    assert "const body = (opts && opts.grid) ? elementCardGridHtml : elementCardListHtml;" in body
     assert "mcard" not in js and "mcard" not in css, "the boxed section is gone, not shadowed"
     sec = css[css.index(".csec-head {"): css.index("}", css.index(".csec-head {"))]
     assert "border-bottom" in sec
@@ -2361,8 +2356,7 @@ def test_a_grouped_card_list_is_one_component_used_by_three_screens() -> None:
     # says nothing.
     assert "filter((g) => g.ids && g.ids.length)" in body
     assert "if (live.length === 1) return body(live[0].ids, live[0].per);" in body
-    for caller in ("function actorCardsHtml() {", "function featRulesHtml(ids) {",
-                   "function unreachedHtml() {"):
+    for caller in ("function featRulesHtml(ids) {", "function unreachedHtml() {"):
         fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
@@ -2412,8 +2406,8 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     assert "-owned" not in code, "the page's second form for a machine is back"
     assert js.count("actorSidePills(") == 3, \
         "the helper itself, cardFacts, and the story actor card — nothing else"
-    head = js[js.index("function actorHeadHtml(actorName) {"):
-              js.index("\n}", js.index("function actorHeadHtml(actorName) {"))]
+    head = js[js.index("function actorPageHeroHtml(actorName) {"):
+              js.index("\n}", js.index("function actorPageHeroHtml(actorName) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
     assert "pills:" not in head, "the actor's page draws no pills of its own"
     # The reader's word is applied in ONE place, and only where the side is about people.
@@ -2427,34 +2421,14 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
 
 def test_a_screen_you_choose_from_is_a_grid_wherever_it_is() -> None:
     """A list is the shape for a set to be READ; a grid is the shape for a set to be CHOSEN between.
-    Features and Rules were grids. Actors was a list, and every card on it is a door to that actor's use
-    cases — exactly what a feature card and a decision-area card are.
-
-    The reason it was a list had expired. Actor cards used to exist twice: as a GRID on the Features
-    view's actor axis, to choose from, and as a LIST on the Actors view, to read, whose cards drilled
-    ACROSS into that axis. Removing the axis deleted the grid copy and handed the choosing job to the
-    list, which kept its shape. Measured after that: an actor card ran the full 1060px width one per row
-    while its sentence used 650px, so 39% of every row was empty, and the counts never justified a
-    second shape (8-10 features, 9-12 decision areas, 4-6 actors on the three real maps).
-
-    The People / Software cut stays: the cut and the shape are different questions. This does not bring
-    back the boxed section — the break is still a heading, a hairline and space, never a frame.
-
-    One more thing fell out of the grid: `.ecard-grid .ecard-name` gives the name the whole first line,
-    so an actor card is now the same shape as every other card in a grid."""
+    Features and Rules are grids; a feature page's rules and the unreached components are read, so
+    they stay lists. (The Actors card grid retired with its view — actors are chosen from the story
+    diagram's cast column now — and `elementCardGroupsHtml`'s grid option left with it.)"""
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "function cardGridHtml(cards) {" in js and "function elementCardGridHtml(ids, per) {" in js
     # The grid class is typed ONCE. Five screens each wrote the div themselves before.
     assert js.count('class="ecard-grid"') == 1, "a hand-rolled card grid is back"
-    actors = js[js.index("function actorCardsHtml() {"):
-                js.index("\nfunction ", js.index("function actorCardsHtml() {") + 10)]
-    assert "], { grid: true });" in actors, "the Actors page must be a grid"
-    assert "'Humans'" in actors and "'Software services'" in actors, "the headings name what is under them"
-    assert "desc:" not in actors and "count:" not in actors, "no gloss and no bare count on the headings"
-    # …and the two screens that really are read, not chosen from, stay lists.
-    for caller in ("function featRulesHtml(ids) {", "function unreachedHtml() {"):
-        fn = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
-        assert "grid: true" not in fn, caller
+    assert "grid: true" not in js, "the grouped list is a LIST; its grid variant left with Actors"
 
 def test_no_kind_quietly_joins_the_pill_repeats_the_drill_set() -> None:
     """`TYPE_PILL_REPEATS_DRILL` is a fact ABOUT two other functions: the kinds where the pill's
@@ -2623,14 +2597,14 @@ def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     ucs = js[js.index("function renderUseCases(sel) {"):
              js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
-    assert "const solo = !!oneActor || one === '-';" in ucs
+    assert "const solo = one === '-';" in ucs
     assert "if (solo) return elementCardGridHtml(ids, per);" in ucs
     assert "elementCardListHtml(" not in ucs, "every use-case list on this screen is a grid"
-    assert "oneActor ? actorHeadHtml(oneActor)" in ucs
     # …and the flat catalog still cuts by role, so the guard is not "always drop the section".
     assert "const kinds = new Set((g.roles || []).map" in ucs
-    head = js[js.index("function actorHeadHtml(actorName) {"):
-              js.index("\nfunction ", js.index("function actorHeadHtml(actorName) {") + 10)]
+    # An actor's page has its own renderer now (the journey line) with the SAME shared hero.
+    head = js[js.index("function actorPageHeroHtml(actorName) {"):
+              js.index("\nfunction ", js.index("function actorPageHeroHtml(actorName) {") + 10)]
     assert "pageHeroHtml({" in head, "one hero builder, shared with the feature and rule-area pages"
     assert "actorName" in head and "esc(actorName)" not in head, "the hero must not print the name"
     # The "Other" bucket is not a role: no kind, nothing it wants, and the hero says so.
@@ -2658,7 +2632,7 @@ def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
     assert 'class="ecard-type ecard-type-plain"' in card, "same word, same slot"
     assert "<span" in card.split("o.homeType")[1].split(":")[0], "plain text, not a button"
     assert 'data-ctx="${esc(id)}"' in card, "…and everywhere else it still acts"
-    for caller in ("function renderOverview() {", "function actorCardsHtml() {"):
+    for caller in ("function renderOverview() {",):
         body = js[js.index(caller): js.index("\nfunction ", js.index(caller) + 10)]
         assert "return { homeType: true," in body, caller
     ucs = js[js.index("function renderUseCases(sel) {"):
@@ -2744,7 +2718,8 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     landing = js[js.index("const LANDING ="): js.index("go({ kind: LANDING });")]
     assert "HAS_USECASES ? 'usecases'" in landing
-    assert "HAS_HP ? 'hp'" in landing and "HAS_ACTORS ? 'actors'" in landing
+    assert "HAS_HP ? 'hp'" in landing
+    assert "'actors'" not in landing, "the Actors view left the fallback chain with its tab"
     assert "(HAS_DIFF && HAS_GROUPING) ? 'container'" in landing   # a diff still opens on the overlay
     assert "'goal'" not in js and "renderGoal" not in js, "the Goal tab is gone, not hidden"
     # …and the description leads the Features page, above a labelled block of feature cards.
@@ -3231,9 +3206,10 @@ def test_search_and_show_in_context_pin_the_card_in_the_diagram() -> None:
     assert "storyPin: { key: 'sfeat', id }" in target
     assert "storyPin: { key: 'sactor', id: role.id }" in target
     assert target.count("if (storyDiagramDraws())") + target.count("storyDiagramDraws())") >= 2
-    # The fallbacks stay behind the guard.
+    # The fallbacks stay behind the guard: a feature flashes its grid card; an actor, with no card
+    # grid left to flash, opens its own page.
     assert "return { state: { kind: 'usecases' }, selectId: null, flashId: id };" in target
-    assert "return { state: { kind: 'actors' }, selectId: null, flashId: id };" in target
+    assert "return { state: { kind: 'actor', act: n.name } };" in target
     # The one-shot survives the navigation, and the in-place case uses the fresh render's applier.
     assert "pendingStoryPin = t.storyPin;" in js
     assert "if (storyPinApply) storyPinApply(t.storyPin);" in js
