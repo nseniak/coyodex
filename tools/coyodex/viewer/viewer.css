@@ -1744,3 +1744,6 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-elabel.story-lab-on { display: block; }
 .story-elabel-live { cursor: pointer; }
 .story-elabel-live:hover { text-decoration: underline; box-shadow: 0 3px 10px rgba(79,70,229,.5); }
+/* The rules pill is a door too: the feature page's "What it decides" section. */
+.story-rulespill { cursor: pointer; }
+.story-rulespill:hover { background: #4f46e5; color: #fff; }

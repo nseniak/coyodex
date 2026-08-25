@@ -7538,11 +7538,12 @@ function storyFeatureCardHtml(id, off) {
   const aud = cardPillsHtml(shownAudience(f.audience || []).map((a) => (
     { text: audienceWord(a), cls: 'uc-aud-' + String(a).toLowerCase() })));
   // The business rules the feature's use-case walks reach (the derived rule join, a floor rather
-  // than a total — see coyodex.features). A count, not a control: its detail lives on the feature
-  // page the use-case pill already opens. Zero draws nothing — on the join's floor, "0 rules"
-  // would read as "decides nothing" when it can only mean "nothing joined".
+  // than a total — see coyodex.features). A DOOR to the feature page's "What it decides" section,
+  // where those rules are listed. Zero draws nothing — on the join's floor, "0 rules" would read
+  // as "decides nothing" when it can only mean "nothing joined".
   const nr = (f.rules || []).length;
-  const rules = nr ? `<span class="story-pill">${nr} rule${nr === 1 ? '' : 's'}</span>` : '';
+  const rules = nr ? `<button type="button" class="story-pill story-rulespill" data-cap="${esc(id)}" `
+    + `title="Open what ${esc(name)} decides">${nr} rule${nr === 1 ? '' : 's'}</button>` : '';
   // The use-case pill is a DOOR to the feature's own details page — the card's click is the pin, so
   // the pill is the one control that leaves this screen, and it says where it goes.
   return `<article class="story-card story-feature${off ? ' story-offf' : ''}" `
@@ -7725,6 +7726,13 @@ function bindStoryDiagram(root) {
     const cap = b.getAttribute('data-cap');
     if (cap) go({ kind: 'capability', cap });
     else go({ kind: 'actor', act: b.getAttribute('data-actor') });
+  }));
+  // The rules pill opens the same feature page, arrived at its "What it decides" section — the
+  // section-scroll twin of pendingFlash, consumed after the page's own scroll restore.
+  root.querySelectorAll('.story-rulespill').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    pendingSection = 'featsec-rules';
+    go({ kind: 'capability', cap: b.getAttribute('data-cap') });
   }));
   // The one-shot arrival pin: a search hit or a "show in context" click on a feature or an actor
   // lands here with the card pinned and framed — the diagram half of what flashCard does for a
@@ -8671,6 +8679,13 @@ function renderRule(s) {
 // Point at the card "show in context" was asked for, once the page holding it exists. After
 // restoreTextScroll, so the remembered scroll position cannot undo the scroll-into-view.
 function applyPendingFlash() {
+  // The section one-shot rides the same consumption point as the card flash, for the same reason:
+  // it must land AFTER restoreTextScroll, or the remembered offset undoes the arrival scroll.
+  if (pendingSection) {
+    const el = diagram.querySelector(`[id="${CSS.escape(pendingSection)}"]`);
+    pendingSection = null;
+    if (el) el.scrollIntoView({ block: 'start' });
+  }
   if (!pendingFlash) return;
   const id = pendingFlash; pendingFlash = null;
   flashCard(id);
@@ -9175,6 +9190,9 @@ function selectTargetFor(id) {
 // A card the next render must scroll to and flash — the card-list half of "show in context", where a
 // diagram would instead select and centre a box. Consumed once, by the render that draws the card.
 let pendingFlash = null;
+// A section id the next text-page render must arrive scrolled to (the rules pill's door to a
+// feature page's "What it decides"). Consumed with pendingFlash, after the scroll restore.
+let pendingSection = null;
 // The story diagram's twin of pendingFlash: {key: 'sfeat'|'sactor', id} to pin on the next Features
 // render. `storyPinApply` is installed by bindStoryDiagram each render, for the already-on-page case.
 let pendingStoryPin = null;

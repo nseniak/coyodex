@@ -3297,9 +3297,18 @@ def test_hover_never_takes_the_picture_away_from_a_pin() -> None:
 
 def test_a_feature_card_counts_its_joined_rules_and_hides_a_zero() -> None:
     """The rule join is a floor, not a total: "0 rules" would read as "decides nothing" when it can
-    only mean "nothing joined", so zero draws no pill. A count, not a control — the detail lives on
-    the feature page the use-case pill already opens."""
+    only mean "nothing joined", so zero draws no pill. The pill is a DOOR: the feature page,
+    arrived scrolled to its "What it decides" section — the section-scroll twin of pendingFlash,
+    consumed at the same point so the page's remembered offset cannot undo it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = _story_fn(js, "storyFeatureCardHtml")
     assert "const nr = (f.rules || []).length;" in card
-    assert "nr ? `<span class=\"story-pill\">${nr} rule${nr === 1 ? '' : 's'}</span>` : ''" in card
+    assert 'class="story-pill story-rulespill"' in card and "nr ? " in card
+    bind = _story_fn(js, "bindStoryDiagram")
+    pill = bind[bind.index(".story-rulespill"):]
+    assert "ev.stopPropagation();" in pill
+    assert "pendingSection = 'featsec-rules';" in pill
+    assert "go({ kind: 'capability', cap: b.getAttribute('data-cap') });" in pill
+    flash = js[js.index("function applyPendingFlash() {"): js.index("\n}", js.index("function applyPendingFlash() {"))]
+    assert "if (pendingSection) {" in flash and "scrollIntoView" in flash
+    assert "'featsec-' + key" in js, "the section ids the one-shot targets still exist"
