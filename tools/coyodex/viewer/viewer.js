@@ -7692,7 +7692,11 @@ function bindStoryDiagram(root) {
       card.addEventListener('mouseleave', scheduleHide);
       const pick = (ev) => { ev.stopPropagation(); pin(key, id, card); };
       card.addEventListener('click', pick);
-      card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') pick(ev); });
+      // Enter on the CARD pins; Enter on the focused use-case pill is the pill's own door, and the
+      // browser fires the button's click for it — the pin must not ride along first.
+      card.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' && ev.target === card) pick(ev);
+      });
     }
   };
   wireCards(stage.querySelectorAll('.story-feature'), 'sfeat');

@@ -329,6 +329,25 @@ def test_an_authored_stake_wins_over_the_fallback():
     assert by[("R1", "CAP1")].label == "pay"   # the OTHER actor still falls back
 
 
+def test_a_map_with_no_walk_has_no_spine_and_everything_off():
+    """The viewer draws no diagram then (its guard reads the empty spine); the classification must
+    still be coherent rather than crash."""
+    doc = make_story_map()
+    doc["happy_path"] = []
+    st = story_of(doc)
+    assert st.spine == [] and st.off == ["CAP1", "CAP2", "CAP3", "CAP4"]
+    assert st.cast == ["R1", "R2", "R3"]                    # map order, nobody appears first
+
+
+def test_a_walk_step_naming_a_missing_use_case_is_skipped_not_fatal():
+    """A dangling `uc` is validate's finding; the derivation must not crash on it or let it shift
+    the orders."""
+    doc = make_story_map()
+    doc["happy_path"].insert(0, {"id": "HP9", "title": "Ghost", "uc": "UC99"})
+    st = story_of(doc)
+    assert st.spine == ["CAP2", "CAP1"] and st.cast == ["R1", "R2", "R3"]
+
+
 def test_the_story_ships_in_the_bundle():
     b = as_bundle(index_of(make_story_map()))
     st = b["story"]

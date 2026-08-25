@@ -3214,3 +3214,30 @@ def test_the_story_stage_scrolls_inside_its_own_wrap_never_the_page() -> None:
     assert "overflow-x: auto" in wrap
     stage = css[css.index(".story-stage {"): css.index("}", css.index(".story-stage {"))]
     assert "width: max-content" in stage
+
+
+def test_the_wires_measure_cards_not_their_own_paths_and_ignore_transforms() -> None:
+    """Two live-found bugs, pinned. (1) Wires and labels carry the same data attributes the hover
+    machinery keys on, so a bare attribute query inside the edge loop matched the PREVIOUS edge's
+    own path and drew NaN wires — the card maps must exist before any wire does. (2) A render can
+    arrive mid drill-animation, whose ancestor transform skews getBoundingClientRect card by card;
+    offsets read the settled layout regardless."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const actorEl = {}, featEl = {};" in bind
+    assert bind.index("actorEl[el.dataset.sactor] = el") < bind.index("for (const e of (st.edges || []))")
+    code = "\n".join(l for l in bind.splitlines() if not l.lstrip().startswith("//"))
+    assert "el.offsetLeft" in code and "getBoundingClientRect" not in code
+    # The glyph must out-specify the pane-wide `#diagram svg { width: 100% }` rule, or every actor
+    # card draws a card-wide stick figure.
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "#diagram .story-glyph" in css
+
+
+def test_enter_on_the_focused_pill_does_not_also_pin_the_card() -> None:
+    """The keydown listener sits on the card, so Enter on the focused use-case pill bubbles to it;
+    the browser then fires the button's own click. Without the target check the pin, the panel
+    write and the tree sync all ride along before the navigation."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "if (ev.key === 'Enter' && ev.target === card) pick(ev);" in bind

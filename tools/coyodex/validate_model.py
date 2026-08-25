@@ -2888,8 +2888,10 @@ def _check_capability_stakes(m: ProjectModel) -> list[str]:
     four forests, so nothing structural stops the others from carrying one.
 
     BLOCKING: stakes on the wrong forest; a stake whose `actor` is not a defined Role id; two stakes
-    for one actor (the arrow they label can only carry one). The advisory half — a driving actor
-    with no stake — is `_stake_coverage_warnings`."""
+    for one actor (the arrow they label can only carry one); a stake with no text — an empty entry
+    would count the actor as covered in the coverage advisory while the arrow still falls back to a
+    use-case name, which is the silent-silencing shape this project refuses. The advisory half — a
+    driving actor with no stake — is `_stake_coverage_warnings`."""
     problems = [f"{g.id} carries `stakes` — stakes is a capability field (a stake says what an "
                 f"actor comes to a FEATURE to do); drop it from this {kind}"
                 for arr, kind in ((m.subsystems, "subsystem"), (m.subdomains, "subdomain"),
@@ -2904,6 +2906,9 @@ def _check_capability_stakes(m: ProjectModel) -> list[str]:
             if s.actor in seen:
                 problems.append(f"{c.id} has two stakes for actor '{s.actor}' — one stake per "
                                 "driving actor")
+            if not (s.stake or "").strip():
+                problems.append(f"{c.id} stake for '{s.actor}' has no text — a stake is the verb "
+                                "phrase the arrow shows; author it or drop the entry")
             seen.add(s.actor)
     return problems
 
@@ -2934,6 +2939,15 @@ def _stake_coverage_warnings(m: ProjectModel) -> list[str]:
                 f"({', '.join(missing)}) — the Features diagram labels each actor→feature arrow "
                 "with the actor's stake; author one per driving actor, or record "
                 f"'{c.id}: <why>' under a 'Stake exceptions' extras heading")
+        # The converse is dead data: a stake for a defined role that drives none of this
+        # capability's use cases labels an arrow the derivation never draws.
+        dead = sorted({s.actor for s in c.stakes if s.actor in role_ids} - driving.get(c.id, set()),
+                      key=lambda rid: (len(rid), rid))
+        if dead:
+            warnings.append(
+                f"{c.id} ({c.name}) has stake(s) for actor(s) that drive none of its use cases "
+                f"({', '.join(dead)}) — no arrow exists to carry them; move or drop the entry, or "
+                f"record '{c.id}: <why>' under a 'Stake exceptions' extras heading")
     return warnings
 
 

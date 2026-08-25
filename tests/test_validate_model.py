@@ -625,6 +625,42 @@ def test_two_stakes_for_one_actor_block() -> None:
     assert any("CAP1" in p and "two stakes" in p for p in problems_of(m))
 
 
+def test_an_empty_stake_blocks_instead_of_counting_as_covered() -> None:
+    """An entry with an actor and no text would satisfy the coverage advisory while the arrow still
+    falls back to a use-case name — silencing a check while authoring nothing."""
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected",
+                            stakes=[Stake(actor="R1")])]
+    m.use_cases[0].capability = "CAP1"
+    assert any("CAP1" in p and "no text" in p for p in problems_of(m))
+
+
+def test_a_stake_for_a_non_driving_actor_advises_as_dead_data() -> None:
+    """A stake for a defined role that drives none of the capability's use cases labels an arrow
+    the derivation never draws — it validates, renders nowhere, and reads as coverage."""
+    m = make_valid_model()
+    m.roles.append(Role(id="R2", name="Ghost", kind="human", audience="user", wants="w", drives=""))
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected",
+                            stakes=[Stake(actor="R1", stake="orders and pays"),
+                                    Stake(actor="R2", stake="haunts the page")])]
+    m.use_cases[0].capability = "CAP1"
+    assert any("CAP1" in w and "drive none" in w and "R2" in w for w in warnings_of(m))
+    assert not any("stake" in p.lower() for p in problems_of(m))
+
+
+def test_a_recorded_stake_exception_silences_only_that_capability() -> None:
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected"),
+                      Group(id="CAP2", name="Refunds", purpose="undoes", happy_path="excluded")]
+    m.use_cases[0].capability = "CAP1"
+    m.use_cases.append(UseCase(id="UC2", name="Refund", actors=["R1"], capability="CAP2"))
+    assert any("CAP1" in w and "no stake entry" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Stake exceptions",
+                             body="CAP1: the one use-case name is the honest label here")]
+    assert not any("CAP1" in w and "no stake entry" in w for w in warnings_of(m))
+    assert any("CAP2" in w and "no stake entry" in w for w in warnings_of(m))
+
+
 def test_a_driving_actor_with_no_stake_advises_and_never_blocks() -> None:
     """The Features diagram labels each actor→feature arrow with the actor's stake; a missing one
     only degrades the label to a use-case name, so the check nudges rather than gates."""
