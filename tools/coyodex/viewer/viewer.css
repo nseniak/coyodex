@@ -1685,6 +1685,10 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    are measured off the laid-out cards once, and a column that cannot rewrap cannot go stale — a
    narrow window scrolls this block sideways inside its own wrap, never the page. */
 .story-wrap { overflow-x: auto; margin: 0 0 22px; padding-bottom: 4px; }
+/* The page that carries the diagram earns a wider measure than a card list's 1100px: the stage is
+   1370px, and clipping it into its own scrollbar on a window that has the room hides the third
+   column. Narrower windows still scroll the wrap alone. */
+.usecases-wrap:has(> .story-wrap) { max-width: 1440px; }
 .story-stage { position: relative; display: grid; width: max-content;
                grid-template-columns: 400px 150px 330px 160px 330px; }
 svg.story-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -1723,7 +1727,9 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-ucpill:hover { background: #4f46e5; color: #fff; }
 .story-who { display: flex; gap: 8px; align-items: center; font-weight: 650; font-size: 13.5px;
              flex-wrap: wrap; }
-.story-glyph { width: 17px; height: 17px; flex: 0 0 auto; }
+/* `#diagram svg` sizes every diagram to its pane (100%); the glyph is an icon, so it needs the
+   same specificity to stay one. */
+#diagram .story-glyph { width: 17px; height: 17px; flex: 0 0 auto; }
 /* Off the story: visually quiet — dashed, greyed, but the same card (still real, just off the walk). */
 .story-offf { border-style: dashed; border-color: #e4e6ef; background: #fbfbfc; }
 .story-offf .story-name { color: #5a6072; }

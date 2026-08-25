@@ -7590,16 +7590,25 @@ function bindStoryDiagram(root) {
   const st = FEATURES.story || {};
   const svg = stage.querySelector('svg.story-wires');
   // Geometry is measured off the REAL cards after layout, not computed from the data: the columns
-  // are fixed-width, so the wires cannot go stale on a window resize.
-  const S = stage.getBoundingClientRect();
+  // are fixed-width, so the wires cannot go stale on a window resize. OFFSET geometry, not
+  // getBoundingClientRect: a render can arrive mid drill-animation, whose ancestor transform skews
+  // client rects card by card as the animation runs — offsets read the settled layout regardless.
+  // A card's offsetParent is the stage itself (the nearest positioned ancestor), so the numbers
+  // are already in stage space.
   const side = (el, which) => {
-    const r = el.getBoundingClientRect();
-    return [which === 'left' ? r.left - S.left : r.right - S.left, r.top - S.top + r.height / 2];
+    return [which === 'left' ? el.offsetLeft : el.offsetLeft + el.offsetWidth,
+            el.offsetTop + el.offsetHeight / 2];
   };
+  // The CARDS by id, mapped before any wire exists: wires and labels carry the same data
+  // attributes (that is how hover finds them), so a bare attribute query would start matching the
+  // previous edge's own path instead of the card.
+  const actorEl = {}, featEl = {};
+  stage.querySelectorAll('.story-actor').forEach((el) => { actorEl[el.dataset.sactor] = el; });
+  stage.querySelectorAll('.story-feature').forEach((el) => { featEl[el.dataset.sfeat] = el; });
   const paths = [], labels = [];
   for (const e of (st.edges || [])) {
-    const a = stage.querySelector(`[data-sactor="${e.actor}"]`);
-    const f = stage.querySelector(`[data-sfeat="${e.feature}"]`);
+    const a = actorEl[e.actor];
+    const f = featEl[e.feature];
     if (!a || !f) continue;
     const toOff = f.classList.contains('story-offf');
     const [ax, ay] = side(a, toOff ? 'right' : 'left');
