@@ -7643,7 +7643,9 @@ function bindStoryDiagram(root) {
     lab.style.top = ((ay + fy) / 2 - 8) + 'px';
     stage.appendChild(lab); labels.push(lab);
   }
-  // Hover previews; click PINS. Leaving falls back to the pinned selection after a grace period
+  // Hover previews WHILE NOTHING IS PINNED; click PINS. A pin is the reader's explicit choice, so
+  // a stray pass of the pointer over another card must not take the picture away from it — with a
+  // pin standing, hover changes nothing. Leaving an unpinned hover clears after a grace period
   // long enough to move the pointer onto a label (the labels sit over the gap between columns).
   let hideTimer = null, selected = null;
   const show = (key, id) => {
@@ -7688,7 +7690,7 @@ function bindStoryDiagram(root) {
   const wireCards = (cards, key) => {
     for (const card of cards) {
       const id = card.dataset[key];
-      card.addEventListener('mouseenter', () => show(key, id));
+      card.addEventListener('mouseenter', () => { if (!selected) show(key, id); });
       card.addEventListener('mouseleave', scheduleHide);
       const pick = (ev) => { ev.stopPropagation(); pin(key, id, card); };
       card.addEventListener('click', pick);

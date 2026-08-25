@@ -3241,3 +3241,11 @@ def test_enter_on_the_focused_pill_does_not_also_pin_the_card() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
     assert "if (ev.key === 'Enter' && ev.target === card) pick(ev);" in bind
+
+
+def test_hover_never_takes_the_picture_away_from_a_pin() -> None:
+    """A pin is the reader's explicit choice; a stray pass of the pointer over another card must
+    not switch the shown arrows to the hovered card. Hover previews only while nothing is pinned."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "card.addEventListener('mouseenter', () => { if (!selected) show(key, id); });" in bind
