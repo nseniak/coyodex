@@ -405,7 +405,8 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 // name column), and the Glossary view itself (the one page that IS the definitions).
 const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ecard-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
-  + '.dv-kindpill, .dv-coll';
+  + '.dv-kindpill, .dv-coll, .story-name, .story-pill, .story-colhead, .story-offnote, '
+  + '.story-elabel';
 // A page about one element is not decorated with a link to itself: the page's subject is the
 // breadcrumb's last item (the trail names the page — one source of truth), folded the same way the
 // matcher folds terms, so on a details page whose subject IS a glossary term that term stays plain.
@@ -7510,6 +7511,194 @@ function renderActors() {
   bindElementCards(diagram, openActor);
 }
 
+// ── The STORY DIAGRAM: the Features view's choosing layer ────────────────────────────────────────
+// Three columns over one set of arrows: THE STORY (the features the happy path touches, as a spine
+// in first-touch order), THE CAST (the actors, in order of first appearance), and OFF THE STORY
+// (the features the walk never reaches, drawn quiet). An arrow is one derived driving relation
+// (actor × capability across the use cases); its label is the actor's STAKE in that feature —
+// authored `stakes[]` when the map has them, else the pair's first use-case name as a verb phrase.
+// All orders and edges come DERIVED from the bundle (FEATURES.story) — nothing here re-decides them.
+//
+// At rest the arrows are thin, grey and unlabelled: the diagram is for choosing, the card grid
+// below it for reading, and fourteen labelled arrows at once are a wall. Hover previews one card's
+// arrows (bold + labelled, the rest faded); click PINS that preview and puts the element's own card
+// in the selection panel, exactly as selecting a shape does on the drawn views. A label with a
+// happy-path step is a door to that step; one without says so and stays put.
+function storyGlyphSvg(kind) {
+  // The same identity the sequence diagrams give an actor — person vs service shape, in the actor
+  // tints (ELEMENT_TINT) — hand-drawn small, since the Mermaid glyphs only exist as SVG mutations.
+  const t = ELEMENT_TINT[kind === 'service' ? 'svc' : 'human'] || {};
+  const stroke = t.stroke || '#6b7280', fill = t.fill || '#fff';
+  if (kind === 'service') {
+    return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
+      + `<polygon points="5.5,3.5 14.5,3.5 18.5,10 14.5,16.5 5.5,16.5 1.5,10" fill="${fill}" `
+      + `stroke="${stroke}" stroke-width="1.6"/></svg>`;
+  }
+  return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
+    + `<circle cx="10" cy="4.6" r="2.9" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`
+    + '<path d="M10 7.5 V13 M4.8 9.8 H15.2 M10 13 L6.4 18.5 M10 13 L13.6 18.5" fill="none" '
+    + `stroke="${stroke}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+}
+function storyFeatureCardHtml(id, off) {
+  const f = FEAT_BY_ID[id] || {};
+  const name = f.name || featureName(id);
+  const n = (f.useCases || []).length;
+  // The use-case pill is a DOOR to the feature's own details page — the card's click is the pin, so
+  // the pill is the one control that leaves this screen, and it says where it goes.
+  return `<article class="story-card story-feature${off ? ' story-offf' : ''}" `
+    + `data-sfeat="${esc(id)}" tabindex="0">`
+    + `<span class="story-name">${esc(name)}</span>`
+    + (f.purpose ? `<p class="story-desc">${mdInline(f.purpose)}</p>` : '')
+    + `<div class="story-pills"><button type="button" class="story-pill story-ucpill" `
+    + `data-cap="${esc(id)}" title="Open the details page of ${esc(name)}">`
+    + `${n} use case${n === 1 ? '' : 's'}</button></div>`
+    + '</article>';
+}
+function storyActorCardHtml(rid) {
+  const r = ROLE_BY_ID[rid] || {};
+  const wants = wantsSentence(r.wants || '');
+  return `<article class="story-card story-actor" data-sactor="${esc(rid)}" tabindex="0">`
+    + `<span class="story-who">${storyGlyphSvg(r.kind)}<span class="story-name">${esc(r.name || rid)}</span>`
+    + cardPillsHtml(actorSidePills(r.kind, r.audience)) + '</span>'
+    + (wants ? `<p class="story-desc">${mdInline(wants)}</p>` : '')
+    + '</article>';
+}
+function storyDiagramHtml() {
+  const st = FEATURES.story || {};
+  // No walk (or no feature it touches) = no story to draw; the card grid below still answers the view.
+  if (!(st.spine || []).length || !(GRAPH.happy_path || []).length) return '';
+  const off = st.off || [];
+  return '<div class="story-wrap"><div class="story-stage" id="storystage">'
+    + '<svg class="story-wires" aria-hidden="true"><defs>'
+    + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
+    + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
+    + '<div class="story-col story-col-spine"><p class="story-colhead">The story · happy-path order</p>'
+    + st.spine.map((id) => storyFeatureCardHtml(id, false)).join('') + '</div>'
+    + '<div class="story-col story-col-cast"><p class="story-colhead">The cast · in order of appearance</p>'
+    + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
+    + '<div class="story-col story-col-off">'
+    + (off.length
+      ? '<p class="story-colhead">Off the story</p>'
+        + '<p class="story-offnote">the happy path never passes here: still real, just not on the walk</p>'
+        + off.map((id) => storyFeatureCardHtml(id, true)).join('')
+      : '')
+    + '</div></div></div>';
+}
+function bindStoryDiagram(root) {
+  const stage = root.querySelector('#storystage');
+  if (!stage) return;
+  const st = FEATURES.story || {};
+  const svg = stage.querySelector('svg.story-wires');
+  // Geometry is measured off the REAL cards after layout, not computed from the data: the columns
+  // are fixed-width, so the wires cannot go stale on a window resize.
+  const S = stage.getBoundingClientRect();
+  const side = (el, which) => {
+    const r = el.getBoundingClientRect();
+    return [which === 'left' ? r.left - S.left : r.right - S.left, r.top - S.top + r.height / 2];
+  };
+  const paths = [], labels = [];
+  for (const e of (st.edges || [])) {
+    const a = stage.querySelector(`[data-sactor="${e.actor}"]`);
+    const f = stage.querySelector(`[data-sfeat="${e.feature}"]`);
+    if (!a || !f) continue;
+    const toOff = f.classList.contains('story-offf');
+    const [ax, ay] = side(a, toOff ? 'right' : 'left');
+    const [fx, fy] = side(f, toOff ? 'left' : 'right');
+    const dx = (toOff ? 1 : -1) * 60;
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', `M ${ax} ${ay} C ${ax + dx} ${ay}, ${fx - dx} ${fy}, ${fx} ${fy}`);
+    p.setAttribute('marker-end', 'url(#story-arr)');
+    p.dataset.sactor = e.actor; p.dataset.sfeat = e.feature;
+    svg.appendChild(p); paths.push(p);
+    const lab = document.createElement('div');
+    lab.className = 'story-elabel';
+    lab.textContent = e.label;
+    lab.dataset.sactor = e.actor; lab.dataset.sfeat = e.feature;
+    const hp = e.step ? HP_BY_ID[e.step] : null;
+    if (hp) {
+      // The label is a door to the walk: the Happy Path view, arriving with this edge's FIRST step
+      // selected (the same one-shot `sel` restore a flow drill uses). Named by TITLE, never by
+      // number — this view carries no step numbers anywhere.
+      lab.classList.add('story-elabel-live');
+      lab.title = 'Open the Happy Path: ' + (hp.title || 'this step');
+      lab.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        go({ kind: 'hp', sel: 'hpstep:' + hp.id });
+      });
+    } else {
+      lab.title = 'Not on the happy path';
+      // Not a door, but not empty background either: a click on it must not clear the pin.
+      lab.addEventListener('click', (ev) => ev.stopPropagation());
+    }
+    lab.style.left = ((ax + fx) / 2) + 'px';
+    lab.style.top = ((ay + fy) / 2 - 8) + 'px';
+    stage.appendChild(lab); labels.push(lab);
+  }
+  // Hover previews; click PINS. Leaving falls back to the pinned selection after a grace period
+  // long enough to move the pointer onto a label (the labels sit over the gap between columns).
+  let hideTimer = null, selected = null;
+  const show = (key, id) => {
+    clearTimeout(hideTimer);
+    for (const p of paths) {
+      const hit = p.dataset[key] === id;
+      p.classList.toggle('story-hot', hit);
+      p.classList.toggle('story-cold', !hit);
+    }
+    for (const l of labels) l.classList.toggle('story-lab-on', l.dataset[key] === id);
+  };
+  const clearWires = () => {
+    for (const p of paths) p.classList.remove('story-hot', 'story-cold');
+    for (const l of labels) l.classList.remove('story-lab-on');
+  };
+  const restore = () => { if (selected) show(selected.key, selected.id); else clearWires(); };
+  const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(restore, 180); };
+  // Pinning drives the SAME selection surface a drawn view's click does: the element's own card in
+  // the panel (a feature is its capability node; an actor is its ACT node, reached by name).
+  const drawerCard = (key, id) => {
+    const nid = key === 'sfeat' ? id : actorNodeId(roleName(id));
+    panel = PANEL_HOST;
+    PANEL_HOST.innerHTML = '';
+    if (nid && GRAPH.nodes[nid]) showNode(nid);
+    paneSync();
+  };
+  const unpin = () => {
+    if (!selected) return;
+    selected = null;
+    stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
+    clearWires();
+    PANEL_HOST.innerHTML = '';
+    paneSync();
+  };
+  const pin = (key, id, card) => {
+    selected = { key, id };
+    stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
+    card.classList.add('story-selected');
+    show(key, id);
+    drawerCard(key, id);
+  };
+  const wireCards = (cards, key) => {
+    for (const card of cards) {
+      const id = card.dataset[key];
+      card.addEventListener('mouseenter', () => show(key, id));
+      card.addEventListener('mouseleave', scheduleHide);
+      const pick = (ev) => { ev.stopPropagation(); pin(key, id, card); };
+      card.addEventListener('click', pick);
+      card.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') pick(ev); });
+    }
+  };
+  wireCards(stage.querySelectorAll('.story-feature'), 'sfeat');
+  wireCards(stage.querySelectorAll('.story-actor'), 'sactor');
+  for (const l of labels) {
+    l.addEventListener('mouseenter', () => clearTimeout(hideTimer));
+    l.addEventListener('mouseleave', scheduleHide);
+  }
+  stage.addEventListener('click', unpin);   // empty background clears the pin
+  root.querySelectorAll('.story-ucpill').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();               // the pill's door is not the card's pin
+    go({ kind: 'capability', cap: b.getAttribute('data-cap') });
+  }));
+}
+
 // The FEATURES view: the whole product as a grid of element cards, one per feature. Each card drills
 // into that feature's page. This is the level the flat catalog was missing: 41 rows answer "what can
 // each person do", and nobody could read the product off them.
@@ -7517,6 +7706,9 @@ function renderActors() {
 // ONE axis, features. It used to carry a Group by switch with Actor and Grid settings, and both are
 // gone: actors have their own view now, and one question answered on two screens is one screen too
 // many. A card grid, a title and the question it answers — nothing else on the page.
+//
+// Above the grid rides the STORY DIAGRAM (see storyDiagramHtml): the diagram is the choosing layer,
+// the cards the reading layer, and the product overview leads both unchanged.
 function renderOverview() {
   const groups = capabilityGroups();
   // The card is the SHARED element card, so a feature reads the same here, in a search result and in
@@ -7545,8 +7737,10 @@ function renderOverview() {
   // holds two blocks now, and without a second label the grid read as a continuation of the prose.
   diagram.innerHTML = '<div class="usecases-wrap">'
     + viewHeadHtml('Features') + productLeadHtml()
+    + storyDiagramHtml()
     + '<p class="block-lbl">Product features</p>' + grid + '</div>';
   bindProductLead();
+  bindStoryDiagram(diagram);
   bindElementCards(diagram);
   bindPlainCards(diagram, (key) => go({ kind: 'capability', cap: key }));
 }

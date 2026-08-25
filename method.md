@@ -132,6 +132,16 @@ one content family with no structure at all, and no screen answers *"what does t
   one of its use cases? `expected` = yes. `excluded` = no, and one record says why. This is what
   turns Happy-Path membership into a rule (see the Coverage rule below) instead of a written
   justification per off-spine use case.
+- **Each capability carries a `stakes[]` line per driving actor.** For every actor that drives at
+  least one of the capability's use cases, write one stake: a short verb phrase with the actor as
+  the implied subject ("mounts, configures and runs the servers"), saying what THAT actor comes to
+  this feature to do. It must read correctly after the actor's name, and the writing rules apply —
+  one idea, plain words, no code, no step numbers. WHY: the viewer draws actor→feature arrows and
+  labels each with the actor's stake; a feature description alone is written from one chair and
+  hides the other roles (real case: "Upstream MCPs" reads admin-only, while the member signs into
+  upstreams there). `validate` blocks a stake whose actor is not a defined role, and advises when a
+  derived driving actor has no stake; a capability whose fallback labels are genuinely right is
+  recordable as `CAPn: <why>` under a **"Stake exceptions"** extras heading.
 - **It says NOTHING about who the capability is for.** That is a second, independent question, and
   it is answered once on the ROLE (`audience`, below) and derived up. A capability may be internal work
   that the walk shows on purpose — the story has to meet the operator and the upkeep job somewhere —

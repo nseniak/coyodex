@@ -109,6 +109,7 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     HeadingSpec("Unclaimed surfaces", True, ID_KEY),
     HeadingSpec("Happy Path coverage", True, ID_KEY),
     HeadingSpec("Audience exceptions", True, ID_KEY),
+    HeadingSpec("Stake exceptions", True, ID_KEY),
     HeadingSpec("Persistence exceptions", True, ID_KEY),
     HeadingSpec("Sweep debt", True),                # key = a `path:line` anchor (free text)
     # Notes: machine-read too, but what they SAY is about the code, not about the map's own checks.

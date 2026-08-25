@@ -101,6 +101,16 @@ class HappyStep:
 
 
 @dataclass
+class Stake:
+    """CAPABILITY-ONLY: what ONE driving actor comes to this capability to do. A short verb phrase
+    with the actor as the implied subject ("mounts, configures and runs the servers"), written to
+    read correctly after the actor's name. The Features diagram labels each actor→feature arrow
+    with it; a capability's own purpose is written from one chair and hides the other roles."""
+    actor: str                # Rn — the driving role this stake belongs to
+    stake: str = ""           # the verb phrase (writing rules apply: one idea, plain words, no code)
+
+
+@dataclass
 class Group:
     """A subsystem (S), a subdomain (SD), or a capability (CAP) — same shape, three forests."""
     id: str
@@ -115,6 +125,10 @@ class Group:
                                # disagreement IS the check. `validate` blocks it on a subsystem or a
                                # subdomain, which have no walk to be on. Says NOTHING about audience —
                                # that is `Role.audience`, derived up by `capability_audience`.
+    stakes: list[Stake] = field(default_factory=list)
+                               # CAPABILITY-ONLY: one entry per driving actor, saying what THAT actor
+                               # comes to this capability to do (see Stake). `validate` blocks it on
+                               # the other forests, and advises when a derived driving actor has none.
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""

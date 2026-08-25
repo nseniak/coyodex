@@ -2882,6 +2882,61 @@ def _check_group_happy_path(m: ProjectModel) -> list[str]:
     return problems
 
 
+def _check_capability_stakes(m: ProjectModel) -> list[str]:
+    """`stakes` (one line per driving actor: what THAT actor comes to this capability to do) is a
+    CAPABILITY field, policed like its siblings `happy_path` and `tech`: one `Group` dataclass backs
+    four forests, so nothing structural stops the others from carrying one.
+
+    BLOCKING: stakes on the wrong forest; a stake whose `actor` is not a defined Role id; two stakes
+    for one actor (the arrow they label can only carry one). The advisory half — a driving actor
+    with no stake — is `_stake_coverage_warnings`."""
+    problems = [f"{g.id} carries `stakes` — stakes is a capability field (a stake says what an "
+                f"actor comes to a FEATURE to do); drop it from this {kind}"
+                for arr, kind in ((m.subsystems, "subsystem"), (m.subdomains, "subdomain"),
+                                  (m.blocks, "block"))
+                for g in arr if g.stakes]
+    role_ids = {r.id for r in m.roles}
+    for c in m.capabilities:
+        seen: set[str] = set()
+        for s in c.stakes:
+            if s.actor not in role_ids:
+                problems.append(f"{c.id} stake actor '{s.actor}' is not a defined Role id")
+            if s.actor in seen:
+                problems.append(f"{c.id} has two stakes for actor '{s.actor}' — one stake per "
+                                "driving actor")
+            seen.add(s.actor)
+    return problems
+
+
+def _stake_coverage_warnings(m: ProjectModel) -> list[str]:
+    """ADVISORY: a DERIVED driving actor of a capability with no stake entry. The Features diagram
+    labels each actor→feature arrow with the actor's stake, and without one the label falls back to
+    a use-case name — readable, but written for the catalog rather than for this actor's angle.
+
+    The driving actors are the roles named by the capability's use cases — the same join the
+    diagram draws its arrows from. Escape: a capability whose fallback labels are genuinely right
+    is recordable as '{CAPn}: <why>' under a 'Stake exceptions' extras heading."""
+    role_ids = {r.id for r in m.roles}
+    driving: dict[str, set[str]] = {}
+    for u in m.use_cases:
+        if u.capability:
+            driving.setdefault(u.capability, set()).update(a for a in u.actors if a in role_ids)
+    recorded = records.recorded_keys(m, "Stake exceptions")
+    warnings = []
+    for c in m.capabilities:
+        if c.id in recorded:
+            continue
+        missing = sorted(driving.get(c.id, set()) - {s.actor for s in c.stakes},
+                         key=lambda rid: (len(rid), rid))
+        if missing:
+            warnings.append(
+                f"{c.id} ({c.name}) has {len(missing)} driving actor(s) with no stake entry "
+                f"({', '.join(missing)}) — the Features diagram labels each actor→feature arrow "
+                "with the actor's stake; author one per driving actor, or record "
+                f"'{c.id}: <why>' under a 'Stake exceptions' extras heading")
+    return warnings
+
+
 def _check_role_audience(m: ProjectModel) -> list[str]:
     """`audience` (user | internal) on every role — the map's ONE authored answer to "who is this for".
 
@@ -4257,6 +4312,8 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(tech_problems)
     warnings.extend(tech_warnings)
     problems.extend(_check_group_happy_path(m))
+    problems.extend(_check_capability_stakes(m))
+    warnings.extend(_stake_coverage_warnings(m))
     problems.extend(_check_role_audience(m))
     warnings.extend(_check_capability_audience(m))
     problems.extend(_check_runs_in(m))

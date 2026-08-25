@@ -64,9 +64,14 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                                                   // (optional): exclude the term's own name from
                                                   // linking. See the Glossary deliverable.
   "capabilities": [ { "id": "CAPn", "name", "purpose", "parent": "CAPn|null",
-                      "happy_path": "expected|excluded" } ],    // capability-only; blocked on S/SD
+                      "happy_path": "expected|excluded",        // capability-only; blocked on S/SD
                                                   // must the walk reach it? Says nothing about
                                                   // audience — that derives from the roles.
+                      "stakes": [ { "actor": "Rn", "stake": "<verb phrase>" }, … ] } ],
+                                                  // capability-only; one entry per driving actor:
+                                                  // what THAT actor comes to this feature to do,
+                                                  // reading correctly after the actor's name. The
+                                                  // viewer labels each actor→feature arrow with it.
   "use_cases":   [ { "id": "UCn", "name", "actors": ["Rn", ...], "trigger_outcome",
                      "capability": "CAPn|null",                 // assigned at synthesis via reconcile
                      "entry_points": ["EPn", …] } ],            // the TRIGGER arm; empty is legitimate

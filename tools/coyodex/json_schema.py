@@ -89,6 +89,18 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                "— a value that always agreed with the walk could never disagree with "
                                "it, and the disagreement IS the check. Says nothing about audience. "
                                "`validate` blocks it on a subsystem or a subdomain."},
+    ("Group", "stakes"): {"description": "CAPABILITY-ONLY: one entry per driving actor, saying "
+                           "what THAT actor comes to this capability to do. The Features diagram "
+                           "labels each actor→feature arrow with the actor's stake; a capability's "
+                           "purpose alone is written from one chair and hides the other roles. "
+                           "`validate` blocks it on the other forests, and advises when a derived "
+                           "driving actor has no entry."},
+    ("Stake", "actor"): {"pattern": r"^R\d+$", "description": "the driving role this stake belongs "
+                          "to — must be a defined Role id."},
+    ("Stake", "stake"): {"description": "a short verb phrase with the actor as the implied subject "
+                          "('mounts, configures and runs the servers'). Must read correctly after "
+                          "the actor's name; writing rules apply (one idea, plain words, no code, "
+                          "no step numbers)."},
     ("Group", "source"): {"description": _DIR_OR_FILE_DESC + " The group's home directory (or a "
                            "representative file)."},
     ("UseCase", "id"): {"pattern": r"^UC\d+$"},

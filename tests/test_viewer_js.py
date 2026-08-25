@@ -2405,11 +2405,13 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     # Colour says WHAT it is, the words say whose: both program readings keep the one program colour.
     assert fn.count("ecard-pill-service") == 1 and "cls: `uc-aud-${side}`" in fn
     # The card and the page draw the SAME pills — the page must not compute its own. It draws none at all
-    # now: an element page's pills ride the breadcrumb beside the name, read from cardFacts, so there is
-    # exactly ONE caller of this helper and the two surfaces cannot disagree by construction.
+    # now: an element page's pills ride the breadcrumb beside the name, read from cardFacts, so the
+    # surfaces cannot disagree by construction. Every renderer that shows the pills goes through this
+    # one helper: cardFacts, and the story diagram's actor card.
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
     assert "-owned" not in code, "the page's second form for a machine is back"
-    assert js.count("actorSidePills(") == 2, "the helper itself, and cardFacts — nothing else"
+    assert js.count("actorSidePills(") == 3, \
+        "the helper itself, cardFacts, and the story actor card — nothing else"
     head = js[js.index("function actorHeadHtml(actorName) {"):
               js.index("\n}", js.index("function actorHeadHtml(actorName) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
@@ -3135,3 +3137,80 @@ console.log(JSON.stringify(framed));
     # The loop frames its representative, never the first piece. An ordinary arrow is unchanged. A step
     # with nothing drawn moves no camera at all.
     assert json.loads(out) == ["mid", "plain"]
+
+
+# --- the story diagram (the Features view's choosing layer) -----------------------
+
+def _story_fn(js: str, name: str) -> str:
+    start = js.index(f"function {name}(")
+    return js[start: js.index("\nfunction ", start + 10)]
+
+
+def test_the_story_diagram_rides_the_features_landing_between_lead_and_grid() -> None:
+    """The tripartite diagram is the CHOOSING layer and the card grid the READING layer: the product
+    overview leads, the diagram follows, the grid stays below unchanged. A map with no walk (or no
+    feature the walk touches) draws no diagram and keeps the page it always had."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    over = js[js.index("function renderOverview() {"):
+              js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
+    assert "storyDiagramHtml()" in over and "bindStoryDiagram(diagram)" in over
+    assert (over.index("productLeadHtml()") < over.index("storyDiagramHtml()")
+            < over.index("Product features"))
+    html = _story_fn(js, "storyDiagramHtml")
+    assert "if (!(st.spine || []).length || !(GRAPH.happy_path || []).length) return '';" in html
+    # The three columns, and the off column drawn quiet under its one-line explanation.
+    assert "The story · happy-path order" in html
+    assert "The cast · in order of appearance" in html
+    assert "Off the story" in html and "story-offnote" in html
+
+
+def test_the_use_case_pill_is_a_door_that_does_not_steal_the_pin() -> None:
+    """The card's own click PINS; the pill is the one control leaving this screen (the feature's
+    details page), so it must not fire the pin too."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    pill = bind[bind.index(".story-ucpill"):]
+    assert "ev.stopPropagation();" in pill
+    assert "go({ kind: 'capability', cap: b.getAttribute('data-cap') });" in pill
+    card = _story_fn(js, "storyFeatureCardHtml")
+    assert 'title="Open the details page of' in card, "the pill says where it goes"
+
+
+def test_a_stake_label_is_a_door_to_the_happy_path_named_by_title_never_by_number() -> None:
+    """A label with a happy-path step opens the Happy Path view with that step selected (the same
+    one-shot `sel` restore a flow drill uses); one without says so and stays put. No step NUMBER
+    appears anywhere on this view — the tooltip names the step by its title."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "go({ kind: 'hp', sel: 'hpstep:' + hp.id });" in bind
+    assert "'Open the Happy Path: ' + (hp.title" in bind
+    assert "'Not on the happy path'" in bind
+
+
+def test_pinning_a_story_card_drives_the_selection_panel_like_any_view() -> None:
+    """A pinned feature shows its capability node's card; a pinned actor its ACT node's, reached by
+    name (roles are not graph nodes). Clearing the pin takes the card away through paneSync — the
+    one rule for whether the panel is on screen."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "actorNodeId(roleName(id))" in bind
+    assert "showNode(nid)" in bind
+    assert bind.count("paneSync()") >= 2, "both the pin and the unpin sync the panel"
+
+
+def test_story_chrome_never_term_links_but_card_prose_does() -> None:
+    """Names, pills, column heads and the stake labels are labels or controls, not prose; the card
+    sentences (purpose, wants) stay linkable like every other card's."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    skip = js[js.index("const GLOSS_SKIP ="): js.index(";", js.index("const GLOSS_SKIP ="))]
+    for cls in (".story-name", ".story-pill", ".story-colhead", ".story-offnote", ".story-elabel"):
+        assert cls in skip, f"{cls} must not term-link"
+    assert ".story-desc" not in skip, "card prose participates in term-linking"
+
+
+def test_the_story_stage_scrolls_inside_its_own_wrap_never_the_page() -> None:
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    wrap = css[css.index(".story-wrap {"): css.index("}", css.index(".story-wrap {"))]
+    assert "overflow-x: auto" in wrap
+    stage = css[css.index(".story-stage {"): css.index("}", css.index(".story-stage {"))]
+    assert "width: max-content" in stage

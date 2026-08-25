@@ -98,7 +98,9 @@ def test_a_feature_carries_its_derived_audience_and_not_its_walk_expectation():
     it and the bundle does not ship it."""
     ix = index_of(make_map())
     assert feature(ix).audience == ["user"]
-    bundled = as_bundle(ix)["features"][0]
+    features = as_bundle(ix)["features"]
+    assert isinstance(features, list)
+    bundled = features[0]
     assert bundled["audience"] == ["user"]
     assert "happyPath" not in bundled and not hasattr(feature(ix), "happy_path")
 
@@ -237,6 +239,106 @@ def test_ids_come_back_in_id_order_not_string_order():
     assert feature(index_of(doc)).components == ["C1", "C2", "C9", "C10"]
 
 
+# --- the story (the tripartite Features diagram's data) ----------------------------
+
+def make_story_map() -> dict:
+    """Two on-path features touched out of authoring order, one excluded, one authored but never
+    walked; three roles, the third driving nothing on the walk. The smallest map where every
+    derived order can come out wrong."""
+    doc = make_map()
+    doc["roles"] += [{"id": "R3", "name": "Auditor", "kind": "human", "audience": "internal",
+                      "wants": "z", "drives": "UC4"}]
+    doc["capabilities"] = [
+        {"id": "CAP1", "name": "Billing", "purpose": "takes the money", "happy_path": "expected"},
+        {"id": "CAP2", "name": "Signup", "purpose": "opens the account", "happy_path": "expected"},
+        {"id": "CAP3", "name": "Marketing", "purpose": "draws people in", "happy_path": "excluded"},
+        {"id": "CAP4", "name": "Cleanup", "purpose": "sweeps up", "happy_path": "expected"}]
+    doc["use_cases"] = [
+        {"id": "UC1", "name": "Pay", "actors": ["R1", "R2"], "capability": "CAP1",
+         "entry_points": []},
+        {"id": "UC2", "name": "Sign up", "actors": ["R1"], "capability": "CAP2",
+         "entry_points": []},
+        {"id": "UC3", "name": "Read the ADS page", "actors": ["R1"], "capability": "CAP3",
+         "entry_points": []},
+        {"id": "UC4", "name": "Audit the books", "actors": ["R3"], "capability": "CAP1",
+         "entry_points": []},
+        {"id": "UC5", "name": "Refund", "actors": ["R2"], "capability": "CAP1",
+         "entry_points": []}]
+    # The walk touches Signup FIRST, then Billing twice — Billing must appear once, at its first.
+    doc["happy_path"] = [{"id": "HP1", "title": "Open the account", "uc": "UC2"},
+                         {"id": "HP2", "title": "Pay", "uc": "UC1"},
+                         {"id": "HP3", "title": "Refund", "uc": "UC5"}]
+    doc["flows"] = []
+    doc["rules"] = []
+    return doc
+
+
+def story_of(doc: dict):
+    return index_of(doc).story
+
+
+def test_the_spine_orders_on_path_features_by_first_touch_once_each():
+    st = story_of(make_story_map())
+    assert st.spine == ["CAP2", "CAP1"]        # Signup first (HP1); Billing once, at HP2 not HP3
+
+
+def test_features_the_walk_never_touches_go_off_the_story():
+    """`excluded` features and an `expected` one no step reaches both sit off the walk — the
+    diagram draws what the walk DOES, and the unreached-but-expected gap is validate's finding."""
+    assert story_of(make_story_map()).off == ["CAP3", "CAP4"]
+
+
+def test_the_cast_orders_actors_by_first_driven_step_then_map_order():
+    st = story_of(make_story_map())
+    assert st.cast == ["R1", "R2", "R3"]       # R1 drives HP1, R2 HP2; R3 drives no step -> last
+
+
+def test_edges_are_distinct_actor_feature_pairs_with_the_pairs_first_step():
+    st = story_of(make_story_map())
+    by = {(e.actor, e.feature): e for e in st.edges}
+    assert set(by) == {("R1", "CAP1"), ("R1", "CAP2"), ("R1", "CAP3"),
+                       ("R2", "CAP1"), ("R3", "CAP1")}
+    assert by[("R2", "CAP1")].step == "HP2"    # UC1 at HP2, not UC5 at HP3
+    assert by[("R1", "CAP3")].step is None     # the walk never exercises the pair
+    assert by[("R3", "CAP1")].step is None     # UC4 is on no step
+
+
+def test_a_fallback_label_is_the_pairs_first_use_case_as_a_verb_phrase():
+    st = story_of(make_story_map())
+    by = {(e.actor, e.feature): e for e in st.edges}
+    assert by[("R1", "CAP1")].label == "pay" and by[("R1", "CAP1")].authored is False
+    assert by[("R1", "CAP2")].label == "sign up"
+    assert by[("R2", "CAP1")].label == "pay"   # first use case of the PAIR, in map order
+
+
+def test_a_fallback_label_keeps_a_leading_acronym():
+    doc = make_story_map()
+    doc["use_cases"][2]["name"] = "ADS reading"
+    st = story_of(doc)
+    by = {(e.actor, e.feature): e for e in st.edges}
+    assert by[("R1", "CAP3")].label == "ADS reading"
+
+
+def test_an_authored_stake_wins_over_the_fallback():
+    doc = make_story_map()
+    doc["capabilities"][0]["stakes"] = [{"actor": "R2", "stake": "settles and refunds"}]
+    st = story_of(doc)
+    by = {(e.actor, e.feature): e for e in st.edges}
+    assert by[("R2", "CAP1")].label == "settles and refunds"
+    assert by[("R2", "CAP1")].authored is True
+    assert by[("R1", "CAP1")].label == "pay"   # the OTHER actor still falls back
+
+
+def test_the_story_ships_in_the_bundle():
+    b = as_bundle(index_of(make_story_map()))
+    st = b["story"]
+    assert isinstance(st, dict)
+    assert sorted(st) == ["cast", "edges", "off", "spine"]
+    assert st["spine"] == ["CAP2", "CAP1"]
+    e = next(x for x in st["edges"] if (x["actor"], x["feature"]) == ("R2", "CAP1"))
+    assert (e["label"], e["authored"], e["step"]) == ("pay", False, "HP2")
+
+
 # --- the view bundle ---------------------------------------------------------------
 
 def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
@@ -248,7 +350,7 @@ def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
     b = build_view_bundle(model_to_graph(m, EXTENTS), None, Path("."), model=m, extents=EXTENTS)
     f = b["features"]
     assert sorted(f) == ["componentFeatures", "coverage", "features", "roleFeatures",
-                         "ruleFeatures", "ruleJoinUsesExtents", "unassignedUseCases"]
+                         "ruleFeatures", "ruleJoinUsesExtents", "story", "unassignedUseCases"]
     assert f["features"][0]["useCases"] == ["UC1"]        # camelCase, not use_cases
     assert f["coverage"]["componentsUnreached"] == ["C3"]
     json.dumps(b)                                          # the bundle is served as JSON

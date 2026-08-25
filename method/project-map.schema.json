@@ -318,6 +318,13 @@
           ],
           "description": "CAPABILITY-ONLY: must the Happy-Path walk reach this capability? `expected` = yes, at least one of its use cases; `excluded` = no, and one 'Happy Path coverage' record says why. Deliberately NOT derived from happy_path[] \u2014 a value that always agreed with the walk could never disagree with it, and the disagreement IS the check. Says nothing about audience. `validate` blocks it on a subsystem or a subdomain."
         },
+        "stakes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Stake"
+          },
+          "description": "CAPABILITY-ONLY: one entry per driving actor, saying what THAT actor comes to this capability to do. The Features diagram labels each actor\u2192feature arrow with the actor's stake; a capability's purpose alone is written from one chair and hides the other roles. `validate` blocks it on the other forests, and advises when a derived driving actor has no entry."
+        },
         "source": {
           "type": [
             "string",
@@ -347,6 +354,24 @@
       "required": [
         "id",
         "name"
+      ],
+      "additionalProperties": false
+    },
+    "Stake": {
+      "type": "object",
+      "properties": {
+        "actor": {
+          "type": "string",
+          "pattern": "^R\\d+$",
+          "description": "the driving role this stake belongs to \u2014 must be a defined Role id."
+        },
+        "stake": {
+          "type": "string",
+          "description": "a short verb phrase with the actor as the implied subject ('mounts, configures and runs the servers'). Must read correctly after the actor's name; writing rules apply (one idea, plain words, no code, no step numbers)."
+        }
+      },
+      "required": [
+        "actor"
       ],
       "additionalProperties": false
     },

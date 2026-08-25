@@ -45,6 +45,7 @@ from coyodex.model import (
     Role,
     RuleSite,
     SecurityRow,
+    Stake,
     StateMachine,
     StateTransition,
     Store,
@@ -589,6 +590,49 @@ def test_happy_path_outside_the_closed_vocabulary_blocks() -> None:
     m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="core")]
     m.use_cases[0].capability = "CAP1"
     assert any("CAP1" in p and "unknown `happy_path`" in p for p in problems_of(m))
+
+
+def test_a_stake_for_a_driving_actor_is_clean_and_on_a_subsystem_blocks() -> None:
+    """`stakes` is the third capability-only field, policed like `happy_path` and `tech`: one Group
+    dataclass, four forests."""
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected",
+                            stakes=[Stake(actor="R1", stake="orders and pays")])]
+    m.use_cases[0].capability = "CAP1"
+    assert not any("stake" in p.lower() for p in problems_of(m))
+    assert not any("stake" in w.lower() for w in warnings_of(m))
+    m.subsystems = [Group(id="S1", name="Core", purpose="core",
+                          stakes=[Stake(actor="R1", stake="orders")])]
+    m.components[0].subsystem = "S1"
+    assert any("S1" in p and "capability field" in p for p in problems_of(m))
+
+
+def test_a_stake_naming_an_undefined_role_blocks() -> None:
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected",
+                            stakes=[Stake(actor="R9", stake="orders")])]
+    m.use_cases[0].capability = "CAP1"
+    assert any("CAP1" in p and "R9" in p and "not a defined Role id" in p for p in problems_of(m))
+
+
+def test_two_stakes_for_one_actor_block() -> None:
+    """The arrow a stake labels can only carry one."""
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected",
+                            stakes=[Stake(actor="R1", stake="orders"),
+                                    Stake(actor="R1", stake="pays")])]
+    m.use_cases[0].capability = "CAP1"
+    assert any("CAP1" in p and "two stakes" in p for p in problems_of(m))
+
+
+def test_a_driving_actor_with_no_stake_advises_and_never_blocks() -> None:
+    """The Features diagram labels each actor→feature arrow with the actor's stake; a missing one
+    only degrades the label to a use-case name, so the check nudges rather than gates."""
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", happy_path="expected")]
+    m.use_cases[0].capability = "CAP1"
+    assert any("CAP1" in w and "no stake entry" in w and "R1" in w for w in warnings_of(m))
+    assert not any("stake" in p.lower() for p in problems_of(m))
 
 
 def test_tech_on_a_capability_blocks() -> None:

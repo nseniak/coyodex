@@ -83,6 +83,33 @@ class Coverage:
 
 
 @dataclass(frozen=True)
+class StoryEdge:
+    """One actor→feature arrow of the Features diagram: a distinct (actor, capability) pair across
+    the use cases, labelled with the actor's STAKE in that feature."""
+    actor: str            # Rn
+    feature: str          # CAPn
+    label: str            # the authored stake, or the fallback derived from the pair's use cases
+    authored: bool        # True when `label` is an authored `stakes[]` entry
+    step: str | None      # HPn — the first happy-path step exercising this pair; None when the
+                          # walk never does (the label then explains instead of navigating)
+
+
+@dataclass(frozen=True)
+class Story:
+    """The tripartite Features diagram's data: the walk's spine, the cast, and what stays off.
+
+    ALL ORDERS ARE DERIVED HERE, deterministically, never layout-computed in the browser:
+    `spine` is the on-path features by their FIRST happy-path touch (a feature touched at several
+    moments appears once, at its first); `off` is every feature the walk never touches, in map
+    order; `cast` is every role by the first step it drives, roles driving none last, in map
+    order."""
+    spine: list[str] = field(default_factory=list)      # CAPn, first-touch order
+    off: list[str] = field(default_factory=list)        # CAPn, map order
+    cast: list[str] = field(default_factory=list)       # Rn, order of first appearance
+    edges: list[StoryEdge] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class FeatureIndex:
     """The whole derivation. `rule_join_uses_extents` is the honesty flag the pages depend on.
 
@@ -96,6 +123,7 @@ class FeatureIndex:
     role_features: dict[str, dict[str, int]] = field(default_factory=dict)  # role -> feat -> UCs
     unassigned_use_cases: list[str] = field(default_factory=list)
     coverage: Coverage = field(default_factory=Coverage)
+    story: Story = field(default_factory=Story)
     rule_join_uses_extents: bool = False
 
 
@@ -106,6 +134,72 @@ def _sorted_ids(ids: "set[str]") -> list[str]:
         tail = i[len(head):]
         return (head, int(tail) if tail else 0, i)
     return sorted(ids, key=key)
+
+
+def _fallback_label(name: str) -> str:
+    """A use-case name as an arrow label: the first letter lowered so it reads as a verb phrase
+    after the actor's name — unless the first word is ALL CAPS, so an acronym survives (the same
+    rule the viewer's `wantsSentence` applies to a role's wants)."""
+    s = name.strip()
+    if not s:
+        return ""
+    first = s.split()[0]
+    if first == first.upper() and any(c.isalpha() for c in first):
+        return s
+    return s[0].lower() + s[1:]
+
+
+def build_story(m: ProjectModel) -> Story:
+    """The tripartite Features diagram's data, derived from the walk, the use cases and the roles.
+
+    The label of an edge is the actor's authored STAKE when the capability carries one for that
+    actor, else the FALLBACK: the pair's first use case's name as a verb phrase. Every existing map
+    has no stakes, so the fallback is what most arrows show until the next build authors them."""
+    caps = {c.id: c for c in m.capabilities}
+    uc_by_id = {u.id: u for u in m.use_cases}
+    role_ids = {r.id for r in m.roles}
+
+    first_cap: dict[str, int] = {}          # capability -> its first happy-path touch (position)
+    first_actor: dict[str, int] = {}        # role -> the first step it drives
+    pair_step: dict[tuple[str, str], str] = {}   # (actor, capability) -> first HPn exercising it
+    for i, hp in enumerate(m.happy_path):
+        u = uc_by_id.get(hp.uc or "")
+        if u is None:
+            continue
+        cap = u.capability if u.capability in caps else None
+        if cap is not None:
+            first_cap.setdefault(cap, i)
+        for a in u.actors:
+            if a in role_ids:
+                first_actor.setdefault(a, i)
+                if cap is not None:
+                    pair_step.setdefault((a, cap), hp.id)
+
+    spine = sorted(first_cap, key=lambda c: first_cap[c])
+    off = [c.id for c in m.capabilities if c.id not in first_cap]
+    cap_pos = {c: i for i, c in enumerate(spine + off)}
+
+    # Roles in order of appearance; a role driving no step keeps its map position, after the cast.
+    role_pos = {r.id: i for i, r in enumerate(m.roles)}
+    cast = sorted(role_ids, key=lambda r: (first_actor.get(r, len(m.happy_path) + role_pos[r]),
+                                           role_pos[r]))
+
+    stakes = {(c.id, s.actor): s.stake.strip()
+              for c in m.capabilities for s in c.stakes if s.stake.strip()}
+    pair_first_uc: dict[tuple[str, str], str] = {}   # (actor, capability) -> first UC name, map order
+    for u in m.use_cases:
+        if u.capability not in caps:
+            continue
+        for a in u.actors:
+            if a in role_ids:
+                pair_first_uc.setdefault((a, u.capability), u.name)
+
+    edges = [StoryEdge(actor=a, feature=c,
+                       label=stakes.get((c, a)) or _fallback_label(pair_first_uc[(a, c)]),
+                       authored=(c, a) in stakes,
+                       step=pair_step.get((a, c)))
+             for a, c in sorted(pair_first_uc, key=lambda p: (cast.index(p[0]), cap_pos[p[1]]))]
+    return Story(spine=spine, off=off, cast=cast, edges=edges)
 
 
 def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex:
@@ -231,6 +325,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
         role_features=role_feat,
         unassigned_use_cases=_sorted_ids(set(unassigned)),
         coverage=coverage,
+        story=build_story(m),
         rule_join_uses_extents=bool(extents),
     )
 
@@ -252,6 +347,14 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
         "ruleFeatures": ix.rule_features,
         "roleFeatures": ix.role_features,
         "unassignedUseCases": ix.unassigned_use_cases,
+        "story": {
+            "spine": ix.story.spine,
+            "off": ix.story.off,
+            "cast": ix.story.cast,
+            "edges": [{"actor": e.actor, "feature": e.feature, "label": e.label,
+                       "authored": e.authored, "step": e.step}
+                      for e in ix.story.edges],
+        },
         "ruleJoinUsesExtents": ix.rule_join_uses_extents,
         "coverage": {
             "componentsTotal": ix.coverage.components_total,

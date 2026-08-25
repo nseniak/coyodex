@@ -86,7 +86,7 @@ COMMAND_MODULE: dict[str, str] = {
 MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "audit exceptions", "balance exceptions", "coverage exceptions",
     "accepted duplications", "entry-point coverage", "happy path coverage",
-    "audience exceptions",
+    "audience exceptions", "stake exceptions",
     "persistence exceptions", "unclaimed surfaces", "drift exceptions",
     "bucket vocabulary", "sweep debt",
 )
