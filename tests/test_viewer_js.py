@@ -3163,7 +3163,7 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
     assert "if (!storyDiagramDraws()) return '';" in html
     # The three columns, and the off column drawn quiet under its one-line explanation.
     assert "Features · happy-path order" in html
-    assert "The cast · in order of appearance" in html
+    assert "Actors · in order of appearance" in html
     assert "Off the happy path" in html and "story-offnote" in html
 
 
@@ -3175,7 +3175,7 @@ def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
     html = _story_fn(js, "storyDiagramHtml")
     assert "const walk = (st.spine || []).length > 0;" in html
     assert "${walk ? 'Features · happy-path order' : 'Features'}" in html
-    assert "${walk ? 'The cast · in order of appearance' : 'The cast'}" in html
+    assert "${walk ? 'Actors · in order of appearance' : 'Actors'}" in html
     assert "story-stage-2col" in html
     bind = _story_fn(js, "bindStoryDiagram")
     assert "'This map has no happy path'" in bind

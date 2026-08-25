@@ -577,28 +577,19 @@ const CARD_DESC_FIELD = {
 //
 // The maps do not agree on how to WRITE it either. Across the three reference maps the 16 actors take
 // three shapes: `to be told what changed` (4), `To use the MCP tools their role allows.` (6), and a bare
-// command, `Ask Mio for answers` (6). All three are verb phrases sharing one stem, so one prefix fits
-// all sixteen once a leading `to` is dropped and the first letter lowered: `Wants to be told what
-// changed`, `Wants to use the MCP tools their role allows`, `Wants to ask Mio for answers`.
+// command, `Ask Mio for answers` (6). All three are verb phrases sharing one stem, so one normal form
+// fits all sixteen once a leading `to` is dropped: `Be told what changed`, `Use the MCP tools their
+// role allows`, `Ask Mio for answers` — the goal as a plain imperative phrase.
 //
-// PROSE, not a label. `WANTS` set as a tag in front of `Ask Mio for answers` reads as a broken sentence,
-// and 6 of the 16 are that shape; WANTS, GOAL, ROLE, PURPOSE and NEEDS each break on at least one of the
-// three. Prose is also what a card asks for: one sentence, no second line, nothing new to style.
-//
-// The word fits a program as well as a person. It is the map's own name for this field, and `Stripe
-// billing wants to tell Mio when a subscription is paid` is plain English.
-//
-// The first letter is left alone when the first word is ALL CAPS, so an acronym survives (`MCP tools`).
-// A merely capitalised proper noun (`Slack sends …`) would still be lowered; none of the sixteen opens
-// that way, and this field is meant to hold what the actor is after rather than a name.
+// No `Wants to` prefix. Every actor card carried it, so after the first card the two words were six
+// repetitions of dead ink; the goal itself is the information. The field's semantics are unchanged —
+// the map still writes `To <goal>` — only the rendering dropped the ceremony.
 function wantsSentence(wants) {
   const s = String(wants || '').trim();
   if (!s) return '';
-  const body = s.replace(/^to\b\s*/i, '').trim();   // `\b`, or a lone `to` survives as `Wants to to`
+  const body = s.replace(/^to\b\s*/i, '').trim();   // `\b`, or a lone `To` would leave `To to`-era data mangled
   if (!body) return '';
-  const first = body.split(/\s/)[0];
-  const keep = first === first.toUpperCase() && /[A-Z]/.test(first);
-  return 'Wants to ' + (keep ? body : body[0].toLowerCase() + body.slice(1));
+  return body[0].toUpperCase() + body.slice(1);
 }
 
 // What a card SAYS about one element: title, the reader's word for its type, the one sentence, and the
@@ -7597,7 +7588,7 @@ function storyDiagramHtml() {
     + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
     + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'Features · happy-path order' : 'Features'}</p>`
     + spineIds.map((id) => storyFeatureCardHtml(id, false)).join('') + '</div>'
-    + `<div class="story-col story-col-cast"><p class="story-colhead">${walk ? 'The cast · in order of appearance' : 'The cast'}</p>`
+    + `<div class="story-col story-col-cast"><p class="story-colhead">${walk ? 'Actors · in order of appearance' : 'Actors'}</p>`
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
     + (off.length
       ? '<div class="story-col story-col-off"><p class="story-colhead">Off the happy path</p>'
