@@ -7595,12 +7595,12 @@ function storyDiagramHtml() {
     + '<svg class="story-wires" aria-hidden="true"><defs>'
     + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
     + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
-    + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'The story · happy-path order' : 'Features'}</p>`
+    + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'Features · happy-path order' : 'Features'}</p>`
     + spineIds.map((id) => storyFeatureCardHtml(id, false)).join('') + '</div>'
     + `<div class="story-col story-col-cast"><p class="story-colhead">${walk ? 'The cast · in order of appearance' : 'The cast'}</p>`
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
     + (off.length
-      ? '<div class="story-col story-col-off"><p class="story-colhead">Off the story</p>'
+      ? '<div class="story-col story-col-off"><p class="story-colhead">Off the happy path</p>'
         + '<p class="story-offnote">the happy path never passes here: still real, just not on the walk</p>'
         + off.map((id) => storyFeatureCardHtml(id, true)).join('') + '</div>'
       : '')
