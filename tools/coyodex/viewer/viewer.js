@@ -7519,10 +7519,10 @@ function renderActors() {
 // authored `stakes[]` when the map has them, else the pair's first use-case name as a verb phrase.
 // All orders and edges come DERIVED from the bundle (FEATURES.story) — nothing here re-decides them.
 //
-// At rest the arrows are thin, grey and unlabelled: the diagram is for choosing, the card grid
-// below it for reading, and fourteen labelled arrows at once are a wall. Hover previews one card's
-// arrows (bold + labelled, the rest faded); click PINS that preview and puts the element's own card
-// in the selection panel, exactly as selecting a shape does on the drawn views. A label with a
+// At rest the arrows are thin, grey and unlabelled: the diagram is for choosing, and fourteen
+// labelled arrows at once are a wall. Hover previews one card's arrows (bold + labelled, the rest
+// faded) while nothing is pinned; click PINS that picture and stays on this page. Each card's
+// use-case pill is its door one level down (the feature's page, the actor's page). A label with a
 // happy-path step is a door to that step; one without says so and stays put.
 function storyGlyphSvg(kind) {
   // The same identity the sequence diagrams give an actor — person vs service shape, in the actor
@@ -7543,13 +7543,16 @@ function storyFeatureCardHtml(id, off) {
   const f = FEAT_BY_ID[id] || {};
   const name = f.name || featureName(id);
   const n = (f.useCases || []).length;
+  // The audience pills the grid card carried, from the same derivation (see cardFacts).
+  const aud = cardPillsHtml(shownAudience(f.audience || []).map((a) => (
+    { text: audienceWord(a), cls: 'uc-aud-' + String(a).toLowerCase() })));
   // The use-case pill is a DOOR to the feature's own details page — the card's click is the pin, so
   // the pill is the one control that leaves this screen, and it says where it goes.
   return `<article class="story-card story-feature${off ? ' story-offf' : ''}" `
     + `data-sfeat="${esc(id)}" tabindex="0">`
     + `<span class="story-name">${esc(name)}</span>`
     + (f.purpose ? `<p class="story-desc">${mdInline(f.purpose)}</p>` : '')
-    + `<div class="story-pills"><button type="button" class="story-pill story-ucpill" `
+    + `<div class="story-pills">${aud}<button type="button" class="story-pill story-ucpill" `
     + `data-cap="${esc(id)}" title="Open the details page of ${esc(name)}">`
     + `${n} use case${n === 1 ? '' : 's'}</button></div>`
     + '</article>';
@@ -7557,32 +7560,51 @@ function storyFeatureCardHtml(id, off) {
 function storyActorCardHtml(rid) {
   const r = ROLE_BY_ID[rid] || {};
   const wants = wantsSentence(r.wants || '');
+  // The actor's use-case pill is its door to the actor's own page — the mirror of the feature
+  // card's pill, and the diagram's only actor drill now that a pin stays on this page. The count
+  // comes from actorGroups, the same reader the Actors view counts with, so the two agree.
+  const g = actorGroups().find((x) => x.actor === r.name);
+  const n = g ? g.ucs.length : 0;
   return `<article class="story-card story-actor" data-sactor="${esc(rid)}" tabindex="0">`
     + `<span class="story-who">${storyGlyphSvg(r.kind)}<span class="story-name">${esc(r.name || rid)}</span>`
-    + cardPillsHtml(actorSidePills(r.kind, r.audience)) + '</span>'
+    + cardPillsHtml(actorSidePills(r.kind, r.audience))
+    + `<button type="button" class="story-pill story-ucpill" data-actor="${esc(r.name || '')}" `
+    + `title="Open the details page of ${esc(r.name || rid)}">${n} use case${n === 1 ? '' : 's'}</button></span>`
     + (wants ? `<p class="story-desc">${mdInline(wants)}</p>` : '')
     + '</article>';
 }
+// Does the tripartite diagram draw on this map? ONE answer, read by the renderer, by renderOverview
+// (which hides the duplicate card grid when it does), and by the search / "show in context"
+// landings that pin a card in it. A walk is NOT required: the arrows derive from the use cases
+// alone, so any map recording features draws — a walk only adds the spine order and the off
+// column. A map recording no features keeps the flat page it always had.
+function storyDiagramDraws() {
+  const st = FEATURES.story || {};
+  return ((st.spine || []).length + (st.off || []).length) > 0;
+}
 function storyDiagramHtml() {
   const st = FEATURES.story || {};
-  // No walk (or no feature it touches) = no story to draw; the card grid below still answers the view.
-  if (!(st.spine || []).length || !(GRAPH.happy_path || []).length) return '';
-  const off = st.off || [];
-  return '<div class="story-wrap"><div class="story-stage" id="storystage">'
+  if (!storyDiagramDraws()) return '';
+  // With a walk: the spine in first-touch order, the untouched features quiet on the right. Without
+  // one there is no story to be on or off, so every feature stands in one plain "Features" column
+  // and the cast keeps map order — its header stops claiming an appearance order it cannot have.
+  const walk = (st.spine || []).length > 0;
+  const spineIds = walk ? st.spine : (st.off || []);
+  const off = walk ? (st.off || []) : [];
+  return `<div class="story-wrap"><div class="story-stage${off.length ? '' : ' story-stage-2col'}" id="storystage">`
     + '<svg class="story-wires" aria-hidden="true"><defs>'
     + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
     + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
-    + '<div class="story-col story-col-spine"><p class="story-colhead">The story · happy-path order</p>'
-    + st.spine.map((id) => storyFeatureCardHtml(id, false)).join('') + '</div>'
-    + '<div class="story-col story-col-cast"><p class="story-colhead">The cast · in order of appearance</p>'
+    + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'The story · happy-path order' : 'Features'}</p>`
+    + spineIds.map((id) => storyFeatureCardHtml(id, false)).join('') + '</div>'
+    + `<div class="story-col story-col-cast"><p class="story-colhead">${walk ? 'The cast · in order of appearance' : 'The cast'}</p>`
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
-    + '<div class="story-col story-col-off">'
     + (off.length
-      ? '<p class="story-colhead">Off the story</p>'
+      ? '<div class="story-col story-col-off"><p class="story-colhead">Off the story</p>'
         + '<p class="story-offnote">the happy path never passes here: still real, just not on the walk</p>'
-        + off.map((id) => storyFeatureCardHtml(id, true)).join('')
+        + off.map((id) => storyFeatureCardHtml(id, true)).join('') + '</div>'
       : '')
-    + '</div></div></div>';
+    + '</div></div>';
 }
 function bindStoryDiagram(root) {
   const stage = root.querySelector('#storystage');
@@ -7635,7 +7657,8 @@ function bindStoryDiagram(root) {
         go({ kind: 'hp', sel: 'hpstep:' + hp.id });
       });
     } else {
-      lab.title = 'Not on the happy path';
+      lab.title = (GRAPH.happy_path || []).length ? 'Not on the happy path'
+        : 'This map has no happy path';
       // Not a door, but not empty background either: a click on it must not clear the pin.
       lab.addEventListener('click', (ev) => ev.stopPropagation());
     }
@@ -7663,29 +7686,21 @@ function bindStoryDiagram(root) {
   };
   const restore = () => { if (selected) show(selected.key, selected.id); else clearWires(); };
   const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(restore, 180); };
-  // Pinning drives the SAME selection surface a drawn view's click does: the element's own card in
-  // the panel (a feature is its capability node; an actor is its ACT node, reached by name).
-  const drawerCard = (key, id) => {
-    const nid = key === 'sfeat' ? id : actorNodeId(roleName(id));
-    panel = PANEL_HOST;
-    PANEL_HOST.innerHTML = '';
-    if (nid && GRAPH.nodes[nid]) showNode(nid);
-    paneSync();
-  };
+  // A pin stays ON THIS PAGE: it lights the card's wires and labels and nothing else. It used to
+  // also fill the selection drawer, and the drawer only ever repeated the card the reader had just
+  // clicked — the one thing it added, the door to an actor's own page, is the actor card's
+  // use-case pill now.
   const unpin = () => {
     if (!selected) return;
     selected = null;
     stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
     clearWires();
-    PANEL_HOST.innerHTML = '';
-    paneSync();
   };
   const pin = (key, id, card) => {
     selected = { key, id };
     stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
     card.classList.add('story-selected');
     show(key, id);
-    drawerCard(key, id);
   };
   const wireCards = (cards, key) => {
     for (const card of cards) {
@@ -7710,8 +7725,24 @@ function bindStoryDiagram(root) {
   stage.addEventListener('click', unpin);   // empty background clears the pin
   root.querySelectorAll('.story-ucpill').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();               // the pill's door is not the card's pin
-    go({ kind: 'capability', cap: b.getAttribute('data-cap') });
+    const cap = b.getAttribute('data-cap');
+    if (cap) go({ kind: 'capability', cap });
+    else go({ kind: 'actor', act: b.getAttribute('data-actor') });
   }));
+  // The one-shot arrival pin: a search hit or a "show in context" click on a feature or an actor
+  // lands here with the card pinned and framed — the diagram half of what flashCard does for a
+  // card list. Installed fresh on every render, so the in-place case never touches stale DOM.
+  storyPinApply = (p) => {
+    const card = (p.key === 'sfeat' ? featEl : actorEl)[p.id];
+    if (!card) return;
+    card.scrollIntoView({ block: 'center' });
+    pin(p.key, p.id, card);
+  };
+  if (pendingStoryPin) {
+    const p = pendingStoryPin;
+    pendingStoryPin = null;
+    storyPinApply(p);
+  }
 }
 
 // The FEATURES view: the whole product as a grid of element cards, one per feature. Each card drills
@@ -7748,12 +7779,18 @@ function renderOverview() {
     count: `${loose.ucs.length} use case${loose.ucs.length === 1 ? '' : 's'}` }) : '';
   const grid = cardGridHtml(ids.map((id) => elementCardHtml(id, per(id))).join('') + looseCard)
     || '<p class="empty">No features recorded.</p>';
-  // The cards get a label of their own, in the same shape as the description above them: the page
-  // holds two blocks now, and without a second label the grid read as a continuation of the prose.
+  const story = storyDiagramHtml();
+  // The grid repeated every feature the diagram already shows, sentence for sentence, so it hides
+  // whenever the diagram draws — EXCEPT in diff mode, whose "changed" badges only the grid carries.
+  // The loose-use-cases card survives alone: it is the one card the diagram has no column for.
+  // The label stays with the cards, in the same shape as the description above them: without it the
+  // block read as a continuation of the prose.
+  const below = (!story || (mode === 'diff' && hasDiff()))
+    ? '<p class="block-lbl">Product features</p>' + grid
+    : cardGridHtml(looseCard);
   diagram.innerHTML = '<div class="usecases-wrap">'
     + viewHeadHtml('Features') + productLeadHtml()
-    + storyDiagramHtml()
-    + '<p class="block-lbl">Product features</p>' + grid + '</div>';
+    + story + below + '</div>';
   bindProductLead();
   bindStoryDiagram(diagram);
   bindElementCards(diagram);
@@ -9077,13 +9114,24 @@ function selectTargetFor(id) {
     // Its home is its own card's list, one level inside the Features tab. Without this case it fell to
     // the `default` below and opened Dependencies, which is a confident wrong answer to a search hit
     // the index itself labels a feature.
-    // A feature and an actor are drawn as no box anywhere: their home view is the CARD LIST that shows
-    // them. "Show in context" scrolls to the card and flashes it, which is what the spec asks a card
-    // list to do — and it is a different action from DRILLING IN, which opens the element's own page.
+    // A feature and an actor are drawn as no box anywhere — but when the map records features, the
+    // STORY DIAGRAM draws both as cards with arrows, and that is the richest context the app has:
+    // land there with the card PINNED, its relations lit. Only when the diagram cannot draw (a map
+    // with no features) does "show in context" fall back to scrolling a card list and flashing the
+    // card — still a different action from DRILLING IN, which opens the element's own page.
     case 'capability':
+      if (storyDiagramDraws()) {
+        return { state: { kind: 'usecases' }, selectId: null, storyPin: { key: 'sfeat', id } };
+      }
       return { state: { kind: 'usecases' }, selectId: null, flashId: id };
-    case 'human': case 'service':
+    case 'human': case 'service': {
+      const role = ROLE_BY_NAME[(n.name || '').trim().toLowerCase()];
+      if (role && storyDiagramDraws()) {
+        return { state: { kind: 'usecases' }, selectId: null,
+                 storyPin: { key: 'sactor', id: role.id } };
+      }
       return { state: { kind: 'actors' }, selectId: null, flashId: id };
+    }
     case 'component': {
       // Open the component INSIDE its parent subsystem's card (the zoomed-in neighbourhood), where it's
       // drawn as a member box. A default subsystem is injected when a map has none, so this parent is
@@ -9130,6 +9178,10 @@ function selectTargetFor(id) {
 // A card the next render must scroll to and flash — the card-list half of "show in context", where a
 // diagram would instead select and centre a box. Consumed once, by the render that draws the card.
 let pendingFlash = null;
+// The story diagram's twin of pendingFlash: {key: 'sfeat'|'sactor', id} to pin on the next Features
+// render. `storyPinApply` is installed by bindStoryDiagram each render, for the already-on-page case.
+let pendingStoryPin = null;
+let storyPinApply = null;
 function flashCard(id) {
   const card = diagram.querySelector(`.ecard[data-id="${CSS.escape(id)}"]`);
   if (!card) return;
@@ -9148,6 +9200,18 @@ function selectFromTree(nodeId) {
     const cur0 = history[hi];
     if (cur0 && stateKey(cur0) === stateKey(t.state)) { flashCard(t.flashId); return; }
     pendingFlash = t.flashId;
+    go(t.state);
+    return;
+  }
+  // The story diagram's version of the same move: go to the Features landing and PIN the card
+  // there (arrows lit), instead of flashing a grid card. In place when already on the landing.
+  if (t.storyPin) {
+    const cur0 = history[hi];
+    if (cur0 && stateKey(cur0) === stateKey(t.state)) {
+      if (storyPinApply) storyPinApply(t.storyPin);
+      return;
+    }
+    pendingStoryPin = t.storyPin;
     go(t.state);
     return;
   }

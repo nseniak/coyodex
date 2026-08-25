@@ -2491,7 +2491,8 @@ def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
     # ONE surface draws it now: the card. A feature's page used to call this too, for a pill row of its
     # own; those pills ride the breadcrumb beside the name, read from cardFacts, so the page and the card
     # cannot print different sets.
-    assert js.count("shownAudience(") == 2, "one definition, one caller"
+    assert js.count("shownAudience(") == 3, \
+        "one definition, two callers: cardFacts, and the story feature card"
     head = js[js.index("function featureHeadHtml(capId) {"):
               js.index("\n}", js.index("function featureHeadHtml(capId) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
@@ -3146,34 +3147,54 @@ def _story_fn(js: str, name: str) -> str:
     return js[start: js.index("\nfunction ", start + 10)]
 
 
-def test_the_story_diagram_rides_the_features_landing_between_lead_and_grid() -> None:
-    """The tripartite diagram is the CHOOSING layer and the card grid the READING layer: the product
-    overview leads, the diagram follows, the grid stays below unchanged. A map with no walk (or no
-    feature the walk touches) draws no diagram and keeps the page it always had."""
+def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() -> None:
+    """The diagram is the page's choosing layer; the grid repeated every one of its features
+    sentence for sentence, so it hides whenever the diagram draws. It survives in exactly two
+    shapes: diff mode (its "changed" badges live only there) and a map recording no features at
+    all. The loose-use-cases card survives alone — the diagram has no column for it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     over = js[js.index("function renderOverview() {"):
               js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "storyDiagramHtml()" in over and "bindStoryDiagram(diagram)" in over
-    assert (over.index("productLeadHtml()") < over.index("storyDiagramHtml()")
-            < over.index("Product features"))
+    assert "const story = storyDiagramHtml();" in over and "bindStoryDiagram(diagram)" in over
+    assert "const below = (!story || (mode === 'diff' && hasDiff()))" in over
+    assert ": cardGridHtml(looseCard);" in over, "the loose card outlives the hidden grid"
+    assert "+ story + below + '</div>';" in over
     html = _story_fn(js, "storyDiagramHtml")
-    assert "if (!(st.spine || []).length || !(GRAPH.happy_path || []).length) return '';" in html
+    assert "if (!storyDiagramDraws()) return '';" in html
     # The three columns, and the off column drawn quiet under its one-line explanation.
     assert "The story · happy-path order" in html
     assert "The cast · in order of appearance" in html
     assert "Off the story" in html and "story-offnote" in html
 
 
+def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
+    """The arrows never needed the happy path — they derive from the use cases — so a map with no
+    walk draws one plain "Features" column and the cast in map order, with no off column and no
+    header claiming an appearance order. The labels then explain instead of navigating."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = _story_fn(js, "storyDiagramHtml")
+    assert "const walk = (st.spine || []).length > 0;" in html
+    assert "${walk ? 'The story · happy-path order' : 'Features'}" in html
+    assert "${walk ? 'The cast · in order of appearance' : 'The cast'}" in html
+    assert "story-stage-2col" in html
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "'This map has no happy path'" in bind
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".story-stage-2col { grid-template-columns: 400px 150px 330px; }" in css
+
+
 def test_the_use_case_pill_is_a_door_that_does_not_steal_the_pin() -> None:
-    """The card's own click PINS; the pill is the one control leaving this screen (the feature's
-    details page), so it must not fire the pin too."""
+    """The card's own click PINS; the pill is the one control leaving this screen — the feature's
+    details page, or the actor's — so it must not fire the pin too."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
     pill = bind[bind.index(".story-ucpill"):]
     assert "ev.stopPropagation();" in pill
-    assert "go({ kind: 'capability', cap: b.getAttribute('data-cap') });" in pill
-    card = _story_fn(js, "storyFeatureCardHtml")
-    assert 'title="Open the details page of' in card, "the pill says where it goes"
+    assert "if (cap) go({ kind: 'capability', cap });" in pill
+    assert "go({ kind: 'actor', act: b.getAttribute('data-actor') });" in pill
+    for fn in ("storyFeatureCardHtml", "storyActorCardHtml"):
+        assert 'title="Open the details page of' in _story_fn(js, fn), \
+            f"{fn}: the pill says where it goes"
 
 
 def test_a_stake_label_is_a_door_to_the_happy_path_named_by_title_never_by_number() -> None:
@@ -3187,15 +3208,38 @@ def test_a_stake_label_is_a_door_to_the_happy_path_named_by_title_never_by_numbe
     assert "'Not on the happy path'" in bind
 
 
-def test_pinning_a_story_card_drives_the_selection_panel_like_any_view() -> None:
-    """A pinned feature shows its capability node's card; a pinned actor its ACT node's, reached by
-    name (roles are not graph nodes). Clearing the pin takes the card away through paneSync — the
-    one rule for whether the panel is on screen."""
+def test_a_pin_stays_on_the_page_and_never_opens_the_drawer() -> None:
+    """The drawer only ever repeated the card the reader had just clicked; the one thing it added,
+    the door to an actor's page, is the actor card's use-case pill now. A pin lights the wires and
+    labels and touches nothing else."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    assert "actorNodeId(roleName(id))" in bind
-    assert "showNode(nid)" in bind
-    assert bind.count("paneSync()") >= 2, "both the pin and the unpin sync the panel"
+    code = "\n".join(l for l in bind.splitlines() if not l.lstrip().startswith("//"))
+    for banned in ("showNode(", "paneSync(", "PANEL_HOST"):
+        assert banned not in code, f"a pin must not touch the panel ({banned})"
+    assert 'data-actor="${esc(r.name' in _story_fn(js, "storyActorCardHtml"), \
+        "the actor card carries its own door instead"
+
+
+def test_search_and_show_in_context_pin_the_card_in_the_diagram() -> None:
+    """A feature or an actor found by search lands on the Features diagram with its card pinned and
+    its arrows lit — the richest context the app has for either. The flash-a-grid-card landing
+    survives only as the fallback for a map whose diagram cannot draw."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    target = js[js.index("function selectTargetFor(id) {"):
+                js.index("\nfunction ", js.index("function selectTargetFor(id) {") + 10)]
+    assert "storyPin: { key: 'sfeat', id }" in target
+    assert "storyPin: { key: 'sactor', id: role.id }" in target
+    assert target.count("if (storyDiagramDraws())") + target.count("storyDiagramDraws())") >= 2
+    # The fallbacks stay behind the guard.
+    assert "return { state: { kind: 'usecases' }, selectId: null, flashId: id };" in target
+    assert "return { state: { kind: 'actors' }, selectId: null, flashId: id };" in target
+    # The one-shot survives the navigation, and the in-place case uses the fresh render's applier.
+    assert "pendingStoryPin = t.storyPin;" in js
+    assert "if (storyPinApply) storyPinApply(t.storyPin);" in js
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "storyPinApply = (p) => {" in bind and "scrollIntoView" in bind
+    assert "if (pendingStoryPin) {" in bind
 
 
 def test_story_chrome_never_term_links_but_card_prose_does() -> None:

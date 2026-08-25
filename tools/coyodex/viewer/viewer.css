@@ -1691,6 +1691,9 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .usecases-wrap:has(> .story-wrap) { max-width: 1440px; }
 .story-stage { position: relative; display: grid; width: max-content;
                grid-template-columns: 400px 150px 330px 160px 330px; }
+/* No walk = no off column: the two remaining columns keep their widths, the stage stops reserving
+   the empty tracks. */
+.story-stage-2col { grid-template-columns: 400px 150px 330px; }
 svg.story-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* At rest a wire is thin, grey and unlabelled — the diagram is for choosing, not reading. Hover or
    pin makes ONE card's wires the picture: bold accent + label, everything else faded hard. */

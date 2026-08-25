@@ -136,9 +136,15 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     note), each element link locating that element in its home view (its subsystem card, entity card, …).
     Navigate back with the breadcrumb (Happy Path › *this step*) or the **◀ ▶** arrows.
 - **Features** *(when the map records capabilities)* — the product on one screen, in three levels.
-  Level 1 is one **card per capability**: its name, its two words (`user`/`internal` audience, DERIVED
-  from the roles driving its use cases, and `expected`/`excluded`, the AUTHORED answer to whether the
-  Happy Path must reach it), what it covers, and how many use cases sit under it. Clicking a card drills to level 2, that feature's use
+  Level 1 is the **story diagram**: the features the Happy Path touches as a spine in first-touch
+  order, the actors as a cast in order of first appearance, the untouched features quiet on the
+  right, joined by derived actor→feature arrows. At rest the arrows are bare; hovering or pinning a
+  card lights its arrows and shows each one's **stake label** (the authored `stakes[]` entry, or the
+  pair's first use-case name), which links to that edge's first Happy-Path step. Each card's
+  use-case pill is its door one level down. A map with no walk draws the same diagram two columns
+  wide ("Features" · "The cast", map order); only a map with no capabilities falls back to the flat
+  card grid, which otherwise survives solely in diff mode for its "changed" badges. Search and
+  "show in context" land here with the card pinned. Level 2 is that feature's use
   cases (the catalog rows, headed by the feature's own purpose); clicking a row drills to level 3, that
   use case's flow — the same flow a Happy Path step drills into, so a use case has one home. A **Show
   all N use cases** button opens the full catalog, which is also the only level carrying the
