@@ -767,6 +767,47 @@ body.code-hidden #srccol,
 body.code-hidden #resizer { display: none; }
 body.code-hidden #leftcol { flex: 1 1 auto; width: auto !important; }
 
+/* ── OPENING AND CLOSING IT IS A SLIDE ───────────────────────────────────────────────────────────
+   `display: none` above is the END state, not the transition: it swapped 542px of the window in and
+   out in one frame, and a third of the screen changing between two frames reads as a page reload
+   rather than as a panel the reader just asked for. So the column runs its width between 0 and its
+   open width, and everything beside it gives way frame by frame instead of once at the end:
+     * the page column is free (`auto`) for those frames, so it takes exactly the space the column
+       hands back on each one — no jump when the slide finishes;
+     * the drag handle (5px) and the rail (30px) run with it, so nothing appears at full size at the
+       end and shunts the row sideways. The rail and the column are the two ends of the same move:
+       one grows exactly as the other shrinks, in the same place on the edge.
+   The CONTENT keeps its open width (--src-open) and stays put against the column's LEFT edge, so what
+   the reader sees is the column TRAVELLING in from beyond the window edge and out again. Letting the
+   content take the column's own changing width instead would squeeze the header, the switch and the
+   filename through fifteen widths on the way, which reads as a panel being crushed, not one arriving. */
+body.code-sliding #srccol { flex: 0 0 var(--src-w, 0px); min-width: 0; overflow: hidden; }
+/* An explicit CROSS size on the two rows of the column: it is the column's main axis (vertical) that
+   `flex` governs here, so this settles their width without touching how they share the height. */
+body.code-sliding #srchead,
+body.code-sliding #srcpanes { width: var(--src-open, 100%); }
+body.code-sliding #resizer { flex: 0 0 var(--src-gap, 0px); min-width: 0; }
+body.code-sliding #srcrail { flex: 0 0 var(--rail-w, 0px); min-width: 0; overflow: hidden;
+                             padding-left: 0; padding-right: 0; }
+/* Same freedom the shut state gives it, for the frames in between. */
+body.code-sliding #leftcol { flex: 1 1 auto; width: auto !important; }
+/* Nothing on the canvas should answer a hover while the column beside it is still moving — the same
+   rule the drag bar already applies for the same reason. */
+body.code-sliding #stage { pointer-events: none; }
+/* THE MOVE ITSELF, held back one frame behind the class above. The widths have to be PUT at their
+   starting values with no transition on them first: the rail comes back from `display: none` at what
+   the plain rule says (30px), so arming the transition in the same breath had it easing DOWN from 30
+   to 0 just as the slide wanted it going up — it never left 30, and the page jumped sideways instead.
+   One curve and one duration for all three, because they are one move: three speeds on one edge would
+   read as three things happening at once. */
+body.code-slide-go #srccol,
+body.code-slide-go #resizer,
+body.code-slide-go #srcrail { transition: flex-basis .24s cubic-bezier(.2, .8, .2, 1); }
+@media (prefers-reduced-motion: reduce) {
+  body.code-slide-go #srccol,
+  body.code-slide-go #resizer,
+  body.code-slide-go #srcrail { transition: none; }
+}
 /* --- file browser ---------------------------------------------------------------------------------
    A repo tree shaded by map coverage. Shown PINNED (its own pane, left of the code viewer) or while
    BROWSING (filling the code viewer's slot); hidden otherwise. Width persists. */

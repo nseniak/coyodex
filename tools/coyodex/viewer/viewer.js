@@ -5773,9 +5773,13 @@ function syncInfoPane(_s, transient) {
 let codeOpen = false;
 function codePaneOpen() { return codeOpen; }
 function syncCodePane(_s) {
-  document.body.classList.toggle('code-hidden', !codePaneOpen());
   const close = document.getElementById('cvclose');
   if (close) close.hidden = false;   // the column is optional everywhere, so × is offered everywhere
+  // MID-SLIDE the column owns its own layout (slideCodePane), and a re-render must not take it back:
+  // every render passes through here, and one landing between the two frames of a slide would put the
+  // column at its end width instantly — which is the jump the slide exists to remove.
+  if (srcSliding) return;
+  document.body.classList.toggle('code-hidden', !codePaneOpen());
   // The rail on the right edge, which stands exactly where the column will appear. It is there when the
   // column is shut and gone when it is up, so the edge of the window always says one of two things.
   //
@@ -5800,11 +5804,105 @@ function codePaneResized() {
   if (mainPz) resizeStagePreserve();
   placeCard();   // the drawing area changed width: re-clamp the card, re-dodge, re-draw the line
 }
+// THE SLIDE. Opening or closing the column moves about a third of the window. Doing that between two
+// frames reads as a page reload rather than as a panel answering a click, and it leaves the reader to
+// work out for themselves that the drawing did not change — only its box did. So the column runs its
+// width between 0 and its open width over a quarter of a second, and the rail on the edge runs the
+// other way over the same quarter second: the two are one move seen from its two ends.
+//
+// The widths are MEASURED in the real layouts rather than assumed. The open width depends on where the
+// reader last left the drag handle and on whether the search sidebar is out, so the page itself is the
+// only honest source for it; it is put in each end state for one measurement and put straight back.
+const SRC_SLIDE_MS = 240;
+const SRC_SLIDE_VARS = ['--src-w', '--src-gap', '--rail-w', '--src-open'];
+const SRC_SLIDE_CLASSES = ['code-sliding', 'code-slide-go'];
+let srcSliding = false;
+let srcSlideToken = 0;
+// The three widths the slide runs between: the column's own, its drag handle's, and the rail's.
+function measureSrcSlide() {
+  const body = document.body;
+  const srccol = document.getElementById('srccol');
+  const rail = document.getElementById('srcrail');
+  const resz = document.getElementById('resizer');
+  const wasHidden = body.classList.contains('code-hidden');
+  const wasRailHidden = rail ? rail.hidden : true;
+  body.classList.remove('code-hidden');             // the OPEN layout: the column and its handle
+  if (rail) rail.hidden = true;
+  const w = srccol.getBoundingClientRect().width;
+  const gap = resz ? resz.getBoundingClientRect().width : 0;
+  body.classList.add('code-hidden');                // the SHUT layout: the rail
+  if (rail) rail.hidden = false;
+  const railW = rail ? rail.getBoundingClientRect().width : 0;
+  body.classList.toggle('code-hidden', wasHidden);  // put back exactly what was borrowed
+  if (rail) rail.hidden = wasRailHidden;
+  return { w, gap, railW };
+}
+// Give the column's layout back to the ordinary rule. `settle` is false when a newer toggle is taking
+// over and will set everything itself in the same task.
+function endSrcSlide(settle) {
+  if (!srcSliding) return;
+  srcSliding = false;
+  srcSlideToken++;                                  // stops the frame loop in slideCodePane
+  SRC_SLIDE_CLASSES.forEach((c) => document.body.classList.remove(c));
+  SRC_SLIDE_VARS.forEach((v) => document.body.style.removeProperty(v));
+  if (!settle) return;
+  resyncCodePane();                                 // the settled layout, and the rail's real state
+  codePaneResized();
+}
+// Run the column from where it is to where `codeOpen` now says it belongs.
+function slideCodePane() {
+  const body = document.body;
+  const srccol = document.getElementById('srccol');
+  const rail = document.getElementById('srcrail');
+  // Nothing to slide on a map opened as a plain file (there is no column), and nothing to slide for a
+  // reader who has asked the system for less motion. Both land in the end state directly.
+  if (!SERVED || !srccol || REDUCE_MOTION) { resyncCodePane(); codePaneResized(); return; }
+  // A slide already running is torn down BEFORE anything is measured: mid-slide the column sits at
+  // whatever width the transition has reached, and measuring that would start the new slide from a
+  // number that means nothing.
+  endSrcSlide(false);
+  const token = ++srcSlideToken;
+  const { w, gap, railW } = measureSrcSlide();
+  const setVars = (colW, gapW, rW) => {
+    body.style.setProperty('--src-w', colW + 'px');
+    body.style.setProperty('--src-gap', gapW + 'px');
+    body.style.setProperty('--rail-w', rW + 'px');
+  };
+  // Both the column and the rail are on screen for the whole slide. Which of the two is left standing
+  // is decided once it is over, by the same rule that decides it on every render (syncCodePane).
+  body.classList.remove('code-hidden');
+  if (rail) rail.hidden = false;
+  body.style.setProperty('--src-open', w + 'px');
+  srcSliding = true;
+  if (codeOpen) setVars(0, 0, railW); else setVars(w, gap, 0);
+  // TWO CLASSES, one frame apart. `code-sliding` PUTS the three widths where the slide starts, with no
+  // transition on them; `code-slide-go` is what arms the move. Arming it in the same breath started the
+  // rail travelling towards its own starting value instead of away from it — it comes back from
+  // `display: none` at 30px, so "put it at 0" became a quarter-second journey to 0 that the slide then
+  // reversed, and the rail simply never moved.
+  body.classList.add('code-sliding');
+  void body.offsetWidth;                            // start from here, not from where it is going
+  requestAnimationFrame(() => {
+    if (token !== srcSlideToken) return;
+    body.classList.add('code-slide-go');
+    if (codeOpen) setVars(w, gap, 0); else setVars(0, 0, railW);
+  });
+  // The drawing's box is changing on every frame, so re-fit it on every frame — the same thing the
+  // drag handle already does on every mousemove, because it is the same size change.
+  const tick = () => {
+    if (token !== srcSlideToken) return;
+    codePaneResized();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  // `transitionend` would arrive three times (three elements) and not at all if a transition is
+  // dropped, so the end of the slide is timed rather than listened for.
+  setTimeout(() => { if (token === srcSlideToken) endSrcSlide(true); }, SRC_SLIDE_MS + 80);
+}
 function setCodeOpen(on) {
   codeOpen = !!on;
   lsSet(LS.codeOpen, codeOpen ? '1' : '');
-  resyncCodePane();
-  codePaneResized();
+  slideCodePane();
   if (!codeOpen || !pendingCode) return;
   const p = pendingCode; pendingCode = null;
   if (p.file) loadCode(p.file, p.line);

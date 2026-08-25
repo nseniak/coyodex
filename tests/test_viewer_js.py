@@ -1913,7 +1913,46 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
                  js.index("\n}", js.index("function codePaneResized() {"))]
     assert "resizeStagePreserve();" in resized and "placeCard();" in resized
     opener2 = js[js.index("function setCodeOpen(on) {"): js.index("\n}", js.index("function setCodeOpen(on) {"))]
-    assert "codePaneResized();" in opener2
+    assert "slideCodePane();" in opener2, "the toggle hands the column to the slide"
+    # THE SLIDE is what re-frames now, and it does it on every frame rather than once: the column's width
+    # is moving for a quarter of a second, so the drawing's box is moving with it, exactly as it does
+    # under a drag of the bar. Doing it only at the end would leave the drawing at its old size while a
+    # third of the window changed underneath it.
+    slide = js[js.index("function slideCodePane() {"): js.index("\n}\n", js.index("function slideCodePane() {"))]
+    assert "requestAnimationFrame(tick);" in slide and "codePaneResized();" in slide
+    assert "resyncCodePane(); codePaneResized();" in slide, "…and no motion still lands in the end state"
+    # The rule that hides the column must not fire mid-slide: every render passes through syncCodePane,
+    # and one landing between the slide's two frames would snap the column to its end width.
+    sync = js[js.index("function syncCodePane(_s) {"): js.index("\n}", js.index("function syncCodePane(_s) {"))]
+    assert "if (srcSliding) return;" in sync
+    assert sync.index("if (srcSliding) return;") < sync.index("classList.toggle('code-hidden'")
+    # TWO CLASSES, and the split is the whole trick. `code-sliding` PUTS the three widths at the start of
+    # the move; `code-slide-go`, one frame later, is the only thing that carries a transition. Arming the
+    # move in the same breath as placing it sent the rail travelling towards its own starting value
+    # instead of away from it — it comes back from `display: none` at 30px, so "put it at 0" became a
+    # quarter-second journey to 0 that the slide then reversed, and the rail never moved at all.
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    placed = css[css.index("body.code-sliding #srccol {"): css.index("body.code-slide-go #srccol,")]
+    for sel in ("#srccol", "#resizer", "#srcrail"):
+        rule = placed[placed.index("body.code-sliding " + sel + " {"):]
+        rule = rule[: rule.index("}")]
+        assert "flex: 0 0 var(--" in rule, sel
+        assert "min-width: 0;" in rule, sel + " must be free to reach zero"
+        assert "transition" not in rule, sel + ": placing a width must never animate it"
+    assert "body.code-slide-go #srccol,\nbody.code-slide-go #resizer,\nbody.code-slide-go #srcrail" in css
+    assert "requestAnimationFrame(() => {" in slide and "classList.add('code-slide-go');" in slide, \
+        "…and the arming class lands a frame after the placing one"
+    # All three carry the SAME duration and curve: they are one move, and three different speeds on one
+    # edge would read as three things happening at once.
+    assert "transition: flex-basis .24s cubic-bezier(.2, .8, .2, 1);" in css
+    # The page column is free for those frames, so it takes the space back one frame at a time instead
+    # of in one jump when the slide ends.
+    assert "body.code-sliding #leftcol { flex: 1 1 auto; width: auto !important; }" in css
+    # …and a reader who asked the system for less motion gets the end state with no travel.
+    reduced = css[css.index("@media (prefers-reduced-motion: reduce) {", css.index("body.code-slide-go")):]
+    reduced = reduced[: reduced.index("}\n}")]
+    for sel in ("#srccol", "#resizer", "#srcrail"):
+        assert "body.code-slide-go " + sel in reduced, sel
     assert "codePaneResized();" in js
     assert "window.addEventListener('resize', placeCard);" in js, "so does the window itself"
     # `placeCard` IS applyPanelBox plus the two steps that depend on where the card landed — it dodges the
