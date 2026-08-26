@@ -7605,8 +7605,11 @@ function journeyZoneHtml(z, opts) {
       + `<span>${esc(name)}</span></button>`
     : (z.stations || []).length || (z.sides || []).length
       ? '<span class="journey-zkind">not in any feature</span>' : '');
+  // The station carries its number's DIGIT COUNT, because the title lines its left edge up with the
+  // number and a number centred on the dot starts further left the more digits it has.
   const stations = (z.stations || []).map((s) =>
-    `<button type="button" class="journey-station" data-step="${esc(s.st.id)}" `
+    `<button type="button" class="journey-station journey-d${String(s.n).length}" `
+    + `data-step="${esc(s.st.id)}" `
     + `title="Open the Happy Path: ${esc(s.st.title || 'this step')}">`
     + `<span class="journey-dot"></span><span class="journey-n">${s.n}</span>`
     + `<span class="journey-t">${esc(stationTitle(s.st.title, o.actor))}</span></button>`).join('');
