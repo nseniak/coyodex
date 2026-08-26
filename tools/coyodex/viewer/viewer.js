@@ -7624,6 +7624,11 @@ function journeyZoneHtml(z, opts) {
   // The upper-lane cell is drawn even for a feature holding no happy-path step, so that feature's
   // lower lane still sits in row 3 with everyone else's. Empty, it draws no rail line — the rule is
   // `.journey-track:empty`, so an off-path feature is not crossed by a path it never joins.
+  // The off-path list lines its circles up with the station titles above it, so the box has ONE text
+  // column. The titles hang off their number, whose left edge depends on its digit count, so the
+  // list takes the indent of this box's FIRST station — the one the reader's eye starts from.
+  const sideIndent = (z.stations || []).length
+    ? ' journey-d' + String(z.stations[0].n).length : '';
   // Every cell of a box carries `gapBefore`, because the box is four separate grid items in one
   // column and a margin on one of them would move that cell alone.
   const gap = o.gapBefore ? ' journey-gap-before' : '';
@@ -7632,7 +7637,8 @@ function journeyZoneHtml(z, opts) {
     + (o.noPath ? '' : `<div class="journey-track${gap}${o.first ? ' journey-track-first' : ''}`
       + `${o.last ? ' journey-track-last' : ''}" `
       + `style="grid-column:${col}">${stations}</div>`)
-    + (o.offLane ? `<div class="journey-sides${gap}" style="grid-column:${col}">${sides}</div>` : '');
+    + (o.offLane ? `<div class="journey-sides${gap}${sideIndent}" `
+      + `style="grid-column:${col}">${sides}</div>` : '');
 }
 // This page once opened with a greyed BEFORE-segment: the steps of the role this actor used to be,
 // when the map authors a `becomes` toward them. It was removed as untrue rather than as clutter. It

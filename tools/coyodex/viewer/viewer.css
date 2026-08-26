@@ -1823,6 +1823,10 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; }
 .journey-d1 .journey-t { padding-left: 4.9px; }
 .journey-d2 .journey-t { padding-left: 1.5px; }
+/* …and the off-path list under them takes the same indent, on top of the box's own 16px, so the
+   circles start where the titles start and the box reads as one column. */
+.journey-sides.journey-d1 { padding-left: 20.9px; }
+.journey-sides.journey-d2 { padding-left: 17.5px; }
 .journey-station:hover .journey-t { color: #4f46e5; }
 /* The lower lane. Its dashed top edge spans the full width of every box at one height, and the
    gutter's own lower label carries the same line, so the cut reads as one band across the board. */
