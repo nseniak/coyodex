@@ -751,6 +751,28 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     assert "journey-gutter-off\">Off the happy path" in page, "…and the one lane is still named"
 
 
+
+def test_a_feature_the_happy_path_enters_twice_gets_two_boxes() -> None:
+    """A happy path may leave a feature and come back to it later, and it does: measured on the four
+    maps the current viewer reads, 4 of the 15 actor pages that have steps at all.
+
+    Filing every station of a feature under that feature's FIRST appearance made the rail run
+    backwards. On this project's own map the coyodex developer's rail read 21, 25, 22, 23, 24 —
+    steps 21 and 25 are "Reviewing a finished build" and 22-24 are "Judging map quality". The rail
+    is the one thing on the page that claims an order, so a zone is a RUN of consecutive stations in
+    one feature, not that feature's whole set, and a twice-entered feature draws two boxes.
+
+    The side stops still hang under the FIRST of those boxes: they belong to the feature, not to a
+    position in the walk, and repeating them under each box would read as two of each."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    jrn = js[js.index("function actorJourney(actorName) {"):
+             js.index("\nfunction ", js.index("function actorJourney(actorName) {") + 10)]
+    assert "if (!run || run.fid !== fid)" in jrn, "a new zone opens when the feature CHANGES"
+    assert "zoneOf" not in jrn and "byFid" not in jrn, "the one-zone-per-feature index is gone"
+    assert "for (const z of zones) if (!(z.fid in firstOf)) firstOf[z.fid] = z;" in jrn
+    assert "if (firstOf[fid]) { firstOf[fid].sides.push(uc); continue; }" in jrn
+
+
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
     """`pushContentPoint` rebuilds the current state field by field so opening a file keeps the screen
     you are on. Maintained by hand it dropped a field three times running (`store`/`entity`, then

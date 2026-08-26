@@ -1803,16 +1803,19 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .journey-no-path .journey-sides, .journey-no-path .journey-gutter-off { grid-row: 2; border-top: 0;
                                                                         padding-top: 12px; }
 .journey-station { font: inherit; background: none; border: 0; padding: 0; text-align: left;
-                   position: relative; width: 118px; cursor: pointer; display: block; color: inherit; }
-/* No left margin: the dot's left edge is the station's left edge, and the number and the title
-   under it start there too. A 4px indent on the dot alone left the text hanging left of it. */
+                   position: relative; width: 126px; cursor: pointer; display: block; color: inherit; }
+/* The dot sits at the station's left edge, and the number and the title start at its CENTRE (half
+   of the 15px dot), so the text hangs from the point the rail actually passes through. The station
+   is 8px wider than the text needs, to give that indent back to the title rather than take a line. */
 .journey-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
                border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
                margin: 2px 0 6px; box-sizing: border-box; }
 .journey-station:hover .journey-dot { background: #4f46e5; }
 .journey-station:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
-.journey-n { display: block; font-size: 10px; font-weight: 700; color: #4f46e5; }
-.journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; }
+.journey-n { display: block; font-size: 10px; font-weight: 700; color: #4f46e5;
+             padding-left: 7.5px; }
+.journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235;
+             padding-left: 7.5px; }
 .journey-station:hover .journey-t { color: #4f46e5; }
 /* The lower lane. Its dashed top edge spans the full width of every box at one height, and the
    gutter's own lower label carries the same line, so the cut reads as one band across the board. */

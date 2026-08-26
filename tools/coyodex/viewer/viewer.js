@@ -7484,21 +7484,32 @@ function actorJourney(actorName) {
   const stations = actorStations(actorName);
   const g = actorGroups().find((x) => x.actor === actorName);
   const ucs = g ? g.ucs : [];
-  const zones = [];              // [{fid, stations:[{st,n}], sides:[ucNode]}], first-station order
-  const byFid = {};
-  const zoneOf = (fid) => {
-    if (!byFid[fid]) { byFid[fid] = { fid, stations: [], sides: [] }; zones.push(byFid[fid]); }
-    return byFid[fid];
-  };
+  const zones = [];              // [{fid, stations:[{st,n}], sides:[ucNode]}], in WALK order
   const featureOfUc = (ucId) => {
     const p = (GRAPH.nodes[ucId] || {}).parent;
     return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
   };
-  for (const s of stations) zoneOf(featureOfUc(s.st.uc)).stations.push(s);
+  // A zone is a RUN of consecutive stations in one feature, not "that feature's stations". A happy
+  // path may leave a feature and come back to it later, and it does: measured on the four maps whose
+  // viewer reads them, 4 of the 15 actor pages that have steps at all. Filing every station of a
+  // feature under that feature's FIRST appearance made the rail run backwards — on this project's
+  // own map the coyodex developer's rail read 21, 25, 22, 23, 24. The rail is the one thing on this
+  // page that claims an order, so a feature entered twice gets TWO zones, one at each position.
+  let run = null;
+  for (const s of stations) {
+    const fid = featureOfUc(s.st.uc);
+    if (!run || run.fid !== fid) { run = { fid, stations: [], sides: [] }; zones.push(run); }
+    run.stations.push(s);
+  }
+  // A feature's side stops hang under its FIRST zone: they belong to the feature, not to a position
+  // in the walk, so repeating them under every zone of a twice-entered feature would say a thing
+  // twice and let a reader think there were two of each.
+  const firstOf = {};
+  for (const z of zones) if (!(z.fid in firstOf)) firstOf[z.fid] = z;
   // Side stops join their feature's on-rail zone, or open a TRAILING zone for a feature the actor
-  // never enters on the walk. Trailing zones follow the rail's arrowhead, drawn exactly like the
-  // others — a feature is not demoted for missing this actor's walk — and they order by the story
-  // column, the one derived order every screen agrees on; a no-feature zone comes last.
+  // never enters on the walk. Trailing zones follow the rail, drawn exactly like the others — a
+  // feature is not demoted for missing this actor's walk — and they order by the story column, the
+  // one derived order every screen agrees on; a no-feature zone comes last.
   const stationUcs = new Set(stations.map((s) => s.st.uc));
   const column = (FEATURES.story || {}).column || [];
   const offZones = [];
@@ -7506,7 +7517,7 @@ function actorJourney(actorName) {
   for (const uc of ucs) {
     if (stationUcs.has(uc.id)) continue;
     const fid = featureOfUc(uc.id);
-    if (byFid[fid] && byFid[fid].stations.length) { byFid[fid].sides.push(uc); continue; }
+    if (firstOf[fid]) { firstOf[fid].sides.push(uc); continue; }
     if (!offByFid[fid]) {
       offByFid[fid] = { fid, sides: [] };
       offZones.push(offByFid[fid]);
