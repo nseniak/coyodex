@@ -7834,11 +7834,12 @@ function storyActorCardHtml(rid) {
 // A DATA AREA's glyph, third in the hand the actor pair and the feature sparkle are drawn in: one
 // 20x20 box, closed shapes, stroked at 1.6, no interior detail beyond one line.
 //
-// THREE STACKED ENTITY BOXES, in the ENTITY tint (the fuchsia the Data view already draws an entity
+// TWO STACKED ENTITY BOXES, in the ENTITY tint (the fuchsia the Data view already draws an entity
 // with), because that is literally what an area is: several kinds of stored thing. The front box
 // carries the header band a class box has, which is what makes the shape read as an entity rather
-// than as a plain rectangle; the two behind are outlines peeking out, which is what makes it read as
-// several.
+// than as a plain rectangle; the one behind is what makes it read as several.
+// THREE boxes was tried first and rejected on screen: at the 17px this renders at, the third
+// outline closed the gaps and the whole mark went to a blob.
 //
 // A DATABASE CYLINDER was considered and rejected: the cylinder is already the dependency's shape
 // everywhere in this viewer (it sits on an entity's own card next to "MongoDB · snapshots"), and an
@@ -7848,11 +7849,11 @@ function storyActorCardHtml(rid) {
 function storyAreaGlyphSvg() {
   const t = ELEMENT_TINT.entity || {};
   const stroke = t.stroke || '#86198f', fill = t.fill || '#fff';
-  const box = (x, y) => `<rect x="${x}" y="${y}" width="10.5" height="8.5" rx="1.7" `
+  const box = (x, y) => `<rect x="${x}" y="${y}" width="11" height="9" rx="1.8" `
     + `fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
   return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
-    + box(7, 2.25) + box(4.75, 4.75) + box(2.5, 7.25)
-    + `<path d="M2.5 10.1 H13" fill="none" stroke="${stroke}" stroke-width="1.5"/>`
+    + box(6.5, 3.25) + box(2.5, 7.75)
+    + `<path d="M2.5 10.65 H13.5" fill="none" stroke="${stroke}" stroke-width="1.5"/>`
     + '</svg>';
 }
 function storyAreaCardHtml(a) {
