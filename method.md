@@ -400,6 +400,30 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   optionally nested. Membership is carried on each card (a `SUBDOMAIN:` line holding one `SD`); the
   member list, the inter-subdomain arrows, and the subsystem→subdomain bridge are *derived*. The Domain
   diagram then leads with a Subdomains overview and drills into one subdomain's classDiagram.
+  - **Each subdomain holding SAVED records names its `owners`** — the feature(s) it exists FOR.
+    Ask one question per area: *which feature is the reason this data exists — who creates its
+    records and runs their lifecycle?* One clear answer → `"owners": ["CAPn"]`. Several genuine
+    ones → list them all, and the split / dominance advisories then challenge the list. No clear
+    answer → leave the field out and record `SDn: <why>` under an **"Ownership exceptions"** extras
+    heading. **Never author an owner to make a diagram complete**: an owner whose feature's walks
+    reach none of the area's records is reported as ungrounded, which is worse than an empty column.
+    A "saved record" is an entity whose `store.mode` is `collection` or `embedded`; an area of pure
+    plumbing (request shapes, enums, read projections) is not asked the question at all. Author it
+    at synthesis, when the features and the areas both exist — as `reconcile` set directives, with
+    the rest of the assignments.
+    - **The one record whose owning feature differs from its area's** carries `owners` on the ENTITY
+      instead — an audit entry sits in the Audit trail area but is written by the gateway. An
+      override that repeats what the area already says is reported as redundant.
+    - **WHY AUTHORED, and why no derivation replaces it.** Code says what a feature TOUCHES; it
+      cannot say what the data is FOR, and every derivation was measured on three live maps and
+      failed the same way. First-touch-in-story-order hands "Snapshots and change" to Page tracking,
+      not to Change detection — the snapshot is first written by the tracker and exists so the
+      change detector can compare it. Touch counts hand an area to whichever feature has the most
+      sign-in plumbing. Majority vote per area split 5 of one map's 8 areas, several on 1-1 ties
+      decided the wrong way. So the map states the judgement and the tools cross-examine it: the
+      touches are shown as evidence beside it, and the ONE disagreement never reported is "the owner
+      is not the first feature to touch the area" — that disagreement is the field's reason to
+      exist.
 - **T6 Use-case flows** *(the inside view of each use case — a block, not a table)*: one block per
   use case, `**UCn — <title>**` + **numbered step lines**. Each step is an ordered interaction
   `from → to`: **every step** — element↔element and actor steps alike — carries a short authored phrase

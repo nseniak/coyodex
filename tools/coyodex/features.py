@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 
 from coyodex.anchors import parse_anchor
 from coyodex.impact_git import Extents
+from coyodex.areas import DataArea, build_areas, sorted_ids
 from coyodex.model import ProjectModel, expanded_flow_steps
 from coyodex.validate_model import anchored_flow_steps, capability_audience, rule_steps
 
@@ -63,6 +64,9 @@ class FeatureFacts:
     rules: list[str] = field(default_factory=list)           # what it decides (function join)
     entities: list[str] = field(default_factory=list)        # what it knows about
     components: list[str] = field(default_factory=list)      # what implements it
+    areas: list[str] = field(default_factory=list)           # the data areas its walks reach — a
+                                                             # projection of `FeatureIndex.areas`,
+                                                             # not a second derivation
 
 
 @dataclass(frozen=True)
@@ -131,16 +135,8 @@ class FeatureIndex:
     unassigned_use_cases: list[str] = field(default_factory=list)
     coverage: Coverage = field(default_factory=Coverage)
     story: Story = field(default_factory=Story)
+    areas: list[DataArea] = field(default_factory=list)   # in the order the right column draws them
     rule_join_uses_extents: bool = False
-
-
-def _sorted_ids(ids: "set[str]") -> list[str]:
-    """Ids in id order (`C9` before `C10`), so a rendered list never reads as shuffled."""
-    def key(i: str) -> tuple[str, int, str]:
-        head = i.rstrip("0123456789")
-        tail = i[len(head):]
-        return (head, int(tail) if tail else 0, i)
-    return sorted(ids, key=key)
 
 
 def _fallback_label(name: str) -> str:
@@ -382,16 +378,23 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                 comp_in_rule.update(file_owners.get(loc.path) or ())
 
     audience = capability_audience(m)
+    story = build_story(m)
+    areas = build_areas(m, story.column)
+    feat_areas: dict[str, list[str]] = {}
+    for a in areas:
+        for t in a.touched_by:
+            feat_areas.setdefault(t.feature, []).append(a.id)
     features = [
         FeatureFacts(
             id=c.id, name=c.name, purpose=c.purpose,
             audience=audience.get(c.id) or [],
-            roles=_sorted_ids(feat_roles[c.id]),
-            use_cases=_sorted_ids(feat_ucs[c.id]),
-            entry_points=_sorted_ids(feat_eps[c.id]),
-            rules=_sorted_ids({rid for rid, hits in rule_feats.items() if c.id in hits}),
-            entities=_sorted_ids(feat_ents[c.id]),
-            components=_sorted_ids(feat_comps[c.id]),
+            roles=sorted_ids(feat_roles[c.id]),
+            use_cases=sorted_ids(feat_ucs[c.id]),
+            entry_points=sorted_ids(feat_eps[c.id]),
+            rules=sorted_ids({rid for rid, hits in rule_feats.items() if c.id in hits}),
+            entities=sorted_ids(feat_ents[c.id]),
+            components=sorted_ids(feat_comps[c.id]),
+            areas=feat_areas.get(c.id, []),
         )
         for c in m.capabilities
     ]
@@ -402,7 +405,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             comp_feats.setdefault(cid, []).append(f.id)
 
     named_eps = {e for u in m.use_cases for e in (u.entry_points or ())}
-    unreached = _sorted_ids({c.id for c in m.components} - comp_in_flow - comp_in_rule)
+    unreached = sorted_ids({c.id for c in m.components} - comp_in_flow - comp_in_rule)
     coverage = Coverage(
         components_total=len(m.components),
         components_in_a_flow=len(comp_in_flow),
@@ -418,12 +421,13 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     )
     return FeatureIndex(
         features=features,
-        component_features={k: _sorted_ids(set(v)) for k, v in comp_feats.items()},
-        rule_features={k: _sorted_ids(v) for k, v in rule_feats.items()},
+        component_features={k: sorted_ids(set(v)) for k, v in comp_feats.items()},
+        rule_features={k: sorted_ids(v) for k, v in rule_feats.items()},
         role_features=role_feat,
-        unassigned_use_cases=_sorted_ids(set(unassigned)),
+        unassigned_use_cases=sorted_ids(set(unassigned)),
         coverage=coverage,
-        story=build_story(m),
+        story=story,
+        areas=areas,
         rule_join_uses_extents=bool(extents),
     )
 
@@ -439,8 +443,14 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
             {"id": f.id, "name": f.name, "purpose": f.purpose,
              "audience": f.audience,
              "roles": f.roles, "useCases": f.use_cases, "entryPoints": f.entry_points,
-             "rules": f.rules, "entities": f.entities, "components": f.components}
+             "rules": f.rules, "entities": f.entities, "components": f.components,
+             "areas": f.areas}
             for f in ix.features],
+        "areas": [
+            {"id": a.id, "name": a.name, "entities": a.entities, "owners": a.owners,
+             "touchedBy": [{"feature": t.feature, "touches": t.touches, "entities": t.entities}
+                           for t in a.touched_by]}
+            for a in ix.areas],
         "componentFeatures": ix.component_features,
         "ruleFeatures": ix.rule_features,
         "roleFeatures": ix.role_features,

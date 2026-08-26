@@ -65,6 +65,11 @@ DIR_KEY_STRICT = r"[\w./-]*[./][\w./-]*"
 #: families key on whatever id their finding's location names — `BR7`, `SF12`, `HP1`).
 ANY_ID_KEY = r"[A-Z]+\d+"
 
+# The 'Ownership exceptions' vocabulary: a data AREA (`SDn`) or the one saved record whose override
+# is being adjudicated (`En`). Its own key rather than `ID_KEY`, which has no `SD` — widening the
+# shared one would quietly let every other family adjudicate a sub-domain it has no check for.
+OWNER_KEY = r"(?:SD|E)\d+"
+
 #: The lead-in of an Audit-exceptions record: the CHECK NAME, which scopes every id on the line.
 AUDIT_LEAD = r"(?:[a-z][a-z-]+)\s+"
 
@@ -111,6 +116,7 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     HeadingSpec("Audience exceptions", True, ID_KEY),
     HeadingSpec("Stake exceptions", True, ID_KEY),
     HeadingSpec("Persistence exceptions", True, ID_KEY),
+    HeadingSpec("Ownership exceptions", True, OWNER_KEY),
     HeadingSpec("Sweep debt", True),                # key = a `path:line` anchor (free text)
     # Notes: machine-read too, but what they SAY is about the code, not about the map's own checks.
     HeadingSpec("Entry-point coverage", False),     # key = a kind + a contract word

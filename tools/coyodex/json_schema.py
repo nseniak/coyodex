@@ -130,8 +130,28 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("StoryAnchor", "feature"): {"pattern": r"^CAP\d+$", "description": "the feature this one reads "
                                   "beside — must be a defined capability id, never the capability "
                                   "itself."},
+    ("Group", "owners"): {"items": {"pattern": r"^CAP\d+$"}, "description": "SUB-DOMAIN-ONLY: "
+                           "which FEATURE this data area exists for — the one that creates its "
+                           "records and runs their lifecycle. AUTHORED, never derived: every "
+                           "derivation was measured on three live maps and each guessed from what "
+                           "the code TOUCHES, which is not what the data is FOR (snapshots are "
+                           "first written by page tracking, but they exist so change detection can "
+                           "compare them). One id = that feature owns the area; several = "
+                           "deliberately shared among exactly those; field ABSENT = the decision "
+                           "has not been made, and an advisory asks for it. `[]` is a shape error, "
+                           "not an answer. NEVER author one to complete a diagram: an owner the "
+                           "area's records are never reached by is reported as ungrounded. "
+                           "`validate` blocks it on a subsystem, a capability or a block, and "
+                           "cross-examines the list against the derived touches."},
     ("Group", "source"): {"description": _DIR_OR_FILE_DESC + " The group's home directory (or a "
                            "representative file)."},
+    ("Entity", "owners"): {"items": {"pattern": r"^CAP\d+$"}, "description": "OVERRIDE of the "
+                            "sub-domain's `owners`, for the one record whose owning feature differs "
+                            "from its area's — an audit entry sits in the Audit trail area but is "
+                            "written by the gateway. Author it ONLY where it differs from what "
+                            "would be inherited; an override equal to the inherited answer is "
+                            "reported as redundant. Absent = inherit, walking up `subdomain` then "
+                            "`parent`. Same vocabulary and same rules as `subdomains[].owners`."},
     ("UseCase", "id"): {"pattern": r"^UC\d+$"},
     ("UseCase", "capability"): {"pattern": r"^CAP\d+$", "description": "the capability this use "
                                 "case belongs to, or null. Assigned at synthesis via `reconcile` "

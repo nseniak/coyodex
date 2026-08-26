@@ -467,7 +467,7 @@ def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
     m = load_model(json.dumps(make_map()))
     b = build_view_bundle(model_to_graph(m, EXTENTS), None, Path("."), model=m, extents=EXTENTS)
     f = b["features"]
-    assert sorted(f) == ["componentFeatures", "coverage", "features", "roleFeatures",
+    assert sorted(f) == ["areas", "componentFeatures", "coverage", "features", "roleFeatures",
                          "ruleFeatures", "ruleJoinUsesExtents", "story", "unassignedUseCases"]
     assert f["features"][0]["useCases"] == ["UC1"]        # camelCase, not use_cases
     assert f["coverage"]["componentsUnreached"] == ["C3"]

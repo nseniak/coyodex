@@ -62,8 +62,11 @@ from coyodex.model import (
     expanded_flow_steps,
     expanded_steps_with_container,
     group_forests,
+    is_saved,
     load_model,
+    subdomain_owners,
 )
+from coyodex.areas import build_areas
 from coyodex.validate_analysis import (
     _ALTITUDE_MIN,
     _COVERAGE_SAMPLE,
@@ -261,6 +264,8 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
             refs.add(cap.parent)
         # cap.story.feature is NOT gathered here: `_check_story_anchors` owns it entirely (it must
         # be a CAPABILITY, and a bare existence scan would bless a defined-but-wrong-kind id).
+    # `subdomains[].owners` / `entities[].owners` are NOT gathered here either, for the same reason:
+    # `_check_owners` owns them, and an owner must be a CAPABILITY, not merely a defined id.
     for blk in m.blocks:
         if blk.parent:
             refs.add(blk.parent)
@@ -3021,6 +3026,137 @@ def _stake_coverage_warnings(m: ProjectModel) -> list[str]:
     return warnings
 
 
+#: A shared area whose top listed owner holds AT LEAST this share of the touches its listed owners
+#: make reads as one owner with a helper, not as sharing. Measured against the three maps the design
+#: was built on: mcpolis's genuinely shared "Organizations and plans" tops out at 12 of 31 touches
+#: (39%), so the band leaves real sharing alone and only speaks when the list is nearly a formality.
+_OWNER_DOMINANCE = 0.90
+
+
+def _check_owners(m: ProjectModel) -> list[str]:
+    """`owners` — which feature a data area exists FOR — is a SUB-DOMAIN field, with an ENTITY-level
+    override for the one record whose owning feature differs from its area's.
+
+    Policed like its siblings `story`, `stakes` and `tech`: one `Group` dataclass backs four
+    forests, so nothing structural stops a subsystem or a capability from carrying one.
+
+    This check owns the ids entirely (they are NOT in `_referenced_ids`): an owner must be a
+    CAPABILITY, and a bare existence scan would bless `S3` or `E7` and then render an ownership wire
+    to nothing.
+
+    BLOCKING: owners on the wrong forest; an id that names no capability; the same feature listed
+    twice (the list says who shares the area, and a name cannot share with itself); and an EMPTY
+    list. Empty is a shape error rather than "nobody owns it" on purpose — `[]` and an absent field
+    would otherwise be the same map, and the advisory that asks for a decision could not tell a
+    considered "shared by nobody" from a field never written. Not deciding is spelled by leaving the
+    field out; the MISSING advisory then asks."""
+    problems = [f"{g.id} carries `owners` — owners is a sub-domain field (it says which FEATURE a "
+                f"data area exists for); drop it from this {kind}"
+                for arr, kind in ((m.subsystems, "subsystem"), (m.capabilities, "capability"),
+                                  (m.blocks, "block"))
+                for g in arr if g.owners is not None]
+    cap_ids = {c.id for c in m.capabilities}
+    carriers: list[tuple[str, str, list[str] | None]] = (
+        [(g.id, "sub-domain", g.owners) for g in m.subdomains]
+        + [(e.id, "entity", e.owners) for e in m.entities])
+    for eid, what, owners in carriers:
+        if owners is None:
+            continue
+        if not owners:
+            problems.append(f"{eid} has an empty `owners` list — name the feature(s) this "
+                            f"{what}'s data exists for, or leave the field out to say the "
+                            "decision has not been made")
+        seen: set[str] = set()
+        for o in owners:
+            if o not in cap_ids:
+                problems.append(f"{eid} lists owner '{o}', which is not a defined capability — an "
+                                "owner is the FEATURE the data exists for")
+            elif o in seen:
+                problems.append(f"{eid} lists owner '{o}' twice — the list says which features "
+                                "SHARE the data, so each one appears once")
+            seen.add(o)
+    return problems
+
+
+def _owner_warnings(m: ProjectModel) -> list[str]:
+    """ADVISORY: cross-examine the AUTHORED `owners` against the DERIVED touches (`build_areas`).
+
+    The authored answer and the derived evidence are deliberately different questions — what data is
+    FOR versus what code reaches it — so they are allowed to disagree, and the ONE disagreement that
+    is never reported is the interesting one: an owner that is not the first feature to touch the
+    area. That is the field's whole reason to exist (a snapshot is first written by page tracking
+    and exists so change detection can compare it), and flagging it would be the derivation this
+    design was measured out of.
+
+    What IS reported:
+      GROUNDING  — a listed owner whose walks touch NO saved record of the area. Either the owner is
+                   wrong, or the area's records are reached by a walk the map has not written.
+      SPLIT      — a shared area whose records partition cleanly by its listed owners (each record
+                   reached by only one of them): two areas glued together.
+      DOMINANCE  — a shared area where one listed owner holds nearly all the touches.
+      MISSING    — an area holding saved records that nobody has decided for.
+      REDUNDANT  — an entity `owners` equal to what it would have inherited.
+
+    Escape, for all of them: '{id}: <why>' under an 'Ownership exceptions' extras heading."""
+    areas = build_areas(m)
+    if not areas:
+        return []
+    recorded = records.recorded_keys(m, "Ownership exceptions")
+    names = {c.id: c.name for c in m.capabilities}
+    warnings: list[str] = []
+
+    for a in areas:
+        if a.id in recorded:
+            continue
+        touched = {t.feature: t for t in a.touched_by}
+        if not a.owners:
+            warnings.append(
+                f"{a.id} ({a.name}) holds {len(a.entities)} saved record(s) and has no `owners` — "
+                "decide which feature the data exists for (the one that creates its records and "
+                "runs their lifecycle), list several if the sharing is real, or record "
+                f"'{a.id}: <why>' under an 'Ownership exceptions' extras heading")
+            continue
+        blind = [o for o in a.owners if o not in touched]
+        if blind:
+            warnings.append(
+                f"{a.id} ({a.name}) names owner(s) whose walks touch none of its saved records "
+                f"({', '.join(f'{o} ({names.get(o, o)})' for o in blind)}) — either the owner is "
+                "wrong, or the walk that reaches this data is not written; fix one of the two, or "
+                f"record '{a.id}: <why>' under an 'Ownership exceptions' extras heading")
+        if len(a.owners) < 2:
+            continue
+        reach = {o: set(touched[o].entities) for o in a.owners if o in touched}
+        # SPLIT: every saved record reached by exactly ONE listed owner, and every listed owner
+        # holding at least one. A record several owners reach is what SHARING looks like, and it is
+        # what keeps a genuinely shared core (an organization row 7 features write) quiet here.
+        if (len(reach) == len(a.owners) and all(reach.values())
+                and all(sum(e in got for got in reach.values()) == 1 for e in a.entities)):
+            warnings.append(
+                f"{a.id} ({a.name}) is listed as shared, but its saved records partition cleanly — "
+                + "; ".join(f"{names.get(o, o)} reaches only {', '.join(sorted(reach[o]))}"
+                            for o in a.owners if o in reach)
+                + f" — two areas glued together; split {a.id}, or record '{a.id}: <why>' under an "
+                "'Ownership exceptions' extras heading")
+        total = sum(touched[o].touches for o in a.owners if o in touched)
+        top = max((touched[o].touches for o in a.owners if o in touched), default=0)
+        if total and top / total >= _OWNER_DOMINANCE:
+            lead = next(o for o in a.owners if o in touched and touched[o].touches == top)
+            warnings.append(
+                f"{a.id} ({a.name}) is listed as shared, but {names.get(lead, lead)} holds "
+                f"{top} of the {total} touches its listed owners make — consider a single owner, "
+                f"or record '{a.id}: <why>' under an 'Ownership exceptions' extras heading")
+
+    inherited = subdomain_owners(m)
+    for e in m.entities:
+        if e.owners and e.id not in recorded and e.owners == inherited.get(e.subdomain or "", []):
+            warnings.append(
+                f"{e.id} ({e.name}) overrides `owners` with the same answer its area already gives "
+                f"({', '.join(e.owners)}) — an override is for the record whose owning feature "
+                f"DIFFERS from its area's; drop it, or record '{e.id}: <why>' under an "
+                "'Ownership exceptions' extras heading")
+    return warnings
+
+
 def _check_role_audience(m: ProjectModel) -> list[str]:
     """`audience` (user | internal) on every role — the map's ONE authored answer to "who is this for".
 
@@ -4422,6 +4558,8 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_story_anchors(m))
     problems.extend(_check_capability_stakes(m))
     warnings.extend(_stake_coverage_warnings(m))
+    problems.extend(_check_owners(m))
+    warnings.extend(_owner_warnings(m))
     problems.extend(_check_role_audience(m))
     problems.extend(_check_role_relations(m))
     warnings.extend(_check_capability_audience(m))
