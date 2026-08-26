@@ -22,6 +22,11 @@ the code's names.
 - **box** — one thing drawn on a view. **arrow** — a relation between two boxes.
 - **code link** — the `file:line` a box points at. A box without one is
   ungrounded, which is a defect.
+- **owner** (of a data area) — the feature the area's data exists FOR: the one
+  that creates its records and runs their lifecycle. Authored, never derived.
+- **owner with no evidence** — the map says an area exists for a feature, but no
+  journey of that feature ever touches the area's records. A defect. Distinct
+  from *ungrounded*, which is only ever about a missing code link.
 - **change impact** — the report saying what a code change does to the map.
 - **accept** — folding a change-impact report into the baseline.
 - **Coyote Effect** — the situation coyodex exists for: your agent wrote a lot

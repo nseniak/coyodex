@@ -121,6 +121,12 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # two `En`-keyed headings would both have been called ownership and neither would have
     # said which question it answers. This one is about which FEATURE the data exists for.
     HeadingSpec("Data owner exceptions", True, OWNER_KEY),
+    # Keyed by a repo PATH, not an id — the thing being adjudicated is a file that used to hold an
+    # access rule and no longer does. It had been pointed at "Audit exceptions", whose key
+    # vocabulary is `[A-Z]+\d+`: a path can never be a key there, so twenty records written on one
+    # live build were unreadable the moment they were saved, and nothing read them anyway.
+    HeadingSpec("Access baseline exceptions", True, DIR_KEY, SEP, strict_multi=DIR_KEY_STRICT,
+                merged_form="<path>, <path>: <why>"),
     HeadingSpec("Sweep debt", True),                # key = a `path:line` anchor (free text)
     # Notes: machine-read too, but what they SAY is about the code, not about the map's own checks.
     HeadingSpec("Entry-point coverage", False),     # key = a kind + a contract word

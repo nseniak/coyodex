@@ -777,6 +777,45 @@ def test_finalize_says_so_when_the_whole_surface_survived():
     assert "still named by an access rule" in note
 
 
+def test_a_deliberate_drop_recorded_by_PATH_actually_silences_the_advisory():
+    """The BEHAVIOURAL half, and the one that was missing. The advisory told the operator to record
+    `access-baseline <path>: <why>` under 'Audit exceptions' — whose key vocabulary is `[A-Z]+\\d+`,
+    so a path could never be a key there, and nothing read the heading for this purpose anyway. One
+    live build wrote twenty such records and every one was inert: the same advisory came back
+    unchanged on the next run.
+
+    A static "the escape is wired" check cannot see that. This runs it: record the path, and the
+    file must drop out of the list."""
+    import tempfile
+    from coyodex.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
+    after = {**_NO_AUTH, "extras": [{"heading": ACCESS_BASELINE_EXCEPTIONS_HEADING,
+                                     "body": "a/auth_google.py: the check moved into the gateway "
+                                             "and is claimed by BR7 there."}]}
+    with tempfile.TemporaryDirectory() as td:
+        report = _finalize_with_baseline(Path(td), _AUTH, after)
+    leg = next(l for l in report.legs if l.name == "access baseline")
+    assert not leg.advisory, f"the recorded path must drop out: {leg.advisory}"
+
+
+def test_the_advisory_names_the_heading_that_can_actually_carry_a_path():
+    """The message is the operator's only instruction, so it must name a heading whose grammar
+    accepts what it asks them to write. `Audit exceptions` cannot: its keys are ids."""
+    import tempfile
+    from coyodex.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
+    from coyodex import records
+    with tempfile.TemporaryDirectory() as td:
+        report = _finalize_with_baseline(Path(td), _AUTH, _NO_AUTH)
+    msg = next(l for l in report.legs if l.name == "access baseline").advisory[0]
+    assert ACCESS_BASELINE_EXCEPTIONS_HEADING in msg
+    assert "Audit exceptions" not in msg
+    # and the heading it names really parses a PATH as a key
+    from coyodex.model import ExtraSection, ProjectModel
+    m = ProjectModel(title="t", goal="g")
+    m.extras = [ExtraSection(heading=ACCESS_BASELINE_EXCEPTIONS_HEADING,
+                             body="a/auth_google.py: deliberate.")]
+    assert records.recorded_keys(m, ACCESS_BASELINE_EXCEPTIONS_HEADING) == {"a/auth_google.py"}
+
+
 def test_the_leg_is_absent_when_no_baseline_is_given():
     """A build with no predecessor must not grow a leg that silently reports nothing."""
     from coyodex.finalize import build_report

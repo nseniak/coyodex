@@ -46,12 +46,18 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coyodex import records
 from coyodex.reporting import shown
 
 if TYPE_CHECKING:
     from coyodex.model import ProjectModel
 
 from coyodex.model import ModelError, access_rules, load_model_path
+
+#: The extras heading the access-baseline advisory offers as its escape, and READS. Named the way
+#: `AUDIT_EXCEPTIONS_HEADING` and `DRIFT_EXCEPTIONS_HEADING` are, so the method contract's scan for
+#: "which headings do the tools actually read" finds it without a literal at the call site.
+ACCESS_BASELINE_EXCEPTIONS_HEADING = "Access baseline exceptions"
 
 #: Where the durable record goes, next to the map it describes.
 REPORT_STEM = "finalize-report"
@@ -453,6 +459,11 @@ def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
                    note=f"--access-baseline {baseline} could not be read ({exc}), so nothing says "
                         f"whether an auth claim was dropped")
     lost = lost_files(base, m)
+    # The ESCAPE, actually wired: a path recorded as deliberate drops out of the list. Without this
+    # read the advisory asked for a record, the operator wrote one, and the next run said exactly
+    # the same thing — the shape this project calls a promise the tool cannot keep.
+    excused = records.recorded_keys(m, ACCESS_BASELINE_EXCEPTIONS_HEADING)
+    lost = [f for f in lost if f not in excused]
     if not lost:
         return Leg("access baseline", RAN,
                    note=f"every one of the {len(base)} file(s) that held access enforcement in "
@@ -462,8 +473,8 @@ def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
         f"{len(lost)} of {len(base)} file(s) that held ACCESS enforcement in {baseline.name} are "
         f"named by NO access rule in this map: {listed}. The code may be unchanged — check each one "
         f"before shipping. A statement count can hold steady while a claim disappears, so this is "
-        f"not visible in `auth-surfaces-no-drop`. Record 'access-baseline <path>: <why>' under an "
-        f"'Audit exceptions' extras heading for each one that is deliberate."])
+        f"not visible in `auth-surfaces-no-drop`. Record '<path>: <why>' under an "
+        f"'{ACCESS_BASELINE_EXCEPTIONS_HEADING}' extras heading for each one that is deliberate."])
 
 
 def build_report(map_path: Path, repo: Path, verdicts: list[Path],
