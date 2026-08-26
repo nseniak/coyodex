@@ -66,7 +66,7 @@ from coyodex.model import (
     load_model,
     subdomain_owners,
 )
-from coyodex.areas import build_areas
+from coyodex.areas import build_areas, sorted_ids
 from coyodex.validate_analysis import (
     _ALTITUDE_MIN,
     _COVERAGE_SAMPLE,
@@ -3032,6 +3032,12 @@ def _stake_coverage_warnings(m: ProjectModel) -> list[str]:
 #: (39%), so the band leaves real sharing alone and only speaks when the list is nearly a formality.
 _OWNER_DOMINANCE = 0.90
 
+#: The extras heading every owner advisory offers as its escape. ONE constant: six messages name it,
+#: and a heading spelled differently in one of them is an escape that silences nothing. Named the way
+#: `AUDIT_EXCEPTIONS_HEADING` and `DRIFT_EXCEPTIONS_HEADING` are, so the method contract's scan for
+#: "which headings do the tools actually read" finds it without a literal at the call site.
+DATA_OWNER_EXCEPTIONS_HEADING = "Data owner exceptions"
+
 
 def _check_owners(m: ProjectModel) -> list[str]:
     """`owners` — which feature a data area exists FOR — is a SUB-DOMAIN field, with an ENTITY-level
@@ -3059,6 +3065,15 @@ def _check_owners(m: ProjectModel) -> list[str]:
     carriers: list[tuple[str, str, list[str] | None]] = (
         [(g.id, "sub-domain", g.owners) for g in m.subdomains]
         + [(e.id, "entity", e.owners) for e in m.entities])
+    # An override on a type this codebase saves NO record of (a request shape, an enum, a read
+    # projection) answers a question that was never asked: its area's question is about saved
+    # records, and `entity_owners` would hand the answer to the "Owned by" line of a card that has
+    # no lifecycle to own. Blocking, not advisory — the field is simply in the wrong place.
+    problems += [f"{e.id} ({e.name}) carries `owners`, but this codebase saves no record of it "
+                 f"(store mode '{(e.store.mode if e.store else '') or 'unstated'}') — an override "
+                 "names the owning feature of a SAVED record; drop it, or state a store mode that "
+                 f"says the record is kept ({', '.join(grammar.STORE_MODES_SAVED)})"
+                 for e in m.entities if e.owners is not None and not is_saved(e)]
     for eid, what, owners in carriers:
         if owners is None:
             continue
@@ -3101,8 +3116,9 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
     areas = build_areas(m)
     if not areas:
         return []
-    recorded = records.recorded_keys(m, "Ownership exceptions")
+    recorded = records.recorded_keys(m, DATA_OWNER_EXCEPTIONS_HEADING)
     names = {c.id: c.name for c in m.capabilities}
+    authored = {g.id: g.owners for g in m.subdomains}
     warnings: list[str] = []
 
     for a in areas:
@@ -3110,11 +3126,16 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
             continue
         touched = {t.feature: t for t in a.touched_by}
         if not a.owners:
-            warnings.append(
-                f"{a.id} ({a.name}) holds {len(a.entities)} saved record(s) and has no `owners` — "
-                "decide which feature the data exists for (the one that creates its records and "
-                "runs their lifecycle), list several if the sharing is real, or record "
-                f"'{a.id}: <why>' under an 'Ownership exceptions' extras heading")
+            # A field that WAS written but resolved to nothing (a dangling id, or `[]`) already has
+            # a blocking error naming it. Telling the same map it decided nothing would be a second,
+            # contradicting instruction — and the one an agent acts on is usually the advisory, so
+            # it would add an owner instead of fixing the typo.
+            if authored.get(a.id) is None:
+                warnings.append(
+                    f"{a.id} ({a.name}) holds {len(a.entities)} saved record(s) and has no "
+                    "`owners` — decide which feature the data exists for (the one that creates its "
+                    "records and runs their lifecycle), list several if the sharing is real, or "
+                    f"record '{a.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
             continue
         blind = [o for o in a.owners if o not in touched]
         if blind:
@@ -3122,21 +3143,31 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
                 f"{a.id} ({a.name}) names owner(s) whose walks touch none of its saved records "
                 f"({', '.join(f'{o} ({names.get(o, o)})' for o in blind)}) — either the owner is "
                 "wrong, or the walk that reaches this data is not written; fix one of the two, or "
-                f"record '{a.id}: <why>' under an 'Ownership exceptions' extras heading")
+                f"record '{a.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
         if len(a.owners) < 2:
             continue
         reach = {o: set(touched[o].entities) for o in a.owners if o in touched}
-        # SPLIT: every saved record reached by exactly ONE listed owner, and every listed owner
-        # holding at least one. A record several owners reach is what SHARING looks like, and it is
-        # what keeps a genuinely shared core (an organization row 7 features write) quiet here.
-        if (len(reach) == len(a.owners) and all(reach.values())
-                and all(sum(e in got for got in reach.values()) == 1 for e in a.entities)):
+        # SPLIT: every REACHED record claimed by exactly one listed owner, and every listed owner
+        # holding at least one. Measured against `a.entities` — every saved record of the area — it
+        # could never fire on a real map: 19 of the 27 areas across the three reference maps hold at
+        # least one saved record no walk reaches, and one such record makes the count 0 and the test
+        # False forever. A record NOBODY reaches says nothing about whether the area is two areas.
+        # A record SEVERAL listed owners reach does, and it still keeps a genuinely shared core
+        # quiet (an organization row 7 features write is not a partition).
+        claimed = sorted(set().union(*reach.values())) if reach else []
+        if (len(reach) == len(a.owners) and all(reach.values()) and claimed
+                and all(sum(e in got for got in reach.values()) == 1 for e in claimed)):
             warnings.append(
                 f"{a.id} ({a.name}) is listed as shared, but its saved records partition cleanly — "
-                + "; ".join(f"{names.get(o, o)} reaches only {', '.join(sorted(reach[o]))}"
+                + "; ".join(f"{names.get(o, o)} reaches only {', '.join(sorted_ids(reach[o]))}"
                             for o in a.owners if o in reach)
-                + f" — two areas glued together; split {a.id}, or record '{a.id}: <why>' under an "
-                "'Ownership exceptions' extras heading")
+                + f" — two areas glued together; split {a.id}, or record '{a.id}: <why>' under a "
+                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+        # DOMINANCE asks which of several REAL owners does the work, so it has nothing to say while
+        # one of them is ungrounded: the ratio is then trivially 1.0 ("2 of the 2 touches"), and it
+        # would advise dropping an owner when the defect the line above already named is a wrong id.
+        if blind:
+            continue
         total = sum(touched[o].touches for o in a.owners if o in touched)
         top = max((touched[o].touches for o in a.owners if o in touched), default=0)
         if total and top / total >= _OWNER_DOMINANCE:
@@ -3144,16 +3175,40 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
             warnings.append(
                 f"{a.id} ({a.name}) is listed as shared, but {names.get(lead, lead)} holds "
                 f"{top} of the {total} touches its listed owners make — consider a single owner, "
-                f"or record '{a.id}: <why>' under an 'Ownership exceptions' extras heading")
+                f"or record '{a.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
 
+    # The ENTITY override is cross-examined the same way its area is. It is the map's deliberate
+    # EXCEPTION — the shape most likely to be wrong — and it was checked for nothing but redundancy:
+    # an override naming a feature whose walks never reach that record rendered an "Owned by" line
+    # with no evidence at all behind it, and the map said nothing.
+    reached_by: dict[str, set[str]] = {}
+    for a in areas:
+        for t in a.touched_by:
+            for eid in t.entities:
+                reached_by.setdefault(eid, set()).add(t.feature)
     inherited = subdomain_owners(m)
+    ent_names = {e.id: e.name for e in m.entities}
     for e in m.entities:
-        if e.owners and e.id not in recorded and e.owners == inherited.get(e.subdomain or "", []):
+        if not e.owners or e.id in recorded:
+            continue
+        # SORTED, both sides: the same two features written in the other order are the same answer,
+        # and an override that escaped the check by reordering its list is exactly the redundancy
+        # the check exists to catch.
+        if sorted(e.owners) == sorted(inherited.get(e.subdomain or "", [])):
             warnings.append(
                 f"{e.id} ({e.name}) overrides `owners` with the same answer its area already gives "
                 f"({', '.join(e.owners)}) — an override is for the record whose owning feature "
-                f"DIFFERS from its area's; drop it, or record '{e.id}: <why>' under an "
-                "'Ownership exceptions' extras heading")
+                f"DIFFERS from its area's; drop it, or record '{e.id}: <why>' under a "
+                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+            continue
+        blind = [o for o in e.owners if o not in reached_by.get(e.id, ())]
+        if blind:
+            warnings.append(
+                f"{e.id} ({ent_names.get(e.id, e.id)}) is overridden to owner(s) whose walks never "
+                f"touch it ({', '.join(f'{o} ({names.get(o, o)})' for o in blind)}) — an override "
+                "is the one place the map contradicts its own area, so it is the one that has to "
+                f"be grounded; fix the owner or write the walk, or record '{e.id}: <why>' under a "
+                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
     return warnings
 
 

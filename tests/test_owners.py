@@ -27,7 +27,7 @@ from coyodex.model import (
     subdomain_owners,
     to_canonical_json,
 )
-from coyodex.validate_model import validate_model
+from coyodex.validate_model import DATA_OWNER_EXCEPTIONS_HEADING, validate_model
 
 
 # --- builders -------------------------------------------------------------------
@@ -83,8 +83,10 @@ def warnings_of(m: ProjectModel) -> list[str]:
 
 
 def owner_warnings(m: ProjectModel) -> list[str]:
-    return [w for w in warnings_of(m)
-            if "`owners`" in w or "listed as shared" in w or "names owner(s)" in w]
+    """Every advisory from the owner family, picked out by the escape it offers — all six name the
+    same heading. Matching on message wording instead let a new advisory quietly fall outside the
+    filter, and a test asserting `== []` then passed because it was looking at the wrong list."""
+    return [w for w in warnings_of(m) if DATA_OWNER_EXCEPTIONS_HEADING in w]
 
 
 # --- the derived half: what a feature TOUCHES ------------------------------------
@@ -263,6 +265,80 @@ def test_an_even_share_keeps_dominance_quiet() -> None:
     assert [w for w in owner_warnings(m) if "consider a single owner" in w] == []
 
 
+def test_split_looks_at_the_records_the_owners_REACH_not_every_record_the_area_holds() -> None:
+    """The regression an independent review found. Measured against every saved record of the area,
+    SPLIT could never fire on a real map: 19 of the 27 areas across the three reference maps hold at
+    least one saved record no walk reaches, and one such record makes the per-record count 0 and the
+    test False forever. A record NOBODY reaches says nothing about whether the area is two areas."""
+    m = make_map()
+    m.subdomains[0].owners = ["CAP1"]
+    m.flows[1].steps = [FlowStep(n=1, src="R1", dst="E3", phrase="asks what moved")]
+    m.subdomains[1].owners = ["CAP1", "CAP2"]          # CAP1 reaches only E2, CAP2 only E3
+    m.entities.append(make_saved("E5", "Retention", "SD2"))   # ...and nobody reaches E5
+    said = [w for w in owner_warnings(m) if "partition cleanly" in w]
+    assert any("SD2 (Snapshots and change)" in w for w in said), said
+
+
+def test_an_override_naming_a_feature_that_never_touches_the_record_is_ungrounded() -> None:
+    """An override is the one place the map contradicts its own area, so it is the one that has to
+    be grounded. It used to be checked for redundancy and nothing else: an override to a feature
+    with zero touches rendered an "Owned by" line with no evidence, silently."""
+    m = make_map()
+    m.subdomains[0].owners = ["CAP1"]
+    m.subdomains[1].owners = ["CAP2"]
+    m.entities[2].owners = ["CAP1"]                    # CAP1's walks never touch E3
+    said = [w for w in owner_warnings(m) if "never touch it" in w]
+    assert any("E3 (Change)" in w and "CAP1 (Page tracking)" in w for w in said), said
+
+
+def test_a_grounded_override_stays_quiet() -> None:
+    m = make_map()
+    m.subdomains[0].owners = ["CAP1"]
+    m.subdomains[1].owners = ["CAP2"]
+    m.entities[1].owners = ["CAP1"]                    # CAP1 DOES touch E2 — the AuditEntry shape
+    assert [w for w in owner_warnings(m) if "never touch it" in w] == []
+
+
+def test_dominance_says_nothing_while_one_listed_owner_is_ungrounded() -> None:
+    """With one listed owner touching nothing, the ratio is trivially 1.0 — "2 of the 2 touches" —
+    and the line advises dropping an owner when the defect is a wrong id the grounding line already
+    named."""
+    m = make_map()
+    m.subdomains[0].owners = ["CAP1"]
+    m.subdomains[1].owners = ["CAP2", "CAP1"]
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="E1", phrase="names the page")]  # CAP1 blind
+    said = owner_warnings(m)
+    assert any("touch none of its saved records" in w and w.startswith("SD2") for w in said), said
+    assert [w for w in said if "consider a single owner" in w] == []
+
+
+def test_a_rejected_owners_field_is_not_also_told_it_decided_nothing() -> None:
+    """A dangling id already has a blocking error naming it. Telling the same map it decided nothing
+    is a second, contradicting instruction — and an agent acts on the advisory, so it would add an
+    owner instead of fixing the typo."""
+    m = make_map()
+    m.subdomains[0].owners = ["CAP99"]
+    assert any("SD1 lists owner 'CAP99'" in p for p in problems_of(m))
+    assert [w for w in owner_warnings(m) if w.startswith("SD1 ") and "no `owners`" in w] == []
+
+
+def test_the_same_owners_in_the_other_order_is_still_redundant() -> None:
+    m = make_map()
+    m.subdomains[1].owners = ["CAP1", "CAP2"]
+    m.entities[1].owners = ["CAP2", "CAP1"]
+    assert any("E2 (Snapshot) overrides `owners`" in w for w in owner_warnings(m))
+
+
+def test_an_override_on_something_this_codebase_saves_no_record_of_is_blocking() -> None:
+    """`owners` names the owning feature of a SAVED record. On a call shape, an enum or a read
+    projection it answers a question nobody asked, and `entity_owners` would hand it to an "Owned
+    by" line on a card with no lifecycle to own."""
+    m = make_map()
+    m.entities[3].owners = ["CAP1"]                    # E4 FetchRequest, store.mode = transient
+    said = [p for p in problems_of(m) if p.startswith("E4")]
+    assert any("saves no record of it" in p and "transient" in p for p in said), said
+
+
 def test_an_override_repeating_the_area_is_reported_as_redundant() -> None:
     m = make_map()
     m.subdomains[0].owners = ["CAP1"]
@@ -282,7 +358,7 @@ def test_an_override_that_differs_stays_quiet() -> None:
 def test_a_recorded_line_silences_the_advisory() -> None:
     m = make_map()
     m.subdomains[1].owners = ["CAP2"]
-    m.extras = [ExtraSection(heading="Ownership exceptions",
+    m.extras = [ExtraSection(heading="Data owner exceptions",
                              body="SD1: the pages are a shared reference table, not a feature's.")]
     said = owner_warnings(m)
     assert [w for w in said if w.startswith("SD1 ")] == [], said

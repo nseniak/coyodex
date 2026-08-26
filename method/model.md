@@ -136,6 +136,11 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                                 "notes": "<TTL, cache tiers, …>" } /* or null = not persisted/stated */,
                      "meaning", "subdomain": "SDn|null",
                      "owners": ["CAPn", …],       // OVERRIDE of the subdomain's `owners`, for the one
+                                                  // SAVED record whose owning feature differs from
+                                                  // its area's. Assigned at synthesis via
+                                                  // `reconcile` (a `CAPn` does not exist when the
+                                                  // T5 fragment is written), exactly as
+                                                  // `use_cases[].capability` is.
                                                   // record whose owning feature differs from its
                                                   // area's; an override equal to the inherited
                                                   // answer is reported as redundant

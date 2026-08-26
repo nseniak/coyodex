@@ -19,7 +19,7 @@ paragraph in method.md before changing any wording.
    Upstream connections and credentials, Gateway credentials, Sandbox runtime and command
    credentials, Activity records). A single owner where one feature clearly runs the lifecycle
    (Access rules → Access control); a deliberate list where the sharing is real (Organizations and
-   plans, whose 3 saved records are reached by 7 features and do not partition).
+   plans, whose Organization row alone is reached by 7 features, so its records do not partition).
    regression sign: no `owners` anywhere (the instruction was not read); all 8 areas single-owned,
    the shared core included (authored to complete the diagram rather than decided); or `owners`
    authored on a subsystem, a capability or a block, which `validate` blocks.
@@ -27,7 +27,7 @@ paragraph in method.md before changing any wording.
    it does report ("names owner(s) whose walks touch none of its saved records") points at an area
    the named feature genuinely never reaches.
    regression sign: a dangling owner id or an empty `owners` list reaching the built map; or a
-   grounding advisory silenced with an "Ownership exceptions" record instead of fixing the owner or
+   grounding advisory silenced with a "Data owner exceptions" record instead of fixing the owner or
    writing the missing walk.
 3. expect: the rendered Features page matches the authoring — an ownership wire only where exactly
    one owner is authored, a shared area drawing no ownership wire and showing its several inbound

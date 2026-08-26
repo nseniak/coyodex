@@ -68,6 +68,12 @@ _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     "runs_in": (Component, "component"),
     "bucket": (Dep, "dependency"),
     "block": (BusinessRule, "business rule"),
+    # `owners` is here for the SAME reason `capability` is, one field over: it names `CAPn` ids that
+    # are minted at synthesis, and the entity it sits on was authored in the T5 harvest, before any
+    # capability existed. A sub-domain needs no entry here — the areas are authored at synthesis
+    # too, in the same pass that mints the features, so `subdomains[].owners` is written directly
+    # on the area and never has to travel through this file.
+    "owners": (Entity, "entity"),
 }
 
 
@@ -82,6 +88,7 @@ class SetDirective:
     capability: str | None = None
     entry_points: list[str] | None = None
     runs_in: list[str] | None = None
+    owners: list[str] | None = None
     bucket: str | None = None
     block: str | None = None
     #: id → the `source` anchor the author SAW on that entry point, for the witnessed form
@@ -249,6 +256,8 @@ def load_reconcile(text: str, label: str) -> Reconcile:
                 setattr(sd, fld, d[fld])
         if "runs_in" in d:
             sd.runs_in = _as_str_list(d["runs_in"], f"{label}: set[{i}].runs_in")
+        if "owners" in d:
+            sd.owners = _as_str_list(d["owners"], f"{label}: set[{i}].owners")
         if "entry_points" in d:
             raw_eps = d["entry_points"]
             if not isinstance(raw_eps, list):
@@ -460,6 +469,17 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                             f"authored against an older harvest and would point {eid} at a different "
                             f"front door. Re-author the entry_points assignments against this "
                             f"assemble's ids (`coyodex dump --id {ep_id}` shows what it is now)")
+                elif fld == "owners":
+                    bad_own = [o for o in (sd.owners or []) if o not in cap_ids]
+                    if bad_own:
+                        problems.append(f"reconcile set[{si}] {eid}: owners names unknown "
+                                        f"capabilit(y/ies): {', '.join(bad_own)} — an owner is the "
+                                        f"FEATURE the record exists for (a `CAPn` in "
+                                        f"`capabilities[]`)")
+                    if not (sd.owners or []):
+                        problems.append(f"reconcile set[{si}] {eid}: owners is empty — name the "
+                                        f"feature(s) the record exists for, or drop the directive "
+                                        f"to leave the decision unmade")
                 elif fld == "runs_in":
                     bad = [u for u in (sd.runs_in or []) if u not in units]
                     if bad:
@@ -550,6 +570,9 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             if sd.runs_in is not None and isinstance(el, Component):
                 el.runs_in = list(sd.runs_in)              # REPLACE the list → idempotent re-run (S9c)
                 set_counts["runs_in"] += 1
+            if sd.owners is not None and isinstance(el, Entity):
+                el.owners = list(sd.owners)                # REPLACE the list → idempotent re-run
+                set_counts["owners"] += 1
             if sd.bucket is not None and isinstance(el, Dep):
                 el.bucket = sd.bucket
                 set_counts["bucket"] += 1
