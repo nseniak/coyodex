@@ -38,7 +38,7 @@ from dataclasses import dataclass, field
 from coyodex.anchors import parse_anchor
 from coyodex.impact_git import Extents
 from coyodex.areas import DataArea, build_areas, sorted_ids
-from coyodex.model import ProjectModel, expanded_flow_steps
+from coyodex.model import ProjectModel, entity_owners, expanded_flow_steps
 from coyodex.validate_model import anchored_flow_steps, capability_audience, rule_steps
 
 
@@ -136,6 +136,11 @@ class FeatureIndex:
     coverage: Coverage = field(default_factory=Coverage)
     story: Story = field(default_factory=Story)
     areas: list[DataArea] = field(default_factory=list)   # in the order the right column draws them
+    entity_owners: dict[str, list[str]] = field(default_factory=dict)
+                                        # record -> its EFFECTIVE owning feature(s): its own
+                                        # authored `owners`, else its area's. The entity page's
+                                        # "Owned by" line is the field's day-one consumer, so an
+                                        # authored owner cannot sit in the map unread.
     rule_join_uses_extents: bool = False
 
 
@@ -428,6 +433,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
         coverage=coverage,
         story=story,
         areas=areas,
+        entity_owners=entity_owners(m),
         rule_join_uses_extents=bool(extents),
     )
 
@@ -451,6 +457,7 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
              "touchedBy": [{"feature": t.feature, "touches": t.touches, "entities": t.entities}
                            for t in a.touched_by]}
             for a in ix.areas],
+        "entityOwners": ix.entity_owners,
         "componentFeatures": ix.component_features,
         "ruleFeatures": ix.rule_features,
         "roleFeatures": ix.role_features,

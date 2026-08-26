@@ -34,6 +34,8 @@ let FEATURES = {};            // the whole bundle (see coyodex.features.as_bundl
 let FEAT_BY_ID = {};          // feature id -> its facts
 let FEAT_COVERAGE = {};       // how much of the code the feature layer reaches
 let COMP_FEATURES = {};       // component id -> the feature ids whose use-case walks pass through it
+let ENTITY_OWNERS = {};       // record id -> its EFFECTIVE owning feature(s), AUTHORED (never derived
+                              // here: the map either says who the data exists for, or nobody knows)
 let DEPLOYMENT_GROUP_CARDS;   // product-area container id -> its members' diagram (the container drill)
 let DEPLOYMENT_GROUP_MEMBERS; // product-area container id -> the unit names inside it
 let DEPLOYMENT_EDGES;      // process->process arrow 'U_a>U_b' -> [async channels it carries]
@@ -122,6 +124,7 @@ function applyBundle(b) {
   for (const f of (FEATURES.features || [])) FEAT_BY_ID[f.id] = f;
   FEAT_COVERAGE = FEATURES.coverage || {};
   COMP_FEATURES = FEATURES.componentFeatures || {};
+  ENTITY_OWNERS = FEATURES.entityOwners || {};
   CAP_OF_UC = {};
   for (const n of Object.values(GRAPH.nodes || {})) {
     if (n.kind === 'usecase' && n.parent && (GRAPH.nodes[n.parent] || {}).kind === 'capability') {
@@ -1931,6 +1934,26 @@ function applyPendingEpSelect() {
 // Data view's C→E derivation — WHO writes and reads it. Every chip (store dep, writer, reader)
 // navigates to that element, whose own node carries its source link (the "link every element to its
 // code" rule). The "See in Data view" link deep-links to this entity's row in the Data tab.
+// A record's OWNING FEATURE — the one the data exists for. AUTHORED on the map (its own `owners`,
+// else its area's, walked up), never inferred here: a record several features write is not owned by
+// the busiest one, and this line has no business guessing where the map stayed silent. Absent from
+// `ENTITY_OWNERS` = nobody decided, and the row is not drawn at all.
+//
+// Each feature is a DOOR to its own page, routed through `selectFromTree` like every other
+// `featref`, so moving a feature's home view cannot break this link.
+function ownedByHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || n.kind !== 'entity') return '';
+  const own = (ENTITY_OWNERS[id] || []).filter((c) => GRAPH.nodes[c]);
+  if (!own.length) return '';
+  const doors = own.map((c) =>
+    `<button type="button" class="featref" data-id="${esc(c)}" `
+    + `title="Open the details page of ${esc(elName(c))}">${esc(elName(c))}</button>`).join(', ');
+  // Several owners is a DELIBERATE statement that the record is shared, not an unresolved list, so
+  // the row says so rather than leaving the reader to read a comma as uncertainty.
+  const note = own.length > 1 ? ' <span class="dv-note">shared, deliberately</span>' : '';
+  return `<dt>Owned by</dt><dd class="dv-panerow">${doors}${note}</dd>`;
+}
 function persistedInHtml(id) {
   const n = GRAPH.nodes[id];
   // Only for an entity with a PHYSICAL store (store.dep). A not-persisted entity (transient/embedded/
@@ -2065,7 +2088,7 @@ function nodeDetailBodyHtml(id) {
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
   return explain
-    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${decidesHtml(id)}${triggeredByHtml(id)}</dl>`
+    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${ownedByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${decidesHtml(id)}${triggeredByHtml(id)}</dl>`
     + impactSectionHtml(id);
 }
 // Everything the map holds about one element, as a PAGE. The info pane shows the element's card and
@@ -7864,11 +7887,21 @@ function storyAreaCardHtml(a) {
   // "44 entities" — so this pill borrows it instead of minting a second word for the same thing.
   // `stored` is the filter that makes the number true: the area's read-only views, value shapes and
   // enums are NOT counted, and the title says so, because the area's own page lists them all.
-  return `<article class="story-card story-area" data-sarea="${esc(a.id)}" tabindex="0">`
+  // AUTHORED owners only. One owner is said by the ownership wire, so the box repeats nothing;
+  // SEVERAL is a deliberate statement of sharing that no wire can carry (the design draws no
+  // ownership wire for a shared area, on purpose), so the box names them. An area the map has not
+  // decided says nothing at all — the arrows landing on it are touches, never an owner.
+  const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
+  const shared = owners.length > 1
+    ? `<p class="story-shared">Shared by ${owners.map((c) => esc(featureName(c))).join(', ')}</p>`
+    : '';
+  return `<article class="story-card story-area${owners.length === 1 ? ' story-area-owned' : ''}`
+    + `${owners.length > 1 ? ' story-area-shared' : ''}" data-sarea="${esc(a.id)}" tabindex="0">`
     + `<span class="story-who">${storyAreaGlyphSvg()}`
     + `<button type="button" class="story-name story-namelink" `
     + `data-sd="${esc(a.id)}" title="Open the details page of ${esc(a.name || a.id)}">`
     + `${esc(a.name || a.id)}</button></span>`
+    + shared
     + '<div class="story-pills"><span class="story-pill" title="Kinds of thing this area keeps a '
     + 'record of. Read-only views, value shapes and enums are not counted.">'
     + `${n} stored entit${n === 1 ? 'y' : 'ies'}</span></div>`
@@ -8029,9 +8062,38 @@ function bindStoryDiagram(root) {
   for (const a of (FEATURES.areas || [])) {
     const to = areaEl[a.id];
     if (!to) continue;
+    // The ONE authored owner, when the map named exactly one: its wire says "this area exists for
+    // that feature", and it REPLACES the reference arrow for the same pair — one line per pair, or
+    // the reader is told the same feature both owns and merely visits the same data.
+    // A SHARED area (several owners) deliberately gets no ownership wire: the design draws sharing
+    // as the SHAPE of several inbound arrows, and the box names the owners in words. Nothing here
+    // ever promotes a lone reference arrow into ownership — an owner is authored or absent.
+    const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
+    const sole = owners.length === 1 ? owners[0] : null;
+    if (sole && featEl[sole]) {
+      const own = wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, 'story-own');
+      own.classList.add('story-elabel-own');
+      own.appendChild(document.createTextNode('owns'));
+      own.title = featureName(sole) + ' is the reason ' + (a.name || a.id) + ' exists — it creates '
+        + 'these records and runs their lifecycle';
+      // The owning pair draws ONE wire, so this label has to do the job of two: at rest it says
+      // `owns`, the answer the column exists to give; lit, it also names the records the feature
+      // reaches, each a door — the doors the reference arrow it replaced would have carried, which
+      // are otherwise lost on exactly the areas the map understands best.
+      const t = (a.touchedBy || []).find((x) => x.feature === sole);
+      if (t) {
+        const names = document.createElement('span');
+        names.className = 'story-own-names';
+        names.appendChild(document.createTextNode(' '));
+        fillAreaTouchLabel(names, t);
+        own.appendChild(names);
+      }
+      own.addEventListener('click', (ev) => ev.stopPropagation());
+      stage.appendChild(own); labels.push(own);
+    }
     for (const t of (a.touchedBy || [])) {
       const from = featEl[t.feature];
-      if (!from) continue;
+      if (!from || t.feature === sole) continue;
       const lab = wire(from, to, { sfeat: t.feature, sarea: a.id }, 'story-ref');
       fillAreaTouchLabel(lab, t);
       lab.title = featureName(t.feature) + ' reaches ' + t.touches + ' time'

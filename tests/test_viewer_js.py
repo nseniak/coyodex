@@ -2536,7 +2536,13 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     # surfaces cannot disagree by construction. Every renderer that shows the pills goes through this
     # one helper: cardFacts, and the story diagram's actor card.
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
-    assert "-owned" not in code, "the page's second form for a machine is back"
+    # The dead form is `staff-owned` — the word the rename removed, aimed exactly. A blanket ban on
+    # `-owned` stood here until an unrelated CSS class (`story-area-owned`, on a data area whose
+    # owning FEATURE is authored) tripped it: a guard that fires on any word containing "owned"
+    # stops being a statement about the actor vocabulary.
+    assert "staff-owned" not in code.lower(), "the page's second form for a machine is back"
+    assert "OWNED" not in "".join(l for l in code.splitlines() if "ecard-pill" in l), \
+        "no pill prints an -OWNED word"
     assert js.count("actorSidePills(") == 3, \
         "the helper itself, cardFacts, and the story actor card — nothing else"
     head = js[js.index("function actorPageHeroHtml(actorName) {"):
@@ -3376,13 +3382,49 @@ def test_the_story_block_scrolls_sideways_only_and_never_clips_the_pillar() -> N
 
 def test_the_data_column_never_invents_an_owner() -> None:
     """The area box draws on every map, authored owners or not — which records a feature's walks
-    reach is a derived fact. Who the data is FOR is authored, and a box that read an owner off the
-    arrows landing on it would be the derivation this design was measured out of."""
+    reach is a derived fact, and who the data is FOR is authored. The box may state the AUTHORED
+    answer (`a.owners`); it must never read one off `touchedBy`, which is the derivation this
+    design was measured out of. One inbound arrow is not ownership."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = _story_fn(js, "storyAreaCardHtml")
-    assert "owners" not in card, "the area box states no owner it was not given"
+    assert "a.owners" in card, "the authored answer is what the box may state"
+    assert "touchedBy" not in card, "an owner is never read off the arrows landing on the box"
     assert "data-sarea=" in card
     assert 'go({ kind: \'domsub\', sd });' in _story_fn(js, "bindStoryDiagram")
+
+
+def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -> None:
+    """The map's authored claim, and the one line that carries it. A SHARED area (several owners)
+    deliberately gets no wire — the design draws sharing as the shape of several inbound arrows and
+    names the owners on the box — and an area the map never decided gets nothing. The owning pair
+    also loses its reference arrow, or the reader is told one feature both owns and merely visits
+    the same data."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const sole = owners.length === 1 ? owners[0] : null;" in bind
+    assert "if (sole && featEl[sole])" in bind
+    assert "if (!from || t.feature === sole) continue;" in bind, \
+        "the owning pair draws ONE line, not two"
+    assert "'story-own'" in bind
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "svg.story-wires path.story-own {" in css
+    assert "border-style: dashed" not in css[css.index(".story-area-owned"):
+                                             css.index(".story-shared")], \
+        "dashed already means `a container, open it` on every diagram here"
+    assert ".story-shared {" in css, "a shared area says its owners in words"
+
+
+def test_a_record_page_says_who_owns_it_only_when_the_map_does() -> None:
+    """The field's day-one consumer, so an authored owner cannot sit in the map unread. It reads the
+    EFFECTIVE owner the server derived from the authored field (the record's own, else its area's) —
+    a record absent from that table is one nobody decided for, and the row is not drawn."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function ownedByHtml(id) {"):js.index("\nfunction persistedInHtml(id) {")]
+    assert "ENTITY_OWNERS[id]" in fn
+    assert "if (!own.length) return '';" in fn, "no decision, no row"
+    assert "featref" in fn, "each owner is a door to its feature"
+    assert "ENTITY_OWNERS = FEATURES.entityOwners || {};" in js
+    assert "${runByHtml(id)}${ownedByHtml(id)}${persistedInHtml(id)}" in js
 
 
 def test_the_use_case_pill_is_a_door_that_does_not_steal_the_pin() -> None:
