@@ -640,6 +640,117 @@ def test_features_owns_the_actor_page_and_the_actors_view_is_gone() -> None:
     assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
 
+
+def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None:
+    """An actor's page cuts every feature box into two lanes: the happy-path steps above a dashed
+    line, everything else the actor drives below it. Six signals already separated them (dot vs
+    circle, the rail, the step numbers, ink vs grey, the dashed line, the legend) and readers still
+    read one stacked list, for two reasons this fixes.
+
+    The lanes were never NAMED where the reader looks — the words "happy path" appeared only in the
+    legend under the board — and the one label that did exist, "also here:", was drawn per box and
+    only in a box that also had steps. So a feature the actor's happy path never enters (the Map
+    reader has two on coyodex's own map) drew an unlabelled list of circles. The names now sit once
+    each in a sticky gutter, and the per-box label is gone.
+
+    And the lanes did not line up: a nested box ended where its own steps ended, so the dashed line
+    sat at a different height in every feature and read as a footnote to that feature. The board is
+    one grid now — name row, happy-path row, other row — with each feature contributing CELLS to
+    those shared rows and a `journey-zbg` cell behind them keeping one box per feature."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    zone = js[js.index("function journeyZoneHtml(z, opts) {"):
+              js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
+    # Cells in one shared grid, not a nested box: every cell names its column, and the tint rides
+    # the backdrop cell that spans the three rows.
+    assert "journey-zone" not in js, "the nested box is gone; the box is the journey-zbg cell"
+    assert 'class="journey-zbg' in zone and 'grid-column:${col}${tint}' in zone
+    for cell in ("journey-zlabel", "journey-track", "journey-sides"):
+        assert f'class="{cell}' in zone, cell
+    assert "grid-row: 1 / -1" in css and ".journey-zbg" in css
+    for row, cell in ((1, "journey-zlabel"), (2, "journey-track"), (3, "journey-sides")):
+        assert f".{cell} {{ grid-row: {row};" in css, cell
+    # The upper lane is drawn even with no step in it, or the box under it would climb a row and
+    # the dashed line would go crooked again. Empty, it must not draw a rail.
+    assert ".journey-track:empty::before { display: none; }" in css
+    # The rail runs PAST the first and last boxes, so it reads as one path through them rather than
+    # as a rule belonging to each; the right tip ends in an arrowhead, which is where the walk ends.
+    assert ".journey-track-first::before { left: -12px; }" in css
+    assert ".journey-track-last::before { right: -20px; }" in css
+    assert ".journey-track-last::after" in css and "border-left: 8px solid #4f46e5;" in css
+    assert ".journey-gap-before { margin-left: 32px; }" in css, "…and the arrowhead ends in clear space"
+    assert "o.offLane ?" in zone, "the lower lane is drawn for every box, or for none"
+    assert "journey-alsolbl" not in js and "journey-alsolbl" not in css, "the per-box label is gone"
+    assert ">also here:<" not in js, "…and so is the text it drew"
+    # Named once, in a gutter that survives the board's sideways scroll.
+    page = js[js.index("function renderActorPage(actorName) {"):
+              js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
+    assert ">Happy path<" in page and ">Off the happy path<" in page
+    assert page.count(">Happy path<") == 1 and page.count(">Off the happy path<") == 1, \
+        "one label each, built once for the page and not once per feature"
+    assert ".journey-gutter { grid-column: 1; position: sticky; left: 0;" in css
+    assert ".journey-gutter-off { grid-row: 3; border-top: 1px dashed" in css, \
+        "the gutter carries the same cut, so the two lanes read as one band"
+    # With the lanes named, everything the legend said was a label restated or a click taught.
+    assert "journey-legend" not in js and "journey-legend" not in css
+    # An actor with nothing off their happy path gets no empty band and no label for it.
+    assert "const offLane = onRail.concat(off).some((b) => (b.z.sides || []).length);" in page
+    assert "offLane ? ' journey-has-off' : ''" in page
+    assert ".journey-rail:not(.journey-has-off) .journey-track { padding-bottom: 12px; }" in css
+    # The gutter is prose-shaped, so the glossary matcher must leave it alone like the other labels.
+    assert ".journey-zkind, .journey-gutter'" in js
+
+
+
+def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
+    """Four things this page drew are gone, and each for its own reason.
+
+    The hero opened with the actor's place in the story ("2nd to appear"). The rail below already
+    numbers this actor's steps by their position in the walk, so an actor whose first station is 1
+    was told the same fact twice in two vocabularies.
+
+    A greyed BEFORE-segment drew the steps of the role this actor used to be (a `becomes`
+    predecessor). It was untrue, not merely noisy: it drew EVERY step that role drives, wherever
+    those sit in the walk, under a label reading "before". On the argus map the Page owner's own
+    steps are 6, 9, 11, 15, 19, 20 and the Visitor's are 1, 2, 16, so step 16 was drawn as happening
+    before step 6. The role change survives in the hero's "was <role> until <use case>" line, which
+    states it once and has no order to get wrong.
+
+    An arrowhead separated the features on this actor's happy path from the rest. It is redundant:
+    a trailing feature's happy-path lane is EMPTY, and the rail visibly stops.
+
+    And the legend explained the blocks, the two glyphs and the clicks. With the lanes named, every
+    line of it restated a label or taught a click a reader finds by trying it.
+
+    What stays is the "may also do everything a <role> may do" sentence — now a sentence, with only
+    the other role's name a quiet link, because a pill reads as a control and this is a fact."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "ordinalWord" not in js and "to appear in the story" not in js
+    page = js[js.index("function renderActorPage(actorName) {"):
+              js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
+    # The ghost is gone from the page, from the box builder and from the styles alike.
+    assert "journey-ghost" not in js and "journey-ghost" not in css
+    assert "o.ghost" not in js and "ghost: true" not in js
+    assert "becomes" not in page, "the role change is the hero's line, not a segment of the rail"
+    meta = js[js.index("function actorHeroMetaHtml(actorName) {"):
+              js.index("\nfunction ", js.index("function actorHeroMetaHtml(actorName) {") + 10)]
+    assert "rel.kind !== 'becomes'" in meta, "…and the hero still says it"
+    assert "journey-endcap" not in js and "journey-endcap" not in css
+    assert "▶" not in page, "…and the page draws no arrowhead"
+    # The "may also do" line: a sentence carrying a link, not a pill.
+    assert "journey-incpill" not in js and "journey-incpill" not in css
+    assert "'<span>may also do everything a '" in meta
+    assert 'class="journey-inclink"' in meta and ".journey-inclink {" in css
+    assert "root.querySelectorAll('.journey-inclink')" in js, "the other actor's page is still a click away"
+    # …and an actor the happy path never touches (argus's Page owner) loses the upper lane entirely
+    # rather than showing an empty one under a dashed line that cuts nothing.
+    assert "const noPath = !hasPath;" in page and "offLane, noPath," in page
+    assert "o.noPath ? '' :" in js, "the upper-lane cell is dropped, not drawn empty"
+    assert ".journey-no-path .journey-sides, .journey-no-path .journey-gutter-off { grid-row: 2;" in css
+    assert "journey-gutter-off\">Off the happy path" in page, "…and the one lane is still named"
+
+
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
     """`pushContentPoint` rebuilds the current state field by field so opening a file keeps the screen
     you are on. Maintained by hand it dropped a field three times running (`store`/`entity`, then
@@ -3140,8 +3251,12 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
     # skips draws the SAME card as any other. Its position in the trailing block is what says the
     # walk misses it, so no card spends a word on it. The demoted third column read as an importance
     # ranking, which walk membership never was.
-    assert "Features · story order" in html
-    assert "Actors · in order of appearance" in html
+    # The headers NAME the columns and claim nothing else — no spelled-out order, and so nothing
+    # that has to be switched off on a map with no walk.
+    assert "<p class=\"story-colhead\">Features</p>" in html
+    assert "<p class=\"story-colhead\">Actors</p>" in html
+    assert "Features \u00b7 story order" not in html, "the header states no ordering rule"
+    assert "Actors \u00b7 in order of appearance" not in html
     # An explicit one-argument call, never a bare `.map(storyFeatureCardHtml)`: map hands its
     # callback the index and the array too, which is a trap the day the card takes a second flag.
     assert "(st.column || []).map((id) => storyFeatureCardHtml(id))" in html
@@ -3155,13 +3270,12 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
 
 def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
     """The arrows never needed the happy path — they derive from the use cases — so a map with no
-    walk draws one plain "Features" column (the derived column is map order there) and no header
-    claiming an appearance order. The labels then explain instead of navigating."""
+    walk still draws both columns (the derived column is map order there). The headers need no
+    walk-aware branch: they name the columns, and a name is true on every map. The labels then
+    explain instead of navigating."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = _story_fn(js, "storyDiagramHtml")
-    assert "const walk = (st.spine || []).length > 0;" in html
-    assert "${walk ? 'Features · story order' : 'Features'}" in html
-    assert "${walk ? 'Actors · in order of appearance' : 'Actors'}" in html
+    assert "walk ?" not in html, "no header switches on whether the map has a walk"
     bind = _story_fn(js, "bindStoryDiagram")
     assert "'This map has no happy path'" in bind
     css = (VIEWER_DIR / "viewer.css").read_text()

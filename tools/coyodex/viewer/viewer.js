@@ -404,7 +404,7 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ecard-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
   + '.dv-kindpill, .dv-coll, .story-name, .story-pill, .story-colhead, '
-  + '.story-elabel, .journey-zkind, .journey-alsolbl, .journey-legend';
+  + '.story-elabel, .journey-zkind, .journey-gutter';
 // A page about one element is not decorated with a link to itself: the page's subject is the
 // breadcrumb's last item (the trail names the page — one source of truth), folded the same way the
 // matcher folds terms, so on a details page whose subject IS a glossary term that term stays plain.
@@ -7521,27 +7521,17 @@ function actorJourney(actorName) {
   return { stations, zones, offZones };
 }
 
-// The page hero's context line: the actor's place in the story (read off the SAME derived cast
-// order the cast column uses — one function answers "actor order"), and the role relations
-// when the map carries them. Everything here is conditional on the map having it: with no walk
-// there is no appearance order, with no relations no history and no chip — the line simply says
-// less, never draws an empty slot.
-function ordinalWord(n) {
-  const tail = (n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th';
-  return n + tail;
-}
+// The page hero's context line: the role relations, when the map carries them. Everything here is
+// conditional on the map having it: with no relations no history and no "may also do" line, and the
+// line simply says less rather than drawing an empty slot.
+//
+// It used to open with the actor's PLACE in the story ("2nd to appear"). Dropped: the rail below
+// already numbers this actor's steps by their position in the walk, so an actor whose first station
+// is 1 was told twice, in two vocabularies.
 function actorHeroMetaHtml(actorName) {
   const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
   if (!role) return '';
   const parts = [];
-  const cast = (FEATURES.story || {}).cast || [];
-  // Only a role that actually drives (or co-drives) a walk step APPEARS in the story. The cast
-  // list alone cannot say: it holds EVERY role, the non-appearing ones sorted after the cast — so
-  // counting an off-walk role's position claimed an appearance it never makes. HP_ACTORS is the
-  // walk's own participant list, so membership there IS appearance.
-  const appears = HP_ACTORS.some((a) => a.name === safeMsgName(role.name));
-  const at = appears ? cast.indexOf(role.id) : -1;
-  if (at >= 0) parts.push(`<span>${ordinalWord(at + 1)} to appear in the story</span>`);
   // "was <role> until <use case>" — read off the PREDECESSOR's `becomes`, so the fact is authored
   // once, on the role that changes. A self-`becomes` is meaningless and stays undrawn.
   for (const p of GRAPH.roles || []) {
@@ -7557,8 +7547,11 @@ function actorHeroMetaHtml(actorName) {
     if (rel.kind !== 'includes' || rel.role === role.id) continue;
     const other = ROLE_BY_ID[rel.role];
     if (!other) continue;
-    parts.push(`<button type="button" class="journey-incpill" data-act="${esc(other.name)}" `
-      + `title="Open ${esc(other.name)}">may also do everything a ${esc(other.name)} may do</button>`);
+    // A sentence, not a pill: it states a fact about this role, and a pill reads as a control. Only
+    // the other role's NAME stays a door, drawn as a quiet link inside the sentence.
+    parts.push('<span>may also do everything a '
+      + `<button type="button" class="journey-inclink" data-act="${esc(other.name)}" `
+      + `title="Open ${esc(other.name)}">${esc(other.name)}</button> may do</span>`);
   }
   return parts.join('<span class="journey-metasep">·</span>');
 }
@@ -7577,15 +7570,28 @@ function actorPageHeroHtml(actorName) {
   });
 }
 
-// One zone of the rail as HTML. Side stops belong to the ZONE, not to whichever station they land
-// under — the mockup hung them under the first station and they read as its sub-steps — so they sit
-// below a zone-wide separator behind an "also here:" micro-label.
+// One feature's box on the rail. The box is not a nested container: the whole board is ONE grid
+// with three rows — the feature name, the happy-path lane, and the lane for everything else — and
+// this returns that feature's four CELLS in its own column. Rows shared across every column are
+// what puts the dashed cut between the two lanes at one height all the way across the board. Nested
+// boxes could not do it: each box ended where its own steps ended, so the lower lane started
+// somewhere different in every feature and read as a footnote to that feature rather than as a band
+// running under the whole page. The tinted box itself is the `journey-zbg` cell, spanning the three
+// rows, so there is still exactly one box per feature.
+//
+// The two lanes are NAMED once, in the gutter renderActorPage pins to the left edge. The per-box
+// "also here:" label this replaces named only the lower lane, and only in a box that also had an
+// upper one — so a feature this actor's happy path never enters drew an unlabelled list of circles.
 function journeyZoneHtml(z, opts) {
   const o = opts || {};
+  const col = o.col;
   const name = z.fid ? featureName(z.fid) : '';
+  // The feature's own glyph rides its name here, the same three sparkles the feature cards carry on
+  // the Features page — one drawing for "feature", wherever a feature is named.
   const label = o.label || (name
     ? `<button type="button" class="journey-zname" data-cap="${esc(z.fid)}" `
-      + `title="Open the details page of ${esc(name)}">${esc(name)}</button>`
+      + `title="Open the details page of ${esc(name)}">${storyFeatureGlyphSvg()}`
+      + `<span>${esc(name)}</span></button>`
     : (z.stations || []).length || (z.sides || []).length
       ? '<span class="journey-zkind">not in any feature</span>' : '');
   const stations = (z.stations || []).map((s) =>
@@ -7593,57 +7599,75 @@ function journeyZoneHtml(z, opts) {
     + `title="Open the Happy Path: ${esc(s.st.title || 'this step')}">`
     + `<span class="journey-dot"></span><span class="journey-n">${s.n}</span>`
     + `<span class="journey-t">${esc(stationTitle(s.st.title, o.actor))}</span></button>`).join('');
-  const sides = (z.sides || []).length
-    ? `<div class="journey-sides">${(z.stations || []).length
-        ? '<span class="journey-alsolbl">also here:</span>' : ''}`
-      + z.sides.map((uc) => `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
-        + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`)
-        .join('') + '</div>'
-    : '';
-  const cls = 'journey-zone' + (o.ghost ? ' journey-ghost' : '');
-  const tint = (o.ghost || !z.fid) ? '' : ` style="background:${featureTint(z.fid)}"`;
-  return `<div class="${cls}"${tint}><div class="journey-zlabel">${label}</div>`
-    + (stations ? `<div class="journey-track">${stations}</div>` : '')
-    + sides + '</div>';
+  const sides = (z.sides || []).map((uc) =>
+    `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
+    + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`).join('');
+  const tint = z.fid ? `;background:${featureTint(z.fid)}` : '';
+  // The rail overhangs half the gap between boxes, so it bridges them into one line, and its two
+  // ENDS (`first` / `last`) stick out further still: a line that stopped at the box edge read as a
+  // property of that box rather than as one path running through all of them. The right-hand tip is
+  // kept clear of the features the happy path never enters by the wider gap `gapBefore` opens.
+  // The upper-lane cell is drawn even for a feature holding no happy-path step, so that feature's
+  // lower lane still sits in row 3 with everyone else's. Empty, it draws no rail line — the rule is
+  // `.journey-track:empty`, so an off-path feature is not crossed by a path it never joins.
+  // Every cell of a box carries `gapBefore`, because the box is four separate grid items in one
+  // column and a margin on one of them would move that cell alone.
+  const gap = o.gapBefore ? ' journey-gap-before' : '';
+  return `<div class="journey-zbg${gap}" style="grid-column:${col}${tint}"></div>`
+    + `<div class="journey-zlabel${gap}" style="grid-column:${col}">${label}</div>`
+    + (o.noPath ? '' : `<div class="journey-track${gap}${o.first ? ' journey-track-first' : ''}`
+      + `${o.last ? ' journey-track-last' : ''}" `
+      + `style="grid-column:${col}">${stations}</div>`)
+    + (o.offLane ? `<div class="journey-sides${gap}" style="grid-column:${col}">${sides}</div>` : '');
 }
+// This page once opened with a greyed BEFORE-segment: the steps of the role this actor used to be,
+// when the map authors a `becomes` toward them. It was removed as untrue rather than as clutter. It
+// drew EVERY step that earlier role drives, wherever those sit in the walk, under a label reading
+// "before" — on the argus map the Page owner's own steps are 6, 9, 11, 15, 19, 20 and the Visitor's
+// are 1, 2, 16, so step 16 was drawn as happening before step 6. The role change survives as the
+// hero's "was <role> until <use case>" line, which states it once and cannot be out of order.
 function renderActorPage(actorName) {
-  const { stations, zones, offZones } = actorJourney(actorName);
-  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
-  // The greyed BEFORE-segment: the same person, wearing their previous hat — drawn only when the
-  // map authors a `becomes` toward this role. One level only, on purpose: a chain (or a cycle,
-  // which nothing forbids the data to hold) never recurses, each page shows its own one predecessor.
-  let ghost = '';
-  if (role) {
-    for (const p of GRAPH.roles || []) {
-      if (p.id === role.id) continue;
-      if (!(p.relations || []).some((rel) => rel.kind === 'becomes' && rel.role === role.id)) continue;
-      const pStations = actorStations(p.name);
-      if (!pStations.length) continue;
-      ghost += journeyZoneHtml({ fid: '', stations: pStations, sides: [] },
-        { ghost: true, actor: p.name,
-          label: `<span class="journey-zkind">before · as a ${esc(p.name)}</span>` });
-    }
-  }
-  const onRail = zones.map((z) => journeyZoneHtml(z, { actor: actorName })).join('');
-  // The trailing zones draw exactly like the others — full tint, plain name. The arrowhead is the
-  // one separator: before it, where this actor's walk goes; after it, what else they can do.
-  const offHtml = offZones.map((z) => journeyZoneHtml(z, { actor: actorName })).join('');
-  // The arrowhead ends the RAIL, so it only draws when a rail drew; the off zones stand beyond it.
-  const rail = ghost + onRail
-    + (onRail ? '<div class="journey-endcap" aria-hidden="true">▶</div>' : '')
-    + offHtml;
+  const { zones, offZones } = actorJourney(actorName);
+  const onRail = zones.map((z) => ({ z, o: { actor: actorName } }));
+  const off = offZones.map((z) => ({ z, o: { actor: actorName } }));
+  // The lower lane is drawn at all only when this actor HAS something off their happy path.
+  // Otherwise every box would carry a dashed line under an empty band, and the gutter would name a
+  // lane holding nothing.
+  const offLane = onRail.concat(off).some((b) => (b.z.sides || []).length);
+  // An actor the happy path never touches (argus's Page owner is one) has no upper lane at all: the
+  // row is dropped rather than drawn empty, and with one lane there is nothing for the dashed line
+  // to cut. The gutter still names the lane, because "everything this actor does is off the happy
+  // path" is the page's answer, not an absence.
+  const hasPath = onRail.some((b) => (b.z.stations || []).length);
+  const noPath = !hasPath;
+  // Column 1 is the gutter; each feature takes the next column.
+  let col = 1;
+  const boxes = (list, lead) => list.map((b, i) => journeyZoneHtml(b.z,
+    Object.assign({}, b.o, { col: ++col, offLane, noPath,
+      first: lead && i === 0, last: lead && i === list.length - 1,
+      // The FIRST feature the happy path never enters opens a wider gap, so the rail's right tip
+      // ends in clear space instead of pointing at it.
+      gapBefore: !lead && i === 0 && onRail.length }))).join('');
+  const onHtml = boxes(onRail, true);
+  // The trailing features draw exactly like the rest — full tint, plain name. They need no marker
+  // between them and the rest: their happy-path lane is EMPTY, which is the whole statement, and the
+  // rail visibly stops at the last feature this actor's happy path reaches.
+  const offHtml = boxes(off, false);
+  // The lane names, once. A label repeated in every box would read as a property of that feature
+  // instead of a property of the lane, which is the mistake "also here:" made.
+  // Three cells, one per row, so the gutter is a solid white strip the board's contents slide
+  // UNDER when it scrolls sideways. Two cells left the feature names and the step titles showing
+  // through the gaps between the labels, cut off mid-word.
+  const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
+    + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
+    + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
+  // No legend. With the two lanes named, every line it carried was either restating a label or
+  // teaching a click the reader finds by trying it.
+  const rail = onHtml + offHtml;
   const board = rail
-    ? `<div class="journey-board"><div class="journey-rail">${rail}</div></div>`
-      + '<p class="journey-legend">'
-      + (stations.length ? '<b>●</b> a step on the happy path — click to open it&ensp;' : '')
-      + '<b>○</b> also possible — click to open the use case'
-      // The zones sentence covers BOTH sides of the arrowhead, so it stays true for an actor
-      // whose page is mostly trailing zones (the ones their walk never enters).
-      + (zones.length + offZones.length > 1
-        ? '&ensp;zones are features — this actor’s walk in entry order, then, past the ▶, '
-          + 'the rest of what they can do'
-        : '')
-      + '</p>'
+    ? '<div class="journey-board"><div class="journey-rail'
+      + `${offLane ? ' journey-has-off' : ''}${noPath ? ' journey-no-path' : ''}">`
+      + `${gutter}${rail}</div></div>`
     : '<p class="empty">This map records nothing this actor does.</p>';
   diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}</div>`;
   bindActorPage(diagram, actorName);
@@ -7658,7 +7682,7 @@ function bindActorPage(root, actorName) {
     go({ kind: 'usecase', uc: b.getAttribute('data-uc'), act: actorName })));
   root.querySelectorAll('.journey-zname').forEach((b) => b.addEventListener('click', () =>
     go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
-  root.querySelectorAll('.journey-incpill').forEach((b) => b.addEventListener('click', () =>
+  root.querySelectorAll('.journey-inclink').forEach((b) => b.addEventListener('click', () =>
     go({ kind: 'actor', act: b.getAttribute('data-act') })));
 }
 
@@ -7798,16 +7822,19 @@ function storyDiagramHtml() {
   // in the trailing block now states that for free. The old demoted third column read as an
   // importance ranking, which walk membership never was, and a trailing block is not that column
   // returning — the cards are identical and a `before` anchor still places a lead-in ahead of the
-  // walk. Without a walk the column is map order and the headers stop claiming an order they
-  // cannot have.
-  const walk = (st.spine || []).length > 0;
+  // walk. Without a walk the column is map order.
+  //
+  // The headers NAME the two columns and claim nothing else. Each used to carry its ordering rule
+  // spelled out after a middle dot, which cost a line of reading to learn what the cards already
+  // show, and had to be switched off on a walk-less map to stop the words being a lie. One word
+  // each is true on every map, so the switch is gone with them.
   return `<div class="story-wrap"><div class="story-stage" id="storystage">`
     + '<svg class="story-wires" aria-hidden="true"><defs>'
     + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
     + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
-    + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'Features · story order' : 'Features'}</p>`
+    + '<div class="story-col story-col-spine"><p class="story-colhead">Features</p>'
     + (st.column || []).map((id) => storyFeatureCardHtml(id)).join('') + '</div>'
-    + `<div class="story-col story-col-cast"><p class="story-colhead">${walk ? 'Actors · in order of appearance' : 'Actors'}</p>`
+    + '<div class="story-col story-col-cast"><p class="story-colhead">Actors</p>'
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
     + '</div></div>';
 }
