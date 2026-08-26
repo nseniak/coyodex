@@ -1760,6 +1760,14 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-elabel.story-lab-on { display: block; }
 .story-elabel-live { cursor: pointer; }
 .story-elabel-live:hover { text-decoration: underline; box-shadow: 0 3px 10px rgba(79,70,229,.5); }
+/* A record NAME inside a reference arrow's label is a door of its own (show it in context). It rides
+   the pill's own type and colour — it is the label's text, not a control bolted onto it — and says
+   it is a door the way every other name-door here does: an underline on hover. */
+.story-elabel-ent { font: inherit; color: inherit; background: none; border: 0; padding: 0;
+                    cursor: pointer; text-decoration: underline;
+                    text-decoration-color: rgba(255,255,255,.45); text-underline-offset: 2px; }
+.story-elabel-ent:hover { text-decoration-color: #fff; }
+.story-elabel-ent:focus-visible { outline: 2px solid #fff; outline-offset: 1px; border-radius: 3px; }
 /* The rules pill is a door too: the feature page's "What it decides" section. */
 .story-rulespill { cursor: pointer; }
 .story-rulespill:hover { background: #4f46e5; color: #fff; }

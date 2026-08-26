@@ -3331,11 +3331,30 @@ def test_every_wire_flows_left_to_right_through_one_drawer() -> None:
     did not when the actors sat on the right."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    assert "const wire = (fromEl, toEl, keys, text, wireCls) => {" in bind
+    assert "const wire = (fromEl, toEl, keys, wireCls) => {" in bind
     assert "side(fromEl, 'right')" in bind and "side(toEl, 'left')" in bind
-    assert "wire(a, f, { sactor: e.actor, sfeat: e.feature }, e.label, '')" in bind
+    assert "wire(a, f, { sactor: e.actor, sfeat: e.feature }, '')" in bind
     assert "{ sfeat: t.feature, sarea: a.id }" in bind
     assert "'story-ref'" in bind
+    # The drawer places the label and never fills it: one hop's label is a stake sentence, the
+    # other's is a list of doors, and a shared `textContent` would make the second impossible.
+    assert "lab.textContent = text;" not in bind
+
+
+def test_a_record_named_on_a_reference_arrow_is_a_door() -> None:
+    """The arrow's label is the one place on this page that names a single saved record, so the name
+    opens it — shown in context, selected on the view that draws it. A name the reader cannot follow
+    is a claim they have to take on trust. The "+N more" tail stays plain text: no single record."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fill = _story_fn(js, "fillAreaTouchLabel")
+    assert "showInContext(id);" in fill
+    assert "ev.stopPropagation();" in fill, "the record's door is not the label's, nor the unpin"
+    assert "story-elabel-ent" in fill
+    # An id the graph does not hold draws its name as TEXT — a button opening nothing is worse
+    # than a word.
+    assert "if (!GRAPH.nodes[id]) { lab.appendChild(document.createTextNode(name)); return; }" in fill
+    assert "createTextNode(' +' + rest + ' more')" in fill
+    assert ".story-elabel-ent" in (VIEWER_DIR / "viewer.css").read_text()
 
 
 def test_the_data_column_never_invents_an_owner() -> None:

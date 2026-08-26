@@ -7842,12 +7842,33 @@ function storyAreaCardHtml(a) {
     + '</article>';
 }
 // The label a reference arrow carries: the saved records that feature's walks actually reach in
-// that area. Names, never ids, and capped — a feature reaching nine records would otherwise draw a
-// label wider than the column it points at.
-function areaTouchLabel(t) {
-  const names = (t.entities || []).map((id) => (GRAPH.nodes[id] || {}).name || id);
-  if (names.length <= 3) return names.join(', ');
-  return names.slice(0, 3).join(', ') + ' +' + (names.length - 3) + ' more';
+// that area. Each name is a DOOR — click it and the record is shown in context, selected on the
+// view that draws it — because the label is the one place on this page that names a single record,
+// and a name the reader cannot follow is a claim they have to take on trust. Names, never ids.
+//
+// Capped at three: a feature reaching nine records would draw a pill wider than the column it
+// points at. The tail says how many were left, and stays plain text — there is no single record
+// for it to open.
+const _AREA_LABEL_CAP = 3;
+function fillAreaTouchLabel(lab, t) {
+  const ids = (t.entities || []).slice(0, _AREA_LABEL_CAP);
+  ids.forEach((id, i) => {
+    if (i) lab.appendChild(document.createTextNode(', '));
+    const name = (GRAPH.nodes[id] || {}).name || id;
+    if (!GRAPH.nodes[id]) { lab.appendChild(document.createTextNode(name)); return; }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'story-elabel-ent';
+    b.textContent = name;
+    b.title = 'Show ' + name + ' in context';
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();          // the record's door is not the label's, nor the stage's unpin
+      showInContext(id);
+    });
+    lab.appendChild(b);
+  });
+  const rest = (t.entities || []).length - ids.length;
+  if (rest > 0) lab.appendChild(document.createTextNode(' +' + rest + ' more'));
 }
 // Does the story diagram draw on this map? ONE answer, read by the renderer, by renderOverview
 // (which hides the duplicate card grid when it does), and by the search / "show in context"
@@ -7925,7 +7946,7 @@ function bindStoryDiagram(root) {
   // ONE wire drawer for both hops of the page, so the actor→feature and feature→area arrows cannot
   // drift apart in shape, in hover behaviour or in how their label is placed. `keys` are the data
   // attributes the wire answers to — a wire lights when ANY of its ends is the hovered/pinned card.
-  const wire = (fromEl, toEl, keys, text, wireCls) => {
+  const wire = (fromEl, toEl, keys, wireCls) => {
     const [sx, sy] = side(fromEl, 'right');
     const [tx, ty] = side(toEl, 'left');
     const dx = 60;
@@ -7937,7 +7958,6 @@ function bindStoryDiagram(root) {
     svg.appendChild(path); paths.push(path);
     const lab = document.createElement('div');
     lab.className = 'story-elabel';
-    lab.textContent = text;
     Object.assign(lab.dataset, keys);
     lab.style.left = ((sx + tx) / 2) + 'px';
     lab.style.top = ((sy + ty) / 2 - 8) + 'px';
@@ -7949,7 +7969,8 @@ function bindStoryDiagram(root) {
     if (!a || !f) continue;
     // The actors are the LEFT column now, so the wire leaves the actor's right edge and lands on
     // the feature's left edge — which is what makes the stake label read in sentence order.
-    const lab = wire(a, f, { sactor: e.actor, sfeat: e.feature }, e.label, '');
+    const lab = wire(a, f, { sactor: e.actor, sfeat: e.feature }, '');
+    lab.textContent = e.label;
     const hp = e.step ? HP_BY_ID[e.step] : null;
     if (hp) {
       // The label is a door to the walk: the Happy Path view, arriving with this edge's FIRST step
@@ -7978,10 +7999,12 @@ function bindStoryDiagram(root) {
     for (const t of (a.touchedBy || [])) {
       const from = featEl[t.feature];
       if (!from) continue;
-      const lab = wire(from, to, { sfeat: t.feature, sarea: a.id }, areaTouchLabel(t),
-                       'story-ref');
+      const lab = wire(from, to, { sfeat: t.feature, sarea: a.id }, 'story-ref');
+      fillAreaTouchLabel(lab, t);
       lab.title = featureName(t.feature) + ' reaches ' + t.touches + ' time'
         + (t.touches === 1 ? '' : 's');
+      // A click anywhere else on the pill is not a door, but it is not empty background either:
+      // it must not clear the pin the reader set.
       lab.addEventListener('click', (ev) => ev.stopPropagation());
       stage.appendChild(lab); labels.push(lab);
     }
