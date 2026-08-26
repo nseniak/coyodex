@@ -1686,26 +1686,48 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    narrow window scrolls this block sideways inside its own wrap, never the page. */
 .story-wrap { overflow-x: auto; margin: 0 0 22px; padding-bottom: 4px; }
 /* The page that carries the diagram earns a wider measure than a card list's 1100px: the stage is
-   1370px, and clipping it into its own scrollbar on a window that has the room hides the third
-   column. Narrower windows still scroll the wrap alone. */
+   1250px with all three columns up, and clipping it into its own scrollbar on a window that has
+   the room hides the data column. Narrower windows still scroll the wrap alone. */
 .usecases-wrap:has(> .story-wrap), .usecases-wrap:has(> .journey-board) { max-width: 1440px; }
-/* ONE features column + the cast: every feature sits in the story column, the walk in walk order
-   and unbroken, off-walk ones in a block after it — never a demoted third column. */
+/* THREE columns, read left to right as one sentence: the people, what they do, the data it keeps.
+   Every arrow on this page flows the same way, which is why the actors moved left — a stake label
+   on a right-to-left wire read backwards on every one of them.
+   The FEATURES column is the pillar: widest, and raised off the page by .story-col-spine below, so
+   the eye still lands in the middle. Columns 2 and 4 are the wire gutters. A map whose sub-domains
+   hold no saved records draws the first three tracks only (.story-has-areas adds the rest). */
 .story-stage { position: relative; display: grid; width: max-content;
-               grid-template-columns: 400px 150px 330px; }
+               grid-template-columns: 300px 130px 420px; }
+.story-stage.story-has-areas { grid-template-columns: 300px 130px 420px 130px 270px; }
 svg.story-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* At rest a wire is thin, grey and unlabelled — the diagram is for choosing, not reading. Hover or
    pin makes ONE card's wires the picture: bold accent + label, everything else faded hard. */
 svg.story-wires path { fill: none; stroke: #c3c8d9; stroke-width: 1.4; opacity: .75;
                        transition: stroke .15s, opacity .15s, stroke-width .15s; }
+/* A reference arrow (a feature's walks reach these records) is thinner and dashed at rest than an
+   actor's wire: it is a fact about the code, where the wire beside it is a person's reason to be
+   here. Hover and pin treat the two identically — one card, one picture. */
+svg.story-wires path.story-ref { stroke-dasharray: 4 3; stroke-width: 1.2; opacity: .6; }
 svg.story-wires path.story-hot { stroke: #4f46e5; stroke-width: 2.2; opacity: 1; }
+svg.story-wires path.story-ref.story-hot { stroke-width: 1.8; }
 svg.story-wires path.story-cold { opacity: .14; }
 svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-col { display: flex; flex-direction: column; gap: 14px; }
-.story-col-spine { grid-column: 1; }
+/* The PILLAR. It is the answer to the page's question, so it carries its own ground and a border
+   the other two columns do not have: without that, a column on the left and a column on the right
+   pull the eye off the middle, which is the whole objection actors-on-the-left has to answer. */
+.story-col-spine { grid-column: 3; background: #f7f8fd; border: 1px solid #e3e6f5;
+                   border-radius: 14px; padding: 12px 14px 14px; margin: -4px 0;
+                   box-shadow: 0 1px 3px rgba(30,34,53,.05); }
+.story-col-spine > .story-card { border-width: 1.5px; box-shadow: 0 1px 3px rgba(30,34,53,.10); }
 /* The cast spreads over the spine's height, so its six cards meet the seven features they drive at
    comparable heights instead of bunching at the top with every wire fanning down. */
-.story-col-cast { grid-column: 3; justify-content: space-between; }
+.story-col-cast { grid-column: 1; justify-content: space-between; }
+/* The data areas sit beside the features they belong to (the server orders them by their owning
+   feature's story position), so they stack from the top rather than spreading. */
+.story-col-areas { grid-column: 5; }
+/* A data area is a quieter box than a feature: it is what the middle column KEEPS, not a thing the
+   reader chose to come for. */
+.story-area { border-color: #d9dced; background: #fcfcfe; }
 .story-colhead { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                  letter-spacing: .06em; color: #6b7280; }
 .story-card { background: #fff; border: 1.5px solid #c7cdf9; border-radius: 10px;

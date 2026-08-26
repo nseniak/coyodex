@@ -3290,9 +3290,9 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
     assert "story-offf" not in js, "the demoted card styling is gone, not shadowed"
 
 
-def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
+def test_a_walk_less_map_still_draws_the_diagram() -> None:
     """The arrows never needed the happy path — they derive from the use cases — so a map with no
-    walk still draws both columns (the derived column is map order there). The headers need no
+    walk still draws the columns (the derived column is map order there). The headers need no
     walk-aware branch: they name the columns, and a name is true on every map. The labels then
     explain instead of navigating."""
     js = (VIEWER_DIR / "viewer.js").read_text()
@@ -3301,8 +3301,52 @@ def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
     bind = _story_fn(js, "bindStoryDiagram")
     assert "'This map has no happy path'" in bind
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "grid-template-columns: 400px 150px 330px;" in css
     assert "story-stage-2col" not in css and "story-stage-2col" not in js
+
+
+def test_the_three_columns_read_left_to_right_with_the_features_in_the_middle() -> None:
+    """Actors | Features | Data areas, and the grid tracks must AGREE with the column order in the
+    markup: the two are written in different files, and a swap in one alone silently draws every
+    wire backwards. A map whose sub-domains hold no saved records keeps the three-track grid, so the
+    data column is added, never faked."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = _story_fn(js, "storyDiagramHtml")
+    assert html.index("story-col-cast") < html.index("story-col-spine") < html.index("story-col-areas")
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "grid-template-columns: 300px 130px 420px;" in css
+    assert ".story-stage.story-has-areas { grid-template-columns: 300px 130px 420px 130px 270px; }" in css
+    assert ".story-col-cast { grid-column: 1;" in css
+    assert ".story-col-spine { grid-column: 3;" in css
+    assert ".story-col-areas { grid-column: 5; }" in css
+    # The pillar carries its own ground: the middle column has to stay the thing the eye lands on
+    # once there is a column on each side of it.
+    spine = css[css.index(".story-col-spine {"):]
+    assert "background:" in spine[:spine.index("}")]
+
+
+def test_every_wire_flows_left_to_right_through_one_drawer() -> None:
+    """Both hops (actor→feature, feature→area) are drawn by the same function, so their shape,
+    their hover keys and their label placement cannot drift apart. Every wire leaves a RIGHT edge
+    and lands on a LEFT edge — that is what makes a stake label read in sentence order, which it
+    did not when the actors sat on the right."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const wire = (fromEl, toEl, keys, text, wireCls) => {" in bind
+    assert "side(fromEl, 'right')" in bind and "side(toEl, 'left')" in bind
+    assert "wire(a, f, { sactor: e.actor, sfeat: e.feature }, e.label, '')" in bind
+    assert "{ sfeat: t.feature, sarea: a.id }" in bind
+    assert "'story-ref'" in bind
+
+
+def test_the_data_column_never_invents_an_owner() -> None:
+    """The area box draws on every map, authored owners or not — which records a feature's walks
+    reach is a derived fact. Who the data is FOR is authored, and a box that read an owner off the
+    arrows landing on it would be the derivation this design was measured out of."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    card = _story_fn(js, "storyAreaCardHtml")
+    assert "owners" not in card, "the area box states no owner it was not given"
+    assert "data-sarea=" in card
+    assert 'go({ kind: \'domsub\', sd });' in _story_fn(js, "bindStoryDiagram")
 
 
 def test_the_use_case_pill_is_a_door_that_does_not_steal_the_pin() -> None:
@@ -3391,7 +3435,7 @@ def test_the_wires_measure_cards_not_their_own_paths_and_ignore_transforms() -> 
     offsets read the settled layout regardless."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    assert "const actorEl = {}, featEl = {};" in bind
+    assert "const actorEl = {}, featEl = {}, areaEl = {};" in bind
     assert bind.index("actorEl[el.dataset.sactor] = el") < bind.index("for (const e of (st.edges || []))")
     code = "\n".join(l for l in bind.splitlines() if not l.lstrip().startswith("//"))
     assert "el.offsetLeft" in code and "getBoundingClientRect" not in code
