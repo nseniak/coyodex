@@ -1804,9 +1804,11 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
                                                                         padding-top: 12px; }
 .journey-station { font: inherit; background: none; border: 0; padding: 0; text-align: left;
                    position: relative; width: 118px; cursor: pointer; display: block; color: inherit; }
+/* No left margin: the dot's left edge is the station's left edge, and the number and the title
+   under it start there too. A 4px indent on the dot alone left the text hanging left of it. */
 .journey-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
                border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
-               margin: 2px 0 6px 4px; box-sizing: border-box; }
+               margin: 2px 0 6px; box-sizing: border-box; }
 .journey-station:hover .journey-dot { background: #4f46e5; }
 .journey-station:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
 .journey-n { display: block; font-size: 10px; font-weight: 700; color: #4f46e5; }
