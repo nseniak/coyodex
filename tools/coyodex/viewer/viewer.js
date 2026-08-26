@@ -7831,14 +7831,46 @@ function storyActorCardHtml(rid) {
 // The box says nothing about who owns it here: `owners` is authored, most maps do not carry it yet,
 // and a box that invented an owner from the arrows landing on it would be the derivation this whole
 // design was measured out of.
+// A DATA AREA's glyph, third in the hand the actor pair and the feature sparkle are drawn in: one
+// 20x20 box, closed shapes, stroked at 1.6, no interior detail beyond one line.
+//
+// THREE STACKED ENTITY BOXES, in the ENTITY tint (the fuchsia the Data view already draws an entity
+// with), because that is literally what an area is: several kinds of stored thing. The front box
+// carries the header band a class box has, which is what makes the shape read as an entity rather
+// than as a plain rectangle; the two behind are outlines peeking out, which is what makes it read as
+// several.
+//
+// A DATABASE CYLINDER was considered and rejected: the cylinder is already the dependency's shape
+// everywhere in this viewer (it sits on an entity's own card next to "MongoDB · snapshots"), and an
+// area is not a database — it groups kinds of data and can span two stores or none. A DASHED FRAME
+// was rejected too: at 17px it is the same mark as a subsystem, a sub-domain frame and a collapsed
+// group, so it would say "a container" and stop there.
+function storyAreaGlyphSvg() {
+  const t = ELEMENT_TINT.entity || {};
+  const stroke = t.stroke || '#86198f', fill = t.fill || '#fff';
+  const box = (x, y) => `<rect x="${x}" y="${y}" width="10.5" height="8.5" rx="1.7" `
+    + `fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+  return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
+    + box(7, 2.25) + box(4.75, 4.75) + box(2.5, 7.25)
+    + `<path d="M2.5 10.1 H13" fill="none" stroke="${stroke}" stroke-width="1.5"/>`
+    + '</svg>';
+}
 function storyAreaCardHtml(a) {
   const n = (a.entities || []).length;
+  // The count says STORED ENTITIES, not "records": an area holds a handful of KINDS of thing that
+  // get kept (Page, Snapshot, Change), while the product stores thousands of each. `entity` is the
+  // word the rest of the viewer already uses for a kind — the tab is Entities, the Data view counts
+  // "44 entities" — so this pill borrows it instead of minting a second word for the same thing.
+  // `stored` is the filter that makes the number true: the area's read-only views, value shapes and
+  // enums are NOT counted, and the title says so, because the area's own page lists them all.
   return `<article class="story-card story-area" data-sarea="${esc(a.id)}" tabindex="0">`
-    + `<span class="story-who"><button type="button" class="story-name story-namelink" `
+    + `<span class="story-who">${storyAreaGlyphSvg()}`
+    + `<button type="button" class="story-name story-namelink" `
     + `data-sd="${esc(a.id)}" title="Open the details page of ${esc(a.name || a.id)}">`
     + `${esc(a.name || a.id)}</button></span>`
-    + `<div class="story-pills"><span class="story-pill">`
-    + `${n} record${n === 1 ? '' : 's'}</span></div>`
+    + '<div class="story-pills"><span class="story-pill" title="Kinds of thing this area keeps a '
+    + 'record of. Read-only views, value shapes and enums are not counted.">'
+    + `${n} stored entit${n === 1 ? 'y' : 'ies'}</span></div>`
     + '</article>';
 }
 // The label a reference arrow carries: the saved records that feature's walks actually reach in
@@ -7915,7 +7947,7 @@ function storyDiagramHtml() {
     + '<div class="story-col story-col-spine"><p class="story-colhead">Features</p>'
     + (st.column || []).map((id) => storyFeatureCardHtml(id)).join('') + '</div>'
     + (areas.length
-       ? '<div class="story-col story-col-areas"><p class="story-colhead">Data areas</p>'
+       ? '<div class="story-col story-col-areas"><p class="story-colhead">Data</p>'
          + areas.map(storyAreaCardHtml).join('') + '</div>'
        : '')
     + '</div></div>';
