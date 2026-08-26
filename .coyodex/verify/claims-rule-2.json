@@ -1,0 +1,234 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'A check that cannot run is reported as skipped, because silence would read as a check that passed.' is enforced at eval/tools/coyodex_eval/compare.py:437 — the zoom check says it was skipped when the new map carries no code-derived expectation",
+   "anchor": "eval/tools/coyodex_eval/compare.py:437",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that cannot run is reported as skipped, because silence would read as a check that passed.' is enforced at eval/tools/coyodex_eval/compare.py:534 — the comparison of enforcement locations says it was skipped rather than reading absence as agreement",
+   "anchor": "eval/tools/coyodex_eval/compare.py:534",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that cannot run is reported as skipped, because silence would read as a check that passed.' is enforced at eval/tools/coyodex_eval/process_scorecard.py:3182 — the scorecard refuses to score at all when the map cannot be read, rather than letting three map-reading rules score zero while the run still reports success",
+   "anchor": "eval/tools/coyodex_eval/process_scorecard.py:3182",
+   "detail": "In: Build behaviour scorecard (C65)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The run refuses a verdict when the map changed after freezing, or when the accepted map is missing.' is enforced at eval/tools/coyodex_eval/run.py:212 — an empty freeze value is refused, so the guard is never switched off by an unnoticed typing mistake",
+   "anchor": "eval/tools/coyodex_eval/run.py:212",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The run refuses a verdict when the map changed after freezing, or when the accepted map is missing.' is enforced at eval/tools/coyodex_eval/run.py:219 — refuses to score a map whose bytes no longer match the ones frozen when the run was picked",
+   "anchor": "eval/tools/coyodex_eval/run.py:219",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The run refuses a verdict when the map changed after freezing, or when the accepted map is missing.' is enforced at eval/tools/coyodex_eval/run.py:242 — a named accepted map that is not there stops the run instead of quietly comparing nothing",
+   "anchor": "eval/tools/coyodex_eval/run.py:242",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The run refuses a verdict when the map changed after freezing, or when the accepted map is missing.' is enforced at eval/tools/coyodex_eval/run.py:247 — an accepted map holding no scores stops the run, because an empty standard cannot produce a verdict",
+   "anchor": "eval/tools/coyodex_eval/run.py:247",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judgements kept from an earlier run are thrown away when the judging method has changed since.' is enforced at eval/tools/coyodex_eval/run.py:451 — a stored reading that does not record which judging method made it is treated as unusable",
+   "anchor": "eval/tools/coyodex_eval/run.py:451",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judgements kept from an earlier run are thrown away when the judging method has changed since.' is enforced at eval/tools/coyodex_eval/run.py:455 — a stored reading made under a different judging method is refused, and the map must be judged again",
+   "anchor": "eval/tools/coyodex_eval/run.py:455",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judgements kept from an earlier run are thrown away when the judging method has changed since.' is enforced at eval/tools/coyodex_eval/compare.py:477 — two sides judged under different methods breach, so the comparison cannot end in a clean pass",
+   "anchor": "eval/tools/coyodex_eval/compare.py:477",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The checkers are scored on how many deliberately false claims they refuse to confirm.' is enforced at eval/tools/coyodex_eval/mutate.py:228 — confirming a claim that was made false on purpose is the only outcome scored as a miss",
+   "anchor": "eval/tools/coyodex_eval/mutate.py:228",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The checkers are scored on how many deliberately false claims they refuse to confirm.' is enforced at eval/tools/coyodex_eval/mutate.py:216 — a moved code link counts as caught only when the checker reports a different line than the planted one",
+   "anchor": "eval/tools/coyodex_eval/mutate.py:216",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The checkers are scored on how many deliberately false claims they refuse to confirm.' is enforced at eval/tools/coyodex_eval/mutate.py:161 — the four kinds of falsehood are planted in turn, so no single easy kind can dominate the score",
+   "anchor": "eval/tools/coyodex_eval/mutate.py:161",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The checkers are scored on how many deliberately false claims they refuse to confirm.' is enforced at eval/tools/coyodex_eval/mutate.py:113 — a planted moved link must land on a real line of code, so the hard case is not quietly replaced by the easy one",
+   "anchor": "eval/tools/coyodex_eval/mutate.py:113",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A relationship, a step or a decision must name the code line that proves it, or the map is refused.' is enforced at tools/coyodex/validate_model.py:3540 — refuses a relationship that gives no line and does not declare that none exists",
+   "anchor": "tools/coyodex/validate_model.py:3540",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A relationship, a step or a decision must name the code line that proves it, or the map is refused.' is enforced at tools/coyodex/validate_model.py:1133 — refuses a decision that lists no place where it is enforced",
+   "anchor": "tools/coyodex/validate_model.py:1133",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A relationship, a step or a decision must name the code line that proves it, or the map is refused.' is enforced at tools/coyodex/validate_model.py:1140 — refuses one enforcement place carrying neither a line nor a declared absence",
+   "anchor": "tools/coyodex/validate_model.py:1140",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A relationship, a step or a decision must name the code line that proves it, or the map is refused.' is enforced at tools/coyodex/validate_model.py:401 — refuses a step between two parts of the product that gives no line of its own",
+   "anchor": "tools/coyodex/validate_model.py:401",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A claim may declare that no single line enforces it. Declaring no line and naming a line at once is refused.' is enforced at tools/coyodex/validate_model.py:1143 — refuses an enforcement place that both declares no line and gives a line",
+   "anchor": "tools/coyodex/validate_model.py:1143",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A claim may declare that no single line enforces it. Declaring no line and naming a line at once is refused.' is enforced at tools/coyodex/validate_model.py:3546 — warns when a relationship declares no line and still carries one",
+   "anchor": "tools/coyodex/validate_model.py:3546",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A claim may declare that no single line enforces it. Declaring no line and naming a line at once is refused.' is enforced at tools/coyodex/validate_model.py:407 — warns when a step declares no line and still carries one",
+   "anchor": "tools/coyodex/validate_model.py:407",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A claim may declare that no single line enforces it. Declaring no line and naming a line at once is refused.' is enforced at tools/coyodex/audit_model.py:966 — leaves a declared absence out of the claim list a checker is asked to read",
+   "anchor": "tools/coyodex/audit_model.py:966",
+   "detail": "In: Map auditor (C14)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.' is enforced at tools/coyodex/validate_model.py:3840 — refuses an enforcement place that names a file without a line",
+   "anchor": "tools/coyodex/validate_model.py:3840",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.' is enforced at tools/coyodex/validate_model.py:1146 — refuses the same file-only place while a worker is still writing its own rows",
+   "anchor": "tools/coyodex/validate_model.py:1146",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.' is enforced at tools/coyodex/validate_model.py:4060 — blocks a link whose file is not in the project",
+   "anchor": "tools/coyodex/validate_model.py:4060",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.' is enforced at tools/coyodex/validate_model.py:4078 — blocks a link naming a line past the end of the file",
+   "anchor": "tools/coyodex/validate_model.py:4078",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.' is enforced at tools/coyodex/anchors.py:128 — counts a blank line as a line that cannot act",
+   "anchor": "tools/coyodex/anchors.py:128",
+   "detail": "In: Map document (C1)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.' is enforced at tools/coyodex/anchors.py:131 — matches the named line against shapes that never act, such as a comment or a function opening",
+   "anchor": "tools/coyodex/anchors.py:131",
+   "detail": "In: Map document (C1)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.' is enforced at tools/coyodex/validate_model.py:4148 — runs that shape test over every link claiming an action fires there",
+   "anchor": "tools/coyodex/validate_model.py:4148",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A relationship shows one example line where it happens. A step shows the exact line, which the reader can open. A change to that line hits the step it belongs to.' is enforced at tools/coyodex/views.py:649 — shows exactly one line for each relationship, as a witness rather than a list of every call",
+   "anchor": "tools/coyodex/views.py:649",
+   "detail": "In: Graph builder (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A relationship shows one example line where it happens. A step shows the exact line, which the reader can open. A change to that line hits the step it belongs to.' is enforced at tools/coyodex/views.py:490 — renders a step's own line as a link the reader can open",
+   "anchor": "tools/coyodex/views.py:490",
+   "detail": "In: Graph builder (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A relationship shows one example line where it happens. A step shows the exact line, which the reader can open. A change to that line hits the step it belongs to.' is enforced at tools/coyodex/impact_lib.py:236 — registers a step's line, so a code change on it points back at that step",
+   "anchor": "tools/coyodex/impact_lib.py:236",
+   "detail": "In: Change impact (C34)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Two workers reporting the same relationship at the same line are folded into one claim. Two different lines are both kept, so a person decides which one is right.' is enforced at tools/coyodex/assemble.py:713 — makes the line part of what identifies a relationship, so only an exact match folds",
+   "anchor": "tools/coyodex/assemble.py:713",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Two workers reporting the same relationship at the same line are folded into one claim. Two different lines are both kept, so a person decides which one is right.' is enforced at tools/coyodex/assemble.py:710 — keeps a relationship that names no line, because nothing tells two of them apart",
+   "anchor": "tools/coyodex/assemble.py:710",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Two workers reporting the same relationship at the same line are folded into one claim. Two different lines are both kept, so a person decides which one is right.' is enforced at tools/coyodex/validate_model.py:3570 — flags one relationship declared twice at two different lines, for a person to settle",
+   "anchor": "tools/coyodex/validate_model.py:3570",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right.' is enforced at tools/coyodex/lint_fragment.py:479 — sends every moved link out on the advisory channel, beside the other nudges",
+   "anchor": "tools/coyodex/lint_fragment.py:479",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right.' is enforced at tools/coyodex/lint_fragment.py:491 — prints the moved-link count on a passing verdict, so a clean check still says how many moved",
+   "anchor": "tools/coyodex/lint_fragment.py:491",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right.' is enforced at tools/coyodex/anchor_drift.py:229 — drops one report the reader has recorded as a false alarm",
+   "anchor": "tools/coyodex/anchor_drift.py:229",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

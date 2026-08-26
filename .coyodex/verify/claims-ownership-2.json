@@ -1,0 +1,174 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "ownership",
+ "claims": [
+  {
+   "claim": "C15 reads E13",
+   "anchor": "tools/coyodex/balance_lib.py:110",
+   "detail": "From: C15 = Diagram balance report (tools/coyodex/balance.py:119); entry points: coyodex balance (tools/coyodex/balance.py:231); To: E13 = Component (tools/coyodex/model.py:187)",
+   "why_risky": "domain-model ownership edge — verify C15's code actually 'reads' E13; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C14 writes E41",
+   "anchor": "tools/coyodex/audit_model.py:1269",
+   "detail": "From: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307); To: E41 = WorkItem (tools/coyodex/audit_model.py:421)",
+   "why_risky": "domain-model ownership edge — verify C14's code actually 'writes' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C14 writes E15",
+   "anchor": "tools/coyodex/audit_model.py:382",
+   "detail": "From: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307); To: E15 = Edge (tools/coyodex/model.py:412)",
+   "why_risky": "domain-model ownership edge — verify C14's code actually 'writes' E15; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C23 writes E35",
+   "anchor": "tools/coyodex/grounding.py:1086",
+   "detail": "From: C23 = Grounding record (tools/coyodex/grounding.py:201); entry points: Running `coyodex anchor-drift` lists every code link pointing at a line that cannot be doing the work. (tools/coyodex/anchor_drift.py:378); Running `coyodex grounding write` derives the four counts and writes them into a build fragment. (tools/coyodex/grounding.py:1003); Running `coyodex grounding by-element` shows, per map element, what a fresh reader proved against the label its author typed. (tools/coyodex/grounding.py:1049); Running `coyodex grounding report` lists which claims were disproved, tied, unsettled, or never voted on. (tools/coyodex/grounding.py:1073); Running `coyodex grounding lint` checks the verdict files for shape while the reader that wrote them is still reachable. (tools/coyodex/grounding.py:924); Running `coyodex grounding refutations` fails the build when the map still carries a claim a fresh reader disproved. (tools/coyodex/grounding.py:974); To: E35 = Grounding (tools/coyodex/model.py:565)",
+   "why_risky": "domain-model ownership edge — verify C23's code actually 'writes' E35; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C23 derives E43",
+   "anchor": "tools/coyodex/grounding.py:1068",
+   "detail": "From: C23 = Grounding record (tools/coyodex/grounding.py:201); entry points: Running `coyodex anchor-drift` lists every code link pointing at a line that cannot be doing the work. (tools/coyodex/anchor_drift.py:378); Running `coyodex grounding write` derives the four counts and writes them into a build fragment. (tools/coyodex/grounding.py:1003); Running `coyodex grounding by-element` shows, per map element, what a fresh reader proved against the label its author typed. (tools/coyodex/grounding.py:1049); Running `coyodex grounding report` lists which claims were disproved, tied, unsettled, or never voted on. (tools/coyodex/grounding.py:1073); Running `coyodex grounding lint` checks the verdict files for shape while the reader that wrote them is still reachable. (tools/coyodex/grounding.py:924); Running `coyodex grounding refutations` fails the build when the map still carries a claim a fresh reader disproved. (tools/coyodex/grounding.py:974); To: E43 = ElementCheck (tools/coyodex/grounding.py:412)",
+   "why_risky": "domain-model ownership edge — verify C23's code actually 'derives' E43; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C13 reads E35",
+   "anchor": "tools/coyodex/validate_model.py:2549",
+   "detail": "From: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663); To: E35 = Grounding (tools/coyodex/model.py:565)",
+   "why_risky": "domain-model ownership edge — verify C13's code actually 'reads' E35; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C24 writes E40",
+   "anchor": "tools/coyodex/fix.py:331",
+   "detail": "From: C24 = Map repairs (tools/coyodex/fix.py:1724); entry points: Running `coyodex fix dedup-security` drops an access surface that two harvest fragments both recorded. (tools/coyodex/fix.py:1128); Running `coyodex fix row` rewrites one row's own text inside the fragment that authored the row. (tools/coyodex/fix.py:1416); Running `coyodex fix apply-drift` writes the corrected line into every code link a fresh reader found had moved. (tools/coyodex/fix.py:149); Running `coyodex fix drop-edge` removes a disproved relation and heals the happy-path steps that rode it. (tools/coyodex/fix.py:399); Running `coyodex fix dedup-relation` removes one chosen copy of a relation two data cards both declare. (tools/coyodex/fix.py:508); Running `coyodex fix dedup-edge` keeps one code link for a relation declared at several different lines. (tools/coyodex/fix.py:739); +1 more; To: E40 = Reconcile (tools/coyodex/reconcile.py:159)",
+   "why_risky": "domain-model ownership edge — verify C24's code actually 'writes' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 removes E15",
+   "anchor": "tools/coyodex/reconcile.py:576",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E15 = Edge (tools/coyodex/model.py:412)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'removes' E15; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 writes E11",
+   "anchor": "tools/coyodex/reconcile.py:584",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E11 = FlowStep (tools/coyodex/model.py:368)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'writes' E11; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C16 writes E45",
+   "anchor": "tools/coyodex/finalize.py:472",
+   "detail": "From: C16 = Pre-commit gate run (tools/coyodex/finalize.py:472); entry points: coyodex finalize (tools/coyodex/finalize.py:778); To: E45 = Leg (tools/coyodex/finalize.py:70)",
+   "why_risky": "domain-model ownership edge — verify C16's code actually 'writes' E45; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C16 writes E46",
+   "anchor": "tools/coyodex/finalize.py:495",
+   "detail": "From: C16 = Pre-commit gate run (tools/coyodex/finalize.py:472); entry points: coyodex finalize (tools/coyodex/finalize.py:778); To: E46 = FinalizeReport (tools/coyodex/finalize.py:86)",
+   "why_risky": "domain-model ownership edge — verify C16's code actually 'writes' E46; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 persists E47",
+   "anchor": "tools/coyodex/provenance.py:217",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E47 = Provenance (tools/coyodex/provenance.py:60)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'persists' E47; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 writes E48",
+   "anchor": "tools/coyodex/provenance.py:199",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E48 = SessionEntry (tools/coyodex/provenance.py:33)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'writes' E48; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C34 writes E49",
+   "anchor": "tools/coyodex/impact_lib.py:196",
+   "detail": "From: C34 = Change impact (tools/coyodex/impact_git.py:285); To: E49 = AnchorRef (tools/coyodex/impact_lib.py:170)",
+   "why_risky": "domain-model ownership edge — verify C34's code actually 'writes' E49; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C34 writes E50",
+   "anchor": "tools/coyodex/impact_lib.py:367",
+   "detail": "From: C34 = Change impact (tools/coyodex/impact_git.py:285); To: E50 = DirectHit (tools/coyodex/impact_lib.py:289)",
+   "why_risky": "domain-model ownership edge — verify C34's code actually 'writes' E50; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C75 writes E1",
+   "anchor": "method/change-impact.md:123",
+   "detail": "From: C75 = The build method (method.md:3); entry points: A person asks coyodex to analyze, when a map exists and the code has moved on since it was pinned. (method/dispatch.md:151); A person says the change report looks right, so coyodex folds the report into the map. (method/dispatch.md:154); A person asks in plain words to move, rename, split or drill deeper into a part of the map. (method/dispatch.md:156); A person explicitly asks to regenerate the whole map from scratch, and confirms the warning. (method/dispatch.md:171); A person types the coyodex command in a project that has no map yet, so a first map is built. (method/dispatch.md:83); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C75's code actually 'writes' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 writes E47",
+   "anchor": "tools/coyodex/provenance.py:217",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E47 = Provenance (tools/coyodex/provenance.py:60)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'writes' E47; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C63 persists E53",
+   "anchor": "eval/tools/coyodex_eval/run.py:166",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: E53 = MapProfile (eval/tools/coyodex_eval/profile.py:39)",
+   "why_risky": "domain-model ownership edge — verify C63's code actually 'persists' E53; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C63 persists E54",
+   "anchor": "eval/tools/coyodex_eval/run.py:403",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: E54 = JudgeReport (eval/tools/coyodex_eval/judge.py:101)",
+   "why_risky": "domain-model ownership edge — verify C63's code actually 'persists' E54; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C63 writes E55",
+   "anchor": "eval/tools/coyodex_eval/compare.py:510",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: E55 = DeltaReport (eval/tools/coyodex_eval/compare.py:176)",
+   "why_risky": "domain-model ownership edge — verify C63's code actually 'writes' E55; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C63 reads E41",
+   "anchor": "eval/tools/coyodex_eval/run.py:328",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: E41 = WorkItem (tools/coyodex/audit_model.py:421)",
+   "why_risky": "domain-model ownership edge — verify C63's code actually 'reads' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C66 reads E47",
+   "anchor": "eval/tools/coyodex_eval/retro_precheck.py:179",
+   "detail": "From: C66 = Map archive and build guard (eval/tools/coyodex_eval/archive.py:107); entry points: coyodex-eval archive (eval/tools/coyodex_eval/archive.py:159); coyodex-eval retro-precheck (eval/tools/coyodex_eval/retro_precheck.py:249); python tools/map_backup.py stamp (tools/map_backup.py:452); python tools/map_backup.py backup (tools/map_backup.py:478); To: E47 = Provenance (tools/coyodex/provenance.py:60)",
+   "why_risky": "domain-model ownership edge — verify C66's code actually 'reads' E47; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C66 reads E48",
+   "anchor": "eval/tools/coyodex_eval/retro_precheck.py:180",
+   "detail": "From: C66 = Map archive and build guard (eval/tools/coyodex_eval/archive.py:107); entry points: coyodex-eval archive (eval/tools/coyodex_eval/archive.py:159); coyodex-eval retro-precheck (eval/tools/coyodex_eval/retro_precheck.py:249); python tools/map_backup.py stamp (tools/map_backup.py:452); python tools/map_backup.py backup (tools/map_backup.py:478); To: E48 = SessionEntry (tools/coyodex/provenance.py:33)",
+   "why_risky": "domain-model ownership edge — verify C66's code actually 'reads' E48; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C66 persists E1",
+   "anchor": "eval/tools/coyodex_eval/archive.py:107",
+   "detail": "From: C66 = Map archive and build guard (eval/tools/coyodex_eval/archive.py:107); entry points: coyodex-eval archive (eval/tools/coyodex_eval/archive.py:159); coyodex-eval retro-precheck (eval/tools/coyodex_eval/retro_precheck.py:249); python tools/map_backup.py stamp (tools/map_backup.py:452); python tools/map_backup.py backup (tools/map_backup.py:478); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C66's code actually 'persists' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 reads E47",
+   "anchor": "tools/coyodex/provenance.py:296",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E47 = Provenance (tools/coyodex/provenance.py:60)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'reads' E47; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 reads E48",
+   "anchor": "tools/coyodex/provenance.py:304",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E48 = SessionEntry (tools/coyodex/provenance.py:33)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'reads' E48; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C65 reads E1",
+   "anchor": "eval/tools/coyodex_eval/process_scorecard.py:1615",
+   "detail": "From: C65 = Build behaviour scorecard (eval/tools/coyodex_eval/process_scorecard.py:2924); entry points: coyodex-eval process (eval/tools/coyodex_eval/process_scorecard.py:3130); coyodex-eval process --diff (eval/tools/coyodex_eval/process_scorecard.py:3134); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C65's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C64 reads E1",
+   "anchor": "eval/tools/coyodex_eval/cost.py:392",
+   "detail": "From: C64 = Build transcript reader and spend report (eval/tools/coyodex_eval/transcript.py:305); entry points: coyodex-eval cost (eval/tools/coyodex_eval/cost.py:674); coyodex-eval transcript (eval/tools/coyodex_eval/transcript.py:1067); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C64's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  }
+ ]
+}

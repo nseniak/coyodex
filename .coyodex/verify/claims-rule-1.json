@@ -1,0 +1,234 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'Version control decides which files a map may describe. A project with no version control falls back to a walk of the disk.' is enforced at tools/coyodex/preindex_lib.py:198 — asks version control for the files it tracks, instead of walking the disk",
+   "anchor": "tools/coyodex/preindex_lib.py:198",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Version control decides which files a map may describe. A project with no version control falls back to a walk of the disk.' is enforced at tools/coyodex/preindex_lib.py:201 — adds files a person created but never added, and drops everything version control is told to ignore",
+   "anchor": "tools/coyodex/preindex_lib.py:201",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Version control decides which files a map may describe. A project with no version control falls back to a walk of the disk.' is enforced at tools/coyodex/preindex_lib.py:224 — falls back to reading the disk when the folder is not under version control",
+   "anchor": "tools/coyodex/preindex_lib.py:224",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Installed packages, build output, lock files and images are never analysed, so the map measures code people wrote.' is enforced at tools/coyodex/preindex_lib.py:148 — drops any file sitting under a folder on the built-in list of generated and vendored trees",
+   "anchor": "tools/coyodex/preindex_lib.py:148",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Installed packages, build output, lock files and images are never analysed, so the map measures code people wrote.' is enforced at tools/coyodex/preindex_lib.py:236 — applies that built-in list before anything the project itself declares",
+   "anchor": "tools/coyodex/preindex_lib.py:236",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Installed packages, build output, lock files and images are never analysed, so the map measures code people wrote.' is enforced at tools/coyodex/preindex_lib.py:257 — prunes the same folders in the disk walk, so both ways of listing files give the same shape",
+   "anchor": "tools/coyodex/preindex_lib.py:257",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project can name committed folders and files that the map is not meant to describe.' is enforced at tools/coyodex/preindex_lib.py:242 — tests each surviving file against the project's own exclusion list, kept separate from the built-in list",
+   "anchor": "tools/coyodex/preindex_lib.py:242",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project can name committed folders and files that the map is not meant to describe.' is enforced at tools/coyodex/preindex_lib.py:245 — takes the file out of the analysed tree when the deciding pattern is an exclusion",
+   "anchor": "tools/coyodex/preindex_lib.py:245",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A project can name committed folders and files that the map is not meant to describe.' is enforced at tools/coyodex/pathmatch.py:52 — a pattern naming a folder and no wildcard also covers everything beneath that folder",
+   "anchor": "tools/coyodex/pathmatch.py:52",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'When several exclusion patterns match one file, the last pattern written decides. So a later line can put one file back.' is enforced at tools/coyodex/ignorefile.py:88 — keeps scanning after a match, so the answer is the last matching pattern and not the first",
+   "anchor": "tools/coyodex/ignorefile.py:88",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'When several exclusion patterns match one file, the last pattern written decides. So a later line can put one file back.' is enforced at tools/coyodex/ignorefile.py:95 — reads the file as excluded only when that deciding pattern is an exclusion, not a put-back",
+   "anchor": "tools/coyodex/ignorefile.py:95",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'When several exclusion patterns match one file, the last pattern written decides. So a later line can put one file back.' is enforced at tools/coyodex/preindex_lib.py:245 — keeps the file when the deciding pattern is a put-back line",
+   "anchor": "tools/coyodex/preindex_lib.py:245",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every check and every screen reading a narrowed tree reports which patterns narrowed it and how many files went.' is enforced at tools/coyodex/validate_model.py:4464 — the disclosure runs on every validate, before the coverage checks, not only in the expensive pass",
+   "anchor": "tools/coyodex/validate_model.py:4464",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every check and every screen reading a narrowed tree reports which patterns narrowed it and how many files went.' is enforced at tools/coyodex/scope.py:132 — the briefing shown before a build states how many files the project's own list removed",
+   "anchor": "tools/coyodex/scope.py:132",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every check and every screen reading a narrowed tree reports which patterns narrowed it and how many files went.' is enforced at tools/coyodex/preindex.py:431 — the pre-index report names the removed count and every pattern behind it",
+   "anchor": "tools/coyodex/preindex.py:431",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Every check and every screen reading a narrowed tree reports which patterns narrowed it and how many files went.' is enforced at tools/coyodex/viewer/filetree.py:261 — puts the note on the root of the file browser, so a narrowed tree is never shown as the whole project",
+   "anchor": "tools/coyodex/viewer/filetree.py:261",
+   "detail": "In: File browser tree (C46)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pattern that removed no file is named on its own, including a line whose spelling can never match anything.' is enforced at tools/coyodex/ignorefile.py:133 — collects the patterns that decided nothing, so no report can offer only a total",
+   "anchor": "tools/coyodex/ignorefile.py:133",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pattern that removed no file is named on its own, including a line whose spelling can never match anything.' is enforced at tools/coyodex/validate_analysis.py:336 — validate names those patterns in a warning of their own",
+   "anchor": "tools/coyodex/validate_analysis.py:336",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pattern that removed no file is named on its own, including a line whose spelling can never match anything.' is enforced at tools/coyodex/scope.py:135 — the briefing before a build warns about them too",
+   "anchor": "tools/coyodex/scope.py:135",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pattern that removed no file is named on its own, including a line whose spelling can never match anything.' is enforced at tools/coyodex/ignorefile.py:170 — a line carrying a comment after the pattern is dropped and reported, because a comment only opens at the start of a line",
+   "anchor": "tools/coyodex/ignorefile.py:170",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pattern that removed no file is named on its own, including a line whose spelling can never match anything.' is enforced at tools/coyodex/ignorefile.py:176 — a line made only of slashes is dropped and reported instead of being stored as a pattern that can never fire",
+   "anchor": "tools/coyodex/ignorefile.py:176",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A measurement that moved too far asks for a human look, while a failed check stops the work.' is enforced at eval/tools/coyodex_eval/compare.py:503 — any failed hard check makes the answer the blocking one, before anything else is considered",
+   "anchor": "eval/tools/coyodex_eval/compare.py:503",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A measurement that moved too far asks for a human look, while a failed check stops the work.' is enforced at eval/tools/coyodex_eval/compare.py:505 — a breached allowance only reaches the softer answer, which asks for a person rather than blocking",
+   "anchor": "eval/tools/coyodex_eval/compare.py:505",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A measurement that moved too far asks for a human look, while a failed check stops the work.' is enforced at eval/tools/coyodex_eval/compare.py:670 — the three answers leave three different exit codes, so an unattended run can tell them apart",
+   "anchor": "eval/tools/coyodex_eval/compare.py:670",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A measurement that moved too far asks for a human look, while a failed check stops the work.' is enforced at eval/tools/coyodex_eval/run.py:275 — the full run returns the same three codes, keeping the meaning identical wherever the comparison is invoked",
+   "anchor": "eval/tools/coyodex_eval/run.py:275",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A count that grew is never called worse, while a count that fell by thirty percent is.' is enforced at eval/tools/coyodex_eval/compare.py:195 — a shrink-only limit passes any growth and only breaches on a fall past the allowance",
+   "anchor": "eval/tools/coyodex_eval/compare.py:195",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A count that grew is never called worse, while a count that fell by thirty percent is.' is enforced at eval/tools/coyodex_eval/compare.py:454 — the name of each limit decides whether it is shrink-only or reacts to movement in both directions",
+   "anchor": "eval/tools/coyodex_eval/compare.py:454",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A count that grew is never called worse, while a count that fell by thirty percent is.' is enforced at eval/tools/coyodex_eval/compare.py:57 — sets the allowed fall for a raw count at thirty percent of the accepted map's count",
+   "anchor": "eval/tools/coyodex_eval/compare.py:57",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The number of boxes is measured against a count derived from the code, not against the accepted map.' is enforced at eval/tools/coyodex_eval/profile.py:271 — the expected number of boxes is computed fresh from the source tree at scoring time",
+   "anchor": "eval/tools/coyodex_eval/profile.py:271",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The number of boxes is measured against a count derived from the code, not against the accepted map.' is enforced at eval/tools/coyodex_eval/compare.py:444 — the new map's distance is measured from that code-derived expectation, not from the accepted map",
+   "anchor": "eval/tools/coyodex_eval/compare.py:444",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The number of boxes is measured against a count derived from the code, not against the accepted map.' is enforced at eval/tools/coyodex_eval/compare.py:450 — only the new map's distance decides the check; the accepted map's distance is shown but never decides",
+   "anchor": "eval/tools/coyodex_eval/compare.py:450",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judging that did not happen never becomes a score, for the map or against it.' is enforced at eval/tools/coyodex_eval/judge.py:241 — claims nobody could read are removed from the divisor, so they never lower the pass rate",
+   "anchor": "eval/tools/coyodex_eval/judge.py:241",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judging that did not happen never becomes a score, for the map or against it.' is enforced at eval/tools/coyodex_eval/judge.py:303 — a reader who says it could not reach the code is recorded as a failure, never as a disproof",
+   "anchor": "eval/tools/coyodex_eval/judge.py:303",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judging that did not happen never becomes a score, for the map or against it.' is enforced at eval/tools/coyodex_eval/judge.py:336 — a scoring stage that produced nothing yields no dimension scores instead of zeros",
+   "anchor": "eval/tools/coyodex_eval/judge.py:336",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judging that did not happen never becomes a score, for the map or against it.' is enforced at eval/tools/coyodex_eval/compare.py:212 — caps how much of the reading may fail before the whole reading is called untrustworthy",
+   "anchor": "eval/tools/coyodex_eval/compare.py:212",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Judging that did not happen never becomes a score, for the map or against it.' is enforced at eval/tools/coyodex_eval/compare.py:493 — either side missing its reading breaches, so a skipped reading can never end in a clean pass",
+   "anchor": "eval/tools/coyodex_eval/compare.py:493",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that cannot run is reported as skipped, because silence would read as a check that passed.' is enforced at eval/tools/coyodex_eval/compare.py:282 — the source-coverage check names itself as skipped when a map was scored without the code",
+   "anchor": "eval/tools/coyodex_eval/compare.py:282",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that cannot run is reported as skipped, because silence would read as a check that passed.' is enforced at eval/tools/coyodex_eval/compare.py:385 — a check that is always true against an older accepted map is announced as empty rather than reported as passing",
+   "anchor": "eval/tools/coyodex_eval/compare.py:385",
+   "detail": "In: Map quality score and verdict (C63)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

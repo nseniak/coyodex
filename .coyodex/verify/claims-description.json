@@ -1,0 +1,192 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "description",
+ "claims": [
+  {
+   "claim": "Component C78 (The eval recipe) is described as: Written instructions for scoring two maps of the same code. The scoring says whether a change to the coyodex method made maps better or worse. The same instructions fix the quality rubric a reviewer scores against, and the pass marks a map must clear. A run ends in one word: as good, drifted, or worse.",
+   "anchor": "eval/method.md:8",
+   "detail": "declared at eval/method.md:8; files: eval/method.md, eval/rubric.md, eval/thresholds.json, eval/README.md, eval/blind-build.md, eval/experiments/2026-08-16-skeptic-recall.md …",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C79 (The build retrospective recipe) is described as: Written instructions for reviewing one finished build. The review reads the map the build made and the chat that made it. The review reports the friction, bugs and gaps the build revealed. A review changes nothing on disk, so every finding is a proposal for the developer. Each past finding is re-checked with a command that returns a number.",
+   "anchor": "eval/retro/method.md:4",
+   "detail": "declared at eval/retro/method.md:4; files: eval/retro/method.md, eval/retro/backlog.md",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C1 (Map document) is described as: Holds the shape of a map: what a box, an arrow and a code link may each contain. Writes the map file the same way every time, so a rebuild shows only real changes. Also holds the word lists the whole tool shares.",
+   "anchor": "tools/coyodex/model.py:1080",
+   "detail": "declared at tools/coyodex/model.py:1080; files: tools/coyodex/model.py, tools/coyodex/grammar.py, tools/coyodex/anchors.py, tools/coyodex/json_schema.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C2 (Fragment merge) is described as: Merges every worker's part of the map into one document. A box claimed by two workers stops the build, instead of one part quietly winning. Gives a worker the self-check it runs before handing its part back.",
+   "anchor": "tools/coyodex/assemble.py:886",
+   "detail": "declared at tools/coyodex/assemble.py:886; files: tools/coyodex/assemble.py, tools/coyodex/lint_fragment.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C3 (Map lookups) is described as: Reads one part of a map, so nobody opens the file and picks it apart by hand. Compares two versions of a map row by row, saying what was added, dropped or changed. Writes the note an operator leaves when accepting an advisory.",
+   "anchor": "tools/coyodex/dump.py:316",
+   "detail": "declared at tools/coyodex/dump.py:316; files: tools/coyodex/dump.py, tools/coyodex/mapdiff.py, tools/coyodex/record.py, tools/coyodex/records.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C4 (Command shell and build setup) is described as: The single command every coyodex action runs through. Before a build starts, the command says which files will be read and which commit the map will name. The same command prints the brief one worker receives, and reads the list of code the map should skip.",
+   "anchor": "tools/coyodex/cli.py:123",
+   "detail": "declared at tools/coyodex/cli.py:123; files: tools/coyodex/cli.py, tools/coyodex/scope.py, tools/coyodex/ignorefile.py, tools/coyodex/pathmatch.py, tools/coyodex/contract.py, tools/coyodex/reporting.py …",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C13 (Map validator) is described as: Checks a finished map is well formed before anyone trusts it. Every reference must resolve and every code link must point at a real file. Softer findings are advice, and an operator can silence one by writing down a reason.",
+   "anchor": "tools/coyodex/validate_model.py:4361",
+   "detail": "declared at tools/coyodex/validate_model.py:4361; files: tools/coyodex/validate_model.py, tools/coyodex/validate_analysis.py, tools/coyodex/prose.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C14 (Map auditor) is described as: Reads a map against itself and reports where the story and the mechanism disagree. Also ranks every claim the map makes about the code. Fresh readers then try to disprove the riskiest claims first.",
+   "anchor": "tools/coyodex/audit_model.py:811",
+   "detail": "declared at tools/coyodex/audit_model.py:811; files: tools/coyodex/audit_model.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C15 (Diagram balance report) is described as: Counts the boxes on every diagram and says which screens are too crowded to read. Proposes a regrouping for each crowded screen, as a starting point for judgment. Never fails a build, because grouping is a view choice.",
+   "anchor": "tools/coyodex/balance.py:119",
+   "detail": "declared at tools/coyodex/balance.py:119; files: tools/coyodex/balance.py, tools/coyodex/balance_lib.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C16 (Pre-commit gate run) is described as: Runs the other gates in one command and writes every finding to a report file. Says for each gate whether it really ran, so silence never reads as a pass. Can also name files that held an access check in an earlier map and hold none now.",
+   "anchor": "tools/coyodex/finalize.py:472",
+   "detail": "declared at tools/coyodex/finalize.py:472; files: tools/coyodex/finalize.py, tools/coyodex/access_surface.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C17 (Feature index) is described as: Joins every part of the map onto the feature it belongs to, and stores nothing. Also derives the one story order every feature screen draws. Counts what fails to join, so a partial list is never shown as a whole one.",
+   "anchor": "tools/coyodex/features.py:331",
+   "detail": "declared at tools/coyodex/features.py:331; files: tools/coyodex/features.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C23 (Grounding record) is described as: Turns the fresh readers' verdicts into the four counts a map must carry before anyone trusts it. Those counts refuse a verdict for a claim nobody pinned, and a pinned claim nobody voted on. A second check compares a proven claim's code link against the line the fresh readers actually found.",
+   "anchor": "tools/coyodex/grounding.py:201",
+   "detail": "declared at tools/coyodex/grounding.py:201; files: tools/coyodex/grounding.py, tools/coyodex/anchor_drift.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C24 (Map repairs) is described as: Applies the mechanical corrections a map needs after a fresh reader reports, so none of them is hand-typed. A moved code link is rewritten, and a disproved relation is dropped. The happy-path steps that rode the dropped relation are healed too.",
+   "anchor": "tools/coyodex/fix.py:1724",
+   "detail": "declared at tools/coyodex/fix.py:1724; files: tools/coyodex/fix.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C25 (Assignment pass) is described as: Turns path rules into an explicit assignment file, so nobody lists hundreds of elements by hand. Every rule that matched nothing is named, and so is an assignment aimed at a group nobody declared. The build stamp is also written here, naming which conversation built the map and the code commit.",
+   "anchor": "tools/coyodex/reconcile_build.py:358",
+   "detail": "declared at tools/coyodex/reconcile_build.py:358; files: tools/coyodex/reconcile_build.py, tools/coyodex/reconcile.py, tools/coyodex/provenance.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C33 (Pre-index) is described as: Sizes a codebase before the map is drawn. The result gives the size and change rate of every folder. A symbol list says where every class and function is defined. The result also says how many parts a map of this size should hold.",
+   "anchor": "tools/coyodex/preindex.py:604",
+   "detail": "declared at tools/coyodex/preindex.py:604; files: tools/coyodex/preindex.py, tools/coyodex/preindex_lib.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C34 (Change impact) is described as: Tells what a code change did to a finished map. The map is pinned to one commit, so the code has moved on. Two comparisons against that commit say which map boxes the changed lines belong to. The answer then spreads along the map's own arrows, so a reader sees everything the change touches.",
+   "anchor": "tools/coyodex/impact_git.py:285",
+   "detail": "declared at tools/coyodex/impact_git.py:285; files: tools/coyodex/impact_lib.py, tools/coyodex/impact_git.py, tools/coyodex/impact_ripple.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C43 (Map server) is described as: Serves every remembered map to a browser on this machine. Each file shown comes from the project's history at the commit the map names.",
+   "anchor": "tools/coyodex/viewer/serve.py:800",
+   "detail": "declared at tools/coyodex/viewer/serve.py:800; files: tools/coyodex/viewer/serve.py, tools/coyodex/viewer/recents.py, tools/coyodex/viewer/__init__.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C44 (Diagram builder) is described as: Builds every diagram a map's screens draw, straight from the map. The work happens on each request, so no diagram file is ever saved.",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:3303",
+   "detail": "declared at tools/coyodex/viewer/gen_viewer.py:3303; files: tools/coyodex/viewer/gen_viewer.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C45 (Graph builder) is described as: Turns the stored map into the boxes and arrows every screen draws. The same code writes the committed text version of the map.",
+   "anchor": "tools/coyodex/views.py:1242",
+   "detail": "declared at tools/coyodex/views.py:1242; files: tools/coyodex/views.py, tools/coyodex/viewer/build_graph.py, tools/coyodex/viewer/render.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C46 (File browser tree) is described as: Builds the folder tree the file browser shows, marking which files the map covers. Also turns one file's change into the rows the code viewer paints.",
+   "anchor": "tools/coyodex/viewer/filetree.py:231",
+   "detail": "declared at tools/coyodex/viewer/filetree.py:231; files: tools/coyodex/viewer/filetree.py, tools/coyodex/viewer/diffmap.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C55 (Map canvas) is described as: Draws a map view as a diagram the reader can pan, zoom and click. Selecting a box or an arrow opens the card describing that box or arrow.",
+   "anchor": "tools/coyodex/viewer/viewer.js:928",
+   "detail": "declared at tools/coyodex/viewer/viewer.js:928; files: tools/coyodex/viewer/viewer.js, tools/coyodex/viewer/viewer.css, tools/coyodex/viewer/viewer.html",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C56 (Map reading pages) is described as: Draws the map screens that are pages of cards instead of drawings. The features, the rules, the storage, the tests and the glossary all live here.",
+   "anchor": "tools/coyodex/viewer/viewer.js:7970",
+   "detail": "declared at tools/coyodex/viewer/viewer.js:7970; files: tools/coyodex/viewer/viewer.js, tools/coyodex/viewer/viewer.css",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C57 (Trail and history) is described as: Decides which map screen is open, and names it in the tabs and the breadcrumb. Back and forward reopen a screen exactly as the reader left it.",
+   "anchor": "tools/coyodex/viewer/viewer.js:4329",
+   "detail": "declared at tools/coyodex/viewer/viewer.js:4329; files: tools/coyodex/viewer/viewer.js, tools/coyodex/viewer/viewer.css, tools/coyodex/viewer/viewer.html",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C58 (Source column) is described as: Shows the mapped project's files and their code, read at the commit the map names. A file can also be opened in the reader's own editor.",
+   "anchor": "tools/coyodex/viewer/viewer.js:10343",
+   "detail": "declared at tools/coyodex/viewer/viewer.js:10343; files: tools/coyodex/viewer/viewer.js, tools/coyodex/viewer/viewer.css, tools/coyodex/viewer/viewer.html",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C63 (Map quality score and verdict) is described as: Reduces a finished map to numbers that two runs can be compared on. Says whether the new map is as good as the accepted one, giving pass, drift or regressed. Also plants false claims about the map and counts how many a reviewer catches.",
+   "anchor": "eval/tools/coyodex_eval/profile.py:337",
+   "detail": "declared at eval/tools/coyodex_eval/profile.py:337; files: eval/tools/coyodex_eval/cli.py, eval/tools/coyodex_eval/profile.py, eval/tools/coyodex_eval/compare.py, eval/tools/coyodex_eval/run.py, eval/tools/coyodex_eval/judge.py, eval/tools/coyodex_eval/legacy_map.py …",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C64 (Build transcript reader and spend report) is described as: Reads a finished build's chat log in slices, because the whole log is too big to open. Also reports the time and the money that build spent, per row of map produced.",
+   "anchor": "eval/tools/coyodex_eval/transcript.py:305",
+   "detail": "declared at eval/tools/coyodex_eval/transcript.py:305; files: eval/tools/coyodex_eval/transcript.py, eval/tools/coyodex_eval/cost.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C65 (Build behaviour scorecard) is described as: Scores what a build agent actually did against the rules the method sets. Reports a share of the chances the build had, never a pass or a fail. Also compares two scorecards to show which way each number moved.",
+   "anchor": "eval/tools/coyodex_eval/process_scorecard.py:2924",
+   "detail": "declared at eval/tools/coyodex_eval/process_scorecard.py:2924; files: eval/tools/coyodex_eval/process_scorecard.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C66 (Map archive and build guard) is described as: Moves a project's current map aside so the next run builds from scratch, keeping it as the baseline. Refuses a review while a build is still writing. Also stamps which chat built a map and bundles the two together.",
+   "anchor": "eval/tools/coyodex_eval/archive.py:107",
+   "detail": "declared at eval/tools/coyodex_eval/archive.py:107; files: eval/tools/coyodex_eval/archive.py, eval/tools/coyodex_eval/retro_precheck.py, tools/map_backup.py",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C75 (The build method) is described as: The written instructions a coding agent follows to build a map. The same instructions specify every field a map holds.",
+   "anchor": "method.md:3",
+   "detail": "declared at method.md:3; files: method.md, method/dispatch.md, method/model.md, method/domain-cards.md, method/diagrams.md, method/change-impact.md …",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C76 (The worker briefings) is described as: The briefings a build hands to each worker agent it fans out to. A briefing states what that worker must return.",
+   "anchor": null,
+   "detail": "declared at method/templates/; files: method/templates/harvest-contract.md, method/templates/trace-contract.md, method/templates/rules-contract.md, method/templates/skeptic-contract.md, method/templates/gapfill-contract.md, method/templates/writing-rules.md …",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  },
+  {
+   "claim": "Component C77 (The installed skill and the project's own writing) is described as: The pointer a person installs into their coding agent, so the coyodex command reaches the method. The project's own writing for readers and contributors lives beside that pointer.",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": "declared at skill/coyodex/SKILL.md:27; files: skill/coyodex/SKILL.md, eval/SKILL.md, eval/retro/SKILL.md, README.md, CONTRIBUTING.md, CLAUDE.md …",
+   "why_risky": "prose is read by no other gate: `validate` counts sentence length and `audit` compares records, so a sentence that is simply false about the code reaches the reader unchallenged. Read the WHOLE description against the files and name the clause that fails, if one does."
+  }
+ ]
+}

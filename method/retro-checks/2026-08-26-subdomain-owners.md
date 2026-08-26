@@ -12,6 +12,17 @@ Escalation: if check 1 fails as "every area single-owned including the shared co
 is being read as a form to fill in — run the eval before accepting the map, and re-read the WHY
 paragraph in method.md before changing any wording.
 
+## Settled once already — 2026-08-26 mcpolis build
+
+Checks 1, 2 and 3 FAILED on that build, and the cause was one thing: the instruction said to decide
+ownership at SYNTHESIS, where no walk exists yet, so the author decided blind and `validate` could
+not challenge anything (9 owner warnings at that moment, all false). 8 areas took 8 single owners,
+one feature took 5, one owner was reached by no walk and was silenced with a recorded exception.
+
+The instruction now says to decide AFTER THE TRACE. Re-deciding the same map with the walks visible
+changed exactly the two answers that had failed, and recorded no exception. The checks below stand
+unchanged and come due again on the next build — the change is to the method they test, not to them.
+
 ## Checks
 
 1. expect: the next mcpolis build authors `owners` on every sub-domain holding saved records

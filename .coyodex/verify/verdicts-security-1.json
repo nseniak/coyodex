@@ -1,0 +1,151 @@
+{
+ "grounding": [
+  {
+   "claim": "Rule 'Nothing the user owns is committed, stashed or overwritten unless the user asks for it.' is enforced at method/dispatch.md:46 — forbids committing or stashing the person's code, even to make the pin clean",
+   "grounded": true,
+   "evidence": "method/dispatch.md:46",
+   "skeptic": "security-1",
+   "note": "Read lines 42-52 of the pin branch. Line 46 ends the sentence 'Never commit' and line 47 continues 'or stash the user's code yourself: it is their working tree and their commit message, and this step is a question, not a mandate.' Option A explicitly makes the USER commit or stash."
+  },
+  {
+   "claim": "Rule 'Nothing the user owns is committed, stashed or overwritten unless the user asks for it.' is enforced at method.md:2040 — repeats the same ban at the moment the pin is recorded",
+   "grounded": true,
+   "evidence": "method.md:2040",
+   "skeptic": "security-1",
+   "note": "Read lines 2020-2051, the baseline-pin gate. Line 2039-2041 is option A: '**the user** commits (or stashes) the code first ... Never commit or stash their working tree yourself'. This is exactly the moment the pin is recorded."
+  },
+  {
+   "claim": "Rule 'Nothing the user owns is committed, stashed or overwritten unless the user asks for it.' is enforced at method/dispatch.md:171 — regenerates a map from scratch only on an explicit request, after a warning and a confirmation",
+   "grounded": true,
+   "evidence": "method/dispatch.md:171",
+   "skeptic": "security-1",
+   "note": "Read lines 150-173. Line 171 reads '**Rebuild** — only when the user *explicitly* asks to regenerate from scratch. Warn that it' and line 172-173 continue 'overwrites the existing baseline and discards its curation and pin history, get confirmation, then Build as above.' Explicit request, warning and confirmation are all there."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:800 — The server binds to the loopback address, so nothing off this machine can connect.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:800",
+   "skeptic": "security-1",
+   "note": "Read serve() at lines 788-813. Line 800 is `httpd = ThreadingHTTPServer((\"127.0.0.1\", port), Handler)` — the bind address is the loopback literal, with no host/interface option anywhere in serve()'s signature or the usage text."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:577 — Every read request whose claimed site is not loopback is refused.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:577",
+   "skeptic": "security-1",
+   "note": "Read do_GET at 576-595 and _loopback_host at 527-538. Line 577 is `if not _loopback_host(self.headers.get(\"Host\", \"\")):` and line 578 returns 403 'host not allowed'. It is the first statement in do_GET, so it gates every read request; a Host naming any other site is refused (an absent Host is allowed, which is not a named site)."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:599 — The same site check refuses a write request.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:599",
+   "skeptic": "security-1",
+   "note": "Read do_POST at 597-610. Line 598 repeats `if not _loopback_host(self.headers.get(\"Host\", \"\")):` and line 599 is the `return self._send(403, ..., b\"host not allowed\")` that carries out the refusal for a write request. Same check as do_GET, one line earlier than the anchor."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:601 — A write request without the private marker header is refused.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:601",
+   "skeptic": "security-1",
+   "note": "Read do_POST. Line 601 is `if self.headers.get(\"X-Coyodex\") != \"serve\":` and line 602 returns 403 'missing X-Coyodex header'. It runs before any body is read, so /api/open, /api/forget and /api/reorder — the three recents-list writers routed at line 604 — are unreachable without that header."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:799 — The served set is built from the remembered list alone, with no disk search.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:799",
+   "skeptic": "security-1",
+   "note": "Read serve() 788-803 and build_projects at 213-227. Line 799 is `Handler.projects = build_projects(store.list())`; build_projects only iterates the folders it is handed and calls load_project on each. Nothing walks or globs the disk looking for maps, and the docstring at 790-791 says so."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:590 — An address that does not name a served project is refused.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:590",
+   "skeptic": "security-1",
+   "note": "Read the /p/<slug> route at 588-594. Line 589 looks the slug up in `self.projects` (the served set), line 590 is `if proj is None:` and line 591 returns 404 'unknown project'. A slug not in the remembered/served set never reaches any project handler."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:640 — Adding a folder is refused unless it holds a coyodex folder.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:640",
+   "skeptic": "security-1",
+   "note": "Read _open at 634-645. Line 640 is `if not _has_coyodex(p):` and line 641 returns 400 'that folder has no .coyodex/ folder'; _has_coyodex at 104-111 tests `(folder / \".coyodex\").is_dir()`. The store.add call at 643 is only reached past that guard."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:794 — A folder named at startup is skipped under the same condition.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:794",
+   "skeptic": "security-1",
+   "note": "Read serve() 792-797. Line 794 is `if _has_coyodex(folder):` around `store.add(str(folder))`, with an else at 796-797 printing 'skipping <folder> — no .coyodex/ folder'. Same condition as the _open path, applied to command-line folders."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:285 — An absolute or otherwise malformed path is rejected before any read.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:285",
+   "skeptic": "security-1",
+   "note": "Read _safe_rel at 283-287. Line 285 is `if not path or path.startswith(\"/\") or \"\\\\\" in path or \"\\x00\" in path:` returning False on line 286. It is a pure predicate called by git_show (277), worktree_read (324) and the /api/src route (697) before any read happens."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:287 — A path containing a step up to the parent folder is rejected.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:287",
+   "skeptic": "security-1",
+   "note": "Read _safe_rel at 283-287. Line 287 is `return \"..\" not in Path(path).parts` — any path component equal to '..' makes the predicate False, so a climb to the parent folder is rejected."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:697 — The code request refuses a bad path before touching disk or version control.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:697",
+   "skeptic": "security-1",
+   "note": "Read the ['src'] branch at 695-714. Line 696 pulls `path` from the query, line 697 is `if not _safe_rel(path):` and line 698 returns 400 'bad path'. The worktree read (703) and the git blob read (711) both sit below it, so nothing touches disk or git first."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:324 — A working-tree read refuses anything inside the version-control folder.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:324",
+   "skeptic": "security-1",
+   "note": "Read worktree_read at 319-343. Line 324 is `if not _safe_rel(path) or path.split(\"/\", 1)[0] == \".git\":` returning None on 325 — a working-tree read whose first path segment is the version-control folder is refused before the resolve() on line 327."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:331 — The real resolved location must still sit inside the project, so a link cannot escape.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:331",
+   "skeptic": "security-1",
+   "note": "Read worktree_read. Line 327-328 resolve(strict=True) both the file and the repo root, then line 331 is `if not real.is_relative_to(real_root) or \".git\" in real.relative_to(real_root).parts:` returning None. Because it tests the RESOLVED location, a tracked symlink pointing outside the project fails the check."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:338 — A file version control ignores is refused, so an ignored secrets file never leaks.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:338",
+   "skeptic": "security-1",
+   "note": "Read worktree_read 335-339. Line 335 runs `git ls-files --error-unmatch`; when the file is not tracked, line 337 runs `git ls-files --others --exclude-standard` and line 338 is `if code2 != 0 or path not in out2.decode(...).splitlines(): return None`. --exclude-standard omits gitignored files, so an ignored .env falls into this return and is never read."
+  },
+  {
+   "claim": "Rule 'A link that leaves the page may open only a known code editor. The address must start with one of a fixed list of editor schemes. A hand-typed link template using any other scheme is refused.' is enforced at tools/coyodex/viewer/viewer.js:10684 — An address outside the allowed editor list never becomes a clickable link.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10684",
+   "skeptic": "security-1",
+   "note": "Read editorUri at 10672-10685 and the ALLOWED_OPEN_SCHEMES set at 10622-10625. Line 10684 is `return ALLOWED_OPEN_SCHEMES.has(uriScheme(uri)) ? uri : null;` — the filled template is returned only when its scheme is in the fixed editor set, otherwise null, so no href is produced."
+  },
+  {
+   "claim": "Rule 'A link that leaves the page may open only a known code editor. The address must start with one of a fixed list of editor schemes. A hand-typed link template using any other scheme is refused.' is enforced at tools/coyodex/viewer/viewer.js:10815 — Saving a custom link template is refused when its scheme is not on the list.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10815",
+   "skeptic": "security-1",
+   "note": "Read saveSettings at 10809-10825. Line 10815 is `if (!ALLOWED_OPEN_SCHEMES.has(uriScheme(custom))) {` and 10816-10817 set the error 'Scheme not allowed — use an editor scheme' and `return`, so the lsSet writes on line 10824 never run for a custom template with a disallowed scheme."
+  },
+  {
+   "claim": "Rule 'The viewer page loads its two diagram libraries from the internet at exact pinned versions. Each one carries a fingerprint of the expected file. The browser refuses to run a file whose content does not match that fingerprint.' is enforced at tools/coyodex/viewer/viewer.html:17 — The pan and zoom library is pinned by fingerprint.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:17",
+   "skeptic": "security-1",
+   "note": "Read the head at lines 13-21. Line 16 loads svg-pan-zoom@3.6.1 (the pan and zoom library) at an exact version and line 17 is `integrity=\"sha384-yc/c2Lk1s2V2ir1rxvjo8YyVD9PlOlYTqpNr3Wm1WIuAA30GlDYNx6U5104OiavY\"`, with crossorigin=\"anonymous\" on 18 so the browser can enforce Subresource Integrity."
+  },
+  {
+   "claim": "Rule 'The viewer page loads its two diagram libraries from the internet at exact pinned versions. Each one carries a fingerprint of the expected file. The browser refuses to run a file whose content does not match that fingerprint.' is enforced at tools/coyodex/viewer/viewer.html:20 — The diagram drawing library is pinned by fingerprint.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:20",
+   "skeptic": "security-1",
+   "note": "Read the head at lines 13-21. Line 19 loads mermaid@11.15.0 (the diagram drawing library) at an exact version and line 20 is `integrity=\"sha384-yQ4mmBBT+vhTAwjFH0toJXNYJ6O4usWnt6EPIdWwrRvx2V/n5lXuDZQwQFeSFydF\"`, with crossorigin=\"anonymous\" on 21; the comment on 14-15 notes the UMD bundle is used precisely so SRI covers the whole library."
+  }
+ ]
+}

@@ -1,0 +1,167 @@
+{
+ "schema": "coyodex/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "S3 purpose",
+   "text": "Shows a person the map in a browser, and the code behind any box they ask about."
+  },
+  {
+   "where": "S4 purpose",
+   "text": "Serves the map's screens from one local process, and reads source out of the commit the map names."
+  },
+  {
+   "where": "S5 purpose",
+   "text": "Draws every view, remembers where the reader is, and puts the code beside the picture."
+  },
+  {
+   "where": "S6 purpose",
+   "text": "The instructions a coding agent follows to build a map. This product's real logic lives here."
+  },
+  {
+   "where": "S7 purpose",
+   "text": "Answers whether a method change made the maps worse, and what a finished run got wrong."
+  },
+  {
+   "where": "SD1 purpose",
+   "text": "Every kind of thing a finished map can say about a project."
+  },
+  {
+   "where": "SD2 purpose",
+   "text": "Who uses the product, what they come to do, and the one walk that tells it end to end."
+  },
+  {
+   "where": "SD3 purpose",
+   "text": "The parts the product is built from, what it pulls in from outside, and how the parts reach each other."
+  },
+  {
+   "where": "SD4 purpose",
+   "text": "The named types a project stores, their fields, how they relate, and the states they move through."
+  },
+  {
+   "where": "SD5 purpose",
+   "text": "What runs where, what is watched, what is configured, and every decision the product makes."
+  },
+  {
+   "where": "SD6 purpose",
+   "text": "The whole map as one file, plus the citations and judgements that say how far it can be trusted."
+  },
+  {
+   "where": "SD7 purpose",
+   "text": "What a build measures, merges, assigns and stamps on the way to a finished map."
+  },
+  {
+   "where": "SD8 purpose",
+   "text": "The claims a map must defend, the verdicts on each, and the report saying which checks ran."
+  },
+  {
+   "where": "SD9 purpose",
+   "text": "What the server keeps about each map it serves, and the shapes a view is drawn from."
+  },
+  {
+   "where": "SD10 purpose",
+   "text": "How one map measures against another, and what the judges said about both."
+  },
+  {
+   "where": "BLK1 purpose",
+   "text": "Which of a project's files the map is allowed to describe, and which are deliberately outside it."
+  },
+  {
+   "where": "BLK2 purpose",
+   "text": "The one shape every code link takes, and which line inside a file it is allowed to name."
+  },
+  {
+   "where": "BLK3 purpose",
+   "text": "Which findings stop a build, which only advise, and what it takes to close one for good."
+  },
+  {
+   "where": "BLK4 purpose",
+   "text": "How big one box may get, how many may share a screen, and when a box should become a group."
+  },
+  {
+   "where": "BLK5 purpose",
+   "text": "Which features the walk has to visit, who counts as an actor, and who a feature is for."
+  },
+  {
+   "where": "BLK6 purpose",
+   "text": "Which part of a project is the system of record for a type, and where that type actually lives."
+  },
+  {
+   "where": "BLK7 purpose",
+   "text": "What a map may claim about how hard its own statements were tested, and what it may not."
+  },
+  {
+   "where": "BLK8 purpose",
+   "text": "What coyodex does when asked to work on a project, and what it refuses to do without being told."
+  },
+  {
+   "where": "BLK9 purpose",
+   "text": "Who may reach the map server, which files it will open, and which version of each it shows."
+  },
+  {
+   "where": "BLK10 purpose",
+   "text": "What has to move, and by how much, before a new map is called a regression rather than a change."
+  },
+  {
+   "where": "UC1 trigger/outcome",
+   "text": "The reader runs the install target in a fresh clone. Every coding agent on that machine can now answer to coyodex."
+  },
+  {
+   "where": "UC2 trigger/outcome",
+   "text": "The reader starts the server once. A landing page lists every project that has a map."
+  },
+  {
+   "where": "UC3 trigger/outcome",
+   "text": "The agent begins a run. The reader sees the file count, what each exclusion removed, and the commit the map will name."
+  },
+  {
+   "where": "UC4 trigger/outcome",
+   "text": "The reader lists a fixture or vendored tree in the ignore file. Every measurement afterwards drops those files."
+  },
+  {
+   "where": "UC5 trigger/outcome",
+   "text": "The agent asks for the weight of every folder. The answer gives line counts, churn, a symbol index and an expected size."
+  },
+  {
+   "where": "UC6 trigger/outcome",
+   "text": "The agent is about to dispatch workers. One command prints the worker's half of the briefing, ready to fill in."
+  },
+  {
+   "where": "UC7 trigger/outcome",
+   "text": "A worker finishes its rows. The check reports schema, code-link and drift problems while the worker can still fix them."
+  },
+  {
+   "where": "UC8 trigger/outcome",
+   "text": "Every fragment is on disk. Merging them writes the map and its readable view, refusing any duplicate identifier."
+  },
+  {
+   "where": "UC9 trigger/outcome",
+   "text": "The agent knows folder paths, not identifiers. Path rules expand into an assignment file, naming every rule that matched nothing."
+  },
+  {
+   "where": "UC10 trigger/outcome",
+   "text": "The agent needs one element's stored record. A read-only lookup returns it, from a finished map or a build fragment."
+  },
+  {
+   "where": "UC11 trigger/outcome",
+   "text": "The agent finishes a write. The check reports broken references, bad code links, and every balance and coverage advisory."
+  },
+  {
+   "where": "UC12 trigger/outcome",
+   "text": "The agent has a map that is well formed. The walk and the flows are compared, and the claims needing code evidence are ranked."
+  },
+  {
+   "where": "UC13 trigger/outcome",
+   "text": "A fresh worker is handed a batch of claims and told to break them. Each comes back confirmed, refuted, or impossible to settle."
+  },
+  {
+   "where": "UC14 trigger/outcome",
+   "text": "Every verdict file is in. The counts are derived and written into the map, refusing a verdict for a claim nobody pinned."
+  },
+  {
+   "where": "UC15 trigger/outcome",
+   "text": "The skeptics report a truer line than the map holds. The correction is written so the next merge keeps it."
+  }
+ ]
+}

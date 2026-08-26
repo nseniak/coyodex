@@ -409,11 +409,26 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
     reach none of the area's records is reported as ungrounded, which is worse than an empty column.
     A "saved record" is an entity whose `store.mode` is `collection` or `embedded`; an area of pure
     plumbing (request shapes, enums, read projections) is not asked the question at all.
-    - **WRITE IT ON THE SUBDOMAIN ROW ITSELF**, in the same synthesis fragment that declares the
-      areas. Synthesis mints the `CAPn` ids and authors the areas in one pass, so the features
-      already exist by the time you write the area — `owners` needs no reconcile directive, and
-      reconcile has none to give: its `set` fields all target a component, entity, use case, dep or
-      rule, never a group.
+    - **DECIDE IT AFTER THE TRACE, NOT AT SYNTHESIS** — the walks have to exist first. The
+      question is which feature the data exists FOR, and the only evidence that bears on it is
+      which features' walks reach the area's records. At synthesis that evidence does not exist
+      yet: the areas and the features are written, the flows are not. Deciding there is deciding
+      blind, and `validate` cannot help either — run it at that moment and every owner comes back
+      ungrounded, because no walk reaches anything yet.
+      MEASURED, on the mcpolis build of 2026-08-26: decided at synthesis, 8 areas took 8 single
+      owners, one feature took 5 of them, one owner was reached by no walk at all and needed a
+      recorded exception to get through. The SAME map and the SAME instruction, decided after the
+      trace, changed exactly those two answers — the ungrounded owner became the feature that
+      really writes the records, the over-claimed area became an honest three-way share — and
+      needed NO recorded exception. Six of the eight answers were identical, so the cost of
+      waiting is two decisions' worth of nothing.
+      Author it in the same after-the-trace pass that writes the rules, and run `validate` there:
+      the split / dominance / grounding challenges all work from that point on, and answering one
+      is cheap while the flows are in front of you.
+    - **WRITE IT ON THE SUBDOMAIN ROW ITSELF.** A sub-domain is a `Group`, and `reconcile` has no
+      directive that can reach one: its `set` fields all target a component, entity, use case, dep
+      or rule. So edit the area's own row in the fragment that declares it — the `CAPn` ids exist
+      by then, minted back at synthesis.
     - **The one record whose owning feature differs from its area's** carries `owners` on the ENTITY
       instead — an audit entry sits in the Audit trail area but is written by the gateway. That one
       DOES go through reconcile (`{"ids": ["E51"], "owners": ["CAP4"]}`), for the same reason
