@@ -3993,3 +3993,48 @@ def test_an_anchor_to_anything_but_a_defined_capability_is_blocking() -> None:
         m.capabilities[1].story = StoryAnchor(place="after", feature=bad)
         hits = [p for p in problems_of(m) if bad in p]
         assert len(hits) == 1 and "not a defined capability" in hits[0], (bad, hits)
+
+
+# --- the trigger arm is never skipped wholesale --------------------------------------------------
+
+def make_all_empty_trigger_model() -> ProjectModel:
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="http-route", trigger="GET /a"),
+                      make_ep(kind="http-route", trigger="GET /b")]
+    for u in m.use_cases:
+        u.entry_points = []
+    return m
+
+
+def test_an_all_empty_trigger_arm_warns_once() -> None:
+    hits = [w for w in warnings_of(make_all_empty_trigger_model())
+            if "No use case names any entry point" in w]
+    assert len(hits) == 1
+    assert "2 surfaces harvested" in hits[0]
+    assert "Entry-point coverage" in hits[0], "the warning names its recordable escape"
+
+
+def test_one_trigger_link_anywhere_silences_the_degenerate_warning() -> None:
+    m = make_all_empty_trigger_model()
+    m.entry_points[0].id = "EP1"
+    m.use_cases[0].entry_points = ["EP1"]
+    assert not any("No use case names any entry point" in w for w in warnings_of(m))
+
+
+def test_a_recorded_trigger_arm_line_silences_it_durably() -> None:
+    m = make_all_empty_trigger_model()
+    m.extras = [ExtraSection(heading="Entry-point coverage",
+                             body="http-route: complete — swept\n"
+                                  "trigger-arm: the harvest recorded route groups; links add nothing")]
+    assert not any("No use case names any entry point" in w for w in warnings_of(m))
+
+
+def test_a_map_with_no_harvest_or_no_use_cases_stays_silent() -> None:
+    m = make_all_empty_trigger_model()
+    m.entry_points = []
+    assert not any("No use case names any entry point" in w for w in warnings_of(m))
+    m = make_all_empty_trigger_model()
+    m.use_cases = []
+    m.happy_path = []
+    m.flows = []
+    assert not any("No use case names any entry point" in w for w in warnings_of(m))

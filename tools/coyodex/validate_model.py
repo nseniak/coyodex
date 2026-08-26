@@ -1283,6 +1283,40 @@ def triggered_entry_point_ids(m: ProjectModel) -> set[str]:
     return {e.strip() for u in m.use_cases for e in u.entry_points if e.strip()}
 
 
+def _trigger_arm_exceptions(m: ProjectModel) -> str:
+    """The recorded reason the trigger arm is deliberately absent map-wide: a line starting
+    `trigger-arm:` under the machine-read 'Entry-point coverage' extras heading. Returns the
+    recorded line, or '' when none is recorded. Read through the SHARED extras reader, like every
+    other escape — a hand-rolled parse here is exactly the drift the records module ended."""
+    for line in records.lines(m, "entry-point coverage"):
+        if line.lower().startswith("trigger-arm:"):
+            return line
+    return ""
+
+
+def _trigger_arm_warnings(m: ProjectModel) -> list[str]:
+    """The DEGENERATE trigger-arm case: entry points and use cases both exist, and NO use case
+    names ANY surface. Per use case an empty `entry_points` is legitimate (the method says so, and
+    the per-surface advisory above stays derived-arm-primary for exactly the reasons it documents)
+    — but ALL-empty means the authored arm of claiming was skipped wholesale, and the "a real
+    surface no use case mentions" cross-check can then never fire per-surface. A rebuild shipped 0
+    trigger links across 319 entry points and six behaviours silently lost their use case; the old
+    map of the same code had linked 41 of 188. One warning, not per-surface: the finding is about
+    the ARM, and the per-surface findings are the other advisories' job once the arm exists."""
+    if not (m.entry_points and m.use_cases):
+        return []          # additivity: no harvest or no behaviour = nothing to link yet
+    if triggered_entry_point_ids(m):
+        return []          # the arm exists; per-surface refinement is the other checks' business
+    if _trigger_arm_exceptions(m):
+        return []          # the operator recorded the decision — silenced durably
+    return [f"No use case names any entry point ({len(m.entry_points)} surfaces harvested, 0 "
+            "trigger links): the authored arm of entry-point claiming was skipped wholesale, so "
+            "'a real surface no use case mentions' can never fire per-surface and missing use "
+            "cases go unnoticed. Link each customer-facing surface from the use case it starts "
+            "(`use_cases[].entry_points`), or — if leaving the arm out is a real decision for this "
+            "map — record `trigger-arm: <why>` under an 'Entry-point coverage' extras heading."]
+
+
 def unclaimed_external_entry_points(m: ProjectModel) -> list[EntryPoint]:
     """Externally-activated entry points that NEITHER arm of claiming reaches.
 
@@ -1509,6 +1543,7 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
     All guards keep a partial map silent (no flows / no HP yet); during a parallel build's trace
     phase the surviving warnings drain as traces land."""
     warnings: list[str] = []
+    warnings.extend(_trigger_arm_warnings(m))
     if m.entry_points and m.flows:
         comp_name = {c.id: c.name for c in m.components}
         silenced: list[str] = []
