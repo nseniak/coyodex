@@ -1809,11 +1809,13 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
    is 8px wider than the text needs, to give that indent back to the title rather than take a line. */
 .journey-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
                border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
-               margin: 2px 0 6px; box-sizing: border-box; }
+               margin: 2px 0 3px; box-sizing: border-box; }
 .journey-station:hover .journey-dot { background: #4f46e5; }
 .journey-station:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
-.journey-n { display: block; font-size: 10px; font-weight: 700; color: #4f46e5;
-             padding-left: 7.5px; }
+/* The number is CENTRED on the dot: a block exactly the dot's width, text centred in it, sitting at
+   the dot's left edge. Starting it at the dot's centre put the digit beside the dot, not under it. */
+.journey-n { display: block; width: 15px; text-align: center; font-size: 10px; font-weight: 700;
+             color: #4f46e5; line-height: 1.2; }
 .journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235;
              padding-left: 7.5px; }
 .journey-station:hover .journey-t { color: #4f46e5; }
