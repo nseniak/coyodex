@@ -525,7 +525,11 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   process**: keep the name atomic (no `mongo / redis` compound rows) and give each its own row. Infra the
   app merely *talks to* (mongo/redis/nginx) is a **dependency**, not a `deployment[]` process box — the
   Deployment view draws a unit as a process only when a component or entry point `runs_in` it, so an
-  infra-only unit renders as a dead empty box. `validate` blocks a `runs_in` that names no real unit (and
+  infra-only unit renders as a dead empty box. **A unit only the test suite starts is not a
+  deployment unit**: its code is outside the map's scope, so no component can ever `runs_in` it and
+  the row is BORN as that dead empty box (a live build shipped an "OAuth test MCP server" unit from
+  the e2e harness's compose file, and it failed the linkage gate as the map's one regression).
+  Deploy manifests used only by tests belong out of the deployment table entirely. `validate` blocks a `runs_in` that names no real unit (and
   a duplicate unit name), advises on a self-started entry point left with no host (it would be "Unplaced"
   in the view), and now **flags a formula-filled `runs_in`** (one unit blanketing every component while
   other units host nothing and no entry point is placed), a **non-atomic unit name**, an **unlinked unit**
