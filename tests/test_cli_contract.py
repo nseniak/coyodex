@@ -77,7 +77,10 @@ def make_command_mains() -> list[tuple[str, object]]:
 #: An absolute map path, so a probe's exit code reflects FLAG HANDLING and not the process CWD. With a
 #: relative default, `audit`/`balance` only reached the offending code path when pytest happened to run
 #: from the repo root — both production bugs went green from any other directory.
-MAP = REPO_ROOT / ".coyodex" / "project-map.json"
+#:
+#: The FROZEN copy, not `.coyodex/project-map.json`: a probe of flag handling has no business
+#: reading a map another session may be rebuilding mid-run.
+MAP = REPO_ROOT / "tests" / "fixtures" / "own-map" / "project-map.json"
 
 
 def run_main(main, argv: list[str]) -> tuple[int, str]:

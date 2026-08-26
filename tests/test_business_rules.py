@@ -446,12 +446,21 @@ def test_reconcile_refuses_a_block_on_a_non_rule() -> None:
 # These tests exist to stop the two measured facts from being designed away: `Component.files` is
 # not disjoint, and the step join is weak on byte equality.
 
-OWN_MAP = REPO / ".coyodex" / "project-map.json"
+#: A FROZEN copy of this repo's own map (the 2026-08-25 commit the ambiguity was measured on),
+#: with its pre-index beside it. It used to be `.coyodex/project-map.json` itself, live. That made
+#: these tests depend on a file another session rewrites: a map rebuild in progress turned three of
+#: them red while the code they test had not moved, and the failure said nothing about the code.
+#:
+#: The live-map question these once doubled as — "is OUR map still good after a rebuild" — belongs
+#: to the map's own gates: `coyodex-eval compare`'s `auth-surfaces-no-drop` hard gate, and the
+#: retro's Step 1, which scores the new map against the previous one and reads the auth-surface
+#: agreement note. Both compare against the accepted map instead of hardcoding a count.
+FROZEN_MAP = REPO / "tests" / "fixtures" / "own-map" / "project-map.json"
 
 
-def load_own_map() -> ProjectModel:
-    """This repo's own committed map — the one the ambiguity was measured on."""
-    return load_model(OWN_MAP.read_text(encoding="utf-8"))
+def load_frozen_map() -> ProjectModel:
+    """The frozen real map — the one the ambiguity was measured on."""
+    return load_model(FROZEN_MAP.read_text(encoding="utf-8"))
 
 
 def make_shared_file_model() -> ProjectModel:
@@ -510,7 +519,7 @@ def test_the_repos_own_map_still_has_a_four_owner_file_and_all_four_come_back() 
     """The measurement the design is built on, re-taken on every run. If a rebuild ever made
     `files` disjoint this would go quiet, so it asserts the ambiguity is STILL there — the day it
     is not, the multi-owner rendering is dead code and someone should know."""
-    m = load_own_map()
+    m = load_frozen_map()
     owners = component_file_owners(m)
     # ONLY files a rule site could actually land in: a shared `.css` proves nothing about the
     # decision surface, and picking the overall maximum would let this pass while every real
@@ -526,7 +535,7 @@ def test_the_repos_own_map_still_has_a_four_owner_file_and_all_four_come_back() 
 
 def test_a_meaningful_share_of_this_maps_call_sites_sit_in_shared_files() -> None:
     """27% when measured. A single-owner UI would be silently wrong on a quarter of the surface."""
-    m = load_own_map()
+    m = load_frozen_map()
     shared = {f for f, o in component_file_owners(m).items() if len(o) > 1}
     anchors = [a for _label, a in call_site_anchors(m)]
     in_shared = [a for a in anchors if strip_anchor(a) in shared]
@@ -630,7 +639,7 @@ def test_a_rule_whose_steps_name_no_entity_claims_none() -> None:
 # --- the shared extents reader ----------------------------------------------------
 
 def test_map_extents_reads_the_preindex_beside_the_map_and_tolerates_its_absence() -> None:
-    assert load_map_extents(OWN_MAP), "this repo commits a preindex beside its map"
+    assert load_map_extents(FROZEN_MAP), "the frozen map ships a preindex beside it"
     with tempfile.TemporaryDirectory() as td:
         assert load_map_extents(Path(td) / "project-map.json") == {}
 
@@ -672,7 +681,7 @@ def test_a_colliding_step_number_cannot_fabricate_an_entity_claim() -> None:
 def test_the_repos_own_map_really_collides_on_uc_and_n() -> None:
     """The measurement behind the container id. If this ever goes to zero the extra key is dead
     weight — but it is 26 of 86 today, so a two-part step identity is simply wrong."""
-    m = load_own_map()
+    m = load_frozen_map()
     steps = anchored_flow_steps(m)
     assert len({(uc, st.n) for uc, _c, st in steps}) < len({(uc, c, st.n) for uc, c, st in steps})
 
@@ -2363,17 +2372,15 @@ def test_the_shape_line_counts_rules_and_names_a_legacy_row_as_legacy() -> None:
         assert "1 LEGACY security rows" in _shape_line(path)
 
 
-def test_this_repos_own_map_is_folded_and_the_fixtures_are_not() -> None:
+def test_the_legacy_fixtures_are_not_folded_and_cannot_be() -> None:
     """The fixtures have ZERO component `files`, so `check_rules_model` BLOCKS a rule on them —
-    they are exactly the "old maps are rebuilt" case the release note names."""
-    own = load_model((REPO / ".coyodex" / "project-map.json").read_text(encoding="utf-8"))
-    # 1:1, deliberately. Fusing is the T7 AUTHORING pass, not a migration — and fusing here fused
-    # two different decisions, misattributed a refutation onto a live site, and dropped the count
-    # the eval's hard auth gate reads. Every access rule carries the row's `who` and `risk` prose.
-    assert own.security == []
-    access = [r for r in own.rules if r.access]
-    assert len(access) == 14 and all(r.risk.strip() for r in access)
-    assert all(r.confidence == "inferred" for r in access), "a migration grounds nothing"
+    they are exactly the "old maps are rebuilt" case the release note names.
+
+    This test used to open with the other half: our own LIVE map is folded, with 14 access rules.
+    That half is gone. A hardcoded count of a file another session rebuilds is not a test of this
+    code, and the same question is already asked where it belongs — `coyodex-eval compare` holds an
+    `auth-surfaces-no-drop` hard gate, and the retro's Step 1 reads the auth-surface agreement
+    between the new map and the previous one. Both beat a literal 14."""
     for rel in ("tests/fixtures/mcpolis-project-map", "eval/fixtures/trapdoor/golden/project-map"):
         legacy = load_model((REPO / f"{rel}.json").read_text(encoding="utf-8"))
         assert legacy.security and not legacy.rules, rel

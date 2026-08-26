@@ -94,15 +94,12 @@ def test_the_auth_surface_set_reads_both_storages_on_every_committed_map() -> No
         assert build_profile_from_model(m).auth_surfaces == expected, rel
 
 
-def test_this_repos_own_map_carries_its_auth_surface_as_rules_now() -> None:
-    """The fold, on the one map that has the `Component.files` a rule needs. The two fixtures keep
-    their `security[]` rows: with zero component `files`, `check_rules_model` BLOCKS a rule on
-    them — they are exactly the "old maps are rebuilt" case."""
-    m = load_model((REPO / ".coyodex" / "project-map.json").read_text(encoding="utf-8"))
-    assert m.security == [] and len([r for r in m.rules if r.access]) == 14
-    # 14, matching the 14 rows it replaced — `auth_surfaces_must_not_drop` is a hard gate with no
-    # tolerance, and it cannot tell a deliberate fusion from a lost surface.
-    assert build_profile_from_model(m).security_surfaces == 14
+# A test here used to assert that THIS repo's live map carries exactly 14 access rules and 14 auth
+# surfaces. It is gone. It read `.coyodex/project-map.json`, which a build rewrites, so a rebuild in
+# progress turned it red while this code had not moved — and the question it asked is already asked
+# properly by `compare`'s `auth-surfaces-no-drop` hard gate, against the accepted map rather than
+# against a literal 14. The code path it covered — an access rule joining the auth-surface set —
+# is covered below on a built model.
 
 
 def test_an_access_rule_joins_the_auth_surface_set() -> None:
