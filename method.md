@@ -406,7 +406,7 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
     ones → list them all, and the split / dominance advisories then challenge the list. No clear
     answer → leave the field out and record `SDn: <why>` under a **"Data owner exceptions"** extras
     heading. **Never author an owner to make a diagram complete**: an owner whose feature's walks
-    reach none of the area's records is reported as ungrounded, which is worse than an empty column.
+    reach none of the area's records is reported as AN OWNER WITH NO EVIDENCE, which is worse than an empty column.
     A "saved record" is an entity whose `store.mode` is `collection` or `embedded`; an area of pure
     plumbing (request shapes, enums, read projections) is not asked the question at all.
     - **DECIDE IT AFTER THE TRACE, NOT AT SYNTHESIS** — the walks have to exist first. The
@@ -418,7 +418,7 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
       MEASURED, on the mcpolis build of 2026-08-26: decided at synthesis, 8 areas took 8 single
       owners, one feature took 5 of them, one owner was reached by no walk at all and needed a
       recorded exception to get through. The SAME map and the SAME instruction, decided after the
-      trace, changed exactly those two answers — the ungrounded owner became the feature that
+      trace, changed exactly those two answers — the owner with no evidence became the one that
       really writes the records, the over-claimed area became an honest three-way share — and
       needed NO recorded exception. Six of the eight answers were identical, so the cost of
       waiting is two decisions' worth of nothing.

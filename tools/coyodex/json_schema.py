@@ -140,7 +140,7 @@ FIELD_META: dict[tuple[str, str], dict] = {
                            "deliberately shared among exactly those; field ABSENT = the decision "
                            "has not been made, and an advisory asks for it. `[]` is a shape error, "
                            "not an answer. NEVER author one to complete a diagram: an owner the "
-                           "area's records are never reached by is reported as ungrounded. "
+                           "area's records are never reached by is reported as an owner with no evidence. "
                            "`validate` blocks it on a subsystem, a capability or a block, and "
                            "cross-examines the list against the derived touches."},
     ("Group", "source"): {"description": _DIR_OR_FILE_DESC + " The group's home directory (or a "

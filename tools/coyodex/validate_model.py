@@ -3104,8 +3104,11 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
     design was measured out of.
 
     What IS reported:
-      GROUNDING  — a listed owner whose walks touch NO saved record of the area. Either the owner is
-                   wrong, or the area's records are reached by a walk the map has not written.
+      NO EVIDENCE — a listed owner whose walks touch NO saved record of the area. Either the owner
+                   is wrong, or the area's records are reached by a walk the map has not written.
+                   Deliberately NOT called "ungrounded": that word already means "has no code link"
+                   everywhere else in this product, and one word for two defects is how a reader
+                   stops believing either.
       SPLIT      — a shared area whose records partition cleanly by its listed owners (each record
                    reached by only one of them): two areas glued together.
       DOMINANCE  — a shared area where one listed owner holds nearly all the touches.
@@ -3140,10 +3143,11 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
         blind = [o for o in a.owners if o not in touched]
         if blind:
             warnings.append(
-                f"{a.id} ({a.name}) names owner(s) whose walks touch none of its saved records "
-                f"({', '.join(f'{o} ({names.get(o, o)})' for o in blind)}) — either the owner is "
-                "wrong, or the walk that reaches this data is not written; fix one of the two, or "
-                f"record '{a.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+                f"{a.id} ({a.name}) has an owner with no evidence — no walk of "
+                f"{', '.join(f'{o} ({names.get(o, o)})' for o in blind)} touches any saved record "
+                "of this area. Either the owner is wrong, or the walk that reaches this data is "
+                f"not written; fix one of the two, or record '{a.id}: <why>' under a "
+                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
         if len(a.owners) < 2:
             continue
         reach = {o: set(touched[o].entities) for o in a.owners if o in touched}
@@ -3204,11 +3208,11 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
         blind = [o for o in e.owners if o not in reached_by.get(e.id, ())]
         if blind:
             warnings.append(
-                f"{e.id} ({ent_names.get(e.id, e.id)}) is overridden to owner(s) whose walks never "
-                f"touch it ({', '.join(f'{o} ({names.get(o, o)})' for o in blind)}) — an override "
-                "is the one place the map contradicts its own area, so it is the one that has to "
-                f"be grounded; fix the owner or write the walk, or record '{e.id}: <why>' under a "
-                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+                f"{e.id} ({ent_names.get(e.id, e.id)}) is overridden to an owner with no evidence "
+                f"— no walk of {', '.join(f'{o} ({names.get(o, o)})' for o in blind)} touches this "
+                "record. An override is the one place the map contradicts its own area, so it is "
+                "the one that most needs evidence; fix the owner or write the walk, or record "
+                f"'{e.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
     return warnings
 
 

@@ -17,7 +17,7 @@ paragraph in method.md before changing any wording.
 Checks 1, 2 and 3 FAILED on that build, and the cause was one thing: the instruction said to decide
 ownership at SYNTHESIS, where no walk exists yet, so the author decided blind and `validate` could
 not challenge anything (9 owner warnings at that moment, all false). 8 areas took 8 single owners,
-one feature took 5, one owner was reached by no walk and was silenced with a recorded exception.
+one feature took 5, one owner had no evidence at all and was silenced with a recorded exception.
 
 The instruction now says to decide AFTER THE TRACE. Re-deciding the same map with the walks visible
 changed exactly the two answers that had failed, and recorded no exception. The checks below stand
@@ -43,7 +43,7 @@ unchanged and come due again on the next build — the change is to the method t
 3. expect: the rendered Features page matches the authoring — an ownership wire only where exactly
    one owner is authored, a shared area drawing no ownership wire and showing its several inbound
    reference arrows instead, and an area nobody decided drawing reference arrows only.
-   regression sign: an ungrounded owner surviving to the screen, or the viewer inventing an owner
+   regression sign: an owner with no evidence surviving to the screen, or the viewer inventing an owner
    where none was authored (an area with one reference arrow rendered as owned).
 4. expect: entity-level `owners` appears only where the record's owning feature genuinely differs
    from its area's — mcpolis's activity/audit record is the candidate, written by the gateway while

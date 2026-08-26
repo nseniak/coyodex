@@ -208,11 +208,11 @@ def test_missing_goes_quiet_once_the_decision_is_authored() -> None:
     assert [w for w in owner_warnings(m) if "no `owners`" in w] == []
 
 
-def test_an_owner_the_walks_never_reach_is_reported_as_ungrounded() -> None:
+def test_an_owner_the_walks_never_reach_has_no_evidence() -> None:
     m = make_map()
     m.subdomains[0].owners = ["CAP2"]        # CAP2's walk never touches E1
     m.subdomains[1].owners = ["CAP2"]
-    said = [w for w in owner_warnings(m) if "touch none of its saved records" in w]
+    said = [w for w in owner_warnings(m) if "owner with no evidence" in w]
     assert any("SD1 (Tracked pages)" in w and "CAP2 (Change detection)" in w for w in said), said
 
 
@@ -279,7 +279,7 @@ def test_split_looks_at_the_records_the_owners_REACH_not_every_record_the_area_h
     assert any("SD2 (Snapshots and change)" in w for w in said), said
 
 
-def test_an_override_naming_a_feature_that_never_touches_the_record_is_ungrounded() -> None:
+def test_an_override_naming_a_feature_that_never_touches_the_record_has_no_evidence() -> None:
     """An override is the one place the map contradicts its own area, so it is the one that has to
     be grounded. It used to be checked for redundancy and nothing else: an override to a feature
     with zero touches rendered an "Owned by" line with no evidence, silently."""
@@ -287,7 +287,7 @@ def test_an_override_naming_a_feature_that_never_touches_the_record_is_ungrounde
     m.subdomains[0].owners = ["CAP1"]
     m.subdomains[1].owners = ["CAP2"]
     m.entities[2].owners = ["CAP1"]                    # CAP1's walks never touch E3
-    said = [w for w in owner_warnings(m) if "never touch it" in w]
+    said = [w for w in owner_warnings(m) if "no evidence" in w]
     assert any("E3 (Change)" in w and "CAP1 (Page tracking)" in w for w in said), said
 
 
@@ -296,10 +296,10 @@ def test_a_grounded_override_stays_quiet() -> None:
     m.subdomains[0].owners = ["CAP1"]
     m.subdomains[1].owners = ["CAP2"]
     m.entities[1].owners = ["CAP1"]                    # CAP1 DOES touch E2 — the AuditEntry shape
-    assert [w for w in owner_warnings(m) if "never touch it" in w] == []
+    assert [w for w in owner_warnings(m) if "no evidence" in w] == []
 
 
-def test_dominance_says_nothing_while_one_listed_owner_is_ungrounded() -> None:
+def test_dominance_says_nothing_while_one_listed_owner_has_no_evidence() -> None:
     """With one listed owner touching nothing, the ratio is trivially 1.0 — "2 of the 2 touches" —
     and the line advises dropping an owner when the defect is a wrong id the grounding line already
     named."""
@@ -308,7 +308,7 @@ def test_dominance_says_nothing_while_one_listed_owner_is_ungrounded() -> None:
     m.subdomains[1].owners = ["CAP2", "CAP1"]
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="E1", phrase="names the page")]  # CAP1 blind
     said = owner_warnings(m)
-    assert any("touch none of its saved records" in w and w.startswith("SD2") for w in said), said
+    assert any("owner with no evidence" in w and w.startswith("SD2") for w in said), said
     assert [w for w in said if "consider a single owner" in w] == []
 
 
