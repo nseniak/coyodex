@@ -142,6 +142,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "src/api/",
    "confidence": "verified",
    "tech": "Python",
@@ -155,6 +156,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "src/messaging/",
    "confidence": "verified",
    "tech": "",
@@ -168,6 +170,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "src/plugins/",
    "confidence": "verified",
    "tech": "",
@@ -181,6 +184,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "src/auth/",
    "confidence": "inferred",
    "tech": "",
@@ -194,6 +198,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "src/flatpack/",
    "confidence": "verified",
    "tech": "",
@@ -207,6 +212,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "web/src/",
    "confidence": "verified",
    "tech": "TypeScript",
@@ -920,6 +926,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "src/domain/models.py:21",
    "confidence": "verified",
    "tech": "",
@@ -933,6 +940,7 @@
    "happy_path": "",
    "stakes": [],
    "story": null,
+   "owners": null,
    "source": "src/domain/models.py:66",
    "confidence": "verified",
    "tech": "",
@@ -1041,7 +1049,8 @@
      }
     ],
     "source": "src/lifecycle/states.py:14"
-   }
+   },
+   "owners": null
   },
   {
    "id": "E2",
@@ -1093,7 +1102,8 @@
      "keyed_by": []
     }
    ],
-   "states": null
+   "states": null,
+   "owners": null
   },
   {
    "id": "E3",
@@ -1130,7 +1140,8 @@
     }
    ],
    "relations": [],
-   "states": null
+   "states": null,
+   "owners": null
   },
   {
    "id": "E4",
@@ -1184,7 +1195,8 @@
      "keyed_by": []
     }
    ],
-   "states": null
+   "states": null,
+   "owners": null
   },
   {
    "id": "E5",
@@ -1211,7 +1223,8 @@
     }
    ],
    "relations": [],
-   "states": null
+   "states": null,
+   "owners": null
   }
  ],
  "non_entity_types": [
