@@ -3357,6 +3357,23 @@ def test_a_record_named_on_a_reference_arrow_is_a_door() -> None:
     assert ".story-elabel-ent" in (VIEWER_DIR / "viewer.css").read_text()
 
 
+def test_the_story_block_scrolls_sideways_only_and_never_clips_the_pillar() -> None:
+    """Two faces of one bug, both seen on screen. `overflow-x: auto` makes the OTHER axis a scroll
+    box too (a `visible` sibling axis computes to `auto`), so the block grew its own VERTICAL
+    scrollbar beside the page's, and sliced the raised pillar's top edge and drop shadow off at its
+    edge. `overflow-y: hidden` gives one scrollbar, the horizontal one — and once the box clips,
+    the box has to hold everything: the wrap carries padding for the shadow, and the pillar may not
+    use a negative margin to sit above the stage."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    wrap = css[css.index(".story-wrap {"):]
+    wrap = wrap[:wrap.index("}")]
+    assert "overflow-x: auto" in wrap and "overflow-y: hidden" in wrap
+    assert "padding: 10px 0 22px" in wrap, "the raised panel's shadow needs room inside the clip"
+    spine = css[css.index(".story-col-spine {"):]
+    spine = spine[:spine.index("}")]
+    assert "margin:" not in spine, "a negative margin here is clipped away by the wrap"
+
+
 def test_the_data_column_never_invents_an_owner() -> None:
     """The area box draws on every map, authored owners or not — which records a feature's walks
     reach is a derived fact. Who the data is FOR is authored, and a box that read an owner off the

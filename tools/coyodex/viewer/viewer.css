@@ -1684,7 +1684,14 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    Three fixed-width columns over one SVG of actor→feature wires. Fixed widths on purpose: the wires
    are measured off the laid-out cards once, and a column that cannot rewrap cannot go stale — a
    narrow window scrolls this block sideways inside its own wrap, never the page. */
-.story-wrap { overflow-x: auto; margin: 0 0 22px; padding-bottom: 4px; }
+/* `overflow-x: auto` makes the OTHER axis a scroll box too — a `visible` sibling axis computes to
+   `auto` — so this wrap grew its OWN vertical scrollbar beside the page's, and sliced the raised
+   pillar's top edge and drop shadow off at its edge. `overflow-y: hidden` is the fix: one scrollbar
+   on this block, the horizontal one, and the page keeps the vertical.
+   The wrap's box then has to HOLD everything, because hidden clips what leaves it: the padding is
+   the raised panel's shadow room, and nothing inside may use a negative margin to sit above the
+   stage. */
+.story-wrap { overflow-x: auto; overflow-y: hidden; margin: 0 0 8px; padding: 10px 0 22px; }
 /* The page that carries the diagram earns a wider measure than a card list's 1100px: the stage is
    1250px with all three columns up, and clipping it into its own scrollbar on a window that has
    the room hides the data column. Narrower windows still scroll the wrap alone. */
@@ -1720,7 +1727,7 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
    pure white with a full shadow, so they lift off that ground; and the side columns' cards give up
    their shadow and take a paler border, so they read as notes in the margin. */
 .story-col-spine { grid-column: 3; background: #eceffb; border: 1px solid #c9d0f0;
-                   border-radius: 16px; padding: 14px 16px 16px; margin: -6px 0;
+                   border-radius: 16px; padding: 14px 16px 16px;
                    box-shadow: 0 6px 22px rgba(40,44,90,.13), 0 1px 3px rgba(40,44,90,.08); }
 .story-col-spine > .story-colhead { color: #3730a3; font-size: 11.5px; letter-spacing: .08em; }
 .story-col-spine > .story-card { background: #fff; border-width: 1.5px; border-color: #b9c0ee;
@@ -1741,6 +1748,12 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 /* A data area is a quieter box than a feature: it is what the middle column KEEPS, not a thing the
    reader chose to come for. */
 .story-area { background: #fcfcfe; }
+/* An area name is a sentence-long noun phrase ("Upstream connections and credentials") and wraps to
+   two lines. It must wrap UNDER ITSELF, beside the glyph — not onto a flex line of its own, where a
+   button's default centring then leaves the glyph stranded above centred text. */
+.story-area .story-who { flex-wrap: nowrap; align-items: flex-start; }
+.story-area .story-name { text-align: left; }
+#diagram .story-area .story-glyph { margin-top: 1px; }
 .story-colhead { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                  letter-spacing: .06em; color: #6b7280; }
 .story-card { background: #fff; border: 1.5px solid #c7cdf9; border-radius: 10px;
