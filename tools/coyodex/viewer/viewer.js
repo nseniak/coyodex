@@ -7690,7 +7690,43 @@ function storyGlyphSvg(kind) {
     + '<path d="M10 7.5 V13 M4.8 9.8 H15.2 M10 13 L6.4 18.5 M10 13 L13.6 18.5" fill="none" '
     + `stroke="${stroke}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
 }
-function storyFeatureCardHtml(id, off) {
+// A FEATURE's glyph, in the same hand as the actor pair above: one 20x20 box, a closed shape filled
+// with its kind's tint and stroked at 1.6, no interior detail. A four-point sparkle — the one figure
+// left that collides with nothing the diagrams already draw (a person is a stick figure, a service
+// actor a hexagon, the system and its parts rectangles, a dependency a cylinder).
+// ONE four-point sparkle: four sides that CURVE INWARD, each a quadratic pulled to a control `p` from
+// the centre. Straight sides between an inner and an outer radius draw a four-point STAR instead; the
+// pinch is the whole difference, and `p` is the arm thickness. The tips meet at about 14 degrees, far
+// under the miter limit, so joins are `round` — mitre lets the browser bevel each point flat, which is
+// the other way to lose the sparkle.
+function sparklePath(cx, cy, r) {
+  const p = 0.11 * r, n = (v) => v.toFixed(2);
+  return `M${n(cx)},${n(cy - r)} Q${n(cx + p)},${n(cy - p)} ${n(cx + r)},${n(cy)}`
+    + ` Q${n(cx + p)},${n(cy + p)} ${n(cx)},${n(cy + r)}`
+    + ` Q${n(cx - p)},${n(cy + p)} ${n(cx - r)},${n(cy)}`
+    + ` Q${n(cx - p)},${n(cy - p)} ${n(cx)},${n(cy - r)} Z`;
+}
+// A FEATURE's glyph. THREE sparkles, the arrangement every icon set uses for this figure (one large,
+// two small off its upper and lower right) — one alone reads as a star or a compass rose, and the
+// companions are what say "sparkle".
+//
+// Only the LARGE one is drawn in the actor glyphs' two-tone hand (tint fill inside, 1.6 stroke round
+// it). The two small ones are solid: at a 3-unit radius in a 20-unit box the stroke would meet itself
+// across the middle and the shape would fill in as a blob.
+//
+// It takes the PERSON's tint, not one of its own. A feature is what a person gets to do, so the two
+// columns of this page are one warm colour and the cool ones stay with the machine.
+function storyFeatureGlyphSvg() {
+  const t = ELEMENT_TINT.human || {};
+  const stroke = t.stroke || '#6b7280', fill = t.fill || '#fff';
+  return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
+    + `<path d="${sparklePath(8, 11.7, 7.1)}" fill="${fill}" stroke="${stroke}" `
+    + 'stroke-width="1.6" stroke-linejoin="round"/>'
+    + `<path d="${sparklePath(16.4, 4.4, 3.3)}" fill="${stroke}" stroke="none"/>`
+    + `<path d="${sparklePath(16.7, 15.6, 2.5)}" fill="${stroke}" stroke="none"/>`
+    + '</svg>';
+}
+function storyFeatureCardHtml(id) {
   const f = FEAT_BY_ID[id] || {};
   const name = f.name || featureName(id);
   const n = (f.useCases || []).length;
@@ -7704,21 +7740,20 @@ function storyFeatureCardHtml(id, off) {
   const nr = (f.rules || []).length;
   const rules = nr ? `<button type="button" class="story-pill story-rulespill" data-cap="${esc(id)}" `
     + `title="Open what ${esc(name)} decides">${nr} rule${nr === 1 ? '' : 's'}</button>` : '';
-  // A feature the walk never reaches is a FACT on the card, never a demoted card: walk membership
-  // says nothing about importance (measured: both of mcpolis's off-walk features are user-side
-  // while a staff feature sits on the walk), and the old dashed third column read as a ranking.
-  const mark = off ? '<span class="story-pill story-walkoff" '
-    + 'title="The happy path never passes here: still real, just not on the walk">'
-    + 'not in the walk</span>' : '';
   // The use-case pill is a DOOR to the feature's own details page — the card's click is the pin, so
   // the pill is the one control that leaves this screen, and it says where it goes.
+  //
+  // TWO bands of pill, the same split the cast card makes. Beside the NAME goes the pill that changes
+  // how the name itself reads: who the feature is for. The LAST line is counts only, so the two
+  // columns' bottom lines are the same kind of line and can be compared down the page.
   return `<article class="story-card story-feature" `
     + `data-sfeat="${esc(id)}" tabindex="0">`
-    + `<span class="story-name">${esc(name)}</span>`
+    + `<span class="story-who">${storyFeatureGlyphSvg()}`
+    + `<span class="story-name">${esc(name)}</span>${aud}</span>`
     + (f.purpose ? `<p class="story-desc">${mdInline(f.purpose)}</p>` : '')
-    + `<div class="story-pills">${aud}<button type="button" class="story-pill story-ucpill" `
+    + `<div class="story-pills"><button type="button" class="story-pill story-ucpill" `
     + `data-cap="${esc(id)}" title="Open the details page of ${esc(name)}">`
-    + `${n} use case${n === 1 ? '' : 's'}</button>${rules}${mark}</div>`
+    + `${n} use case${n === 1 ? '' : 's'}</button>${rules}</div>`
     + '</article>';
 }
 function storyActorCardHtml(rid) {
@@ -7730,21 +7765,26 @@ function storyActorCardHtml(rid) {
   // actorGroups, the same reader the journey page counts with, so the two agree.
   const g = actorGroups().find((x) => x.actor === r.name);
   const n = g ? g.ucs.length : 0;
+  // The use-case pill sits where the feature card's does — the LAST band, under the sentence — so the
+  // one control that leaves the screen is in the same place on both columns. The nature pills stay
+  // beside the name: they say what this actor IS, which is part of reading the name, not a fact
+  // collected under it.
   return `<article class="story-card story-actor" data-sactor="${esc(rid)}" tabindex="0">`
     + `<span class="story-who">${storyGlyphSvg(r.kind)}<button type="button" `
     + `class="story-name story-namelink" data-actor="${esc(r.name || '')}" `
     + `title="Open the details page of ${esc(r.name || rid)}">${esc(r.name || rid)}</button>`
-    + cardPillsHtml(actorSidePills(r.kind, r.audience))
-    + `<button type="button" class="story-pill story-ucpill" data-actor="${esc(r.name || '')}" `
-    + `title="Open the details page of ${esc(r.name || rid)}">${n} use case${n === 1 ? '' : 's'}</button></span>`
+    + cardPillsHtml(actorSidePills(r.kind, r.audience)) + '</span>'
     + (wants ? `<p class="story-desc">${mdInline(wants)}</p>` : '')
-    + '</article>';
+    + `<div class="story-pills"><button type="button" class="story-pill story-ucpill" `
+    + `data-actor="${esc(r.name || '')}" `
+    + `title="Open the details page of ${esc(r.name || rid)}">${n} use case${n === 1 ? '' : 's'}</button>`
+    + '</div></article>';
 }
 // Does the story diagram draw on this map? ONE answer, read by the renderer, by renderOverview
 // (which hides the duplicate card grid when it does), and by the search / "show in context"
 // landings that pin a card in it. A walk is NOT required: the arrows derive from the use cases
-// alone, so any map recording features draws — a walk only adds the story order and the
-// not-in-the-walk markers. A map recording no features keeps the flat page it always had.
+// alone, so any map recording features draws — a walk only adds the story order and the trailing
+// block. A map recording no features keeps the flat page it always had.
 function storyDiagramDraws() {
   return ((FEATURES.story || {}).column || []).length > 0;
 }
@@ -7752,18 +7792,21 @@ function storyDiagramHtml() {
   const st = FEATURES.story || {};
   if (!storyDiagramDraws()) return '';
   // ONE features column: every feature, in the story order the server derived (`column` — the
-  // walk's first-touch order, off-walk features interleaved at their authored anchor or the
-  // fallback). A feature the walk skips keeps a full card and gains only a marker pill; the old
-  // demoted third column read as an importance ranking, which walk membership never was. Without
-  // a walk the column is map order and the headers stop claiming an order they cannot have.
+  // walk's first-touch order unbroken, then the off-walk features in a block after it, each at its
+  // authored anchor or the fallback). A feature the walk skips draws the SAME card as any other and
+  // spends no word on the walk: it used to carry a pill saying the walk missed it, and its position
+  // in the trailing block now states that for free. The old demoted third column read as an
+  // importance ranking, which walk membership never was, and a trailing block is not that column
+  // returning — the cards are identical and a `before` anchor still places a lead-in ahead of the
+  // walk. Without a walk the column is map order and the headers stop claiming an order they
+  // cannot have.
   const walk = (st.spine || []).length > 0;
-  const offSet = new Set(st.off || []);
   return `<div class="story-wrap"><div class="story-stage" id="storystage">`
     + '<svg class="story-wires" aria-hidden="true"><defs>'
     + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
     + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
     + `<div class="story-col story-col-spine"><p class="story-colhead">${walk ? 'Features · story order' : 'Features'}</p>`
-    + (st.column || []).map((id) => storyFeatureCardHtml(id, walk && offSet.has(id))).join('') + '</div>'
+    + (st.column || []).map((id) => storyFeatureCardHtml(id)).join('') + '</div>'
     + `<div class="story-col story-col-cast"><p class="story-colhead">${walk ? 'Actors · in order of appearance' : 'Actors'}</p>`
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
     + '</div></div>';

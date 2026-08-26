@@ -146,12 +146,14 @@ one content family with no structure at all, and no screen answers *"what does t
   justification per off-spine use case.
 - **A capability the walk never reaches states its `story` anchor:**
   `{ "place": "before"|"after", "feature": "CAPn" }` — the feature this one reads beside. WHY: the
-  viewer draws ONE story column, every feature in walk order, and a feature with no walk step has
-  no derived position in it; walk membership says nothing about importance, so an unanchored
-  feature must not fall to the bottom as if demoted. Without the anchor the viewer guesses from the
-  feature's actors' last walk step — right for trailing features (a chat variant of work already
-  walked reads after that work; ops reads at the end), wrong for lead-in ones (a marketing /
-  onboarding feature belongs BEFORE the first step, and the guess puts it after). Anchor to the
+  viewer draws ONE story column, the walk unbroken and the off-walk features in a block after it,
+  and a feature with no walk step has no derived position in it. So `after` ORDERS that trailing
+  block — the block already sits after every walk feature — while `before` is the one placement
+  that keeps a feature among the walk, because the end of the column is not before anything. Author
+  `before` on a lead-in (a marketing / onboarding feature belongs BEFORE the first step); author
+  `after` on a trailing or variant feature, so it follows the work it extends instead of landing
+  last. Without an anchor the viewer guesses from the feature's actors' last walk step, which
+  orders the block sensibly for trailing features and never rescues a lead-in. Anchor to the
   feature it genuinely reads beside in the product's story; never invent an anchor for a feature
   the walk already reaches (its position is derived), and never author anchors that form a cycle
   (A after B, B after A) — a cycle cannot resolve, and the viewer then drops one member's anchor.

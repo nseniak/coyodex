@@ -1689,8 +1689,8 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    1370px, and clipping it into its own scrollbar on a window that has the room hides the third
    column. Narrower windows still scroll the wrap alone. */
 .usecases-wrap:has(> .story-wrap), .usecases-wrap:has(> .journey-board) { max-width: 1440px; }
-/* ONE features column + the cast: every feature sits in the story column, walk order, off-walk
-   ones interleaved at their story anchor and marked — never a demoted third column. */
+/* ONE features column + the cast: every feature sits in the story column, the walk in walk order
+   and unbroken, off-walk ones in a block after it — never a demoted third column. */
 .story-stage { position: relative; display: grid; width: max-content;
                grid-template-columns: 400px 150px 330px; }
 svg.story-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -1708,9 +1708,6 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-col-cast { grid-column: 3; justify-content: space-between; }
 .story-colhead { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                  letter-spacing: .06em; color: #6b7280; }
-/* The not-in-the-walk marker: the same pill shape as the card's other facts, quieter ink — a fact
-   about the walk, never a demotion of the card. */
-.story-walkoff { background: none; border: 1px dashed #c3c8d9; color: #6b7280; cursor: default; }
 .story-card { background: #fff; border: 1.5px solid #c7cdf9; border-radius: 10px;
               padding: 10px 14px 9px; cursor: pointer; box-shadow: 0 1px 2px rgba(30,34,53,.06); }
 .story-card:hover { border-color: #4f46e5; box-shadow: 0 2px 10px rgba(79,70,229,.16); }

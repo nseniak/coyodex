@@ -3137,28 +3137,31 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
     html = _story_fn(js, "storyDiagramHtml")
     assert "if (!storyDiagramDraws()) return '';" in html
     # ONE features column in the derived story order, the cast beside it — and a feature the walk
-    # skips keeps a full card with only a marker pill. The demoted third column read as an
-    # importance ranking, which walk membership never was.
+    # skips draws the SAME card as any other. Its position in the trailing block is what says the
+    # walk misses it, so no card spends a word on it. The demoted third column read as an importance
+    # ranking, which walk membership never was.
     assert "Features · story order" in html
     assert "Actors · in order of appearance" in html
-    assert "(st.column || []).map((id) => storyFeatureCardHtml(id, walk && offSet.has(id)))" in html
+    # An explicit one-argument call, never a bare `.map(storyFeatureCardHtml)`: map hands its
+    # callback the index and the array too, which is a trap the day the card takes a second flag.
+    assert "(st.column || []).map((id) => storyFeatureCardHtml(id))" in html
     assert "Off the happy path" not in html and "story-offnote" not in js
     card = _story_fn(js, "storyFeatureCardHtml")
-    assert "story-walkoff" in card and "not in the walk" in card
+    assert "story-walkoff" not in card and "not in the walk" not in card
+    assert "story-walkoff" not in js
+    assert "story-walkoff" not in (VIEWER_DIR / "viewer.css").read_text()
     assert "story-offf" not in js, "the demoted card styling is gone, not shadowed"
 
 
 def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
     """The arrows never needed the happy path — they derive from the use cases — so a map with no
-    walk draws one plain "Features" column (the derived column is map order there), no
-    not-in-the-walk markers (there is no walk to be in), and no header claiming an appearance
-    order. The labels then explain instead of navigating."""
+    walk draws one plain "Features" column (the derived column is map order there) and no header
+    claiming an appearance order. The labels then explain instead of navigating."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = _story_fn(js, "storyDiagramHtml")
     assert "const walk = (st.spine || []).length > 0;" in html
     assert "${walk ? 'Features · story order' : 'Features'}" in html
     assert "${walk ? 'Actors · in order of appearance' : 'Actors'}" in html
-    assert "walk && offSet.has(id)" in html, "no marker without a walk"
     bind = _story_fn(js, "bindStoryDiagram")
     assert "'This map has no happy path'" in bind
     css = (VIEWER_DIR / "viewer.css").read_text()

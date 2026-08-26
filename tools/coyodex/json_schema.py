@@ -116,10 +116,14 @@ FIELD_META: dict[tuple[str, str], dict] = {
                           "no step numbers)."},
     ("Group", "story"): {"description": "CAPABILITY-ONLY, and only worth authoring on a feature the "
                           "walk never reaches: where that feature sits in the ONE story column the "
-                          "viewer draws. Absent = the viewer guesses from the feature's actors' "
-                          "last walk step — right for trailing features (ops, a chat variant of "
-                          "work already walked), wrong for lead-in ones (a marketing page belongs "
-                          "BEFORE the first step). `validate` blocks it on the other forests."},
+                          "viewer draws. The walk reads unbroken and the off-walk features form a "
+                          "block after it, so `after` ORDERS that block (the block is already after "
+                          "every walk feature) while `before` is the one placement that keeps a "
+                          "feature among the walk — author it on a lead-in like a marketing page, "
+                          "which belongs BEFORE the first step. Absent = the viewer guesses from "
+                          "the feature's actors' last walk step, which orders the block sensibly "
+                          "for trailing features (ops, a chat variant of work already walked) and "
+                          "never rescues a lead-in. `validate` blocks it on the other forests."},
     ("StoryAnchor", "place"): {"enum": ["before", "after"], "description": "exactly `before` or "
                                 "`after` (lowercase) — the derivation and `validate` compare "
                                 "strictly."},

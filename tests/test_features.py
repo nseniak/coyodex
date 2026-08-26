@@ -359,7 +359,7 @@ def test_the_story_ships_in_the_bundle():
     assert (e["label"], e["authored"], e["step"]) == ("pay", False, "HP2")
 
 
-# --- the one story column: off-walk features interleave at an anchor or the fallback -------------
+# --- the one story column: the walk unbroken, then the off-walk features in a trailing block ------
 
 def test_the_column_is_the_spine_with_off_features_at_the_derived_fallback():
     """No anchors authored: Marketing's only actor (R1) last drives HP2, whose feature is Billing,
@@ -377,10 +377,50 @@ def test_an_authored_before_anchor_beats_the_fallback():
     assert story_of(doc).column == ["CAP3", "CAP2", "CAP1", "CAP4"]
 
 
-def test_an_authored_after_anchor_places_beside_the_named_feature():
+def test_an_after_anchor_on_a_walk_feature_orders_the_trailing_block_and_never_breaks_the_walk():
+    """`after CAP2` is honoured by the trailing block itself: everything there is after CAP2. So
+    Cleanup does NOT interrupt the walk to sit beside it; it only sorts ahead of Marketing, whose
+    fallback (after Billing) puts it later."""
     doc = make_story_map()
     doc["capabilities"][3]["story"] = {"place": "after", "feature": "CAP2"}
-    assert story_of(doc).column == ["CAP2", "CAP4", "CAP1", "CAP3"]
+    assert story_of(doc).column == ["CAP2", "CAP1", "CAP4", "CAP3"]
+
+
+def test_every_off_feature_trails_the_whole_walk_even_when_anchored_mid_walk():
+    """The rule that changed: two off features anchored after two DIFFERENT walk features used to
+    interleave at each anchor. Both now sit after the last walk feature, and the anchors survive as
+    the order INSIDE that block — Cleanup (after Signup) ahead of Marketing (after Billing)."""
+    doc = make_story_map()
+    doc["capabilities"][2]["story"] = {"place": "after", "feature": "CAP1"}
+    doc["capabilities"][3]["story"] = {"place": "after", "feature": "CAP2"}
+    assert story_of(doc).column == ["CAP2", "CAP1", "CAP4", "CAP3"]
+
+
+def test_before_a_mid_walk_feature_splits_the_walk_and_lands_exactly_above_it():
+    """The reason `pinned()` exists, and the case the trailing block cannot serve: `before Billing`
+    can only be honoured by sitting between Signup and Billing. Asserting the WHOLE column, not
+    just "somewhere earlier": a rule that pinned only against the walk's FIRST feature would put
+    Marketing after Billing and silently break the anchor."""
+    doc = make_story_map()
+    doc["capabilities"][2]["story"] = {"place": "before", "feature": "CAP1"}
+    assert story_of(doc).column == ["CAP2", "CAP3", "CAP1", "CAP4"]
+
+
+def test_before_an_unpinned_off_feature_does_not_drag_it_into_the_walk():
+    """`before` pins only when the chain REACHES the walk. Anchored before an off feature that is
+    itself trailing, this feature is honoured inside the trailing block and must not climb into the
+    walk with it. Needs a third walk feature, so that the target's own fallback lands mid-walk and
+    a wrong rule would be visible."""
+    doc = make_story_map()
+    doc["capabilities"].append({"id": "CAP5", "name": "Support", "purpose": "helps out",
+                                "happy_path": "expected"})
+    doc["use_cases"].append({"id": "UC6", "name": "Ask for help", "actors": ["R2"],
+                             "capability": "CAP5", "entry_points": []})
+    doc["happy_path"].append({"id": "HP4", "title": "Ask for help", "uc": "UC6"})
+    doc["capabilities"][3]["story"] = {"place": "before", "feature": "CAP3"}
+    col = story_of(doc).column
+    assert col == ["CAP2", "CAP1", "CAP5", "CAP4", "CAP3"]
+    assert col.index("CAP5") < col.index("CAP4"), "the walk stays unbroken"
 
 
 def test_an_anchor_may_name_another_off_feature_and_a_cycle_falls_back():

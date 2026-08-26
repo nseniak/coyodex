@@ -80,9 +80,12 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                       "story": { "place": "before|after", "feature": "CAPn" },
                                                   // capability-only, optional; author it ONLY on a
                                                   // feature the walk never reaches: where it sits
-                                                  // in the one story column. Absent = the viewer
-                                                  // derives (the feature's actors' last walk
-                                                  // step, else the end).
+                                                  // in the one story column. The walk reads
+                                                  // unbroken and off-walk features form a block
+                                                  // after it, so `after` orders that block and
+                                                  // `before` is what keeps a lead-in among the
+                                                  // walk. Absent = the viewer derives (the
+                                                  // feature's actors' last walk step, else the end).
                       "stakes": [ { "actor": "Rn", "stake": "<verb phrase>" }, … ] } ],
                                                   // capability-only; one entry per driving actor:
                                                   // what THAT actor comes to this feature to do,

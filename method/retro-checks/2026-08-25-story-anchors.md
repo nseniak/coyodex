@@ -1,10 +1,11 @@
 # Off-walk features get a story anchor, and the story column reads as one story
 
 Change: one story column — the Features diagram's "Off the happy path" column is gone; every
-feature sits in one column in story order, off-walk features interleaved at an authored
-`capabilities[].story` anchor ({place: before|after, feature: CAPn}), with a derived fallback
-(the feature's actors' last walk step) · method.md, method/model.md, method/project-map.schema.json,
-tools/coyodex/model.py, validate_model.py, features.py, viewer.
+feature sits in one column, the walk unbroken and the off-walk features in a block after it,
+ordered by an authored `capabilities[].story` anchor ({place: before|after, feature: CAPn}) with a
+derived fallback (the feature's actors' last walk step). A `before` anchor on a walk feature is the
+one placement that keeps an off feature among the walk · method.md, method/model.md,
+method/project-map.schema.json, tools/coyodex/model.py, validate_model.py, features.py, viewer.
 
 Escalation: if check 3 fails (anchors placing features where the story misreads), run the eval
 before accepting the map.
@@ -20,8 +21,8 @@ before accepting the map.
 2. expect: every `story.feature` resolves to a defined capability id and never to the capability
    itself (`coyodex validate` reports zero problems from story anchors).
    regression sign: validate reports a dangling or self-referencing anchor.
-3. expect: the rendered story column reads as the product story — lead-in features before the
-   walk's first feature, trailing/variant features after the work they extend, and no feature at
-   the bottom of the column solely because it lacked an anchor a human would have authored.
+3. expect: the rendered story column reads as the product story — lead-in features (anchored
+   `before`) ahead of the walk's first feature, and the trailing block ordered so each variant
+   feature follows the work it extends rather than landing last for want of an anchor.
    regression sign: an anchor that contradicts the walk's own reading (a marketing feature after
    onboarding is complete), or anchors invented to reorder ON-walk features.

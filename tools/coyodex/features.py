@@ -101,13 +101,16 @@ class Story:
     ALL ORDERS ARE DERIVED HERE, deterministically, never layout-computed in the browser:
     `spine` is the on-path features by their FIRST happy-path touch (a feature touched at several
     moments appears once, at its first); `off` is every feature the walk never touches, in map
-    order — it survives as the SET the views mark "not in the walk", not as a column of its own;
-    `column` is the one merged order every screen draws: the spine, with each off feature
-    interleaved at its authored story anchor, or at the derived fallback (its actors' last walk
-    step), or at the end; `cast` is every role by the first step it drives, roles driving none
-    last, in map order."""
+    order — the classification, never a column of its own. No screen draws it today: the trailing
+    block in `column` is where an off feature reads, and `off` survives for callers that need the
+    SET rather than the order;
+    `column` is the one merged order every screen draws: the spine unbroken, then the off features
+    in a block after it, each at its authored story anchor, or at the derived fallback (its actors'
+    last walk step), or at the end — an off feature stays among the walk only when a `before` anchor
+    leaves it no choice (see _story_column); `cast` is every role by the first step it drives, roles
+    driving none last, in map order."""
     spine: list[str] = field(default_factory=list)      # CAPn, first-touch order
-    off: list[str] = field(default_factory=list)        # CAPn, map order — the not-in-the-walk SET
+    off: list[str] = field(default_factory=list)        # CAPn, map order — the off-the-walk SET
     column: list[str] = field(default_factory=list)     # CAPn, the one merged story order
     cast: list[str] = field(default_factory=list)       # Rn, order of first appearance
     edges: list[StoryEdge] = field(default_factory=list)
@@ -155,24 +158,37 @@ def _fallback_label(name: str) -> str:
 
 def _story_column(m: ProjectModel, spine: list[str], first_cap: dict[str, int],
                   last_actor: dict[str, int]) -> list[str]:
-    """The ONE story order: the spine, with every off-walk feature interleaved.
+    """The ONE story order: the spine, then the off-walk features, in a block after it.
 
-    An off feature's position, in priority order: its AUTHORED anchor (before/after another
-    feature, resolved recursively with a cycle guard — an anchor may name another off feature);
-    the DERIVED fallback (after the feature holding its actors' last walk step — right for
-    trailing features like ops or a chat variant of walked work, wrong for lead-in ones, which is
-    why the anchor exists); else the END, in map order. Ties (two features anchored to the same
-    spot, or a chain landing on a spine position) break walk-features-first, then map order —
-    deterministic, so the same map always draws the same column."""
+    The walk reads unbroken. An off feature interrupted it for no gain: walk membership is not
+    importance, so the reader paid a break in the story order to learn nothing.
+
+    An off feature's position INSIDE that trailing block, in priority order: its AUTHORED anchor
+    (before/after another feature, resolved recursively with a cycle guard — an anchor may name
+    another off feature); the DERIVED fallback (after the feature holding its actors' last walk
+    step — right for trailing features like ops or a chat variant of walked work, wrong for
+    lead-in ones, which is why the anchor exists); else the END, in map order.
+
+    The ONE thing that keeps an off feature among the walk is a `before` anchor it could not
+    otherwise honour: a marketing page authored BEFORE the first step has to sit before it, and
+    the end of the column is not before anything. Such a feature is PINNED, and so is anything
+    authored `after` a pinned one, which keeps an authored lead-in chain together. An `after`
+    anchor naming a WALK feature never pins: the end of the column is already after it, so the
+    anchor still holds there, and honouring it in place is what used to break the walk.
+
+    Ties (two features anchored to the same spot, or a chain landing on a spine position) break
+    walk-features-first, then map order — deterministic, so the same map always draws the same
+    column."""
     caps = {c.id: c for c in m.capabilities}
     role_ids = {r.id for r in m.roles}
     map_pos = {c.id: i for i, c in enumerate(m.capabilities)}
     key: dict[str, float] = {c: float(i) for i, c in enumerate(spine)}
     # Each feature's "granularity": how far its OWN dependents sit from it. Halving per link keeps
     # a realistic chain (B after A, A before CAP2) inside the gap its head claimed, whatever order
-    # the memoized resolution visits them in. Only a pathological chain of ~50+ "after" links can
-    # saturate the floats and spill past the next spine feature — deterministically, never wrongly
-    # ordered within itself.
+    # the memoized resolution visits them in. A pathological chain of ~50+ links saturates the
+    # floats: past that depth the steps round to zero, the tail ties on one key, and the members
+    # fall back to map order — so the chain's own links stop being honoured. Deterministic, and no
+    # authored map comes near 50 anchors deep.
     gran: dict[str, float] = {c: 0.5 for c in key}
     cap_roles: dict[str, set[str]] = {c: set() for c in caps}
     for u in m.use_cases:
@@ -210,7 +226,22 @@ def _story_column(m: ProjectModel, spine: list[str], first_cap: dict[str, int],
 
     for cid in caps:
         resolve(cid, frozenset())
-    return sorted(caps, key=lambda cid: (key[cid], cid not in first_cap, map_pos[cid]))
+
+    def pinned(fid: str, seen: frozenset[str]) -> bool:
+        """Must this off feature stay among the walk? Only an unhonourable `before` says so."""
+        if fid in first_cap or fid in seen:
+            return False                      # on the walk (not an off feature), or an anchor cycle
+        a = caps[fid].story
+        if a is None or a.feature not in caps or a.feature == fid:
+            return False
+        if a.place == "before":
+            return a.feature in first_cap or pinned(a.feature, seen | {fid})
+        # `after` a PINNED off feature keeps an authored chain together; `after` a walk feature
+        # does not pin, since the trailing block is already after it.
+        return a.place == "after" and a.feature not in first_cap and pinned(a.feature, seen | {fid})
+
+    late = {cid: cid not in first_cap and not pinned(cid, frozenset()) for cid in caps}
+    return sorted(caps, key=lambda cid: (late[cid], key[cid], cid not in first_cap, map_pos[cid]))
 
 
 def build_story(m: ProjectModel) -> Story:

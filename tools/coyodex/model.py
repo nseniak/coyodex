@@ -131,10 +131,13 @@ class Stake:
 class StoryAnchor:
     """CAPABILITY-ONLY: where a feature the walk never reaches SITS in the one product story.
 
-    The viewer draws ONE story column — every feature, walk order — and a feature with no walk
-    step has no derived position in it. The anchor is the authored answer: this feature reads
-    `before` or `after` that one. Without it the viewer falls back to a guess (the feature's
-    actors' last walk step), which mis-places lead-in features like a marketing page. Validation
+    The viewer draws ONE story column — the walk unbroken, then the off-walk features in a block
+    after it — and a feature with no walk step has no derived position in it. The anchor is the
+    authored answer: this feature reads `before` or `after` that one. `after` a walk feature only
+    ORDERS the trailing block, since the block already sits after every walk feature; `before` a
+    walk feature is the one anchor that keeps a feature among the walk, because the end of the
+    column is not before anything. Without an anchor the viewer falls back to a guess (the
+    feature's actors' last walk step), which never rescues a lead-in like a marketing page. Validation
     stops at shape + referential integrity: `place` is the exact pair, `feature` must resolve and
     not be the capability itself; whether the placement reads well is the author's judgement."""
     place: str                # before | after
@@ -163,7 +166,8 @@ class Group:
     story: StoryAnchor | None = None
                                # CAPABILITY-ONLY: where a feature the walk never reaches sits in the
                                # one story column (see StoryAnchor). None = derive (actors' last walk
-                               # step) — right for trailing features, wrong for lead-in ones.
+                               # step) — orders the trailing block for trailing features, and cannot
+                               # pull a lead-in one back among the walk; only `before` does that.
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""

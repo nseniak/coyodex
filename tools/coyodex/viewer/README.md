@@ -137,12 +137,13 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     Navigate back with the breadcrumb (Happy Path › *this step*) or the **◀ ▶** arrows.
 - **Features** *(when the map records capabilities)* — the product on one screen, in three levels.
   Level 1 is the **story diagram**: ONE column holding every feature in **story order** (the walk's
-  first-touch order, with each feature the walk never reaches interleaved at its authored
-  `story` anchor — before/after the feature it reads beside — or at a derived fallback, its
-  actors' last walk step), beside the actors as a cast in order of first appearance, joined by
-  derived actor→feature arrows. A feature the walk skips keeps a full card and carries only a
-  small "not in the walk" pill: walk membership says nothing about importance, and the demoted
-  third column this replaces read as a ranking. At rest the arrows are bare; hovering or pinning a
+  first-touch order unbroken, then every feature the walk never reaches in a block after it, each
+  placed by its authored `story` anchor — before/after the feature it reads beside — or by a derived
+  fallback, its actors' last walk step), beside the actors as a cast in order of first appearance,
+  joined by derived actor→feature arrows. A feature the walk skips draws the SAME card as any other
+  and spends no word on the walk: walk membership says nothing about importance, and the demoted
+  third column this replaces read as a ranking. A `before` anchor is the one placement that keeps
+  such a feature among the walk, since the end of a column is not before anything. At rest the arrows are bare; hovering or pinning a
   card lights its arrows and shows each one's **stake label** (the authored `stakes[]` entry, or the
   pair's first use-case name), which links to that edge's first Happy-Path step. Each card's
   use-case pill is its door one level down. A cast card's actor NAME is the door to that **actor's
