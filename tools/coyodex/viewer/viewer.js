@@ -7886,7 +7886,11 @@ function bindStoryDiagram(root) {
     l.addEventListener('mouseenter', () => clearTimeout(hideTimer));
     l.addEventListener('mouseleave', scheduleHide);
   }
-  stage.addEventListener('click', unpin);   // empty background clears the pin
+  // Empty background clears the pin — bound on the WRAP, not the stage: the stage is only as wide
+  // as its columns, and since the third column left, the whitespace right of the cast sits outside
+  // it, where a click cleared nothing. Card and pill clicks stopPropagation, so they never reach
+  // here from either element.
+  (stage.closest('.story-wrap') || stage).addEventListener('click', unpin);
   root.querySelectorAll('.story-ucpill').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();               // the pill's door is not the card's pin
     const cap = b.getAttribute('data-cap');
