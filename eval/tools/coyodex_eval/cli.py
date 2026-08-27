@@ -33,6 +33,10 @@ Commands:
   archive  Move a repo's coyodex map into .coyodex/dev-rebuilds/NNNN/ so the next run BUILDS
            from scratch (dispatch reads the WORKING TREE to choose the mode). Moves, never
            deletes — the old map is the baseline the new one is compared against.
+  ledger   Cross-examine a retro ledger against the git history it cites. A row's `landed`
+           flag is set by hand and nothing checked it: one session answered 40 rows, fixed
+           seven of them, and left all seven reading `landed: false` — the next retro would
+           re-propose work already done. Exit 1 on any such row.
   retro-precheck  Refuse to retrospect a build that has not finished. Exit 1 when another
            session is still writing a transcript — provenance is stamped near the END of a
            build, so mid-run it still names the PREVIOUS one and a retro reads the wrong run.
@@ -84,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "archive":
         from coyodex_eval import archive
         return archive.main(rest)
+    if cmd == "ledger":
+        from coyodex_eval import ledger
+        return ledger.main(rest)
     if cmd == "retro-precheck":
         from coyodex_eval import retro_precheck
         return retro_precheck.main(rest)

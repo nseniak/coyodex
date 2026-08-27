@@ -91,6 +91,16 @@ def _verdicts(tmp: Path) -> Path:
     return p
 
 
+def _ledger_file(t) -> "Path":
+    """A minimal retro ledger. One row, no `landed_in`, so the sweep exercises the command without
+    depending on any sha existing in this clone."""
+    p = t / "findings.json"
+    p.write_text(json.dumps({"schema": "coyodex-retro-ledger/v1",
+                             "findings": [{"id": "x-1", "title": "t", "landed": False}]}),
+                 encoding="utf-8")
+    return p
+
+
 def _run_dir(tmp: Path, name: str) -> Path:
     """`bless` promotes a run directory to a baseline; both must exist and hold a profile."""
     d = tmp / name
@@ -117,6 +127,8 @@ RECIPES: dict[str, tuple] = {
     "bless":          (lambda t: ["bless", str(_run_dir(t, "run")), str(_run_dir(t, "baseline"))], OK),
     "archive":        (lambda t: ["archive", str(t / "empty"), "--list"], (0, 1, 2)),
     "retro-precheck": (lambda t: ["retro-precheck", "--repo", str(t / "empty"), "--json"], (0, 1)),
+    # a ledger of one row that names no commit: nothing to check, so nothing to be wrong about
+    "ledger":         (lambda t: ["ledger", str(_ledger_file(t)), "--repo", str(REPO), "--json"], OK),
     "mutate":         (lambda t: ["mutate", "plant", str(FIXTURE / "claims-sample.json"),
                                   "--n", "2", "--repo", str(FIXTURE),
                                   "--out", str(t / "m.json"), "--key", str(t / "k.json")], OK),

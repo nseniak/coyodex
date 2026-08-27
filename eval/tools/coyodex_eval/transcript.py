@@ -444,7 +444,7 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
 _COYODEX_SUBCOMMANDS = frozenset({
     "anchor-drift", "archive", "assemble", "audit", "balance", "bless", "claims", "compare",
     "contract", "cost", "diff", "dump", "finalize", "fix", "grounding", "hash", "judge",
-    "lint-fragment",
+    "ledger", "lint-fragment",
     "mutate", "preindex",
     "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
     "run", "score", "scope", "serve", "transcript", "validate",

@@ -212,6 +212,15 @@ for four retros is a different problem from a new one**, and the count is what m
 recurring item visible. Carry every row forward whatever its severity: a LOW-severity item that has
 survived five retros outranks a new MED one, and only the count can say so.
 
+**Before writing it, run `coyodex-eval ledger <the previous findings.json> --repo <the coyodex
+clone>`.** The `landed` flag is hand-set and it is the one input this carry-forward depends on;
+nothing checked it until that command existed. On the session that wrote it, an operator answered 40
+rows and fixed seven of them in the same session, leaving all seven reading `landed: false` — seven
+rows the next retro would have re-proposed with their `retros_open` going up, which is the shape
+that ledger already had 24 instances of. Exit 1 names each row whose `landed_in` commit is merged
+while the row still calls itself open. It says nothing about a row that names no commit, and prints
+how many of those there are: a clean result there is not a clean ledger.
+
 Write the updated ledger to YOUR run directory as `findings.json`, with this run's new findings
 appended. The shape:
 
