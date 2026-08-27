@@ -1124,9 +1124,15 @@ synthesis → parallel trace.**
     turn.** One message keeps the batch atomic: the slices are dispatched from one decision, so a
     late edit cannot reach half of them. The same rule applies to every fan-out below, not just
     harvest. **What it does NOT buy is speed.** Dispatch latency is the model EMITTING the prompt
-    text, at roughly 230-320 bytes/s, so it scales with prompt BYTES and not with agent count. The
-    lever is shorter dispatch prompts — put the invariant block in a file the agents read, as the
-    skeptic fan-out already does — not turn count.
+    text, at roughly 230-320 bytes/s, so it scales with prompt BYTES and not with agent count.
+    **So dispatch every contract by POINTER, never by paste — in every fan-out below (harvest,
+    trace, rules, skeptics, gap-fill).** Fill each agent's contract into a scratch FILE (the
+    `coyodex contract` verb, then the slot edits in place), and make the agent's prompt three
+    lines: its agent id, the file's absolute path, and "Read it COMPLETELY and follow it — it is
+    your entire brief." A pasted trace contract is ~13 KB times the fan-out, an hour of dispatch
+    typing on a large build, where a pointer is three lines; a pasted copy can also drift mid-batch
+    while the file cannot. A build has already run its whole harvest on pointer briefs, and the L3
+    scorecard reads a pointer brief correctly (assertion 31 scores the FILE it names).
   - **Pre-size the slices from the pre-index so no slice becomes the critical path.** The whole
     phase ends when the SLOWEST agent does, so one oversized slice stalls the barrier for everybody.
     The pre-index already counts files/symbols per area — aim for roughly EQUAL estimated work per
@@ -1407,7 +1413,8 @@ synthesis → parallel trace.**
   sub-flow between them).
   **The copyable contract is
   [method/templates/trace-contract.md](method/templates/trace-contract.md)** — hand every trace agent
-  that file's contents, changing only the «angle-bracket» slots. **Get it with the verb:**
+  a POINTER to its filled copy (the pointer-dispatch rule in Phase 1), changing only the
+  «angle-bracket» slots. **Get it with the verb:**
   `coyodex contract trace > <scratch>/trace-contract.md`, then fill them in
   place; a `Read` followed by a `Write` is one keystroke from a rewrite, and the verb prints only
   the agent's half, so the lead-facing header cannot travel with it. This was the largest fan-out
@@ -1625,9 +1632,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   you each group's size, so the batches fall out of the data instead of being guessed. **Batch by
   theme/risk, don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group
   the claims into themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage),
-  one fresh-context skeptic per batch — hand each one
+  one fresh-context skeptic per batch — hand each one a POINTER to its filled copy of
   [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
-  contract, rather than composing one from this section. **Copy it with a command, not by reading
+  contract (the pointer-dispatch rule in Phase 1), rather than composing one from this section. **Copy it with a command, not by reading
   and retyping** — `coyodex contract skeptic >
   <scratch>/skeptic-contract.md`, then fill the «angle-bracket» slots. The instruction on its own
   does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and a
@@ -1984,7 +1991,8 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
 **Harvest-prompt template (Phase 1).** The copyable contract is
 [method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every harvest
-agent that file's contents, changing only the file list and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
+agent a POINTER to its filled copy (the pointer-dispatch rule above), changing only the file list
+and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
 contract harvest > <scratch>/harvest-contract.md`, then fill the «angle-bracket» slots in place.
 The verb prints the agent's half and appends the writing rules, so you never handle the template
 and the lead-facing header at its top cannot reach an agent. A harvest agent authors every
