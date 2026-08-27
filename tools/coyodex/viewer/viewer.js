@@ -3202,7 +3202,7 @@ const GROUP_LABEL = {};     // group id -> its label, from VIEW_GROUPS
 const groupLast = {};
 const VIEW_LABEL = {};   // view id -> its tab label, filled from the buttons at boot (one source)
 const VIEW_Q = {
-  hp: 'What does this system do, end to end?',
+  hp: 'Which features does one successful run touch, and in what order?',
   usecases: 'What can this product do, feature by feature?',
   container: 'How is the code organised, and what depends on what?',
   domain: 'What things does this system know about, and how do they relate?',
@@ -8294,6 +8294,11 @@ function renderHappyPath() {
     return;
   }
   const feats = new Set(rows.flatMap((r) => r.segs.map((sg) => sg.fid)).filter(Boolean)).size;
+  // …out of how many the product HAS. The walk is usually a selection, and on the four maps this
+  // viewer reads it is 9 of 10 and 8 of 10 — but on the other two it is 7 of 7, every feature there
+  // is. So the fact is stated as a count and never as a word: "a subset of the features" would be a
+  // plain lie on half of them, and on any small product, whose walk naturally covers everything.
+  const allFeats = (FEATURES.features || []).length;
   // Each row is its OWN sideways scroller. One scroller for the whole board would tie a row of three
   // steps to a row of thirteen: scrolling to see the end of the long one would drag the short ones
   // off screen with it, showing empty space where their line has already finished.
@@ -8316,9 +8321,10 @@ function renderHappyPath() {
   // and the hand count named a thing nobody looks up: the rows themselves are the hand-overs, and
   // counting them said nothing a reader acts on.
   const n = (GRAPH.happy_path || []).length;
+  const of = (allFeats && allFeats !== feats) ? ` of ${allFeats}` : '';
   diagram.innerHTML = '<div class="usecases-wrap">'
     + `<p class="block-lbl">${n} step${n === 1 ? '' : 's'}, `
-    + `${feats} feature${feats === 1 ? '' : 's'}</p>`
+    + `${feats}${of} feature${(of ? allFeats : feats) === 1 ? '' : 's'}</p>`
     + `<div class="walk-board">${html}</div></div>`;
   levelWalkBoxes(diagram);
   bindWalk(diagram);

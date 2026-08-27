@@ -14,6 +14,7 @@ Conventions: top-level test functions, no classes/fixtures (helpers are `make_*`
 """
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 import threading
@@ -525,4 +526,22 @@ def test_the_arrow_head_that_turns_the_line_down_is_centred_on_it() -> None:
         }""")
         assert off == [], off
         assert page.evaluate("() => document.querySelectorAll('.walk-elbow').length") == 5
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_walk_counts_the_features_it_touches_out_of_all_there_are() -> None:
+    """The walk is usually a selection, and the page should say so. It cannot say so in WORDS: on the
+    four maps this viewer reads it is 9 of 10 and 8 of 10, but on the other two it is 7 of 7, every
+    feature there is — and on any small product the walk naturally covers everything. "A subset of
+    the features" would be a plain lie on half of them.
+
+    So it is a count, and the "of N" appears only when there is something left out. The fixture's
+    walk misses one feature, so it says "of"; a map whose walk reaches them all says only how many.
+    """
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        label = page.evaluate("() => document.querySelector('.block-lbl').textContent")
+        assert re.fullmatch(r"14 steps, \d+ of \d+ features", label), label
+        touched, total = (int(x) for x in re.findall(r"(\d+) of (\d+)", label)[0])
+        assert touched < total, label
         assert not page.js_errors, page.js_errors
