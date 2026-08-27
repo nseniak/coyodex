@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from coyodex import balance_lib, prose, records, grammar
+from coyodex import anchors, balance_lib, prose, records, grammar
 from coyodex.audit_model import l2_worklist_model
 from coyodex.reporting import clip as _clip, reset_full_lists, set_full_lists, shown as _shown
 from coyodex.anchors import (
@@ -4254,6 +4254,14 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         href = _first_link_of(s, [s.source]) or (s.source or None)
         if href and not url.match(href):
             out.append((f"security '{s.surface}'", href))
+    # A role INCLUSION's grant line. An inclusion is an access claim — the viewer draws it as "may
+    # do everything the other may do" — so its anchor faces the same existence gate as every other
+    # one. Until it did, an invented grant line (`.../NOPE_does_not_exist.py:999`) passed all-green,
+    # which is the "a gate will catch a guess, so guessing looks safe" shape this check exists for.
+    for r in m.roles:
+        for i, rel in enumerate(r.relations or []):
+            if rel.source and not url.match(rel.source):
+                out.append((f"{r.id} relations[{i}]", rel.source))
     for d in m.deployment:
         # a variant's grounding anchor rides the SAME existence path as security anchors (T6): a CITED
         # `source` that doesn't resolve is a hard block under `--check-sources`. An empty source is the
@@ -4261,6 +4269,31 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         for v in d.variants:
             if v.source and not url.match(v.source):
                 out.append((f"deployment '{d.unit}' variant '{v.env}'", v.source))
+    return out
+
+
+def check_role_relation_shape(m: ProjectModel) -> list[str]:
+    """BLOCKING: a role inclusion's `source` must be a `path:line`, and only `includes` may carry one.
+
+    Nothing shape-checked it, so `source: "because the admin flag says so"` validated at exit 0 and
+    the minted claim then read "granted at because the admin flag says so" — telling a skeptic the
+    grant IS anchored and handing it nothing to open. That is strictly worse than leaving it null,
+    which at least says out loud that nobody anchored it."""
+    out: list[str] = []
+    for r in m.roles:
+        for i, rel in enumerate(r.relations or []):
+            src = (rel.source or "").strip()
+            if not src:
+                continue
+            if (rel.kind or "").strip().lower() != "includes":
+                out.append(f"{r.id} relations[{i}]: `source` is for `includes` — the line that GRANTS "
+                           f"the inclusion. A `becomes` is a hat change at a use case (`at`), so a "
+                           f"grant line says nothing about it; drop the field.")
+            elif not anchors.FILEREF.fullmatch(src):
+                out.append(f"{r.id} relations[{i}]: `source` is '{src}', which is not a `path:line`. "
+                           f"A claim reading 'granted at {src}' tells a skeptic the grant is anchored "
+                           f"and gives it nothing to open — leave it null instead, which says plainly "
+                           f"that nobody anchored it.")
     return out
 
 
@@ -4621,6 +4654,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_owner_warnings(m))
     problems.extend(_check_role_audience(m))
     problems.extend(_check_role_relations(m))
+    problems.extend(check_role_relation_shape(m))
     warnings.extend(_check_capability_audience(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))

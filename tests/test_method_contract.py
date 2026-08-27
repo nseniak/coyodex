@@ -534,6 +534,14 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
         "contradictory row; drop one field",
     "{} → {}: the '{}' edge is declared {} times":
         "one edge, one primary call site; merge them",
+    # A role INCLUSION's grant line: both shapes are mechanical and BLOCKING, so there is no
+    # judgement to record. A `source` that is not a `path:line` makes the minted claim read "granted
+    # at <prose>", telling a skeptic the grant is anchored and handing it nothing to open — worse
+    # than the null it should be. A `source` on a `becomes` says nothing about a hat change.
+    "{} relations[{}]: `source` is for `includes`":
+        "a grant line says nothing about a hat change; drop the field",
+    "{} relations[{}]: `source` is '{}', which is not a `path:line`":
+        "leave it null instead — that states plainly that nobody anchored it, which is the fact",
     "{}: '{}' does not resolve to a":
         "a nonexistent path is never a judgement call",
     "{}: '{}' cites a line the file does not have":

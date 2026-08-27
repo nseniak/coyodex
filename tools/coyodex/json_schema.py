@@ -72,6 +72,12 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                 "defined Role id."},
     ("RoleRelation", "at"): {"pattern": r"^UC\d+$", "description": "becomes only: the use case "
                               "where the hat changes — must be a defined use-case id."},
+    ("RoleRelation", "source"): {"description": "`includes` only: the `path:line` that GRANTS the "
+                              "inclusion — the check that lets this role do what the other may do. "
+                              "An `includes` is an access claim and the viewer draws it as one, so "
+                              "it carries evidence like every other access claim. Null is allowed "
+                              "and says nobody has anchored it; `audit` then challenges it as an "
+                              "unanchored access claim rather than passing it in silence."},
     ("GlossaryRow", "source"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
                                "(where it is defined); null when the concept has no single code home "
                                "(a pure product-level term)."},

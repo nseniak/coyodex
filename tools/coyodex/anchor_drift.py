@@ -405,8 +405,13 @@ def main(argv: list[str] | None = None) -> int:
         roots = _source_roots(Path(map_path).resolve(),
                               Path(repo_root).resolve() if repo_root else None)
         found = shape_findings(m, roots)
+        recorded, malformed = drift_exceptions(m)
+        inert = len(recorded) + len(malformed)
         if as_json:
-            print(json.dumps({"mode": "shape-only", "findings": found}, indent=2))
+            # The same warning the human form prints. A reader on `--json` was the one reader who
+            # got no signal that their recorded lines do nothing on this pass.
+            print(json.dumps({"mode": "shape-only", "findings": found,
+                              "drift_exceptions_inert_here": inert}, indent=2))
         else:
             head = (f"Shape-only anchor drift ({len(found)} finding(s)) — no verdicts given.\n"
                     "Each anchor below points at a line that cannot be the acting statement.\n"
@@ -422,9 +427,8 @@ def main(argv: list[str] | None = None) -> int:
             # says "anchor the operative statement", and `KNOWN_NO_ESCAPE` carries that decision
             # with its reason — so the answer is to say which pass the line belongs to, not to
             # invent a second key vocabulary under one heading.
-            recorded, malformed = drift_exceptions(m)
-            if recorded or malformed:
-                print(f"\n  NOTE: {len(recorded) + len(malformed)} line(s) are recorded under "
+            if inert:
+                print(f"\n  NOTE: {inert} line(s) are recorded under "
                       f"'{DRIFT_EXCEPTIONS_HEADING}'. They silence nothing HERE — a drift exception "
                       f"keys to a verdict-based finding, and this is the shape-only pass. A "
                       f"shape-only finding has no recorded escape by design: the anchored line "

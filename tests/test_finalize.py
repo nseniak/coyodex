@@ -427,6 +427,9 @@ def test_the_shape_line_names_the_access_surface():
     empties, so two real builds committed shapes that said nothing about 47 and 44 access rules."""
     root, p = make_repo()
     doc = json.loads(p.read_text())
+    # a rule's components are DERIVED by resolving its sites through `files`, so validate blocks a
+    # map that has rules and no component declaring any — give the first component the site's file
+    doc["components"][0]["files"] = ["src/a.py"]
     doc["rules"] = [
         {"id": "BR1", "statement": "Only an owner may cancel.", "access": True,
          "risk": "anyone could cancel", "sites": [{"where": "a.py:1", "why": "rejects"}]},
@@ -644,6 +647,83 @@ def test_the_unchallenged_confidence_finding_is_ONE_advisory_not_one_per_element
     assert "element(s) state a confidence" in leg["advisory"][0]
 
 
+def _map_with_rule(access: bool, confidence: str) -> tuple[Path, Path]:
+    """A repo whose map carries one rule with a site, an authored `confidence`, and no verdict."""
+    root, p = make_repo()
+    doc = json.loads(p.read_text())
+    # a rule's components are DERIVED by resolving its sites through `Component.files`, so validate
+    # blocks a map that carries rules and no component declaring any
+    doc["components"][0]["files"] = ["src/a.py"]
+    doc["rules"] = [{"id": "BR1", "name": "Live updates never cross organizations",
+                     "statement": "A listener reaches one organization only.",
+                     "risk": "A wildcard listener is a tenant data leak.",
+                     "access": access, "confidence": confidence,
+                     "sites": [{"where": "src/a.py:2", "why": "the refusal"}]}]
+    p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    return root, p
+
+
+def test_an_ACCESS_rule_claiming_verified_with_no_vote_BLOCKS():
+    """The one shape promoted out of the confidence count line. `verified` on an access rule tells a
+    reader that who-may-do-what was checked; with no vote at all, nobody checked. A shipped mcpolis
+    map carried two — both authored after the worklist was pinned, so no skeptic could have seen
+    them, both labelled by the hand that wrote them — and the map's own note admits neither went to
+    a skeptic. It shipped as an advisory nobody acted on."""
+    root, p = _map_with_rule(access=True, confidence="verified")
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
+    code = finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)])
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
+    assert len(leg["blocking"]) == 1 and "BR1" in leg["blocking"][0]
+    assert "NO skeptic ever voted" in leg["blocking"][0]
+    assert doc["verdict"] == "BLOCKED" and code == 1
+
+
+def test_a_rule_that_WAS_voted_on_and_then_RE_ANCHORED_does_not_block():
+    """The over-block an adversarial review found, pinned. Votes pair to an element by exact claim
+    text and a rule-site claim carries the `file:line` inside it, so one `fix apply-drift` — the
+    method's own remedy for a drifted anchor, documented as covering security anchors — orphans
+    every vote the rule had and the element reads `unchecked`. Blocking on that alone turned 50
+    confirmed access rules of a real map into build failures, under a message asserting that no
+    skeptic had ever voted. The STATEMENT is the part of the claim that does not move."""
+    root, p = _map_with_rule(access=True, confidence="verified")
+    doc = json.loads(p.read_text())
+    doc["rules"][0]["sites"][0]["where"] = "src/a.py:1"          # the anchor moved
+    p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    # a vote that named the rule by STATEMENT, cast against the anchor it had before the move
+    v = make_verdicts(root, "verdicts-a.json", [
+        {"claim": "Rule 'A listener reaches one organization only.' is enforced at src/a.py:2",
+         "grounded": True, "evidence": "src/a.py:2"}])
+    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
+    assert not leg["blocking"]
+
+
+def test_a_NON_access_rule_claiming_verified_stays_advisory():
+    """The narrowness is the point. A rule about how something works, described as verified when the
+    pass did not reach it, is a wording overstatement — the judgement the count line already carries.
+    Gating on it would fail honest maps."""
+    root, p = _map_with_rule(access=False, confidence="verified")
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
+    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
+    assert not leg["blocking"]
+    assert any("state a confidence" in a for a in leg["advisory"])
+
+
+def test_an_ACCESS_rule_that_says_inferred_does_not_block():
+    """`inferred` is what the map actually knows when nobody looked, and saying so is the remedy the
+    blocking message names. It must be a real way out, or the gate is a dead end."""
+    root, p = _map_with_rule(access=True, confidence="inferred")
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
+    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
+
+
 def test_the_leg_is_absent_rather_than_silently_clean_when_no_verdicts_are_given():
     """A leg that cannot run must not report a pass. `finalize` already says which verdict files it
     was not given; inventing a clean grounding leg out of no verdicts is the failure this whole
@@ -727,6 +807,48 @@ def test_a_note_that_does_not_name_the_count_is_UNANSWERED_not_recorded():
     assert _disposition_for("Every claim in this map was challenged.", _POSTPIN)[0] == "UNANSWERED"
     # a note about a DIFFERENT number is the realistic failure: it reads as an answer and is not one
     assert _disposition_for("Nine claims were minted after the pin.", _POSTPIN)[0] == "UNANSWERED"
+
+
+def test_the_demanded_count_is_the_one_the_FINDING_is_about():
+    """"The first number in the advisory" was wrong for half of them. The partial-grounding advisory
+    OPENS with the count of claims that were confirmed — the good number. Demanding it accepted a
+    note restating the headline and rejected the note that answers the finding."""
+    partial = ("Grounding is partial: 100 of 500 claims confirmed (20%), 9 refuted. At that "
+               "refutation rate the 400 remaining claims are good leads, not facts — say which "
+               "claims were prioritized in `grounding.note`")
+    assert _disposition_for("We prioritized the 400 remaining claims in the sign-in areas.",
+                            partial)[0] == "recorded"
+    assert _disposition_for("The 100 confirmed claims were the security theme.",
+                            partial)[0] == "UNANSWERED"
+
+
+def test_an_advisory_whose_wording_moves_out_from_under_its_pattern_fails_OPEN():
+    """A gate that starts demanding an arbitrary number would reject honest notes with no way to
+    tell why. No key means no demand — the behaviour before the key table existed."""
+    unknown = "Something new about `grounding.note` with 7 and 9 in it."
+    assert _disposition_for("any text at all", unknown)[0] == "recorded"
+
+
+def test_a_number_inside_a_path_or_a_filename_does_not_count_as_naming_it():
+    """`read verdicts-21.json` names a file. Accepting it let a note satisfy a demand for 21 by
+    citing an artifact rather than by stating the count."""
+    from coyodex.finalize import _note_names
+    assert not _note_names("read verdicts-21.json", 21)
+    assert not _note_names("src/a.py:21", 21)
+    assert _note_names("The 21 post-pin claims were read line by line.", 21)
+
+
+def test_the_spelled_form_needs_word_boundaries():
+    """As a bare substring `ten` is inside "written", `one` inside "someone"/"none"/"money", `eight`
+    inside "weighted". Against one real 3400-character note, 13 of 18 counts probed matched by
+    accident, which made this check close to inert for anything under twenty."""
+    from coyodex.finalize import _note_names
+    assert not _note_names("nothing was written down", 10)
+    assert not _note_names("someone looked at it", 1)
+    assert not _note_names("none of them", 1)
+    assert not _note_names("we weighted the evidence", 8)
+    assert _note_names("ten claims", 10)
+    assert _note_names("one claim", 1)
 
 
 def test_the_count_may_be_spelled_out_because_a_note_is_prose():

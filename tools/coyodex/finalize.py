@@ -356,6 +356,34 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
     # this report is contractually "fixed or recorded under the heading its message names" — 81 rows
     # with no heading to record them under is not a finding, it is noise that pushes the ten real
     # advisories off the top. The count is the finding; `by-element` is where the list lives.
+    # ONE SHAPE IS PROMOTED OUT OF THE COUNT LINE, and only one: an ACCESS rule that states
+    # `verified` with NO vote at all. The rest of this list is a wording judgement — a component
+    # described as `verified` when the pass part-checked it overstates how it was read. An access
+    # rule is different in kind: `verified` on it tells a reader that someone checked who may do
+    # what, and nobody did. The shipped mcpolis map carried two, `A sign-in return must carry an
+    # unforged ticket` and `Live updates never cross organizations`, both authored AFTER the
+    # worklist was pinned — so no skeptic could have seen them — and both labelled by the hand that
+    # wrote them. The map's own note admits it: "neither went to a skeptic, so they carry less
+    # assurance than the 728 that did". It shipped as an advisory nobody acted on.
+    #
+    # `part-checked` stays advisory. Some skeptic did read the rule, so the label is an
+    # overstatement rather than an invention, and a gate that cannot tell those apart would fail
+    # honest maps. `unchecked` is the case with nothing behind it at all.
+    # `voted_under_any_anchor` is what keeps this from firing on a rule that WAS challenged and then
+    # re-anchored. Votes pair to an element by exact claim text, and a rule-site claim carries the
+    # `file:line` in it, so one `fix apply-drift` orphans every vote the rule had and the element
+    # reads `unchecked`. Blocking on `unchecked` alone turned 50 confirmed access rules of a real
+    # map into build failures under a message asserting nobody had voted.
+    unvetted_access = [e for e in stated
+                       if e.get("access") and e.get("kind") == "rule_site"
+                       and e.get("status") == "unchecked" and e.get("stated") == "verified"
+                       and not e.get("voted_under_any_anchor")]
+    blocking += [f"ACCESS rule {e['id']} ({e['label']}) states `confidence: verified` and NO skeptic "
+                 f"ever voted on it, under this anchor or any other — the map tells a reader that "
+                 f"who-may-do-what was checked, and it was not. Send it to a skeptic, or say "
+                 f"`inferred`, which is what the map actually knows."
+                 for e in unvetted_access]
+    stated = [e for e in stated if e not in unvetted_access]
     kinds: dict[str, int] = {}
     for e in stated:
         kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
@@ -543,7 +571,16 @@ def format_report(r: FinalizeReport) -> str:
         # The UNRECORDED rows are the ones asking to be written, so name the writer beside them.
         # See the same footer in `validate`: sixty advisory strings name a heading and none names
         # the command, and a measured build hand-appended every record instead.
-        if any(d in ("UNRECORDED", "UNSURE", "UNANSWERED") for d, _, _ in disp):
+        # `coyodex record` appends under an EXTRAS HEADING; it cannot write a map field. Naming it
+        # beside an UNANSWERED row would point the author at a command that cannot fix it — the same
+        # unreachable-remedy shape this footer exists to prevent, committed by the footer.
+        if any(d == "UNANSWERED" for d, _, _ in disp):
+            out.append("An **UNANSWERED** row is a map FIELD, not a recorded line: edit the field the "
+                       "row names (`grounding.note`) so it states the count the advisory is about. "
+                       "`coyodex record` cannot write it — that command appends under an extras "
+                       "heading.")
+            out.append("")
+        if any(d in ("UNRECORDED", "UNSURE") for d, _, _ in disp):
             out.append("Write the missing records with `coyodex record --map <the FRAGMENT that "
                        "owns extras> --heading \"<heading>\" --line \"<key>: <why>\"` — it "
                        "shape-checks each line, so one that would silence nothing is refused "
@@ -754,29 +791,67 @@ _SPELLED: tuple[str, ...] = (
     "nineteen", "twenty")
 
 
-def _advisory_counts(advisory: str) -> list[int]:
-    """The count(s) an advisory demands an answer about — the first number in it, and nothing more.
+#: Each advisory that offers `grounding.note` as its remedy, and the pattern that pulls out THE
+#: number it is about. Explicit per advisory, because "the first number in the text" is wrong for
+#: half of them: the partial-grounding advisory opens with the count of claims that WERE confirmed,
+#: so demanding it accepted a note restating the headline ("The 100 confirmed claims were the
+#: security theme") and rejected the note that answers the finding ("we prioritized the 400
+#: remaining claims"). A parser guessing at prose is what this table replaces.
+_NOTE_KEYS: tuple[tuple[str, str], ...] = (
+    # "…: 21 of the shipped map's 736 claim(s) have NO verdict" -> the 21 with no verdict
+    ("covers the pinned worklist", r"(?:^|:\s*)(?:at least\s+)?(\d[\d,]*) of the shipped map"),
+    # "…the 400 remaining claims are good leads" -> the REMAINING, never the confirmed
+    ("grounding is partial", r"the (\d[\d,]*) remaining claims"),
+)
 
-    Deliberately ONE number, not every number in the text. The post-pin advisory names 21, 736, 715,
-    728 and 728 again; requiring all five would fail every honest note. The first is the one the
-    finding is about, and it is the one a note that has read the finding will state."""
-    nums = [int(x.replace(",", "")) for x in re.findall(r"\b\d[\d,]*\b", advisory)]
-    return nums[:1]
+#: A digit inside a path, a filename or a version is not the note NAMING a count — `read
+#: verdicts-21.json` and `src/a.py:21` both used to satisfy a demand for 21.
+_PATHY = re.compile(r"\S*[/\\.:-]\d[\d,]*\S*")
+
+
+def _advisory_counts(advisory: str) -> list[int]:
+    """The count(s) an advisory demands an answer about, or `[]` when this text names none.
+
+    `[]` means "no key", and the caller then accepts any non-empty note — the behaviour before this
+    table existed. An advisory whose wording moves out from under its pattern must fail OPEN: a gate
+    that starts demanding an arbitrary number would reject honest notes with no way to tell why."""
+    low = advisory.lower()
+    for marker, pattern in _NOTE_KEYS:
+        if marker in low:
+            m = re.search(pattern, advisory, re.I)
+            return [int(m.group(1).replace(",", ""))] if m else []
+    return []
 
 
 def _note_names(note: str, n: int) -> bool:
-    """Does the note state `n`, as a digit or spelled out (`21` or `twenty-one`)?"""
-    low = note.lower()
-    if re.search(rf"\b{n:,}\b".replace(",", "[,]?"), low.replace(",", "")):
+    """Does the note state `n`, as a digit or spelled out (`21` or `twenty-one`)?
+
+    Two things this had to learn from a review. Path-shaped tokens are stripped first, because a
+    note saying `read verdicts-21.json` names a filename, not a count. And the spelled form needs
+    WORD BOUNDARIES: as a bare substring, `ten` is inside "written", `one` is inside "someone",
+    "none" and "money", and `eight` is inside "weighted" — 13 of 18 counts probed against one real
+    3400-character note matched by accident, which made the check close to inert for anything under
+    twenty."""
+    low = _PATHY.sub(" ", note.lower())
+    if re.search(rf"(?<![\d,]){n}(?![\d,])", low.replace(",", "")):
         return True
+    for word in _spelled_forms(n):
+        if re.search(rf"\b{re.escape(word)}\b", low):
+            return True
+    return False
+
+
+def _spelled_forms(n: int) -> list[str]:
+    """How prose writes `n`. Only up to 99: past that a note spells it out too rarely to be worth
+    the table, and the digit form still matches."""
     if 0 <= n <= 20:
-        return _SPELLED[n] in low
+        return [_SPELLED[n]]
     if 21 <= n <= 99:
         tens, ones = divmod(n, 10)
         word = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty",
                 "ninety"][tens]
-        return (word in low if ones == 0 else f"{word}-{_SPELLED[ones]}" in low)
-    return False
+        return [word] if ones == 0 else [f"{word}-{_SPELLED[ones]}", f"{word} {_SPELLED[ones]}"]
+    return []
 
 
 def _map_field_escape(m: "ProjectModel", advisory: str) -> tuple[str, str, str] | None:

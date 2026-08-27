@@ -292,10 +292,9 @@ def test_the_shape_only_pass_says_a_recorded_drift_line_does_nothing_here():
     this heading was created to end, at the one address it still had. The findings on this pass have
     no recorded escape BY DESIGN (`KNOWN_NO_ESCAPE` carries that decision), so the answer is to name
     the pass, not to accept a second key vocabulary under one heading."""
-    m = make_map_with_drift_exceptions("- anchor-drift `C1 calls C2`: read it, the anchor stands.")
     with tempfile.TemporaryDirectory() as d:
         mp = Path(d) / "m.json"
-        mp.write_text(m.model_dump_json() if hasattr(m, "model_dump_json") else json.dumps(
+        mp.write_text(json.dumps(
             {"format": FORMAT, "title": "T", "goal": "g",
              "extras": [{"heading": ad.DRIFT_EXCEPTIONS_HEADING,
                          "body": "- anchor-drift `C1 calls C2`: read it, the anchor stands."}]}),

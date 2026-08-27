@@ -50,6 +50,15 @@ class RoleRelation:
     kind: str                 # becomes | includes
     role: str                 # Rn — the other role
     at: str | None = None     # UCn — becomes only: the use case where the hat changes
+    #: `includes` only: the `path:line` that grants the inclusion. An `includes` is an ACCESS claim —
+    #: the viewer draws it as "may also do everything a Team member may do" — and it was the one
+    #: element class in the map that asserted who may do what while being structurally incapable of
+    #: carrying evidence: `at` is pinned to a use-case id, and there was no other field. A fabricated
+    #: `R3 includes R1` (a headless agent may do everything an admin may do) passed `validate` with
+    #: exit 0 and left `audit`'s theme counts byte-identical. On the map that found this, `R1
+    #: includes R2` was not true of the code at all: the admin flag gates the dashboard routes, and
+    #: the three functions deciding what a caller actually reaches never consult it.
+    source: str | None = None
 
 
 @dataclass
