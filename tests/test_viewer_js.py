@@ -3471,6 +3471,17 @@ def test_hovering_a_label_glows_the_one_wire_it_names() -> None:
     assert "svg.story-wires path.story-glow {" in (VIEWER_DIR / "viewer.css").read_text()
 
 
+def test_a_wire_arrives_flat_however_far_it_has_to_climb() -> None:
+    """The curve leaves and arrives HORIZONTALLY, because that is the direction the arrow head is
+    oriented in. With a fixed handle, a wire whose ends are far apart vertically had to swing from
+    near-vertical to horizontal inside those few pixels — a kink right where the head sits, which
+    read as the head being detached from its line. The handle scales with the climb instead."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const dx = Math.max(60, Math.min(Math.abs(ty - sy) * 0.55, Math.abs(tx - sx) * 0.9));" in bind
+    assert "const dx = 60;" not in bind
+
+
 def test_a_feature_card_wears_the_same_colour_it_wears_on_the_journey_board() -> None:
     """ONE hash, two screens. `featureTint` already tints each feature's band on an actor's journey;
     the pillar card reuses it, so a reader carries the association across instead of meeting a

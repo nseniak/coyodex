@@ -8030,7 +8030,14 @@ function bindStoryDiagram(root) {
   const wire = (fromEl, toEl, keys, wireCls) => {
     const [sx, sy] = side(fromEl, 'right');
     const [tx, ty] = side(toEl, 'left');
-    const dx = 60;
+    // The curve leaves and arrives HORIZONTALLY, because that is the direction the arrow head is
+    // oriented in. With a fixed 60px handle, a wire whose two ends are far apart vertically had to
+    // swing from near-vertical to horizontal inside those 60px — a visible kink right where the
+    // head sits, which read as the head being detached from its line.
+    // Scaling the handle with the vertical drop lets the turn happen over the whole span instead:
+    // the line is already flat by the time it reaches the head. Floored at 60 so a level wire keeps
+    // the gentle S it had, and capped so a full-height wire does not bow out of its own gutter.
+    const dx = Math.max(60, Math.min(Math.abs(ty - sy) * 0.55, Math.abs(tx - sx) * 0.9));
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', `M ${sx} ${sy} C ${sx + dx} ${sy}, ${tx - dx} ${ty}, ${tx} ${ty}`);
     path.setAttribute('marker-end', 'url(#story-arr)');
