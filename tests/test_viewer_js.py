@@ -3406,8 +3406,13 @@ def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -
     assert "if (!from || t.feature === sole) continue;" in bind, \
         "the owning pair draws ONE line, not two"
     assert "'story-own'" in bind
+    # The class MARKS the wire; it must not STYLE it. At rest every wire in the gutter is the same
+    # grey, because the diagram at rest is for choosing — a line that shouts before the reader has
+    # picked anything spends the page's one loud voice on it.
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "svg.story-wires path.story-own {" in css
+    assert "path.story-own {" not in css, "an ownership wire takes no look of its own at rest"
+    assert ".story-elabel-own" not in css and ".story-elabel-own" not in js
+    assert "'owns'" not in bind, "the wire carries the records it reaches, not the word"
     assert "border-style: dashed" not in css[css.index(".story-area-owned"):
                                              css.index(".story-shared")], \
         "dashed already means `a container, open it` on every diagram here"

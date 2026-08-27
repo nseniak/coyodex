@@ -8073,22 +8073,14 @@ function bindStoryDiagram(root) {
     const sole = owners.length === 1 ? owners[0] : null;
     if (sole && featEl[sole]) {
       const own = wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, 'story-own');
-      own.classList.add('story-elabel-own');
-      own.appendChild(document.createTextNode('owns'));
+      // The owning pair draws ONE wire, so its label carries what the reference arrow it replaced
+      // would have: the records the feature reaches, each a door. The `story-own` class stays on
+      // the path — it marks which wire is the authored ownership, for a later use — but it says
+      // nothing at rest: the wire looks like every other, grey until the reader picks a card.
+      const t = (a.touchedBy || []).find((x) => x.feature === sole);
+      if (t) fillAreaTouchLabel(own, t);
       own.title = featureName(sole) + ' is the reason ' + (a.name || a.id) + ' exists — it creates '
         + 'these records and runs their lifecycle';
-      // The owning pair draws ONE wire, so this label has to do the job of two: at rest it says
-      // `owns`, the answer the column exists to give; lit, it also names the records the feature
-      // reaches, each a door — the doors the reference arrow it replaced would have carried, which
-      // are otherwise lost on exactly the areas the map understands best.
-      const t = (a.touchedBy || []).find((x) => x.feature === sole);
-      if (t) {
-        const names = document.createElement('span');
-        names.className = 'story-own-names';
-        names.appendChild(document.createTextNode(' '));
-        fillAreaTouchLabel(names, t);
-        own.appendChild(names);
-      }
       own.addEventListener('click', (ev) => ev.stopPropagation());
       stage.appendChild(own); labels.push(own);
     }

@@ -1714,14 +1714,13 @@ svg.story-wires path { fill: none; stroke: #c3c8d9; stroke-width: 1.4; opacity: 
    actor's wire: it is a fact about the code, where the wire beside it is a person's reason to be
    here. Hover and pin treat the two identically — one card, one picture. */
 svg.story-wires path.story-ref { stroke-dasharray: 4 3; stroke-width: 1.2; opacity: .6; }
-/* An OWNERSHIP wire — the map's authored answer to "this area exists for that feature" — is the one
-   solid, heavier line in the gutter. Read against the dashed reference arrow beside it, the pair
-   says the whole thing: a solid line is a claim the map makes, a dashed one is a fact about the
-   code. It is drawn ONLY where exactly one owner is authored, and never derived from the arrows. */
-svg.story-wires path.story-own { stroke: #7c6ff0; stroke-width: 2.2; opacity: .85; }
+/* An OWNERSHIP wire — the map's authored answer to "this area exists for that feature" — carries the
+   `story-own` class so the wire is identifiable, and takes NO styling of its own: at rest it is the
+   same grey line as an actor's, and hover/pin light it the same way. Ownership was drawn as a bold
+   coloured line for one round and pulled back: at rest the diagram is for CHOOSING, and a line that
+   shouts before the reader has picked anything spends the page's one loud voice on it. */
 svg.story-wires path.story-hot { stroke: #4f46e5; stroke-width: 2.2; opacity: 1; }
 svg.story-wires path.story-ref.story-hot { stroke-width: 1.8; }
-svg.story-wires path.story-own.story-hot { stroke-width: 3; }
 svg.story-wires path.story-cold { opacity: .14; }
 svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-col { display: flex; flex-direction: column; gap: 14px; }
@@ -1803,17 +1802,6 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
                     text-decoration-color: rgba(255,255,255,.45); text-underline-offset: 2px; }
 .story-elabel-ent:hover { text-decoration-color: #fff; }
 .story-elabel-ent:focus-visible { outline: 2px solid #fff; outline-offset: 1px; border-radius: 3px; }
-/* The ownership label is the only one shown AT REST — the other two appear on hover, because they
-   are detail; this one is the answer the column exists to give, and a wire whose meaning only
-   appears when you touch it is a wire most readers never read. Small, quiet, and always there. */
-.story-elabel-own { display: block; background: #7c6ff0; font-size: 9.5px; letter-spacing: .04em;
-                    padding: 1.5px 8px; box-shadow: 0 1px 4px rgba(124,111,240,.35); }
-.story-elabel-own.story-lab-on { background: #4f46e5; }
-/* The records the owning feature reaches, folded into the same label: hidden while the wire is at
-   rest (the answer is `owns`, and the column would otherwise carry a sentence per area), revealed
-   with their doors when the card is the picture. */
-.story-own-names { display: none; }
-.story-elabel-own.story-lab-on .story-own-names { display: inline; }
 /* An owned area is the settled case: a firmer border, in the wire's own colour, so the box and the
    line that reaches it read as one statement. A SHARED area says its owners in WORDS instead — no
    wire can carry "these two, deliberately", and no border can either. A dashed border was tried and
