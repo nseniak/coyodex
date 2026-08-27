@@ -8086,9 +8086,23 @@ function bindStoryDiagram(root) {
       // the path — it marks which wire is the authored ownership, for a later use — but it says
       // nothing at rest: the wire looks like every other, grey until the reader picks a card.
       const t = (a.touchedBy || []).find((x) => x.feature === sole);
-      if (t) fillAreaTouchLabel(own, t);
-      own.title = featureName(sole) + ' is the reason ' + (a.name || a.id) + ' exists — it creates '
-        + 'these records and runs their lifecycle';
+      if (t) {
+        fillAreaTouchLabel(own, t);
+        own.title = featureName(sole) + ' is the reason ' + (a.name || a.id) + ' exists — it '
+          + 'creates these records and runs their lifecycle';
+      } else {
+        // AN OWNER WITH NO EVIDENCE: the map says this area exists for that feature, and no walk of
+        // it reaches a single saved record here. There are no record names to list, so the label
+        // said nothing at all — an empty pill, which reads as a rendering fault rather than as the
+        // defect it is. `validate` reports it, and the screen must not be the one place it hides:
+        // this is exactly what the change's own retro-check calls a regression when it reaches the
+        // page unmarked. Quiet at rest like every other label, and plain when the reader looks.
+        own.classList.add('story-elabel-noev');
+        own.textContent = 'no journey reaches this';
+        own.title = featureName(sole) + ' is named as the owner of ' + (a.name || a.id)
+          + ', but no walk of it touches any saved record here — `coyodex validate` reports this as '
+          + 'an owner with no evidence';
+      }
       own.addEventListener('click', (ev) => ev.stopPropagation());
       stage.appendChild(own); labels.push(own);
     }

@@ -3413,6 +3413,12 @@ def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -
     assert "path.story-own {" not in css, "an ownership wire takes no look of its own at rest"
     assert ".story-elabel-own" not in css and ".story-elabel-own" not in js
     assert "'owns'" not in bind, "the wire carries the records it reaches, not the word"
+    # An owner NO walk reaches has no record names to list, so its label used to render EMPTY — a
+    # pill that reads as a rendering fault rather than as the defect it is. The screen must not be
+    # the one place `validate`'s "owner with no evidence" hides; the change's own retro-check calls
+    # that a regression.
+    assert "'no journey reaches this'" in bind
+    assert "story-elabel-noev" in bind and ".story-elabel-noev" in css
     # A SHARED area draws no ownership wire and says its owners in WORDS instead. No dashed border:
     # dashed already means "a container, open it" on every diagram in this viewer.
     assert ".story-shared {" in css, "a shared area says its owners in words"

@@ -1799,6 +1799,10 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
                 transform: translate(-50%,-50%); display: none; z-index: 5;
                 box-shadow: 0 2px 8px rgba(30,34,53,.20); cursor: default; }
 .story-elabel.story-lab-on { display: block; }
+/* The label of an ownership wire whose owner no walk reaches. Not a colour of its own — the
+   page has no red and this is a map defect, not an error state — but italic and quieter, so
+   it reads as an absence rather than as a list of records. */
+.story-elabel-noev { font-style: italic; opacity: .85; }
 .story-elabel-live { cursor: pointer; }
 .story-elabel-live:hover { text-decoration: underline; box-shadow: 0 3px 10px rgba(79,70,229,.5); }
 /* A record NAME inside a reference arrow's label is a door of its own (show it in context). It rides
