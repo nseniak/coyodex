@@ -1967,7 +1967,8 @@ def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_sa
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "function syncInfoPane(_s, transient) {" in js
     assert "  if (transient) return;" in js, "a drill animation's own frames must not blink the card"
-    assert "syncInfoPane(s, transient);" in js[js.index("async function render(sArg, transient) {"):][:1200]
+    # `render` is the degrade wrapper now; `renderView` is the body every screen goes through.
+    assert "syncInfoPane(s, transient);" in js[js.index("async function renderView(sArg, transient, seq) {"):][:1200]
     assert "showViewIntro" not in js, "one mechanism clears the card, not two"
     pages = js[js.index("const TEXT_PAGES = new Set(["):]
     pages = pages[: pages.index("]);")]
@@ -3998,7 +3999,9 @@ def test_a_selection_restates_the_url_and_never_grows_the_back_button() -> None:
     assert len(re.findall(r"window\.history\.pushState", js)) == 1, "pushState belongs to pushUrl alone"
     assert js.count("pushUrl();") == 2, "one per history point: go() and pushContentPoint()"
     sel = js[js.index("function selApply(scene) {"): js.index("function flowSuspendIfDeselected")]
-    assert "if (scene === mainScene) refreshUrl();" in sel
+    # `mainScene` IS the throwaway scene during a drill animation's intermediate flash, so the identity
+    # test alone would pass there and write the destination's fields beside the intermediate's selection.
+    assert "if (scene === mainScene && !renderingTransient) refreshUrl();" in sel
     # …and the one place every render ends, so a drill's own fields land in the URL once it has settled.
     chrome = js[js.index("function renderChrome(s) {"):]
     assert "if (s === history[hi]) refreshUrl();" in chrome[: chrome.index("\n}\n")]
@@ -4056,7 +4059,131 @@ def test_a_map_opened_as_a_plain_file_syncs_no_url() -> None:
         assert "if (!URL_SYNC" in body and "try {" in body and "catch (_)" in body
 
 
-def test_the_url_uses_the_fragment_so_the_server_is_untouched() -> None:
+def test_a_new_stack_gets_a_new_stamp_so_old_entries_stop_matching() -> None:
+    """A browser entry names the internal point it stands for by INDEX, so it must also say which stack
+    that index counts in. The stamp was keyed on the page LOAD, and that is not the same thing: a hash
+    typed into the address bar reaches `adoptUrlState`, which throws the stack away and starts again at
+    one point, all without a page load. The entries behind it kept a stamp that still matched, so
+    popstate trusted their stale indexes.
+
+    Measured by an adversarial review, in a real browser: after one address-bar paste, Back rendered the
+    wrong screens AND `refreshUrl` wrote each wrong screen's hash over the entry, so the screens those
+    entries named became unreachable by Back for the life of the tab.
+
+    `adoptUrlState` now regenerates the stamp, so every older entry fails the test and falls through to
+    `adoptUrlState` itself — which reads that entry's own hash, and is right by construction."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "let URL_LOAD = newStackStamp();" in js, "a generation, so it must be reassignable"
+    assert "const URL_LOAD" not in js
+    adopt = js[js.index("function adoptUrlState(from) {"):]
+    adopt = adopt[: adopt.index("\n}\n")]
+    assert "URL_LOAD = newStackStamp();" in adopt
+    # …and the new stamp must be in force BEFORE the entry is restamped, or this entry keeps the old one.
+    assert adopt.index("URL_LOAD = newStackStamp();") < adopt.index("window.history.replaceState")
+
+
+def test_a_url_value_can_never_be_an_inherited_property_name() -> None:
+    """Several screens use a state field as a lookup key into a plain object (`GRAPH.nodes[s.id]`,
+    `FEAT_BY_ID[s.cap]`, `FOLD_NARRATIVE[s.kind]`, `scene.selectors[k]`). A fragment is text a reader can
+    type, so a value like `constructor` or `__proto__` finds an INHERITED property: the lookup reads as a
+    hit and the screen throws on it, or draws something that is not an element at all. An adversarial
+    review reached four such throws, and `sel=constructor` even CALLED the inherited function.
+
+    The boundary is the one place to stop it. `x in {}` is exactly the dangerous set, so one test in
+    `stateFromUrl` retires the whole class — rather than a hasOwnProperty guard per lookup, added at four
+    sites today and forgotten at the fifth tomorrow."""
+    got = json.loads(_run_js_regions(
+        [("const STATE_FIELDS = [", "function stateKey(s) {"),
+         ("function idFromUrl(v)", "// `history` (the app's own stack) SHADOWS")],
+        """
+console.log(JSON.stringify({
+  proto: stateFromUrl('#v=__proto__'),
+  ctor: stateFromUrl('#v=constructor'),
+  ctorField: stateFromUrl('#v=capability&cap=constructor'),
+  ctorSel: stateFromUrl('#v=container&sel=constructor'),
+  toStr: stateFromUrl('#v=element&id=toString'),
+  hasOwn: stateFromUrl('#v=element&id=hasOwnProperty'),
+  ok: stateFromUrl('#v=element&id=C1'),
+  mixed: stateFromUrl('#v=container&sel=__proto__&sel=node:S1'),
+}));
+"""))
+    # A kind naming an inherited member is not a kind, so the whole state is refused and the caller
+    # falls back to the landing view.
+    assert got["proto"] is None and got["ctor"] is None
+    # A FIELD naming one is dropped, leaving a state that is still a legal screen.
+    assert got["ctorField"] == {"kind": "capability"}
+    assert got["toStr"] == {"kind": "element"} and got["hasOwn"] == {"kind": "element"}
+    # …and so is a selection key, without losing the good keys beside it.
+    assert got["ctorSel"] == {"kind": "container"}
+    assert got["mixed"] == {"kind": "container", "sels": ["node:S1"]}
+    # An ordinary id is untouched.
+    assert got["ok"] == {"kind": "element", "id": "C1"}
+
+
+def test_every_screen_degrades_and_none_of_them_throws() -> None:
+    """The safety net wrapped the mermaid step alone, which was enough while every state was built from
+    live data. A URL can name anything now, and a throw inside a TEXT renderer aborted the render before
+    `renderChrome`: the page kept the previous screen's group tab, view tab, breadcrumb and question over
+    blank content, and on the boot path it had no trail at all. An adversarial review reached that state
+    from four fragments, one of them just `#v=data&store=%29`.
+
+    The whole body is inside the net now. The stale-render check is in the net too, so a throw from an
+    abandoned render cannot paint over the screen a newer one already drew."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    wrap = js[js.index("async function render(sArg, transient) {"):
+              js.index("async function renderView(sArg, transient, seq) {")]
+    assert "await renderView(sArg, transient, seq);" in wrap
+    assert "} catch (err) {" in wrap
+    assert "if (seq !== renderSeq) return;" in wrap, "a stale render must not paint over a newer one"
+    assert "This view could not be rendered." in wrap
+    assert "renderChrome(s);" in wrap, "the trail has to survive, or nothing says where you are"
+    # `seq` is minted once, by the wrapper, and passed down — two counters would break the stale check.
+    assert js.count("const seq = ++renderSeq;") == 1
+    # An id straight from a URL cannot hold every character an id SELECTOR can, so the lookup that used
+    # `'#' + id` (and threw on a bracket or a paren) is an attribute match through CSS.escape.
+    assert "diagram.querySelector('#' + paneId(" not in js
+    assert 'diagram.querySelector(`[id="${CSS.escape(paneId(s.store))}"]`)' in js
+
+
+def test_a_stale_link_names_no_internal_id_on_screen() -> None:
+    """The viewer shows element NAMES; ids are internal and belong in the markup. Every id-to-name lookup
+    fell back to the id itself, which was unreachable while every state came from live data. A stale link
+    — one built against a map that has since been rebuilt — reaches it, and an adversarial review found 8
+    fragments that printed a raw id straight into the breadcrumb.
+
+    One phrase for the miss, in one constant, so the trail, a card and a tooltip cannot describe the same
+    miss differently. `stateTitle` had four hand-rolled copies of the same lookup, each with the id as its
+    fallback; they are gone in favour of `elName`."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "const UNKNOWN_NAME = 'Not in this map';" in js
+    assert "function elName(id) { return (GRAPH.nodes[id] || {}).name || UNKNOWN_NAME; }" in js
+    assert "|| (GRAPH.nodes[fid] || {}).name || UNKNOWN_NAME;" in js          # featureName
+    assert "function roleName(rid) { return (ROLE_BY_ID[rid] || {}).name || UNKNOWN_NAME; }" in js
+    assert "return b ? b.name : UNKNOWN_NAME; }" in js                        # bucketFoldName
+    title = js[js.index("function stateTitle(s) {"): js.index("function groupChain(")]
+    assert "GRAPH.nodes[id] ? GRAPH.nodes[id].name : id" not in title, "no hand-rolled copy is left"
+    for line in ("if (s.kind === 'domsub') return elName(s.sd);",
+                 "if (s.kind === 'usecase') return elName(s.uc);",
+                 "if (s.kind === 'subsystem') return elName(s.sid);",
+                 "if (s.kind === 'depedge') return elName(s.a) + ' → ' + elName(s.b);",
+                 "if (s.kind === 'bridge') return elName(s.sid) + ' → ' + elName(s.sd);"):
+        assert line in title, line
+    assert "const nm = featureName(s.cap);" in title
+
+
+def test_a_refused_push_keeps_the_url_and_the_screen_agreeing() -> None:
+    """`pushState` can be refused: a browser rate-limits it, a sandboxed frame rejects it outright. `hi`
+    has already advanced by then, so returning empty-handed left the browser's newest entry naming the
+    point BEFORE this one, and Back silently skipped a screen. With the title bar's own arrows gone there
+    is nothing to fall back on.
+
+    Restating the current entry instead keeps the URL and the screen agreeing about where you are. It
+    costs the one point that got no entry of its own, which is the smaller wrong."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    push = js[js.index("function pushUrl() {"):]
+    push = push[: push.index("\n}\n")]
+    assert "try { window.history.replaceState(stamp, '', h); } catch (_e) { return; }" in push
+    assert push.index("catch (_)") < push.index("urlStarted = true;")
     """The screen rides in the part of the URL after `#`, which a browser never sends to the server. So
     serve.py keeps its `/p/<slug>/` routes and needs no change to make a link shareable."""
     js = (VIEWER_DIR / "viewer.js").read_text()

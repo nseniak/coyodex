@@ -524,16 +524,22 @@ for (const r of GRAPH.roles || []) ROLE_BY_NAME[(r.name || '').trim().toLowerCas
 // never an id looked up in the name index, which is the bug class the comment above records.
 const ROLE_BY_ID = {};
 for (const r of GRAPH.roles || []) if (r.id) ROLE_BY_ID[r.id] = r;
-// A role id in its readable form. Falls back to the id so a map built before roles carried ids
-// degrades to something inert rather than to `undefined`.
-function roleName(rid) { return (ROLE_BY_ID[rid] || {}).name || rid; }
+// What to call something the map does not hold. Every one of the three lookups below used to fall back
+// to the ELEMENT ID, which put an internal id on screen — ids belong in the markup and nowhere else.
+// That fallback was unreachable while every state was built from live data. A stale link (one built
+// against an older map, then rebuilt) reaches it, and an adversarial review found 8 fragments that
+// printed a raw id straight into the breadcrumb. One phrase, so the trail, a card and a tooltip all
+// say the same thing about the same miss.
+const UNKNOWN_NAME = 'Not in this map';
+// A role id in its readable form.
+function roleName(rid) { return (ROLE_BY_ID[rid] || {}).name || UNKNOWN_NAME; }
 // A feature id in its readable form, from the derived layer first (it carries every feature) and the
 // graph node second.
 function featureName(fid) {
-  return (FEAT_BY_ID[fid] || {}).name || (GRAPH.nodes[fid] || {}).name || fid;
+  return (FEAT_BY_ID[fid] || {}).name || (GRAPH.nodes[fid] || {}).name || UNKNOWN_NAME;
 }
 // Any element id in its readable form. Names on screen, ids only in the markup.
-function elName(id) { return (GRAPH.nodes[id] || {}).name || id; }
+function elName(id) { return (GRAPH.nodes[id] || {}).name || UNKNOWN_NAME; }
 
 // ── THE ELEMENT CARD ──────────────────────────────────────────────────────────────────────────────
 // ONE card design for every element, in every place an element is shown: a card list, a group of
@@ -944,7 +950,11 @@ function selApply(scene) {
   renderSelPanel(scene);
   // Selecting is not a navigation — it makes no history point — but it IS part of where you are, so the
   // URL is restated in place. replaceState only, or every click on a box would grow the Back button.
-  if (scene === mainScene) refreshUrl();
+  // NOT during a drill animation's intermediate flash: `mainScene` IS that throwaway scene while it is
+  // on screen, so this test alone would pass and write the destination's fields beside the intermediate
+  // diagram's selection. No intermediate reaches a selection today, which is why it has never fired;
+  // the guard is here so it cannot start when one does.
+  if (scene === mainScene && !renderingTransient) refreshUrl();
   flowSuspendIfDeselected(scene);
   flowMapRefreshStepLabels();
   // Deselecting the last element (⌘-click it off) returns to the empty state: clear the file-browser
@@ -2282,7 +2292,7 @@ function showLibsFold() {
 // altitude so an integration-heavy map stays legible). Same at-a-glance roster as the Libraries fold;
 // drilling the box (⌘-click) is where each member selects to its own details.
 function bucketFoldOf(bkid) { return (FOLDED_BUCKETS || []).find((b) => b.id === bkid) || null; }
-function bucketFoldName(bkid) { const b = bucketFoldOf(bkid); return b ? b.name : bkid; }
+function bucketFoldName(bkid) { const b = bucketFoldOf(bkid); return b ? b.name : UNKNOWN_NAME; }
 // Which view a bucket fold drills OUT of: a library bucket sits inside the Libraries drill, an external
 // one directly under Context — so back / breadcrumbs land one extra level up for library buckets.
 function bucketFoldParent(bkid) { const b = bucketFoldOf(bkid); return b && b.parent ? b.parent : 'context'; }
@@ -4273,11 +4283,18 @@ function stateKey(s) {
 // Only over http(s). A map opened as a plain file gets no URL sync at all, because pushState on a
 // file:// page is rejected by the browser — the same reason API_BASE is null there.
 const URL_SYNC = /^https?:$/.test(location.protocol);
-// Stamped into every browser history entry this page load creates. An entry from an EARLIER load (the
-// page was reloaded, or a link was opened into a tab that already held a map) still carries an index,
-// but that index means nothing to the stack this load built — matching on it would jump to an
-// unrelated screen. The stamp is what tells the two apart.
-const URL_LOAD = Math.random().toString(36).slice(2);
+// Stamped into every browser history entry, to say WHICH STACK its index counts in. An entry from an
+// earlier stack still carries an index, but that index means nothing to the stack in force now, and
+// matching on it would jump to an unrelated screen.
+//
+// It marks a stack generation, NOT a page load. A reload starts a new stack, but so does every
+// `adoptUrlState`, which throws the stack away and starts again at one point — and a hash typed into
+// the address bar reaches adoptUrlState WITHOUT a page load. Keyed on the load, the entries behind
+// that point kept a stamp that still matched, so popstate trusted their stale indexes: Back rendered
+// whatever now sat at that index, and refreshUrl then wrote that wrong screen's hash over the entry,
+// losing the screen it named for good. Found by an adversarial review, driving a real browser.
+let URL_LOAD = newStackStamp();
+function newStackStamp() { return Math.random().toString(36).slice(2) + '.' + Date.now().toString(36); }
 // The open file in the source column is deliberately NOT carried. Back/forward already reopens it from
 // the history point's own `content`, and only the diagram views restore `content` on arrival — putting
 // it in a shared link would work on a diagram and silently do nothing on a text view.
@@ -4321,15 +4338,23 @@ function urlFromState(s, live) {
   for (const k of sels) if (k) q.append('sel', k);
   return q.toString();
 }
+// A fragment is text a reader can type, so a value in it is not automatically an id this map holds.
+// Several screens use a state field as a LOOKUP KEY into a plain object (`GRAPH.nodes[s.id]`,
+// `FEAT_BY_ID[s.cap]`, `FOLD_NARRATIVE[s.kind]`, `scene.selectors[k]`). A value naming a member of
+// Object.prototype — `constructor`, `toString`, `__proto__` — then finds an INHERITED property: the
+// lookup reads as a hit, and the screen either throws on it or draws something that is not an element
+// at all. `x in {}` is exactly that set, so one test at the boundary retires the whole class, rather
+// than a hasOwnProperty guard added to each lookup and forgotten at the next one.
+function idFromUrl(v) { return (v && !(v in {})) ? v : null; }
 function stateFromUrl(hash) {
   const raw = String(hash || '').replace(/^#/, '');
   if (!raw) return null;
   const q = new URLSearchParams(raw);
-  const kind = q.get('v');
+  const kind = idFromUrl(q.get('v'));
   if (!kind) return null;
   const s = { kind };
-  for (const f of STATE_FIELDS) { const v = q.get(f); if (v) s[f] = v; }
-  const sels = q.getAll('sel').filter(Boolean);
+  for (const f of STATE_FIELDS) { const v = idFromUrl(q.get(f)); if (v) s[f] = v; }
+  const sels = q.getAll('sel').map(idFromUrl).filter(Boolean);
   if (sels.length) s.sels = sels;
   return s;
 }
@@ -4355,7 +4380,14 @@ function pushUrl() {
     // load, and the first Back press would look like it did nothing.
     if (urlStarted) window.history.pushState(stamp, '', h);
     else window.history.replaceState(stamp, '', h);
-  } catch (_) { return; }  // history not writable here — leave the URL alone rather than half-syncing
+  } catch (_) {
+    // A REFUSED push (a browser rate-limiting pushState, a sandboxed frame) leaves `hi` already
+    // advanced while the browser's newest entry still names the point before it. Restating the current
+    // entry keeps the two agreeing about where you ARE, and costs only the one point that got no entry
+    // of its own; returning here instead left Back silently skipping a screen, with no in-app arrows
+    // left to fall back on.
+    try { window.history.replaceState(stamp, '', h); } catch (_e) { return; }
+  }
   urlStarted = true;
   urlLast = h;
 }
@@ -4515,6 +4547,10 @@ function adoptUrlState(from) {
   hi = 0;
   urlStarted = true;
   urlLast = location.hash;
+  // A NEW stack means a new stamp. Every entry still behind this one belongs to the stack just thrown
+  // away, so its index must stop matching — otherwise popstate would trust it and render the wrong
+  // screen. Failing the stamp sends those entries back through here, where their own hash is read.
+  URL_LOAD = newStackStamp();
   try { window.history.replaceState({ coy: 0, load: URL_LOAD }, '', location.hash); } catch (_) { /* ignore */ }
   driveTransition(from);
 }
@@ -6686,7 +6722,7 @@ function stateTitle(s) {
   if (s.kind === 'usecases') return 'Features';  // user-facing label; internal kind stays `usecases`
   if (s.kind === 'capability') {
     if (s.cap === '-') return 'Not assigned to a feature';
-    const nm = GRAPH.nodes[s.cap] ? GRAPH.nodes[s.cap].name : s.cap;
+    const nm = featureName(s.cap);
     return s.act ? nm + ' · ' + s.act : nm;   // a grid cell names both axes it crossed
   }
   if (s.kind === 'actor') return s.act;   // the actor NAME is already the crumb's own words
@@ -6701,17 +6737,18 @@ function stateTitle(s) {
   if (s.kind === 'deployment') return 'Deployment';
   if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
   if (s.kind === 'deploymentUnit') return s.unit;
-  if (s.kind === 'depedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
-  if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
-  if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
-  if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
+  // Every name below goes through `elName`, the one place that knows what to call an element the map
+  // does not hold. Four hand-rolled `nm` closures did the same lookup with the ID as their fallback.
+  if (s.kind === 'depedge') return elName(s.a) + ' → ' + elName(s.b);
+  if (s.kind === 'domsub') return elName(s.sd);
+  if (s.kind === 'domedge') return elName(s.a) + ' → ' + elName(s.b);
+  if (s.kind === 'bridge') return elName(s.sid) + ' → ' + elName(s.sd);
   if (s.kind === 'hp') return 'Happy Path';
-  if (s.kind === 'usecase') return (GRAPH.nodes[s.uc] ? GRAPH.nodes[s.uc].name : s.uc);
+  if (s.kind === 'usecase') return elName(s.uc);
   if (s.kind === 'libs') return 'Libraries';
   if (s.kind === 'bucketfold') return bucketFoldName(s.bkid);
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  if (s.kind === 'subsystem') return nm(s.sid);
-  return nm(s.a) + ' → ' + nm(s.b);  // edge
+  if (s.kind === 'subsystem') return elName(s.sid);
+  return elName(s.a) + ' → ' + elName(s.b);  // edge
 }
 // The nesting path (top ancestor → id) as breadcrumb states, walking `parent` pointers — so a deep
 // drill (Subsystems › Plugins › Social Content) shows EVERY level, each crumb clickable. A seen-set
@@ -9162,7 +9199,10 @@ function renderData(s) {
   // named store, else the store with the most collections, else the first pane.
   const hit = (s && s.entity) ? dvDefRow(s.entity) : null;
   let target = (hit && hit.pane) ? hit.pane.id : null;
-  if (!target && s && s.store && diagram.querySelector('#' + paneId(s.store))) target = paneId(s.store);
+  // `[id="…"]` with CSS.escape, not `'#' + id`: `s.store` can come straight from the URL, and a value
+  // carrying a character an id selector cannot hold (a bracket, a paren) made querySelector THROW —
+  // which aborted the whole render. Same shape `dvDefRow` already uses a few functions up.
+  if (!target && s && s.store && diagram.querySelector(`[id="${CSS.escape(paneId(s.store))}"]`)) target = paneId(s.store);
   if (!target && stores.length) {
     const best = stores.reduce((a, b) => (b.rows.length > a.rows.length ? b : a), stores[0]);
     target = paneId(best.dep);
@@ -9518,11 +9558,39 @@ function restoreTextScroll(s) {
   const top = (s.scroll != null) ? s.scroll : scrollByView[stateKey(s)];
   if (top) sc.scrollTop = top;
 }
+// EVERY screen degrades, not only the mermaid ones. The safety net used to wrap the mermaid step alone,
+// which was enough while every state was built from live data. A URL can now name anything, and a throw
+// inside a text renderer aborted the render BEFORE renderChrome: the page kept the previous screen's
+// group tab, view tab, breadcrumb and question over blank content, and on the boot path it had no trail
+// at all. That reads as a broken app, and worse than the plain "could not be rendered" message, because
+// nothing on screen admitted anything was wrong. Found by an adversarial review, driving a real browser
+// against `#v=data&store=%29` and three others.
+//
+// The stale-render check is here too: a throw from an abandoned render must not paint over the screen a
+// newer one has already drawn.
+// True only while a drill animation's intermediate flash is being drawn. Read by anything that must not
+// mistake that throwaway screen for where the reader ends up.
+let renderingTransient = false;
+async function render(sArg, transient) {
+  const seq = ++renderSeq;
+  const wasTransient = renderingTransient;
+  renderingTransient = !!transient;
+  try {
+    await renderView(sArg, transient, seq);
+  } catch (err) {
+    if (seq !== renderSeq) return;
+    const s = sArg || history[hi];
+    diagram.innerHTML = '<p class="empty">This view could not be rendered.</p>';
+    mainScene = null;
+    try { renderChrome(s); } catch (_) { /* the chrome is the last thing that can fail; leave the rest */ }
+  } finally {
+    renderingTransient = wasTransient;
+  }
+}
 // `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely
 // for the drill animation's intermediate "flash" — no panel/selection/camera-restore side effects, so it
 // doesn't disturb history or the info pane.
-async function render(sArg, transient) {
-  const seq = ++renderSeq;
+async function renderView(sArg, transient, seq) {
   hideActionIconTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
