@@ -32,6 +32,9 @@ CONTRACTS: dict[str, str] = {
     # the shared machinery: the gap-fill brief was the ONE trace-phase contract of eleven missing
     # "do NOT spawn sub-agents", and it lost four more blocks with it.
     "gapfill": "gapfill-contract.md",
+    # Appended to ONE harvest brief only — the T5 owner's. The entity-card spec used to sit in the
+    # shared harvest contract, where 13 of ~14 agents read a detailed job they were forbidden to do.
+    "harvest-t5": "t5-addendum.md",
 }
 
 # Which contracts author reader-facing prose, and therefore carry the writing rules. A skeptic

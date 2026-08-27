@@ -1214,7 +1214,11 @@ synthesis → parallel trace.**
     a deliberate second wave.
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
     whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
-    **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). This holds even when
+    **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). **The owner's brief
+    is the filled harvest contract PLUS the T5 addendum** — `coyodex contract harvest-t5 >> <the
+    owner's brief>`; the addendum reaches the owner ALONE, and the shared contract carries only the
+    sentence forbidding everyone else, so 13 agents no longer read the spec of a job they must not
+    do. This holds even when
     the rest of the harvest is sliced **by directory or by subsystem** for a large repo: the
     directory/subsystem-sliced agents return their **components / entry-points only** (Phase 1 returns
     nodes; edges are Phase 3) and must **not** absorb (or split up) the T5 slice, and no slice may
@@ -1668,8 +1672,15 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   a false one corrupts it silently and no gate can tell the difference. The majority vote is a
   filter, not a verdict: on a live build three of one batch's adverse findings were FALSE, the
   highest-risk claim among them, and all three were caught by the lead's own initiative rather than
-  by any step written here. This is that step: open the file, confirm the refutation, THEN
-  reconcile. Rejecting a refutation is a normal outcome — say so in `grounding.note`.
+  by any step written here. This is that step, and it runs in FRESH CONTEXT too: dispatch ONE
+  **closer** agent with only the refuted claims — each with its skeptic's `evidence` and `note` —
+  and the repo; never the build reasoning, and never the confirming rows. It opens each
+  refutation's file and returns **uphold / reject** per refutation with the line it read. WHY not
+  the lead's own read by default: the lead re-reading the code is the build-context blind spot the
+  fresh-context rule exists to break, reintroduced at the very step that decides what the map ends
+  up saying (the same reason a lead tie-break is refused below). The lead applies the upheld ones
+  through the destination table below and rejects the rest. Rejecting a refutation is a normal
+  outcome — say so in `grounding.note`.
 - **Cap each batch at ~40 claims** and split an oversized theme into two skeptics rather than one
   long-running one — an oversized batch becomes the phase's critical path, and more, smaller
   skeptics also mean fresher context per claim, so this trades nothing away. **When the worklist
@@ -1878,7 +1889,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   yourself, what you find outranks the majority — a 1-of-3 minority refutation is correct to apply
   when the dissenter turns out to be right. Say so in `grounding.note` (`report` will flag it as a
   CONFIRMED claim you overrode). This is not a licence to overrule a vote you merely dislike: the
-  re-read wins because it is evidence, so it only wins when you actually did it. Two
+  re-read wins because it is evidence, so it only wins when you actually did it. The closer agent's
+  uphold/reject IS this re-read for refutations; overruling the closer takes a read of your own,
+  recorded the same way. Two
   **behavioral-consistency items** ride the same fresh-context pass (judgment calls no mechanical
   gate can make): (1) for each Happy Path step, does its **title contradict its use case's name or
   outcome**? (the "signs in; the organization exists" vs "create an organization" class — a title

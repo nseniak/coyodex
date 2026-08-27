@@ -127,16 +127,8 @@ lead; nothing above this line goes into an agent prompt.
 > **Anchor the operative statement** — the call / write / enforce line itself — **never the enclosing
 > `def`/class header** (the most common anchor-drift the adversarial pass finds).
 > Your AGENT_ID is your fragment's **filename stem only** — never a field inside the JSON.
-> **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
-> also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
-> `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
-> [domain-cards.md](«COYODEX_HOME»/method/domain-cards.md)), with **a `relations` item wherever two entities
-> relate** — the entities + their `E↔E` relations are the whole point of the slice. Each entity is a
-> **real named type** (class / dataclass / enum) whose `source` anchors its **definition** — do NOT
-> synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`) so
-> relations carry the field name. For a **field-less** relation a store realizes by keying (no FK on
-> the row — e.g. a per-parent store keyed by `parent_id`), set the relation's **`keyed_by`** so the
-> arrow shows the key (`«key» parent_id`) instead of a bare line — see [domain-cards.md](«COYODEX_HOME»/method/domain-cards.md).
-> Mark plumbing types you deliberately did NOT model in `non_entity_types` (name + why). A directory- or subsystem-sliced agent that is **not** the T5
-> owner returns its components / entry-points only and leaves `entities` to the owner.
+> **Entities are the T5 owner's alone.** Exactly one agent in this fan-out owns T5; its brief says
+> so and continues in an appended addendum. If yours does not, return your components /
+> entry-points only and leave `entities` (and every `E↔E` relation) to the owner — do not author
+> them, however clearly the domain layer shows in your files.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
