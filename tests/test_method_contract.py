@@ -72,7 +72,7 @@ COMMAND_MODULE: dict[str, str] = {
     "dump": "dump", "diff": "mapdiff", "reconcile": "reconcile_build",
     "balance": "balance",
     "finalize": "finalize", "grounding": "grounding", "record": "record",
-    "scope": "scope",
+    "scope": "scope", "ship": "ship",
     # `provenance` was missing, and an unlisted command does not merely go unchecked: attribution
     # runs from one recognised command to the NEXT one, so every flag the method passes to an
     # unlisted command is charged to whichever listed command preceded it. The moment

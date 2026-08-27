@@ -133,7 +133,27 @@ RECIPES: dict[str, tuple] = {
     "preindex":      (lambda t, m: ["preindex", "--root", str(FIXTURE),
                                     "--out", str(t / "pre.json")], OK),
     "fix":           (lambda t, m: ["fix", "dedup-relation", "--map", str(m)], OK),
+    # ship's PREPARE phase (no --note-file): anchor-drift → apply-drift → assemble → report.
+    # The finish phase stamps provenance and reads the session env, so prepare is the honest sweep.
+    "ship":          (lambda t, m: ["ship", str(_ship_repo(t, m))], OK),
 }
+
+
+def _ship_repo(tmp: Path, map_path: Path) -> Path:
+    """A repo shaped like a build at its closing sequence: fragments, a map, the pinned worklist,
+    verdicts, and the fixture's reconcile file (so ship's assembles match `_assembled`'s)."""
+    import shutil
+    repo = tmp / "shiprepo"
+    out = repo / ".coyodex"
+    (out / "build-fragments").mkdir(parents=True, exist_ok=True)
+    (out / "verify").mkdir(parents=True, exist_ok=True)
+    for p in FRAGMENTS:
+        shutil.copy(p, out / "build-fragments" / p.name)
+    shutil.copy(map_path, out / "project-map.json")
+    shutil.copy(FIXTURE / "reconcile.json", out / "reconcile.json")
+    shutil.copy(_worklist(tmp, map_path), out / "verify" / "worklist.json")
+    shutil.copy(_verdicts(tmp, map_path), out / "verify" / "verdicts-sweep.json")
+    return repo
 
 #: `fix` verb -> argv builder. Each is invoked in its LISTING form where it has one (no mutation),
 #: because a sweep that edited the map would make every later case depend on the earlier ones.

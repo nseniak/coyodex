@@ -66,6 +66,11 @@ Commands:
              with whole lists. Adds no check of its own and compares nothing against
              a previous map. A convenience wrapper, not an enforcement point — exit 1
              for what validate/audit already block on, or when a check did not run.
+  ship       The build's closing sequence (method.md's numbered list, steps 2-12) as one
+             command. Without --note-file it PREPARES (anchor-drift → apply-drift →
+             assemble → grounding report) and stops so the note is written from the
+             report; with --note-file it FINISHES through finalize. A failed step stops
+             the run and names every step that did not run.
   scope      The up-front briefing, before any work: which files will be analyzed
              (git decides — .gitignore is out), what `.coyodex/.ignore` removed, and
              which commit the map will be pinned to, warning when uncommitted code
@@ -178,6 +183,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "provenance":
         from coyodex import provenance  # stdlib-only; the file finalize requires before a commit
         return provenance.main(rest)
+    if cmd == "ship":
+        from coyodex import ship  # stdlib-only; orchestrates the other subcommands in-process
+        return ship.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

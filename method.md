@@ -1887,8 +1887,23 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   — the mechanical duplication detector only catches *identical* runs, so depth-inconsistent
   retellings are found here; fix by extracting a sub-flow or aligning the depths. Re-validate →
   re-audit → render after fixes.
-  - **Ordering — ONE sequence, and `grounding write` is second-to-last.** The sequence below is the
-    single one; where an older note disagrees, this wins.
+  - **Ordering — ONE sequence, and `coyodex ship` RUNS it.** The list below is the reference for
+    what happens; the way to execute steps 2–12 is the verb, which stops at the first failing step
+    and names every step that did not run:
+
+    ```
+    .venv/bin/coyodex ship <repo>                       # PREPARE: steps 2-5, then stop — read the
+                                                        #   report it ends on, write the note
+    .venv/bin/coyodex ship <repo> --note-file <path> \
+        [--partial] [--access-baseline <old-map>]       # FINISH: through step 12
+    ```
+
+    It derives every path from `<repo>/.coyodex/` (map, fragments, reconcile.json, the pinned
+    `verify/worklist.json`, `verify/verdicts-*.json`) and refuses, naming the missing input, rather
+    than running a shorter sequence — so a skipped step can never read as a clean one. Steps 0, 1
+    and 13 stay yours: the collection-time verdicts lint, the refutation reconcile, and the commit.
+    Run the steps by hand only when ship refuses and the refusal is genuinely wrong for this build.
+    Where an older note disagrees with the list below, the list wins.
 
     ```
     0. coyodex grounding lint --verdicts <v> … --agent-transcripts <dir>   # at COLLECTION, not here
