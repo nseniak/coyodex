@@ -96,8 +96,7 @@ Chrome that orients a first-time reader, so the map is readable without knowing 
   not a destination. (The flat row of eleven tabs did not fit — at a 1280px window the last tab had zero visible
   width and could not be clicked at all.)
 - **View caption** — the info pane's top-level state (what it shows when nothing is selected): the
-  view's name as the title, and under it the question that view answers. The Happy Path additionally
-  keeps the system's own description, since it is the view that tells the whole story.
+  view's name as the title, and under it the question that view answers.
 - **Emptiness note** — a quiet chip under the caption saying why a view looks bare when it does ("no
   infrastructure is used by 2+ processes"). A lane a rule found nothing for looks identical to one
   nobody recorded anything for; the note says which. Deliberately NOT coverage counts — "N of M
@@ -153,10 +152,18 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     (named after the project) so there is always a structural altitude. The flat-map generators are kept
     dormant and restorable.)*
 - **Happy Path** *(when the map has a Happy Path)* — the behavioural overlay, in two levels:
-  - **Level 1** is the path as a black-box **sequence diagram** — an ordered walk through the use
-    cases, each step a message from its use case's actor to the System. Plain-click a step to see that
-    use case's **outside summary** in the side panel (its actor + trigger → outcome, the same facts as
-    the Use Cases list); ⌘-click to drill in.
+  - **Level 1** is the walk on **one line**, read left to right. A **box** holds a run of consecutive
+    steps sharing one feature AND one person, tinted in that feature's own colour (the same
+    `featureTint` the two rails use, so the three screens agree). The line **breaks at every change of
+    person**: the box's line ends in an arrow head, the new person stands in the break as their glyph
+    with their name under it, and the next box's line reaches back to meet them. A box that only
+    changes feature keeps one unbroken line running into the next. Each step is a bullet carrying its
+    position in the whole walk — the number both rails drop, because this is the view whose subject it
+    is. Three doors: a step opens its use case's flow, a feature's name that feature's page, a
+    person's name theirs. It is HTML (`renderHappyPath`), not a diagram, so it scrolls sideways
+    rather than shrinking: Mermaid scaled the sequence diagram this replaced down to 9.5px of step
+    text on a 29-step map, and 44% of another map's drawing width was the empty channel between the
+    last actor's lifeline and the System's.
   - **Level 2** (a step) opens its **use case's T6 flow**: a **sequence diagram** of the actor plus the
     components/deps/entities it touches, each step an ordered message (the verb comes from the backbone
     edge). The side panel keeps the use case's outside summary — it does **not** repeat the steps, since

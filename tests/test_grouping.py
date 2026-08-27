@@ -3260,19 +3260,18 @@ def test_parser_captures_use_case_flows() -> None:
     assert all(st["ok"] for st in s1)
 
 
-def test_gen_hp_mermaid_black_box_sequence() -> None:
-    # Level 1: a sequenceDiagram whose lifelines are the actors derived from each step's UC, with one
-    # message per step. The label is the step TITLE only — no `HPn` id (the viewer pairs by order).
-    mm = gen_viewer.gen_hp_mermaid(parse_map(make_gp_map()))
-    assert mm.startswith("sequenceDiagram")
-    assert "actor HPA0 as Andy" in mm and "actor HPA1 as Adam" in mm  # one lifeline per distinct actor
-    assert "participant HPSYS" in mm
-    assert "HPA0->>HPSYS: 1. Submit order" in mm
-    assert "HPA1->>HPSYS: 2. Approve order" in mm
-    assert "HP1" not in mm and "HP2" not in mm  # step ids no longer leak into the message labels
+def test_hp_actors_are_one_per_distinct_driver_in_walk_order() -> None:
+    # The walk's people, derived from each step's use case: one entry per DISTINCT actor, in the
+    # order the walk first reaches them, each joined to the steps it drives. The Happy Path board
+    # reads exactly this to know whose name stands in each break of its line.
+    actors = gen_viewer.hp_actors(parse_map(make_gp_map()))
+    assert [a["name"] for a in actors] == ["Andy", "Adam"]
+    assert [a["aid"] for a in actors] == ["HPA0", "HPA1"]
+    assert actors[0]["steps"] == [{"id": "HP1", "title": "Submit order"}]
+    assert actors[1]["steps"] == [{"id": "HP2", "title": "Approve order"}]
 
 
-def test_gen_hp_mermaid_actor_fallback_without_uc() -> None:
+def test_hp_actor_fallback_without_uc() -> None:
     # A GP step with no `*(UCn)*` tag falls back to a generic 'Actor' lifeline (no crash).
     md = """{
   "format": "coyodex-map",
@@ -3322,8 +3321,8 @@ def test_gen_hp_mermaid_actor_fallback_without_uc() -> None:
   "tests": [],
   "extras": []
 }"""
-    mm = gen_viewer.gen_hp_mermaid(parse_map(md))
-    assert "actor HPA0 as Actor" in mm and "HPA0->>HPSYS: 1. Do a thing" in mm
+    actors = gen_viewer.hp_actors(parse_map(md))
+    assert [a["name"] for a in actors] == ["Actor"] and actors[0]["stepIdx"] == [0]
 
 
 def test_hp_actors_links_roles_and_steps() -> None:
@@ -3432,9 +3431,8 @@ def test_parser_hp_captures_first_uc_of_multi_tag() -> None:
     steps = {s["id"]: s for s in g["happy_path"]}
     assert steps["HP1"]["uc"] == "UC1"           # first id of the multi-UC tag
     assert steps["HP2"]["uc"] == "UC3"           # trailing text after the id is ignored
-    mm = gen_viewer.gen_hp_mermaid(g)
-    assert "actor HPA0 as Org admin" in mm and "actor HPA1 as End user" in mm  # real actors...
-    assert "as Actor" not in mm                  # ...not the generic fallback
+    names = [a["name"] for a in gen_viewer.hp_actors(g)]
+    assert names == ["Org admin", "End user"]    # real actors, not the generic fallback
 
 
 def test_hp_actor_is_use_case_actor() -> None:
@@ -3474,18 +3472,14 @@ def test_use_case_node_carries_actor_list_and_readable_field() -> None:
     assert cast("dict[str, str]", uc["fields"])["Actor"] == "Org admin and Moderator"
 
 
-def test_interchangeable_actors_get_one_arrow_and_a_junction_mark() -> None:
-    g = parse_map(make_gp_two_actor_map())
-    mm = gen_viewer.gen_hp_mermaid(g)
-    # Both actors are real lifelines, and the joined name is never one of them.
-    assert "actor HPA0 as Org admin" in mm and "actor HPA1 as Moderator" in mm
-    assert "Org admin, Moderator" not in mm and "Org admin and Moderator" not in mm
-    # ONE message per step — a second arrow for the alternative actor would read as a second thing
-    # that happened — and the shared step's arrow leaves the LEFTMOST of its actors.
-    assert mm.count("->>HPSYS") == 2
-    assert "HPA0->>HPSYS: 1. Admin creates the org" in mm
-    # ...so the other actor's lifeline is between that arrow's ends, and gets the junction mark.
-    assert gen_viewer.hp_step_marks(g) == [["HPA1"], []]
+def test_interchangeable_actors_are_two_people_not_one_joined_name() -> None:
+    # Both are real people of the walk, and the JOINED name is never one of them — that string is the
+    # shape that used to draw a lifeline for somebody who does not exist. The Happy Path board stands
+    # both of them in the same break of its line, reading "Org admin or Moderator".
+    actors = gen_viewer.hp_actors(parse_map(make_gp_two_actor_map()))
+    names = [a["name"] for a in actors]
+    assert names == ["Org admin", "Moderator"]
+    assert "Org admin, Moderator" not in names and "Org admin and Moderator" not in names
 
 
 def test_both_interchangeable_actors_drive_the_shared_step() -> None:
@@ -3543,10 +3537,13 @@ def test_flow_arrow_backstop_prefers_why_over_verb() -> None:
 
 
 def test_bundle_carries_gp_data() -> None:
-    # The bundle carries the GP sequence + step diagrams so the client opens them.
+    # The walk itself and its people, so the client can draw the Happy Path board, plus the flow
+    # diagram behind each of its steps. The board is HTML built in the browser, so the bundle ships
+    # no drawing of the walk — only the facts it is drawn from.
     b = bundle_of(make_gp_map())
-    hay = b["mermaidHp"] + " ".join(b["flowsMm"].values())
-    assert "sequenceDiagram" in hay and "Submit order" in hay
+    assert [s["title"] for s in b["graph"]["happy_path"]] == ["Submit order", "Approve order"]
+    assert [a["name"] for a in b["hpActors"]] == ["Andy", "Adam"]
+    assert "sequenceDiagram" in " ".join(b["flowsMm"].values())
 
 
 def test_bundle_carries_both_flow_renderings() -> None:

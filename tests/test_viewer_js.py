@@ -1402,21 +1402,21 @@ def test_the_line_points_at_an_arrows_own_middle_not_its_boxs() -> None:
 
 
 def test_the_sequence_views_get_a_line_too() -> None:
-    """The Happy Path and every use-case flow select through `hpHighlight`, which marked nothing — so
-    `soleSelectedEl` found nothing and the whole feature was silently absent on two of the twelve views.
+    """Every use-case flow selects through `hpHighlight`, which marked nothing — so `soleSelectedEl`
+    found nothing and the whole feature was silently absent on that view.
 
-    One selection there lights SEVERAL parts: a step is its label, its arrow and any junction dots; an
-    actor is its figure, its lifeline and every step it drives. The mark goes on ONE of them, the first,
-    which each caller orders as the part that stands for the whole. Marking all of them would read as
-    several selections and take the line away again."""
+    One selection there lights SEVERAL parts: a step is its label and its arrow; an actor is its
+    figure, its lifeline and every step it drives. The mark goes on ONE of them, the first, which each
+    caller orders as the part that stands for the whole. Marking all of them would read as several
+    selections and take the line away again.
+
+    The Happy Path used to be the second such view. It is an HTML board now (renderHappyPath), so the
+    flow is the only one left."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     fn = js[js.index("function hpHighlight(scene, els, revealAction = true) {"):
             js.index("\n}", js.index("function hpHighlight(scene, els, revealAction = true) {"))]
     assert "const lead = els[0];" in fn
     assert "lead.classList.add('is-selected')" in fn and "lead.classList.remove('is-selected')" in fn
-    msg = js[js.index("function hpMsgEls(m) {"): js.index("\n", js.index("function hpMsgEls(m) {"))]
-    assert "m.text" in msg and msg.index("m.text") < msg.index("m.line"), \
-        "a step's own label leads, so that is what the line points at"
 
 
 def test_everything_that_floats_over_the_drawing_states_its_layer() -> None:
@@ -2002,9 +2002,10 @@ def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_sa
     assert "showViewIntro" not in js, "one mechanism clears the card, not two"
     pages = js[js.index("const TEXT_PAGES = new Set(["):]
     pages = pages[: pages.index("]);")]
-    for kind in ("usecases", "capability", "actor", "rules", "system", "glossary"):
+    # `hp` is on the list: the Happy Path is an HTML board now (renderHappyPath), not a diagram.
+    for kind in ("usecases", "capability", "actor", "hp", "rules", "system", "glossary"):
         assert f"'{kind}'" in pages, kind
-    assert "'hp'" not in pages and "'usecase'," not in pages, "a diagram is not a page of prose"
+    assert "'usecase'," not in pages, "a diagram is not a page of prose"
     # ONE rule, called from both paths that fill the card: a selection, and a page's own default.
     sync = js[js.index("function paneSync() {"): js.index("\n}", js.index("function paneSync() {"))]
     assert "PANEL_HOST.hidden = !has;" in sync

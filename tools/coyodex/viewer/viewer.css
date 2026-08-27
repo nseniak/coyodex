@@ -1712,7 +1712,8 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    page draws it inside its "What you can do" section. Both are the same board and both earn the
    same measure — matched on the child only, a feature's rail lost 360px and clipped its last
    station into a scrollbar on a window with the room for it. */
-.usecases-wrap:has(> .story-wrap), .usecases-wrap:has(.journey-board) { max-width: 1440px; }
+.usecases-wrap:has(> .story-wrap), .usecases-wrap:has(.journey-board),
+.usecases-wrap:has(.walk-board) { max-width: 1440px; }
 /* THREE columns, read left to right as one sentence: the people, what they do, the data it keeps.
    Every arrow on this page flows the same way, which is why the actors moved left — a stake label
    on a right-to-left wire read backwards on every one of them.
@@ -1990,6 +1991,83 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .journey-gutter-on { grid-row: 2; padding-top: 15.75px; }
 .journey-gutter-off { grid-row: 3; border-top: 1px dashed #c9cdde; padding-top: 7px; }
 /* Trailing features need no marker before them: their happy-path lane is empty, and the rail stops. */
+/* --- THE HAPPY PATH: the walk as one line ------------------------------------------------------
+   The same vocabulary the two rails above are drawn in — a tinted feature box, a 3px indigo line,
+   a 15px bullet, an arrow head at the line's end — laid out as ONE line instead of one lane per
+   subject. The board scrolls sideways rather than shrinking: Mermaid scaled the sequence diagram
+   this replaced down to 9.5px of step text on the biggest of the four maps the viewer reads. */
+.walk-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
+              overflow-x: auto; padding: 14px 0; margin: 10px 0 6px; }
+.walk { display: flex; align-items: flex-start; min-width: max-content; padding: 0 24px; }
+/* A box holds a run of steps sharing one feature AND one set of people. Its width comes from the
+   step count (set inline), never from its own label: a one-step box sized to "Page tracking · Page
+   owner" stopped the bullets lining up down the walk. */
+.walk-box { flex: none; border-radius: 10px; padding: 10px 0 12px; position: relative;
+            background: #f7f8fb; }
+.walk-flabel { height: 18px; padding: 0 14px; display: flex; align-items: center; gap: 5px;
+               overflow: hidden; min-width: 0; }
+.walk-fname { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+              color: #1e2235; background: none; border: 0; padding: 0; cursor: pointer;
+              display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+.walk-fname:hover { color: #4f46e5; text-decoration: underline; }
+.walk-fnm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#diagram .walk-fname .story-glyph { width: 13px; height: 13px; }
+.walk-fkind { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; color: #5a6072; }
+/* The line. `--walk-l` pulls its left end BACK past the box edge, to touch the person who just
+   took over; a box that only changes feature leaves it at 0 and the line runs on unbroken. */
+/* `flex-start`, the same rule `.journey-track` carries. Stretched, every step button is as tall as
+   the tallest, and a BUTTON centres its content box inside itself — which put the bullet of a step
+   with a short title 8px below the line, measured on Meerbot's steps 14, 17 and 20. */
+.walk-line { display: flex; align-items: flex-start; position: relative; margin-top: 4px; }
+.walk-line::before { content: ''; position: absolute; left: var(--walk-l, 0px); right: 0;
+                     top: 19.5px; height: 3px; background: #4f46e5; border-radius: 2px; }
+/* …and the arrow head closes it wherever the next step belongs to somebody else. The same triangle
+   the journey rail's right tip draws, with its POINT at the line's end. */
+.walk-closes .walk-line::after { content: ''; position: absolute; right: -9px; top: 16px;
+                                 width: 0; height: 0; border-left: 9px solid #4f46e5;
+                                 border-top: 5px solid transparent;
+                                 border-bottom: 5px solid transparent; }
+/* `display: block`, the same rule `.journey-station` carries and for the same reason: a BUTTON
+   centres its content box vertically inside itself, and as a stretched flex item every step is as
+   tall as the tallest, so a step with a short title had its bullet pushed 8px below the line. */
+.walk-step { font: inherit; background: none; border: 0; text-align: left; color: inherit;
+             display: block; width: 150px; flex: none; position: relative;
+             padding: 0 16px 0 14px; cursor: pointer; border-radius: 8px; }
+.walk-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
+            border-radius: 50%; background: #4f46e5; border: 3.5px solid #4f46e5;
+            box-sizing: border-box; margin: 13.5px 0 4px; }
+.walk-step:hover .walk-dot { background: #fff; }
+.walk-step:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+/* The step's place in the WHOLE walk. Both rails drop this number on purpose; this is the view
+   whose subject it is, so here it stays. */
+.walk-n { display: block; font-size: 10px; font-weight: 700; color: #8a90a4; }
+.walk-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; margin-top: 1px; }
+.walk-step:hover .walk-t { color: #4f46e5; }
+/* The person in a break: glyph, then name under it. Nothing is drawn around them — the break in
+   the line is what says somebody new took over, and a ring competed with the boxes either side.
+   The 33px of top margin puts the glyph's middle on the line the boxes draw at 51.5px. */
+.walk-hand { flex: none; position: relative; z-index: 2; margin-top: 40px; padding: 0 10px;
+             display: flex; align-items: flex-start; gap: 6px; }
+.walk-one { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+            display: flex; flex-direction: column; align-items: center; width: 84px; }
+.walk-ico { width: 26px; height: 26px; display: flex; align-items: center;
+            justify-content: center; }
+#diagram .walk-ico .story-glyph { width: 22px; height: 22px; }
+.walk-who { margin-top: 5px; font-size: 10.5px; line-height: 1.25; font-weight: 650;
+            color: #39405a; text-align: center; }
+.walk-one:hover .walk-who { color: #4f46e5; text-decoration: underline; }
+/* Between two INTERCHANGEABLE people, in the same quiet lower case a feature box's label uses. */
+.walk-or { font-size: 10px; font-weight: 500; color: #8a90a4; margin-top: 9px; }
+/* "Show in context" on this board: a station on an actor's rail, a feature's rail or a story
+   arrow's label lands here naming one step, and the step is ringed the way a card list rings a
+   card (`.ecard-flash`), since there is no scene to select into. */
+.walk-step-flash { animation: walkflash 1.4s ease-out; }
+@keyframes walkflash {
+  0%   { box-shadow: 0 0 0 3px #6366f1; }
+  70%  { box-shadow: 0 0 0 3px #6366f1; }
+  100% { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0); }
+}
+
 .journey-metasep { margin: 0 2px; color: #9aa0b4; }
 /* The other role's name inside the "may also do everything a <role> may do" sentence. A link in
    running text, not a pill: the sentence is a fact about this role, and a pill reads as a control. */

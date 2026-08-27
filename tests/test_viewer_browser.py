@@ -161,3 +161,93 @@ def test_a_stale_link_shows_no_internal_id_on_screen() -> None:
             assert gone not in crumb, f"{fragment} put the id in the trail: {crumb!r}"
             assert "Not in this map" in crumb, crumb
         assert not page.js_errors, page.js_errors
+
+
+def test_the_happy_path_draws_one_line_broken_at_every_change_of_person() -> None:
+    """The Happy Path board, which replaced a sequence diagram Mermaid shrank to 9.5px of step text
+    on this very map. Three things make it the walk rather than a list of steps:
+
+      * a BOX is a run of consecutive steps sharing one feature AND one person, so the fixture's 14
+        steps draw 11 boxes;
+      * the line BREAKS wherever the person changes, and that person stands in the break — 6 of
+        them here, one per hand-over;
+      * an arrow head closes a box only when somebody else is about to take over, so a box that
+        merely changes feature runs on unbroken into the next.
+
+    Read from the rendered page, not from the source: every other viewer test asserts on text."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        counts = page.evaluate("""() => ({
+            steps: document.querySelectorAll('.walk-step').length,
+            boxes: document.querySelectorAll('.walk-box').length,
+            hands: document.querySelectorAll('.walk-hand').length,
+            closed: document.querySelectorAll('.walk-box.walk-closes').length,
+        })""")
+        assert counts == {"steps": 14, "boxes": 11, "hands": 6, "closed": 6}, counts
+        # …and no sequence diagram is left anywhere on the page.
+        assert page.evaluate("() => !document.querySelector('#diagram svg .actor-line')")
+        assert not page.js_errors, page.js_errors
+
+
+def test_every_bullet_of_the_walk_sits_on_the_line() -> None:
+    """A BUTTON centres its own content box, and as a stretched flex item every step is as tall as
+    the tallest — which put the bullet of a step with a short title 8px below the line it is meant to
+    sit on. Measured, never eyeballed: the bullet's centre, the line's centre and the centre of the
+    person's glyph must all be one number."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        mids = page.evaluate("""() => {
+            const mid = (el) => { const r = el.getBoundingClientRect(); return +(r.top + r.height / 2).toFixed(1); };
+            const line = document.querySelector('.walk-line').getBoundingClientRect();
+            return {
+              dots: [...new Set([...document.querySelectorAll('.walk-dot')].map(mid))],
+              icons: [...new Set([...document.querySelectorAll('.walk-ico')].map(mid))],
+              line: +(line.top + 21).toFixed(1),
+            };
+        }""")
+        assert mids["dots"] == [mids["line"]], mids
+        assert mids["icons"] == [mids["line"]], mids
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_walk_has_three_doors_and_each_opens_that_thing_s_own_page() -> None:
+    """A step opens the flow of the use case it realizes — the same flow the Features tab drills to,
+    so a use case keeps ONE home. A feature's name opens that feature's page, a person's name theirs.
+    """
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        page.evaluate("() => document.querySelector('.walk-step').click()")
+        _settle(page)
+        assert page.evaluate("() => location.hash").startswith("#v=usecase&uc="), \
+            page.evaluate("() => location.hash")
+
+        page.evaluate("() => { location.hash = '#v=hp'; }")
+        _settle(page)
+        page.evaluate("() => document.querySelector('.walk-fname').click()")
+        _settle(page)
+        assert page.evaluate("() => location.hash").startswith("#v=capability&cap=")
+
+        page.evaluate("() => { location.hash = '#v=hp'; }")
+        _settle(page)
+        page.evaluate("() => document.querySelector('.walk-one').click()")
+        _settle(page)
+        assert page.evaluate("() => location.hash").startswith("#v=actor&act=")
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_link_naming_one_step_arrives_scrolled_to_it() -> None:
+    """A station on an actor's rail, a feature's rail and a story arrow's label all navigate here
+    naming one step. The board has no scene to select into, so it scrolls that step into view and
+    rings it — the same answer a card list gives to "show in context". Step 12 of the fixture's 14
+    is well off the right edge on arrival, so a board that ignored the name would leave it there."""
+    with _served() as url, _page(url + "#v=hp&sel=hpstep:HP12") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const el = document.querySelector('.walk-step[data-step="HP12"]');
+            if (!el) return null;
+            const r = el.getBoundingClientRect(), b = document.querySelector('.walk-board').getBoundingClientRect();
+            return { scrolled: document.querySelector('.walk-board').scrollLeft > 0,
+                     inside: r.left >= b.left - 1 && r.right <= b.right + 1 };
+        }""")
+        assert seen == {"scrolled": True, "inside": True}, seen
+        assert not page.js_errors, page.js_errors

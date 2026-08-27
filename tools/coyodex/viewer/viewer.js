@@ -44,14 +44,11 @@ let DEPLOYMENT_CALL_EDGES;   // process->process arrow 'U_a>U_b' -> [synchronous
 let DEPLOY_ENVS;           // declared deployment environments (variant names), or [] — gates the env picker
 let DEPLOY_ENV = null;     // the selected environment (null = All); persists across the session
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
-let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
 let REPO_STATE = 'ok';    // 'ok' | 'no-repo' | 'no-commit' — whether the server can read this map's code
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 let HP_ACTORS;          // Happy-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
-let HP_STEP_MARKS;      // per Happy-Path step, the participant ids its ONE arrow crosses — a use case's
-                        // other interchangeable actors ([] for the normal one-actor step)
 let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors HP_ACTORS, scoped to one flow's own steps)
 let ELEMENT_TINT;       // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
 let MERMAID_LIBS;       // Context "Libraries" drill: System + the folded in-process deps
@@ -102,9 +99,9 @@ function applyBundle(b) {
   DEPLOY_ENVS = b.deploymentEnvironments || [];
   DEPLOYMENT_EDGES = b.deploymentEdges || {}; DEPLOYMENT_INFRA_EDGES = b.deploymentInfraEdges || {};
   DEPLOYMENT_CALL_EDGES = b.deploymentCallEdges || {};
-  MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
+  FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
   FLOWS_MAP = b.flowsMap || {};
-  HP_ACTORS = b.hpActors; HP_STEP_MARKS = b.hpStepMarks || []; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
+  HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
   MERMAID_BY_BUCKETFOLD = b.mermaidByBucketFold || {}; FOLDED_BUCKETS = b.foldedBuckets || [];
   HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
@@ -927,7 +924,7 @@ function makeScene(root, defaultPanel) {
   //     focus   -> flowchart: { nodes:Set<id>, edge:(e)=>bool }; sequence: { els:Set<DOMEl> }; null = don't dim
   //     show()  -> fill `panel` with this element's detail (an existing show* fn; also syncs tree/code when primary)
   // focusUnion(scene, selection) dims to the UNION of every selected element's neighbourhood — the default
-  //   is the node/edge model; bindHP/bindFlow swap in the sequence-diagram variant.
+  //   is the node/edge model; bindFlow swaps in the sequence-diagram variant.
   // selectors: key -> a zero-arg closure that ADDS that element to the selection (selAdd), registered at
   //   bind time so back/forward can restore a whole multi-selection (and single-select navigations replay one).
   // noAction: node ids that must NOT get a corner action icon or an ⌥-drill in this view — the box you
@@ -1090,7 +1087,7 @@ function focusUnionNodes(scene, selection) {
   applyFocus(scene, (n) => keepN.has(n), (e) => withFocus.some((d) => d.focus.edge(e)));
 }
 // Sequence-diagram focus (Happy Path / use-case flow): keep the union of every selected element's lit DOM
-// parts, dim the rest. Swapped in for focusUnionNodes by bindHP/bindFlow.
+// parts, dim the rest. Swapped in for focusUnionNodes by bindFlow.
 function focusUnionEls(scene, selection) {
   const keep = new Set();
   for (const d of selection) if (d.focus && d.focus.els) d.focus.els.forEach((x) => keep.add(x));
@@ -1156,24 +1153,6 @@ function styleSeqActor(root, aid, kind) {
     g.style.setProperty('stroke', tint.stroke, 'important');
     if (kind === 'service') hexagonifyActor(g);
     for (const shape of g.querySelectorAll('circle, polygon')) shape.style.setProperty('fill', tint.fill, 'important');
-  }
-}
-// The Happy Path's System lifeline, painted like the System box every other view draws it — the same
-// dark indigo, with its label repainted so it stays readable on that fill. Mermaid renders it as a plain
-// default participant, so without this the one box that IS the system reads as the greyest thing on
-// screen. In THIS diagram the boxed participant is the system and every other lifeline is a stick figure
-// or a hexagon, so `text.actor-box` reaches its label with no name to match on (Mermaid puts none there).
-const HP_SYS_ID = 'HPSYS';  // the participant id gen_hp_mermaid gives the System lifeline
-function styleSeqSystem(root) {
-  const tint = ELEMENT_TINT.system;
-  if (!tint) return;
-  for (const rect of root.querySelectorAll('rect.actor[name="' + HP_SYS_ID + '"]')) applyTint(rect, 'system');
-  // The label AND its tspans: Mermaid wraps the text in a `tspan` that carries its own (black) fill, so
-  // painting only the `text` leaves a black label on the dark box — the box read as empty. `fill` is not
-  // inherited past an element that sets it, so every drawn node in the label has to be told.
-  const color = tint.color || '#fff';   // a dark box with no colour to pair it with is unreadable, never bare
-  for (const t of root.querySelectorAll('text.actor-box')) {
-    for (const el of [t, ...t.querySelectorAll('tspan')]) el.style.setProperty('fill', color, 'important');
   }
 }
 // Swap one stick figure for the hexagon outline, in place: the hexagon is centred on the figure's own
@@ -2003,7 +1982,7 @@ function persistedDataLinkHtml(id) {
 }
 // The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
 // Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
-// description (mirrors how showContextEdge/showHPActor treat Wants, and showEdge treats Why).
+// description (mirrors how showContextEdge treats Wants, and showEdge treats Why).
 const EXPLANATION_KEYS = ['purpose', 'used for', 'meaning'];
 function explanationKey(fields) {
   for (const want of EXPLANATION_KEYS)
@@ -2499,12 +2478,6 @@ function useCaseFeatureFootHtml(uc) {
     + `<button type="button" data-card-own class="ecard-pill ecard-pill-link" `
     + `data-gofeat="${esc(cap.id)}" title="Everything this feature can do">${esc(cap.name)}</button></p>`;
 }
-// Selecting a Happy Path step (plain click on the overview) shows that use case's summary — the same
-// facts as its row in the Use Cases list. The mechanism (T6 flow) is behind the drill.
-function showHPArrow(hpId) {
-  const s = HP_BY_ID[hpId];
-  showUseCaseSummary(s ? s.uc : null);
-}
 // The use-case flow view's default panel. Reached by drilling a use case (from the Use Cases list or a
 // Happy Path step). The sequence diagram IS the flow; the panel shows the same outside summary as a
 // plain selection, so it doesn't repeat every arrow the diagram already draws. A step's own detail
@@ -2561,7 +2534,7 @@ function bindFlow(uc) {
   }
 
   // messages: the i-th label (text[i]) + the i-th arrow (line[i]) pair with steps[i] — same pairing as
-  // bindHP. Pair POSITIONALLY (document order), NOT by Mermaid's `data-id="i<n>"`: that <n> is a global
+  // Pair POSITIONALLY (document order), NOT by Mermaid's `data-id="i<n>"`: that <n> is a global
   // element counter that also advances for every sub-flow `rect` and its naming `Note`, so once the first
   // sub-box appears the arrow ids develop gaps (…i4, i7, i8…) and an id-keyed lookup would slide every
   // later label onto the wrong arrow's column. Notes/rects emit no `.messageText`/`.messageLine`, so the
@@ -2605,7 +2578,7 @@ function bindFlow(uc) {
   // role (actor) participants: same "select -> highlight my messages, dim the rest" as an element
   // participant above, just addressed differently — a Role has no graph node of its own, so
   // FLOW_ACTORS (gen_viewer.flow_actors) hands us its Mermaid alias (data-id) instead of a node id.
-  // Mirrors bindHP's actor loop below, the same DOM shape (stick figure + lifeline).
+  // The actor loop, over the same DOM shape Mermaid draws (stick figure + lifeline).
   const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
   // A step's endpoint that is a Role has no node id (srcId/dstId are null), so it can't be found via
   // partsById. Index each actor's DOM parts by the steps it drives (a.stepIdx) so selecting a step can
@@ -3037,12 +3010,6 @@ function actorPanelHtml(a, drives) {
   const wants = a.wants ? '<p class="uc-wants">' + mdInline(wantsSentence(a.wants)) + '</p>' : '';
   return '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
     + '<span class="badge kind">actor</span></div>' + wants + driveRows;
-}
-// The Happy Path's actor card: the steps it drives are that walk's own positions.
-function showHPActor(a) {
-  panel.innerHTML = actorPanelHtml(a, (a.steps || []).map((st) =>
-    '<dd>' + esc(st.title || st.id) + '</dd>').join(''));
-  bindElementCards(panel);
 }
 // A flow-level actor's card — the same card, scoped to one flow: which of THIS flow's own steps it
 // drives. Reads those steps straight out of FLOWS_NARR by index rather than duplicating their text in
@@ -5733,171 +5700,6 @@ function hpRestFilter(scene, el) {
 function hpFocus(scene, keep) {  // dim every focusable HP element not in the keep set (system stays lit)
   for (const el of scene.dimEls) el.style.opacity = keep.has(el) ? '' : DIM;
 }
-// Select an actor: its figure + lifeline + every step it drives glow; the rest dims.
-// One step's drawn parts: its label, its arrow, and any junction dots marking the alternative actors
-// that arrow passes. The dots belong to the step everywhere the step is treated as a unit (hover, glow,
-// dim), so they are collected here once rather than at each of the four call sites.
-function hpMsgEls(m) { return [m.text, m.line, ...(m.dots || [])].filter(Boolean); }
-function hpActorDesc(scene, a) {
-  const stepEls = [];
-  for (const i of a.stepIdx) { const m = scene.hpMsg[i]; if (m) stepEls.push(...hpMsgEls(m)); }
-  const lit = [...scene.hpActor[a.aid].els, ...stepEls];
-  return { key: 'hpactor:' + a.aid, glow: () => hpHighlight(scene, lit, false),
-           focus: { els: new Set(lit) }, show: () => showHPActor(a) };
-}
-function selectHPActor(scene, a) { selReplace(scene, hpActorDesc(scene, a)); }
-// Select a step: the step (label + arrow + its junction dots) glows and EVERY actor that can drive it
-// stays lit — for a use case with interchangeable actors that is more than one; dimming the others
-// would hide drivers of the very step being read. The rest dims.
-function hpStepDesc(scene, i, hpId, aids) {
-  const m = scene.hpMsg[i] || {};
-  const glow = hpMsgEls(m);
-  const keep = new Set(glow);
-  for (const aid of (aids || [])) for (const el of ((scene.hpActor[aid] || {}).els || [])) keep.add(el);
-  return { key: 'hpstep:' + hpId, glow: (reveal) => hpHighlight(scene, glow, reveal),
-           focus: { els: keep }, show: () => showHPArrow(hpId) };
-}
-function selectHPStep(scene, i, hpId, aids) { selReplace(scene, hpStepDesc(scene, i, hpId, aids)); }
-// Select a whole use case on the Happy Path (reached from a Use-cases `HPn` pill): EVERY step that
-// realizes it glows and its driving actor stays lit; the rest dims. A use case can occupy several
-// positions, so more than one step may light — that is exactly the "appears twice" signal. The panel
-// shows the use case (not a single step), and the selection is keyed by uc so back/forward restores it.
-
-// Bind the Happy Path: steps + actors both select; a step ⌘-clicks to its Level-2 components view.
-// The step id is no longer in the label, so message[i] pairs with GRAPH.happy_path[i] by order; an actor's
-// figure/lifeline are found by participant id (data-id="GPAn") and its driven steps come from HP_ACTORS.
-// A step whose use case names SEVERAL interchangeable actors still gets one arrow (a sequence diagram
-// has no "or" — a second arrow would read as a second thing that happened). The arrow leaves the
-// leftmost of them, and each of the others is marked with a junction dot where the arrow crosses its
-// lifeline: "any of these can drive this step", said on the arrow itself, with no invented step.
-//
-// The dot is a plain circle in the diagram's own coordinates, so it zooms with the arrow it sits on
-// (unlike the action icons, which are counter-scaled to stay a fixed screen size). The crossing is
-// guaranteed by the generator's leftmost rule, but it is re-checked here anyway: a dot that missed its
-// arrow would read as a mark on some other step entirely, so it is dropped rather than drawn adrift.
-const HP_JUNCTION_R = 4.5;
-function hpJunctionDots(root, line, aids) {
-  const out = [];
-  if (!line || !aids || !aids.length) return out;
-  let lb; try { lb = line.getBBox(); } catch (_) { return out; }
-  const stroke = getComputedStyle(line).stroke;  // the arrow's own colour — the dot is part of it
-  for (const aid of aids) {
-    const life = root.querySelector('line.actor-line[data-id="' + aid + '"]');
-    if (!life) continue;
-    const x = parseFloat(life.getAttribute('x1'));
-    if (!isFinite(x) || x < lb.x || x > lb.x + lb.width) continue;
-    const dot = document.createElementNS(SVGNS, 'circle');
-    dot.setAttribute('cx', x); dot.setAttribute('cy', lb.y + lb.height / 2);
-    dot.setAttribute('r', HP_JUNCTION_R);
-    dot.setAttribute('fill', stroke || '#333');
-    dot.setAttribute('stroke', 'none');
-    dot.setAttribute('pointer-events', 'none');  // the arrow beneath keeps the whole hit area
-    line.parentNode.appendChild(dot);
-    out.push(dot);
-  }
-  return out;
-}
-function bindHP() {
-  const scene = mainScene, root = scene.root;
-  // message text[i] <-> GRAPH.happy_path[i]; its arrow is the i-th .messageLine in document order. Pair
-  // POSITIONALLY, not by Mermaid's `data-id="i<n>"` — see bindFlow: <n> is a global element counter that
-  // sub-flow rects/notes advance, so an id-keyed lookup mis-pairs once a sub-box exists. The HP overlay
-  // has none today, but keeping both paths positional makes it robust to that and matches bindFlow.
-  const texts = [...root.querySelectorAll('text.messageText')];
-  const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
-  leftAlignMessageLabels(texts, lines);
-  scene.focusUnion = focusUnionEls;  // this is a sequence diagram — union selections dim by DOM-part set
-  scene.hpMsg = {};  // step index -> { text, line, dots }
-  for (let i = 0; i < (GRAPH.happy_path || []).length; i++) {
-    const text = texts[i] || null;
-    const line = lines[i] || null;
-    const dots = hpJunctionDots(root, line, HP_STEP_MARKS[i]);
-    scene.hpMsg[i] = { text, line, dots };
-    for (const el of hpMsgEls(scene.hpMsg[i])) scene.dimEls.push(el);
-  }
-  // resolve each actor's DOM (figure top + bottom mirror + lifeline) by participant id, register for dimming.
-  scene.hpActor = {};  // aid -> { els:[…] }
-  styleSeqSystem(root);  // the System lifeline, in the same dark box the other views draw it as
-  const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
-  for (const a of HP_ACTORS) {
-    const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
-    const life = root.querySelector('line.actor-line[data-id="' + a.aid + '"]');
-    const figB = bottoms.find((g) => (g.textContent || '').trim() === a.name) || null;  // no data-id on the mirror
-    const els = [figT, figB, life].filter(Boolean);
-    scene.hpActor[a.aid] = { els };
-    for (const el of els) scene.dimEls.push(el);
-    styleSeqActor(root, a.aid, a.kind);  // person vs service actor, in the Dependencies view's vocabulary
-  }
-  // step index -> EVERY actor that can drive it (a use case may name interchangeable initiators), so a
-  // selected step keeps all of them lit rather than just whichever one the arrow starts from.
-  const aidsOfStep = {};
-  for (const a of HP_ACTORS) for (const i of a.stepIdx) (aidsOfStep[i] || (aidsOfStep[i] = [])).push(a.aid);
-  // steps: plain click selects (panel), ⌘-click adds to the multi-selection, ⌥-click drills to Level 2.
-  (GRAPH.happy_path || []).forEach((step, i) => {
-    const { text, line } = scene.hpMsg[i];
-    if (!text) return;
-    // The junction dots are part of the arrow, so they take the hover/rest treatment with it.
-    const dots = scene.hpMsg[i].dots || [];
-    const hpId = step.id, selKey = 'hpstep:' + hpId;
-    scene.selectors[selKey] = () => selAdd(scene, hpStepDesc(scene, i, hpId, aidsOfStep[i]));  // back/forward restore
-    // Drilling a step opens its use case's flow — the SAME view (and breadcrumb: "Use Cases › …") a
-    // click from the Use Cases tab lands on, so a use case's flow has ONE home regardless of entry.
-    addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'usecase', uc: step.uc }) });
-    const icon = ACTION_ICONS[selKey];
-    // A dimmed step (hpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
-    // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
-    const on = () => { if (!selHas(scene, selKey)) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; for (const d of dots) d.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
-    // restore to the resting glow (an actor-selected step keeps its HILITE), not blank — and for the
-    // same reason, a directly selected step's pill stays visible. An automatically selected or merely
-    // indirectly lit step returns to hover-only when the pointer leaves.
-    const off = () => { if (!selHas(scene, selKey)) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); for (const d of dots) d.style.filter = hpRestFilter(scene, d); if (!icon._selected) hideIcon(icon); } };
-    const click = (ev) => {
-      if (isDrag(ev)) return;
-      ev.stopPropagation();
-      off();
-      if (isDrillClick(ev)) { go({ kind: 'usecase', uc: step.uc }); return; }  // ⌥-click drills into the use case's flow
-      if (ev.shiftKey) { frameArrow(line || text); return; }  // shift-click is a pure camera move — frame, never select
-      pickSel(scene, hpStepDesc(scene, i, hpId, aidsOfStep[i]), ev);
-    };
-    for (const el of [text, line]) {
-      if (!el) continue;
-      el.style.cursor = 'pointer';
-      el.style.setProperty('pointer-events', el === text ? 'all' : 'stroke', 'important');
-      el.classList.add('drill');  // ⌥-held cursor affordance
-      el.addEventListener('click', click);
-      el.addEventListener('mouseenter', on);
-      el.addEventListener('mouseleave', off);
-      attachTip(el, () => actionTipHP(hpId));
-    }
-    // The pill and its bridge (see addLabelActionIcon) get the same on/off as the text/line, so the
-    // whole step — label, arrow, gap, pill — behaves as one continuous hover zone with an instant,
-    // lag-free show/hide (no gap ever left uncovered means no grace timer is needed to paper over one).
-    icon.addEventListener('mouseenter', on);
-    icon.addEventListener('mouseleave', off);
-    if (icon._bridge) { icon._bridge.addEventListener('mouseenter', on); icon._bridge.addEventListener('mouseleave', off); }
-  });
-
-  // actors: click the figure or anywhere on the lifeline to select the actor (no drill).
-  for (const a of HP_ACTORS) {
-    const rec = scene.hpActor[a.aid], selKey = 'hpactor:' + a.aid;
-    scene.selectors[selKey] = () => selAdd(scene, hpActorDesc(scene, a));  // back/forward restore
-    const on = () => { if (!selHas(scene, selKey)) for (const el of rec.els) el.style.filter = HOVER; };
-    const off = () => { if (!selHas(scene, selKey)) for (const el of rec.els) el.style.filter = hpRestFilter(scene, el); };
-    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off();
-      if (ev.shiftKey) { frameArrow(rec.els.find((x) => x.tagName !== 'line') || rec.els[0]); return; }  // shift-click frames the actor, never selects
-      pickSel(scene, hpActorDesc(scene, a), ev); };
-    for (const el of rec.els) {
-      if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
-      el.style.cursor = 'pointer';
-      el.addEventListener('click', click);
-      el.addEventListener('mouseenter', on);
-      el.addEventListener('mouseleave', off);
-    }
-    const life = rec.els.find((el) => el.tagName === 'line');
-    if (life) attachEdgeHandlers(life, null, click, on, off, null);
-  }
-}
-
 // --- render ---------------------------------------------------------------------
 function mermaidFor(s) {
   if (s.kind === 'context') return MERMAID_CONTEXT;
@@ -5913,7 +5715,6 @@ function mermaidFor(s) {
   if (s.kind === 'deployment') return MERMAID_DEPLOYMENT;  // one diagram; the env dims, never filters
   if (s.kind === 'deploymentGroup') return DEPLOYMENT_GROUP_CARDS[s.gid];
   if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
-  if (s.kind === 'hp') return MERMAID_HP;
   if (s.kind === 'usecase') return flowMermaidFor(s.uc);  // Sequence or Map — the flow picker's choice
   if (s.kind === 'libs') return MERMAID_LIBS;
   if (s.kind === 'bucketfold') return MERMAID_BY_BUCKETFOLD[s.bkid];
@@ -5935,7 +5736,7 @@ function topLevelView(s) {
 // top-level view: a use-case FLOW lives under the Features tab and IS a diagram, while its sibling
 // states under the same tab are pages. The legend used to keep a second list, keyed by view, and that
 // distinction is exactly what it got wrong — see the comment on syncLegend.
-const TEXT_PAGES = new Set(['usecases', 'capability', 'actor',
+const TEXT_PAGES = new Set(['usecases', 'capability', 'actor', 'hp',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge']);
 // A CARD BELONGS TO THE PAGE THAT IS ON SCREEN. Every navigation therefore starts with no card, and the
 // page then puts one back only if it has one to show: its own subject (a drilled subsystem, a use case's
@@ -6616,7 +6417,6 @@ function bindFor(s) {
   else if (s.kind === 'domsub') bindDomainSub(s.sd);  // neighbourhood: framed entities + collapsed neighbour boxes + cross arrows
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
-  else if (s.kind === 'hp') bindHP();
   else if (s.kind === 'usecase') (FLOW_VIEW === 'map' ? bindFlowMap : bindFlow)(s.uc);
   else if (s.kind === 'deployment') bindDeployment();
   else if (s.kind === 'deploymentUnit') bindDeployment(s.unit);  // same binder; the focal process (s.unit) drills nowhere further
@@ -8272,6 +8072,163 @@ function roleKindOfName(name) {
   return r ? r.kind : '';
 }
 
+// ── The HAPPY PATH: the walk as one line ─────────────────────────────────────────────────────────
+// This view was a black-box sequence diagram: one arrow per step, every arrow from an actor to the
+// System. It was replaced, and each of its faults is why a piece of this board exists.
+//
+//   * Mermaid scales a sequence diagram to fit the pane, so the more the product does the smaller
+//     its own story is written. Measured: 13.5px of step text on the Mio map's 17 steps, 12px on
+//     Meerbot's 20, 9.5px on MCP Hero's 29 — against 11.5px here on every map, whatever its size,
+//     because this board scrolls sideways instead of shrinking.
+//   * Every step drew the same arrow to the same box, and 44% of Meerbot's drawing width was the
+//     empty channel between the last actor's lifeline and the System's. There is no System column
+//     here: every step points at it, so the column carried nothing.
+//   * The FEATURE of each step appeared nowhere, though the Features page, a feature's page and an
+//     actor's page all colour and group by it. Here a run of steps in one feature is one tinted box,
+//     in that feature's own colour (featureTint), so the three screens agree.
+//
+// A BOX is a run of consecutive steps sharing BOTH the feature and the set of actors — the same
+// run-of-consecutive-steps rule the actor page (actorJourney) and the feature page (featureJourney)
+// each apply with ONE key; this board is the third caller, and it cuts on both. The line therefore
+// breaks at every change of person, the new person stands in the break, and the box that follows
+// reopens after them: who takes over is the one thing a walk's picture must not make you look up.
+function walkSegments() {
+  const segs = [];
+  (GRAPH.happy_path || []).forEach((st) => {
+    // The AUTHORED name space, like every zone label, link and glyph lookup on the two rails: the
+    // walk records the folded spelling, and reading a token of one space in the other index is this
+    // area's whole bug class (see the ROLE_BY_NAME comment).
+    const acts = (HP_ACTORS_OF_STEP[st.id] || []).map((d) => authoredActorName(d.name));
+    const fid = capabilityOfUc(st.uc);
+    const last = segs[segs.length - 1];
+    if (last && last.fid === fid && zoneKey(last.acts) === zoneKey(acts)) last.steps.push(st);
+    else segs.push({ fid, acts, steps: [st] });
+  });
+  // Two flags per box, both about the NEIGHBOUR's actors and never about its feature: `opens` when
+  // somebody new has just taken over, which is what pulls the line left to meet them, and `closes`
+  // when somebody else is about to, which is what puts an arrow head on the line's end. A box that
+  // only changes feature keeps one unbroken line running on into the next, and that difference is
+  // what the reader is meant to see.
+  segs.forEach((sg, i) => {
+    sg.opens = i === 0 || zoneKey(segs[i - 1].acts) !== zoneKey(sg.acts);
+    sg.closes = i === segs.length - 1 || zoneKey(segs[i + 1].acts) !== zoneKey(sg.acts);
+  });
+  return segs;
+}
+// The feature a use case belongs to: its parent, when that parent is a feature. The same lookup
+// actorJourney makes, in one place now that a third board asks it.
+function capabilityOfUc(ucId) {
+  const p = (GRAPH.nodes[ucId] || {}).parent;
+  return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
+}
+// The person standing in a break: their glyph, and their name under it. No pill and no ring round
+// the glyph — the break in the line is what says somebody new took over, and a shape drawn round
+// them competed with the boxes on either side. Several names when the step's use case lets either of
+// them start it, joined by the same quiet "or" a feature box's driver label uses.
+function walkHandHtml(acts) {
+  const one = (name) =>
+    `<button type="button" class="walk-one" data-act="${esc(name)}" `
+    + `title="Open the page of ${esc(name)}">`
+    + `<span class="walk-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
+    + `<span class="walk-who">${esc(name)}</span></button>`;
+  return `<div class="walk-hand">${(acts || []).map(one).join('<span class="walk-or">or</span>')}</div>`;
+}
+// One box: the feature's name over a line of its steps. The step's title drops the leading actor
+// designator (stationTitle), because the person who does it is named on the line a few pixels away,
+// and repeating it in every title is the noise the two rails already dropped.
+//
+// The NUMBER stays. Both rails drop it deliberately — "which of the walk's twenty steps is this"
+// answers no question either of those pages asks. It is the question THIS page asks, so the number
+// belongs here and nowhere else.
+function walkBoxHtml(sg) {
+  const name = sg.fid ? featureName(sg.fid) : '';
+  const label = name
+    ? `<button type="button" class="walk-fname" data-cap="${esc(sg.fid)}" `
+      + `title="Open the details page of ${esc(name)}">${storyFeatureGlyphSvg()}`
+      + `<span class="walk-fnm">${esc(name)}</span></button>`
+    : '<span class="walk-fkind">not in any feature</span>';
+  const steps = sg.steps.map((st) =>
+    `<button type="button" class="walk-step" data-step="${esc(st.id)}" data-uc="${esc(st.uc)}" `
+    + `title="Open how this works: ${esc(st.title || 'this step')}">`
+    + '<span class="walk-dot"></span>'
+    + `<span class="walk-n">${esc(String(walkPos(st.id)))}</span>`
+    + `<span class="walk-t">${esc(stationTitle(st.title, sg.acts))}</span></button>`).join('');
+  // The box is exactly as wide as its steps. Letting it size to its LABEL instead made a one-step
+  // box as wide as the feature's name, and the steps then stopped lining up down the walk.
+  const tint = sg.fid ? featureTint(sg.fid) : '';
+  return `<div class="walk-box${sg.closes ? ' walk-closes' : ''}" `
+    + `style="width:${sg.steps.length * WALK_STEP_W}px`
+    + `${tint ? ';background:' + tint : ''};--walk-l:${sg.opens ? WALK_REACH : 0}px">`
+    + `<div class="walk-flabel">${label}</div>`
+    + `<div class="walk-line">${steps}</div></div>`;
+}
+const WALK_STEP_W = 150;   // one step's column, in px — the width every box is a multiple of
+// How far a box's line reaches back past its own left edge to touch the person who just took over:
+// the hand's 10px of padding plus half the gap between the 26px glyph and its 84px column.
+const WALK_REACH = -39;
+// A step's place in the whole walk, 1-based, read from the walk itself — so a board built from any
+// slice of it still numbers by the real position.
+function walkPos(hpId) {
+  const i = (GRAPH.happy_path || []).findIndex((st) => st.id === hpId);
+  return i < 0 ? '' : i + 1;
+}
+function renderHappyPath() {
+  const segs = walkSegments();
+  if (!segs.length) {
+    diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">'
+      + 'This map records no happy path.</p></div>';
+    return;
+  }
+  const feats = new Set(segs.map((sg) => sg.fid).filter(Boolean)).size;
+  let html = '';
+  for (const sg of segs) {
+    if (sg.opens) html += walkHandHtml(sg.acts);
+    html += walkBoxHtml(sg);
+  }
+  const n = (GRAPH.happy_path || []).length;
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + `<p class="block-lbl">The walk — ${n} step${n === 1 ? '' : 's'}, `
+    + `${feats} feature${feats === 1 ? '' : 's'}</p>`
+    + `<div class="walk-board"><div class="walk">${html}</div></div></div>`;
+  bindWalk(diagram);
+}
+// Arriving FROM a station on an actor's rail, from a feature's rail, or from a story arrow's label:
+// all three navigate here naming one step, on the same one-shot `sel` a diagram's selection rides.
+// This board has no scene to select into, so the step is scrolled to and ringed — exactly how a card
+// list answers "show in context".
+function ringWalkStep(s) {
+  const key = ((s && s.sels) || [s && s.sel]).filter(Boolean)
+    .find((k) => String(k).startsWith('hpstep:'));
+  if (!key) return;
+  const el = diagram.querySelector(`.walk-step[data-step="${CSS.escape(key.slice(7))}"]`);
+  if (!el) return;
+  // The board is scrolled DIRECTLY, not through scrollIntoView. That walks every scrollable
+  // ancestor, and the page's own wrap is one — it took part of the movement, and the step then
+  // stopped 5px past the board's right edge instead of arriving inside it.
+  const board = el.closest('.walk-board');
+  if (board) {
+    // Measured, not `offsetLeft`: a box is `position: relative`, so the step's offset parent is its
+    // own box and the number was a few pixels inside it rather than the distance down the board.
+    const br = board.getBoundingClientRect(), r = el.getBoundingClientRect();
+    board.scrollLeft += (r.left - br.left) - (board.clientWidth - r.width) / 2;
+  }
+  el.classList.remove('walk-step-flash');
+  void el.offsetWidth;                        // restart the animation on a repeat of the same step
+  el.classList.add('walk-step-flash');
+  setTimeout(() => el.classList.remove('walk-step-flash'), 1400);
+}
+// Three doors, each to the page that thing already has: a step to the flow of the use case it
+// realizes (the same flow the Features tab drills to, so a use case keeps ONE home), a feature's
+// name to that feature's page, a person's name to theirs.
+function bindWalk(root) {
+  root.querySelectorAll('.walk-step').forEach((b) => b.addEventListener('click', () =>
+    go({ kind: 'usecase', uc: b.getAttribute('data-uc') })));
+  root.querySelectorAll('.walk-fname').forEach((b) => b.addEventListener('click', () =>
+    go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
+  root.querySelectorAll('.walk-one').forEach((b) => b.addEventListener('click', () =>
+    go({ kind: 'actor', act: b.getAttribute('data-act') })));
+}
+
 // ── The STORY DIAGRAM: the Features view's choosing layer ────────────────────────────────────────
 // Three columns over one set of arrows: THE STORY (the features the happy path touches, as a spine
 // in first-touch order), THE CAST (the actors, in order of first appearance), and OFF THE STORY
@@ -9822,6 +9779,18 @@ async function renderView(sArg, transient, seq) {
     renderUseCases({ cap: s.cap, actor: s.act });
     mainScene = null;
     renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+  }
+  // The Happy Path is HTML now, not a mermaid sequence diagram — same shape as the pages above. The
+  // walk on one line: a tinted box per run of steps in one feature, broken wherever the person
+  // changes, with that person standing in the break. See renderHappyPath for why the diagram went.
+  if (s.kind === 'hp') {
+    renderHappyPath();
+    mainScene = null;
+    renderChrome(s); restoreTextScroll(s); applyPendingFlash();
+    // AFTER the remembered offset is put back, for the reason applyPendingFlash states: an arrival
+    // scroll that lands first is undone by the restore.
+    ringWalkStep(s);
+    return;
   }
   // One actor's page — the journey line: their happy-path stations on one rail, zoned by feature,
   // with everything else they can do as side stops. The drill out of a cast card.
