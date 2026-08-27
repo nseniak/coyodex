@@ -1854,6 +1854,58 @@ def test_access_and_rule_tiers_do_not_interleave():
     assert len(groups) == len(set(themes)), f"themes are not contiguous: {groups}"
 
 
+def _roles_map(relations: list[dict]) -> str:
+    return json.dumps({
+        "format": "coyodex-map", "title": "T", "goal": "g",
+        "roles": [{"id": "R1", "name": "Organization admin", "kind": "human",
+                   "relations": relations},
+                  {"id": "R2", "name": "Team member", "kind": "human"},
+                  {"id": "R3", "name": "Headless agent", "kind": "software"}]})
+
+
+def test_a_role_INCLUSION_is_challenged_as_a_security_claim():
+    """It was the one element class asserting who-may-do-what while carrying no claim at all. The
+    viewer draws it to a reader as a plain sentence — "may also do everything a Team member may do" —
+    and `audit` held no theme for it, so a fabricated `R3 includes R1` (a headless agent may do
+    everything an admin may do) left the worklist byte-identical. On the map that surfaced this the
+    one authored inclusion was not true of the code: the admin flag gates only the dashboard routes,
+    and the three functions deciding what a caller actually reaches never consult it."""
+    items = [i for i in l2(_roles_map([{"kind": "includes", "role": "R2"}]))
+             if "may do everything" in i.claim]
+    assert len(items) == 1
+    assert items[0].theme == "security"
+    assert "Organization admin" in items[0].claim and "Team member" in items[0].claim
+    assert "privilege claim" in items[0].why_risky
+
+
+def test_an_UNANCHORED_inclusion_says_so_in_the_claim_rather_than_passing_quietly():
+    """`RoleRelation` had nowhere to put a code anchor — `at` is pinned to a use-case id — so an
+    inclusion was structurally ungroundable. The item now carries the grant line, or says there is
+    none, in its `detail` — never in the CLAIM, because a claim's text is its identity and votes
+    pair to it by that text. A rule-site claim does embed its anchor, and the same change that added
+    this had to add `_rules_voted_under_any_anchor` to stop one anchor correction orphaning every
+    vote a rule had. Anchoring an inclusion is the ordinary next step after a skeptic reads it."""
+    unanchored = [i for i in l2(_roles_map([{"kind": "includes", "role": "R2"}]))
+                  if "may do everything" in i.claim][0]
+    assert "anchors this to NO line" in (unanchored.detail or "")
+    assert unanchored.anchor is None
+    anchored = [i for i in l2(_roles_map([{"kind": "includes", "role": "R2",
+                                           "source": "src/policy.py:12"}]))
+                if "may do everything" in i.claim][0]
+    assert "granted at src/policy.py:12" in (anchored.detail or "")
+    # the CLAIM is identical either way, on purpose: the anchor is not part of its identity, so
+    # anchoring an inclusion a skeptic already voted on does not orphan that vote
+    assert anchored.claim == unanchored.claim
+
+
+def test_a_BECOMES_relation_mints_no_privilege_claim():
+    """`becomes` is one person changing hat at a use case, not one role reaching another's
+    permissions. Challenging it as a privilege claim would ask a skeptic to verify a sentence the
+    map never made."""
+    assert not [i for i in l2(_roles_map([{"kind": "becomes", "role": "R2", "at": "UC1"}]))
+                if "may do everything" in i.claim]
+
+
 def test_themes_are_closed_and_match_the_worklist_order():
     """The pin an earlier comment CLAIMED existed and did not.
 

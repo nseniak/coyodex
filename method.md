@@ -400,6 +400,53 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   optionally nested. Membership is carried on each card (a `SUBDOMAIN:` line holding one `SD`); the
   member list, the inter-subdomain arrows, and the subsystem→subdomain bridge are *derived*. The Domain
   diagram then leads with a Subdomains overview and drills into one subdomain's classDiagram.
+  - **Each subdomain holding SAVED records names its `owners`** — the feature(s) it exists FOR.
+    Ask one question per area: *which feature is the reason this data exists — who creates its
+    records and runs their lifecycle?* One clear answer → `"owners": ["CAPn"]`. Several genuine
+    ones → list them all, and the split / dominance advisories then challenge the list. No clear
+    answer → leave the field out and record `SDn: <why>` under a **"Data owner exceptions"** extras
+    heading. **Never author an owner to make a diagram complete**: an owner whose feature's walks
+    reach none of the area's records is reported as AN OWNER WITH NO EVIDENCE, which is worse than an empty column.
+    A "saved record" is an entity whose `store.mode` is `collection` or `embedded`; an area of pure
+    plumbing (request shapes, enums, read projections) is not asked the question at all.
+    - **DECIDE IT AFTER THE TRACE, NOT AT SYNTHESIS** — the walks have to exist first. The
+      question is which feature the data exists FOR, and the only evidence that bears on it is
+      which features' walks reach the area's records. At synthesis that evidence does not exist
+      yet: the areas and the features are written, the flows are not. Deciding there is deciding
+      blind, and `validate` cannot help either — run it at that moment and every owner comes back
+      ungrounded, because no walk reaches anything yet.
+      MEASURED, on the mcpolis build of 2026-08-26: decided at synthesis, 8 areas took 8 single
+      owners, one feature took 5 of them, one owner was reached by no walk at all and needed a
+      recorded exception to get through. The SAME map and the SAME instruction, decided after the
+      trace, changed exactly those two answers — the owner with no evidence became the one that
+      really writes the records, the over-claimed area became an honest three-way share — and
+      needed NO recorded exception. Six of the eight answers were identical, so the cost of
+      waiting is two decisions' worth of nothing.
+      Author it in the same after-the-trace pass that writes the rules, and run `validate` there:
+      the split / dominance / grounding challenges all work from that point on, and answering one
+      is cheap while the flows are in front of you.
+    - **WRITE IT ON THE SUBDOMAIN ROW ITSELF.** A sub-domain is a `Group`, and `reconcile` has no
+      directive that can reach one: its `set` fields all target a component, entity, use case, dep
+      or rule. So edit the area's own row in the fragment that declares it — the `CAPn` ids exist
+      by then, minted back at synthesis.
+    - **The one record whose owning feature differs from its area's** carries `owners` on the ENTITY
+      instead — an audit entry sits in the Audit trail area but is written by the gateway. That one
+      DOES go through reconcile (`{"ids": ["E51"], "owners": ["CAP4"]}`), for the same reason
+      `capability` does: the entity was authored in the T5 harvest, before any `CAPn` existed. An
+      override is checked as hard as an area: one that repeats what the area already says is
+      reported as redundant, and one naming a feature whose walks never touch that record is
+      reported as ungrounded. It belongs only on a SAVED record; on anything else `validate` blocks
+      it.
+    - **WHY AUTHORED, and why no derivation replaces it.** Code says what a feature TOUCHES; it
+      cannot say what the data is FOR, and every derivation was measured on three live maps and
+      failed the same way. First-touch-in-story-order hands "Snapshots and change" to Page tracking,
+      not to Change detection — the snapshot is first written by the tracker and exists so the
+      change detector can compare it. Touch counts hand an area to whichever feature has the most
+      sign-in plumbing. Majority vote per area split 5 of one map's 8 areas, several on 1-1 ties
+      decided the wrong way. So the map states the judgement and the tools cross-examine it: the
+      touches are shown as evidence beside it, and the ONE disagreement never reported is "the owner
+      is not the first feature to touch the area" — that disagreement is the field's reason to
+      exist.
 - **T6 Use-case flows** *(the inside view of each use case — a block, not a table)*: one block per
   use case, `**UCn — <title>**` + **numbered step lines**. Each step is an ordered interaction
   `from → to`: **every step** — element↔element and actor steps alike — carries a short authored phrase

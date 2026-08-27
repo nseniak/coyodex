@@ -75,6 +75,7 @@ _FIELD_OWNER: dict[str, type] = {
     "block": BusinessRule,
     "capability": UseCase,
     "entry_points": UseCase,
+    "owners": Entity,
 }
 
 

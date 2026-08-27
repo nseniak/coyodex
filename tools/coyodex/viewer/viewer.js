@@ -34,6 +34,8 @@ let FEATURES = {};            // the whole bundle (see coyodex.features.as_bundl
 let FEAT_BY_ID = {};          // feature id -> its facts
 let FEAT_COVERAGE = {};       // how much of the code the feature layer reaches
 let COMP_FEATURES = {};       // component id -> the feature ids whose use-case walks pass through it
+let ENTITY_OWNERS = {};       // record id -> its EFFECTIVE owning feature(s), AUTHORED (never derived
+                              // here: the map either says who the data exists for, or nobody knows)
 let DEPLOYMENT_GROUP_CARDS;   // product-area container id -> its members' diagram (the container drill)
 let DEPLOYMENT_GROUP_MEMBERS; // product-area container id -> the unit names inside it
 let DEPLOYMENT_EDGES;      // process->process arrow 'U_a>U_b' -> [async channels it carries]
@@ -122,6 +124,7 @@ function applyBundle(b) {
   for (const f of (FEATURES.features || [])) FEAT_BY_ID[f.id] = f;
   FEAT_COVERAGE = FEATURES.coverage || {};
   COMP_FEATURES = FEATURES.componentFeatures || {};
+  ENTITY_OWNERS = FEATURES.entityOwners || {};
   CAP_OF_UC = {};
   for (const n of Object.values(GRAPH.nodes || {})) {
     if (n.kind === 'usecase' && n.parent && (GRAPH.nodes[n.parent] || {}).kind === 'capability') {
@@ -1931,6 +1934,26 @@ function applyPendingEpSelect() {
 // Data view's C→E derivation — WHO writes and reads it. Every chip (store dep, writer, reader)
 // navigates to that element, whose own node carries its source link (the "link every element to its
 // code" rule). The "See in Data view" link deep-links to this entity's row in the Data tab.
+// A record's OWNING FEATURE — the one the data exists for. AUTHORED on the map (its own `owners`,
+// else its area's, walked up), never inferred here: a record several features write is not owned by
+// the busiest one, and this line has no business guessing where the map stayed silent. Absent from
+// `ENTITY_OWNERS` = nobody decided, and the row is not drawn at all.
+//
+// Each feature is a DOOR to its own page, routed through `selectFromTree` like every other
+// `featref`, so moving a feature's home view cannot break this link.
+function ownedByHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || n.kind !== 'entity') return '';
+  const own = (ENTITY_OWNERS[id] || []).filter((c) => GRAPH.nodes[c]);
+  if (!own.length) return '';
+  const doors = own.map((c) =>
+    `<button type="button" class="featref" data-id="${esc(c)}" `
+    + `title="Open the details page of ${esc(elName(c))}">${esc(elName(c))}</button>`).join(', ');
+  // Several owners is a DELIBERATE statement that the record is shared, not an unresolved list, so
+  // the row says so rather than leaving the reader to read a comma as uncertainty.
+  const note = own.length > 1 ? ' <span class="dv-note">shared, deliberately</span>' : '';
+  return `<dt>Owned by</dt><dd class="dv-panerow">${doors}${note}</dd>`;
+}
 function persistedInHtml(id) {
   const n = GRAPH.nodes[id];
   // Only for an entity with a PHYSICAL store (store.dep). A not-persisted entity (transient/embedded/
@@ -2065,7 +2088,7 @@ function nodeDetailBodyHtml(id) {
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
   return explain
-    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${decidesHtml(id)}${triggeredByHtml(id)}</dl>`
+    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${ownedByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${decidesHtml(id)}${triggeredByHtml(id)}</dl>`
     + impactSectionHtml(id);
 }
 // Everything the map holds about one element, as a PAGE. The info pane shows the element's card and
@@ -7460,9 +7483,9 @@ function safeMsgName(s) {
 function actorStations(actorName) {
   const key = safeMsgName(actorName);
   const out = [];
-  (GRAPH.happy_path || []).forEach((st, i) => {
+  (GRAPH.happy_path || []).forEach((st) => {
     const drivers = HP_ACTORS_OF_STEP[st.id] || [];
-    if (drivers.length && drivers[0].name === key) out.push({ st, n: i + 1 });
+    if (drivers.length && drivers[0].name === key) out.push(st);
   });
   return out;
 }
@@ -7495,7 +7518,7 @@ function actorJourney(actorName) {
   const stations = actorStations(actorName);
   const g = actorGroups().find((x) => x.actor === actorName);
   const ucs = g ? g.ucs : [];
-  const zones = [];              // [{fid, stations:[{st,n}], sides:[ucNode]}], in WALK order
+  const zones = [];              // [{fid, stations:[hpStep], sides:[ucNode]}], in WALK order
   const featureOfUc = (ucId) => {
     const p = (GRAPH.nodes[ucId] || {}).parent;
     return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
@@ -7508,7 +7531,7 @@ function actorJourney(actorName) {
   // page that claims an order, so a feature entered twice gets TWO zones, one at each position.
   let run = null;
   for (const s of stations) {
-    const fid = featureOfUc(s.st.uc);
+    const fid = featureOfUc(s.uc);
     if (!run || run.fid !== fid) { run = { fid, stations: [], sides: [] }; zones.push(run); }
     run.stations.push(s);
   }
@@ -7521,7 +7544,7 @@ function actorJourney(actorName) {
   // never enters on the walk. Trailing zones follow the rail, drawn exactly like the others — a
   // feature is not demoted for missing this actor's walk — and they order by the story column, the
   // one derived order every screen agrees on; a no-feature zone comes last.
-  const stationUcs = new Set(stations.map((s) => s.st.uc));
+  const stationUcs = new Set(stations.map((s) => s.uc));
   const column = (FEATURES.story || {}).column || [];
   const offZones = [];
   const offByFid = {};
@@ -7616,24 +7639,17 @@ function journeyZoneHtml(z, opts) {
       + `<span>${esc(name)}</span></button>`
     : (z.stations || []).length || (z.sides || []).length
       ? '<span class="journey-zkind">not in any feature</span>' : '');
-  // The station carries its number's DIGIT COUNT, because the title lines its left edge up with the
-  // number and a number centred on the dot starts further left the more digits it has. With the
-  // numbers off there is nothing to line up with, so the title hangs from the dot's own centre and
-  // the digit class is not written at all.
-  //
-  // `numbers: false` is the FEATURE rail. There the rail is the order — one feature's stretch of the
-  // walk, read left to right — and the walk position each digit carried is a fact about the whole
-  // walk, which is the Happy Path view's own subject and one click away through the station. On the
-  // ACTOR rail they stay: that page scatters an actor's steps across a 25-step walk, and the number
-  // is the only thing saying how far apart two of their stations really are.
-  const nums = o.numbers !== false;
+  // A dot and a title. The station carried its position in the whole walk as a number over the
+  // title, and the number told the reader nothing they act on: the rail already runs left to right,
+  // and which of the walk's twenty steps this one is answers no question this page asks. It cost an
+  // alignment rule per digit count, because a number centred on the dot starts further left the more
+  // digits it has, and the title had to line up with the number rather than with the dot.
   const stations = (z.stations || []).map((s) =>
-    `<button type="button" class="journey-station${nums ? ' journey-d' + String(s.n).length : ''}" `
-    + `data-step="${esc(s.st.id)}" `
-    + `title="Open the Happy Path: ${esc(s.st.title || 'this step')}">`
-    + `<span class="journey-dot"></span>`
-    + (nums ? `<span class="journey-n">${s.n}</span>` : '')
-    + `<span class="journey-t">${esc(stationTitle(s.st.title, o.actor))}</span></button>`).join('');
+    '<button type="button" class="journey-station" '
+    + `data-step="${esc(s.id)}" `
+    + `title="Open the Happy Path: ${esc(s.title || 'this step')}">`
+    + '<span class="journey-dot"></span>'
+    + `<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span></button>`).join('');
   const sides = (z.sides || []).map((uc) =>
     `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
     + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`).join('');
@@ -7650,10 +7666,8 @@ function journeyZoneHtml(z, opts) {
   // lower lane still sits in row 3 with everyone else's. Empty, it draws no rail line — the rule is
   // `.journey-track:empty`, so an off-path feature is not crossed by a path it never joins.
   // The off-path list lines its circles up with the station titles above it, so the box has ONE text
-  // column. The titles hang off their number, whose left edge depends on its digit count, so the
-  // list takes the indent of this box's FIRST station — the one the reader's eye starts from.
-  const sideIndent = (nums && (z.stations || []).length)
-    ? ' journey-d' + String(z.stations[0].n).length : '';
+  // column. Both now start at the box's own 16px of padding and need no extra indent: with the step
+  // numbers gone, a title starts at its dot's left edge instead of under a number of unknown width.
   // Every cell of a box carries `gapBefore`, because the box is four separate grid items in one
   // column and a margin on one of them would move that cell alone.
   const gap = o.gapBefore ? ' journey-gap-before' : '';
@@ -7662,7 +7676,7 @@ function journeyZoneHtml(z, opts) {
     + (o.noPath ? '' : `<div class="journey-track${gap}${o.first ? ' journey-track-first' : ''}`
       + `${o.last ? ' journey-track-last' : ''}" `
       + `style="grid-column:${col}">${stations}</div>`)
-    + (o.offLane ? `<div class="journey-sides${gap}${sideIndent}" `
+    + (o.offLane ? `<div class="journey-sides${gap}" `
       + `style="grid-column:${col}">${sides}</div>` : '');
 }
 // This page once opened with a greyed BEFORE-segment: the steps of the role this actor used to be,
@@ -7671,6 +7685,30 @@ function journeyZoneHtml(z, opts) {
 // "before" — on the argus map the Page owner's own steps are 6, 9, 11, 15, 19, 20 and the Visitor's
 // are 1, 2, 16, so step 16 was drawn as happening before step 6. The role change survives as the
 // hero's "was <role> until <use case>" line, which states it once and cannot be out of order.
+// The actor themself, heading the board: icon THEN name, on one line, over the gutter and above both
+// lane names. It was first drawn ON the rail, centred on the line, and that placement said the wrong
+// thing: the figure sat inside the happy-path band, so the band below it read as somebody else's use
+// cases. This page is everything ONE actor does, on the path and off it, so the head titles the whole
+// board and both lanes hang under it.
+//
+// One line, in the hand every other title on this page uses, is what makes this a SLOT rather than an
+// actor's portrait: a feature's sparkle and a feature's name drop in with nothing redrawn. The draft
+// that centred the name under a 30px figure had a shape nothing else on the page had, and one that
+// only fits a figure.
+//
+// It is deliberately NOT a fourth cell of the rail grid. A cell in row 1 would grow that row for
+// every feature too, and each feature's tinted box would open with 26px of empty colour above its
+// name. Outside the grid, the boxes are untouched.
+//
+// The SAME drawing the cast card gives them — person or service, in the actor tints — because one
+// figure means "who" wherever a who is drawn, and a second hand for it here would read as a second
+// kind of thing.
+function journeyActorHeadHtml(actorName) {
+  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
+  return '<div class="journey-actorhead">'
+    + `${storyGlyphSvg(role && role.kind)}`
+    + `<span class="journey-actorname">${esc(actorName || '')}</span></div>`;
+}
 function renderActorPage(actorName) {
   const { zones, offZones } = actorJourney(actorName);
   const onRail = zones.map((z) => ({ z, o: { actor: actorName } }));
@@ -7703,14 +7741,21 @@ function renderActorPage(actorName) {
   // Three cells, one per row, so the gutter is a solid white strip the board's contents slide
   // UNDER when it scrolls sideways. Two cells left the feature names and the step titles showing
   // through the gaps between the labels, cut off mid-word.
+  //
+  // Each lane name sits ON its own lane. The upper one is centred on the rail — 22.5px down its row,
+  // where the rail is drawn — so it reads as a caption on that line rather than as a heading over the
+  // whole band. The lower one keeps the dashed cut it shares with the boxes.
   const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
     + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
     + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
   // No legend. With the two lanes named, every line it carried was either restating a label or
   // teaching a click the reader finds by trying it.
   const rail = onHtml + offHtml;
+  // The actor heads the board WHATEVER the lanes are, including for an actor whose every use case is
+  // off the happy path (argus's Page owner is one): the figure says whose board this is, and that is
+  // as true of a board with one lane as of a board with two.
   const board = rail
-    ? '<div class="journey-board"><div class="journey-rail'
+    ? `<div class="journey-board">${journeyActorHeadHtml(actorName)}<div class="journey-rail`
       + `${offLane ? ' journey-has-off' : ''}${noPath ? ' journey-no-path' : ''}">`
       + `${gutter}${rail}</div></div>`
     : '<p class="empty">This map records nothing this actor does.</p>';
@@ -7767,11 +7812,10 @@ function bindActorPage(root, actorName) {
 function featureJourney(capId) {
   const f = FEAT_BY_ID[capId] || {};
   const own = new Set(f.useCases || []);
-  const zones = [];   // [{act, stations:[{st,n}], sides:[ucNode]}], in WALK order
-  let run = null, prev = 0;
+  const zones = [];   // [{act, stations:[hpStep], sides:[ucNode]}], in WALK order
+  let run = null, prev = -2;
   (GRAPH.happy_path || []).forEach((st, i) => {
     if (!own.has(st.uc)) return;
-    const n = i + 1;
     // The step's DRAWN driver — the leftmost of its interchangeable actors, the same choice
     // actorStations makes, so a step lands under the same actor on both pages.
     const drivers = HP_ACTORS_OF_STEP[st.id] || [];
@@ -7779,19 +7823,19 @@ function featureJourney(capId) {
     // A new zone on a change of driver OR on a GAP in the walk. The gap matters as much as the
     // driver: "Getting set up" is entered at step 1 and again at step 15, and one box holding both
     // draws them as neighbours — the rail is the one thing on this page that claims an order, so it
-    // must not claim that one. The actor rail breaks on the same two conditions with the keys
-    // swapped, and it was a real bug there before it was a rule.
-    if (!run || run.act !== act || n !== prev + 1) {
+    // must not claim that one. The walk POSITION is only ever compared here, never carried onto a
+    // station: no station shows a number, so `i` is a fact about this loop and nothing else.
+    if (!run || run.act !== act || i !== prev + 1) {
       run = { act, stations: [], sides: [] };
       zones.push(run);
     }
-    run.stations.push({ st, n });
-    prev = n;
+    run.stations.push(st);
+    prev = i;
   });
   // Everything the feature can do that the walk never reaches. They hang under the FIRST zone: they
   // belong to the feature, not to a position in it, so repeating them under a second run would say
   // the same thing twice. With no run at all they open a lane of their own.
-  const onWalk = new Set(zones.flatMap((z) => z.stations.map((s) => s.st.uc)));
+  const onWalk = new Set(zones.flatMap((z) => z.stations.map((s) => s.uc)));
   const sides = (f.useCases || []).filter((id) => !onWalk.has(id))
     .map((id) => GRAPH.nodes[id]).filter(Boolean);
   return { zones, sides };
@@ -7807,10 +7851,6 @@ function featureRailHtml(capId) {
   let col = 1;
   const boxes = zones.map((z, i) => journeyZoneHtml(z, {
     col: ++col, offLane, actor: z.act, first: i === 0, last: i === zones.length - 1,
-    // No step NUMBERS here. The rail already reads left to right, and the digit each station carried
-    // was its position in the WHOLE walk — a fact about the Happy Path, not about this feature, and
-    // one click away through the station itself.
-    numbers: false,
     // The zone is named by its DRIVER, and the name is a door to that actor's page — the mirror of
     // the actor rail, where the zone is named by its feature and opens the feature's page. The
     // feature's own name is NOT drawn: the breadcrumb is this page's title, and a box repeating it
@@ -7927,7 +7967,10 @@ function storyFeatureCardHtml(id) {
   // TWO bands of pill, the same split the cast card makes. Beside the NAME goes the pill that changes
   // how the name itself reads: who the feature is for. The LAST line is counts only, so the two
   // columns' bottom lines are the same kind of line and can be compared down the page.
-  return `<article class="story-card story-feature" `
+  // The feature's OWN colour, from `featureTint` — the same hash the actor journey board tints each
+  // feature band with, so one feature is one colour everywhere it appears and the reader carries
+  // the association between the two screens. Inline, because the tint is per-card data, not a class.
+  return `<article class="story-card story-feature" style="background:${featureTint(id)}" `
     + `data-sfeat="${esc(id)}" tabindex="0">`
     + `<span class="story-who">${storyFeatureGlyphSvg()}`
     + `<button type="button" class="story-name story-namelink" data-cap="${esc(id)}" `
@@ -7959,6 +8002,96 @@ function storyActorCardHtml(rid) {
     + `<div class="story-pills">`
     + `<span class="story-pill">${n} use case${n === 1 ? '' : 's'}</span></div></article>`;
 }
+// One DATA AREA box of the right column: a sub-domain holding saved records, named, with how many
+// records it holds. The name is a DOOR to that area's own page (the Domain view drilled into it) —
+// the same split the actor card makes, where the name leaves and the body pins.
+//
+// The box says nothing about who owns it here: `owners` is authored, most maps do not carry it yet,
+// and a box that invented an owner from the arrows landing on it would be the derivation this whole
+// design was measured out of.
+// A DATA AREA's glyph, third in the hand the actor pair and the feature sparkle are drawn in: one
+// 20x20 box, closed shapes, stroked at 1.6, no interior detail beyond one line.
+//
+// TWO STACKED ENTITY BOXES, in the ENTITY tint (the fuchsia the Data view already draws an entity
+// with), because that is literally what an area is: several kinds of stored thing. The front box
+// carries the header band a class box has, which is what makes the shape read as an entity rather
+// than as a plain rectangle; the one behind is what makes it read as several.
+// THREE boxes was tried first and rejected on screen: at the 17px this renders at, the third
+// outline closed the gaps and the whole mark went to a blob.
+//
+// A DATABASE CYLINDER was considered and rejected: the cylinder is already the dependency's shape
+// everywhere in this viewer (it sits on an entity's own card next to "MongoDB · snapshots"), and an
+// area is not a database — it groups kinds of data and can span two stores or none. A DASHED FRAME
+// was rejected too: at 17px it is the same mark as a subsystem, a sub-domain frame and a collapsed
+// group, so it would say "a container" and stop there.
+function storyAreaGlyphSvg() {
+  const t = ELEMENT_TINT.entity || {};
+  const stroke = t.stroke || '#86198f', fill = t.fill || '#fff';
+  const box = (x, y) => `<rect x="${x}" y="${y}" width="11" height="9" rx="1.8" `
+    + `fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>`;
+  return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
+    + box(6.5, 3.25) + box(2.5, 7.75)
+    + `<path d="M2.5 10.65 H13.5" fill="none" stroke="${stroke}" stroke-width="1.5"/>`
+    + '</svg>';
+}
+function storyAreaCardHtml(a) {
+  const n = (a.entities || []).length;
+  // The count says STORED ENTITIES, not "records": an area holds a handful of KINDS of thing that
+  // get kept (Page, Snapshot, Change), while the product stores thousands of each. `entity` is the
+  // word the rest of the viewer already uses for a kind — the tab is Entities, the Data view counts
+  // "44 entities" — so this pill borrows it instead of minting a second word for the same thing.
+  // `stored` is the filter that makes the number true: the area's read-only views, value shapes and
+  // enums are NOT counted, and the title says so, because the area's own page lists them all.
+  // AUTHORED owners only. One owner is said by the ownership wire, so the box repeats nothing;
+  // SEVERAL is a deliberate statement of sharing that no wire can carry (the design draws no
+  // ownership wire for a shared area, on purpose), so the box names them. An area the map has not
+  // decided says nothing at all — the arrows landing on it are touches, never an owner.
+  const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
+  const shared = owners.length > 1
+    ? `<p class="story-shared">Shared by ${owners.map((c) => esc(featureName(c))).join(', ')}</p>`
+    : '';
+  return `<article class="story-card story-area${owners.length === 1 ? ' story-area-owned' : ''}`
+    + `${owners.length > 1 ? ' story-area-shared' : ''}" data-sarea="${esc(a.id)}" tabindex="0">`
+    + `<span class="story-who">${storyAreaGlyphSvg()}`
+    + `<button type="button" class="story-name story-namelink" `
+    + `data-sd="${esc(a.id)}" title="Open the details page of ${esc(a.name || a.id)}">`
+    + `${esc(a.name || a.id)}</button></span>`
+    + (a.purpose ? `<p class="story-desc">${mdInline(a.purpose)}</p>` : '')
+    + shared
+    + '<div class="story-pills"><span class="story-pill" title="Kinds of thing this area keeps a '
+    + 'record of. Read-only views, value shapes and enums are not counted.">'
+    + `${n} stored entit${n === 1 ? 'y' : 'ies'}</span></div>`
+    + '</article>';
+}
+// The label a reference arrow carries: the saved records that feature's walks actually reach in
+// that area. Each name is a DOOR — click it and the record is shown in context, selected on the
+// view that draws it — because the label is the one place on this page that names a single record,
+// and a name the reader cannot follow is a claim they have to take on trust. Names, never ids.
+//
+// Capped at three: a feature reaching nine records would draw a pill wider than the column it
+// points at. The tail says how many were left, and stays plain text — there is no single record
+// for it to open.
+const _AREA_LABEL_CAP = 3;
+function fillAreaTouchLabel(lab, t) {
+  const ids = (t.entities || []).slice(0, _AREA_LABEL_CAP);
+  ids.forEach((id, i) => {
+    if (i) lab.appendChild(document.createTextNode(', '));
+    const name = (GRAPH.nodes[id] || {}).name || id;
+    if (!GRAPH.nodes[id]) { lab.appendChild(document.createTextNode(name)); return; }
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'story-elabel-ent';
+    b.textContent = name;
+    b.title = 'Show ' + name + ' in context';
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();          // the record's door is not the label's, nor the stage's unpin
+      showInContext(id);
+    });
+    lab.appendChild(b);
+  });
+  const rest = (t.entities || []).length - ids.length;
+  if (rest > 0) lab.appendChild(document.createTextNode(' +' + rest + ' more'));
+}
 // Does the story diagram draw on this map? ONE answer, read by the renderer, by renderOverview
 // (which hides the duplicate card grid when it does), and by the search / "show in context"
 // landings that pin a card in it. A walk is NOT required: the arrows derive from the use cases
@@ -7983,14 +8116,37 @@ function storyDiagramHtml() {
   // spelled out after a middle dot, which cost a line of reading to learn what the cards already
   // show, and had to be switched off on a walk-less map to stop the words being a lie. One word
   // each is true on every map, so the switch is gone with them.
-  return `<div class="story-wrap"><div class="story-stage" id="storystage">`
+  //
+  // THREE columns, and every arrow flows LEFT TO RIGHT: the people, what they do, the data it keeps.
+  // Actors moved to the left for that reading order alone — a stake label used to read backwards on
+  // every wire, because the sentence "the admin configures the gateway" was drawn right to left.
+  // The features column is the PILLAR (wider, raised, its own ground), so the eye still lands in the
+  // middle, which is what the empty-left-edge objection to actors-left was really about.
+  //
+  // The data column draws on EVERY map, authored owners or not: which records a feature's walks
+  // reach is a derived fact with anchors behind it. What the map has not decided is who the data is
+  // FOR, and nothing on this screen guesses at that.
+  const areas = FEATURES.areas || [];
+  return `<div class="story-wrap"><div class="story-stage${areas.length ? ' story-has-areas' : ''}" `
+    + 'id="storystage">'
     + '<svg class="story-wires" aria-hidden="true"><defs>'
-    + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
-    + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
-    + '<div class="story-col story-col-spine"><p class="story-colhead">Features</p>'
-    + (st.column || []).map((id) => storyFeatureCardHtml(id)).join('') + '</div>'
+    // TWO settings carry this head, and both were wrong:
+    // `markerUnits="userSpaceOnUse"` — a marker scales with the line's STROKE WIDTH by default, so
+    // the head grew and shifted every time a wire went from grey (1.4) to lit (2.2) to glowing
+    // (3.2). Fixed size means the head sits still while the line under it changes.
+    // `refX` at the TIP (8, the point of the triangle) — it was 7, so the tip overshot the line's
+    // end by a unit and the head hung off the box it points at.
+    + '<marker id="story-arr" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="9" markerHeight="9" '
+    + 'markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
+    + '<path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
     + '<div class="story-col story-col-cast"><p class="story-colhead">Actors</p>'
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
+    + '<div class="story-col story-col-spine"><p class="story-colhead">Features</p>'
+    + (st.column || []).map((id) => storyFeatureCardHtml(id)).join('') + '</div>'
+    + (areas.length
+       ? '<div class="story-col story-col-areas"><p class="story-colhead">Data</p>'
+         + areas.map(storyAreaCardHtml).join('') + '</div>'
+       : '')
     + '</div></div>';
 }
 function bindStoryDiagram(root) {
@@ -8011,29 +8167,56 @@ function bindStoryDiagram(root) {
   // The CARDS by id, mapped before any wire exists: wires and labels carry the same data
   // attributes (that is how hover finds them), so a bare attribute query would start matching the
   // previous edge's own path instead of the card.
-  const actorEl = {}, featEl = {};
+  const actorEl = {}, featEl = {}, areaEl = {};
   stage.querySelectorAll('.story-actor').forEach((el) => { actorEl[el.dataset.sactor] = el; });
   stage.querySelectorAll('.story-feature').forEach((el) => { featEl[el.dataset.sfeat] = el; });
+  stage.querySelectorAll('.story-area').forEach((el) => { areaEl[el.dataset.sarea] = el; });
   const paths = [], labels = [];
+  // Which wire does a label belong to? Set where BOTH are made, never inferred from array position:
+  // the two arrays are filled by different code paths (a label is appended by the caller, after its
+  // own handlers), so index-pairing would be one refactor away from lighting the wrong wire.
+  const pathOfLabel = new Map();
+  // ONE wire drawer for both hops of the page, so the actor→feature and feature→area arrows cannot
+  // drift apart in shape, in hover behaviour or in how their label is placed. `keys` are the data
+  // attributes the wire answers to — a wire lights when ANY of its ends is the hovered/pinned card.
+  const wire = (fromEl, toEl, keys, wireCls) => {
+    const [sx, sy] = side(fromEl, 'right');
+    const [tx, ty] = side(toEl, 'left');
+    // The curve leaves and arrives HORIZONTALLY, because that is the direction the arrow head is
+    // oriented in. With a fixed 60px handle, a wire whose two ends are far apart vertically had to
+    // swing from near-vertical to horizontal inside those 60px — a visible kink right where the
+    // head sits, which read as the head being detached from its line.
+    // Scaling the handle with the vertical drop lets the turn happen over the whole span instead:
+    // the line is already flat by the time it reaches the head. Floored at 60 so a level wire keeps
+    // the gentle S it had, and capped so a full-height wire does not bow out of its own gutter.
+    const dx = Math.max(60, Math.min(Math.abs(ty - sy) * 0.55, Math.abs(tx - sx) * 0.9));
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${sx} ${sy} C ${sx + dx} ${sy}, ${tx - dx} ${ty}, ${tx} ${ty}`);
+    path.setAttribute('marker-end', 'url(#story-arr)');
+    if (wireCls) path.setAttribute('class', wireCls);
+    Object.assign(path.dataset, keys);
+    svg.appendChild(path); paths.push(path);
+    const lab = document.createElement('div');
+    lab.className = 'story-elabel';
+    Object.assign(lab.dataset, keys);
+    // Every label on this page belongs to a FEATURE — an actor's stake in one, or the records one
+    // reaches — so it wears that feature's own colour, the same `featureTint` its card wears and
+    // its band on the journey board wears. A label used to be one indigo pill whatever it labelled,
+    // which made a lit card's several labels read as one voice instead of as that feature's.
+    if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);
+    lab.style.left = ((sx + tx) / 2) + 'px';
+    lab.style.top = ((sy + ty) / 2 - 8) + 'px';
+    pathOfLabel.set(lab, path);
+    return lab;
+  };
   for (const e of (st.edges || [])) {
     const a = actorEl[e.actor];
     const f = featEl[e.feature];
     if (!a || !f) continue;
-    // Every feature sits in the one left column now, so every wire leaves the cast's left edge
-    // and lands on the feature's right edge — the off column that once pulled wires rightward is
-    // gone with its demotion.
-    const [ax, ay] = side(a, 'left');
-    const [fx, fy] = side(f, 'right');
-    const dx = -60;
-    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    p.setAttribute('d', `M ${ax} ${ay} C ${ax + dx} ${ay}, ${fx - dx} ${fy}, ${fx} ${fy}`);
-    p.setAttribute('marker-end', 'url(#story-arr)');
-    p.dataset.sactor = e.actor; p.dataset.sfeat = e.feature;
-    svg.appendChild(p); paths.push(p);
-    const lab = document.createElement('div');
-    lab.className = 'story-elabel';
+    // The actors are the LEFT column now, so the wire leaves the actor's right edge and lands on
+    // the feature's left edge — which is what makes the stake label read in sentence order.
+    const lab = wire(a, f, { sactor: e.actor, sfeat: e.feature }, '');
     lab.textContent = e.label;
-    lab.dataset.sactor = e.actor; lab.dataset.sfeat = e.feature;
     const hp = e.step ? HP_BY_ID[e.step] : null;
     if (hp) {
       // The label is a door to the walk: the Happy Path view, arriving with this edge's FIRST step
@@ -8051,9 +8234,61 @@ function bindStoryDiagram(root) {
       // Not a door, but not empty background either: a click on it must not clear the pin.
       lab.addEventListener('click', (ev) => ev.stopPropagation());
     }
-    lab.style.left = ((ax + fx) / 2) + 'px';
-    lab.style.top = ((ay + fy) / 2 - 8) + 'px';
     stage.appendChild(lab); labels.push(lab);
+  }
+  // The REFERENCE arrows: a feature's walks reach these saved records. Derived and factual — it
+  // says what the code touches, never what the data is for. Their label names the records reached,
+  // so the arrow can be checked against the map instead of taken on trust.
+  for (const a of (FEATURES.areas || [])) {
+    const to = areaEl[a.id];
+    if (!to) continue;
+    // The ONE authored owner, when the map named exactly one: its wire says "this area exists for
+    // that feature", and it REPLACES the reference arrow for the same pair — one line per pair, or
+    // the reader is told the same feature both owns and merely visits the same data.
+    // A SHARED area (several owners) deliberately gets no ownership wire: the design draws sharing
+    // as the SHAPE of several inbound arrows, and the box names the owners in words. Nothing here
+    // ever promotes a lone reference arrow into ownership — an owner is authored or absent.
+    const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
+    const sole = owners.length === 1 ? owners[0] : null;
+    if (sole && featEl[sole]) {
+      const own = wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, 'story-own');
+      // The owning pair draws ONE wire, so its label carries what the reference arrow it replaced
+      // would have: the records the feature reaches, each a door. The `story-own` class stays on
+      // the path — it marks which wire is the authored ownership, for a later use — but it says
+      // nothing at rest: the wire looks like every other, grey until the reader picks a card.
+      const t = (a.touchedBy || []).find((x) => x.feature === sole);
+      if (t) {
+        fillAreaTouchLabel(own, t);
+        own.title = featureName(sole) + ' is the reason ' + (a.name || a.id) + ' exists — it '
+          + 'creates these records and runs their lifecycle';
+      } else {
+        // AN OWNER WITH NO EVIDENCE: the map says this area exists for that feature, and no walk of
+        // it reaches a single saved record here. There are no record names to list, so the label
+        // said nothing at all — an empty pill, which reads as a rendering fault rather than as the
+        // defect it is. `validate` reports it, and the screen must not be the one place it hides:
+        // this is exactly what the change's own retro-check calls a regression when it reaches the
+        // page unmarked. Quiet at rest like every other label, and plain when the reader looks.
+        own.classList.add('story-elabel-noev');
+        own.textContent = 'no journey reaches this';
+        own.title = featureName(sole) + ' is named as the owner of ' + (a.name || a.id)
+          + ', but no walk of it touches any saved record here — `coyodex validate` reports this as '
+          + 'an owner with no evidence';
+      }
+      own.addEventListener('click', (ev) => ev.stopPropagation());
+      stage.appendChild(own); labels.push(own);
+    }
+    for (const t of (a.touchedBy || [])) {
+      const from = featEl[t.feature];
+      if (!from || t.feature === sole) continue;
+      const lab = wire(from, to, { sfeat: t.feature, sarea: a.id }, 'story-ref');
+      fillAreaTouchLabel(lab, t);
+      lab.title = featureName(t.feature) + ' reaches ' + t.touches + ' time'
+        + (t.touches === 1 ? '' : 's');
+      // A click anywhere else on the pill is not a door, but it is not empty background either:
+      // it must not clear the pin the reader set.
+      lab.addEventListener('click', (ev) => ev.stopPropagation());
+      stage.appendChild(lab); labels.push(lab);
+    }
   }
   // Hover previews WHILE NOTHING IS PINNED; click PINS. A pin is the reader's explicit choice, so
   // a stray pass of the pointer over another card must not take the picture away from it — with a
@@ -8066,11 +8301,12 @@ function bindStoryDiagram(root) {
       const hit = p.dataset[key] === id;
       p.classList.toggle('story-hot', hit);
       p.classList.toggle('story-cold', !hit);
+      p.classList.remove('story-glow');   // a new picture starts with no wire singled out
     }
     for (const l of labels) l.classList.toggle('story-lab-on', l.dataset[key] === id);
   };
   const clearWires = () => {
-    for (const p of paths) p.classList.remove('story-hot', 'story-cold');
+    for (const p of paths) p.classList.remove('story-hot', 'story-cold', 'story-glow');
     for (const l of labels) l.classList.remove('story-lab-on');
   };
   const restore = () => { if (selected) show(selected.key, selected.id); else clearWires(); };
@@ -8106,9 +8342,21 @@ function bindStoryDiagram(root) {
   };
   wireCards(stage.querySelectorAll('.story-feature'), 'sfeat');
   wireCards(stage.querySelectorAll('.story-actor'), 'sactor');
+  wireCards(stage.querySelectorAll('.story-area'), 'sarea');
+  // A lit card lights ALL its wires at once, and its labels sit over a gutter several of them cross.
+  // Hovering one label glows the single wire it names, which is the only way to tell from the page
+  // which of a feature's five arrows a given label belongs to.
   for (const l of labels) {
-    l.addEventListener('mouseenter', () => clearTimeout(hideTimer));
-    l.addEventListener('mouseleave', scheduleHide);
+    l.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimer);
+      const p = pathOfLabel.get(l);
+      if (p) p.classList.add('story-glow');
+    });
+    l.addEventListener('mouseleave', () => {
+      const p = pathOfLabel.get(l);
+      if (p) p.classList.remove('story-glow');
+      scheduleHide();
+    });
   }
   // Empty background clears the pin — bound on the WRAP, not the stage: the stage is only as wide
   // as its columns, and since the third column left, the whitespace right of the cast sits outside
@@ -8124,14 +8372,16 @@ function bindStoryDiagram(root) {
   root.querySelectorAll('.story-namelink').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
     const cap = b.getAttribute('data-cap');
+    const sd = b.getAttribute('data-sd');
     if (cap) go({ kind: 'capability', cap });
+    else if (sd) go({ kind: 'domsub', sd });     // a data area's name opens that area
     else go({ kind: 'actor', act: b.getAttribute('data-actor') });
   }));
   // The one-shot arrival pin: a search hit or a "show in context" click on a feature or an actor
   // lands here with the card pinned and framed — the diagram half of what flashCard does for a
   // card list. Installed fresh on every render, so the in-place case never touches stale DOM.
   storyPinApply = (p) => {
-    const card = (p.key === 'sfeat' ? featEl : actorEl)[p.id];
+    const card = (p.key === 'sfeat' ? featEl : p.key === 'sarea' ? areaEl : actorEl)[p.id];
     if (!card) return;
     card.scrollIntoView({ block: 'center' });
     pin(p.key, p.id, card);

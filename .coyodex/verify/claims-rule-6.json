@@ -1,0 +1,228 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'A statement counts as held up only when more than half of its checks agree. An even split is filed as unsettled and credited to neither side.' is enforced at tools/coyodex/anchor_drift.py:90 — Applies the same majority before the code-link check will touch a statement at all.",
+   "anchor": "tools/coyodex/anchor_drift.py:90",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A statement counts as held up only when more than half of its checks agree. An even split is filed as unsettled and credited to neither side.' is enforced at tools/coyodex/grounding.py:281 — Lists a split apart from a checker's own cannot-settle answer, so a person adjudicates it.",
+   "anchor": "tools/coyodex/grounding.py:281",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pass that left statements unchecked is refused until the operator declares that stopping early was deliberate. The declaration must name what was checked first.' is enforced at tools/coyodex/grounding.py:181 — Refuses the record while any statement has no verdict, unless the pass is declared partial.",
+   "anchor": "tools/coyodex/grounding.py:181",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pass that left statements unchecked is refused until the operator declares that stopping early was deliberate. The declaration must name what was checked first.' is enforced at tools/coyodex/grounding.py:187 — Refuses the partial declaration when every statement did get a verdict, so a finished pass cannot understate itself.",
+   "anchor": "tools/coyodex/grounding.py:187",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A pass that left statements unchecked is refused until the operator declares that stopping early was deliberate. The declaration must name what was checked first.' is enforced at tools/coyodex/grounding.py:192 — Refuses a partial pass that carries no note saying which statements were checked first.",
+   "anchor": "tools/coyodex/grounding.py:192",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'How much of a map was checked is counted against the statement list as it stood before any fixes. Statements nobody voted on stay in that list.' is enforced at tools/coyodex/grounding.py:163 — Refuses a verdict for a statement missing from the pinned list, which proves the wrong snapshot was used.",
+   "anchor": "tools/coyodex/grounding.py:163",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'How much of a map was checked is counted against the statement list as it stood before any fixes. Statements nobody voted on stay in that list.' is enforced at tools/coyodex/grounding.py:203 — Keeps the whole pinned list as the total, so a short pass cannot shrink what it is measured against.",
+   "anchor": "tools/coyodex/grounding.py:203",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'How much of a map was checked is counted against the statement list as it stood before any fixes. Statements nobody voted on stay in that list.' is enforced at tools/coyodex/grounding.py:204 — Subtracts an unvoted statement from the number checked, never from the total.",
+   "anchor": "tools/coyodex/grounding.py:204",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'How much of a map was checked is counted against the statement list as it stood before any fixes. Statements nobody voted on stay in that list.' is enforced at tools/coyodex/grounding.py:225 — Counts separately how many statements the shipped map carries that a checker actually saw.",
+   "anchor": "tools/coyodex/grounding.py:225",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A statement the checkers disproved may not remain in the map word for word. A run that finds one fails.' is enforced at tools/coyodex/grounding.py:992 — Fails the run when any disproved statement still matches the shipped map.",
+   "anchor": "tools/coyodex/grounding.py:992",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A statement the checkers disproved may not remain in the map word for word. A run that finds one fails.' is enforced at tools/coyodex/grounding.py:298 — Names each disproved statement the map still carries word for word, which the counts alone cannot show.",
+   "anchor": "tools/coyodex/grounding.py:298",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Correcting the code link under a statement never counts against the statement itself. The check that finds a moved link reports it and never fails a run.' is enforced at tools/coyodex/anchor_drift.py:435 — Ends the code-link check as a report, so a moved link cannot block a map.",
+   "anchor": "tools/coyodex/anchor_drift.py:435",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Correcting the code link under a statement never counts against the statement itself. The check that finds a moved link reports it and never fails a run.' is enforced at tools/coyodex/anchor_drift.py:86 — Skips statements whose link deliberately points at a definition rather than the acting line, so a different line is not a move.",
+   "anchor": "tools/coyodex/anchor_drift.py:86",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Correcting the code link under a statement never counts against the statement itself. The check that finds a moved link reports it and never fails a run.' is enforced at tools/coyodex/anchor_drift.py:229 — Lets a person record for good that the stored link is the right one, so the finding stops repeating.",
+   "anchor": "tools/coyodex/anchor_drift.py:229",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What coyodex does next is decided by the working tree, never by what the project's history still holds.' is enforced at method/dispatch.md:75 — looks for an existing map only in the working tree, not in the project's history",
+   "anchor": "method/dispatch.md:75",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What coyodex does next is decided by the working tree, never by what the project's history still holds.' is enforced at method/dispatch.md:77 — refuses to restore a deleted map from history, so deleting it is how a person asks for a fresh build",
+   "anchor": "method/dispatch.md:77",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What coyodex does next is decided by the working tree, never by what the project's history still holds.' is enforced at method/dispatch.md:147 — stops and says the baseline is up to date when the code matches the pin, instead of writing an empty report",
+   "anchor": "method/dispatch.md:147",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What coyodex does next is decided by the working tree, never by what the project's history still holds.' is enforced at method/dispatch.md:150 — routes to change analysis when the code differs from the pin, uncommitted edits included",
+   "anchor": "method/dispatch.md:150",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Before any work starts, the person is told which files will be read and what the pin means.' is enforced at method/dispatch.md:22 — requires the briefing to be the first message, shown word for word",
+   "anchor": "method/dispatch.md:22",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Before any work starts, the person is told which files will be read and what the pin means.' is enforced at tools/coyodex/scope.py:172 — prints the briefing: how many files will be read and what the map's commit will claim",
+   "anchor": "tools/coyodex/scope.py:172",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Before any work starts, the person is told which files will be read and what the pin means.' is enforced at tools/coyodex/scope.py:135 — names every ignore pattern that removed nothing, so a narrowing of the file set cannot pass unseen",
+   "anchor": "tools/coyodex/scope.py:135",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A rebuild never opens the map it is replacing, so the new map cannot copy the old one.' is enforced at method/dispatch.md:119 — forbids opening any earlier map during a build, filed archives included",
+   "anchor": "method/dispatch.md:119",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A rebuild never opens the map it is replacing, so the new map cannot copy the old one.' is enforced at tools/coyodex/scope.py:116 — warns when a map sits inside the set of files to be read, so a hand-made copy is not analyzed as source",
+   "anchor": "tools/coyodex/scope.py:116",
+   "detail": "In: Command shell and build setup (C4)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map built on uncommitted code records a commit marked as not containing that code.' is enforced at method.md:2043 — requires the marked pin whenever the person chooses to go on without committing",
+   "anchor": "method.md:2043",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map built on uncommitted code records a commit marked as not containing that code.' is enforced at method/dispatch.md:49 — states, at the moment of the choice, that the marked pin means the code is in no commit",
+   "anchor": "method/dispatch.md:49",
+   "detail": "In: The build method (C75)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map built on uncommitted code records a commit marked as not containing that code.' is enforced at tools/coyodex/provenance.py:177 — computes the pin and marks it whenever the tree holds uncommitted code",
+   "anchor": "tools/coyodex/provenance.py:177",
+   "detail": "In: Assignment pass (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map built on uncommitted code records a commit marked as not containing that code.' is enforced at tools/coyodex/provenance.py:360 — writes that same pin into the map's header, so the header cannot claim a clean commit",
+   "anchor": "tools/coyodex/provenance.py:360",
+   "detail": "In: Assignment pass (C25)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Clearing the way for a rebuild files the old map away instead of deleting it.' is enforced at eval/tools/coyodex_eval/archive.py:107 — moves each part of the map into the archive folder rather than removing it",
+   "anchor": "eval/tools/coyodex_eval/archive.py:107",
+   "detail": "In: Map archive and build guard (C66)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Clearing the way for a rebuild files the old map away instead of deleting it.' is enforced at eval/tools/coyodex_eval/archive.py:113 — puts back everything already moved when a move fails, so no half-filed map is left behind",
+   "anchor": "eval/tools/coyodex_eval/archive.py:113",
+   "detail": "In: Map archive and build guard (C66)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A review of a build is refused while anything is still writing that build's map.' is enforced at eval/tools/coyodex_eval/retro_precheck.py:201 — refuses when any map file was written moments ago",
+   "anchor": "eval/tools/coyodex_eval/retro_precheck.py:201",
+   "detail": "In: Map archive and build guard (C66)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A review of a build is refused while anything is still writing that build's map.' is enforced at eval/tools/coyodex_eval/retro_precheck.py:235 — refuses when another session has been active moments ago",
+   "anchor": "eval/tools/coyodex_eval/retro_precheck.py:235",
+   "detail": "In: Map archive and build guard (C66)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A review of a build is refused while anything is still writing that build's map.' is enforced at eval/tools/coyodex_eval/retro_precheck.py:191 — refuses when the review would be reading the map its own session just wrote",
+   "anchor": "eval/tools/coyodex_eval/retro_precheck.py:191",
+   "detail": "In: Map archive and build guard (C66)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What a reader sees always matches the map. Each file is read from version control at the commit the map was pinned to, not from the working copy. A map edited while the server runs is picked up on the next page load.' is enforced at tools/coyodex/viewer/serve.py:701 — A code request defaults to the map's pinned commit; another version is asked for explicitly.",
+   "anchor": "tools/coyodex/viewer/serve.py:701",
+   "detail": "In: Map server (C43)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What a reader sees always matches the map. Each file is read from version control at the commit the map was pinned to, not from the working copy. A map edited while the server runs is picked up on the next page load.' is enforced at tools/coyodex/viewer/serve.py:435 — The file browser lists the files present at the map's pinned commit.",
+   "anchor": "tools/coyodex/viewer/serve.py:435",
+   "detail": "In: Map server (C43)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What a reader sees always matches the map. Each file is read from version control at the commit the map was pinned to, not from the working copy. A map edited while the server runs is picked up on the next page load.' is enforced at tools/coyodex/viewer/serve.py:592 — Every project request first checks whether the map changed on disk.",
+   "anchor": "tools/coyodex/viewer/serve.py:592",
+   "detail": "In: Map server (C43)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'What a reader sees always matches the map. Each file is read from version control at the commit the map was pinned to, not from the working copy. A map edited while the server runs is picked up on the next page load.' is enforced at tools/coyodex/viewer/serve.py:210 — A changed map drops the stored copies of the browser tree, the views and the code symbols.",
+   "anchor": "tools/coyodex/viewer/serve.py:210",
+   "detail": "In: Map server (C43)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The file browser never presents a shortened tree as the whole project. When the skip list hid files, the tree carries a note. The note says how many files went, which pattern removed each one, and which pattern removed nothing.' is enforced at tools/coyodex/viewer/filetree.py:261 — The note about what the skip list removed is attached to the top of the tree.",
+   "anchor": "tools/coyodex/viewer/filetree.py:261",
+   "detail": "In: File browser tree (C46)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

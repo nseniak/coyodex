@@ -294,6 +294,14 @@ STORE_MODES = ("collection", "embedded", "transient", "cache", "in-code", "enum"
 # `cache` and `collection` are NOT here: something writes a cache, and something writes a collection.
 STORE_MODES_UNOWNED = ("embedded", "in-code", "enum", "transient", "projection")
 
+# The modes that mean THIS CODEBASE SAVES A RECORD of the entity — a row of its own in a store, or a
+# record carried inside its parent's row. The one derived signal about ownership that measured
+# RELIABLE on all three live maps: it separates real records from plumbing and value shapes, so the
+# Features page's data areas are areas of SAVED DATA and not of every named type. It is the
+# eligibility filter for the `owners` question, never an answer to it — which feature a saved record
+# exists FOR is authored (see `Group.owners`).
+STORE_MODES_SAVED = ("collection", "embedded")
+
 
 # ── Entry-point KIND — the seeded-open naming axis (mirror of the dep PURPOSE bucket) ─────────────
 # Unlike `activation` (CLOSED: who starts it), `kind` names WHAT the entry point is, and stays

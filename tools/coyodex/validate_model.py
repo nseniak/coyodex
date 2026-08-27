@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from coyodex import balance_lib, prose, records, grammar
+from coyodex import anchors, balance_lib, prose, records, grammar
 from coyodex.audit_model import l2_worklist_model
 from coyodex.reporting import clip as _clip, reset_full_lists, set_full_lists, shown as _shown
 from coyodex.anchors import (
@@ -62,8 +62,11 @@ from coyodex.model import (
     expanded_flow_steps,
     expanded_steps_with_container,
     group_forests,
+    is_saved,
     load_model,
+    subdomain_owners,
 )
+from coyodex.areas import build_areas, sorted_ids
 from coyodex.validate_analysis import (
     _ALTITUDE_MIN,
     _COVERAGE_SAMPLE,
@@ -261,6 +264,8 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
             refs.add(cap.parent)
         # cap.story.feature is NOT gathered here: `_check_story_anchors` owns it entirely (it must
         # be a CAPABILITY, and a bare existence scan would bless a defined-but-wrong-kind id).
+    # `subdomains[].owners` / `entities[].owners` are NOT gathered here either, for the same reason:
+    # `_check_owners` owns them, and an owner must be a CAPABILITY, not merely a defined id.
     for blk in m.blocks:
         if blk.parent:
             refs.add(blk.parent)
@@ -3021,6 +3026,196 @@ def _stake_coverage_warnings(m: ProjectModel) -> list[str]:
     return warnings
 
 
+#: A shared area whose top listed owner holds AT LEAST this share of the touches its listed owners
+#: make reads as one owner with a helper, not as sharing. Measured against the three maps the design
+#: was built on: mcpolis's genuinely shared "Organizations and plans" tops out at 12 of 31 touches
+#: (39%), so the band leaves real sharing alone and only speaks when the list is nearly a formality.
+_OWNER_DOMINANCE = 0.90
+
+#: The extras heading every owner advisory offers as its escape. ONE constant: six messages name it,
+#: and a heading spelled differently in one of them is an escape that silences nothing. Named the way
+#: `AUDIT_EXCEPTIONS_HEADING` and `DRIFT_EXCEPTIONS_HEADING` are, so the method contract's scan for
+#: "which headings do the tools actually read" finds it without a literal at the call site.
+DATA_OWNER_EXCEPTIONS_HEADING = "Data owner exceptions"
+
+
+def _check_owners(m: ProjectModel) -> list[str]:
+    """`owners` — which feature a data area exists FOR — is a SUB-DOMAIN field, with an ENTITY-level
+    override for the one record whose owning feature differs from its area's.
+
+    Policed like its siblings `story`, `stakes` and `tech`: one `Group` dataclass backs four
+    forests, so nothing structural stops a subsystem or a capability from carrying one.
+
+    This check owns the ids entirely (they are NOT in `_referenced_ids`): an owner must be a
+    CAPABILITY, and a bare existence scan would bless `S3` or `E7` and then render an ownership wire
+    to nothing.
+
+    BLOCKING: owners on the wrong forest; an id that names no capability; the same feature listed
+    twice (the list says who shares the area, and a name cannot share with itself); and an EMPTY
+    list. Empty is a shape error rather than "nobody owns it" on purpose — `[]` and an absent field
+    would otherwise be the same map, and the advisory that asks for a decision could not tell a
+    considered "shared by nobody" from a field never written. Not deciding is spelled by leaving the
+    field out; the MISSING advisory then asks."""
+    problems = [f"{g.id} carries `owners` — owners is a sub-domain field (it says which FEATURE a "
+                f"data area exists for); drop it from this {kind}"
+                for arr, kind in ((m.subsystems, "subsystem"), (m.capabilities, "capability"),
+                                  (m.blocks, "block"))
+                for g in arr if g.owners is not None]
+    cap_ids = {c.id for c in m.capabilities}
+    carriers: list[tuple[str, str, list[str] | None]] = (
+        [(g.id, "sub-domain", g.owners) for g in m.subdomains]
+        + [(e.id, "entity", e.owners) for e in m.entities])
+    # An override on a type this codebase saves NO record of (a request shape, an enum, a read
+    # projection) answers a question that was never asked: its area's question is about saved
+    # records, and `entity_owners` would hand the answer to the "Owned by" line of a card that has
+    # no lifecycle to own. Blocking, not advisory — the field is simply in the wrong place.
+    problems += [f"{e.id} ({e.name}) carries `owners`, but this codebase saves no record of it "
+                 f"(store mode '{(e.store.mode if e.store else '') or 'unstated'}') — an override "
+                 "names the owning feature of a SAVED record; drop it, or state a store mode that "
+                 f"says the record is kept ({', '.join(grammar.STORE_MODES_SAVED)})"
+                 for e in m.entities if e.owners is not None and not is_saved(e)]
+    for eid, what, owners in carriers:
+        if owners is None:
+            continue
+        if not owners:
+            problems.append(f"{eid} has an empty `owners` list — name the feature(s) this "
+                            f"{what}'s data exists for, or leave the field out to say the "
+                            "decision has not been made")
+        seen: set[str] = set()
+        for o in owners:
+            if o not in cap_ids:
+                problems.append(f"{eid} lists owner '{o}', which is not a defined capability — an "
+                                "owner is the FEATURE the data exists for")
+            elif o in seen:
+                problems.append(f"{eid} lists owner '{o}' twice — the list says which features "
+                                "SHARE the data, so each one appears once")
+            seen.add(o)
+    return problems
+
+
+def _owner_warnings(m: ProjectModel) -> list[str]:
+    """ADVISORY: cross-examine the AUTHORED `owners` against the DERIVED touches (`build_areas`).
+
+    The authored answer and the derived evidence are deliberately different questions — what data is
+    FOR versus what code reaches it — so they are allowed to disagree, and the ONE disagreement that
+    is never reported is the interesting one: an owner that is not the first feature to touch the
+    area. That is the field's whole reason to exist (a snapshot is first written by page tracking
+    and exists so change detection can compare it), and flagging it would be the derivation this
+    design was measured out of.
+
+    What IS reported:
+      NO EVIDENCE — a listed owner whose walks touch NO saved record of the area. Either the owner
+                   is wrong, or the area's records are reached by a walk the map has not written.
+                   Deliberately NOT called "ungrounded": that word already means "has no code link"
+                   everywhere else in this product, and one word for two defects is how a reader
+                   stops believing either.
+      SPLIT      — a shared area whose records partition cleanly by its listed owners (each record
+                   reached by only one of them): two areas glued together.
+      DOMINANCE  — a shared area where one listed owner holds nearly all the touches.
+      MISSING    — an area holding saved records that nobody has decided for.
+      REDUNDANT  — an entity `owners` equal to what it would have inherited.
+
+    Escape, for all of them: '{id}: <why>' under an 'Ownership exceptions' extras heading."""
+    areas = build_areas(m)
+    if not areas:
+        return []
+    recorded = records.recorded_keys(m, DATA_OWNER_EXCEPTIONS_HEADING)
+    names = {c.id: c.name for c in m.capabilities}
+    authored = {g.id: g.owners for g in m.subdomains}
+    warnings: list[str] = []
+
+    for a in areas:
+        if a.id in recorded:
+            continue
+        touched = {t.feature: t for t in a.touched_by}
+        if not a.owners:
+            # A field that WAS written but resolved to nothing (a dangling id, or `[]`) already has
+            # a blocking error naming it. Telling the same map it decided nothing would be a second,
+            # contradicting instruction — and the one an agent acts on is usually the advisory, so
+            # it would add an owner instead of fixing the typo.
+            if authored.get(a.id) is None:
+                warnings.append(
+                    f"{a.id} ({a.name}) holds {len(a.entities)} saved record(s) and has no "
+                    "`owners` — decide which feature the data exists for (the one that creates its "
+                    "records and runs their lifecycle), list several if the sharing is real, or "
+                    f"record '{a.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+            continue
+        blind = [o for o in a.owners if o not in touched]
+        if blind:
+            warnings.append(
+                f"{a.id} ({a.name}) has an owner with no evidence — no walk of "
+                f"{', '.join(f'{o} ({names.get(o, o)})' for o in blind)} touches any saved record "
+                "of this area. Either the owner is wrong, or the walk that reaches this data is "
+                f"not written; fix one of the two, or record '{a.id}: <why>' under a "
+                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+        if len(a.owners) < 2:
+            continue
+        reach = {o: set(touched[o].entities) for o in a.owners if o in touched}
+        # SPLIT: every REACHED record claimed by exactly one listed owner, and every listed owner
+        # holding at least one. Measured against `a.entities` — every saved record of the area — it
+        # could never fire on a real map: 19 of the 27 areas across the three reference maps hold at
+        # least one saved record no walk reaches, and one such record makes the count 0 and the test
+        # False forever. A record NOBODY reaches says nothing about whether the area is two areas.
+        # A record SEVERAL listed owners reach does, and it still keeps a genuinely shared core
+        # quiet (an organization row 7 features write is not a partition).
+        claimed = sorted(set().union(*reach.values())) if reach else []
+        if (len(reach) == len(a.owners) and all(reach.values()) and claimed
+                and all(sum(e in got for got in reach.values()) == 1 for e in claimed)):
+            warnings.append(
+                f"{a.id} ({a.name}) is listed as shared, but its saved records partition cleanly — "
+                + "; ".join(f"{names.get(o, o)} reaches only {', '.join(sorted_ids(reach[o]))}"
+                            for o in a.owners if o in reach)
+                + f" — two areas glued together; split {a.id}, or record '{a.id}: <why>' under a "
+                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+        # DOMINANCE asks which of several REAL owners does the work, so it has nothing to say while
+        # one of them is ungrounded: the ratio is then trivially 1.0 ("2 of the 2 touches"), and it
+        # would advise dropping an owner when the defect the line above already named is a wrong id.
+        if blind:
+            continue
+        total = sum(touched[o].touches for o in a.owners if o in touched)
+        top = max((touched[o].touches for o in a.owners if o in touched), default=0)
+        if total and top / total >= _OWNER_DOMINANCE:
+            lead = next(o for o in a.owners if o in touched and touched[o].touches == top)
+            warnings.append(
+                f"{a.id} ({a.name}) is listed as shared, but {names.get(lead, lead)} holds "
+                f"{top} of the {total} touches its listed owners make — consider a single owner, "
+                f"or record '{a.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+
+    # The ENTITY override is cross-examined the same way its area is. It is the map's deliberate
+    # EXCEPTION — the shape most likely to be wrong — and it was checked for nothing but redundancy:
+    # an override naming a feature whose walks never reach that record rendered an "Owned by" line
+    # with no evidence at all behind it, and the map said nothing.
+    reached_by: dict[str, set[str]] = {}
+    for a in areas:
+        for t in a.touched_by:
+            for eid in t.entities:
+                reached_by.setdefault(eid, set()).add(t.feature)
+    inherited = subdomain_owners(m)
+    ent_names = {e.id: e.name for e in m.entities}
+    for e in m.entities:
+        if not e.owners or e.id in recorded:
+            continue
+        # SORTED, both sides: the same two features written in the other order are the same answer,
+        # and an override that escaped the check by reordering its list is exactly the redundancy
+        # the check exists to catch.
+        if sorted(e.owners) == sorted(inherited.get(e.subdomain or "", [])):
+            warnings.append(
+                f"{e.id} ({e.name}) overrides `owners` with the same answer its area already gives "
+                f"({', '.join(e.owners)}) — an override is for the record whose owning feature "
+                f"DIFFERS from its area's; drop it, or record '{e.id}: <why>' under a "
+                f"'{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+            continue
+        blind = [o for o in e.owners if o not in reached_by.get(e.id, ())]
+        if blind:
+            warnings.append(
+                f"{e.id} ({ent_names.get(e.id, e.id)}) is overridden to an owner with no evidence "
+                f"— no walk of {', '.join(f'{o} ({names.get(o, o)})' for o in blind)} touches this "
+                "record. An override is the one place the map contradicts its own area, so it is "
+                "the one that most needs evidence; fix the owner or write the walk, or record "
+                f"'{e.id}: <why>' under a '{DATA_OWNER_EXCEPTIONS_HEADING}' extras heading")
+    return warnings
+
+
 def _check_role_audience(m: ProjectModel) -> list[str]:
     """`audience` (user | internal) on every role — the map's ONE authored answer to "who is this for".
 
@@ -4059,6 +4254,14 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         href = _first_link_of(s, [s.source]) or (s.source or None)
         if href and not url.match(href):
             out.append((f"security '{s.surface}'", href))
+    # A role INCLUSION's grant line. An inclusion is an access claim — the viewer draws it as "may
+    # do everything the other may do" — so its anchor faces the same existence gate as every other
+    # one. Until it did, an invented grant line (`.../NOPE_does_not_exist.py:999`) passed all-green,
+    # which is the "a gate will catch a guess, so guessing looks safe" shape this check exists for.
+    for r in m.roles:
+        for i, rel in enumerate(r.relations or []):
+            if rel.source and not url.match(rel.source):
+                out.append((f"{r.id} relations[{i}]", rel.source))
     for d in m.deployment:
         # a variant's grounding anchor rides the SAME existence path as security anchors (T6): a CITED
         # `source` that doesn't resolve is a hard block under `--check-sources`. An empty source is the
@@ -4066,6 +4269,31 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         for v in d.variants:
             if v.source and not url.match(v.source):
                 out.append((f"deployment '{d.unit}' variant '{v.env}'", v.source))
+    return out
+
+
+def check_role_relation_shape(m: ProjectModel) -> list[str]:
+    """BLOCKING: a role inclusion's `source` must be a `path:line`, and only `includes` may carry one.
+
+    Nothing shape-checked it, so `source: "because the admin flag says so"` validated at exit 0 and
+    the minted claim then read "granted at because the admin flag says so" — telling a skeptic the
+    grant IS anchored and handing it nothing to open. That is strictly worse than leaving it null,
+    which at least says out loud that nobody anchored it."""
+    out: list[str] = []
+    for r in m.roles:
+        for i, rel in enumerate(r.relations or []):
+            src = (rel.source or "").strip()
+            if not src:
+                continue
+            if (rel.kind or "").strip().lower() != "includes":
+                out.append(f"{r.id} relations[{i}]: `source` is for `includes` — the line that GRANTS "
+                           f"the inclusion. A `becomes` is a hat change at a use case (`at`), so a "
+                           f"grant line says nothing about it; drop the field.")
+            elif not anchors.FILEREF.fullmatch(src):
+                out.append(f"{r.id} relations[{i}]: `source` is '{src}', which is not a `path:line`. "
+                           f"A claim reading 'granted at {src}' tells a skeptic the grant is anchored "
+                           f"and gives it nothing to open — leave it null instead, which says plainly "
+                           f"that nobody anchored it.")
     return out
 
 
@@ -4422,8 +4650,11 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_story_anchors(m))
     problems.extend(_check_capability_stakes(m))
     warnings.extend(_stake_coverage_warnings(m))
+    problems.extend(_check_owners(m))
+    warnings.extend(_owner_warnings(m))
     problems.extend(_check_role_audience(m))
     problems.extend(_check_role_relations(m))
+    problems.extend(check_role_relation_shape(m))
     warnings.extend(_check_capability_audience(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))

@@ -284,6 +284,13 @@
           ],
           "pattern": "^UC\\d+$",
           "description": "becomes only: the use case where the hat changes \u2014 must be a defined use-case id."
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "`includes` only: the `path:line` that GRANTS the inclusion \u2014 the check that lets this role do what the other may do. An `includes` is an access claim and the viewer draws it as one, so it carries evidence like every other access claim. Null is allowed and says nobody has anchored it; `audit` then challenges it as an unanchored access claim rather than passing it in silence."
         }
       },
       "required": [
@@ -366,6 +373,16 @@
         "story": {
           "$ref": "#/$defs/StoryAnchor",
           "description": "CAPABILITY-ONLY, and only worth authoring on a feature the walk never reaches: where that feature sits in the ONE story column the viewer draws. The walk reads unbroken and the off-walk features form a block after it, so `after` ORDERS that block (the block is already after every walk feature) while `before` is the one placement that keeps a feature among the walk \u2014 author it on a lead-in like a marketing page, which belongs BEFORE the first step. Absent = the viewer guesses from the feature's actors' last walk step, which orders the block sensibly for trailing features (ops, a chat variant of work already walked) and never rescues a lead-in. `validate` blocks it on the other forests."
+        },
+        "owners": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "pattern": "^CAP\\d+$"
+          },
+          "description": "SUB-DOMAIN-ONLY: which FEATURE this data area exists for \u2014 the one that creates its records and runs their lifecycle. AUTHORED, never derived: every derivation was measured on three live maps and each guessed from what the code TOUCHES, which is not what the data is FOR (snapshots are first written by page tracking, but they exist so change detection can compare them). One id = that feature owns the area; several = deliberately shared among exactly those; field ABSENT = the decision has not been made, and an advisory asks for it. `[]` is a shape error, not an answer. NEVER author one to complete a diagram: an owner the area's records are never reached by is reported as an owner with no evidence. `validate` blocks it on a subsystem, a capability or a block, and cross-examines the list against the derived touches."
         },
         "source": {
           "type": [
@@ -857,6 +874,16 @@
         },
         "states": {
           "$ref": "#/$defs/StateMachine"
+        },
+        "owners": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "pattern": "^CAP\\d+$"
+          },
+          "description": "OVERRIDE of the sub-domain's `owners`, for the one record whose owning feature differs from its area's \u2014 an audit entry sits in the Audit trail area but is written by the gateway. Author it ONLY where it differs from what would be inherited; an override equal to the inherited answer is reported as redundant. Absent = inherit, walking up `subdomain` then `parent`. Same vocabulary and same rules as `subdomains[].owners`."
         }
       },
       "required": [

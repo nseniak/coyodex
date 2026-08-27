@@ -641,11 +641,102 @@ def test_features_owns_the_actor_page_and_the_actors_view_is_gone() -> None:
     assert "renderRoleGrid" not in js
 
 
+def test_the_actor_heads_their_own_board_above_both_lanes() -> None:
+    """The board opens with the actor themself — icon then name on one line, over the gutter and
+    above BOTH lane names.
+
+    The figure was first drawn ON the rail, centred on the line, which is where the eye wants it.
+    That placement said the wrong thing: it sat inside the happy-path band, so the band under it read
+    as somebody else's use cases. The page is everything ONE actor does, on the path and off it, so
+    the head titles the whole board and the two lanes hang under it.
+
+    Icon THEN name, on one line, is the hand every other title on this page is written in — a feature
+    box's name, a cast card's name. The first draft stacked the name under a 30px figure, a shape
+    nothing else on the page had, and a shape that only fits a figure. One line makes the head a
+    SLOT: a feature's sparkle and a feature's name drop in with nothing redrawn.
+
+    The head is deliberately NOT a fourth cell of the rail grid. A cell in row 1 would grow that row
+    for every feature too, and each tinted box would open with 26px of empty colour above its name —
+    measured. Outside the grid the boxes are untouched, and the head is sticky like the gutter under
+    it, so it stays put while the board scrolls sideways.
+
+    The drawing is the cast card's — `storyGlyphSvg`, person or service in the actor tints — because
+    one figure means "who" wherever a who is drawn.
+
+    With the figure gone from the rail, the upper lane's name takes the rail's own height: 15.75px of
+    padding puts its 13.5px line box's middle at 22.5px, which is `top: 21px` plus half of
+    `height: 3px`. At the row's top it read as a heading over the band, which is what the lower
+    lane's name is — and only one of the two lanes has a line to caption."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    page = js[js.index("function renderActorPage(actorName) {"):
+              js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
+    # The head opens the board, OUTSIDE the rail grid, and is drawn whatever the lanes are — an actor
+    # whose every use case is off the happy path still owns their board.
+    assert '<div class="journey-board">${journeyActorHeadHtml(actorName)}<div class="journey-rail' in page
+    assert "hasPath ? `<div" not in page and "hasPath ? '<span" not in page, \
+        "the head is not conditional on there being a happy path"
+    assert "journey-actorhead" not in page.split("const gutter")[1].split("const rail")[0], \
+        "…and it is not one of the gutter's cells"
+    assert ".journey-actorhead { position: sticky; left: 0;" in css, \
+        "sticky like the gutter, so the head stays put when the board scrolls sideways"
+    # One LINE — icon then name — not a figure with a name under it.
+    head_css = css[css.index(".journey-actorhead { position: sticky"):
+                   css.index(".journey-actorname {")]
+    assert "display: flex; align-items: center; gap: 8px;" in head_css
+    assert "flex-direction: column" not in head_css, "icon then name, side by side"
+    assert "#diagram .journey-actorhead .story-glyph { width: 17px; height: 17px; }" in css, \
+        "icon at the size a title carries one, not a 30px portrait"
+    assert ".journey-actorname { font-size: 13.5px;" in css
+    # Row 1 is the feature-name row and nothing else, so the tinted boxes are untouched.
+    assert ".journey-gutter-top { grid-row: 1; }" in css
+    assert ".journey-zlabel { grid-row: 1; white-space: nowrap; padding-top: 8px;" in css
+    # The upper lane's name sits ON the rail, which is drawn at top 21 with height 3.
+    assert ".journey-track::before" in css and "top: 21px;" in css and "height: 3px;" in css
+    assert ".journey-gutter-on { grid-row: 2; padding-top: 15.75px; }" in css
+    # Same drawing as the cast card's, read off the same role record, and the name beside it.
+    head = js[js.index("function journeyActorHeadHtml(actorName) {"):
+              js.index("\nfunction ", js.index("function journeyActorHeadHtml(actorName) {") + 10)]
+    assert "ROLE_BY_NAME[(actorName || '').trim().toLowerCase()]" in head
+    assert "storyGlyphSvg(role && role.kind)" in head, "one hand for who, wherever a who is drawn"
+    assert '<span class="journey-actorname">${esc(actorName || \'\')}</span>' in head
+
+
+def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
+    """A station on the rail is a dot and a title. Its position in the whole walk was drawn over the
+    title as a number, and the number answered no question this page asks: the rail already runs left
+    to right, and which of the walk's twenty steps this one is changes nothing the reader does.
+
+    It was not free. A number centred on the dot starts further left the more digits it has, so the
+    title had to line up with the NUMBER rather than with the dot — an indent rule per digit count,
+    on the title AND on the off-path list under it, which took the indent of its box's first station.
+    All of that goes with the number. The title now starts at the dot's own left edge, the off-path
+    list starts at the box's own padding, and the two are one column because they are one number.
+
+    The station index is gone from the data too: `actorStations` returns the walk's steps, not steps
+    wrapped in a counter that nothing reads."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    zone = js[js.index("function journeyZoneHtml(z, opts) {"):
+              js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
+    assert 'class="journey-n"' not in js and ".journey-n {" not in css, "no number on the dot"
+    assert "journey-d1" not in js and "journey-d2" not in css, "and no per-digit indent rule"
+    assert "sideIndent" not in zone, "…nor the off-path list's copy of it"
+    assert '<span class="journey-dot"></span>' in zone
+    assert '<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span>' in zone
+    assert 'class="journey-station" ' in zone, "one class, no digit-count variant"
+    # The counter is gone from the data, not just from the markup.
+    stations = js[js.index("function actorStations(actorName) {"):
+                  js.index("\nfunction ", js.index("function actorStations(actorName) {") + 10)]
+    assert "out.push(st);" in stations and "n: i + 1" not in stations
+    assert "s.st." not in js, "a station IS a step now, not a wrapper around one"
+
+
 def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None:
     """An actor's page cuts every feature box into two lanes: the happy-path steps above a dashed
     line, everything else the actor drives below it. Six signals already separated them (dot vs
-    circle, the rail, the step numbers, ink vs grey, the dashed line, the legend) and readers still
-    read one stacked list, for two reasons this fixes.
+    circle, the rail, the step numbers — since removed — ink vs grey, the dashed line, the legend)
+    and readers still read one stacked list, for two reasons this fixes.
 
     The lanes were never NAMED where the reader looks — the words "happy path" appeared only in the
     legend under the board — and the one label that did exist, "also here:", was drawn per box and
@@ -706,8 +797,10 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     """Four things this page drew are gone, and each for its own reason.
 
     The hero opened with the actor's place in the story ("2nd to appear"). The rail below already
-    numbers this actor's steps by their position in the walk, so an actor whose first station is 1
-    was told the same fact twice in two vocabularies.
+    puts this actor's steps in the walk's order, left to right, so an actor whose first station
+    opens the walk was told the same fact twice in two vocabularies. (The rail said it in figures
+    too, until the step numbers came out; see
+    `test_a_station_is_a_dot_and_a_title_with_no_step_number`.)
 
     A greyed BEFORE-segment drew the steps of the role this actor used to be (a `becomes`
     predecessor). It was untrue, not merely noisy: it drew EVERY step that role drives, wherever
@@ -2397,7 +2490,7 @@ def test_a_feature_page_draws_the_walk_as_a_rail_not_a_grid() -> None:
     fj = js[js.index("function featureJourney(capId) {"):
             js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
     assert "HP_ACTORS_OF_STEP[st.id]" in fj, "the same drawn driver the actor rail files a step under"
-    assert "run.stations.push({ st, n });" in fj
+    assert "run.stations.push(st);" in fj, "a station IS the walk step, the shape the actor rail uses"
     # The off-walk use cases hang under the FIRST zone \u2014 they belong to the feature, not to a
     # position in it, so a second run must not repeat them.
     assert "zones[0].sides = sides" in js
@@ -2411,40 +2504,18 @@ def test_a_feature_page_draws_the_walk_as_a_rail_not_a_grid() -> None:
     assert "(body || elementCardGridHtml(ids, per))" in js
 
 
-def test_only_the_actor_rail_numbers_its_stations() -> None:
-    """The digit under a dot is that step's place in the WHOLE walk. On an actor's page it is the
-    point — their steps are scattered across a 25-step walk and the number is the only thing saying
-    how far apart two stations are. On a FEATURE's page it answers a question about the Happy Path,
-    which is another view and one click away through the station, so the rail drops it and reads as
-    the order it already is. With no number the title has nothing to line up with, so the digit-count
-    class is not written either and the dot alone carries the indent."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    zone = js[js.index("function journeyZoneHtml(z, opts) {"):
-              js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
-    assert "const nums = o.numbers !== false;" in zone, "numbered is the default; the rail opts out"
-    assert "nums ? ' journey-d' + String(s.n).length : ''" in zone
-    assert "(nums ? `<span class=\"journey-n\">${s.n}</span>` : '')" in zone
-    assert "const sideIndent = (nums && (z.stations || []).length)" in zone
-    rail = js[js.index("function featureRailHtml(capId) {"):
-              js.index("\nfunction ", js.index("function featureRailHtml(capId) {") + 10)]
-    assert "numbers: false," in rail
-    act = js[js.index("function renderActorPage(actorName) {"):
-             js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
-    assert "numbers" not in act, "the actor rail takes the numbered default"
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    assert '.journey-station:not([class*="journey-d"]) .journey-dot' in css
-
-
 def test_a_feature_rail_breaks_a_zone_on_a_new_driver_or_a_gap_in_the_walk() -> None:
     """Two boxes, not one, when the walk leaves and comes back. On this project's own map "Getting set
     up" is entered at step 1 and again at step 15, and "Reviewing a finished build" at 21 and 25 \u2014 one
     box holding both draws them as neighbours, and the rail is the one thing on the page that claims
-    an order. The actor rail breaks on the same two conditions with the keys swapped."""
+    an order. The walk POSITION is only ever compared, never carried onto a station: no station shows
+    a number, so the index is a fact about the loop and nothing else."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     fj = js[js.index("function featureJourney(capId) {"):
             js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
-    assert "run.act !== act || n !== prev + 1" in fj
-    assert "prev = n;" in fj
+    assert "run.act !== act || i !== prev + 1" in fj
+    assert "prev = i;" in fj
+    assert 'class="journey-n"' not in js, "no rail numbers its stations"
 
 
 def test_one_board_and_one_binder_serve_both_rails() -> None:
@@ -2640,7 +2711,13 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     # surfaces cannot disagree by construction. Every renderer that shows the pills goes through this
     # one helper: cardFacts, and the story diagram's actor card.
     code = "\n".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
-    assert "-owned" not in code, "the page's second form for a machine is back"
+    # The dead form is `staff-owned` — the word the rename removed, aimed exactly. A blanket ban on
+    # `-owned` stood here until an unrelated CSS class (`story-area-owned`, on a data area whose
+    # owning FEATURE is authored) tripped it: a guard that fires on any word containing "owned"
+    # stops being a statement about the actor vocabulary.
+    assert "staff-owned" not in code.lower(), "the page's second form for a machine is back"
+    assert "OWNED" not in "".join(l for l in code.splitlines() if "ecard-pill" in l), \
+        "no pill prints an -OWNED word"
     assert js.count("actorSidePills(") == 3, \
         "the helper itself, cardFacts, and the story actor card — nothing else"
     head = js[js.index("function actorPageHeroHtml(actorName) {"):
@@ -3394,9 +3471,9 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
     assert "story-offf" not in js, "the demoted card styling is gone, not shadowed"
 
 
-def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
+def test_a_walk_less_map_still_draws_the_diagram() -> None:
     """The arrows never needed the happy path — they derive from the use cases — so a map with no
-    walk still draws both columns (the derived column is map order there). The headers need no
+    walk still draws the columns (the derived column is map order there). The headers need no
     walk-aware branch: they name the columns, and a name is true on every map. The labels then
     explain instead of navigating."""
     js = (VIEWER_DIR / "viewer.js").read_text()
@@ -3405,14 +3482,215 @@ def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
     bind = _story_fn(js, "bindStoryDiagram")
     assert "'This map has no happy path'" in bind
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "grid-template-columns: 400px 150px 330px;" in css
     assert "story-stage-2col" not in css and "story-stage-2col" not in js
+
+
+def test_the_three_columns_read_left_to_right_with_the_features_in_the_middle() -> None:
+    """Actors | Features | Data areas, and the grid tracks must AGREE with the column order in the
+    markup: the two are written in different files, and a swap in one alone silently draws every
+    wire backwards. A map whose sub-domains hold no saved records keeps the three-track grid, so the
+    data column is added, never faked."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = _story_fn(js, "storyDiagramHtml")
+    assert html.index("story-col-cast") < html.index("story-col-spine") < html.index("story-col-areas")
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "grid-template-columns: 300px 130px 420px;" in css
+    assert ".story-stage.story-has-areas { grid-template-columns: 300px 130px 420px 130px 270px; }" in css
+    assert ".story-col-cast { grid-column: 1;" in css
+    assert ".story-col-spine { grid-column: 3;" in css
+    assert ".story-col-areas { grid-column: 5; justify-content: space-between; }" in css
+    # The pillar carries its own ground: the middle column has to stay the thing the eye lands on
+    # once there is a column on each side of it.
+    spine = css[css.index(".story-col-spine {"):]
+    assert "background:" in spine[:spine.index("}")]
+
+
+def test_every_wire_flows_left_to_right_through_one_drawer() -> None:
+    """Both hops (actor→feature, feature→area) are drawn by the same function, so their shape,
+    their hover keys and their label placement cannot drift apart. Every wire leaves a RIGHT edge
+    and lands on a LEFT edge — that is what makes a stake label read in sentence order, which it
+    did not when the actors sat on the right."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const wire = (fromEl, toEl, keys, wireCls) => {" in bind
+    assert "side(fromEl, 'right')" in bind and "side(toEl, 'left')" in bind
+    assert "wire(a, f, { sactor: e.actor, sfeat: e.feature }, '')" in bind
+    assert "{ sfeat: t.feature, sarea: a.id }" in bind
+    assert "'story-ref'" in bind
+    # The drawer places the label and never fills it: one hop's label is a stake sentence, the
+    # other's is a list of doors, and a shared `textContent` would make the second impossible.
+    assert "lab.textContent = text;" not in bind
+
+
+def test_a_record_named_on_a_reference_arrow_is_a_door() -> None:
+    """The arrow's label is the one place on this page that names a single saved record, so the name
+    opens it — shown in context, selected on the view that draws it. A name the reader cannot follow
+    is a claim they have to take on trust. The "+N more" tail stays plain text: no single record."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fill = _story_fn(js, "fillAreaTouchLabel")
+    assert "showInContext(id);" in fill
+    assert "ev.stopPropagation();" in fill, "the record's door is not the label's, nor the unpin"
+    assert "story-elabel-ent" in fill
+    # An id the graph does not hold draws its name as TEXT — a button opening nothing is worse
+    # than a word.
+    assert "if (!GRAPH.nodes[id]) { lab.appendChild(document.createTextNode(name)); return; }" in fill
+    assert "createTextNode(' +' + rest + ' more')" in fill
+    assert ".story-elabel-ent" in (VIEWER_DIR / "viewer.css").read_text()
+
+
+def test_the_story_block_scrolls_sideways_only_and_never_clips_the_pillar() -> None:
+    """Two faces of one bug, both seen on screen. `overflow-x: auto` makes the OTHER axis a scroll
+    box too (a `visible` sibling axis computes to `auto`), so the block grew its own VERTICAL
+    scrollbar beside the page's, and sliced the raised pillar's top edge and drop shadow off at its
+    edge. `overflow-y: hidden` gives one scrollbar, the horizontal one — and once the box clips,
+    the box has to hold everything: the wrap carries padding for the shadow, and the pillar may not
+    use a negative margin to sit above the stage."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    wrap = css[css.index(".story-wrap {"):]
+    wrap = wrap[:wrap.index("}")]
+    assert "overflow-x: auto" in wrap and "overflow-y: hidden" in wrap
+    assert "padding: 10px 0 22px" in wrap, "the raised panel's shadow needs room inside the clip"
+    spine = css[css.index(".story-col-spine {"):]
+    spine = spine[:spine.index("}")]
+    assert "margin:" not in spine, "a negative margin here is clipped away by the wrap"
+
+
+def test_the_data_column_never_invents_an_owner() -> None:
+    """The area box draws on every map, authored owners or not — which records a feature's walks
+    reach is a derived fact, and who the data is FOR is authored. The box may state the AUTHORED
+    answer (`a.owners`); it must never read one off `touchedBy`, which is the derivation this
+    design was measured out of. One inbound arrow is not ownership."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    card = _story_fn(js, "storyAreaCardHtml")
+    assert "a.owners" in card, "the authored answer is what the box may state"
+    assert "touchedBy" not in card, "an owner is never read off the arrows landing on the box"
+    assert "data-sarea=" in card
+    assert 'go({ kind: \'domsub\', sd });' in _story_fn(js, "bindStoryDiagram")
+
+
+def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -> None:
+    """The map's authored claim, and the one line that carries it. A SHARED area (several owners)
+    deliberately gets no wire — the design draws sharing as the shape of several inbound arrows and
+    names the owners on the box — and an area the map never decided gets nothing. The owning pair
+    also loses its reference arrow, or the reader is told one feature both owns and merely visits
+    the same data."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const sole = owners.length === 1 ? owners[0] : null;" in bind
+    assert "if (sole && featEl[sole])" in bind
+    assert "if (!from || t.feature === sole) continue;" in bind, \
+        "the owning pair draws ONE line, not two"
+    assert "'story-own'" in bind
+    # The class MARKS the wire; it must not STYLE it. At rest every wire in the gutter is the same
+    # grey, because the diagram at rest is for choosing — a line that shouts before the reader has
+    # picked anything spends the page's one loud voice on it.
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "path.story-own {" not in css, "an ownership wire takes no look of its own at rest"
+    assert ".story-elabel-own" not in css and ".story-elabel-own" not in js
+    assert "'owns'" not in bind, "the wire carries the records it reaches, not the word"
+    # An owner NO walk reaches has no record names to list, so its label used to render EMPTY — a
+    # pill that reads as a rendering fault rather than as the defect it is. The screen must not be
+    # the one place `validate`'s "owner with no evidence" hides; the change's own retro-check calls
+    # that a regression.
+    assert "'no journey reaches this'" in bind
+    assert "story-elabel-noev" in bind and ".story-elabel-noev" in css
+    # A SHARED area draws no ownership wire and says its owners in WORDS instead. No dashed border:
+    # dashed already means "a container, open it" on every diagram in this viewer.
+    assert ".story-shared {" in css, "a shared area says its owners in words"
+    assert "border-style: dashed" not in css[css.index(".story-area-owned"):
+                                             css.index(".story-shared")]
+    # Both lines SOLID: at rest the gutter speaks one visual language, and a reader should not have
+    # to learn a dash code before the diagram has told them anything. Scoped to the story wires —
+    # other diagrams on other screens use a dash for their own reasons.
+    wires = [l for l in css.splitlines() if l.startswith("svg.story-wires path")]
+    assert not [l for l in wires if "dasharray" in l], f"a story wire is dashed: {wires}"
+
+
+def test_the_arrow_head_sits_at_the_line_end_and_takes_the_line_s_colour() -> None:
+    """Two faults in one marker, both seen on screen.
+
+    A marker scales with its line's STROKE WIDTH by default, so the head grew and shifted every time
+    a wire went grey (1.4) → lit (2.2) → glowing (3.2), which is what made the join look broken.
+    `userSpaceOnUse` fixes its size, and `refX` at the TIP (8, the triangle's point, not 7) puts
+    that point exactly where the line ends instead of a unit past it.
+
+    And ONE marker is shared by every path, so a fixed `fill` left a selected indigo wire ending in
+    a grey point. `context-stroke` takes the colour of the line the head sits on — every state, one
+    marker."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = _story_fn(js, "storyDiagramHtml")
+    assert 'refX="8"' in html and 'markerUnits="userSpaceOnUse"' in html
+    assert 'refX="7"' not in html
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    marker = css[css.index("svg.story-wires marker path {"):]
+    marker = marker[:marker.index("}")]
+    assert "context-stroke" in marker, "the head takes the colour of the line it sits on"
+    assert "#c3c8d9" not in marker, "no fixed colour: a lit wire would end in a grey point"
+
+
+def test_hovering_a_label_glows_the_one_wire_it_names() -> None:
+    """A lit card lights ALL its wires, and its labels sit over a gutter several of them cross —
+    without this there is no way to tell from the page which of a feature's five arrows a given
+    label belongs to. The pairing is set where BOTH are made, never inferred from array position:
+    the label is appended by the caller, after the path, so index-pairing is one refactor away from
+    glowing the wrong wire."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const pathOfLabel = new Map();" in bind
+    assert "pathOfLabel.set(lab, path);" in bind
+    assert "p.classList.add('story-glow');" in bind
+    assert "p.classList.remove('story-glow');" in bind
+    # a new picture (a pin, or clearing) must never leave a stale wire singled out
+    assert "'story-hot', 'story-cold', 'story-glow'" in bind
+    assert "p.classList.remove('story-glow');   // a new picture starts with no wire singled out" in bind
+    assert "svg.story-wires path.story-glow {" in (VIEWER_DIR / "viewer.css").read_text()
+
+
+def test_a_wire_arrives_flat_however_far_it_has_to_climb() -> None:
+    """The curve leaves and arrives HORIZONTALLY, because that is the direction the arrow head is
+    oriented in. With a fixed handle, a wire whose ends are far apart vertically had to swing from
+    near-vertical to horizontal inside those few pixels — a kink right where the head sits, which
+    read as the head being detached from its line. The handle scales with the climb instead."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const dx = Math.max(60, Math.min(Math.abs(ty - sy) * 0.55, Math.abs(tx - sx) * 0.9));" in bind
+    assert "const dx = 60;" not in bind
+
+
+def test_a_feature_card_wears_the_same_colour_it_wears_on_the_journey_board() -> None:
+    """ONE hash, two screens. `featureTint` already tints each feature's band on an actor's journey;
+    the pillar card reuses it, so a reader carries the association across instead of meeting a
+    feature as a white box here and a coloured one there."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    card = _story_fn(js, "storyFeatureCardHtml")
+    assert "style=\"background:${featureTint(id)}\"" in card
+    assert js.count("const FEATURE_TINTS = [") == 1, "one palette, not a second copy"
+    # ...and every LABEL on the page wears the same colour as the feature it belongs to, both hops.
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);" in bind
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "background: #fff" not in css[css.index(".story-col-spine > .story-card"):
+                                         css.index(".story-col-spine > .story-card") + 200], \
+        "the pillar must not paint over a card's own colour"
+
+
+def test_a_record_page_says_who_owns_it_only_when_the_map_does() -> None:
+    """The field's day-one consumer, so an authored owner cannot sit in the map unread. It reads the
+    EFFECTIVE owner the server derived from the authored field (the record's own, else its area's) —
+    a record absent from that table is one nobody decided for, and the row is not drawn."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function ownedByHtml(id) {"):js.index("\nfunction persistedInHtml(id) {")]
+    assert "ENTITY_OWNERS[id]" in fn
+    assert "if (!own.length) return '';" in fn, "no decision, no row"
+    assert "featref" in fn, "each owner is a door to its feature"
+    assert "ENTITY_OWNERS = FEATURES.entityOwners || {};" in js
+    assert "${runByHtml(id)}${ownedByHtml(id)}${persistedInHtml(id)}" in js
 
 
 def test_a_card_name_is_the_door_that_does_not_steal_the_pin() -> None:
     """The card's own click PINS; its NAME is the one control leaving this screen — the feature's
-    details page, or the actor's — so the name must not fire the pin too. ONE handler serves both
-    columns, branching on which id the name carries."""
+    details page, the actor's, or the data area's — so the name must not fire the pin too. ONE
+    handler serves all three columns, branching on which id the name carries."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
     name = bind[bind.index(".story-namelink"):]
@@ -3514,7 +3792,7 @@ def test_the_wires_measure_cards_not_their_own_paths_and_ignore_transforms() -> 
     offsets read the settled layout regardless."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    assert "const actorEl = {}, featEl = {};" in bind
+    assert "const actorEl = {}, featEl = {}, areaEl = {};" in bind
     assert bind.index("actorEl[el.dataset.sactor] = el") < bind.index("for (const e of (st.edges || []))")
     code = "\n".join(l for l in bind.splitlines() if not l.lstrip().startswith("//"))
     assert "el.offsetLeft" in code and "getBoundingClientRect" not in code

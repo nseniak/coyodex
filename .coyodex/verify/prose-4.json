@@ -1,0 +1,167 @@
+{
+ "schema": "coyodex/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "BR182 risk",
+   "text": "Judging zoom against the accepted map would lock its own wrong zoom into every map that follows it."
+  },
+  {
+   "where": "BR183 statement",
+   "text": "Judging that did not happen never becomes a score, for the map or against it."
+  },
+  {
+   "where": "BR183 risk",
+   "text": "A failed reading counted as a disproof blames the map for a broken run. Counted as a pass, it hides that nothing was read."
+  },
+  {
+   "where": "BR184 statement",
+   "text": "A check that cannot run is reported as skipped, because silence would read as a check that passed."
+  },
+  {
+   "where": "BR184 risk",
+   "text": "A quietly disabled check leaves the reader believing a whole class of loss was looked for and not found."
+  },
+  {
+   "where": "BR185 statement",
+   "text": "The run refuses a verdict when the map changed after freezing, or when the accepted map is missing."
+  },
+  {
+   "where": "BR185 risk",
+   "text": "A run that compared nothing still reports success, so a later map is measured against a standard nobody ever set."
+  },
+  {
+   "where": "BR186 statement",
+   "text": "Judgements kept from an earlier run are thrown away when the judging method has changed since."
+  },
+  {
+   "where": "BR186 risk",
+   "text": "Scores from two different judging methods are not comparable as one number. A change in the method then reads as a change in map quality."
+  },
+  {
+   "where": "BR187 statement",
+   "text": "The checkers are scored on how many deliberately false claims they refuse to confirm."
+  },
+  {
+   "where": "BR187 risk",
+   "text": "Without a known answer, a low count of disproved claims cannot tell a good map from lazy checking."
+  },
+  {
+   "where": "BR20 statement",
+   "text": "A relationship, a step or a decision must name the code line that proves it, or the map is refused."
+  },
+  {
+   "where": "BR20 risk",
+   "text": "An unwitnessed claim cannot be checked. A wrong map then reads exactly like a right one."
+  },
+  {
+   "where": "BR21 statement",
+   "text": "A claim may declare that no single line enforces it. Declaring no line and naming a line at once is refused."
+  },
+  {
+   "where": "BR21 risk",
+   "text": "A blank left by accident and an absence chosen on purpose look identical. Nobody can then tell which claims were really read."
+  },
+  {
+   "where": "BR22 statement",
+   "text": "A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts."
+  },
+  {
+   "where": "BR22 risk",
+   "text": "A link nobody can open proves nothing. A link resting on a line that never runs proves nothing either, and it still looks grounded."
+  },
+  {
+   "where": "BR23 statement",
+   "text": "A relationship shows one example line where it happens. A step shows the exact line, which the reader can open. A change to that line hits the step it belongs to."
+  },
+  {
+   "where": "BR23 risk",
+   "text": "Reading a relationship's single line as the whole story hides every other place the same thing happens."
+  },
+  {
+   "where": "BR24 statement",
+   "text": "Two workers reporting the same relationship at the same line are folded into one claim. Two different lines are both kept, so a person decides which one is right."
+  },
+  {
+   "where": "BR24 risk",
+   "text": "Folding two different lines together would silently throw away the one that was right."
+  },
+  {
+   "where": "BR25 statement",
+   "text": "A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right."
+  },
+  {
+   "where": "BR25 risk",
+   "text": "Failing a whole map over a moved link would throw away true claims. Hiding the report instead would let wrong lines pile up unseen."
+  },
+  {
+   "where": "BR26 statement",
+   "text": "Where a unit runs, how it is reached, and where a signal is emitted stay plain words. No single code line is that place."
+  },
+  {
+   "where": "BR26 risk",
+   "text": "Forcing a link here would make the author invent one. An invented link is worse than plain words."
+  },
+  {
+   "where": "BR40 statement",
+   "text": "A finding stops the work only when whoever receives it can still fix it. A judgement call only advises."
+  },
+  {
+   "where": "BR41 statement",
+   "text": "A check that did not run never counts as a check that passed. The run names each check that was missing."
+  },
+  {
+   "where": "BR42 statement",
+   "text": "Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused."
+  },
+  {
+   "where": "BR43 statement",
+   "text": "A written reason answers only the findings it names. A line that would silence a whole family of findings silences none of them."
+  },
+  {
+   "where": "BR44 statement",
+   "text": "A run always says what each written reason did. The count of findings that reason silenced is shown, or the fact that it silenced none."
+  },
+  {
+   "where": "BR45 statement",
+   "text": "A map with open advice is never reported as clean. A run marks one piece of advice answered only where it can name the written line that answers it."
+  },
+  {
+   "where": "BR46 statement",
+   "text": "When two workers state the same thing differently, the merge stops and writes nothing. Neither version is quietly chosen over the other."
+  },
+  {
+   "where": "BR60 statement",
+   "text": "A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead."
+  },
+  {
+   "where": "BR60 risk",
+   "text": "A box that quietly holds a whole subsystem cannot be opened. The reader sees one name where a dozen units live."
+  },
+  {
+   "where": "BR61 statement",
+   "text": "The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number."
+  },
+  {
+   "where": "BR61 risk",
+   "text": "A project full of tiny pictures or settings files would be told to draw hundreds of boxes. Those boxes describe nothing about the product."
+  },
+  {
+   "where": "BR62 statement",
+   "text": "How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes."
+  },
+  {
+   "where": "BR62 risk",
+   "text": "A guessed number with the power to block would force every map to the size a formula picked. The right size is the one that explains the product."
+  },
+  {
+   "where": "BR63 statement",
+   "text": "One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them."
+  },
+  {
+   "where": "BR63 risk",
+   "text": "A screen nobody can take in at one look is not a map. The reader is back to the file listing it was meant to replace."
+  }
+ ]
+}

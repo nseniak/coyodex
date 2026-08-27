@@ -120,12 +120,30 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                        "cadence_source": "<bare path:line to the line DECLARING the schedule>" } ],  // "" on a set cadence = INFERRED (advisory)
 
 
-  "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence" } ],
+  "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence",
+                     "owners": ["CAPn", …] } ],
+                                                  // subdomain-only, optional; the feature(s) this
+                                                  // data area exists FOR — who creates its records
+                                                  // and runs their lifecycle. AUTHORED, never
+                                                  // derived (code says what a feature TOUCHES, not
+                                                  // what the data is for). One id = owned; several
+                                                  // = deliberately shared; ABSENT = not decided,
+                                                  // and an advisory asks. `[]` is a shape error.
+                                                  // Never author one to complete a diagram.
   "entities":    [ { "id": "En",  "name",
                      "store": { "dep": "Dn|null", "container": "<collection/table/bucket>",
                                 "mode": "<collection|embedded|transient|cache|in-code|enum|projection|''>",
                                 "notes": "<TTL, cache tiers, …>" } /* or null = not persisted/stated */,
                      "meaning", "subdomain": "SDn|null",
+                     "owners": ["CAPn", …],       // OVERRIDE of the subdomain's `owners`, for the one
+                                                  // SAVED record whose owning feature differs from
+                                                  // its area's. Assigned at synthesis via
+                                                  // `reconcile` (a `CAPn` does not exist when the
+                                                  // T5 fragment is written), exactly as
+                                                  // `use_cases[].capability` is.
+                                                  // record whose owning feature differs from its
+                                                  // area's; an override equal to the inherited
+                                                  // answer is reported as redundant
                      "source": "<path:line|null>",
                      "fields":    [ { "name", "type", "markers": ["PK", "FK→En", "[]", …] } ],
                      "relations": [ { "verb", "target": "En", "src_card", "dst_card",

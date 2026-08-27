@@ -1433,6 +1433,57 @@ def test_a_heredoc_body_is_not_read_as_shell():
     assert not P._invokes(cmd, "anchor-drift")
 
 
+def test_a_bash_c_body_is_read_as_shell_not_as_data():
+    """The sibling of the two strippers above, and the opposite call: a `python3 -c` body is DATA, a
+    `bash -c` body is SHELL. Telling them apart is the whole point — before this, a multi-line
+    `bash -c '…'` body was deleted by the quote stripper and the command became the two dead tokens
+    `bash -c`. One measured build wrapped 116 of its 123 Bash calls that way, so the scorecard could
+    read 6 % of what it was scoring, and `preindex --report used` printed 0/1 over a build that ran
+    it."""
+    wrapped = ("bash -c '/p/coyodex preindex --report --root /r --depth 3 --top 60 2>&1 | head -160'")
+    assert P._invokes(wrapped, "preindex")
+    assert P._segments(wrapped)[0].startswith("/p/coyodex preindex --report")
+    # every shape the corpus uses: a path on the interpreter, a double-quoted body, a multi-line body
+    assert P._invokes('/bin/bash -c "cd /r; $CX audit m.json"', "audit")
+    assert P._invokes("bash -c 'cd /r\nCX=/p/coyodex\n$CX finalize --repo . m.json'", "finalize")
+    assert P._invokes("sh -c 'coyodex validate m.json'", "validate")
+
+
+def test_unwrapping_bash_c_does_not_promote_data_to_shell():
+    """The negative half. Unwrapping must not reach INSIDE the body's own data: a heredoc or a
+    `python3 -c` string nested in a `bash -c` script is still data, and a mention is still a
+    mention."""
+    assert not P._invokes("bash -c \"python3 - <<'PY'\ncoyodex validate x\nPY\"", "validate")
+    assert not P._invokes("bash -c 'grep -n \"coyodex anchor-drift\" method.md'", "anchor-drift")
+    assert not P._invokes('python3 -c "\nimport json\n# coyodex validate output\nprint(1)\n"',
+                          "validate")
+    # `-c` on something that is not a shell is left alone
+    assert not P._invokes('python3 -c "coyodex assemble a.json"', "assemble")
+
+
+def test_a_read_only_verb_in_a_writer_group_is_not_counted_as_a_write():
+    """Assertion 27's denominator is "chances to hand-write the model", and `_MODEL_WRITERS` matches
+    whole subcommand GROUPS. Three of those groups hold read-only verbs, so a build that ran
+    `grounding lint` twice and `grounding report` once was credited with three writes it never made.
+    The score barely moved; the sentence the denominator states was false."""
+    assert P._writes_the_model("$CX grounding write --worklist w.json --verdicts v.json")
+    assert P._writes_the_model("$CX record --map m.json --heading H --line 'C1: why'")
+    assert P._writes_the_model("bash -c '$CX assemble f.json --out .coyodex'")
+    assert not P._writes_the_model("$CX grounding lint --verdicts v.json")
+    assert not P._writes_the_model("$CX grounding report --worklist w.json --verdicts v.json")
+    assert not P._writes_the_model("$CX fix drop-edge --help")
+    # `dedup-edge` is the one verb whose write depends on a flag rather than on its name
+    assert not P._writes_the_model("$CX fix dedup-edge --map m.json --repo .")
+    assert P._writes_the_model("$CX fix dedup-edge --map m.json --repo . --accept-suggested")
+
+
+def test_an_unbalanced_shell_c_quote_is_left_for_the_quote_scanner():
+    """An unterminated `bash -c '…` cannot be unwrapped without guessing where the script ends, so it
+    is handed on untouched rather than spliced at a made-up boundary."""
+    cmd = "bash -c 'coyodex validate m.json"
+    assert P._unwrap_shell_c(cmd) == cmd
+
+
 def test_an_unbalanced_quote_does_not_swallow_the_rest_of_the_command():
     """A lone quote closes nothing, so the scanner emits the tail rather than dropping it. Nothing in
     either real corpus has an unbalanced quote, so this guards a path the corpus cannot reach."""

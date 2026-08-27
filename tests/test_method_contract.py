@@ -83,11 +83,21 @@ COMMAND_MODULE: dict[str, str] = {
 
 #: The extras headings some tool actually READS (the escape tokens that silence an advisory).
 #: Derived below from the source, never hard-coded into an assertion.
+#: Every tool file that DECIDES an advisory and therefore may name an extras heading as its escape.
+#: ONE list, because three separate scans below used to hand-write their own file tuple: `finalize.py`
+#: was in none of them, and it shipped an advisory naming a heading whose key vocabulary could not
+#: carry its key AND that nothing read. Twenty records were written against it on one live build and
+#: every one was inert. A file added here joins all three checks at once.
+ADVISORY_TOOL_FILES: tuple[str, ...] = (
+    "validate_model.py", "balance_lib.py", "audit_model.py", "anchor_drift.py", "finalize.py",
+)
+
 MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "audit exceptions", "balance exceptions", "coverage exceptions",
     "accepted duplications", "entry-point coverage", "happy path coverage",
     "audience exceptions", "stake exceptions",
-    "persistence exceptions", "unclaimed surfaces", "drift exceptions",
+    "persistence exceptions", "data owner exceptions", "access baseline exceptions",
+    "unclaimed surfaces", "drift exceptions",
     "bucket vocabulary", "sweep debt",
 )
 
@@ -524,6 +534,14 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
         "contradictory row; drop one field",
     "{} → {}: the '{}' edge is declared {} times":
         "one edge, one primary call site; merge them",
+    # A role INCLUSION's grant line: both shapes are mechanical and BLOCKING, so there is no
+    # judgement to record. A `source` that is not a `path:line` makes the minted claim read "granted
+    # at <prose>", telling a skeptic the grant is anchored and handing it nothing to open — worse
+    # than the null it should be. A `source` on a `becomes` says nothing about a hat change.
+    "{} relations[{}]: `source` is for `includes`":
+        "a grant line says nothing about a hat change; drop the field",
+    "{} relations[{}]: `source` is '{}', which is not a `path:line`":
+        "leave it null instead — that states plainly that nobody anchored it, which is the fact",
     "{}: '{}' does not resolve to a":
         "a nonexistent path is never a judgement call",
     "{}: '{}' cites a line the file does not have":
@@ -804,12 +822,13 @@ def make_documented_headings() -> tuple[str, ...]:
 
 def test_every_extras_heading_the_method_prescribes_is_read_by_a_tool():
     """A heading a lead is told to write but nothing reads is prose that silences nothing — the
-    same class as an unreachable command, one level down. PASSES today: all seven documented
-    headings are read by `validate_model.py`."""
-    # Both files: `validate_model` reads five headings by literal, and reaches 'Balance
-    # exceptions' through `balance_lib`'s own constant.
+    same class as an unreachable command, one level down.
+
+    Scanned across EVERY advisory-owning tool (`ADVISORY_TOOL_FILES`), not just `validate_model`:
+    an advisory does not have to live there to name an escape, and `finalize`'s access-baseline one
+    named a heading nothing read for as long as this scan looked at two files."""
     src = "\n".join((TOOLS / f).read_text(encoding="utf-8")
-                    for f in ("validate_model.py", "balance_lib.py")).lower()
+                    for f in ADVISORY_TOOL_FILES).lower()
     unread = [h for h in make_documented_headings() if f'"{h}"' not in src]
     assert not unread, (
         "Extras headings the method tells a lead to write that NO tool reads: "
@@ -834,8 +853,7 @@ def test_the_machine_read_heading_list_matches_the_validator():
     families was permanently unanswerable; a file missing from this list is a family whose escape
     nothing here audits."""
     src = "\n".join((TOOLS / f).read_text(encoding="utf-8")
-                    for f in ("validate_model.py", "balance_lib.py", "audit_model.py",
-                              "anchor_drift.py"))
+                    for f in ADVISORY_TOOL_FILES)
     # Case-folded: `extras_bodies` matches headings case-insensitively, so a constant written in
     # title case ("Audit exceptions") and a call-site literal in lower case name the same heading.
     found = {h.lower() for h in

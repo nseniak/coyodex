@@ -1,0 +1,234 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "backbone",
+ "claims": [
+  {
+   "claim": "C2 calls C1",
+   "anchor": "tools/coyodex/assemble.py:155",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432)",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'calls' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C2 calls C13",
+   "anchor": "tools/coyodex/lint_fragment.py:125",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663)",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C2 calls C25",
+   "anchor": "tools/coyodex/assemble.py:928",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329)",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'calls' C25; ground the call site against the code."
+  },
+  {
+   "claim": "C2 calls C3",
+   "anchor": "tools/coyodex/assemble.py:440",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194)",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C2 calls C45",
+   "anchor": "tools/coyodex/assemble.py:964",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: C45 = Graph builder (tools/coyodex/views.py:1242); entry points: coyodex render <map file> <output text file> (tools/coyodex/viewer/render.py:53)",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'calls' C45; ground the call site against the code."
+  },
+  {
+   "claim": "C2 calls C43",
+   "anchor": "tools/coyodex/assemble.py:968",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: C43 = Map server (tools/coyodex/viewer/serve.py:800); entry points: The server checks whether its own code changed since it started, and warns once (tools/coyodex/viewer/serve.py:180); The server checks whether a map changed on disk, and drops what it cached (tools/coyodex/viewer/serve.py:210); GET / (tools/coyodex/viewer/serve.py:583); GET /static/<file> (tools/coyodex/viewer/serve.py:586); GET /api/recents (tools/coyodex/viewer/serve.py:614); GET /api/browse?path= (tools/coyodex/viewer/serve.py:621); +17 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'calls' C43; ground the call site against the code."
+  },
+  {
+   "claim": "C25 calls C2",
+   "anchor": "tools/coyodex/reconcile_build.py:302",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353)",
+   "why_risky": "backbone edge — no deterministic gate confirms C25's code 'calls' C2; ground the call site against the code."
+  },
+  {
+   "claim": "C25 calls C1",
+   "anchor": "tools/coyodex/reconcile_build.py:105",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432)",
+   "why_risky": "backbone edge — no deterministic gate confirms C25's code 'calls' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C25 calls C4",
+   "anchor": "tools/coyodex/reconcile_build.py:150",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167)",
+   "why_risky": "backbone edge — no deterministic gate confirms C25's code 'calls' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C3 calls C2",
+   "anchor": "tools/coyodex/dump.py:292",
+   "detail": "From: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194); To: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353)",
+   "why_risky": "backbone edge — no deterministic gate confirms C3's code 'calls' C2; ground the call site against the code."
+  },
+  {
+   "claim": "C3 calls C1",
+   "anchor": "tools/coyodex/dump.py:103",
+   "detail": "From: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194); To: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432)",
+   "why_risky": "backbone edge — no deterministic gate confirms C3's code 'calls' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C13 calls C1",
+   "anchor": "tools/coyodex/validate_model.py:4727",
+   "detail": "From: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663); To: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432)",
+   "why_risky": "backbone edge — no deterministic gate confirms C13's code 'calls' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C13 calls C3",
+   "anchor": "tools/coyodex/validate_model.py:3468",
+   "detail": "From: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663); To: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194)",
+   "why_risky": "backbone edge — no deterministic gate confirms C13's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C13 calls C15",
+   "anchor": "tools/coyodex/validate_model.py:4501",
+   "detail": "From: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663); To: C15 = Diagram balance report (tools/coyodex/balance.py:119); entry points: coyodex balance (tools/coyodex/balance.py:231)",
+   "why_risky": "backbone edge — no deterministic gate confirms C13's code 'calls' C15; ground the call site against the code."
+  },
+  {
+   "claim": "C14 calls C1",
+   "anchor": "tools/coyodex/audit_model.py:1361",
+   "detail": "From: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307); To: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432)",
+   "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C14 calls C3",
+   "anchor": "tools/coyodex/audit_model.py:782",
+   "detail": "From: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307); To: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194)",
+   "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C14 calls C13",
+   "anchor": "tools/coyodex/audit_model.py:962",
+   "detail": "From: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307); To: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663)",
+   "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C15 calls C1",
+   "anchor": "tools/coyodex/balance.py:271",
+   "detail": "From: C15 = Diagram balance report (tools/coyodex/balance.py:119); entry points: coyodex balance (tools/coyodex/balance.py:231); To: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432)",
+   "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C4 calls C14",
+   "anchor": "tools/coyodex/cli.py:132",
+   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307)",
+   "why_risky": "backbone edge — no deterministic gate confirms C4's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C4 calls C23",
+   "anchor": "tools/coyodex/cli.py:171",
+   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: C23 = Grounding record (tools/coyodex/grounding.py:201); entry points: Running `coyodex anchor-drift` lists every code link pointing at a line that cannot be doing the work. (tools/coyodex/anchor_drift.py:378); Running `coyodex grounding write` derives the four counts and writes them into a build fragment. (tools/coyodex/grounding.py:1003); Running `coyodex grounding by-element` shows, per map element, what a fresh reader proved against the label its author typed. (tools/coyodex/grounding.py:1049); Running `coyodex grounding report` lists which claims were disproved, tied, unsettled, or never voted on. (tools/coyodex/grounding.py:1073); Running `coyodex grounding lint` checks the verdict files for shape while the reader that wrote them is still reachable. (tools/coyodex/grounding.py:924); Running `coyodex grounding refutations` fails the build when the map still carries a claim a fresh reader disproved. (tools/coyodex/grounding.py:974)",
+   "why_risky": "backbone edge — no deterministic gate confirms C4's code 'calls' C23; ground the call site against the code."
+  },
+  {
+   "claim": "C4 calls C24",
+   "anchor": "tools/coyodex/cli.py:174",
+   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: C24 = Map repairs (tools/coyodex/fix.py:1724); entry points: Running `coyodex fix dedup-security` drops an access surface that two harvest fragments both recorded. (tools/coyodex/fix.py:1128); Running `coyodex fix row` rewrites one row's own text inside the fragment that authored the row. (tools/coyodex/fix.py:1416); Running `coyodex fix apply-drift` writes the corrected line into every code link a fresh reader found had moved. (tools/coyodex/fix.py:149); Running `coyodex fix drop-edge` removes a disproved relation and heals the happy-path steps that rode it. (tools/coyodex/fix.py:399); Running `coyodex fix dedup-relation` removes one chosen copy of a relation two data cards both declare. (tools/coyodex/fix.py:508); Running `coyodex fix dedup-edge` keeps one code link for a relation declared at several different lines. (tools/coyodex/fix.py:739); +1 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C4's code 'calls' C24; ground the call site against the code."
+  },
+  {
+   "claim": "C4 calls C16",
+   "anchor": "tools/coyodex/cli.py:168",
+   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: C16 = Pre-commit gate run (tools/coyodex/finalize.py:472); entry points: coyodex finalize (tools/coyodex/finalize.py:778)",
+   "why_risky": "backbone edge — no deterministic gate confirms C4's code 'calls' C16; ground the call site against the code."
+  },
+  {
+   "claim": "C4 calls C25",
+   "anchor": "tools/coyodex/cli.py:180",
+   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329)",
+   "why_risky": "backbone edge — no deterministic gate confirms C4's code 'calls' C25; ground the call site against the code."
+  },
+  {
+   "claim": "C23 calls C14",
+   "anchor": "tools/coyodex/grounding.py:1062",
+   "detail": "From: C23 = Grounding record (tools/coyodex/grounding.py:201); entry points: Running `coyodex anchor-drift` lists every code link pointing at a line that cannot be doing the work. (tools/coyodex/anchor_drift.py:378); Running `coyodex grounding write` derives the four counts and writes them into a build fragment. (tools/coyodex/grounding.py:1003); Running `coyodex grounding by-element` shows, per map element, what a fresh reader proved against the label its author typed. (tools/coyodex/grounding.py:1049); Running `coyodex grounding report` lists which claims were disproved, tied, unsettled, or never voted on. (tools/coyodex/grounding.py:1073); Running `coyodex grounding lint` checks the verdict files for shape while the reader that wrote them is still reachable. (tools/coyodex/grounding.py:924); Running `coyodex grounding refutations` fails the build when the map still carries a claim a fresh reader disproved. (tools/coyodex/grounding.py:974); To: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307)",
+   "why_risky": "backbone edge — no deterministic gate confirms C23's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C24 calls C23",
+   "anchor": "tools/coyodex/fix.py:192",
+   "detail": "From: C24 = Map repairs (tools/coyodex/fix.py:1724); entry points: Running `coyodex fix dedup-security` drops an access surface that two harvest fragments both recorded. (tools/coyodex/fix.py:1128); Running `coyodex fix row` rewrites one row's own text inside the fragment that authored the row. (tools/coyodex/fix.py:1416); Running `coyodex fix apply-drift` writes the corrected line into every code link a fresh reader found had moved. (tools/coyodex/fix.py:149); Running `coyodex fix drop-edge` removes a disproved relation and heals the happy-path steps that rode it. (tools/coyodex/fix.py:399); Running `coyodex fix dedup-relation` removes one chosen copy of a relation two data cards both declare. (tools/coyodex/fix.py:508); Running `coyodex fix dedup-edge` keeps one code link for a relation declared at several different lines. (tools/coyodex/fix.py:739); +1 more; To: C23 = Grounding record (tools/coyodex/grounding.py:201); entry points: Running `coyodex anchor-drift` lists every code link pointing at a line that cannot be doing the work. (tools/coyodex/anchor_drift.py:378); Running `coyodex grounding write` derives the four counts and writes them into a build fragment. (tools/coyodex/grounding.py:1003); Running `coyodex grounding by-element` shows, per map element, what a fresh reader proved against the label its author typed. (tools/coyodex/grounding.py:1049); Running `coyodex grounding report` lists which claims were disproved, tied, unsettled, or never voted on. (tools/coyodex/grounding.py:1073); Running `coyodex grounding lint` checks the verdict files for shape while the reader that wrote them is still reachable. (tools/coyodex/grounding.py:924); Running `coyodex grounding refutations` fails the build when the map still carries a claim a fresh reader disproved. (tools/coyodex/grounding.py:974)",
+   "why_risky": "backbone edge — no deterministic gate confirms C24's code 'calls' C23; ground the call site against the code."
+  },
+  {
+   "claim": "C25 calls C14",
+   "anchor": "tools/coyodex/reconcile.py:526",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307)",
+   "why_risky": "backbone edge — no deterministic gate confirms C25's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C16 calls C13",
+   "anchor": "tools/coyodex/finalize.py:108",
+   "detail": "From: C16 = Pre-commit gate run (tools/coyodex/finalize.py:472); entry points: coyodex finalize (tools/coyodex/finalize.py:778); To: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663)",
+   "why_risky": "backbone edge — no deterministic gate confirms C16's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C16 calls C14",
+   "anchor": "tools/coyodex/finalize.py:111",
+   "detail": "From: C16 = Pre-commit gate run (tools/coyodex/finalize.py:472); entry points: coyodex finalize (tools/coyodex/finalize.py:778); To: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307)",
+   "why_risky": "backbone edge — no deterministic gate confirms C16's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C16 calls C23",
+   "anchor": "tools/coyodex/finalize.py:114",
+   "detail": "From: C16 = Pre-commit gate run (tools/coyodex/finalize.py:472); entry points: coyodex finalize (tools/coyodex/finalize.py:778); To: C23 = Grounding record (tools/coyodex/grounding.py:201); entry points: Running `coyodex anchor-drift` lists every code link pointing at a line that cannot be doing the work. (tools/coyodex/anchor_drift.py:378); Running `coyodex grounding write` derives the four counts and writes them into a build fragment. (tools/coyodex/grounding.py:1003); Running `coyodex grounding by-element` shows, per map element, what a fresh reader proved against the label its author typed. (tools/coyodex/grounding.py:1049); Running `coyodex grounding report` lists which claims were disproved, tied, unsettled, or never voted on. (tools/coyodex/grounding.py:1073); Running `coyodex grounding lint` checks the verdict files for shape while the reader that wrote them is still reachable. (tools/coyodex/grounding.py:924); Running `coyodex grounding refutations` fails the build when the map still carries a claim a fresh reader disproved. (tools/coyodex/grounding.py:974)",
+   "why_risky": "backbone edge — no deterministic gate confirms C16's code 'calls' C23; ground the call site against the code."
+  },
+  {
+   "claim": "C43 calls C34",
+   "anchor": "tools/coyodex/viewer/serve.py:420",
+   "detail": "From: C43 = Map server (tools/coyodex/viewer/serve.py:800); entry points: The server checks whether its own code changed since it started, and warns once (tools/coyodex/viewer/serve.py:180); The server checks whether a map changed on disk, and drops what it cached (tools/coyodex/viewer/serve.py:210); GET / (tools/coyodex/viewer/serve.py:583); GET /static/<file> (tools/coyodex/viewer/serve.py:586); GET /api/recents (tools/coyodex/viewer/serve.py:614); GET /api/browse?path= (tools/coyodex/viewer/serve.py:621); +17 more; To: C34 = Change impact (tools/coyodex/impact_git.py:285)",
+   "why_risky": "backbone edge — no deterministic gate confirms C43's code 'calls' C34; ground the call site against the code."
+  },
+  {
+   "claim": "C24 calls C2",
+   "anchor": "tools/coyodex/fix.py:1399",
+   "detail": "From: C24 = Map repairs (tools/coyodex/fix.py:1724); entry points: Running `coyodex fix dedup-security` drops an access surface that two harvest fragments both recorded. (tools/coyodex/fix.py:1128); Running `coyodex fix row` rewrites one row's own text inside the fragment that authored the row. (tools/coyodex/fix.py:1416); Running `coyodex fix apply-drift` writes the corrected line into every code link a fresh reader found had moved. (tools/coyodex/fix.py:149); Running `coyodex fix drop-edge` removes a disproved relation and heals the happy-path steps that rode it. (tools/coyodex/fix.py:399); Running `coyodex fix dedup-relation` removes one chosen copy of a relation two data cards both declare. (tools/coyodex/fix.py:508); Running `coyodex fix dedup-edge` keeps one code link for a relation declared at several different lines. (tools/coyodex/fix.py:739); +1 more; To: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353)",
+   "why_risky": "backbone edge — no deterministic gate confirms C24's code 'calls' C2; ground the call site against the code."
+  },
+  {
+   "claim": "C75 prescribes C45",
+   "anchor": "method/dispatch.md:187",
+   "detail": "From: C75 = The build method (method.md:3); entry points: A person asks coyodex to analyze, when a map exists and the code has moved on since it was pinned. (method/dispatch.md:151); A person says the change report looks right, so coyodex folds the report into the map. (method/dispatch.md:154); A person asks in plain words to move, rename, split or drill deeper into a part of the map. (method/dispatch.md:156); A person explicitly asks to regenerate the whole map from scratch, and confirms the warning. (method/dispatch.md:171); A person types the coyodex command in a project that has no map yet, so a first map is built. (method/dispatch.md:83); To: C45 = Graph builder (tools/coyodex/views.py:1242); entry points: coyodex render <map file> <output text file> (tools/coyodex/viewer/render.py:53)",
+   "why_risky": "backbone edge — no deterministic gate confirms C75's code 'prescribes' C45; ground the call site against the code."
+  },
+  {
+   "claim": "C63 calls C1",
+   "anchor": "eval/tools/coyodex_eval/profile.py:250",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432)",
+   "why_risky": "backbone edge — no deterministic gate confirms C63's code 'calls' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C63 calls C13",
+   "anchor": "eval/tools/coyodex_eval/profile.py:257",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663)",
+   "why_risky": "backbone edge — no deterministic gate confirms C63's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C63 calls C14",
+   "anchor": "eval/tools/coyodex_eval/profile.py:259",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307)",
+   "why_risky": "backbone edge — no deterministic gate confirms C63's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C63 calls C44",
+   "anchor": "eval/tools/coyodex_eval/run.py:136",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: C44 = Diagram builder (tools/coyodex/viewer/gen_viewer.py:3303); entry points: python -m coyodex.viewer.gen_viewer <graph file> <output file> (tools/coyodex/viewer/gen_viewer.py:3366)",
+   "why_risky": "backbone edge — no deterministic gate confirms C63's code 'calls' C44; ground the call site against the code."
+  },
+  {
+   "claim": "C63 calls C45",
+   "anchor": "eval/tools/coyodex_eval/run.py:163",
+   "detail": "From: C63 = Map quality score and verdict (eval/tools/coyodex_eval/profile.py:337); entry points: coyodex-eval (eval/tools/coyodex_eval/cli.py:56); coyodex-eval compare (eval/tools/coyodex_eval/compare.py:606); coyodex-eval mutate plant (eval/tools/coyodex_eval/mutate.py:244); coyodex-eval mutate score (eval/tools/coyodex_eval/mutate.py:249); coyodex-eval score (eval/tools/coyodex_eval/profile.py:443); coyodex-eval run (eval/tools/coyodex_eval/run.py:192); +5 more; To: C45 = Graph builder (tools/coyodex/views.py:1242); entry points: coyodex render <map file> <output text file> (tools/coyodex/viewer/render.py:53)",
+   "why_risky": "backbone edge — no deterministic gate confirms C63's code 'calls' C45; ground the call site against the code."
+  },
+  {
+   "claim": "C65 calls C64",
+   "anchor": "eval/tools/coyodex_eval/process_scorecard.py:2941",
+   "detail": "From: C65 = Build behaviour scorecard (eval/tools/coyodex_eval/process_scorecard.py:2924); entry points: coyodex-eval process (eval/tools/coyodex_eval/process_scorecard.py:3130); coyodex-eval process --diff (eval/tools/coyodex_eval/process_scorecard.py:3134); To: C64 = Build transcript reader and spend report (eval/tools/coyodex_eval/transcript.py:305); entry points: coyodex-eval cost (eval/tools/coyodex_eval/cost.py:674); coyodex-eval transcript (eval/tools/coyodex_eval/transcript.py:1067)",
+   "why_risky": "backbone edge — no deterministic gate confirms C65's code 'calls' C64; ground the call site against the code."
+  }
+ ]
+}

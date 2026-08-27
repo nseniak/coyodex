@@ -405,8 +405,13 @@ def main(argv: list[str] | None = None) -> int:
         roots = _source_roots(Path(map_path).resolve(),
                               Path(repo_root).resolve() if repo_root else None)
         found = shape_findings(m, roots)
+        recorded, malformed = drift_exceptions(m)
+        inert = len(recorded) + len(malformed)
         if as_json:
-            print(json.dumps({"mode": "shape-only", "findings": found}, indent=2))
+            # The same warning the human form prints. A reader on `--json` was the one reader who
+            # got no signal that their recorded lines do nothing on this pass.
+            print(json.dumps({"mode": "shape-only", "findings": found,
+                              "drift_exceptions_inert_here": inert}, indent=2))
         else:
             head = (f"Shape-only anchor drift ({len(found)} finding(s)) — no verdicts given.\n"
                     "Each anchor below points at a line that cannot be the acting statement.\n"
@@ -415,6 +420,21 @@ def main(argv: list[str] | None = None) -> int:
             print(head + "\n".join(f"  - {f}" for f in found) if found else
                   "Shape-only anchor drift: no findings — every call-site anchor points at a "
                   "line that can act.")
+            # A recorded `Drift exceptions` line reaches the VERDICT-based pass only, and this pass
+            # ran instead. Nothing said so, so the record was silently inert: an operator who wrote
+            # one watched the finding survive with no way to tell a dead key from a live one that
+            # simply had not fired. The findings here are deliberately unrecordable — the message
+            # says "anchor the operative statement", and `KNOWN_NO_ESCAPE` carries that decision
+            # with its reason — so the answer is to say which pass the line belongs to, not to
+            # invent a second key vocabulary under one heading.
+            if inert:
+                print(f"\n  NOTE: {inert} line(s) are recorded under "
+                      f"'{DRIFT_EXCEPTIONS_HEADING}'. They silence nothing HERE — a drift exception "
+                      f"keys to a verdict-based finding, and this is the shape-only pass. A "
+                      f"shape-only finding has no recorded escape by design: the anchored line "
+                      f"cannot be the acting statement whatever anyone judges, so fix the `where` "
+                      f"or set `no_call_site`. Re-run with `--verdicts` for the pass those lines "
+                      f"answer.")
         return 0
     worklist = l2_worklist_model(m)
     grounding, notes = load_verdicts(verdicts_paths)

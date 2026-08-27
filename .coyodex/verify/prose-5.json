@@ -1,0 +1,167 @@
+{
+ "schema": "coyodex/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "BR64 statement",
+   "text": "A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes."
+  },
+  {
+   "where": "BR64 risk",
+   "text": "Cutting eleven look-alike boxes into invented groups adds a level that carries no meaning. The reader now clicks twice to read a list."
+  },
+  {
+   "where": "BR65 statement",
+   "text": "A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out."
+  },
+  {
+   "where": "BR65 risk",
+   "text": "A first screen showing two boxes tells the reader which technologies are used. Nothing on it says what the product does."
+  },
+  {
+   "where": "BR66 statement",
+   "text": "A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested."
+  },
+  {
+   "where": "BR66 risk",
+   "text": "A suggestion allowed to merge or cut boxes to reach a nicer number changes what the map claims. The product's real shape is lost."
+  },
+  {
+   "where": "BR80 statement",
+   "text": "Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too."
+  },
+  {
+   "where": "BR80 risk",
+   "text": "Without the claim, the story can quietly drop main work or fill up with side work."
+  },
+  {
+   "where": "BR81 statement",
+   "text": "The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver."
+  },
+  {
+   "where": "BR81 risk",
+   "text": "A delivery mechanism counted as a driver puts a party in the story who wanted nothing."
+  },
+  {
+   "where": "BR82 statement",
+   "text": "Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read."
+  },
+  {
+   "where": "BR82 risk",
+   "text": "A feature filed on the wrong side reads as customer work when only the company ever touches it."
+  },
+  {
+   "where": "BR83 statement",
+   "text": "A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last."
+  },
+  {
+   "where": "BR83 risk",
+   "text": "A feature dropped to the bottom reads as unimportant, which walk membership never said about it."
+  },
+  {
+   "where": "BR84 statement",
+   "text": "A front door is accounted for when a traced scenario reaches it, or a use case names it. A door nothing claims is reported, including one that starts itself with no caller. Writing a door off silences the report, and the map still counts it as a gap."
+  },
+  {
+   "where": "BR84 risk",
+   "text": "An unclaimed front door is often a real capability nobody wrote down, and it stays hidden."
+  },
+  {
+   "where": "BR85 statement",
+   "text": "Every party that drives a feature states in its own words what it comes there to do. A blank line does not count as an answer. A line written for a party that drives nothing is reported too."
+  },
+  {
+   "where": "BR85 risk",
+   "text": "Without each party's own words, the picture labels every arrow with a catalog name."
+  },
+  {
+   "where": "BR86 statement",
+   "text": "When one person wears several roles, the map records the link between those roles. A role that turns into another names the action where the change happens."
+  },
+  {
+   "where": "BR86 risk",
+   "text": "Without the link, the story draws one person as several strangers."
+  },
+  {
+   "where": "BR100 statement",
+   "text": "The map draws a kind of data only when the code defines it as a named type."
+  },
+  {
+   "where": "BR100 risk",
+   "text": "Invented boxes fill the data picture with things a reader cannot open in the code."
+  },
+  {
+   "where": "BR101 statement",
+   "text": "The map credits a part of the project with owning data only when that part's own code writes it."
+  },
+  {
+   "where": "BR101 risk",
+   "text": "A caller that merely asks for a save is named as the owner, so the real owner stays hidden."
+  },
+  {
+   "where": "BR102 statement",
+   "text": "Data that lives inside another record, in the source, or only during a call needs no owner."
+  },
+  {
+   "where": "BR102 risk",
+   "text": "Every value object and short-lived shape is reported as a hole, so real missing owners drown in noise."
+  },
+  {
+   "where": "BR103 statement",
+   "text": "A save into a store must be explained by a named type that records the same store."
+  },
+  {
+   "where": "BR103 risk",
+   "text": "Real collections stay off the map because nobody gave the data a name, and the reader never learns they exist."
+  },
+  {
+   "where": "BR104 statement",
+   "text": "Where data lives must be recorded exactly enough for a reader to find it in the running system."
+  },
+  {
+   "where": "BR104 risk",
+   "text": "A described place cannot be looked up, so the reader cannot check the map against the real store."
+  },
+  {
+   "where": "BR105 statement",
+   "text": "A relation between two kinds of data is recorded on one side only, never twice."
+  },
+  {
+   "where": "BR105 risk",
+   "text": "The same link is drawn twice, and two copies that disagree leave the reader with no true version."
+  },
+  {
+   "where": "BR106 statement",
+   "text": "A lifecycle whose states no line declares is kept as a guess rather than thrown away."
+  },
+  {
+   "where": "BR106 risk",
+   "text": "Either real lifecycles vanish from the map, or a guessed one is read as proven."
+  },
+  {
+   "where": "BR120 statement",
+   "text": "A map is blocked when the numbers in its testing record contradict each other. Having tested very little only raises a warning."
+  },
+  {
+   "where": "BR120 risk",
+   "text": "The testing record is the only place a map says how much of itself was checked. Numbers that count nothing there make every other number look checked."
+  },
+  {
+   "where": "BR121 statement",
+   "text": "A check on one statement comes back held up, disproved, or impossible to settle from the code. A fourth answer is refused, never rounded into one of the three."
+  },
+  {
+   "where": "BR121 risk",
+   "text": "Rounding an unknown answer into one of the three credits the map with a verdict nobody gave."
+  },
+  {
+   "where": "BR122 statement",
+   "text": "A statement counts as held up only when more than half of its checks agree. An even split is filed as unsettled and credited to neither side."
+  },
+  {
+   "where": "BR122 risk",
+   "text": "Crediting a tie to one side turns a disagreement between checkers into a fact the map states."
+  }
+ ]
+}

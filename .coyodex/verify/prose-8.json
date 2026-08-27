@@ -1,0 +1,159 @@
+{
+ "schema": "coyodex/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "glossary 'viewer'",
+   "text": "The browser page that shows a map. Served live from the map, never committed as a file."
+  },
+  {
+   "where": "glossary 'view'",
+   "text": "One screen in the viewer answering one question. Happy Path, Features, Entities and Deployment are views."
+  },
+  {
+   "where": "glossary 'box'",
+   "text": "One thing drawn on a view. A component, an entity, a feature or a dependency each draw as one."
+  },
+  {
+   "where": "glossary 'code link'",
+   "text": "The file and line a box points at. A box without one is an ungrounded claim."
+  },
+  {
+   "where": "glossary 'change impact'",
+   "text": "The report saying what a code change does to the map: what is added, changed or gone."
+  },
+  {
+   "where": "glossary 'accept'",
+   "text": "Folding a change-impact report into the baseline and re-pinning it to the new commit."
+  },
+  {
+   "where": "glossary 'Coyote Effect'",
+   "text": "Your agent wrote a lot of code, and the code still runs. Nobody knows any more what is under your feet."
+  },
+  {
+   "where": "glossary 'the method'",
+   "text": "The written instructions a coding agent follows to build a map. This product's real logic lives there."
+  },
+  {
+   "where": "glossary 'the skill'",
+   "text": "The small pointer file installed into each coding agent so a person can invoke coyodex by name."
+  },
+  {
+   "where": "glossary 'fragment'",
+   "text": "One worker's slice of a map, written as its own file. Every fragment is merged into the map."
+  },
+  {
+   "where": "glossary 'contract'",
+   "text": "The briefing a fan-out worker is handed, printed by a command so the wording never drifts."
+  },
+  {
+   "where": "glossary 'fan-out'",
+   "text": "Splitting one phase of a build across many workers who run at the same time and never share context."
+  },
+  {
+   "where": "glossary 'skeptic'",
+   "text": "A fresh worker handed a batch of the map's claims and told to disprove each one against the code."
+  },
+  {
+   "where": "glossary 'claim'",
+   "text": "One statement the map makes about what the code actually does, carrying the line that witnesses it."
+  },
+  {
+   "where": "glossary 'worklist'",
+   "text": "The ranked list of claims the audit says need code evidence. The skeptics work it top down."
+  },
+  {
+   "where": "glossary 'grounding'",
+   "text": "The record of how many claims were challenged and how the skeptics voted on each."
+  },
+  {
+   "where": "glossary 'anchor drift'",
+   "text": "A code link pointing at a line that cannot be acting, such as a definition header or a comment."
+  },
+  {
+   "where": "glossary 'advisory'",
+   "text": "A finding that never blocks. Fix it, or write one line saying why it is acceptable."
+  },
+  {
+   "where": "glossary 'recorded exception'",
+   "text": "One written line that stops a named advisory firing forever, because a person judged it acceptable."
+  },
+  {
+   "where": "glossary 'gate'",
+   "text": "An automatic check a map must pass. Failing one is a defect in the map, not in the code."
+  },
+  {
+   "where": "glossary 'pre-index'",
+   "text": "A measurement of the code tree made before the map is drawn: folder weight, symbols, and an expected size."
+  },
+  {
+   "where": "glossary 'expected component count'",
+   "text": "How many components a tree of this size should produce, derived from the code alone with a band around it."
+  },
+  {
+   "where": "glossary 'component'",
+   "text": "One module-sized unit of the code, roughly a folder with one purpose. The map's main structural box."
+  },
+  {
+   "where": "glossary 'subsystem'",
+   "text": "A group of components, and of smaller subsystems. What the first screen of a large map shows."
+  },
+  {
+   "where": "glossary 'entity'",
+   "text": "A real named type in the code that the product stores or reasons about. Drawn with its fields and relations."
+  },
+  {
+   "where": "glossary 'subdomain'",
+   "text": "A group of entities that belong together. The domain-model twin of a subsystem."
+  },
+  {
+   "where": "glossary 'use case'",
+   "text": "One goal one actor has, with one trigger and one outcome. The unit the product's story is told in."
+  },
+  {
+   "where": "glossary 'flow'",
+   "text": "The inside view of one use case: the ordered steps among components, dependencies and entities."
+  },
+  {
+   "where": "glossary 'sub-flow'",
+   "text": "A named step sequence shared by two or more flows, so shared machinery is written down once."
+  },
+  {
+   "where": "glossary 'Happy Path'",
+   "text": "One end-to-end walk through the use cases that tells the product's story and reaches every actor."
+  },
+  {
+   "where": "glossary 'feature'",
+   "text": "A group of use cases serving one goal of the product. What a product person would call an area."
+  },
+  {
+   "where": "glossary 'business rule'",
+   "text": "One decision the product makes, in product words, plus every place the code enforces it."
+  },
+  {
+   "where": "glossary 'block'",
+   "text": "A group of business rules covering one area a product person would argue about."
+  },
+  {
+   "where": "glossary 'entry point'",
+   "text": "A surface the outside world reaches the product through, or a job the product starts on its own."
+  },
+  {
+   "where": "glossary 'pin'",
+   "text": "The commit a map says it describes. Every code link is read at that commit."
+  },
+  {
+   "where": "glossary 'eval'",
+   "text": "Scoring two maps of one project to say whether a change to the method made map quality better or worse."
+  },
+  {
+   "where": "glossary 'retro'",
+   "text": "Reading a finished build and its transcript to find what went wrong in the process."
+  },
+  {
+   "where": "glossary 'verdict'",
+   "text": "How an eval rates a new map, in one of three words. Pass means as good as before. Drift means a measurement moved too far. Regressed means a hard check got worse."
+  }
+ ]
+}

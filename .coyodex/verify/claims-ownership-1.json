@@ -1,0 +1,174 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "ownership",
+ "claims": [
+  {
+   "claim": "C1 loads E1",
+   "anchor": "tools/coyodex/model.py:1080",
+   "detail": "From: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C1's code actually 'loads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C43 reads E1",
+   "anchor": "tools/coyodex/viewer/serve.py:123",
+   "detail": "From: C43 = Map server (tools/coyodex/viewer/serve.py:800); entry points: The server checks whether its own code changed since it started, and warns once (tools/coyodex/viewer/serve.py:180); The server checks whether a map changed on disk, and drops what it cached (tools/coyodex/viewer/serve.py:210); GET / (tools/coyodex/viewer/serve.py:583); GET /static/<file> (tools/coyodex/viewer/serve.py:586); GET /api/recents (tools/coyodex/viewer/serve.py:614); GET /api/browse?path= (tools/coyodex/viewer/serve.py:621); +17 more; To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C43's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 creates E51",
+   "anchor": "tools/coyodex/views.py:730",
+   "detail": "From: C45 = Graph builder (tools/coyodex/views.py:1242); entry points: coyodex render <map file> <output text file> (tools/coyodex/viewer/render.py:53); To: E51 = Graph node (tools/coyodex/viewer/build_graph.py:28)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'creates' E51; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 creates E52",
+   "anchor": "tools/coyodex/views.py:1183",
+   "detail": "From: C45 = Graph builder (tools/coyodex/views.py:1242); entry points: coyodex render <map file> <output text file> (tools/coyodex/viewer/render.py:53); To: E52 = Graph edge (tools/coyodex/viewer/build_graph.py:72)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'creates' E52; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C43 persists E56",
+   "anchor": "tools/coyodex/viewer/recents.py:44",
+   "detail": "From: C43 = Map server (tools/coyodex/viewer/serve.py:800); entry points: The server checks whether its own code changed since it started, and warns once (tools/coyodex/viewer/serve.py:180); The server checks whether a map changed on disk, and drops what it cached (tools/coyodex/viewer/serve.py:210); GET / (tools/coyodex/viewer/serve.py:583); GET /static/<file> (tools/coyodex/viewer/serve.py:586); GET /api/recents (tools/coyodex/viewer/serve.py:614); GET /api/browse?path= (tools/coyodex/viewer/serve.py:621); +17 more; To: E56 = RecentsStore (tools/coyodex/viewer/recents.py:22)",
+   "why_risky": "domain-model ownership edge — verify C43's code actually 'persists' E56; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C75 reads E1",
+   "anchor": "method/dispatch.md:132",
+   "detail": "From: C75 = The build method (method.md:3); entry points: A person asks coyodex to analyze, when a map exists and the code has moved on since it was pinned. (method/dispatch.md:151); A person says the change report looks right, so coyodex folds the report into the map. (method/dispatch.md:154); A person asks in plain words to move, rename, split or drill deeper into a part of the map. (method/dispatch.md:156); A person explicitly asks to regenerate the whole map from scratch, and confirms the warning. (method/dispatch.md:171); A person types the coyodex command in a project that has no map yet, so a first map is built. (method/dispatch.md:83); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C75's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C3 reads E1",
+   "anchor": "tools/coyodex/dump.py:139",
+   "detail": "From: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C3's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 reads E1",
+   "anchor": "tools/coyodex/views.py:1030",
+   "detail": "From: C45 = Graph builder (tools/coyodex/views.py:1242); entry points: coyodex render <map file> <output text file> (tools/coyodex/viewer/render.py:53); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 reads E13",
+   "anchor": "tools/coyodex/views.py:1122",
+   "detail": "From: C45 = Graph builder (tools/coyodex/views.py:1242); entry points: coyodex render <map file> <output text file> (tools/coyodex/viewer/render.py:53); To: E13 = Component (tools/coyodex/model.py:187)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'reads' E13; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C17 reads E5",
+   "anchor": "tools/coyodex/features.py:222",
+   "detail": "From: C17 = Feature index (tools/coyodex/features.py:331); To: E5 = Group (tools/coyodex/model.py:145)",
+   "why_risky": "domain-model ownership edge — verify C17's code actually 'reads' E5; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C17 reads E6",
+   "anchor": "tools/coyodex/features.py:295",
+   "detail": "From: C17 = Feature index (tools/coyodex/features.py:331); To: E6 = UseCase (tools/coyodex/model.py:92)",
+   "why_risky": "domain-model ownership edge — verify C17's code actually 'reads' E6; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C17 reads E9",
+   "anchor": "tools/coyodex/features.py:230",
+   "detail": "From: C17 = Feature index (tools/coyodex/features.py:331); To: E9 = HappyStep (tools/coyodex/model.py:113)",
+   "why_risky": "domain-model ownership edge — verify C17's code actually 'reads' E9; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C33 writes E37",
+   "anchor": "tools/coyodex/preindex.py:148",
+   "detail": "From: C33 = Pre-index (tools/coyodex/preindex.py:604); entry points: A coding agent reads an already measured codebase back as a readable summary. (tools/coyodex/preindex.py:518); A coding agent sizes a codebase before choosing how coarse the map should be. (tools/coyodex/preindex.py:557); To: E37 = Symbol (tools/coyodex/preindex_lib.py:312)",
+   "why_risky": "domain-model ownership edge — verify C33's code actually 'writes' E37; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C33 writes E38",
+   "anchor": "tools/coyodex/preindex_lib.py:625",
+   "detail": "From: C33 = Pre-index (tools/coyodex/preindex.py:604); entry points: A coding agent reads an already measured codebase back as a readable summary. (tools/coyodex/preindex.py:518); A coding agent sizes a codebase before choosing how coarse the map should be. (tools/coyodex/preindex.py:557); To: E38 = DirExpectation (tools/coyodex/preindex_lib.py:533)",
+   "why_risky": "domain-model ownership edge — verify C33's code actually 'writes' E38; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C2 reads E1",
+   "anchor": "tools/coyodex/lint_fragment.py:452",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C2's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C1 writes E1",
+   "anchor": "tools/coyodex/model.py:892",
+   "detail": "From: C1 = Map document (tools/coyodex/model.py:1080); entry points: `python -m coyodex.json_schema` prints the published schema for the map file. (tools/coyodex/json_schema.py:432); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C1's code actually 'writes' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C2 writes E39",
+   "anchor": "tools/coyodex/assemble.py:294",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: E39 = FragmentLoad (tools/coyodex/assemble.py:222)",
+   "why_risky": "domain-model ownership edge — verify C2's code actually 'writes' E39; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C2 writes E16",
+   "anchor": "tools/coyodex/assemble.py:688",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: E16 = EntryPoint (tools/coyodex/model.py:238)",
+   "why_risky": "domain-model ownership edge — verify C2's code actually 'writes' E16; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C2 writes E15",
+   "anchor": "tools/coyodex/assemble.py:131",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: E15 = Edge (tools/coyodex/model.py:412)",
+   "why_risky": "domain-model ownership edge — verify C2's code actually 'writes' E15; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C2 reads E40",
+   "anchor": "tools/coyodex/assemble.py:916",
+   "detail": "From: C2 = Fragment merge (tools/coyodex/assemble.py:886); entry points: `coyodex assemble` merges the build's fragments into one map and writes it. (tools/coyodex/assemble.py:812); `coyodex lint-fragment` checks one worker's fragment before the worker returns it. (tools/coyodex/lint_fragment.py:353); To: E40 = Reconcile (tools/coyodex/reconcile.py:159)",
+   "why_risky": "domain-model ownership edge — verify C2's code actually 'reads' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 writes E40",
+   "anchor": "tools/coyodex/reconcile_build.py:439",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E40 = Reconcile (tools/coyodex/reconcile.py:159)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'writes' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 reads E16",
+   "anchor": "tools/coyodex/reconcile_build.py:213",
+   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: E16 = EntryPoint (tools/coyodex/model.py:238)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'reads' E16; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C3 reads E16",
+   "anchor": "tools/coyodex/dump.py:99",
+   "detail": "From: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194); To: E16 = EntryPoint (tools/coyodex/model.py:238)",
+   "why_risky": "domain-model ownership edge — verify C3's code actually 'reads' E16; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C13 reads E1",
+   "anchor": "tools/coyodex/validate_model.py:4359",
+   "detail": "From: C13 = Map validator (tools/coyodex/validate_model.py:4361); entry points: coyodex validate (tools/coyodex/validate_model.py:4663); To: E1 = ProjectModel (tools/coyodex/model.py:646)",
+   "why_risky": "domain-model ownership edge — verify C13's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C14 writes E42",
+   "anchor": "tools/coyodex/audit_model.py:575",
+   "detail": "From: C14 = Map auditor (tools/coyodex/audit_model.py:811); entry points: coyodex audit (tools/coyodex/audit_model.py:1307); To: E42 = Audit finding (tools/coyodex/audit_model.py:413)",
+   "why_risky": "domain-model ownership edge — verify C14's code actually 'writes' E42; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C3 reads E36",
+   "anchor": "tools/coyodex/records.py:165",
+   "detail": "From: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194); To: E36 = ExtraSection (tools/coyodex/model.py:558)",
+   "why_risky": "domain-model ownership edge — verify C3's code actually 'reads' E36; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C3 writes E36",
+   "anchor": "tools/coyodex/record.py:116",
+   "detail": "From: C3 = Map lookups (tools/coyodex/dump.py:316); entry points: `coyodex dump` prints the whole map, or one named part of it, as data. (tools/coyodex/dump.py:246); `coyodex diff` reports what changed between two versions of a map, row by row. (tools/coyodex/mapdiff.py:198); `coyodex record` writes one accepted-advisory line under a named heading. (tools/coyodex/record.py:194); To: E36 = ExtraSection (tools/coyodex/model.py:558)",
+   "why_risky": "domain-model ownership edge — verify C3's code actually 'writes' E36; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C15 reads E5",
+   "anchor": "tools/coyodex/balance_lib.py:107",
+   "detail": "From: C15 = Diagram balance report (tools/coyodex/balance.py:119); entry points: coyodex balance (tools/coyodex/balance.py:231); To: E5 = Group (tools/coyodex/model.py:145)",
+   "why_risky": "domain-model ownership edge — verify C15's code actually 'reads' E5; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  }
+ ]
+}

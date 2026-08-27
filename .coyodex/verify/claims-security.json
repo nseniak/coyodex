@@ -1,0 +1,132 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "security",
+ "claims": [
+  {
+   "claim": "Rule 'Nothing the user owns is committed, stashed or overwritten unless the user asks for it.' is enforced at method/dispatch.md:46 — forbids committing or stashing the person's code, even to make the pin clean",
+   "anchor": "method/dispatch.md:46",
+   "detail": "In: The build method (C75)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'Nothing the user owns is committed, stashed or overwritten unless the user asks for it.' is enforced at method.md:2040 — repeats the same ban at the moment the pin is recorded",
+   "anchor": "method.md:2040",
+   "detail": "In: The build method (C75)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'Nothing the user owns is committed, stashed or overwritten unless the user asks for it.' is enforced at method/dispatch.md:171 — regenerates a map from scratch only on an explicit request, after a warning and a confirmation",
+   "anchor": "method/dispatch.md:171",
+   "detail": "In: The build method (C75)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:800 — The server binds to the loopback address, so nothing off this machine can connect.",
+   "anchor": "tools/coyodex/viewer/serve.py:800",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:577 — Every read request whose claimed site is not loopback is refused.",
+   "anchor": "tools/coyodex/viewer/serve.py:577",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:599 — The same site check refuses a write request.",
+   "anchor": "tools/coyodex/viewer/serve.py:599",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.' is enforced at tools/coyodex/viewer/serve.py:601 — A write request without the private marker header is refused.",
+   "anchor": "tools/coyodex/viewer/serve.py:601",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:799 — The served set is built from the remembered list alone, with no disk search.",
+   "anchor": "tools/coyodex/viewer/serve.py:799",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:590 — An address that does not name a served project is refused.",
+   "anchor": "tools/coyodex/viewer/serve.py:590",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:640 — Adding a folder is refused unless it holds a coyodex folder.",
+   "anchor": "tools/coyodex/viewer/serve.py:640",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.' is enforced at tools/coyodex/viewer/serve.py:794 — A folder named at startup is skipped under the same condition.",
+   "anchor": "tools/coyodex/viewer/serve.py:794",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:285 — An absolute or otherwise malformed path is rejected before any read.",
+   "anchor": "tools/coyodex/viewer/serve.py:285",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:287 — A path containing a step up to the parent folder is rejected.",
+   "anchor": "tools/coyodex/viewer/serve.py:287",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:697 — The code request refuses a bad path before touching disk or version control.",
+   "anchor": "tools/coyodex/viewer/serve.py:697",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:324 — A working-tree read refuses anything inside the version-control folder.",
+   "anchor": "tools/coyodex/viewer/serve.py:324",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:331 — The real resolved location must still sit inside the project, so a link cannot escape.",
+   "anchor": "tools/coyodex/viewer/serve.py:331",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.' is enforced at tools/coyodex/viewer/serve.py:338 — A file version control ignores is refused, so an ignored secrets file never leaks.",
+   "anchor": "tools/coyodex/viewer/serve.py:338",
+   "detail": "In: Map server (C43)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A link that leaves the page may open only a known code editor. The address must start with one of a fixed list of editor schemes. A hand-typed link template using any other scheme is refused.' is enforced at tools/coyodex/viewer/viewer.js:10684 — An address outside the allowed editor list never becomes a clickable link.",
+   "anchor": "tools/coyodex/viewer/viewer.js:10684",
+   "detail": "In: Map canvas (C55), Map reading pages (C56), Trail and history (C57), Source column (C58)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'A link that leaves the page may open only a known code editor. The address must start with one of a fixed list of editor schemes. A hand-typed link template using any other scheme is refused.' is enforced at tools/coyodex/viewer/viewer.js:10815 — Saving a custom link template is refused when its scheme is not on the list.",
+   "anchor": "tools/coyodex/viewer/viewer.js:10815",
+   "detail": "In: Map canvas (C55), Map reading pages (C56), Trail and history (C57), Source column (C58)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The viewer page loads its two diagram libraries from the internet at exact pinned versions. Each one carries a fingerprint of the expected file. The browser refuses to run a file whose content does not match that fingerprint.' is enforced at tools/coyodex/viewer/viewer.html:17 — The pan and zoom library is pinned by fingerprint.",
+   "anchor": "tools/coyodex/viewer/viewer.html:17",
+   "detail": "In: Map canvas (C55), Trail and history (C57), Source column (C58)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Rule 'The viewer page loads its two diagram libraries from the internet at exact pinned versions. Each one carries a fingerprint of the expected file. The browser refuses to run a file whose content does not match that fingerprint.' is enforced at tools/coyodex/viewer/viewer.html:20 — The diagram drawing library is pinned by fingerprint.",
+   "anchor": "tools/coyodex/viewer/viewer.html:20",
+   "detail": "In: Map canvas (C55), Trail and history (C57), Source column (C58)",
+   "why_risky": "an ACCESS decision and the line that enforces it — a false claim here is an access-control hole."
+  }
+ ]
+}

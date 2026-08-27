@@ -619,8 +619,82 @@ def test_a_flag_after_the_paths_is_still_a_flag():
         a = _verdict_file(tmp, "a.json", "claim one")
         agents = tmp / "agents"
         agents.mkdir()
-        (agents / "agent-1.jsonl").write_text("a.py\n", encoding="utf-8")
+        (agents / "agent-1.jsonl").write_text(
+            json.dumps({"message": {"content": [{"type": "tool_use", "name": "Read",
+                                                       "input": {"file_path": "a.py"}}]}}) + "\n", encoding="utf-8")
         assert main(["lint", "--verdicts", str(a), "--agent-transcripts", str(agents)]) == 0
+
+
+def test_the_evidence_check_tests_a_row_that_cites_its_anchor_only_in_evidence(capsys):
+    """The widening, and it is most of this check. `note` prose of the shape `read <file>` covered
+    20 of 1000 rows on a measured build, because most skeptics cite the anchor in `evidence` and
+    describe the reading in words. `evidence` is a bare `path:line` on every row, and citing a file
+    you never opened is exactly the shape this exists to catch — the fabricating pass put a
+    real-looking anchor on all forty of its rows."""
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        p = tmp / "v.json"
+        p.write_text(json.dumps({"grounding": [
+            {"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "s",
+             "note": "the anchor is the operative line"},
+            {"claim": "c2", "grounded": True, "evidence": "ghost.py:2", "skeptic": "s",
+             "note": "the anchor is the operative line"}]}), encoding="utf-8")
+        agents = tmp / "agents"
+        agents.mkdir()
+        (agents / "agent-1.jsonl").write_text(json.dumps(
+            {"message": {"content": [{"type": "tool_use", "name": "Read",
+                                      "input": {"file_path": "/repo/a.py"}}]}}) + "\n",
+            encoding="utf-8")
+        assert main(["lint", "--verdicts", str(p),
+                     "--agent-transcripts", str(agents)]) == 1
+        out = capsys.readouterr()
+        # the fabricated one is named; `a.py` was really opened, so it is not
+        assert "ghost.py" in out.err and "a.py:" not in out.err
+
+
+def test_a_SYMBOL_anchor_is_not_read_as_a_missing_file(capsys):
+    """`evidence` also carries symbol references — `ServiceTokenService.mint` — which are
+    `Word.word` and match any "token dot token" rule. Reading eleven of those as unopened files was
+    the first thing the widening did on a real pass."""
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        p = tmp / "v.json"
+        p.write_text(json.dumps({"grounding": [
+            {"claim": "c1", "grounded": True, "evidence": "ServiceTokenService.mint",
+             "skeptic": "s", "note": "read MongoOAuthStateRepository.save"}]}), encoding="utf-8")
+        agents = tmp / "agents"
+        agents.mkdir()
+        (agents / "agent-1.jsonl").write_text("{}\n", encoding="utf-8")
+        assert main(["lint", "--verdicts", str(p), "--agent-transcripts", str(agents)]) == 0
+        out = capsys.readouterr()
+        assert "ServiceTokenService" not in out.out + out.err
+
+
+def test_a_file_only_PRINTED_by_a_grep_is_a_note_and_does_not_fail_the_lint(capsys):
+    """The `opened` set used to be every filename-shaped token anywhere in the transcript — 477
+    names against 17 files actually opened, on one measured skeptic. A directory-wide grep prints
+    hundreds of paths, and a grep is what the fabricating skeptic used. The two sets are kept apart:
+    absent from both is a problem, present only as text is a NOTE, because a skeptic may read a
+    range through a shell verb this cannot see and a signal that fails the lint teaches the next
+    agent to route around it."""
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        p = tmp / "v.json"
+        p.write_text(json.dumps({"grounding": [
+            {"claim": "c1", "grounded": True, "evidence": "printed.py:1", "skeptic": "s",
+             "note": "the anchor is the operative line"}]}), encoding="utf-8")
+        agents = tmp / "agents"
+        agents.mkdir()
+        (agents / "agent-1.jsonl").write_text(json.dumps(
+            {"message": {"content": [{"type": "text",
+                                      "text": "grep printed 'printed.py' among others"}]}}) + "\n",
+            encoding="utf-8")
+        assert main(["lint", "--verdicts", str(p), "--agent-transcripts", str(agents)]) == 0
+        out = capsys.readouterr()
+        assert "only as TEXT" in out.out + out.err
 
 
 def test_lint_says_how_much_of_the_pass_the_evidence_check_could_test(capsys):
@@ -636,12 +710,17 @@ def test_lint_says_how_much_of_the_pass_the_evidence_check_could_test(capsys):
             {"claim": "c2", "grounded": True, "evidence": "b.py:2", "skeptic": "s",
              "note": "the anchor is the operative line"}]}), encoding="utf-8")
         (tmp / "agents").mkdir()
-        (tmp / "agents" / "agent-1.jsonl").write_text("a.py\n", encoding="utf-8")
+        (tmp / "agents" / "agent-1.jsonl").write_text("\n".join(
+            json.dumps({"message": {"content": [{"type": "tool_use", "name": "Read",
+                                                 "input": {"file_path": f"/repo/{f}"}}]}})
+            for f in ("a.py", "b.py")) + "\n", encoding="utf-8")
         assert main(["lint", "--verdicts", str(p),
                      "--agent-transcripts", str(tmp / "agents")]) == 0
         out = capsys.readouterr().out
         assert "2 verdict row(s)" in out
-        assert "covered 1 of 2 row(s)" in out
+        # BOTH rows are testable now: the second cites `b.py:2` in `evidence`, which the check
+        # could not read while it only understood `read <file>` prose.
+        assert "covered 2 of 2 row(s)" in out
 
 
 # --- retro 2026-08-18, findings 0 and 21/A1 ------------------------------------------
@@ -778,7 +857,9 @@ def _lint_with(agent_dir: Path, tmp: Path) -> tuple[int, str]:
 def test_a_dot_output_transcript_is_read_like_a_dot_jsonl():
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
-        d = _agent_dir(tmp, "session/tasks", "abc123.output", "a.py\n")
+        d = _agent_dir(tmp, "session/tasks", "abc123.output",
+                       json.dumps({"message": {"content": [{"type": "tool_use", "name": "Read",
+                                                       "input": {"file_path": "a.py"}}]}}) + "\n")
         rc, out = _lint_with(d, tmp)
         assert rc == 0, out
         assert "covered 1 of 1 row(s)" in out, out

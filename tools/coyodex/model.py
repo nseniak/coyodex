@@ -50,6 +50,15 @@ class RoleRelation:
     kind: str                 # becomes | includes
     role: str                 # Rn — the other role
     at: str | None = None     # UCn — becomes only: the use case where the hat changes
+    #: `includes` only: the `path:line` that grants the inclusion. An `includes` is an ACCESS claim —
+    #: the viewer draws it as "may also do everything a Team member may do" — and it was the one
+    #: element class in the map that asserted who may do what while being structurally incapable of
+    #: carrying evidence: `at` is pinned to a use-case id, and there was no other field. A fabricated
+    #: `R3 includes R1` (a headless agent may do everything an admin may do) passed `validate` with
+    #: exit 0 and left `audit`'s theme counts byte-identical. On the map that found this, `R1
+    #: includes R2` was not true of the code at all: the admin flag gates the dashboard routes, and
+    #: the three functions deciding what a caller actually reaches never consult it.
+    source: str | None = None
 
 
 @dataclass
@@ -168,6 +177,18 @@ class Group:
                                # one story column (see StoryAnchor). None = derive (actors' last walk
                                # step) — orders the trailing block for trailing features, and cannot
                                # pull a lead-in one back among the walk; only `before` does that.
+    owners: list[str] | None = None
+                               # SUBDOMAIN-ONLY: which feature(s) this data area exists FOR — the one
+                               # that creates its records and runs their lifecycle. AUTHORED, never
+                               # derived: every derivation was measured on three live maps and each
+                               # one guessed from what the code TOUCHES, which is not what the data
+                               # is FOR (snapshots are first written by Page tracking but exist so
+                               # Change detection can compare them). One id = that feature owns it;
+                               # several = deliberately shared among exactly those; None = not
+                               # decided (advisory nudges a decision, old maps still load). `[]` is
+                               # a shape error, not "none": say who, or leave the field out.
+                               # `validate` blocks it on the other forests, and cross-examines the
+                               # list against the derived touches (grounding / split / dominance).
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""
@@ -356,6 +377,13 @@ class Entity:                        # a T5 domain card
     fields: list[EntityField] = field(default_factory=list)
     relations: list[EntityRelation] = field(default_factory=list)
     states: StateMachine | None = None  # the entity's lifecycle, when the code implements one
+    owners: list[str] | None = None     # OVERRIDE of the sub-domain's `owners`, for the one record
+                                        # whose owning feature differs from its area's (an audit
+                                        # entry sits in the Audit trail area but is written by the
+                                        # gateway). Author it ONLY where it differs from what would
+                                        # be inherited — `validate` reports an override equal to the
+                                        # inherited answer as redundant. None = inherit, walking up
+                                        # `subdomain` then `parent`.
 
 
 @dataclass
@@ -746,6 +774,67 @@ def expanded_flow_steps(m: ProjectModel, f: Flow) -> list[FlowStep]:
     ripple, the model audit) walk THIS, so content inside a sub-flow is never invisible.
     An unresolved or empty reference degrades to the bare reference step."""
     return [st for _container, st in expanded_steps_with_container(m, f)]
+
+
+def is_saved(e: Entity) -> bool:
+    """Does this codebase SAVE a record of the entity — a row of its own, or one inside a parent's?
+
+    The eligibility filter for everything ownership: a data AREA is an area of saved records, so
+    plumbing and value shapes (a request object, an enum, a read projection) never become a box on
+    the Features page and never pull an ownership question that has no answer. `store.mode` is the
+    one derived ownership signal that measured reliable; see `grammar.STORE_MODES_SAVED`."""
+    return e.store is not None and (e.store.mode or "").strip() in grammar.STORE_MODES_SAVED
+
+
+def subdomain_owners(m: ProjectModel) -> dict[str, list[str]]:
+    """The EFFECTIVE owning feature(s) of every sub-domain: its own authored `owners`, else the
+    nearest authored answer walking up `parent`. A sub-domain absent from the result is one nobody
+    decided anywhere up its chain.
+
+    Ids that name no defined capability are dropped here rather than passed on — `validate` reports
+    the dangling entry as a shape error, and no screen should draw an owner box that has no feature.
+    A `parent` cycle (a shape error of its own) stops the walk instead of hanging."""
+    subs = {g.id: g for g in m.subdomains}
+    cap_ids = {c.id for c in m.capabilities}
+    out: dict[str, list[str]] = {}
+    for sid in subs:
+        chain: list[str] = []
+        answer: list[str] = []
+        cur: str | None = sid
+        seen: set[str] = set()
+        while cur and cur in subs and cur not in seen:
+            if cur in out:
+                answer = out[cur]
+                break
+            seen.add(cur)
+            chain.append(cur)
+            g = subs[cur]
+            if g.owners:
+                answer = [o for o in g.owners if o in cap_ids]
+                break
+            cur = g.parent
+        for c in chain:
+            out[c] = answer
+    return {k: v for k, v in out.items() if v}
+
+
+def entity_owners(m: ProjectModel) -> dict[str, list[str]]:
+    """The EFFECTIVE owning feature(s) of every entity: its own authored `owners` when it has them,
+    else its sub-domain's (`subdomain_owners`, which already walked up `parent`). An entity absent
+    from the result is one nobody decided for.
+
+    ONE implementation, because three consumers ask it — `validate`'s cross-examination, the feature
+    derivation the Features page draws, and the entity page's "Owned by" line. Two of them computing
+    the inheritance separately is how the same map answers the same question two ways."""
+    cap_ids = {c.id for c in m.capabilities}
+    areas = subdomain_owners(m)
+    out: dict[str, list[str]] = {}
+    for e in m.entities:
+        own = ([o for o in e.owners if o in cap_ids] if e.owners
+               else areas.get(e.subdomain or "", []))
+        if own:
+            out[e.id] = own
+    return out
 
 
 def group_forests(m: ProjectModel) -> list[Group]:

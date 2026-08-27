@@ -1,0 +1,228 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead.' is enforced at tools/coyodex/preindex_lib.py:616 — goes inside a folder that is over the limits, so its parts are counted one by one",
+   "anchor": "tools/coyodex/preindex_lib.py:616",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead.' is enforced at tools/coyodex/preindex_lib.py:615 — counts an oversized folder with no sub-folders as several boxes, never as one",
+   "anchor": "tools/coyodex/preindex_lib.py:615",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:577 — drops documentation, settings and other text files before counting anything",
+   "anchor": "tools/coyodex/preindex_lib.py:577",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:579 — drops test folders, internal folders and asset folders such as icons, images and translations",
+   "anchor": "tools/coyodex/preindex_lib.py:579",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:609 — folds a nearly empty sub-folder into its parent rather than counting a box for it",
+   "anchor": "tools/coyodex/preindex_lib.py:609",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:619 — counts the loose files of a folder as a box only when they hold real code",
+   "anchor": "tools/coyodex/preindex_lib.py:619",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes.' is enforced at tools/coyodex/validate_model.py:4481 — files the box-count comparison under notes, never under failures",
+   "anchor": "tools/coyodex/validate_model.py:4481",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes.' is enforced at tools/coyodex/validate_model.py:4501 — files the crowded-screen and thin-screen findings under notes, never under failures",
+   "anchor": "tools/coyodex/validate_model.py:4501",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes.' is enforced at tools/coyodex/validate_analysis.py:382 — says nothing at all while the number of boxes stays inside the forty percent margin",
+   "anchor": "tools/coyodex/validate_analysis.py:382",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them.' is enforced at tools/coyodex/balance_lib.py:613 — counts a screen as reading well while it carries three to nine boxes",
+   "anchor": "tools/coyodex/balance_lib.py:613",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them.' is enforced at tools/coyodex/balance_lib.py:294 — raises the crowding note when the first screen carries more than twelve boxes",
+   "anchor": "tools/coyodex/balance_lib.py:294",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them.' is enforced at tools/coyodex/balance_lib.py:307 — raises the same crowding note when a group carries more than twelve boxes",
+   "anchor": "tools/coyodex/balance_lib.py:307",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes.' is enforced at tools/coyodex/balance_lib.py:194 — reads the children as one family when two thirds of them sit in the same folder",
+   "anchor": "tools/coyodex/balance_lib.py:194",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes.' is enforced at tools/coyodex/balance_lib.py:198 — reads the children as one family when two thirds of their names end in the same word",
+   "anchor": "tools/coyodex/balance_lib.py:198",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes.' is enforced at tools/coyodex/balance_lib.py:309 — leaves such a family alone until it passes fifteen boxes",
+   "anchor": "tools/coyodex/balance_lib.py:309",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out.' is enforced at tools/coyodex/balance_lib.py:290 — raises the thin note when the first screen shows under three boxes and the map holds many",
+   "anchor": "tools/coyodex/balance_lib.py:290",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out.' is enforced at tools/coyodex/balance_lib.py:303 — raises a note when a group holds exactly one box, so the level earns nothing",
+   "anchor": "tools/coyodex/balance_lib.py:303",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out.' is enforced at tools/coyodex/balance.py:147 — names the thin screens deeper in the map and states plainly that none of them is a fault",
+   "anchor": "tools/coyodex/balance.py:147",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested.' is enforced at tools/coyodex/balance_lib.py:524 — starts from exactly the boxes already on the screen, so none is created and none is dropped",
+   "anchor": "tools/coyodex/balance_lib.py:524",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested.' is enforced at tools/coyodex/balance.py:103 — the only thing a suggestion adds to the map is a group row",
+   "anchor": "tools/coyodex/balance.py:103",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested.' is enforced at tools/coyodex/balance.py:107 — the only change asked of an existing box is which group it belongs to",
+   "anchor": "tools/coyodex/balance.py:107",
+   "detail": "In: Diagram balance report (C15)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:1693 — reports a feature claiming the story must reach it, when no story step does",
+   "anchor": "tools/coyodex/validate_model.py:1693",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:1726 — reports a story step whose work sits in a feature claiming the story skips it",
+   "anchor": "tools/coyodex/validate_model.py:1726",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:1701 — separates a feature that answered nothing from a feature claiming the story skips it",
+   "anchor": "tools/coyodex/validate_model.py:1701",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:2883 — rejects any answer outside the two allowed words, so an unanswered feature stays visible",
+   "anchor": "tools/coyodex/validate_model.py:2883",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver.' is enforced at tools/coyodex/validate_model.py:1803 — blocks a use case that names no driving party at all",
+   "anchor": "tools/coyodex/validate_model.py:1803",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver.' is enforced at tools/coyodex/validate_model.py:1820 — reports a use case naming a person and a program together, because the program is usually delivery machinery",
+   "anchor": "tools/coyodex/validate_model.py:1820",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver.' is enforced at tools/coyodex/audit_model.py:692 — reports a traced scenario whose opening party is not one of the declared drivers",
+   "anchor": "tools/coyodex/audit_model.py:692",
+   "detail": "In: Map auditor (C14)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/validate_model.py:725 — sorts each driving party's vote by whether that party is a person or a program",
+   "anchor": "tools/coyodex/validate_model.py:725",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/validate_model.py:726 — counts the people's votes, and falls back to the programs only when no person voted",
+   "anchor": "tools/coyodex/validate_model.py:726",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/features.py:353 — the feature's record takes the derived answer, so nothing on the feature can contradict its parties",
+   "anchor": "tools/coyodex/features.py:353",
+   "detail": "In: Feature index (C17)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/validate_model.py:3057 — reports a feature whose people pull to opposite sides, unless the map records why",
+   "anchor": "tools/coyodex/validate_model.py:3057",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/features.py:193 — uses the author's named neighbour when the feature carries one",
+   "anchor": "tools/coyodex/features.py:193",
+   "detail": "In: Feature index (C17)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/features.py:203 — falls back to the last walk step the feature's own parties drive",
+   "anchor": "tools/coyodex/features.py:203",
+   "detail": "In: Feature index (C17)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/features.py:207 — puts a feature with nothing to hang on at the end of the column",
+   "anchor": "tools/coyodex/features.py:207",
+   "detail": "In: Feature index (C17)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/validate_model.py:2915 — rejects a named neighbour that is not a defined feature",
+   "anchor": "tools/coyodex/validate_model.py:2915",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/validate_model.py:2899 — blocks a story place on a code area or a data area, because only a feature sits in the column",
+   "anchor": "tools/coyodex/validate_model.py:2899",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

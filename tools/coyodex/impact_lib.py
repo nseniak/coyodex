@@ -201,8 +201,9 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
     entities, deps (where_configured + evidence), backbone edges (`where`), flow steps (`where` —
     a step's own precise call site, so a changed line hits the step directly and ripples to its use
     case), entry points, glossary, security rows, run_commands, non_entity_types, and groups
-    (EVERY forest — subsystems/subdomains/capabilities/blocks — the territory seeds). HP / use cases / roles carry no anchors
-    (ripple-only, by design — they inherit precision from their steps)."""
+    (EVERY forest — subsystems/subdomains/capabilities/blocks — the territory seeds), and a
+    role INCLUSION's grant line. HP and use cases carry no anchors (ripple-only, by design — they
+    inherit precision from their steps)."""
     out: list[AnchorRef] = []
 
     def add(r: AnchorRef | None) -> None:
@@ -241,6 +242,14 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
                 add(_ref(f"step:{sf.id}:{st.n}", "flow_step", st.where, "where", owner=sf.id))
     for s in model.security:
         add(_ref(f"security:{s.surface}", "security", s.source, "source"))
+    # A role INCLUSION's grant line. Roles were listed above as carrying no anchors, and that was
+    # true until `includes` gained a `source`: an inclusion is an access claim ("may do everything
+    # the other may do"), so its anchor has to face `--check-sources` like every other one. Without
+    # this an entirely invented grant line passed the existence gate, and change impact never
+    # rippled an edit of that line to the role.
+    for r in model.roles:
+        for rel in (r.relations or []):
+            add(_ref(r.id, "role", rel.source, "relations[].source"))
     for br in model.rules:
         # `owner=` carries the rule id, following the `ep:` pattern, so a changed site ripples to the
         # rule AND onward to what the rule reaches (impact_ripple).

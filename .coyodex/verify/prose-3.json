@@ -1,0 +1,167 @@
+{
+ "schema": "coyodex/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "UC16 trigger/outcome",
+   "text": "A relation turns out not to exist. Removing it also heals the walk steps that rode on it."
+  },
+  {
+   "where": "UC17 trigger/outcome",
+   "text": "An advisory is a judgement, not a defect. One line written under the heading it names stops it firing again."
+  },
+  {
+   "where": "UC18 trigger/outcome",
+   "text": "Grouping was cut before any relation existed. The report shows each screen's box count and where a split would fall."
+  },
+  {
+   "where": "UC19 trigger/outcome",
+   "text": "The agent believes the map is done. One run does every gate, writes the whole finding list to a file, and says which gates ran."
+  },
+  {
+   "where": "UC20 trigger/outcome",
+   "text": "The map is written and checked. The session and the minute are recorded, so the transcript can be found again later."
+  },
+  {
+   "where": "UC21 trigger/outcome",
+   "text": "The reader clicks a project on the landing page. Every view is built from the map on demand and drawn."
+  },
+  {
+   "where": "UC22 trigger/outcome",
+   "text": "The reader wants to know what the product does. One column shows every feature in the order the story runs."
+  },
+  {
+   "where": "UC23 trigger/outcome",
+   "text": "The reader wants the evidence behind a claim. The file opens at that line, read from the commit the map names."
+  },
+  {
+   "where": "UC24 trigger/outcome",
+   "text": "The reader wants to change what a box describes. One click opens that line in the editor or on the hosting site."
+  },
+  {
+   "where": "UC25 trigger/outcome",
+   "text": "The code has moved past the commit the map names. The report says which parts of the map are added, changed or gone."
+  },
+  {
+   "where": "UC26 trigger/outcome",
+   "text": "The reader says the report is right. The map is patched element by element and re-pinned to the new commit."
+  },
+  {
+   "where": "UC27 trigger/outcome",
+   "text": "The reader asks to split, rename, move or drill deeper into a part. The map is edited directly, then put through every gate."
+  },
+  {
+   "where": "UC28 trigger/outcome",
+   "text": "The agent has the map from before and after an edit. Every added, dropped and changed row is listed with the fields that moved."
+  },
+  {
+   "where": "UC29 trigger/outcome",
+   "text": "The developer changed the method and rebuilt. The two maps are measured and the run says pass, drift or regressed."
+  },
+  {
+   "where": "UC30 trigger/outcome",
+   "text": "Counting cannot say whether the words are true. Judges read both maps for grounding and against a rubric, and their verdicts are gathered."
+  },
+  {
+   "where": "UC31 trigger/outcome",
+   "text": "The developer decides the new map is the standard. Its map, view, profile and judgement all become the baseline."
+  },
+  {
+   "where": "UC32 trigger/outcome",
+   "text": "Refutation rates cannot say whether skeptics are weak. Planting known-false claims gives an answer key to score against."
+  },
+  {
+   "where": "UC33 trigger/outcome",
+   "text": "A build stamps its session near the end. Reviewing early would read the previous run, so the check stops it."
+  },
+  {
+   "where": "UC34 trigger/outcome",
+   "text": "A build transcript is far too large to read whole. An index comes first, then one range at a time."
+  },
+  {
+   "where": "UC35 trigger/outcome",
+   "text": "The gates say a map is well formed, never that the agent followed the method. The transcript is scored rule by rule."
+  },
+  {
+   "where": "UC36 trigger/outcome",
+   "text": "The developer wants the price of a map. Time and tokens are totalled across every worker, then divided by the rows produced."
+  },
+  {
+   "where": "UC37 trigger/outcome",
+   "text": "A rebuild must never read the map it replaces. Filing the old map away leaves the folder empty and keeps the baseline."
+  },
+  {
+   "where": "UC38 trigger/outcome",
+   "text": "The reader picks two commits in the viewer. Every box the change reaches is marked, including the ones it reaches indirectly."
+  },
+  {
+   "where": "BR1 statement",
+   "text": "Version control decides which files a map may describe. A project with no version control falls back to a walk of the disk."
+  },
+  {
+   "where": "BR1 risk",
+   "text": "Code that version control hides never reaches the map. An absent folder then reads exactly like a folder that was looked at and found empty."
+  },
+  {
+   "where": "BR2 statement",
+   "text": "Installed packages, build output, lock files and images are never analysed, so the map measures code people wrote."
+  },
+  {
+   "where": "BR2 risk",
+   "text": "Counting generated files inflates how big the project looks, which moves how many boxes the map is expected to have."
+  },
+  {
+   "where": "BR3 statement",
+   "text": "A project can name committed folders and files that the map is not meant to describe."
+  },
+  {
+   "where": "BR3 risk",
+   "text": "A fixture tree or a vendored copy would stay in the map forever. Version control is asked to commit those files, never to hide them."
+  },
+  {
+   "where": "BR4 statement",
+   "text": "When several exclusion patterns match one file, the last pattern written decides. So a later line can put one file back."
+  },
+  {
+   "where": "BR4 risk",
+   "text": "Without a later line winning, a broad exclusion could never be narrowed. One wanted file would then force the whole folder back in."
+  },
+  {
+   "where": "BR5 statement",
+   "text": "Every check and every screen reading a narrowed tree reports which patterns narrowed it and how many files went."
+  },
+  {
+   "where": "BR5 risk",
+   "text": "The exclusion list is the one input able to hide a real gap from the checks that find gaps. Silence would make an incomplete map read as complete."
+  },
+  {
+   "where": "BR6 statement",
+   "text": "A pattern that removed no file is named on its own, including a line whose spelling can never match anything."
+  },
+  {
+   "where": "BR6 risk",
+   "text": "A dead pattern reads as coverage the author never got. Hiding it inside a reassuring total is how a typo silently costs a coverage decision."
+  },
+  {
+   "where": "BR180 statement",
+   "text": "A measurement that moved too far asks for a human look, while a failed check stops the work."
+  },
+  {
+   "where": "BR180 risk",
+   "text": "Without the split, every normal wobble between two rebuilds reads as a failure, so real losses stop being believed."
+  },
+  {
+   "where": "BR181 statement",
+   "text": "A count that grew is never called worse, while a count that fell by thirty percent is."
+  },
+  {
+   "where": "BR181 risk",
+   "text": "A symmetric limit would call a map that found more parts a regression. The same limit would wave through a map that quietly lost half of them."
+  },
+  {
+   "where": "BR182 statement",
+   "text": "The number of boxes is measured against a count derived from the code, not against the accepted map."
+  }
+ ]
+}

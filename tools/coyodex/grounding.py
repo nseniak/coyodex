@@ -679,9 +679,46 @@ def surviving_refutations(m: ProjectModel,
     return out
 
 
+def _access_rule_ids(m: ProjectModel) -> set[str]:
+    """Ids of the rules the map marks `access: true` — the ones whose stated confidence is a claim
+    about who may do what, not about how something works."""
+    return {br.id for br in m.rules if getattr(br, "access", False) and br.id}
+
+
+def _rules_voted_under_any_anchor(m: ProjectModel, grounding_rows: list[dict]) -> set[str]:
+    """Rule ids a skeptic voted on, matched by STATEMENT rather than by the anchored claim string.
+
+    `element_checks` pairs a vote to an element by exact claim text, and a rule-site claim embeds the
+    `file:line` and the site's `why` (see `rule_site_claim`). So moving an anchor one line, or
+    rewording a `why`, orphans every vote the rule ever had and the element reads `unchecked` — as if
+    nobody had looked. That is fine for an advisory about wording. It is not fine for a gate: an
+    adversarial review moved ONE anchor on a confirmed access rule of a real map and the rule went
+    straight to BLOCKING under a message reading "NO skeptic ever voted on it", which was false. 50
+    of that map's 56 access rules sit in the state where that could happen, and `fix apply-drift` —
+    the method's own remedy for a drifted anchor — is documented as moving exactly these anchors.
+
+    The statement is the part of the claim that does NOT move when an anchor is corrected, so it is
+    what tells "nobody challenged this rule" from "the rule was challenged and then re-anchored"."""
+    claims = " \u0000 ".join(str(r.get("claim") or "") for r in grounding_rows)
+    return {br.id for br in m.rules
+            if br.id and (br.statement or "").strip() and (br.statement or "").strip() in claims}
+
+
 def format_refutations(surviving: list[SurvivingRefutation],
-                       disagreeing: list[ElementCheck], as_json: bool = False) -> str:
-    """The gate's report: what the map still asserts against its own skeptics."""
+                       disagreeing: list[ElementCheck], as_json: bool = False,
+                       m: ProjectModel | None = None,
+                       grounding_rows: list[dict] | None = None) -> str:
+    """The gate's report: what the map still asserts against its own skeptics.
+
+    `access` rides on each unchallenged element because the caller has to tell two cases apart that
+    read identically here. A component description stating `verified` with no vote is a prose
+    overstatement. An ACCESS rule stating `verified` with no vote is the map telling a reader that
+    someone checked who may do what, when nobody did — and a shipped mcpolis map carried exactly
+    two, `A sign-in return must carry an unforged ticket` and `Live updates never cross
+    organizations`, both authored after the worklist was pinned so no skeptic ever saw them, both
+    labelled `verified` by the hand that wrote them."""
+    access = _access_rule_ids(m) if m else set()
+    voted = _rules_voted_under_any_anchor(m, grounding_rows or []) if m else set()
     if as_json:
         return json.dumps({
             "surviving_refutations": [
@@ -689,7 +726,8 @@ def format_refutations(surviving: list[SurvivingRefutation],
                  "refuted_by": s.refuted_by, "note": s.note} for s in surviving],
             "stated_but_unchallenged": [
                 {"id": e.element_id, "kind": e.kind, "label": e.label, "stated": e.stated,
-                 "status": e.status} for e in disagreeing],
+                 "status": e.status, "access": e.element_id in access,
+                 "voted_under_any_anchor": e.element_id in voted} for e in disagreeing],
         }, indent=2, ensure_ascii=False)
     lines: list[str] = []
     if surviving:
@@ -747,11 +785,21 @@ def lint_verdicts(paths: list[str], agent_dir: Path | None = None) -> VerdictLin
     cost four turns of hand-repair on the critical path. The same check, runnable the moment a
     skeptic returns, costs nothing and fails where the fix is cheap.
 
-    With `--agent-transcripts <dir>` it also answers the question no shape check can: did the
-    skeptic READ what its note says it read. One skeptic settled 40 claims in 95 seconds from a
-    single directory-wide grep and generated every row from a script, each `note` opening
-    `Read <file>:` for files it never opened. Those forty fabricated confirmations reached a
-    shipped grounding record, and nothing in the toolchain could see them.
+    With `--agent-transcripts <dir>` it also answers a question no shape check can: is the file a
+    row cites one this agent ever touched. The incident behind it: one skeptic settled 40 claims in
+    95 seconds from a single directory-wide grep and generated every row from a script, each `note`
+    opening `Read <file>:` for files it never opened.
+
+    WHAT IT CATCHES, stated narrowly on purpose. A citation of a file that appears NOWHERE in the
+    transcript is a hard problem — that is a path the agent could not have learned. A citation of a
+    file the transcript only ever PRINTED, in a grep result or a listing, is a note and not a
+    failure: reading the matching lines out of a grep result is legitimate verification, so
+    grep-only is a shape, not proof.
+
+    WHAT IT DOES NOT CATCH, so nobody reads a clean run as more than it is: the incident above would
+    pass this as a note. Its tell was 40 claims in 95 seconds off one grep — a RATE, not a missing
+    path — and a rate is not something this command can see. Do not treat `VERDICTS OK` as evidence
+    that a pass was honest.
     """
     out = VerdictLint()
     rows, load_notes = load_verdicts(paths)
@@ -781,7 +829,13 @@ def lint_verdicts(paths: list[str], agent_dir: Path | None = None) -> VerdictLin
                                           "passed in twice"}[field])
 
     if agent_dir is not None:
-        out.problems += _fabricated_evidence(rows, agent_dir)
+        evidence = _fabricated_evidence(rows, agent_dir)
+        # The weak half says of itself that it is not proof, so it rides as a NOTE. A signal that
+        # fails the lint is a signal an agent must clear, and the only way to clear this one is to
+        # re-read files it may have read already — which teaches the next agent to route its reading
+        # around the check rather than to look again.
+        out.problems += evidence.problems
+        out.notes += evidence.notes
     return out
 
 
@@ -790,10 +844,49 @@ def lint_verdicts(paths: list[str], agent_dir: Path | None = None) -> VerdictLin
 _CLAIMS_A_READ = re.compile(r"\bread\s+([\w./-]+\.[A-Za-z0-9]+)", re.I)
 
 
+#: The file extensions a map anchors into. An explicit list, because `evidence` also carries
+#: SYMBOL references — `ServiceTokenService.mint`, `MongoOAuthStateRepository.save` — which are
+#: `Word.word` and match any "token dot token" rule. Reading eleven of those as unopened files was
+#: the first thing this widening did.
+_SOURCE_SUFFIXES = (
+    "py", "pyi", "js", "jsx", "ts", "tsx", "mjs", "cjs", "go", "rs", "rb", "java", "kt", "kts",
+    "swift", "c", "h", "cc", "cpp", "hpp", "cs", "php", "scala", "clj", "ex", "exs", "erl", "lua",
+    "sh", "bash", "zsh", "sql", "html", "css", "scss", "vue", "svelte", "json", "yaml", "yml",
+    "toml", "ini", "cfg", "conf", "env", "md", "txt", "proto", "graphql", "tf", "dockerfile")
+
+#: Extensionless files a map really anchors into. Across three real maps these are 60 anchors the
+#: suffix list alone could not reach — `Makefile` 43 times on one of them — and a build file is
+#: where a fabricated claim is least likely to be noticed.
+_EXTENSIONLESS = ("makefile", "dockerfile", "procfile", "rakefile", "gemfile", "justfile",
+                  "commit-msg", "pre-commit", "pre-push", "codeowners")
+
+#: A bare `path:line` — the shape every verdict row's `evidence` field carries.
+_EVIDENCE_PATH = re.compile(
+    r"((?:[\w./-]+\.(?:" + "|".join(_SOURCE_SUFFIXES) + r")"
+    r"|(?:[\w./-]*/)?(?:" + "|".join(_EXTENSIONLESS) + r")))(?::\d+)?$", re.I)
+
+
+def _claimed_files(row: dict) -> set[str]:
+    """Every file this row asserts the skeptic looked at.
+
+    Two sources, and the second is what took this check from 2 % of rows to nearly all of them. The
+    NOTE half was here first and only matches prose of the shape `read <file>.<ext>`; on a measured
+    build that was 20 of 1000 rows, because most notes cite their anchor in `evidence` instead and
+    describe the reading in words. `evidence` is a bare `path:line` on every row, and citing a file
+    you never opened is precisely the shape this check exists to catch — the skeptic that settled 40
+    claims in 95 seconds from one directory-wide grep put a real-looking anchor on every one."""
+    out = {_norm_path(m) for m in _CLAIMS_A_READ.findall(str(row.get("note") or ""))
+           if m.rsplit(".", 1)[-1].lower() in _SOURCE_SUFFIXES
+           or m.rsplit("/", 1)[-1].lower() in _EXTENSIONLESS}
+    ev = _EVIDENCE_PATH.match(str(row.get("evidence") or "").strip())
+    if ev:
+        out.add(_norm_path(ev.group(1)))
+    return {f for f in out if f}
+
+
 def _read_claim_coverage(rows: list[dict]) -> tuple[int, int]:
-    """`(rows, rows whose note the evidence check can actually test)`."""
-    testable = sum(1 for r in rows if _CLAIMS_A_READ.search(str(r.get("note") or "")))
-    return len(rows), testable
+    """`(rows, rows the evidence check can actually test)`."""
+    return len(rows), sum(1 for r in rows if _claimed_files(r))
 
 
 #: Suffixes a per-agent transcript is written under. `.jsonl` is the settled convention; `.output`
@@ -813,14 +906,137 @@ def _agent_transcript_files(agent_dir: Path) -> list[Path]:
     return sorted(seen)
 
 
-def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> list[str]:
-    """Files a note says were read, that the agent's own transcript never opened."""
-    opened: set[str] = set()
-    files = _agent_transcript_files(agent_dir)
+#: A tool call that really opens a file, and where the path sits in its input. `Read` is the direct
+#: one; the shell verbs are how a skeptic reads a range without loading a whole file.
+#: `Grep` and `Glob` open nothing themselves, but a skeptic that greps a file and reads the matching
+#: lines out of the RESULT has verified the claim — and accusing it of fabrication is the expensive
+#: mistake here. They count as opening their `path`, which is why the strong set is the one that
+#: FAILS the lint and the loose set only notes.
+_FILE_READING_TOOLS = ("Read", "NotebookRead", "Grep", "Glob")
+_SHELL_READERS = re.compile(r"\b(?:cat|sed|head|tail|less|awk|grep|rg|nl|wc)\b")
+
+
+def _shell_read_operands(command: str) -> set[str]:
+    """Paths a shell command READS, as operands — never as a pattern or a redirect target.
+
+    `grep -rn "src/auth_token.py" docs/` names a path inside its PATTERN and opens nothing. Taking
+    every path-shaped token out of the command string turned that into a self-service whitelist: one
+    grep laundered an arbitrary file list into "actually opened", and the row cleared without even a
+    note. Quoted spans and everything after a redirect are dropped, and only the verbs that read a
+    file are considered at all."""
+    if not _SHELL_READERS.search(command):
+        return set()
+    body = re.sub(r"'[^']*'|\"[^\"]*\"", " ", command)      # a pattern is quoted; an operand rarely is
+    body = re.split(r"[>]", body)[0]                        # a redirect target is written, not read
+    out: set[str] = set()
+    for tok in body.split():
+        if tok.startswith("-"):
+            continue
+        if re.fullmatch(r"[\w./-]+\.[A-Za-z0-9]+", tok) or tok.rsplit("/", 1)[-1].lower() in _EXTENSIONLESS:
+            out.add(_norm_path(tok))
+    return out
+
+
+def _opened_files(files: list[Path]) -> set[str]:
+    """Paths the agent's transcript shows it ACTUALLY opening — file-reading tool calls only.
+
+    The permissive set below (every filename-shaped token anywhere in the transcript) is what this
+    check used to test against, and it is close to useless: measured on one skeptic transcript from
+    a real build it held 477 names where the agent had opened 17 files. A directory-wide `grep`
+    prints hundreds of paths into the transcript, and a grep is exactly what the fabricating skeptic
+    this check was written for used. So the two sets are kept apart: a claim outside BOTH is a hard
+    finding, and a claim inside the loose set but outside this one is the weaker signal, reported as
+    such rather than silently folded into "no findings"."""
+    out: set[str] = set()
     for f in files:
         for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
-            for m in re.finditer(r"[\w./-]+\.[A-Za-z0-9]+", line):
-                opened.add(m.group(0).lstrip("./"))
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            for c in ((rec.get("message") or {}).get("content") or []):
+                if not isinstance(c, dict) or c.get("type") != "tool_use":
+                    continue
+                inp = c.get("input") or {}
+                if c.get("name") in _FILE_READING_TOOLS:
+                    for key in ("file_path", "path", "notebook_path"):
+                        if str(inp.get(key) or "").strip():
+                            out.add(_norm_path(str(inp[key])))
+                elif c.get("name") == "Bash":
+                    out |= _shell_read_operands(str(inp.get("command") or ""))
+    return {p for p in out if p}
+
+
+def _norm_path(p: str) -> str:
+    """One normaliser, used on BOTH sides. `lstrip("./")` was the first version and it is a
+    character-class strip, not a prefix strip: it turned `.github/dependabot.yml` into
+    `github/dependabot.yml` while the transcript kept `/.github/`, so the two could never match. The
+    single finding the widened check produced on a real 1000-row pass was that false accusation, and
+    one of the three real maps carries 104 dot-directory anchors."""
+    return p.strip().removeprefix("./").rstrip("/")
+
+
+def _mentioned_files(files: list[Path]) -> set[str]:
+    """Every path the transcript NAMES anywhere — including in a tool result a grep printed.
+
+    Decoded from the JSON, not scanned off raw lines. A JSONL record holds `\n` as a two-character
+    escape, so a line-wise regex reads `\nsrc/pkg/mod.py` as a token beginning `nsrc/`: measured on
+    one real transcript, 10 of 477 tokens were real paths mangled that way. It decided outcomes — the
+    same 40 fabricated rows exited 1 or 0 depending on whether the grep output happened to be
+    indented."""
+    out: set[str] = set()
+    for f in files:
+        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            text = (json.dumps(rec, ensure_ascii=False)
+                    .replace("\\n", "\n").replace("\\t", "\t"))
+            for m in re.finditer(r"[\w./-]+\.[A-Za-z0-9]+", text):
+                out.add(_norm_path(m.group(0)))
+            for m in re.finditer(r"(?:[\w./-]*/)?(?:" + "|".join(_EXTENSIONLESS) + r")\b", text,
+                                 re.I):
+                out.add(_norm_path(m.group(0)))
+    return {p for p in out if p}
+
+
+def _resolves(claimed: str, pool: set[str]) -> bool:
+    """Is `claimed` one of `pool`?
+
+    SYMMETRIC, because the sides disagree about absoluteness in both directions: a transcript may
+    hold `/repo/a/b.py` where a verdict cites `a/b.py`, and a verdict may cite an absolute path
+    where the transcript holds the relative one.
+
+    A bare BASENAME never matches on suffix alone. `config.py` would otherwise resolve against
+    `vendor/thirdparty/junk/config.py` and clear a row that cited a file nobody opened — the check
+    would report clean on exactly the shape it exists to catch. A one-segment claim must match
+    whole."""
+    c = _norm_path(claimed)
+    if not c:
+        return False
+    normed = {_norm_path(p) for p in pool}
+    if c in normed:
+        return True
+    if "/" in c:
+        return any(p.endswith("/" + c) or c.endswith("/" + p) for p in normed)
+    # A one-segment claim (`config.py`, `Makefile`) matches on basename ONLY when the pool holds
+    # exactly one file with that name. Two candidates and the claim cannot say which was read; zero
+    # is a genuine miss. Matching any suffix would clear a row that cited `config.py` against a
+    # `vendor/thirdparty/junk/config.py` nobody opened — clean on the shape this exists to catch.
+    same_name = {p for p in normed if p.rsplit("/", 1)[-1] == c}
+    return len(same_name) == 1
+
+
+def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> VerdictLint:
+    """What the transcript says about files a row CITES but the agent never opened.
+
+    A `VerdictLint`, not a `(list, list)` pair, for the reason that class already exists: both slots
+    are empty on the happy path, so a swapped return reads as correct behaviour and no test can tell
+    the difference. `tests/test_cli_contract` refuses the positional shape by name."""
+    files = _agent_transcript_files(agent_dir)
+    opened = _opened_files(files)
+    mentioned = _mentioned_files(files)
     if not files:
         # Name the directory that DOES work. The lead is handed
         # `<session>/tasks/<id>.output` at dispatch and has to guess that the readable copies live
@@ -829,19 +1045,38 @@ def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> list[str]:
         hint = (f" Did you mean {sibling}? That is where this harness keeps the readable per-agent "
                 f"files; the `tasks/` directory a dispatch result names holds the same JSONL under "
                 f"a different suffix." if sibling.is_dir() and sibling != agent_dir else "")
-        return [f"--agent-transcripts {agent_dir} holds no per-agent transcript "
-                f"({' or '.join(_AGENT_TRANSCRIPT_GLOBS)}) — nothing to check evidence against.{hint}"]
+        return VerdictLint(problems=[
+            f"--agent-transcripts {agent_dir} holds no per-agent transcript "
+            f"({' or '.join(_AGENT_TRANSCRIPT_GLOBS)}) — nothing to check evidence against.{hint}"])
     claimed: dict[str, int] = {}
     for r in rows:
-        for hit in _CLAIMS_A_READ.findall(str(r.get("note") or "")):
-            claimed[hit.lstrip("./")] = claimed.get(hit.lstrip("./"), 0) + 1
-    ghosts = sorted(f for f in claimed if f not in opened)
-    if not ghosts:
-        return []
-    return [f"{len(ghosts)} file(s) are named as READ in a note but appear nowhere in the agent's "
-            f"transcript: {', '.join(ghosts[:8])}{' …' if len(ghosts) > 8 else ''}. A note that says "
-            f"you read something is a statement about your own work; {sum(claimed[g] for g in ghosts)} "
-            f"row(s) rest on one."]
+        for hit in _claimed_files(r):
+            claimed[hit] = claimed.get(hit, 0) + 1
+    # A file in EITHER set is not a ghost. Testing `mentioned` alone accused two real, opened files
+    # on a live pass: `mentioned` is built from path-shaped tokens with a dot in them, so
+    # `Makefile` — which the agent had genuinely opened with `Read` — never entered it.
+    ghosts = sorted(f for f in claimed if not _resolves(f, mentioned | opened))
+    unopened = sorted(f for f in claimed
+                      if f not in ghosts and not _resolves(f, opened))
+    found = VerdictLint()
+    if ghosts:
+        found.problems.append(
+            f"{len(ghosts)} file(s) are cited as evidence but appear NOWHERE in the "
+            f"{len(files)} transcript(s) given: {', '.join(ghosts[:8])}"
+            f"{' …' if len(ghosts) > 8 else ''}. A cited anchor is a statement about your own work; "
+            f"{sum(claimed[g] for g in ghosts)} row(s) rest on one. Pass the transcripts of EVERY "
+            f"skeptic in the pass — rows are pooled across all of them, so a missing transcript "
+            f"reads exactly like a fabricated citation.")
+    if unopened:
+        found.notes.append(
+            f"{len(unopened)} file(s) are cited as evidence and appear in the transcript only as "
+            f"TEXT — printed by a grep or a listing — never as a file this agent opened: "
+            f"{', '.join(unopened[:8])}{' …' if len(unopened) > 8 else ''}. Weaker than the line "
+            f"above and not proof of anything: a skeptic may read a range through a shell verb this "
+            f"cannot see. It is the shape the fabricating pass had — 40 claims settled in 95 seconds "
+            f"off one directory-wide grep — so {sum(claimed[u] for u in unopened)} row(s) are worth "
+            f"a second look.")
+    return found
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -962,9 +1197,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"VERDICTS OK — {len(verdicts)} file(s) well-formed, {rows_total} verdict row(s)"
               + ("; pass --agent-transcripts <dir> to also check that every note claiming a read "
                  "is backed by the agent's transcript" if not agent_dir else
-                 f"; evidence check covered {rows_testable} of {rows_total} row(s) — the ones "
-                 f"whose `note` names a file it read. A row that cites its anchor only in "
-                 f"`evidence` cannot be tested this way"))
+                 f"; evidence check covered {rows_testable} of {rows_total} row(s) — every row "
+                 f"citing a file, in `evidence` or in a `read <file>` note. A row anchored on a "
+                 f"SYMBOL, or on a filename this does not recognise, cannot be tested this way"))
         return 0
 
     if verb == "refutations":
@@ -985,7 +1220,8 @@ def main(argv: list[str] | None = None) -> int:
             print(n, file=sys.stderr)
         surviving = surviving_refutations(live, rows)
         checks, _unresolved = element_checks(live, [w.claim for w in l2_worklist_model(live)], rows)
-        print(format_refutations(surviving, [c for c in checks if c.disagrees], as_json=as_json))
+        print(format_refutations(surviving, [c for c in checks if c.disagrees],
+                                 as_json=as_json, m=live, grounding_rows=rows))
         # BLOCKING on a survivor, ADVISORY on a label the pass does not support. The second is a
         # judgement about wording; the first is the map asserting something its own skeptics
         # disproved, which is the one shape here that makes the map wrong rather than unclear.
@@ -1106,8 +1342,20 @@ def main(argv: list[str] | None = None) -> int:
         buckets = json.loads(format_report(claims, rows, as_json=True, live_claims=live_claims))
         sup_confirmed = sum(1 for r in buckets["superseded"] if r.get("verdict") == "confirmed")
         labels = sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")})
+        # REDUNDANT ROWS, spelled out, because the note has to state it and the arithmetic is the
+        # kind nobody re-does. A three-voted theme produces three rows per claim; "136 redundant
+        # rows" was published in a shipped map and in the operator report for a pass whose four
+        # security batches held 136 CLAIMS and 408 rows — 272 redundant. The note's author had the
+        # row count here and the claim count nowhere, so it quoted the number it could see.
+        # Both sides count the SAME rows: a row with no claim is excluded from each, or it would
+        # inflate `redundant` by one while belonging to neither side of the subtraction.
+        claimed_rows = [r for r in rows if r.get("claim")]
+        voted = len({str(r.get("claim")) for r in claimed_rows})
+        redundant = max(0, len(claimed_rows) - voted)
         print(f"  NOTE FACTS — quote these, do not retype them from an earlier run:\n"
-              f"    verdict rows {len(rows)} · distinct skeptic labels {len(labels)} "
+              f"    verdict rows {len(rows)} over {voted} distinct claim(s) — "
+              f"{redundant} row(s) that added no new claim (usually a re-vote)\n"
+              f"    distinct skeptic labels {len(labels)} "
               f"(a label is not an agent: one agent may carry several batches)\n"
               f"    confirmed {record['claims_confirmed']} · refuted {record['claims_refuted']} · "
               f"unverifiable {record['claims_unverifiable']} · tied {len(buckets['tied'])}"

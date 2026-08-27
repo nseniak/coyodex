@@ -1,0 +1,228 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Rule 'A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right.' is enforced at tools/coyodex/anchor_drift.py:169 — requires the whole claim and a non-empty reason, so one record answers one report",
+   "anchor": "tools/coyodex/anchor_drift.py:169",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right.' is enforced at tools/coyodex/anchor_drift.py:246 — reports back a record that silences nothing, because the claim changed or the line was fixed",
+   "anchor": "tools/coyodex/anchor_drift.py:246",
+   "detail": "In: Grounding record (C23)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Where a unit runs, how it is reached, and where a signal is emitted stay plain words. No single code line is that place.' is enforced at tools/coyodex/views.py:619 — writes what a unit runs on and how it is reached as plain cells, with no link",
+   "anchor": "tools/coyodex/views.py:619",
+   "detail": "In: Graph builder (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Where a unit runs, how it is reached, and where a signal is emitted stay plain words. No single code line is that place.' is enforced at tools/coyodex/views.py:623 — writes where a signal is emitted and where it is watched as plain cells, with no link",
+   "anchor": "tools/coyodex/views.py:623",
+   "detail": "In: Graph builder (C45)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Where a unit runs, how it is reached, and where a signal is emitted stay plain words. No single code line is that place.' is enforced at tools/coyodex/viewer/viewer.js:8178 — shows the emit place in the browser as text, unlike the fields the viewer turns into links",
+   "anchor": "tools/coyodex/viewer/viewer.js:8178",
+   "detail": "In: Map canvas (C55), Map reading pages (C56), Trail and history (C57), Source column (C58)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding stops the work only when whoever receives it can still fix it. A judgement call only advises.' is enforced at tools/coyodex/finalize.py:345 — A disproved claim still standing in the map stops the run, because correcting or dropping it is always possible.",
+   "anchor": "tools/coyodex/finalize.py:345",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding stops the work only when whoever receives it can still fix it. A judgement call only advises.' is enforced at tools/coyodex/finalize.py:316 — A code link pointing at the wrong line is only advice, because the repair tool cannot apply every one.",
+   "anchor": "tools/coyodex/finalize.py:316",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding stops the work only when whoever receives it can still fix it. A judgement call only advises.' is enforced at tools/coyodex/finalize.py:420 — How boxes are grouped on a screen is recorded as information, and never allowed to move the verdict.",
+   "anchor": "tools/coyodex/finalize.py:420",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding stops the work only when whoever receives it can still fix it. A judgement call only advises.' is enforced at tools/coyodex/lint_fragment.py:174 — An access rule that names no stake stops the worker writing it, the one person able to answer.",
+   "anchor": "tools/coyodex/lint_fragment.py:174",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A finding stops the work only when whoever receives it can still fix it. A judgement call only advises.' is enforced at tools/coyodex/lint_fragment.py:480 — A judgement-shaped nudge is printed for the worker and never fails the worker's own check.",
+   "anchor": "tools/coyodex/lint_fragment.py:480",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that did not run never counts as a check that passed. The run names each check that was missing.' is enforced at tools/coyodex/finalize.py:490 — One check that should have run and did not makes the whole verdict incomplete.",
+   "anchor": "tools/coyodex/finalize.py:490",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that did not run never counts as a check that passed. The run names each check that was missing.' is enforced at tools/coyodex/finalize.py:934 — An incomplete read exits as a failure, exactly like a finding that blocks.",
+   "anchor": "tools/coyodex/finalize.py:934",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that did not run never counts as a check that passed. The run names each check that was missing.' is enforced at tools/coyodex/lint_fragment.py:487 — A fragment that could not be read gives a did-not-run verdict instead of a clean one.",
+   "anchor": "tools/coyodex/lint_fragment.py:487",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that did not run never counts as a check that passed. The run names each check that was missing.' is enforced at tools/coyodex/finalize.py:393 — A check this run could have done, and was not asked to do, is reported as its own line.",
+   "anchor": "tools/coyodex/finalize.py:393",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A check that did not run never counts as a check that passed. The run names each check that was missing.' is enforced at tools/coyodex/finalize.py:511 — The written report lists every check that did not run, and says their silence is not a pass.",
+   "anchor": "tools/coyodex/finalize.py:511",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused.' is enforced at tools/coyodex/record.py:264 — A line that names a finding and gives no reason is refused as a dismissal.",
+   "anchor": "tools/coyodex/record.py:264",
+   "detail": "In: Map lookups (C3)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused.' is enforced at tools/coyodex/records.py:151 — The one reader of these lines needs text after the separator before it reads a line as a record.",
+   "anchor": "tools/coyodex/records.py:151",
+   "detail": "In: Map lookups (C3)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused.' is enforced at tools/coyodex/record.py:269 — A heading no check reads is refused, because a line under it would silence nothing.",
+   "anchor": "tools/coyodex/record.py:269",
+   "detail": "In: Map lookups (C3)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused.' is enforced at tools/coyodex/record.py:309 — The batch is re-read after writing, and refused whole when one line answers no finding.",
+   "anchor": "tools/coyodex/record.py:309",
+   "detail": "In: Map lookups (C3)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused.' is enforced at tools/coyodex/validate_model.py:3489 — A stored line that tries to be a record and answers nothing is reported on every run.",
+   "anchor": "tools/coyodex/validate_model.py:3489",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A written reason answers only the findings it names. A line that would silence a whole family of findings silences none of them.' is enforced at tools/coyodex/validate_model.py:3439 — An unscoped deployment exception is reported as silencing nothing, because it once switched off every deployment finding at once.",
+   "anchor": "tools/coyodex/validate_model.py:3439",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A written reason answers only the findings it names. A line that would silence a whole family of findings silences none of them.' is enforced at tools/coyodex/records.py:271 — A free-text key answers a line only when the line starts with that key, never when it merely contains it.",
+   "anchor": "tools/coyodex/records.py:271",
+   "detail": "In: Map lookups (C3)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A written reason answers only the findings it names. A line that would silence a whole family of findings silences none of them.' is enforced at tools/coyodex/validate_model.py:1487 — A recorded folder covers itself and what sits under it, never a neighbour whose name starts the same.",
+   "anchor": "tools/coyodex/validate_model.py:1487",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A written reason answers only the findings it names. A line that would silence a whole family of findings silences none of them.' is enforced at tools/coyodex/records.py:191 — A key list holding one token that is not a key records nothing, rather than the part it could read.",
+   "anchor": "tools/coyodex/records.py:191",
+   "detail": "In: Map lookups (C3)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A run always says what each written reason did. The count of findings that reason silenced is shown, or the fact that it silenced none.' is enforced at tools/coyodex/validate_model.py:3395 — Names how many deployment findings the written reasons swallowed, and which groups they covered.",
+   "anchor": "tools/coyodex/validate_model.py:3395",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A run always says what each written reason did. The count of findings that reason silenced is shown, or the fact that it silenced none.' is enforced at tools/coyodex/validate_model.py:1262 — Names the decision-sounding steps a written reason silenced, and says they were counted as done because of it.",
+   "anchor": "tools/coyodex/validate_model.py:1262",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A run always says what each written reason did. The count of findings that reason silenced is shown, or the fact that it silenced none.' is enforced at tools/coyodex/validate_model.py:3418 — Names a written reason silencing nothing today, so an inert line and a mistyped one are told apart.",
+   "anchor": "tools/coyodex/validate_model.py:3418",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A run always says what each written reason did. The count of findings that reason silenced is shown, or the fact that it silenced none.' is enforced at tools/coyodex/validate_model.py:4744 — Drops every written reason for one read, so a person sees the findings they hide without editing the map.",
+   "anchor": "tools/coyodex/validate_model.py:4744",
+   "detail": "In: Map validator (C13)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map with open advice is never reported as clean. A run marks one piece of advice answered only where it can name the written line that answers it.' is enforced at tools/coyodex/finalize.py:492 — Open advice gives the run its own verdict, which is not the clean one.",
+   "anchor": "tools/coyodex/finalize.py:492",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map with open advice is never reported as clean. A run marks one piece of advice answered only where it can name the written line that answers it.' is enforced at tools/coyodex/finalize.py:929 — Says on screen that advice is not a pass, and that each piece is fixed or recorded.",
+   "anchor": "tools/coyodex/finalize.py:929",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map with open advice is never reported as clean. A run marks one piece of advice answered only where it can name the written line that answers it.' is enforced at tools/coyodex/finalize.py:719 — Marks a piece of advice unanswered when the finding it names carries no recorded line.",
+   "anchor": "tools/coyodex/finalize.py:719",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A map with open advice is never reported as clean. A run marks one piece of advice answered only where it can name the written line that answers it.' is enforced at tools/coyodex/finalize.py:715 — Says the pairing cannot be decided, rather than guessing that a piece of advice was answered.",
+   "anchor": "tools/coyodex/finalize.py:715",
+   "detail": "In: Pre-commit gate run (C16)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'When two workers state the same thing differently, the merge stops and writes nothing. Neither version is quietly chosen over the other.' is enforced at tools/coyodex/assemble.py:394 — Two workers claiming one identifier is a conflict, never one silently overwriting the other.",
+   "anchor": "tools/coyodex/assemble.py:394",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'When two workers state the same thing differently, the merge stops and writes nothing. Neither version is quietly chosen over the other.' is enforced at tools/coyodex/assemble.py:382 — One fact stated twice with different values stops the merge, and both workers are named.",
+   "anchor": "tools/coyodex/assemble.py:382",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'When two workers state the same thing differently, the merge stops and writes nothing. Neither version is quietly chosen over the other.' is enforced at tools/coyodex/assemble.py:558 — Two rows for one channel disagreeing on a value is reported, because the merge will not choose between them.",
+   "anchor": "tools/coyodex/assemble.py:558",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'When two workers state the same thing differently, the merge stops and writes nothing. Neither version is quietly chosen over the other.' is enforced at tools/coyodex/assemble.py:891 — A merge conflict leaves no map written at all.",
+   "anchor": "tools/coyodex/assemble.py:891",
+   "detail": "In: Fragment merge (C2)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  },
+  {
+   "claim": "Rule 'A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead.' is enforced at tools/coyodex/preindex_lib.py:599 — stops at a folder that fits both size limits and counts it as exactly one box",
+   "anchor": "tools/coyodex/preindex_lib.py:599",
+   "detail": "In: Pre-index (C33)",
+   "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
+  }
+ ]
+}

@@ -410,6 +410,7 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: no fragment given", file=sys.stderr)
         return 2
     clean = True
+    worst_budget = 0.0
     n_drift = 0
     unreadable = False
     # Buffered, so the VERDICT can be printed before the detail. It used to print last, after every
@@ -460,6 +461,9 @@ def main(argv: list[str] | None = None) -> int:
             say(f"{p.name}: OK", False)
         # advisory warnings never fail the lint — heuristic nudges the agent can act on or ignore
         drift: list[str] = []
+        budget = _budget_warnings(m, expect)
+        if budget and expect:
+            worst_budget = max(worst_budget, len(m.components) / expect)
         if repo_root is not None:
             # THE OPERATIVE-LINE CHECK, which this command could not see until now.
             #
@@ -476,19 +480,37 @@ def main(argv: list[str] | None = None) -> int:
             # anchor does not refute the relationship, only its `where`. Promoting it here would
             # have failed six fragments on a build that shipped a clean map.
             drift = check_operative_lines_model(m, [repo_root.resolve()])
-        for w in lint_fragment_warnings(m) + _budget_warnings(m, expect) + drift:
+        for w in lint_fragment_warnings(m) + budget + drift:
             say(f"{p.name}: warning: {w}", kind="warning")
         n_drift += len(drift)
     n_prob, n_warn = tally["problem"], tally["warning"]
     # The drift count rides in the VERDICT, not only in the rows. The rows are the middle of the
     # output and a `head -5` cuts them; the verdict is the line every reader keeps.
     drift_note = f" ({n_drift} anchor drift)" if n_drift else ""
+    # The BUDGET overshoot rides in the verdict too, for the reason the drift count already does:
+    # rows get cut by a `head`, the verdict is the line every reader keeps.
+    #
+    # REDUNDANCY, NOT A RESCUE — and the distinction matters, because the first draft of this comment
+    # claimed the opposite and the transcripts refute it. On the measured build the warning fired for
+    # FIVE slices (1.8x, 2.0x, 2.0x, 3.0x, 3.7x) and all five agents quoted it verbatim in their
+    # report to the lead, one of them as "Balance exception to record: 22 components against a budget
+    # of 6, deliberate". The lead then recorded a `granularity` line under `Balance exceptions`, which
+    # is the documented escape for `validate`'s own component-count advisory. The map shipped at 118
+    # components against a code-derived 56 as a DECISION, not through a signal anyone lost.
+    #
+    # So this line buys one thing only: a reader who takes the verdict and nothing else sees the
+    # ratio. What it does NOT fix is the surface where that decision was actually made — the lead
+    # writing one line of prose about its own work, with no second reader and no requirement to name
+    # the per-slice overshoots it covers.
+    budget_note = f" ({worst_budget:.1f}x the slice budget)" if worst_budget >= _BUDGET_HI else ""
     if unreadable:
         verdict, code = "LINT DID NOT RUN", 2
     elif not clean:
-        verdict, code = f"LINT FAILED — {n_prob} problem(s), {n_warn} advisory warning(s){drift_note}", 1
+        verdict, code = (f"LINT FAILED — {n_prob} problem(s), "
+                         f"{n_warn} advisory warning(s){drift_note}{budget_note}"), 1
     else:
-        verdict, code = f"LINT OK — 0 problems, {n_warn} advisory warning(s){drift_note}", 0
+        verdict, code = (f"LINT OK — 0 problems, "
+                         f"{n_warn} advisory warning(s){drift_note}{budget_note}"), 0
     # FIRST line, always, and on STDERR whichever way the lint went. Two reasons, both learned:
     #
     #  * a truncating pipe must keep the verdict, so it leads and both streams are flushed before

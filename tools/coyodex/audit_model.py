@@ -30,6 +30,7 @@ from coyodex import balance_lib, prose, records, grammar
 from coyodex.anchors import FILEREF as _FILEREF
 from coyodex.model import (
     ProjectModel,
+    Role,
     RuleSite,
     expanded_flow_steps,
     group_forests,
@@ -88,6 +89,19 @@ def _claim_text(cell: str) -> str:
 # assemble and re-typed by hand from the human-readable listing.
 
 EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2`
+
+
+#: A role inclusion, as its claim. The two names are its identity and nothing else is: the grant
+#: anchor is deliberately OUT of this string. A rule-site claim embeds its `file:line`, and the same
+#: diff that added this had to add `_rules_voted_under_any_anchor` to stop one anchor correction
+#: orphaning every vote a rule had. Anchoring an inclusion that had none is the ordinary next step
+#: after a skeptic reads it, so building that failure in here would guarantee it.
+ROLE_INCLUSION_CLAIM = re.compile(r"^Role '(.+)' may do everything '(.+)' may do$")
+
+
+def role_inclusion_claim(role_name: str, other_name: str) -> str:
+    """The sentence a role inclusion asserts, in the words the viewer draws it in."""
+    return f"Role '{role_name}' may do everything '{other_name}' may do"
 
 
 def security_claim(surface: str, source: str) -> str:
@@ -216,6 +230,25 @@ def resolve_claim(m: ProjectModel, claim: str) -> ClaimMatch:
         e = m.edges[hits[0]]
         return ClaimMatch(ClaimTarget("edge", hits[0], -1, "", f"{e.src} {e.verb} {e.dst}"),
                           "edge", 1)
+    # A ROLE INCLUSION. Without this branch `resolve_claim` returned None and
+    # `surviving_refutations` read that as "reconciled: the live map no longer makes this claim" —
+    # so a skeptic could correctly refute "a headless agent may do everything an admin may do", the
+    # record would say `claims_refuted: 1`, and the gate that exists to catch a surviving refutation
+    # printed "No refuted claim survives in this map" and exited 0. Minting the claim without this
+    # is worse than not minting it: it consumes a skeptic and throws the answer away.
+    ro = ROLE_INCLUSION_CLAIM.match(claim)
+    if ro:
+        by_id = {r.id: r for r in m.roles}
+        hits = [(i, j)
+                for i, r in enumerate(m.roles)
+                for j, rel in enumerate(r.relations or [])
+                if (rel.kind or "").strip().lower() == "includes"
+                and r.name == ro.group(1)
+                and (by_id[rel.role].name if rel.role in by_id else rel.role) == ro.group(2)]
+        if len(hits) != 1:
+            return ClaimMatch(None, "role", len(hits))
+        i, j = hits[0]
+        return ClaimMatch(ClaimTarget("role", i, j, m.roles[i].id, m.roles[i].name), "role", 1)
     sec = [i for i, s in enumerate(m.security)
            if security_claim(s.surface, s.source) == claim]
     if sec:
@@ -949,6 +982,31 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             claim=security_claim(s.surface, s.source),
             anchor=_anchor(s.source), theme="security",
             why_risky="security boundary — a false claim here is an access-control hole."))
+    # A ROLE INCLUSION is an access claim and had no claim of its own. The viewer draws it to a
+    # reader on the Actors page as a plain sentence — "may also do everything a Team member may do" —
+    # and nothing in the toolchain ever challenged it: `audit`'s themes held no `role` kind, so a
+    # fabricated `R3 includes R1` (a headless agent may do everything an admin may do) left the
+    # worklist byte-identical. On the map that surfaced this, the one authored inclusion was not
+    # true of the code: the admin flag gates only the dashboard routes, and the three functions
+    # deciding what a caller actually reaches never consult it. `security` tier, because that is
+    # what the sentence says.
+    by_role = {r.id: r for r in m.roles}
+    for r in m.roles:
+        for rel in (r.relations or []):
+            if (rel.kind or "").strip().lower() != "includes":
+                continue
+            other = by_role.get(rel.role)
+            where = (f"granted at {rel.source}" if (rel.source or "").strip()
+                     else "the map anchors this to NO line, so nothing shows where it is granted")
+            items.append(WorkItem(
+                claim=role_inclusion_claim(r.name, other.name if other else rel.role),
+                anchor=_anchor(rel.source or ""), theme="security",
+                detail=f"{r.id} includes {rel.role} — {where}",
+                # `apply-drift` has no writer for a role relation, so promising drift-eligibility
+                # here would advertise a correction the fix verbs cannot apply.
+                drift_eligible=False,
+                why_risky="a privilege claim — it says one role may do everything another may do, "
+                          "which a reader takes as a fact about who can reach what."))
     # An `access: true` rule IS an auth surface — that is what the T7 fold made it — so its sites
     # carry the `security` theme and are ordered with the other security claims. Before this, every
     # rule site was themed `rule` and `m.security` was empty by design, so the theme the audit orders

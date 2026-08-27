@@ -273,6 +273,139 @@ that dropped an `assemble` WARNING (the dangerous half is fixed by line-bufferin
 is a filter habit no test can hold); and a method sentence about the post-hoc `granularity` record
 (hygiene, and no test reaches a timing habit).
 
+### Answered 2026-08-27 — the whole 2026-08-26_2158 ledger, 40 rows of 77
+
+Scope: every row open two or more retrospectives, plus every new HIGH row. Verified against the code
+and the real maps, not against the rows' own prose. Two adversarial refuters overturned two of the
+kills below before they were written. The ledger itself is git-ignored, which is why the answers are
+repeated here.
+
+**Rejected — do not re-propose. Each was checked; the evidence is on the row.**
+
+| # | item | why it is dead |
+|---|---|---|
+| 19 | The readable map file is read by nobody | False. `validate_model.py` re-renders the model and flags a stale or hand-edited `project-map.md`, and `eval/rubric.md` hands it to the judge. |
+| 20 | No use case names any entry point | False against the map it was written about: 30 of 30 use cases name entry points, 52 distinct ids. `_trigger_arm_warnings` returns `[]`, which is the check that would fire. |
+| 21 | `--agent-transcripts` never passed (open 4 retros) | Superseded. I ran the check it would have run: `evidence check covered 20 of 1000 row(s)`. The defect is the check, not the missing flag — see the KEEP row for it. |
+| 22 | A recorded exception silences one advisory but not its sibling | Wrong reading. The sub-flow refcount advisory is deliberately unescapable and is registered in `KNOWN_NO_ESCAPE` (`tests/test_method_contract.py`), with the reason in `method.md`. The real residual moved to the inert-record row. |
+| 23 | The prose counter reads 400 of ~1,437 fields | Duplicate of the prose-coverage row, and its totals do not reproduce (true unwalked: 1,534 and 2,208). |
+| 24 | 389 prose fields batched and dispatched on none | Duplicate of the better-evidenced dispatch row. Killing it also removes two probes that both give the wrong answer: `grep -ri 'prose batch'` returns 0 while the instruction exists in `method.md`, and `verdicts-prose-*.json` is a filename the method never asks anyone to write. |
+| 25 | The scorecard cannot see `open(var,'w')` | Landed. The class stays open under the `bash -c` and script-by-path rows; decide it there. |
+| 26 | Post-pin claims have no lister | Landed. `grounding report` prints `ADDED SINCE THE PIN (n)`. What remains is that `grounding write` REFUSES those verdicts, which is its own KEEP row. |
+
+**Confirmed fixed, verified rather than trusted** — refuted claims no longer ship; `lint-fragment`
+runs the operative-line check; both CLI entry points are line-buffered; NOTE FACTS carries
+superseded-that-were-CONFIRMED; the description theme is live and caught 5 false descriptions;
+`record` ran 15 times; the access-baseline escape works (moving the 20 recorded paths to the new
+heading takes the leg from 1 advisory to 0).
+
+**Reopened** — the Step-0 briefing. It IS shown verbatim, but after 10 tool calls, and
+`method/dispatch.md` says "before the first tool call". Do not close it against its own probe.
+
+**Seven of these landed the same day, in commits `019f1b6` and `5569348`** — marked LANDED below.
+The ledger rows carry the commit. Fifteen keeps are genuinely still open.
+
+**The keeps, ranked.** Full evidence on each ledger row.
+
+| rank | item | size |
+|---|---|---|
+| 1 | The process scorecard cannot parse `bash -c`, so it is blind to 94 % of the commands it scores | small |  **[LANDED 2026-08-27]**
+| 2 | The behavioural half of the map ships with no grounding claim at all — 235 elements, 461 step phrases | large |
+| 3 | Two builds of one commit produce different maps; the box count is the loudest symptom | see below |
+| 4 | Two access rules carry `confidence: verified` with zero votes | small |  **[LANDED 2026-08-27]**
+| 5 | `R1 includes R2` is not enforced by the code, and a role relation cannot carry an anchor | medium |  **[LANDED 2026-08-27]**
+| 6 | The fabricated-evidence check covers 2 % of verdict rows and treats any filename token as "opened" | medium |  **[LANDED 2026-08-27]**
+| 7 | 136 of 188 customer-facing surfaces carry none of the method's three dispositions | medium |
+| 8 | `Drift exceptions` records are inert on the shape-only pass, which finalize always runs — NEW | small |  **[LANDED 2026-08-27]**
+| 9 | `grounding report` says "challenge these 21"; `grounding write` then refuses them with a false diagnosis | small |
+| 10 | Access enforcement lines agree 55 % at file level between two builds of one commit | restate + one agent |
+| 11 | Four fifths of the map's reader-facing prose is never checked | small |
+| 12 | The prose batches are minted every build and dispatched on none, three builds running | small |
+| 13 | Fan-out scheduling wastes a third of active build time | method prose |
+| 14 | `grounding.note` publishes "136 redundant rows" where the true count is 272 | tiny |  **[LANDED 2026-08-27]**
+| 15 | `read-never-created HP3-files` parses to `HP3`, so one key silences two findings | small |
+| 16 | `coyodex record` accepts a key no reader of that heading honours | small |
+| 17 | `lint-fragment` runs no prose check, so 16 long sentences shipped | tiny |
+| 18 | `fix row --set-<field>` refuses to create a field the row omits | small |
+| 19 | The build hand-scripted 3 mutations a fix verb owns; the detector flagged only the one that never ran | method prose |
+| 20 | `finalize` accepts any non-empty `grounding.note` as the answer — a note reading "no." passes — NEW | small |  **[LANDED 2026-08-27]**
+| 21 | Nothing notices a sub-agent dispatched and returned empty | small |
+| 22 | The retro method gives slice readers no filename rule | one line |
+
+**Why the map doubled, 70 boxes to 118 on the same commit.** Not a method change: the slice-sizing
+paragraph is byte-identical between the two tool commits, and `EXPECTED COMPONENTS (E):` was never
+in the method at either — the earlier lead invented that field. Not a missing pre-index read: both
+builds ran `preindex --report` and saw the full per-directory E table (the scorecard says otherwise,
+and the scorecard is wrong — see rank 1). Not bad budgets: the numbers handed out match the table.
+What differs is only obedience — the earlier build ran 1.29× over budget with 2 of 7 slices exactly
+on target, this one 2.17× with 10 of 10 over. The one visible difference is the FORM of the line, a
+labelled field against a `~6 components` aside, and that is a hypothesis across two builds, not a
+proven cause. **What is certain: nothing anywhere compares a returned fragment's component count
+against the budget its own brief stated.** Build that check and the cause stops mattering.
+
+**The deeper number, which nothing in the toolchain measures.** Two builds of one commit share 55 of
+70 component SOURCE anchors but only **9 component NAMES of 70 and 118**; 13 of 47 use-case names;
+13 of 47 flow titles; **0 of 76 test-area labels**. `compare` measures name overlap for access
+enforcement lines only, and `profile` already collects `entity_names` that nothing reads.
+
+### Investigated 2026-08-27 — why two builds of one commit produce different maps
+
+The question: 70 components then 118, on commit `5dccb1c`, 21 hours apart, no product file
+changed. Answered from the 22 archived rebuilds under `.coyodex/dev-rebuilds/`; no build was run.
+
+**What is established.**
+
+1. **The instability is real and it is concentrated in INVENTED names.** Median survival of a
+   baseline name across 10 same-commit rebuild pairs: entities 96 %, glossary 70 %, deps 67 % —
+   all names COPIED from the code; components 4 %, box groups 5 %, data areas 14 % — all names the
+   model composes. 55 files carry a box in both builds and only 6 kept their name. The map points at
+   the same code and offers a different vocabulary each time.
+2. **The 70 -> 118 growth was every slice running about twice its own budget.** Ten harvest slices,
+   ten overshoots: 6->13, 6->10, 2->6, 6->22, 4->8, 5->9, 6->9, 11->20, 4->12, 4->8. Told 54, made
+   117, 2.17x — which IS the 2.11 C/E ratio. Not a lost signal: `lint-fragment --expect` fired on
+   five slices, all five agents quoted the warning verbatim to the lead, and the lead recorded a
+   deliberate `granularity` exception. It was a judgement, taken with the numbers in front of
+   everyone.
+3. **The operator judges build 23's names consistently better than build 22's.** Four explanations
+   were offered for that. THREE WERE WRONG, and each was wrong the same way — a line drawn through
+   two points before anyone looked at the distribution that was already on disk:
+   - *"Finer boxes name better."* Mostly wrong. Across 446 boxes on three maps the share of
+     list-shaped names runs 1 % (one file), 20 % (2-3), 25 % (4-6), 30 % (7-10), 28 % (11+). The only
+     sharp break is at ONE file; above that it is flat. On the 49 renames the operator judged
+     better, list-shaped names fell only 40 % -> 34 %.
+   - *"The granularity band is too coarse."* Not supported. Boxes at the band's ceiling are named
+     about as well as boxes of three files.
+   - *"List-shaped names are rising, 4 % -> 27 %."* Wrong as first measured: builds 0003, 0014, 0015
+     and 0018 name boxes with CODE IDENTIFIERS (`AsgiAppFactory`, `DrainCoordinator`), and an
+     identifier cannot contain "and", so their 0 % was arithmetic. Restricted to the 19
+     plain-English builds the rise SURVIVES (first half median 4 %, second half 21 %, last four
+     builds 29/28/33/27 %) — real, and with no cause found. Do not treat it as explained.
+   - *"Build 23 is better."* True but backwards: **build 22 is the outlier.** Its share of vague
+     words (plumbing / chrome / machinery / helpers / shell / bundle / glue) is 15 %, the WORST of
+     all 22 earlier builds, against a median of 6 %. Build 23's 3 % ranks 4th best of 23. The gap
+     the operator saw is one bad build, not a better method.
+
+**The one actionable thing this found.** `method.md`'s leaf rule says a component is "a directory of
+<= ~10 source files / <= ~3 kLOC **with one purpose**". The file-count half is computed, banded and
+nudged. **The one-purpose half is checked nowhere, and nothing in the toolchain reads a component's
+NAME at all** (grep `c.name` in `validate_model.py`: no hits outside id/source/files handling; no
+naming rule in `method.md` or `method/templates/`). Yet the name already states the violation: a name
+joining two things with "and" or a comma is the build saying in writing that the box holds two
+purposes. 32 of the current map's 118 boxes say it. PROPOSED: an ADVISORY on a list-shaped component
+name — split the box, or rename it to the one purpose it has. Advisory, not a gate: some joined names
+are legitimately one thing.
+
+**Still open, and unaffected by any of the above.** The cut is not reproducible. Nothing makes the
+next build land on build 23's granularity rather than build 22's; the better map was luck. And eight
+test suites entered build 23 as components while `method.md:988` computes E with test trees excluded,
+so that part of the growth is not a better reading of the code.
+
+**Ruled out by the operator, 2026-08-27:** carrying names forward from the previous map. A full
+rebuild must not peek at the map it replaces (scorecard assertion 29, and the reason is recorded
+there: a build that reads its predecessor is not independent of it, and an eval then reads copying as
+convergence). If name stability is ever wanted, the only sanctioned position is AFTER the map is
+written and before the commit — where `finalize --access-baseline` already sits, for the same reason.
+
 ## Open — questions a retro could not answer
 
 A retro's `Not assessed` block names the tool that owns each question it parked. That naming used to

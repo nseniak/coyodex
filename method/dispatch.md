@@ -98,6 +98,13 @@ contradiction of the rule below: the build is finished by then, and a claim that
 two maps of unchanged code is invisible to every other gate — one pair held its access-rule COUNT at
 21 → 21 while the file verifying an identity token's signature lost its claim outright.
 
+A file that deliberately no longer holds an access rule is recordable as `<path>: <why>` under an
+**"Access baseline exceptions"** extras heading, and `finalize` READS it — the path drops out of the
+advisory on the next run. Record only a deliberate drop, after reading the file: this is the one
+gate that sees an auth claim disappear between two maps of unchanged code. (The advisory used to
+name `'access-baseline <path>: <why>'` under "Audit exceptions", whose keys are ids, not paths — so
+one live build wrote twenty records that nothing could read and nothing ever read.)
+
 **Archiving an existing map is `coyodex-eval archive <repo>`.** Say so before the rest of this
 paragraph, because the rest is a prohibition and the command is the permitted action: a build asked
 to archive first did it by hand — `mv .coyodex .coyodex-archive-<date>` — before the skill was even

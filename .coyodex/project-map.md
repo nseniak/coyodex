@@ -9,13 +9,13 @@
 > The committed source of truth is `project-map.json` (JSON); this file is a generated
 > view. IDs, cross-references, and confidence tags are validated by
 > `coyodex validate project-map.json`.
-> **Commit:** `b9050ae` · **Committed:** `2026-07-29` · **Built:** `2026-07-29 11:06`
+> **Commit:** `037db30` · **Committed:** `2026-08-25`
 
 ---
 
 ## T0 — Goal (the anchor)
 
-coyodex is for a developer whose AI coding agent has written more code than they can hold in their head — code that runs fine until the day they need to understand it. It gives that developer a top-down, drillable map of the codebase: an AI coding agent reads coyodex's method (a set of prose prompts), reads the repo, and produces a structured map — what the project is for, who uses it, the ordered walk through its main use cases, then the machine underneath (components, dependencies, the domain model, the flows and calls that connect them). Every claim in the map is anchored to a real file:line, checked by deterministic gates, and attacked by fresh agents that try to disprove it against the code. The map is committed next to the code and pinned to a commit, so it can be diffed and updated as the code changes, and it is read in an interactive C4 viewer served locally, where each box drills down to the source it describes.
+coyodex builds a map of a codebase that a person can read top down, without reading the code. An AI coding agent follows a written method to read the project and produce that map: diagrams, one plain sentence on every box, and a link to a real file and line under every claim. The map is committed next to the code and served as an interactive browser page. The product exists for one situation: your coding agent wrote a lot of code, the code runs, and you have lost track of what is under your feet. It is for the developer who owns such a project, for the agent that has to keep the map honest, and for whoever maintains the method itself.
 
 ---
 
@@ -23,33 +23,47 @@ coyodex is for a developer whose AI coding agent has written more code than they
 
 | Term | Meaning | Defined / used in |
 |---|---|---|
-| **Coyote Effect** | the state coyodex exists to cure: an agent has generated so much code that the developer has lost track of it, and — like the cartoon coyote past the cliff edge — nothing is under their feet the day they need to understand it | [README.md](README.md:26) |
-| **Map (project map)** | the deliverable: one structured JSON document describing a whole codebase top-down, committed next to the code as .coyodex/project-map.json | [model.md](method/model.md:3) |
-| **Method** | the prose instructions an AI coding agent follows to build and maintain a map — the program half of the product, shipped as markdown rather than code | [method.md](method.md:1) |
-| **Skill** | the small manifest installed into a coding agent's skills folder that makes /coyodex reach the method docs and the CLI in this clone | [SKILL.md](skill/coyodex/SKILL.md:1) |
-| **Behavioral layer** | the why/who/what half of a map — goal, glossary, roles, use cases, Happy Path — authored before any code is read | [method.md](method.md:26) |
-| **Structural layer** | the machine half of a map — components, dependencies, entry points, the domain model, flows and edges | [method.md](method.md:161) |
-| **Use case** | one actor goal with one trigger and one outcome; the join point between the two layers, since each use case has a flow | [method.md](method.md:50) |
-| **Happy Path** | the map's spine: one end-to-end ordering of use cases that walks the whole product as a coherent story | [method.md](method.md:86) |
-| **Flow (T6)** | the inside view of one use case — its ordered steps between components, dependencies, entities and the actor, each step anchored at its own call site | [method.md](method.md:234) |
-| **Sub-flow** | a named step sequence shared by two or more flows, defined once and referenced, so shared machinery is told at one depth everywhere | [method.md](method.md:292) |
-| **Component** | one module-, folder- or deployable-sized unit of the code with a single purpose — the leaf box of the map | [method.md](method.md:176) |
-| **Subsystem** | a group of components (or of smaller subsystems) — the altitude above components, grouped by what the system does rather than by tech tier | [method.md](method.md:164) |
-| **Entity (domain card)** | a real named type in the code, written as a card with its meaning, fields and relations, and rendered as a class diagram | [domain-cards.md](method/domain-cards.md:1) |
-| **Subdomain** | a bounded context grouping entities — the domain-model analog of a subsystem | [method.md](method.md:229) |
-| **Backbone edge** | one project-wide list of typed relationships between components, dependencies and entities, each with a verb, a reason and a witnessed call site | [method.md](method.md:444) |
-| **Anchor** | a bare path:line reference to the exact source location that grounds a claim; every element and most claims carry one | [model.md](method/model.md:309) |
-| **Fragment** | a partial map returned by one build agent as JSON; the tooling merges the fragments into the stored model so no agent ever hand-writes it | [model.md](method/model.md:363) |
-| **Pre-index** | a mechanical scan of the code tree that reports where the weight is, where symbols are defined, and how many components the tree implies — sizing input, never rows for the map | [method.md](method.md:566) |
-| **E (expected components)** | the component count the pre-index derives from the code tree, with a generous band; landing far outside it means the altitude was misjudged, and a deliberate exception is recorded | [method.md](method.md:593) |
-| **Fan-out rule** | the readability budget for one screen — about five boxes per diagram, so a large system is grouped into levels instead of one crowded picture | [method.md](method.md:609) |
-| **Baseline pin** | the commit the map describes, recorded in the map itself, so a later diff knows exactly which code the map was true for | [method.md](method.md:1128) |
-| **Grounding (adversarial pass)** | the final build phase: fresh agents that never saw the build reasoning try to disprove each claim against the code, and every refutation is reconciled | [method.md](method.md:929) |
-| **Change impact** | what a code diff does to an existing map — which elements it modifies, adds or deletes, and what those ripple to through the edges and flows | [change-impact.md](method/change-impact.md:1) |
-| **Analyze / Accept** | the two maintenance moves: analyze reports a diff's impact without touching the baseline; accept patches the map, re-pins it and commits it | [dispatch.md](method/dispatch.md:14) |
-| **Drilling deeper** | refining altitude inside the one map — nesting a subsystem, promoting a component into one, or flattening a level that pulls no weight; never a second map file | [method.md](method.md:1272) |
-| **Verified / inferred** | the confidence label every claim carries: read in the code, or guessed from naming and docs | [method.md](method.md:530) |
-| **Viewer** | the interactive C4 page a local server builds from the model on demand — never a committed file, so it always matches the map | [model.md](method/model.md:351) |
+| **map** | The whole picture coyodex produces for a project: diagrams, plain-language text on every box, and code links. | [model.md](method/model.md:1) |
+| **baseline** | The map as currently accepted, pinned to one commit. A code change is compared against it. | [change-impact.md](method/change-impact.md:1) |
+| **build** | Analysing a project from scratch and producing a new map. Hand edits are thrown away. | [method.md](method.md:2008) |
+| **viewer** | The browser page that shows a map. Served live from the map, never committed as a file. | [tools/coyodex/viewer/](tools/coyodex/viewer/) |
+| **view** | One screen in the viewer answering one question. Happy Path, Features, Entities and Deployment are views. | [views.py](tools/coyodex/views.py:1) |
+| **box** | One thing drawn on a view. A component, an entity, a feature or a dependency each draw as one. | [build_graph.py](tools/coyodex/viewer/build_graph.py:1) |
+| **code link** | The file and line a box points at. A box without one is an ungrounded claim. | [anchors.py](tools/coyodex/anchors.py:1) |
+| **change impact** | The report saying what a code change does to the map: what is added, changed or gone. | [impact_lib.py](tools/coyodex/impact_lib.py:1) |
+| **accept** | Folding a change-impact report into the baseline and re-pinning it to the new commit. | [change-impact.md](method/change-impact.md:1) |
+| **Coyote Effect** | Your agent wrote a lot of code, and the code still runs. Nobody knows any more what is under your feet. | [README.md](README.md:20) |
+| **the method** | The written instructions a coding agent follows to build a map. This product's real logic lives there. | [method.md](method.md:1) |
+| **the skill** | The small pointer file installed into each coding agent so a person can invoke coyodex by name. | [SKILL.md](skill/coyodex/SKILL.md:1) |
+| **fragment** | One worker's slice of a map, written as its own file. Every fragment is merged into the map. | [assemble.py](tools/coyodex/assemble.py:1) |
+| **contract** | The briefing a fan-out worker is handed, printed by a command so the wording never drifts. | [contract.py](tools/coyodex/contract.py:1) |
+| **fan-out** | Splitting one phase of a build across many workers who run at the same time and never share context. | [method.md](method.md:1045) |
+| **skeptic** | A fresh worker handed a batch of the map's claims and told to disprove each one against the code. | [skeptic-contract.md](method/templates/skeptic-contract.md:1) |
+| **claim** | One statement the map makes about what the code actually does, carrying the line that witnesses it. | [audit_model.py](tools/coyodex/audit_model.py:1) |
+| **worklist** | The ranked list of claims the audit says need code evidence. The skeptics work it top down. | [audit_model.py](tools/coyodex/audit_model.py:1) |
+| **grounding** | The record of how many claims were challenged and how the skeptics voted on each. | [grounding.py](tools/coyodex/grounding.py:1) |
+| **anchor drift** | A code link pointing at a line that cannot be acting, such as a definition header or a comment. | [anchor_drift.py](tools/coyodex/anchor_drift.py:1) |
+| **advisory** | A finding that never blocks. Fix it, or write one line saying why it is acceptable. | [validate_model.py](tools/coyodex/validate_model.py:1) |
+| **recorded exception** | One written line that stops a named advisory firing forever, because a person judged it acceptable. | [record.py](tools/coyodex/record.py:1) |
+| **gate** | An automatic check a map must pass. Failing one is a defect in the map, not in the code. | [finalize.py](tools/coyodex/finalize.py:1) |
+| **pre-index** | A measurement of the code tree made before the map is drawn: folder weight, symbols, and an expected size. | [preindex_lib.py](tools/coyodex/preindex_lib.py:1) |
+| **expected component count** | How many components a tree of this size should produce, derived from the code alone with a band around it. | [preindex_lib.py](tools/coyodex/preindex_lib.py:1) |
+| **component** | One module-sized unit of the code, roughly a folder with one purpose. The map's main structural box. | [model.py](tools/coyodex/model.py:1) |
+| **subsystem** | A group of components, and of smaller subsystems. What the first screen of a large map shows. | [model.py](tools/coyodex/model.py:1) |
+| **entity** | A real named type in the code that the product stores or reasons about. Drawn with its fields and relations. | [domain-cards.md](method/domain-cards.md:1) |
+| **subdomain** | A group of entities that belong together. The domain-model twin of a subsystem. | [model.py](tools/coyodex/model.py:1) |
+| **use case** | One goal one actor has, with one trigger and one outcome. The unit the product's story is told in. | [model.py](tools/coyodex/model.py:1) |
+| **flow** | The inside view of one use case: the ordered steps among components, dependencies and entities. | [model.py](tools/coyodex/model.py:1) |
+| **sub-flow** | A named step sequence shared by two or more flows, so shared machinery is written down once. | [model.py](tools/coyodex/model.py:1) |
+| **Happy Path** | One end-to-end walk through the use cases that tells the product's story and reaches every actor. | [method.md](method.md:226) |
+| **feature** | A group of use cases serving one goal of the product. What a product person would call an area. | [features.py](tools/coyodex/features.py:1) |
+| **business rule** | One decision the product makes, in product words, plus every place the code enforces it. | [method.md](method.md:600) |
+| **block** | A group of business rules covering one area a product person would argue about. | [model.py](tools/coyodex/model.py:1) |
+| **entry point** | A surface the outside world reaches the product through, or a job the product starts on its own. | [model.py](tools/coyodex/model.py:1) |
+| **pin** | The commit a map says it describes. Every code link is read at that commit. | [provenance.py](tools/coyodex/provenance.py:1) |
+| **eval** | Scoring two maps of one project to say whether a change to the method made map quality better or worse. | [README.md](eval/README.md:1) |
+| **retro** | Reading a finished build and its transcript to find what went wrong in the process. | [method.md](eval/retro/method.md:1) |
+| **verdict** | How an eval rates a new map, in one of three words. Pass means as good as before. Drift means a measurement moved too far. Regressed means a hard check got worse. | [thresholds.json](eval/thresholds.json:1) |
 
 ---
 
@@ -61,27 +75,103 @@ Every capability's audience is derived from it.
 
 | Role | Kind | Audience | What they want | Use cases they drive |
 |---|---|---|---|---|
-| **Developer** | human | user | to understand and oversee a codebase they have lost track of — top-down, without reading all of it, drilling into the code only where it matters | UC1, UC3, UC4, UC5, UC10, UC11 |
-| **Coding agent** | service | user | to turn a repo it has read into a grounded, gate-passing map, and to keep that map in step with the code as the developer changes it | UC2, UC6, UC7, UC8 |
-| **Method maintainer** | human | internal | evidence that a change to coyodex's own method or tooling made the maps it produces better rather than worse | UC9 |
+| **Map reader** | human | user | To understand a codebase top down, and to drop into the code only where it matters. | Installs the skill, starts the map server, reads the map, and asks for map changes in plain words. |
+| **Coding agent** | service | user | To follow the written method end to end and produce a map every gate accepts. | Runs the briefing, the tree sizing, the fan-out, the merge, every gate, and the change-impact report. |
+| **coyodex developer** | human | internal | To know whether a change to the method made the maps better or worse. | Archives a map, scores a rebuild against the accepted one, and reviews what a finished build did. |
+
+---
+
+## Capabilities — what this product does
+
+The use-case grouping. `Audience` is DERIVED from the roles driving its use cases, so nothing on a capability can contradict its own actors.
+
+| ID | Capability | Audience | Purpose | Parent |
+|---|---|---|---|---|
+| **CAP1** | Getting set up | user | Putting coyodex on a machine and getting the map server running, once. |  |
+| **CAP2** | Building a map | user | Reading a project from scratch and turning what many workers found into one map. |  |
+| **CAP3** | Proving the map | user | Deciding whether a finished map is well formed, self-consistent, and true about the code. |  |
+| **CAP4** | Reading the map | user | Letting a person understand a project top down, and reach the code only where it matters. |  |
+| **CAP5** | Keeping the map current | user | Telling what a later code change did to the map, and folding the answer back in. |  |
+| **CAP6** | Judging map quality | internal | Answering whether a change to the method made the maps it produces better or worse. |  |
+| **CAP7** | Reviewing a finished build | internal | Reading a build that already ran to find what the method and the tools got wrong. |  |
 
 ---
 
 ## Use cases
 
+### Getting set up *(CAP1)*
+
 | ID | Use case | Actor | Trigger → Outcome |
 |---|---|---|---|
-| **UC1** | Install the coyodex skill | Developer | A developer clones coyodex and runs `make install` → the skill manifest, with this clone's path baked into it, sits in every coding agent's skills folder, and a repo-local virtualenv holds the `coyodex` command; typing `/coyodex` in any agent now reaches the method. |
-| **UC2** | Build a baseline map of a repo | Coding agent | The developer types `/coyodex` in a repo that has no map → the agent reads the method, sizes the code tree, fans out to read the repo, and leaves a validated, commit-pinned map (the JSON model, its markdown view and the pre-index) committed in `.coyodex/`. |
-| **UC3** | Start the local map server | Developer | The developer runs `make start` in the coyodex clone → a small local server is listening on 127.0.0.1, offering a landing page that lists every project they have mapped. |
-| **UC4** | Explore a map top-down | Developer | The developer opens a project in the viewer → they read the goal, the Happy Path and the diagrams, and drill from one screen of boxes into the level beneath it, seeing each element's plain-language annotation as they go. |
-| **UC5** | Open the source behind a mapped element | Developer | The developer clicks the code anchor on a box, arrow or flow step → the exact file and line that grounds the claim appears in the code viewer, read from git at the commit the map is pinned to, with the option to hand it off to their editor or GitHub. |
-| **UC6** | Analyze a code change against the map | Coding agent | The developer edits code and types `/coyodex analyze` → the agent diffs the working tree against the map's pinned commit and writes an uncommitted report saying which mapped elements the change modifies, adds and deletes, and what those ripple to. |
-| **UC7** | Accept a change into the baseline | Coding agent | The developer is satisfied with the report and types `/coyodex accept` → the agent patches the model in place, re-pins it to the new commit, re-runs the gates, regenerates the markdown view and pre-index, and commits the map beside the code. |
-| **UC8** | Change the map on request | Coding agent | The developer asks in plain language for a map change ("split this component", "rename that subsystem") → the agent edits the stored model surgically, refusing anything the code does not back, passes the same gates as any other write, and commits the result. |
-| **UC9** | Check the method's quality | Method maintainer | A maintainer runs the eval on a project that already has a map → a fresh map is built with the current method, scored on grounding and a rubric, and compared against the committed baseline, so a method change is reported as an improvement or a regression instead of a hunch. |
-| **UC10** | Back up a map with its build transcript | Developer | The developer runs the backup script against a mapped repo → the map is bundled together with the exact conversation that produced it, found through the session id the build stamped into the map's provenance file. |
-| **UC11** | See what a change ripples to in the viewer | Developer | The developer opens the impact explorer and picks two commits → the diagrams light up with what the diff touched and what that reaches through the map's edges and flows, and each changed file can be read as a diff in place. |
+| **UC1** | Install the coyodex skill into the coding agents | Map reader | The reader runs the install target in a fresh clone. Every coding agent on that machine can now answer to coyodex. |
+| **UC2** | Start the local map server | Map reader | The reader starts the server once. A landing page lists every project that has a map. |
+
+### Building a map *(CAP2)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC3** | Brief the reader on what will be analysed | Coding agent | The agent begins a run. The reader sees the file count, what each exclusion removed, and the commit the map will name. |
+| **UC4** | Declare code the map should not describe | Map reader | The reader lists a fixture or vendored tree in the ignore file. Every measurement afterwards drops those files. |
+| **UC5** | Size the code tree before choosing altitude | Coding agent | The agent asks for the weight of every folder. The answer gives line counts, churn, a symbol index and an expected size. |
+| **UC6** | Hand a fan-out worker its contract | Coding agent | The agent is about to dispatch workers. One command prints the worker's half of the briefing, ready to fill in. |
+| **UC7** | Self-check one harvested fragment | Coding agent | A worker finishes its rows. The check reports schema, code-link and drift problems while the worker can still fix them. |
+| **UC8** | Merge the workers' fragments into one map | Coding agent | Every fragment is on disk. Merging them writes the map and its readable view, refusing any duplicate identifier. |
+| **UC9** | Turn path rules into explicit assignments | Coding agent | The agent knows folder paths, not identifiers. Path rules expand into an assignment file, naming every rule that matched nothing. |
+| **UC10** | Look up one part of the map | Coding agent | The agent needs one element's stored record. A read-only lookup returns it, from a finished map or a build fragment. |
+
+### Proving the map *(CAP3)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC11** | Check the map is well formed | Coding agent | The agent finishes a write. The check reports broken references, bad code links, and every balance and coverage advisory. |
+| **UC12** | Make the map's two layers refute each other | Coding agent | The agent has a map that is well formed. The walk and the flows are compared, and the claims needing code evidence are ranked. |
+| **UC13** | Disprove a claim against the code | Coding agent | A fresh worker is handed a batch of claims and told to break them. Each comes back confirmed, refuted, or impossible to settle. |
+| **UC14** | Record what the skeptics proved | Coding agent | Every verdict file is in. The counts are derived and written into the map, refusing a verdict for a claim nobody pinned. |
+| **UC15** | Correct a code link that points at the wrong line | Coding agent | The skeptics report a truer line than the map holds. The correction is written so the next merge keeps it. |
+| **UC16** | Drop a claim the code refutes | Coding agent | A relation turns out not to exist. Removing it also heals the walk steps that rode on it. |
+| **UC17** | Record an advisory the reader accepts | Coding agent | An advisory is a judgement, not a defect. One line written under the heading it names stops it firing again. |
+| **UC18** | Re-balance the diagrams against the traced graph | Coding agent | Grouping was cut before any relation existed. The report shows each screen's box count and where a split would fall. |
+| **UC19** | Run the pre-commit read | Coding agent | The agent believes the map is done. One run does every gate, writes the whole finding list to a file, and says which gates ran. |
+| **UC20** | Stamp which conversation built the map | Coding agent | The map is written and checked. The session and the minute are recorded, so the transcript can be found again later. |
+
+### Reading the map *(CAP4)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC21** | Open a project's map in a browser | Map reader | The reader clicks a project on the landing page. Every view is built from the map on demand and drawn. |
+| **UC22** | Follow the product's story end to end | Map reader | The reader wants to know what the product does. One column shows every feature in the order the story runs. |
+| **UC23** | Read the code under a box | Map reader | The reader wants the evidence behind a claim. The file opens at that line, read from the commit the map names. |
+| **UC24** | Open an element's source in the editor | Map reader | The reader wants to change what a box describes. One click opens that line in the editor or on the hosting site. |
+
+### Keeping the map current *(CAP5)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC25** | Report what a code change did to the map | Coding agent | The code has moved past the commit the map names. The report says which parts of the map are added, changed or gone. |
+| **UC26** | Fold a change report into the map | Coding agent | The reader says the report is right. The map is patched element by element and re-pinned to the new commit. |
+| **UC27** | Change the map by asking in plain words | Map reader | The reader asks to split, rename, move or drill deeper into a part. The map is edited directly, then put through every gate. |
+| **UC28** | See what an edit changed, row by row | Coding agent | The agent has the map from before and after an edit. Every added, dropped and changed row is listed with the fields that moved. |
+| **UC38** | See the change overlaid on the map | Map reader | The reader picks two commits in the viewer. Every box the change reaches is marked, including the ones it reaches indirectly. |
+
+### Judging map quality *(CAP6)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC29** | Score a rebuilt map against the accepted one | coyodex developer | The developer changed the method and rebuilt. The two maps are measured and the run says pass, drift or regressed. |
+| **UC30** | Have judges read both maps | coyodex developer | Counting cannot say whether the words are true. Judges read both maps for grounding and against a rubric, and their verdicts are gathered. |
+| **UC31** | Accept a run as the new baseline | coyodex developer | The developer decides the new map is the standard. Its map, view, profile and judgement all become the baseline. |
+| **UC32** | Measure how many planted falsehoods the skeptics catch | coyodex developer | Refutation rates cannot say whether skeptics are weak. Planting known-false claims gives an answer key to score against. |
+
+### Reviewing a finished build *(CAP7)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC33** | Refuse to review a build that has not finished | coyodex developer | A build stamps its session near the end. Reviewing early would read the previous run, so the check stops it. |
+| **UC34** | Read a build transcript in slices | coyodex developer | A build transcript is far too large to read whole. An index comes first, then one range at a time. |
+| **UC35** | Score a build's behaviour against the method | coyodex developer | The gates say a map is well formed, never that the agent followed the method. The transcript is scored rule by rule. |
+| **UC36** | Measure what a build spent | coyodex developer | The developer wants the price of a map. Time and tokens are totalled across every worker, then divided by the rows produced. |
+| **UC37** | Archive a map so the next run builds from scratch | coyodex developer | A rebuild must never read the map it replaces. Filing the old map away leaves the folder empty and keeps the baseline. |
+
 
 ---
 
@@ -91,27 +181,54 @@ The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag
 names it); the step's detail lives in that use case's T6 flow. An optional `why:`
 line records the prerequisite that fixes the step's position.
 
-**HP1 — Developer installs the coyodex skill** *(UC1)*
-**HP2 — Coding agent builds the repo's baseline map** *(UC2)*
-why: needs the skill and the CLI installed in HP1
-**HP3 — Developer starts the local map server** *(UC3)*
-why: needs the CLI and virtualenv installed in HP1
-**HP4 — Developer explores the new map top-down** *(UC4)*
-why: needs the map from HP2 and the server from HP3
-**HP5 — Developer opens the source behind a box that surprised them** *(UC5)*
-why: the code viewer reads from git at the commit the HP2 map is pinned to
-**HP6 — Coding agent analyzes the developer's next code change** *(UC6)*
-why: diffs against the baseline pinned in HP2
-**HP7 — Developer sees what that change ripples to in the viewer** *(UC11)*
-why: needs the server from HP3 and the code change analyzed in HP6
-**HP8 — Coding agent accepts the change into the baseline** *(UC7)*
-why: acts on the report written in HP6
-**HP9 — Developer asks for the map itself to be restructured** *(UC8)*
-why: edits the baseline map built in HP2
-**HP10 — Developer backs up the map with its build transcript** *(UC10)*
-why: pairs the map with the session stamped into its provenance during HP2
-**HP11 — Method maintainer checks whether the method improved** *(UC9)*
-why: compares a fresh build against the baseline accepted in HP8
+**HP1 — Reader installs the skill into their coding agents** *(UC1)*
+**HP2 — Agent briefs the reader on what it is about to analyse** *(UC3)*
+why: needs the skill installed at HP1, so the agent knows what coyodex means
+**HP3 — Agent measures the weight of every folder** *(UC5)*
+why: needs the file set agreed at HP2
+**HP4 — Agent hands each worker its briefing** *(UC6)*
+why: needs the slice sizes from HP3
+**HP5 — A worker self-checks its fragment before returning it** *(UC7)*
+why: needs the briefing handed over at HP4
+**HP6 — Agent merges every fragment into one map** *(UC8)*
+why: needs every worker's fragment on disk from HP5
+**HP7 — Agent assigns grouping and links across the whole build** *(UC9)*
+why: needs the merged identifiers from HP6
+**HP8 — Agent checks the map is well formed** *(UC11)*
+why: needs a written map from HP6
+**HP9 — Agent makes the walk and the flows refute each other** *(UC12)*
+why: needs the map to be well formed, from HP8
+**HP10 — A fresh worker tries to disprove a batch of claims** *(UC13)*
+why: needs the ranked claim list from HP9
+**HP11 — Agent corrects a code link the skeptics moved** *(UC15)*
+why: needs the skeptics' verdicts from HP10
+**HP12 — Agent records what the skeptics proved** *(UC14)*
+why: needs every verdict file from HP10
+**HP13 — Agent runs the pre-commit read** *(UC19)*
+why: needs the grounding record from HP12
+**HP14 — Agent stamps the conversation that built the map** *(UC20)*
+why: needs a map that passed the gates at HP13
+**HP15 — Reader starts the local map server** *(UC2)*
+**HP16 — Reader opens the new project's map** *(UC21)*
+why: needs the server running from HP15 and a committed map from HP14
+**HP17 — Reader follows the product's story end to end** *(UC22)*
+why: needs the map open from HP16
+**HP18 — Reader reads the code under a box that surprised them** *(UC23)*
+why: needs a box on screen from HP17
+**HP19 — Agent reports what later code changes did to the map** *(UC25)*
+why: needs the pinned baseline from HP14
+**HP20 — Agent folds the change report into the map** *(UC26)*
+why: needs the report from HP19 and the reader's agreement
+**HP21 — Developer archives the map before rebuilding it** *(UC37)*
+why: needs a baseline worth comparing against, from HP20
+**HP22 — Developer scores the rebuilt map against the archived one** *(UC29)*
+why: needs the archived baseline from HP21
+**HP23 — Judges read both maps for grounding and against the rubric** *(UC30)*
+why: needs both maps profiled at HP22
+**HP24 — Developer accepts the rebuilt map as the new baseline** *(UC31)*
+why: needs the verdict and the judgements from HP22 and HP23
+**HP25 — Developer scores the build's behaviour against the method** *(UC35)*
+why: needs the finished build's transcript, found through the stamp from HP14
 
 ---
 
@@ -119,18 +236,13 @@ why: compares a fresh build against the baseline accepted in HP8
 
 | ID | Subsystem | Purpose | Parent | Tech | Source | Conf. |
 |---|---|---|---|---|---|---|
-| **S1** | Method & skill | The prose program a coding agent executes: the method docs that tell it how to build, check and maintain a map, plus the small manifest that makes /coyodex reach them. This is shipped as markdown rather than code, and it is as much the product as the tools are. |  |  |  | verified |
-| **S2** | Map authoring | Everything that turns an agent's reading of a repo into the stored map: sizing the code tree first, then defining what a map IS and merging the agents' fragments into one canonical document. |  | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/ | inferred |
-| **S3** | Map model | The definition of a map: the typed document, the vocabularies its fields may use, the anchor format every claim is written in, and the published JSON schema derived from all of it. | S2 | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/ | inferred |
-| **S4** | Fragment assembly | The build path from many agents to one file: each agent self-checks its fragment, the assembler merges them by id, and reconcile/fix apply the assignments and corrections that must survive a re-assemble. | S2 | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/ | inferred |
-| **S6** | Map checking | The gates a map must pass before anyone trusts it: is it well-formed and do all its references and anchors resolve, do its cited lines really exist in the code, is it self-contradictory, and is it readable at each altitude. |  | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/ | inferred |
-| **S7** | Map viewing | How a reader actually consumes a map: the model turned into diagrams and tables, served locally, and explored in the browser down to the source line each box stands for. |  |  | tools/coyodex/viewer/ | inferred |
-| **S11** | Diagram generation | Builds, from the stored model, every diagram and side-panel payload the viewer shows — the context and subsystem drills, the domain class diagrams, the deployment and channel views, and the Happy Path and use-case sequences. | S7 | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/viewer/ | inferred |
-| **S12** | Browser viewer | The single-page app the reader works in: the diagram canvas and its drill navigation, the info pane for a selected element, the file browser and code viewer, search, and the change-impact overlay. | S7 | JavaScript (browser) ([pyproject.toml](pyproject.toml:51)) | tools/coyodex/viewer/ | inferred |
-| **S13** | Map serving | The small local HTTP server that fronts every mapped project — serving each map's diagram data built on demand, and reading the mapped repo's files from git at the commit the map is pinned to. | S7 | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/viewer/ | inferred |
-| **S8** | Map lifecycle | Keeping a map true over time: working out what a code diff does to the map and what that ripples to, and preserving a map together with the exact conversation that built it. |  | Python ([pyproject.toml](pyproject.toml:9)) |  | inferred |
-| **S9** | Method-quality eval | coyodex measuring itself: rebuild a map with the current method, judge it on grounding and a rubric, and compare it against the project's committed baseline to say whether the method got better or worse. |  | Python ([pyproject.toml](pyproject.toml:43)) | eval/tools/coyodex_eval/ | verified |
-| **S10** | Command front door | The single `coyodex` command every other part is reached through, and the read-only lookup that answers questions about a stored map without opening it by hand. |  | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/ | inferred |
+| **S1** | Building and updating the map | Turns a project into a map, and works out what a later code change did to that map. |  | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/ | verified |
+| **S2** | Proving the map | Decides whether a finished map is well formed, self-consistent and true about the code. |  | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/ | verified |
+| **S3** | Reading the map | Shows a person the map in a browser, and the code behind any box they ask about. |  |  | tools/coyodex/viewer/ | verified |
+| **S4** | The map server | Serves the map's screens from one local process, and reads source out of the commit the map names. | S3 | Python ([pyproject.toml](pyproject.toml:9)) | tools/coyodex/viewer/serve.py:800 | verified |
+| **S5** | The browser page | Draws every view, remembers where the reader is, and puts the code beside the picture. | S3 | JavaScript ([pyproject.toml](pyproject.toml:51)) | tools/coyodex/viewer/viewer.html:362 | verified |
+| **S6** | The written method | The instructions a coding agent follows to build a map. This product's real logic lives here. |  |  | method/ | verified |
+| **S7** | Judging and reviewing builds | Answers whether a method change made the maps worse, and what a finished run got wrong. |  | Python ([pyproject.toml](pyproject.toml:9)) | eval/tools/coyodex_eval/ | verified |
 
 ---
 
@@ -138,42 +250,37 @@ why: compares a fresh build against the baseline accepted in HP8
 
 | ID | Component | Subsystem | Purpose | Entry point | Depends on | Conf. | Files | Evidence | Runs in |
 |---|---|---|---|---|---|---|---|---|---|
-| **C11** | Validate semantic-check helpers | S6 | The shared helper library the map validator calls for its semantic (non-schema) checks: it decides whether a nesting parent is the right kind, defined, and cycle-free (all blocking), and it computes the opt-in map-fidelity advisories — peer-level directory compression, absent/unreferenced modules, uncovered code files grouped by directory, and the component-count-vs-code-derived-expectation granularity band. It also owns anchor/source resolution (stripping a `:line`, resolving a path against the repo root) and the domain-coverage thresholds, and it re-measures the repo tree itself rather than trusting the pre-index's JSON. |  |  | verified | tools/coyodex/validate_analysis.py | [validate_analysis.py](tools/coyodex/validate_analysis.py:50) — The blocking hierarchy problem: a child whose parent is not the expected kind (component/subsystem must sit under an S, entity/subdomain under an SD) is appended to `problems`, not `warnings`. · [validate_analysis.py](tools/coyodex/validate_analysis.py:63) — Nesting-cycle detection appends to `problems` too — the cycle check, not a depth cap, is what makes the parent walk terminate; over-deep nesting only becomes an advisory warning. · [validate_analysis.py](tools/coyodex/validate_analysis.py:149) — The peer-compression advisory fires when the map individually references fewer than about a quarter of a directory's sibling source subdirs — the 'many modules folded into one box' lost-signal test. · [validate_analysis.py](tools/coyodex/validate_analysis.py:228) — The file-level coverage gap: a code source file is skipped when it is covered by an exact ref, by a referenced directory prefix, or by a recorded 'Coverage exceptions' dir; everything left is reported grouped by directory. · [validate_analysis.py](tools/coyodex/validate_analysis.py:270) — The granularity advisory stays silent inside the +/-40% band around the code-derived expected component count, and only outside it emits the fold-vs-split hint — a zoom anchor, never a verdict. | coyodex CLI, coyodex-eval CLI |
-| **C12** | Map auditor | S6 | The adversarial pass (`coyodex audit`) that makes the map's two layers refute each other: it reads the narrative Happy Path against the mechanism (flows plus backbone edges) and reports contradictions — a `why:` precondition citing a step that does not exist or comes later in the walk, an entity read before any step writes it, a flow whose opening actor is not among the use case's declared actors, a step with no stated precondition while its siblings have one, and step/edge text written as a static dependency instead of an action. Only hard contradictions block (exit 1); everything else is advisory. It then prints the ranked L2 grounding worklist — self-describing 'actually-does' claims that fresh-context skeptics try to disprove against the code — as text or as `--json`. | [audit_model.py](tools/coyodex/audit_model.py:560) |  | verified | tools/coyodex/audit_model.py | [audit_model.py](tools/coyodex/audit_model.py:593) — The blocking rule in one line: the process exits 1 only when some finding carries CONTRADICTION severity — every ADVISORY / WARNING finding exits 0. · [audit_model.py](tools/coyodex/audit_model.py:234) — A contradiction in practice: a step's `why:` cites a Happy-Path position that comes AFTER it in the walk, so the narrative order refutes its own stated precondition. · [audit_model.py](tools/coyodex/audit_model.py:196) — The narrative-vs-mechanism cross-check that stays ADVISORY on purpose: a step reads an entity the Happy Path only writes later; component-granular attribution is lossy in both directions, so it advises rather than blocks. · [audit_model.py](tools/coyodex/audit_model.py:423) — Worklist tier 1 for edges: an `enforces` / `encrypts` verb is filed as security-critical and appended before the dependency, entity, and generic edge buckets. · [audit_model.py](tools/coyodex/audit_model.py:367) — The self-describing detail that stops false refutations: a component endpoint carries its canonical anchor plus its member entry points, so an umbrella component is never reduced to one arbitrary file. | coyodex CLI, coyodex-eval CLI |
-| **C13** | Balance reporter | S6 | Reports how readable each rendered diagram is: per-diagram fan-out against the 5±2 target (flagging sparse, soft 10-12, dense, single-child, and homogeneous-family screens), the inter-subsystem component-to-component edge matrix with its busiest cross-subsystem seams, and, for each over-dense non-exempt diagram, a deterministic greedy-modularity split proposal printed as an exact 'Direct map change' block with the next free subsystem id precomputed. It never gates — the command always exits 0, and the same engine supplies the always-on advisory warnings the validator appends; a 'Balance exceptions' block in the map durably silences named diagrams. | [balance.py](tools/coyodex/balance.py:170) |  | verified | tools/coyodex/balance.py · tools/coyodex/balance_lib.py | [balance.py](tools/coyodex/balance.py:206) — Advisory by construction: the command's normal path prints the report and returns 0 — only a missing or unparsable map file is an error. · [balance.py](tools/coyodex/balance.py:122) — The per-diagram fan-out table, one row per diagram with its child count and flag, printed under the '(target 5±2)' heading. · [balance.py](tools/coyodex/balance.py:138) — The inter-subsystem matrix output: the busiest cross-subsystem seams, ranked by how many component-to-component pairs cross each pair of top-level groups. · [balance_lib.py](tools/coyodex/balance_lib.py:478) — The split engine's stop condition — greedy merging halts as soon as no merge improves modularity, which is what makes the proposal deterministic rather than tuned. · [balance_lib.py](tools/coyodex/balance_lib.py:192) — The durable escape: a line-leading `cadence:` / `store:` / `messaging:` / `isolated:` record (plus plain diagram ids) inside a 'Balance exceptions' extras block adds that token to the skip set, so a justified advisory stops re-firing. | coyodex CLI, coyodex-eval CLI |
-| **C30** | CLI dispatcher | S10 | The front door of the single `coyodex` command: it reads the first word on the command line and hands the rest to that subcommand's implementation, printing the command list for no arguments, help, or an unknown command. Each implementation is loaded only inside its own branch, so the everyday commands (validate, render, serve, dump) never pull in the code-parsing path and keep working on a plain Python install with no third-party package present; when a command that reads a map is given no map file, the dispatcher fills in the standard `.coyodex/project-map.json` location itself so callers can stay terse. | [pyproject.toml](pyproject.toml:30) |  | verified | tools/coyodex/cli.py · tools/coyodex/__init__.py | [cli.py](tools/coyodex/cli.py:80) — the pre-index implementation is imported inside its own branch — the only path allowed to touch the third-party parser, so no other command loads it · [cli.py](tools/coyodex/cli.py:84) — a map-reading command is dispatched with the argument list already passed through the default-map filler, so an omitted map file resolves to the standard location · [cli.py](tools/coyodex/cli.py:66) — appends the standard map path when the scan found no positional argument, which is the whole default-map rule · [cli.py](tools/coyodex/cli.py:116) — an unrecognised command prints the error plus the usage to standard error and exits with code 2, so a typo fails loudly instead of doing nothing | coyodex CLI, Map server |
-| **C31** | Model dump | S10 | A read-only lookup over a stored map: it parses the map file and prints either the whole model back as canonical JSON, or exactly one of four fixed slices — what an id is (kind, display name, canonical source, and its members), an element's full stored record, the backbone links into and out of a node, or a group's member records. The slice set is deliberately closed rather than a query language, it refuses more than one slice flag, and it falls back to the standard map location when no file is named. | [cli.py](tools/coyodex/cli.py:99) |  | verified | tools/coyodex/dump.py | [dump.py](tools/coyodex/dump.py:158) — with no slice flag the entire parsed model is written back out in the canonical serialization — the whole-map read · [dump.py](tools/coyodex/dump.py:144) — more than one slice flag is rejected outright, which is what keeps the surface to exactly one fixed slice per run · [dump.py](tools/coyodex/dump.py:97) — the links slice scans the map's backbone links by destination and by source, keeping the authored order and duplicates · [dump.py](tools/coyodex/dump.py:85) — the id slice returns the resolved kind, display name, canonical source anchor and members for any element id | coyodex CLI |
-| **C3** | Map model & serializer | S3 | Defines the exact shape of a project map — which kinds of elements exist, what fields each one carries, and how their ids must look — and is the only place that turns a map into the committed JSON file and back. It always writes the same bytes for the same map so the file diffs cleanly, and it rejects a malformed map by naming the precise location of the bad value. |  |  | verified | tools/coyodex/model.py | [model.py](tools/coyodex/model.py:612) — the single serialization call — fixed key order, indent 2, trailing newline — so the same map always produces byte-identical JSON · [model.py](tools/coyodex/model.py:676) — loading raises an error naming the exact JSON path of an unknown field, which is how a malformed map is pinpointed · [model.py](tools/coyodex/model.py:771) — loading enforces each element array's required id prefix, so a wrongly-prefixed id fails at load · [model.py](tools/coyodex/model.py:592) — rewrites every reference to a renamed element id across the whole map, so a merge never leaves a dangling pointer | coyodex CLI, Map server, coyodex-eval CLI |
-| **C4** | Map grammar & vocabularies | S3 | Holds the shared vocabularies the rest of the toolkit agrees on: what an element id looks like, the kinds and purpose groups a dependency can have, the kinds of entry points and who starts them, the verbs used for data relations and for backbone links. It also fills in a value when the author left one blank, so every reader classifies the same row the same way. |  |  | verified | tools/coyodex/grammar.py | [grammar.py](tools/coyodex/grammar.py:97) — an explicitly authored dependency kind wins; otherwise the keyword fallback below classifies it — the single classification rule · [grammar.py](tools/coyodex/grammar.py:294) — folds a drifted entry-point kind spelling back to its canonical seed, so two consumers cannot split the same kind · [grammar.py](tools/coyodex/grammar.py:317) — the one rule deciding an entry point's effective activation, shared by the viewer, the coverage advisory and the eval · [grammar.py](tools/coyodex/grammar.py:456) — derives a dependency's role purely from the verbs of the links pointing at it, so no stored field can drift from the edges | coyodex CLI, Map server |
-| **C5** | Anchor & schema utilities | S3 | Small shared helpers for the code references a map is built on: deciding whether a source pointer is well formed, splitting it into file and line, judging whether a cited line could plausibly be the line where something happens, and measuring how far a stored pointer has drifted from where reviewers found the code. It also parses third-party Python without leaking that code's own warnings, and generates a JSON Schema of the map for documentation and editor autocomplete. | [json_schema.py](tools/coyodex/json_schema.py:286) |  | verified | tools/coyodex/anchors.py · tools/coyodex/pysrc.py · tools/coyodex/json_schema.py | [anchors.py](tools/coyodex/anchors.py:31) — the one test for a well-formed source pointer — a file reference or a directory reference · [anchors.py](tools/coyodex/anchors.py:127) — returns why a cited line cannot be the acting statement (a definition header, an import, a comment) · [anchors.py](tools/coyodex/anchors.py:154) — computes whether the stored pointer drifts from the line reviewers reported, beyond a tolerance · [pysrc.py](tools/coyodex/pysrc.py:19) — suppresses the scanned repo's own syntax warnings so they never surface as coyodex output · [json_schema.py](tools/coyodex/json_schema.py:271) — the schema is generated from the model classes themselves, so it cannot drift from the real shape | coyodex CLI, Map server, coyodex-eval CLI |
-| **C6** | Fragment assembler | S4 | Merges the JSON pieces each build agent returns into one canonical map file. It checks every piece against the schema so a bad one fails alone with its name, refuses to silently overwrite when two agents claim the same id, folds away duplicate dependencies, components and links, adds the missing component-to-data links that flow steps imply, applies the reconcile file, and writes the map plus its markdown view. | [assemble.py](tools/coyodex/assemble.py:343) |  | verified | tools/coyodex/assemble.py | [assemble.py](tools/coyodex/assemble.py:181) — the merge itself — every piece's arrays are concatenated into one model, in argument order · [assemble.py](tools/coyodex/assemble.py:185) — the same id claimed by two pieces is reported as a conflict naming both, never silently overwritten · [assemble.py](tools/coyodex/assemble.py:115) — creates the component-to-entity link a flow step implies when no piece supplied one · [assemble.py](tools/coyodex/assemble.py:316) — after collapsing two copies of the same component, re-points every reference to the removed id · [assemble.py](tools/coyodex/assemble.py:474) — writes the canonical map file through the one serializer, so validity is guaranteed by code, not by hand | coyodex CLI |
-| **C7** | Fragment linter | S4 | The self-check an authoring agent runs on its own piece of the map before handing it back: shape, source-pointer format, per-row rules for links, flows, data relations and channels, that each cited file really exists in the repo, and that every referenced id is defined here or in a supplied id list. Real errors fail the check; judgment-shaped nudges are printed separately and never fail it. | [lint_fragment.py](tools/coyodex/lint_fragment.py:182) |  | verified | tools/coyodex/lint_fragment.py | [lint_fragment.py](tools/coyodex/lint_fragment.py:150) — with a repo root given, every cited file is checked to actually exist, catching a wrong prefix at the source · [lint_fragment.py](tools/coyodex/lint_fragment.py:80) — reports ids referenced but defined neither in this piece nor in the supplied id universe — an invented id dies here · [lint_fragment.py](tools/coyodex/lint_fragment.py:254) — advisory nudges are printed on a separate channel, so a heuristic never fails the check · [lint_fragment.py](tools/coyodex/lint_fragment.py:258) — exits non-zero on any real finding, which is what makes the check a gate the agent must clear | coyodex CLI |
-| **C8** | Reconcile & post-assemble fixes | S4 | The bulk-edit toolkit for a map. Before assembly it turns path rules ("everything under this folder belongs to that subsystem") into an explicit, checked assignment file; during assembly it applies those assignments and removes refuted links, healing the flow steps that rode them. After the map is written it rewrites source pointers that reviewers found in the wrong place, drops a refuted link, and resolves duplicate data relations — replacing the throwaway scripts each build used to write by hand. | [fix.py](tools/coyodex/fix.py:303) |  | verified | tools/coyodex/reconcile_build.py · tools/coyodex/reconcile.py · tools/coyodex/fix.py · tools/coyodex/anchor_drift.py | [reconcile_build.py](tools/coyodex/reconcile_build.py:234) — expands path rules into an explicit assignment file, so a huge map's assignments are generated and checked instead of typed · [reconcile.py](tools/coyodex/reconcile.py:258) — an assignment replaces the stored list rather than appending, which is what makes re-running the build idempotent · [reconcile.py](tools/coyodex/reconcile.py:274) — removes the refuted backbone links named by the reconcile file during assembly · [fix.py](tools/coyodex/fix.py:105) — writes the reviewers' corrected line into the stored link, matching on the full source-verb-target triple so paired links never swap · [anchor_drift.py](tools/coyodex/anchor_drift.py:110) — the no-reviewers pass: flags stored pointers aimed at a line that cannot be the acting statement | coyodex CLI |
-| **C9** | Code pre-index | S2 | Walks the repository before the map is built and writes a sizing file: how much code sits in each directory (lines, file counts, how often it changed), where every class and function is defined, import links between parts the agent already named, how many components the code's size suggests, and what the scan could not read. It is advisory input the build agent reconciles, never rows copied into the map. | [preindex.py](tools/coyodex/preindex.py:379) |  | verified | tools/coyodex/preindex.py · tools/coyodex/preindex_lib.py | [preindex.py](tools/coyodex/preindex.py:432) — writes the sizing file holding the weight tree, symbols, imports, expectation and coverage blocks · [preindex.py](tools/coyodex/preindex.py:146) — records every class/function definition by name with its file and line — the symbol index the viewer searches · [preindex_lib.py](tools/coyodex/preindex_lib.py:190) — the file walk that produces the counted set, after generated, vendored and binary files are excluded · [preindex_lib.py](tools/coyodex/preindex_lib.py:541) — the stop rule: a directory small enough to be one component counts as a single expected unit, which is how the expectation is derived · [preindex.py](tools/coyodex/preindex.py:400) — the expectation is computed from the code tree at build time, so it is a code-derived hint rather than anything read back from a map | coyodex CLI, coyodex-eval CLI |
-| **C23** | Diagram canvas & drill navigation | S12 | The screen the reader spends their time on: it draws the map as a diagram, lets them pan, zoom and switch between the view tabs (Happy Path, Subsystems, Entities, Dependencies, Data, Deployment, and the text-only Glossary / Use Cases / System / Tests tabs), and lets them drill into a box to replace the diagram with that box's own card. It remembers where they have been, so back and forward return each view to the exact zoom, position and selection it was left at, and it shows the legend, the breadcrumb and the environment filter around the drawing. | [viewer.js](tools/coyodex/viewer/viewer.js:6937) |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css · tools/coyodex/viewer/viewer.html | [viewer.js](tools/coyodex/viewer/viewer.js:4562) — turns the diagram source picked for the current view/drill state into an SVG drawing · [viewer.js](tools/coyodex/viewer/viewer.js:4570) — writes that drawing into the page — this single line is what the reader actually sees · [viewer.js](tools/coyodex/viewer/viewer.js:4626) — attaches pan/zoom to the fresh drawing, with wheel-pan and pinch-zoom wired separately at viewer.js:6681 · [viewer.js](tools/coyodex/viewer/viewer.js:3103) — double-click or Option-click on a container box drills in, which pushes a new view instead of opening a popup · [viewer.js](tools/coyodex/viewer/viewer.js:2857) — every diagram-changing move is recorded on a back/forward stack, the basis of the arrows and the Cmd-arrow shortcuts | Browser viewer page |
-| **C37** | Element info pane & selection | S12 | Turns a click on the canvas into readable detail: the selected box or arrow lights up, everything unrelated fades, and the pane under the diagram fills with that element's purpose, its type tags, its use cases, its entry points and its links. Hovering an element previews its meaning without selecting it; Cmd-clicking more elements stacks their cards; and on a use-case flow a small player walks the steps one arrow at a time. | [viewer.js](tools/coyodex/viewer/viewer.js:2452) |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css | [viewer.js](tools/coyodex/viewer/viewer.js:1121) — writes the clicked element's detail card into the pane — the operative line of the whole info pane · [viewer.js](tools/coyodex/viewer/viewer.js:313) — one atomic step re-glows every selected element, fades the rest, and re-stacks their cards · [viewer.js](tools/coyodex/viewer/viewer.js:454) — a multi-selection appends one card per selected element, so Cmd-clicking a second box adds rather than replaces · [viewer.js](tools/coyodex/viewer/viewer.js:1799) — hovering any box or arrow pops the meaning tooltip, so the map reads without clicking · [viewer.js](tools/coyodex/viewer/viewer.js:1681) — the flow step player replaces the selection with exactly one flow step, driving the arrow keys and the prev/next strip | Browser viewer page |
-| **C38** | File browser & code viewer | S12 | The right-hand side of the window: the mapped repository's real folder tree, shaded by how much of it the map covers, next to a read-only source view with line numbers, syntax colouring and an overview ruler. Selecting an element on the diagram reveals and highlights its file here; clicking a file selects the matching element on the diagram and shows the source scrolled to its line. Files come from the server as of the map's commit, and one control re-opens the shown file in an external editor or on GitHub. | [viewer.js](tools/coyodex/viewer/viewer.js:6659) |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css | [viewer.js](tools/coyodex/viewer/viewer.js:5242) — draws the repository tree from the server's response — the file browser's whole content · [viewer.js](tools/coyodex/viewer/viewer.js:5806) — fetches the selected file's text (or its inline diff) from the server rather than from disk · [viewer.js](tools/coyodex/viewer/viewer.js:5666) — writes the highlighted source as a numbered-line table, which is what the code pane shows · [viewer.js](tools/coyodex/viewer/viewer.js:4822) — clicking a tree row that anchors an element selects that element, closing the file-to-diagram loop · [viewer.js](tools/coyodex/viewer/viewer.js:6021) — hands the file off to the chosen external editor by URL scheme, with the GitHub blob link as the fallback below it | Browser viewer page |
-| **C39** | Map search sidebar | S12 | A single 'jump to anything' box on the far left, opened by the magnifier, the slash key or Cmd-K. Typing filters, as you type, over every element name, entity field, glossary term, operational reference row, file, folder and code symbol, plus the free text of every description. Picking a result reuses the viewer's own navigation: an element is selected in the view that draws it, a file opens in the code viewer, a folder opens in the browser, a term flashes on the Glossary. Typing '@' first scopes the search to the symbols of the file currently open. | [viewer.js](tools/coyodex/viewer/viewer.js:6654) |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css · tools/coyodex/viewer/viewer.html | [viewer.js](tools/coyodex/viewer/viewer.js:6224) — every named map element becomes a search row whose action selects it in its home view · [viewer.js](tools/coyodex/viewer/viewer.js:6325) — lazily pulls code symbols from the server, so a class or function the map never names is still findable · [viewer.js](tools/coyodex/viewer/viewer.js:6503) — clicking a result runs that row's navigation — the one place a search hit becomes a move in the viewer · [viewer.js](tools/coyodex/viewer/viewer.js:6647) — Enter jumps to the highlighted result, with the arrow keys moving the highlight just above · [viewer.js](tools/coyodex/viewer/viewer.js:6610) — opening the sidebar builds the index and runs the query, so the first keystroke already has everything to match against | Browser viewer page |
-| **C32** | Change-impact overlay | S12 | Lets the reader project a code change onto the map: pick the map's commit against the working tree, or any two commits, choose how far the ripple should spread, and the diagram badges every affected box as added, modified, deleted or rippled. The pane lists everything hit, grouped by kind and clickable; selecting one element explains why it was hit and which files changed; the file browser badges the changed files and can hide the rest; and opening a changed file shows its inline diff instead of the plain source. | [viewer.js](tools/coyodex/viewer/viewer.js:6906) |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css · tools/coyodex/viewer/viewer.html | [viewer.js](tools/coyodex/viewer/viewer.js:2132) — stamps the change badge onto each drawn box — the visible result of arming an impact analysis · [viewer.js](tools/coyodex/viewer/viewer.js:6805) — writes the 'what does this diff impact' summary into the info pane, every row clickable · [viewer.js](tools/coyodex/viewer/viewer.js:6928) — changing the ripple depth re-projects which elements count as impacted and redraws in place · [viewer.js](tools/coyodex/viewer/viewer.js:5801) — with an impact armed, opening a changed file requests its inline diff instead of the plain file · [viewer.js](tools/coyodex/viewer/viewer.js:5702) — records which files changed, which is what puts the change dots in the file browser and feeds its 'changed only' filter | Browser viewer page |
-| **C1** | Method docs | S1 | The prose program a coding agent executes to build and maintain a map: dispatch picks the mode (build / analyze / accept / direct map change), method.md drives the build, and the sibling docs spell out the JSON model, the domain cards, the diagrams, and the change-impact lifecycle. It is product, not documentation — the agent reads it and follows it instead of working from memory. | [dispatch.md](method/dispatch.md:3) |  | verified | method.md · method/dispatch.md · method/model.md · method/domain-cards.md · method/diagrams.md · method/change-impact.md · method/templates/project-map.template.md | [dispatch.md](method/dispatch.md:14) — the docs are executable instructions with modes, not reference: an invocation naming build / analyze / accept routes straight to the doc that implements it. · [dispatch.md](method/dispatch.md:89) — names the gate sequence every write must pass — validate -> audit -> render — which is what makes the prose enforceable by the CLI. · [method.md](method.md:18) — the division of labour with the tools: build agents return structured rows and `coyodex assemble` writes the model; nobody hand-authors the stored file. · [change-impact.md](method/change-impact.md:12) — the three-step Build / Analyze / Accept lifecycle table that defines what each mode writes and what gets committed. · [project-map.template.md](method/templates/project-map.template.md:7) — the template now only documents the generated view's shape (schema v1, ID-based rows), so it is a spec of the rendering, not an authoring form. |  |
-| **C2** | Agent skill manifest | S1 | The one file installed into each agent's skills home so that `/coyodex` (and phrases like 'map this repo' or 'change impact') reaches the method. It carries no method content itself: it pins COYODEX_HOME to this clone's absolute path and sends the agent to method/dispatch.md. | [SKILL.md](skill/coyodex/SKILL.md:9) |  | verified | skill/coyodex/SKILL.md | [SKILL.md](skill/coyodex/SKILL.md:9) — the trigger phrases the agent host matches on — 'coyodex', 'project map', 'codebase map', 'change impact', 'accept the map'. · [SKILL.md](skill/coyodex/SKILL.md:28) — the whole payload of the manifest: read `__COYODEX_HOME__/method/dispatch.md` and follow it. · [SKILL.md](skill/coyodex/SKILL.md:18) — separates the two directories the agent must not confuse — the coyodex clone (docs + tools) versus the repo being mapped (only `.coyodex/`). · [Makefile](Makefile:56) — install substitutes `__COYODEX_HOME__` for this repo's absolute path while copying the manifest into each skills home, so the installed copy points straight back here. |  |
-| **C40** | Change-impact engine | S8 | Projects an arbitrary git diff onto an existing map: it re-expresses every changed file in the map's pinned line frame (two `-U0` diffs against the pin), resolves each map anchor hosted in that file to a line / symbol / file rung, then applies one pass of typed ripple rules to report every element the change reaches, ranked by strength. | [serve.py](tools/coyodex/viewer/serve.py:655) |  | verified | tools/coyodex/impact_git.py · tools/coyodex/impact_lib.py · tools/coyodex/impact_ripple.py | [impact_git.py](tools/coyodex/impact_git.py:259) — the line-frame translation: a changed file's fate is computed from diff(pin, base) and diff(pin, target), never from a base->target diff directly. · [impact_lib.py](tools/coyodex/impact_lib.py:142) — the fate comparison itself — hunks present identically on both sides cancel; only unmatched hunks mark pinned lines as affected. · [impact_lib.py](tools/coyodex/impact_lib.py:339) — the resolution ladder in action: an anchor whose lines the frame touches resolves at 'line', else at the enclosing symbol, else at file rung. · [impact_ripple.py](tools/coyodex/impact_ripple.py:188) — consolidates several anchor hits on one element and assigns its strength on the lattice (direct line/symbol/file above ripple, territory last). · [impact_ripple.py](tools/coyodex/impact_ripple.py:212) — the structural ripple walk — a hit component climbs to its subsystem and onward to every ancestor group, once, never re-firing. | Map server |
-| **C41** | Map backup & provenance | S8 | Records which conversation produced a map (session id + minute-precise build time in a committed provenance.json) and, later, bundles the map files together with the exact transcript(s) of those conversations into a timestamped backup folder. It refuses to move a map out of a repo when no conversation could be found to bundle with it. | [method.md](method.md:1164) |  | verified | tools/map_backup.py | [map_backup.py](tools/map_backup.py:409) — the stamp writes the session entry into `<repo>/.coyodex/provenance.json`, the committed record a later backup reads. · [map_backup.py](tools/map_backup.py:477) — the safety guard: a MOVE with zero bundled conversations is refused before anything is created, because it would delete the map and defeat the feature. · [map_backup.py](tools/map_backup.py:507) — copy-then-delete ordering — the map files are copied into the backup first, so a mid-run failure loses nothing. · [map_backup.py](tools/map_backup.py:512) — the transcripts are copied (never moved) alongside the map, which is what pairs a map with the conversation that built it. · [map_backup.py](tools/map_backup.py:458) — the recovery path for un-stamped maps: scan the agent's transcripts for the session that actually wrote project-map.md. | Map backup script |
-| **C45** | Eval runner | S9 | The `coyodex-eval` command and the deterministic run pipeline behind it: reduce a freshly built map to a comparable quality profile (structure counts, validate/audit findings, coverage, granularity), enforce the build-time freeze hash, compare against the blessed baseline, and archive the whole run (map, views, profile, judge report, delta) so it can later be blessed as the new baseline. | [pyproject.toml](pyproject.toml:32) |  | verified | eval/tools/coyodex_eval/cli.py · eval/tools/coyodex_eval/run.py · eval/tools/coyodex_eval/profile.py | [cli.py](eval/tools/coyodex_eval/cli.py:37) — the single command dispatches each subcommand (score / run / hash / claims / judge / protocol / bless / compare) to its implementation, imported lazily. · [run.py](eval/tools/coyodex_eval/run.py:213) — the freeze guard — the run refuses when the map on disk no longer matches the sha256 written at build time, so a post-build edit can never be scored. · [run.py](eval/tools/coyodex_eval/run.py:67) — the run's verdict comes from comparing the fresh profile against the baseline profile and judge report; with no baseline the verdict is BASELINE. · [run.py](eval/tools/coyodex_eval/run.py:164) — archives the run directory — model, generated md view, view bundle, profile.json, judge.json and delta.md — as the historical record a baseline is blessed from. · [profile.py](eval/tools/coyodex_eval/profile.py:129) — the profile is computed through the same validate/audit model pipeline the product itself uses, so a map is never scored through a second, drifting grammar. | coyodex-eval CLI |
-| **C46** | Eval scoring | S9 | Turns two maps into a verdict. The judge half aggregates externally produced LLM verdicts — a majority-of-N skeptic vote per high-risk claim plus median rubric scores — into a judge report with a protocol fingerprint; the compare half applies baseline-relative hard gates and drift bands and returns PASS, DRIFT or REGRESSED. | [cli.py](eval/tools/coyodex_eval/cli.py:55) |  | verified | eval/tools/coyodex_eval/judge.py · eval/tools/coyodex_eval/compare.py | [compare.py](eval/tools/coyodex_eval/compare.py:325) — the verdict precedence that the whole eval reports on — any failed hard gate is REGRESSED, any breached band is DRIFT, otherwise PASS. · [compare.py](eval/tools/coyodex_eval/compare.py:238) — the gates are relative, not absolute: a real baseline map carries validate problems, so the rule is 'no new problems'. · [compare.py](eval/tools/coyodex_eval/compare.py:255) — the security-specific hard gate — the number of auth surfaces must never drop between baseline and candidate. · [judge.py](eval/tools/coyodex_eval/judge.py:215) — the grounding math: a claim's verdict is the majority of usable skeptic votes, so a single dissenter cannot flip it and a tie is refuted. · [judge.py](eval/tools/coyodex_eval/judge.py:250) — anchor drift is measured separately from truth — a confirmed claim whose stored `where` is far from the line the skeptics read counts as drift, not as a refutation. | coyodex-eval CLI |
-| **C20** | Map views builder | S7 | Turns the loaded map model into its two generated views: the committed markdown file (canonical section order, sections and columns emitted only when the map has that content, bare anchors re-linked so the text view stays clickable) and the graph payload the viewer consumes (nodes carrying their owned files, entry points, stores and lifecycles, deduped edges with their backing fields resolved, and the store-centric Data view). The `coyodex render` command drives the markdown half, writes it next to the map, and registers the project with the local server. | [render.py](tools/coyodex/viewer/render.py:22) |  | verified | tools/coyodex/views.py · tools/coyodex/viewer/render.py | [views.py](tools/coyodex/views.py:259) — appends one markdown section in the template's fixed order — called only for a non-empty model list, so a small map omits the section entirely · [views.py](tools/coyodex/views.py:736) — registers a component as a graph node carrying its owned file list, its grouped entry points and its lifecycle lines · [views.py](tools/coyodex/views.py:849) — rolls a subsystem's or subdomain's files up from its members, so drilling a group's code viewer spans everything it contains · [render.py](tools/coyodex/viewer/render.py:53) — writes the generated markdown view to the requested .md output · [render.py](tools/coyodex/viewer/render.py:56) — registers the rendered project's folder with the serve recents, so the map shows up as a card without a restart | coyodex CLI, Map server, coyodex-eval CLI |
-| **C24** | Map server | S13 | Serves every remembered coyodex project from one local loopback-only HTTP server: the shared viewer shell and static assets, each map's view bundle, file tree and code-symbol list, the change-impact endpoints, and file contents read from git at the map's pinned commit (with a scoped `at=` escape for another commit or a guarded working-tree read). It also serves the landing page for adding, reordering and forgetting project folders, and re-reads a map whose file changed on disk so an edit appears on the next refresh. | [serve.py](tools/coyodex/viewer/serve.py:763) |  | verified | tools/coyodex/viewer/serve.py | [serve.py](tools/coyodex/viewer/serve.py:734) — binds the threading HTTP server to 127.0.0.1 only · [serve.py](tools/coyodex/viewer/serve.py:513) — refuses any request whose Host header is not loopback — the DNS-rebinding guard that stops a remote page reading local source · [serve.py](tools/coyodex/viewer/serve.py:527) — checks the map file's mtime on every project request and drops the cached tree/view/symbols when it changed · [serve.py](tools/coyodex/viewer/serve.py:650) — reads a file's bytes out of git at the requested commit — the pinned-snapshot read behind the code viewer · [serve.py](tools/coyodex/viewer/serve.py:605) — serves the one generic viewer shell for every project; the per-map data arrives separately from the project's own API | Map server |
-| **C25** | File browser, recents & diff rows | S13 | Builds the viewer's file-browser tree — repo files nested into folders, each row tagged with how the map covers it and with which element a click should select (the file's own element, its owning component, or the nearest mapped ancestor folder) — keeps the remembered-project list in `~/.coyodex/serve-recents.json` so builds and the running server merge instead of clobbering each other, and parses `git diff` output into the numbered add/delete/context rows the code viewer paints. | [serve.py](tools/coyodex/viewer/serve.py:384) |  | verified | tools/coyodex/viewer/filetree.py · tools/coyodex/viewer/recents.py · tools/coyodex/viewer/diffmap.py | [filetree.py](tools/coyodex/viewer/filetree.py:166) — sets a row's click target: the element defined or owned at that path, else the nearest ancestor folder an element anchors · [filetree.py](tools/coyodex/viewer/filetree.py:177) — rolls a folder up to partial coverage when nothing anchors it but a descendant is mapped — what makes the browser double as a coverage view · [filetree.py](tools/coyodex/viewer/filetree.py:127) — records a component as the owner of each file it lists, so clicking any owned file selects that component · [recents.py](tools/coyodex/viewer/recents.py:66) — puts the opened folder at the front of the recents list after dropping duplicate spellings of the same directory · [diffmap.py](tools/coyodex/viewer/diffmap.py:51) — turns one added diff line into a display row carrying its new-side line number | Map server, coyodex CLI |
-| **C10** | Map validator | S6 | Runs the model-only semantic rulebook over a loaded map: every element defined once, every cross-reference resolving, and the shape rules for flows, entry points, deps, stores, state machines, messaging channels, domain cards and anchor formats. Blocking breakages come back as problems; the judgement calls (balance, completeness, cadence, persistence coverage, isolated components) come back as non-blocking advisory warnings. |  |  | verified | tools/coyodex/validate_model.py | [validate_model.py](tools/coyodex/validate_model.py:143) — reports every id defined more than once — the duplicate-definition block · [validate_model.py](tools/coyodex/validate_model.py:271) — the reference check: referenced ids minus defined ids, minus the additivity suppressions, is the dangling-reference list · [validate_model.py](tools/coyodex/validate_model.py:306) — per-step flow rulebook — a step missing an endpoint is a blocking problem · [validate_model.py](tools/coyodex/validate_model.py:1684) — a backbone edge with neither a `where` call site nor `no_call_site` blocks · [validate_model.py](tools/coyodex/validate_model.py:1846) — anchor-format gate: every source-location field must be a bare `path:line` · [validate_model.py](tools/coyodex/validate_model.py:1158) — example advisory — components appearing in no edge and no channel are collected and warned about, never blocked | coyodex CLI, coyodex-eval CLI |
-| **C14** | Source & coverage grounding checks | S6 | The repo-reading half of validation, opt-in behind `--check-sources` / `--check-coverage`: it opens the cited files to prove each anchor really resolves, that a call-site anchor points at an acting statement rather than a def header, import or comment, and that entity and state-machine names actually appear in the file they cite. For coverage it collects the repo paths the map references and re-parses the entities' source directories to spot named types with no entity card. |  |  | verified | tools/coyodex/validate_model.py | [validate_model.py](tools/coyodex/validate_model.py:2054) — existence check: each anchor's path must be a real file (or directory) under one of the source roots · [validate_model.py](tools/coyodex/validate_model.py:2119) — reads the anchored line and asks whether it can be the acting statement (advisory drift check) · [validate_model.py](tools/coyodex/validate_model.py:2148) — state names that do not appear in the cited source file are reported as invented or prose-read · [validate_model.py](tools/coyodex/validate_model.py:2175) — anti-synthesized-entity gate: no token of the entity name found in its SOURCE file is a blocking problem · [validate_model.py](tools/coyodex/validate_model.py:2267) — re-measures the domain model — Python classes in the entities' source dirs with no matching entity card · [validate_model.py](tools/coyodex/validate_model.py:2212) — keeps only the repo-relative paths that exist, the reference set the coverage walk compares the tree against | coyodex CLI, coyodex-eval CLI |
-| **C15** | Validation run & CLI | S6 | Drives one validation pass — calls every check in a fixed order, folds in the hierarchy, balance and tree-coverage checks from the sibling modules, and flags a committed `project-map.md` that differs from the view regenerated out of the model. The `coyodex validate` command line parses the flags, loads the map, prints the inventory, the advisory warnings and the blocking problems, and exits non-zero on any problem; `--emit-unclaimed` instead prints a ready-to-paste adjudication block. | [validate_model.py](tools/coyodex/validate_model.py:2496) |  | verified | tools/coyodex/validate_model.py | [validate_model.py](tools/coyodex/validate_model.py:2308) — the orchestration: each check's findings are appended to the problems or warnings list in turn · [validate_model.py](tools/coyodex/validate_model.py:2368) — the `--check-sources` branch wires the repo-reading anchor existence check in as BLOCKING · [validate_model.py](tools/coyodex/validate_model.py:2386) — the `--check-coverage` branch re-walks the tree and adds the compression/coverage advisories · [validate_model.py](tools/coyodex/validate_model.py:2483) — compares the committed markdown view with the regenerated one — a stale generated file is surfaced · [validate_model.py](tools/coyodex/validate_model.py:2561) — the gate itself: any blocking problem makes the command exit non-zero | coyodex CLI, coyodex-eval CLI |
-| **C16** | Advisory adjudication readers | S6 | Reads the operator's durable decisions out of the map's own `extras` headings so a justified advisory stays quiet on every later run — accepted flow duplications, unclaimed surfaces, persistence and Happy-Path-coverage records, coarse-fold coverage directories, and the per-kind entry-point completeness contract. Each record is parsed only from a line-leading id or path followed by a separator, so prose that merely mentions an id mid-sentence can never silence a check. |  |  | verified | tools/coyodex/validate_model.py | [validate_model.py](tools/coyodex/validate_model.py:422) — collects the flow pairs adjudicated under an 'Accepted duplications' heading · [validate_model.py](tools/coyodex/validate_model.py:559) — records an id only when the line STARTS with it and a separator follows — the strictness that keeps prose from exempting elements · [validate_model.py](tools/coyodex/validate_model.py:581) — collects the repo-relative directories recorded under 'Coverage exceptions' · [validate_model.py](tools/coyodex/validate_model.py:588) — boundary-aware prefix match, so a recorded dir silences its subtree and not a same-prefixed sibling · [validate_model.py](tools/coyodex/validate_model.py:873) — reads the per-entry-point-kind completeness contract (complete/sampled/partial), folded to the canonical kind spelling | coyodex CLI, coyodex-eval CLI |
-| **C21** | Viewer graph builder | S11 | Defines the graph shape every viewer diagram reads — nodes (with their files, entry points, deployment hosts, store and lifecycle facts), edges, flows, tests and the store-centric Data view — and injects a default subsystem when a map groups nothing, so a component altitude always exists. It also parses a change-impact report into per-element change labels and new edges for the viewer's diff overlay. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2775) |  | verified | tools/coyodex/viewer/build_graph.py | [build_graph.py](tools/coyodex/viewer/build_graph.py:219) — injects the synthetic default subsystem and reparents every component under it when the map declares none · [build_graph.py](tools/coyodex/viewer/build_graph.py:254) — classifies one change-impact report row into an added/modified/deleted element entry · [build_graph.py](tools/coyodex/viewer/build_graph.py:269) — collects a report's from\|verb\|to row as a new edge the diff overlay draws · [build_graph.py](tools/coyodex/viewer/build_graph.py:192) — splits the report's markdown tables with the shared grammar helpers, so parser and validator cannot disagree on table boundaries | Map server |
-| **C22** | View bundle assembler | S11 | Assembles the single JSON payload the browser app fetches per map: every pre-rendered diagram source, the per-arrow crossing lists, the merged graph with diff annotations, the colour table, the header meta line (repo, commit, build time, schema) and the source-link config (repo root and GitHub URL read from git). Each view is included only when the map actually has that content. | [serve.py](tools/coyodex/viewer/serve.py:399) |  | verified | tools/coyodex/viewer/gen_viewer.py | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2813) — builds the ViewBundle, gating each diagram on has_grouping / has_domain / has_subdomains / has_deployment / has_hp · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2801) — assembles the header meta line from the repo name plus commit/date or the diff summary · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2653) — annotates the merged graph with each element's change status so the panel and badges can show it · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:1145) — marks an unchanged element downstream of a changed one as rippled for the diff badges · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2872) — the debug entry point that dumps the same bundle to a JSON file for two-stage inspection | Map server, coyodex-eval CLI |
-| **C26** | Context & subsystem diagram generator | S11 | Draws the structural altitudes: the Context view (the system, its actors and the external systems it uses, grouped by purpose and with in-process libraries folded into one drillable box), the Subsystems overview with count-labelled crossings, each subsystem's neighbourhood card, and the two-subsystem edge card. It also produces the explanation payloads behind the Context arrows and the crossing lists behind every subsystem arrow. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2778) |  | verified | tools/coyodex/viewer/gen_viewer.py | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:1342) — emits the Context view's collapsed Libraries box holding every in-process dependency · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:1219) — wraps each purpose bucket of dependencies in its own labelled cluster, shared by Context and the Libraries drill · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:877) — emits the Subsystems overview's inter-subsystem arrow, labelled by the number of component edges it bundles · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:1078) — emits a subsystem card's bridge arrow from a component to the subdomain its data touches · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:932) — lists, per subsystem-pair arrow, the concrete component-to-component crossings the panel shows | Map server |
-| **C27** | Domain diagram generator | S11 | Draws the domain-model altitudes as class diagrams: the flat Entities view (each entity a box with its fields, key markers, store, retention and lifecycle), the Subdomains overview, each subdomain's neighbourhood card, the two-subdomain edge card, and the bridge card pairing a subsystem with a subdomain. It also draws the reverse link showing which subsystems read or write each entity. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2821) |  | verified | tools/coyodex/viewer/gen_viewer.py | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:468) — emits one class box per entity, with its fields and its store/retention/lifecycle lines, for the flat Entities view · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:581) — emits the Subdomains overview arrow, labelled by how many entity relations cross that pair · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:744) — emits a subdomain card's crossing arrow to a collapsed neighbour subdomain box · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:678) — emits the reverse bridge arrow from a subsystem box into an entity, counted by the underlying component-to-entity edges · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:841) — emits the bridge card's concrete component-to-entity link so a click resolves to the real edge | Map server |
-| **C28** | Deployment & messaging diagram generator | S11 | Draws the runtime picture: the Deployment overview (one box per process, product-area containers on big maps, a shared-infrastructure lane banded by role, and process-to-process arrows derived from async channels and cross-process calls), each process's own card, each container's card, and a per-broker channel diagram for the Data tab. It also injects the process boxes into the graph and lists the calls and channels behind every drawn arrow. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2828) |  | verified | tools/coyodex/viewer/gen_viewer.py | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2110) — emits the one process-to-process arrow per pair, labelled by the channels and calls that cross it · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2116) — emits a real arrow from each process to the infrastructure it shares with another process · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2224) — emits a process card's arrow to each subsystem or component that unit runs · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:1499) — injects a view-only process node per drawn deployment unit so its box binds and shows its operational facts · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2701) — stores the per-broker publisher-to-channel-to-consumer diagram keyed by broker, for the Data tab | Map server |
-| **C29** | Behavioural flow generator | S11 | Draws the behavioural overlay as sequence diagrams: the Happy Path as an ordered walk of numbered messages from each step's actor to the system, and each use case's flow as messages between the actor and the components, dependencies and entities it touches, with shared sub-flows expanded inline in a named block. It emits the matching numbered narrative and actor lists the side panel shows, kept on the same index as the drawn messages. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2837) |  | verified | tools/coyodex/viewer/gen_viewer.py | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2412) — emits one numbered Happy Path message per step, from the step's actor to the system lifeline · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2553) — emits one numbered flow message per step between the two elements it connects · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2550) — wraps an expanded sub-flow run in a tinted block named by a note, without disturbing the message numbering · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2581) — builds the side panel's narrative row for a step, carrying its own action text, note and call site · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2503) — replaces a sub-flow reference step by the referenced sub-flow's own steps, the single expansion all three per-flow views consume | Map server |
+| **C78** | The eval recipe | S6 | Written instructions for scoring two maps of the same code. The scoring says whether a change to the coyodex method made maps better or worse. The same instructions fix the quality rubric a reviewer scores against, and the pass marks a map must clear. A run ends in one word: as good, drifted, or worse. |  |  | verified | eval/method.md · eval/rubric.md · eval/thresholds.json · eval/README.md · eval/blind-build.md · eval/experiments/2026-08-16-skeptic-recall.md · eval/experiments/2026-08-16-skeptic-recall.key.json | [method.md](eval/method.md:8) — The recipe states its job, which is to compare the current map against an archived one. · [method.md](eval/method.md:41) — The recipe forbids editing either map to improve a number, and voids a run where that happened. · [thresholds.json](eval/thresholds.json:6) — The pass marks hold the hard check that a map must not gain new validation problems. · [rubric.md](eval/rubric.md:10) — The rubric names its first quality dimension, asking whether the map's claims match the code. · [method.md](eval/method.md:33) — The recipe hands a caller off to the separate recipe for a provably blind rebuild. |  |
+| **C79** | The build retrospective recipe | S6 | Written instructions for reviewing one finished build. The review reads the map the build made and the chat that made it. The review reports the friction, bugs and gaps the build revealed. A review changes nothing on disk, so every finding is a proposal for the developer. Each past finding is re-checked with a command that returns a number. |  |  | verified | eval/retro/method.md · eval/retro/backlog.md | [method.md](eval/retro/method.md:4) — The recipe states its job, which is to read the map and the chat and report what the run shows. · [method.md](eval/retro/method.md:6) — The recipe forbids changing anything on disk, so every finding stays a proposal. · [method.md](eval/retro/method.md:62) — The recipe orders the reviewer to refuse while the build is still writing. · [method.md](eval/retro/method.md:264) — The recipe collects every promise a method change made since the previous build. · [backlog.md](eval/retro/backlog.md:7) — The durable record of past proposals says the recipe must read it before a review starts. |  |
+| **C1** | Map document | S1 | Holds the shape of a map: what a box, an arrow and a code link may each contain. Writes the map file the same way every time, so a rebuild shows only real changes. Also holds the word lists the whole tool shares. |  |  | verified | tools/coyodex/model.py · tools/coyodex/grammar.py · tools/coyodex/anchors.py · tools/coyodex/json_schema.py | [model.py](tools/coyodex/model.py:892) — The one serializer: fixed key order, indent 2, trailing newline, so the same map always writes identical bytes. · [model.py](tools/coyodex/model.py:1084) — Load rejects an element whose id does not match its array's required prefix, which is the shape half of validation. · [grammar.py](tools/coyodex/grammar.py:369) — One shared decision for an entry point's activation, reused by the viewer, the coverage advisory and the eval. · [anchors.py](tools/coyodex/anchors.py:36) — The single definition of a well-formed code link: a file reference with an optional line, or a directory reference. | coyodex command |
+| **C2** | Fragment merge | S1 | Merges every worker's part of the map into one document. A box claimed by two workers stops the build, instead of one part quietly winning. Gives a worker the self-check it runs before handing its part back. |  |  | verified | tools/coyodex/assemble.py · tools/coyodex/lint_fragment.py | [assemble.py](tools/coyodex/assemble.py:394) — A duplicate id across two fragments is reported as a merge conflict naming both files, never silently overwritten. · [assemble.py](tools/coyodex/assemble.py:688) — Entry-point ids are minted here from content order, which is why a fragment must not author one. · [assemble.py](tools/coyodex/assemble.py:963) — The merged model is written to the canonical map file, plus its generated markdown view. · [lint_fragment.py](tools/coyodex/lint_fragment.py:452) — The per-fragment self-check runs the same row-local rules the whole-map validator does, in the authoring worker's own turn. | coyodex command |
+| **C3** | Map lookups | S1 | Reads one part of a map, so nobody opens the file and picks it apart by hand. Compares two versions of a map row by row, saying what was added, dropped or changed. Writes the note an operator leaves when accepting an advisory. |  |  | verified | tools/coyodex/dump.py · tools/coyodex/mapdiff.py · tools/coyodex/record.py · tools/coyodex/records.py | [dump.py](tools/coyodex/dump.py:297) — With no slice flag the whole parsed model is emitted, which is the read-only whole-map lookup. · [mapdiff.py](tools/coyodex/mapdiff.py:159) — For a row present on both sides, the fields whose values moved are recorded as the change. · [record.py](tools/coyodex/record.py:318) — One write for a whole batch of recorded lines, after every line has passed its shape check. · [records.py](tools/coyodex/records.py:183) — The single reader for a recorded line, so every advisory family parses the same key-and-reason shape. | coyodex command |
+| **C4** | Command shell and build setup | S1 | The single command every coyodex action runs through. Before a build starts, the command says which files will be read and which commit the map will name. The same command prints the brief one worker receives, and reads the list of code the map should skip. |  |  | verified | tools/coyodex/cli.py · tools/coyodex/scope.py · tools/coyodex/ignorefile.py · tools/coyodex/pathmatch.py · tools/coyodex/contract.py · tools/coyodex/reporting.py · tools/coyodex/subverb_help.py · tools/coyodex/pysrc.py · tools/coyodex/__init__.py | [cli.py](tools/coyodex/cli.py:114) — Standard output is switched to line buffering at startup, so notes and failures interleave in program order under a pipe. · [scope.py](tools/coyodex/scope.py:172) — The up-front briefing is printed as plain text, with no exit-code signalling, for a person to read before the build. · [ignorefile.py](tools/coyodex/ignorefile.py:178) — Each accepted line of the analysis ignore file becomes an ordered rule, where a later rule overrides an earlier one. · [contract.py](tools/coyodex/contract.py:118) — Only the agent half of a contract template is printed, so the lead's own instructions cannot reach a worker. | coyodex command |
+| **C13** | Map validator | S2 | Checks a finished map is well formed before anyone trusts it. Every reference must resolve and every code link must point at a real file. Softer findings are advice, and an operator can silence one by writing down a reason. |  |  | verified | tools/coyodex/validate_model.py · tools/coyodex/validate_analysis.py · tools/coyodex/prose.py | [validate_model.py](tools/coyodex/validate_model.py:4444) — A code link pointing at a file that is not there fails the map, rather than only nudging. · [validate_analysis.py](tools/coyodex/validate_analysis.py:181) — Warns when many sibling folders of code were folded into about one box on a diagram. · [prose.py](tools/coyodex/prose.py:172) — Counts what makes one sentence hard to read alone, and reports each count as advice. · [validate_model.py](tools/coyodex/validate_model.py:4810) — Names the command that writes down a reason, once, where the operator reads the warnings. | coyodex command |
+| **C14** | Map auditor | S2 | Reads a map against itself and reports where the story and the mechanism disagree. Also ranks every claim the map makes about the code. Fresh readers then try to disprove the riskiest claims first. |  |  | verified | tools/coyodex/audit_model.py | [audit_model.py](tools/coyodex/audit_model.py:1432) — Only a hard contradiction stops the build; every softer finding is advice to reconcile. · [audit_model.py](tools/coyodex/audit_model.py:1017) — Access claims are ranked first, so the first batch of readers gets the riskiest claims. · [audit_model.py](tools/coyodex/audit_model.py:831) — A written reason silences exactly one finding, and the report still says what it silenced. · [audit_model.py](tools/coyodex/audit_model.py:1250) — Clears its own earlier claim files, so a stale batch is never handed out a second time. | coyodex command |
+| **C15** | Diagram balance report | S2 | Counts the boxes on every diagram and says which screens are too crowded to read. Proposes a regrouping for each crowded screen, as a starting point for judgment. Never fails a build, because grouping is a view choice. |  |  | verified | tools/coyodex/balance.py · tools/coyodex/balance_lib.py | [balance_lib.py](tools/coyodex/balance_lib.py:313) — Warns when one screen shows more boxes than a reader can hold at once. · [balance.py](tools/coyodex/balance.py:201) — Writes a concrete regrouping suggestion for each crowded screen, ready to apply by hand. · [balance.py](tools/coyodex/balance.py:284) — Always reports success, because a crowded diagram is a judgement call and not a failure. · [balance_lib.py](tools/coyodex/balance_lib.py:238) — Reads the reasons an operator wrote down and skips the screens those reasons name. | coyodex command |
+| **C16** | Pre-commit gate run | S2 | Runs the other gates in one command and writes every finding to a report file. Says for each gate whether it really ran, so silence never reads as a pass. Can also name files that held an access check in an earlier map and hold none now. |  |  | verified | tools/coyodex/finalize.py · tools/coyodex/access_surface.py | [finalize.py](tools/coyodex/finalize.py:490) — A gate that should have run and did not makes the whole read incomplete, never a pass. · [finalize.py](tools/coyodex/finalize.py:877) — Writes every finding to a file, which trimming the screen output cannot hide. · [finalize.py](tools/coyodex/finalize.py:719) — Checks each piece of advice against what the map recorded, and names a missing record. · [access_surface.py](tools/coyodex/access_surface.py:84) — Names files that held an access check in an earlier map and hold none in this one. | coyodex command |
+| **C17** | Feature index | S4 | Joins every part of the map onto the feature it belongs to, and stores nothing. Also derives the one story order every feature screen draws. Counts what fails to join, so a partial list is never shown as a whole one. |  |  | verified | tools/coyodex/features.py | [features.py](tools/coyodex/features.py:331) — Reuses the reader the Rules view uses, so the two screens cannot disagree about a rule. · [features.py](tools/coyodex/features.py:382) — Counts the decisions that reach no feature, so a floor is never read as an answer. · [features.py](tools/coyodex/features.py:246) — Derives one story order here, instead of letting the browser compute a layout. | coyodex command |
+| **C23** | Grounding record | S2 | Turns the fresh readers' verdicts into the four counts a map must carry before anyone trusts it. Those counts refuse a verdict for a claim nobody pinned, and a pinned claim nobody voted on. A second check compares a proven claim's code link against the line the fresh readers actually found. |  |  | verified | tools/coyodex/grounding.py · tools/coyodex/anchor_drift.py | [grounding.py](tools/coyodex/grounding.py:201) — One claim's votes are folded into one of three buckets, and the bucket totals become the counts the map ships. · [grounding.py](tools/coyodex/grounding.py:162) — A verdict about a claim the pinned worklist never held is refused, because the two sides came from different snapshots. · [grounding.py](tools/coyodex/grounding.py:180) — A pinned claim with no verdict is refused, unless the operator declares the pass deliberately partial. · [anchor_drift.py](tools/coyodex/anchor_drift.py:93) — The stored code link of a proven claim is compared against the lines the fresh readers reported. | coyodex command |
+| **C24** | Map repairs | S2 | Applies the mechanical corrections a map needs after a fresh reader reports, so none of them is hand-typed. A moved code link is rewritten, and a disproved relation is dropped. The happy-path steps that rode the dropped relation are healed too. |  |  | verified | tools/coyodex/fix.py | [fix.py](tools/coyodex/fix.py:227) — The corrected line the fresh readers agreed on is written into every drifted code link. · [fix.py](tools/coyodex/fix.py:447) — Dropping a disproved relation also removes the happy-path steps that rode it, so a rebuild cannot bring it back. · [fix.py](tools/coyodex/fix.py:926) — A relation declared at several different lines is reduced to the one occurrence the operator chose. · [fix.py](tools/coyodex/fix.py:1586) — A text correction is written into the fragment that authored the row, so every later rebuild keeps it. | coyodex command |
+| **C25** | Assignment pass | S1 | Turns path rules into an explicit assignment file, so nobody lists hundreds of elements by hand. Every rule that matched nothing is named, and so is an assignment aimed at a group nobody declared. The build stamp is also written here, naming which conversation built the map and the code commit. |  |  | verified | tools/coyodex/reconcile_build.py · tools/coyodex/reconcile.py · tools/coyodex/provenance.py | [reconcile_build.py](tools/coyodex/reconcile_build.py:168) — A rule whose path pattern reached no element is reported instead of quietly producing an empty assignment. · [reconcile_build.py](tools/coyodex/reconcile_build.py:439) — The expanded assignment file is written, keeping the repair decisions an earlier run had already recorded in it. · [reconcile.py](tools/coyodex/reconcile.py:539) — An assignment is applied to the merged map after the fragments are joined and before the map is written. · [provenance.py](tools/coyodex/provenance.py:217) — The session, the build minute and the code commit are written into the stamp file a commit is gated on. | coyodex command |
+| **C33** | Pre-index | S1 | Sizes a codebase before the map is drawn. The result gives the size and change rate of every folder. A symbol list says where every class and function is defined. The result also says how many parts a map of this size should hold. | [preindex.py](tools/coyodex/preindex.py:557) |  | verified | tools/coyodex/preindex.py · tools/coyodex/preindex_lib.py | [preindex.py](tools/coyodex/preindex.py:604) — Writes the sizing result, holding the folder weights, the symbol list, the import advisory and the part count. · [preindex_lib.py](tools/coyodex/preindex_lib.py:600) — The stop rule that turns one folder into one part of the map, which is how the advised count is reached. · [preindex_lib.py](tools/coyodex/preindex_lib.py:492) — Reads Python deeply through the standard parser, and every other language through an optional parser pack. · [preindex.py](tools/coyodex/preindex.py:143) — Records every file the tool could not read, so unread code is reported as unknown rather than as empty. | coyodex command |
+| **C34** | Change impact | S1 | Tells what a code change did to a finished map. The map is pinned to one commit, so the code has moved on. Two comparisons against that commit say which map boxes the changed lines belong to. The answer then spreads along the map's own arrows, so a reader sees everything the change touches. |  |  | verified | tools/coyodex/impact_lib.py · tools/coyodex/impact_git.py · tools/coyodex/impact_ripple.py | [impact_git.py](tools/coyodex/impact_git.py:94) — Lists the files a change added, edited, deleted or renamed, including edits not yet committed. · [impact_lib.py](tools/coyodex/impact_lib.py:146) — Compares the two sides against the pinned commit, so a change already present at both ends counts as nothing. · [impact_lib.py](tools/coyodex/impact_lib.py:353) — Says how precisely a box was reached, from an exact line down to only the file, so the viewer never overstates precision. · [impact_ripple.py](tools/coyodex/impact_ripple.py:236) — Carries a hit outward along the map's own relations, so a reader sees everything the change touches. | coyodex command |
+| **C43** | Map server | S4 | Serves every remembered map to a browser on this machine. Each file shown comes from the project's history at the commit the map names. | [serve.py](tools/coyodex/viewer/serve.py:852) | The diagram builder, the graph builder and the file browser tree. | verified | tools/coyodex/viewer/serve.py · tools/coyodex/viewer/recents.py · tools/coyodex/viewer/__init__.py | [serve.py](tools/coyodex/viewer/serve.py:594) — sends a request for one project to that project's own handler · [serve.py](tools/coyodex/viewer/serve.py:279) — reads a file out of the project's history at the commit the map names · [serve.py](tools/coyodex/viewer/serve.py:577) — refuses any request that did not come from this machine · [recents.py](tools/coyodex/viewer/recents.py:67) — saves the list of project folders the landing page offers | map server |
+| **C44** | Diagram builder | S4 | Builds every diagram a map's screens draw, straight from the map. The work happens on each request, so no diagram file is ever saved. |  | The graph builder, and the map's own folder for the code links. | verified | tools/coyodex/viewer/gen_viewer.py | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3264) — draws the whole map as boxes and arrows · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2364) — draws one arrow for each pair of running processes that talk · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2900) — draws one numbered message per step of a use case · [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:1552) — folds the in-process libraries into one box on the top view | coyodex command, map server |
+| **C45** | Graph builder | S4 | Turns the stored map into the boxes and arrows every screen draws. The same code writes the committed text version of the map. | [render.py](tools/coyodex/viewer/render.py:53) | The stored map, plus the change-impact report when one sits beside it. | verified | tools/coyodex/views.py · tools/coyodex/viewer/build_graph.py · tools/coyodex/viewer/render.py | [views.py](tools/coyodex/views.py:299) — starts the committed text version with the map's title · [views.py](tools/coyodex/views.py:1128) — turns one component of the map into a box a screen can draw · [build_graph.py](tools/coyodex/viewer/build_graph.py:271) — reads a change-impact report so the screens can badge what moved · [render.py](tools/coyodex/viewer/render.py:53) — writes the committed text version to disk | coyodex command, map server |
+| **C46** | File browser tree | S4 | Builds the folder tree the file browser shows, marking which files the map covers. Also turns one file's change into the rows the code viewer paints. |  | The graph builder, for the map's file anchors. | verified | tools/coyodex/viewer/filetree.py · tools/coyodex/viewer/diffmap.py | [filetree.py](tools/coyodex/viewer/filetree.py:210) — marks a file as covered by the map, or not covered at all · [filetree.py](tools/coyodex/viewer/filetree.py:115) — indexes every path the map points at, so a click finds its box · [filetree.py](tools/coyodex/viewer/filetree.py:261) — states on the tree what the ignore file hid from it · [diffmap.py](tools/coyodex/viewer/diffmap.py:51) — marks a line as added, for the side-by-side code view | map server |
+| **C55** | Map canvas | S5 | Draws a map view as a diagram the reader can pan, zoom and click. Selecting a box or an arrow opens the card describing that box or arrow. |  |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css · tools/coyodex/viewer/viewer.html | [viewer.js](tools/coyodex/viewer/viewer.js:8953) — Turns the map's own diagram text into the drawing on screen. · [viewer.js](tools/coyodex/viewer/viewer.js:9025) — Adds pan and zoom to the drawing, and keeps the reader's camera. · [viewer.js](tools/coyodex/viewer/viewer.js:6389) — Gives each kind of view its own click behaviour on boxes and arrows. · [viewer.js](tools/coyodex/viewer/viewer.js:940) — Lights every selected element and dims the rest, so a selection reads as a focus. | viewer page |
+| **C56** | Map reading pages | S5 | Draws the map screens that are pages of cards instead of drawings. The features, the rules, the storage, the tests and the glossary all live here. |  |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css | [viewer.js](tools/coyodex/viewer/viewer.js:7961) — The Features page leads with the story of every feature beside the cast of actors. · [viewer.js](tools/coyodex/viewer/viewer.js:8738) — The Rules page groups the product's decisions into decision areas. · [viewer.js](tools/coyodex/viewer/viewer.js:8375) — The Storage page is built from the stores the map records. · [viewer.js](tools/coyodex/viewer/viewer.js:6861) — The Glossary page is a table of terms, not a drawing. | viewer page |
+| **C57** | Trail and history | S5 | Decides which map screen is open, and names it in the tabs and the breadcrumb. Back and forward reopen a screen exactly as the reader left it. |  |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css · tools/coyodex/viewer/viewer.html | [viewer.js](tools/coyodex/viewer/viewer.js:11386) — Clicking a view tab opens that view. · [viewer.js](tools/coyodex/viewer/viewer.js:11401) — Clicking a group tab opens the view that group was last left on. · [viewer.js](tools/coyodex/viewer/viewer.js:4302) — Remembers where each tab was left, so returning to a tab lands back there. · [viewer.js](tools/coyodex/viewer/viewer.js:11694) — Picks the first screen a reader sees when the map opens. | viewer page |
+| **C58** | Source column | S5 | Shows the mapped project's files and their code, read at the commit the map names. A file can also be opened in the reader's own editor. |  |  | verified | tools/coyodex/viewer/viewer.js · tools/coyodex/viewer/viewer.css · tools/coyodex/viewer/viewer.html | [viewer.js](tools/coyodex/viewer/viewer.js:9712) — Asks the server for the project's file tree and draws it as a browser. · [viewer.js](tools/coyodex/viewer/viewer.js:10683) — Builds the address that opens a file in the reader's chosen editor. · [viewer.js](tools/coyodex/viewer/viewer.js:10707) — Builds the GitHub address for a file, pinned to the commit the map names. | viewer page |
+| **C63** | Map quality score and verdict | S7 | Reduces a finished map to numbers that two runs can be compared on. Says whether the new map is as good as the accepted one, giving pass, drift or regressed. Also plants false claims about the map and counts how many a reviewer catches. | [cli.py](eval/tools/coyodex_eval/cli.py:56) |  | verified | eval/tools/coyodex_eval/cli.py · eval/tools/coyodex_eval/profile.py · eval/tools/coyodex_eval/compare.py · eval/tools/coyodex_eval/run.py · eval/tools/coyodex_eval/judge.py · eval/tools/coyodex_eval/legacy_map.py · eval/tools/coyodex_eval/mutate.py · eval/tools/coyodex_eval/__init__.py | [profile.py](eval/tools/coyodex_eval/profile.py:263) — Counts the risky claims a reviewer is asked to check against the code. · [compare.py](eval/tools/coyodex_eval/compare.py:503) — One failed hard check makes the whole comparison read as regressed. · [judge.py](eval/tools/coyodex_eval/judge.py:242) — Turns the reviewers' votes into one pass rate, ignoring votes that failed. · [mutate.py](eval/tools/coyodex_eval/mutate.py:228) — A reviewer that confirms a claim false by construction is scored as a miss. | coyodex command |
+| **C64** | Build transcript reader and spend report | S7 | Reads a finished build's chat log in slices, because the whole log is too big to open. Also reports the time and the money that build spent, per row of map produced. | [transcript.py](eval/tools/coyodex_eval/transcript.py:1067) |  | verified | eval/tools/coyodex_eval/transcript.py · eval/tools/coyodex_eval/cost.py | [transcript.py](eval/tools/coyodex_eval/transcript.py:374) — Every record of one reply is folded into one turn, so ten tool calls at once count as one turn. · [transcript.py](eval/tools/coyodex_eval/transcript.py:874) — Lists every coyodex command the build ran, with the turn number that ran it. · [cost.py](eval/tools/coyodex_eval/cost.py:492) — Subtracts the stretches where nobody was working, so the clock measures the build. · [cost.py](eval/tools/coyodex_eval/cost.py:557) — Divides the spend by the rows of map produced, so two builds of different size compare. | coyodex command |
+| **C65** | Build behaviour scorecard | S7 | Scores what a build agent actually did against the rules the method sets. Reports a share of the chances the build had, never a pass or a fail. Also compares two scorecards to show which way each number moved. | [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3130) |  | verified | eval/tools/coyodex_eval/process_scorecard.py | [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:124) — A line with no chance to obey the rule scores as not applicable, never as zero. · [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:2987) — Warns when a score rose only because the chances to break the rule vanished. · [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3180) — Refuses a map it cannot read, instead of quietly scoring less of the build. | coyodex command |
+| **C66** | Map archive and build guard | S7 | Moves a project's current map aside so the next run builds from scratch, keeping it as the baseline. Refuses a review while a build is still writing. Also stamps which chat built a map and bundles the two together. | [archive.py](eval/tools/coyodex_eval/archive.py:159) |  | verified | eval/tools/coyodex_eval/archive.py · eval/tools/coyodex_eval/retro_precheck.py · tools/map_backup.py | [archive.py](eval/tools/coyodex_eval/archive.py:83) — Each archive takes the next number up, so the number always means how recent. · [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:201) — A recent write inside the map folder means something is still changing the map. · [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:226) — A chat file whose date moved counts as live only when a real message was added. · [map_backup.py](tools/map_backup.py:361) — Refuses to move a map out of a repo when no chat could be bundled with it. | coyodex command |
+| **C75** | The build method | S6 | The written instructions a coding agent follows to build a map. The same instructions specify every field a map holds. |  |  | verified | method.md · method/dispatch.md · method/model.md · method/domain-cards.md · method/diagrams.md · method/change-impact.md · method/project-map.schema.json | [dispatch.md](method/dispatch.md:83) — the line that sends an agent into a fresh build when no map is on disk · [method.md](method.md:1047) — the build order the whole method runs, from harvest through synthesis to trace · [model.md](method/model.md:50) — the first line of the map document's field-by-field specification · [method.md](method.md:2100) — the command that turns the workers' returns into the stored map |  |
+| **C76** | The worker briefings | S6 | The briefings a build hands to each worker agent it fans out to. A briefing states what that worker must return. |  |  | verified | method/templates/harvest-contract.md · method/templates/trace-contract.md · method/templates/rules-contract.md · method/templates/skeptic-contract.md · method/templates/gapfill-contract.md · method/templates/writing-rules.md · method/templates/project-map.template.md | [harvest-contract.md](method/templates/harvest-contract.md:26) — the opening line of the briefing every harvest worker reads · [trace-contract.md](method/templates/trace-contract.md:51) — tells a trace worker to write one file and return only its path · [rules-contract.md](method/templates/rules-contract.md:95) — names the one field a rule worker must never fill, which cost eleven repairs · [method.md](method.md:1960) — the command that prints a briefing, so nobody retypes one |  |
+| **C77** | The installed skill and the project's own writing | S6 | The pointer a person installs into their coding agent, so the coyodex command reaches the method. The project's own writing for readers and contributors lives beside that pointer. |  |  | verified | skill/coyodex/SKILL.md · eval/SKILL.md · eval/retro/SKILL.md · README.md · CONTRIBUTING.md · CLAUDE.md · SECURITY.md · CODE_OF_CONDUCT.md · docs/how-coyodex-works.html · internal/docs/method-rationale.md · method/retro-checks/README.md · method/retro-checks/2026-08-25-feature-stakes.md · method/retro-checks/2026-08-25-role-relations.md · method/retro-checks/2026-08-25-story-anchors.md · method/retro-checks/2026-08-25-term-linking-and-indirect-references.md · .github/PULL_REQUEST_TEMPLATE.md · .github/ISSUE_TEMPLATE/bug_report.yml · .github/ISSUE_TEMPLATE/idea.yml · .github/ISSUE_TEMPLATE/config.yml | [SKILL.md](skill/coyodex/SKILL.md:27) — the one line that sends an agent from the installed pointer into the method · [SKILL.md](skill/coyodex/SKILL.md:22) — the clone path baked in at install time, so everything else is read live · [CONTRIBUTING.md](CONTRIBUTING.md:99) — the install step that copies the pointer into each agent's skills home · [README.md](README.md:74) — tells a reader where installing puts the skill for each agent |  |
 
 ---
 
@@ -181,24 +288,22 @@ why: compares a fresh build against the baseline accepted in HP8
 
 | ID | Name | Kind | Bucket | Type | Used for | Where configured | Conf. | Deployment-linked | Package | Alternative | Evidence |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **D1** | git | datastore | Data & storage | version-control system, driven as a local CLI binary via subprocess | Reads the mapped repo's files at the map's pinned commit, so the viewer always shows the code the map describes; also resolves refs, lists tracked files, produces diffs for the impact explorer, and supplies churn/history for the pre-index. There is no database in this product — git IS the content store the viewer reads from. | [serve.py](tools/coyodex/viewer/serve.py:180) | verified |  |  | Every git helper degrades instead of failing: a missing binary or a non-repo folder returns an empty result (the pre-index falls back to an os.walk of the tree; the viewer's GitHub target is simply not offered). | [serve.py](tools/coyodex/viewer/serve.py:180) — The single read-only git call site the whole server funnels through — `subprocess.run(["git", "-C", repo_root, *args])`, no shell, args passed as a list. · [serve.py](tools/coyodex/viewer/serve.py:223) — `git show <commit>:<path>` is how the code viewer gets file contents — pinned to the map's commit, so local edits never leak into the view. · [preindex_lib.py](tools/coyodex/preindex_lib.py:172) — The pre-index prefers `git ls-files -z` to enumerate authored files (honors .gitignore) and falls back to an os.walk when the folder is not a git repo. |
-| **D2** | Local filesystem | datastore | Data & storage | the user's disk — plain JSON/markdown files, no database | Stores every artifact this product owns: the committed map under each repo's `.coyodex/`, the build fragments, the pre-index, the server's recents list under the user's home, and the map backups. The product has no database and no cloud storage. | [recents.py](tools/coyodex/viewer/recents.py:18) | verified |  |  |  | [recents.py](tools/coyodex/viewer/recents.py:44) — The recents store writes `~/.coyodex/serve-recents.json` itself — the only state coyodex keeps outside a mapped repo. · [serve.py](tools/coyodex/viewer/serve.py:117) — A served project is just a folder holding `.coyodex/project-map.json`, read straight off disk. · [map_backup.py](tools/map_backup.py:40) — Backups are written to `<coyodex-home>/map-backups/<project>-<build-time>/` on the same local disk. |
-| **D3** | Claude Code transcript store | datastore | Data & storage | another tool's live on-disk session log (`~/.claude/projects/*/<session>.jsonl`) | Supplies the conversation transcript that produced a map, so a backup bundles the map together with the exact session that built it. Read-only and always copied, never moved, because the store belongs to the running agent. | [map_backup.py](tools/map_backup.py:41) | verified |  |  | When a map carries no stamped session, `--search` scans the transcripts for a Write/Edit of a project-map file to recover the session ids; if no transcript is on disk the backup still bundles the map files alone. | [map_backup.py](tools/map_backup.py:217) — Locates a session's transcript by globbing `*/<session_id>.jsonl` under `~/.claude/projects` — a direct read of another product's store. · [map_backup.py](tools/map_backup.py:265) — Matches the repo to its transcript directory by comparing the `cwd` field Claude Code stamps into each transcript entry. |
-| **D4** | jsDelivr CDN | platform | Frontend asset delivery | public CDN host (cdn.jsdelivr.net) the viewer page loads scripts from | Delivers the two browser libraries the viewer page needs at load time (the diagram renderer and the pan/zoom control). Every tag is version-pinned with Subresource Integrity, so a tampered file is rejected by the browser; the server itself never talks to this host. | [viewer.html](tools/coyodex/viewer/viewer.html:16) | verified |  |  | None — the viewer has no local copy of these bundles, so with no network the diagram surface does not render. | [viewer.html](tools/coyodex/viewer/viewer.html:16) — The svg-pan-zoom script tag points at cdn.jsdelivr.net with an `integrity` hash and `crossorigin=anonymous`. · [viewer.html](tools/coyodex/viewer/viewer.html:19) — The mermaid UMD bundle loads from the same host, deliberately the UMD build so SRI covers the whole library. |
-| **D5** | cdnjs | platform | Frontend asset delivery | public CDN host (cdnjs.cloudflare.com) the viewer page lazy-loads from | Delivers the syntax highlighter (script plus stylesheet) the first time the user opens the in-app code viewer. Loaded lazily rather than at boot, version-pinned and SRI-checked like the head tags. | [viewer.js](tools/coyodex/viewer/viewer.js:5390) | verified |  |  | The code viewer still shows the file as plain text if the highlighter never arrives — highlighting is an enhancement, not a requirement. | [viewer.js](tools/coyodex/viewer/viewer.js:5390) — The highlight.js script URL is built against cdnjs.cloudflare.com with a pinned version constant. · [viewer.js](tools/coyodex/viewer/viewer.js:5404) — The injected `<script>` carries `integrity` and `crossOrigin` before it is appended — the lazy load is SRI-checked too. |
-| **D6** | Web browser | platform | Infrastructure & runtime | the user's browser — the runtime that hosts the whole viewer UI | Runs the viewer application: fetches each map's bundle from the local server, renders the diagrams, and persists per-user viewer settings in localStorage. The server can also ask the OS to open it on start. | [serve.py](tools/coyodex/viewer/serve.py:740) | verified |  |  |  | [serve.py](tools/coyodex/viewer/serve.py:740) — `webbrowser.open(url)` launches the user's default browser at the landing page when `--open` is passed. · [viewer.js](tools/coyodex/viewer/viewer.js:5919) — Viewer settings (editor target, source root, GitHub URL, panel sizes) live in the browser's localStorage — no server-side settings store exists. |
-| **D7** | GitHub | service | Source hand-off | hosted git service — a blob-URL hand-off target for source links | Opens a mapped element's source in a browser as a portable fallback when no local editor is configured. The repo URL is derived at build time from the `origin` remote, and the blob link is pinned to the map's commit so the line numbers still match. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:77) | verified |  |  | Offered only when `origin` is a github.com remote AND the map records a commit; otherwise the target is not even listed and the user picks a local editor instead. The user can override the URL in Settings. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:77) — Build time: `git remote get-url origin` is parsed into `https://github.com/<owner>/<repo>` and baked into the view bundle. · [viewer.js](tools/coyodex/viewer/viewer.js:6024) — Runtime: the blob URL is opened in a new tab with `noopener` — the only outbound navigation the viewer performs. |
-| **D8** | Local code editor | service | Source hand-off | desktop application invoked through an OS URL scheme (vscode://, cursor://, idea://, zed://, …) | Opens a mapped element's file at its exact line in the user's own editor. The hand-off is pure browser: a hidden anchor fires the scheme URI and the OS scheme handler does the opening — no server involvement. | [viewer.js](tools/coyodex/viewer/viewer.js:5901) | verified |  |  | Ten editors ship as presets plus a custom URI template; if nothing usable is configured the viewer falls back to the GitHub blob link, and failing that reopens Settings. | [viewer.js](tools/coyodex/viewer/viewer.js:5901) — The target table maps each editor to its URI template with `{abspath}`/`{line}`/`{col}` placeholders. · [viewer.js](tools/coyodex/viewer/viewer.js:5976) — Only a URI whose scheme is in the editor allowlist is ever returned for an anchor — the enforcement point of the hand-off. |
-| **D9** | CPython | platform | Infrastructure & runtime | language runtime, 3.10 or newer, in a repo-local virtualenv | Runs the CLI, the pre-index, and the map server. The core gate is deliberately stdlib-only, so the interpreter itself is effectively the entire runtime requirement. | [pyproject.toml](pyproject.toml:9) | verified | yes | python >=3.10 (pyproject.toml [project].requires-python) |  | [pyproject.toml](pyproject.toml:9) — `requires-python = ">=3.10"` is the declared floor. · [Makefile](Makefile:29) — The venv target fails fast with a readable message when the discovered python3 is older than 3.10. |
-| **D10** | pip | platform | Developer tooling | Python package installer, run as its own process from the Makefile | Installs the CLI editable into the repo-local virtualenv, with the optional extras. Deliberately targets the repo's own `.venv` so nothing is installed into the user's system Python. | [Makefile](Makefile:38) | verified | yes |  |  | [Makefile](Makefile:38) — `$(PY) -m pip install -e '$(REPO)[preindex]'` — the install path, always against the repo-local venv interpreter. · [Makefile](Makefile:43) — The contributor target adds the `dev` extra (pytest + pyright) through the same installer. |
-| **D11** | setuptools | library | Developer tooling | Python build backend | Builds the distribution: resolves the src-layout (package root `tools/`, plus the separate eval package), declares the two console scripts, reads the version out of the VERSION file, and wheels the viewer's html/css/js as package data. | [pyproject.toml](pyproject.toml:2) | verified | yes | setuptools >=64 (pyproject.toml build-system.requires) |  | [pyproject.toml](pyproject.toml:2) — `requires = ["setuptools>=64"]` with `build-backend = "setuptools.build_meta"`. · [pyproject.toml](pyproject.toml:43) — The non-obvious package-dir mapping (two source roots) that only this backend resolves. |
-| **D12** | tree-sitter | library | Source parsing | Python parsing library — an OPTIONAL extra, imported lazily | Extracts symbols and imports from non-Python source files during the pre-index. It is the one deliberate exception to the stdlib-only rule and is firewalled: only the `preindex` command may import it, so validate/render/serve stay dependency-free. | [pyproject.toml](pyproject.toml:19) | verified |  | tree-sitter >=0.21 (pyproject.toml [project.optional-dependencies].preindex) | Python files always go through the stdlib `ast`; when the extra is absent the pre-index still runs and simply reports its non-Python symbol coverage as unavailable rather than failing. | [pyproject.toml](pyproject.toml:19) — Declared only inside the `preindex` optional extra — the core dependency list is empty on purpose. · [cli.py](tools/coyodex/cli.py:80) — The dependency firewall: the import happens inside the `preindex` branch, so no other command can pull it in. · [preindex_lib.py](tools/coyodex/preindex_lib.py:329) — The actual lazy import of `tree_sitter.Parser`, built the documented way for compatibility across 0.21-0.25. |
-| **D13** | tree-sitter-language-pack | library | Source parsing | Python package bundling the tree-sitter grammars — same optional extra | Supplies the per-language grammars the pre-index needs (javascript, typescript, go, java, and the rest). Probed behind a try/except so a missing or broken pack degrades the pre-index instead of breaking it. | [pyproject.toml](pyproject.toml:20) | verified |  | tree-sitter-language-pack >=0.2 (pyproject.toml [project.optional-dependencies].preindex) | A grammar that will not load raises a LookupError the caller treats as 'no symbols for this language' — the file is still counted, just not parsed. | [pyproject.toml](pyproject.toml:20) — Declared alongside tree-sitter in the `preindex` extra. · [preindex_lib.py](tools/coyodex/preindex_lib.py:314) — The availability probe imports the pack inside a try/except and reports a boolean, never raising. |
-| **D14** | pytest | library | Developer tooling | Python test runner — the `dev` optional extra | Runs the tool test suite (the repo's own tests plus the eval's), installed into the repo-local venv by the contributor setup target so the gates run against the editable package. | [pyproject.toml](pyproject.toml:25) | verified | yes | pytest >=8 (pyproject.toml [project.optional-dependencies].dev) |  | [pyproject.toml](pyproject.toml:25) — Declared in the `dev` extra, kept out of the runtime dependency set. · [pyproject.toml](pyproject.toml:35) — `testpaths = ["tests", "eval/tests"]` — the two suites the runner collects. |
-| **D15** | pyright | library | Developer tooling | Python static type checker — the `dev` optional extra | Type-checks the tools package as a contributor gate. Its config only has to add the two source roots, because the package directory name matches the import name. | [pyproject.toml](pyproject.toml:26) | verified | yes | pyright >=1.1 (pyproject.toml [project.optional-dependencies].dev) |  | [pyproject.toml](pyproject.toml:26) — Declared in the `dev` extra. · [pyrightconfig.json](pyrightconfig.json:2) — `extraPaths` points at `tools` and `eval/tools`, the two src-layout roots. |
-| **D16** | mermaid | library | Diagram rendering | browser JS library loaded from a CDN with SRI | Renders every diagram in the viewer from the pre-built diagram sources in each map's view bundle — the Context, container, subsystem, domain, deployment, and flow views are all mermaid output. | [viewer.html](tools/coyodex/viewer/viewer.html:19) | verified |  | mermaid 11.15.0 (viewer.html script tag, SRI-pinned) | A parse error or a missing baked diagram degrades to an on-page message rather than a blank stage. | [viewer.html](tools/coyodex/viewer/viewer.html:19) — The pinned UMD bundle plus its integrity hash — the UMD build is chosen specifically so SRI covers the whole library. · [viewer.js](tools/coyodex/viewer/viewer.js:131) — Initialised with `securityLevel: 'loose'` so HTML labels work; the label text is sanitized on the Python side before it ever reaches here. |
-| **D17** | svg-pan-zoom | library | Diagram rendering | browser JS library loaded from a CDN with SRI | Adds pan and zoom to the rendered diagram SVG, so a large map stays navigable at any altitude. | [viewer.html](tools/coyodex/viewer/viewer.html:16) | verified |  | svg-pan-zoom 3.6.1 (viewer.html script tag, SRI-pinned) |  | [viewer.html](tools/coyodex/viewer/viewer.html:16) — The pinned script tag with its integrity hash, loaded in the page head before the viewer module. |
-| **D18** | highlight.js | library | Frontend / UI | browser JS library lazy-loaded from a CDN with SRI | Syntax-highlights source files in the in-app code viewer. Loaded on first use rather than at boot, with a per-extension language map choosing the grammar. | [viewer.js](tools/coyodex/viewer/viewer.js:5390) | verified |  | highlight.js 11.9.0 (viewer.js HLJS_VER constant, script + stylesheet both SRI-pinned) | An unknown file extension, or a failed load, leaves the file rendered as unhighlighted plain text. | [viewer.js](tools/coyodex/viewer/viewer.js:5389) — The single pinned version constant both the script and stylesheet URLs are built from. · [viewer.js](tools/coyodex/viewer/viewer.js:5401) — The stylesheet is injected with its own integrity hash — the theme is fetched from the CDN too, not bundled. |
+| **D1** | git | platform | Infrastructure & runtime | version-control program, run as a separate process | Reads project files at a pinned commit. The map server shows each file as it was when the map was built. | [serve.py](tools/coyodex/viewer/serve.py:236) | verified |  |  |  | [serve.py](tools/coyodex/viewer/serve.py:236) — the map server runs a read-only git command inside the project folder · [preindex_lib.py](tools/coyodex/preindex_lib.py:189) — the file survey asks git for the tracked file list · [provenance.py](tools/coyodex/provenance.py:120) — the build stamp reads the current commit from git |
+| **D2** | Python | platform | Infrastructure & runtime | language runtime, version 3.10 or newer | Runs every coyodex command. Setup builds a private environment inside the coyodex folder, so no package lands in the machine's own Python. | [pyproject.toml](pyproject.toml:9) | verified |  |  |  | [pyproject.toml](pyproject.toml:9) — the package declares the minimum Python version · [Makefile](Makefile:31) — setup refuses to continue on an older Python, with a plain message |
+| **D3** | tree-sitter | library | Code parsing | optional Python package, source-code parser | Parses code in many languages. The file survey uses tree-sitter to count symbols and imports before an altitude is chosen. | [pyproject.toml](pyproject.toml:19) | verified |  | tree-sitter >=0.21 (pyproject.toml, the `preindex` extra) | Python's own built-in parser, which still handles Python files when tree-sitter is missing. | [pyproject.toml](pyproject.toml:19) — the pin lives in an optional extra, so the checking path stays free of it · [preindex_lib.py](tools/coyodex/preindex_lib.py:390) — the survey builds one parser per language from tree-sitter |
+| **D4** | tree-sitter-language-pack | library | Code parsing | optional Python package, bundled grammars | Supplies the grammar for each language the survey parses. Without the pack no non-Python file can be surveyed. | [pyproject.toml](pyproject.toml:20) | verified |  | tree-sitter-language-pack >=0.2 (pyproject.toml, the `preindex` extra) | The survey falls back to Python-only parsing and records that the pack was absent. | [pyproject.toml](pyproject.toml:20) — the pin lives in the same optional extra as the parser · [preindex.py](tools/coyodex/preindex.py:587) — the survey records whether the grammars were available for this run |
+| **D5** | pytest | library | Testing & type checking | developer-only Python package, test runner | Runs the coyodex test suite. Only a coyodex developer installs pytest. | [pyproject.toml](pyproject.toml:25) | verified | yes | pytest >=8 (pyproject.toml, the `dev` extra) |  | [pyproject.toml](pyproject.toml:25) — the pin sits in the developer-only extra · [pyproject.toml](pyproject.toml:35) — the two test folders the runner reads by default |
+| **D6** | pyright | library | Testing & type checking | developer-only Python package, type checker | Checks types across the coyodex code. Only a coyodex developer installs pyright. | [pyproject.toml](pyproject.toml:26) | verified | yes | pyright >=1.1 (pyproject.toml, the `dev` extra) |  | [pyproject.toml](pyproject.toml:26) — the pin sits in the developer-only extra · [pyrightconfig.json](pyrightconfig.json:2) — the two source roots the type checker is pointed at |
+| **D7** | setuptools | library | Build & packaging | Python build backend | Builds and installs coyodex into its private environment. The install is editable, so an edit takes effect with no reinstall. | [pyproject.toml](pyproject.toml:2) | verified |  | setuptools >=64 (pyproject.toml, the build requirement) |  | [pyproject.toml](pyproject.toml:2) — the build backend and its minimum version · [Makefile](Makefile:40) — setup installs the package editable into the private environment |
+| **D8** | Mermaid | library | Frontend / UI | browser JavaScript library, fetched from a content delivery network | Draws every diagram in the viewer. The browser fetches Mermaid from a pinned web address and rejects a tampered copy. | [viewer.html](tools/coyodex/viewer/viewer.html:19) | verified |  | mermaid 11.15.0 (viewer.html, pinned with an integrity hash) |  | [viewer.html](tools/coyodex/viewer/viewer.html:19) — the exact version and the integrity hash the browser checks |
+| **D9** | svg-pan-zoom | library | Frontend / UI | browser JavaScript library, fetched from a content delivery network | Lets a reader pan and zoom a diagram. The browser fetches svg-pan-zoom from a pinned web address with an integrity hash. | [viewer.html](tools/coyodex/viewer/viewer.html:16) | verified |  | svg-pan-zoom 3.6.1 (viewer.html, pinned with an integrity hash) |  | [viewer.html](tools/coyodex/viewer/viewer.html:16) — the exact version and the integrity hash the browser checks |
+| **D10** | highlight.js | library | Frontend / UI | browser JavaScript library, fetched on demand from a content delivery network | Colours the code shown in the source column. The fetch happens only the first time a file is opened. | [viewer.js](tools/coyodex/viewer/viewer.js:9902) | verified |  | highlight.js 11.9.0 (viewer.js, pinned with an integrity hash) | Plain uncoloured code, whenever the library cannot be fetched. | [viewer.js](tools/coyodex/viewer/viewer.js:9902) — the pinned address, version and integrity hash · [viewer.js](tools/coyodex/viewer/viewer.js:9918) — a failed fetch degrades to uncoloured text instead of breaking the page |
+| **D11** | web browser | platform | Code viewing | desktop application the reader already has | Shows the viewer. Starting the map server opens the landing page in the reader's default browser. | [serve.py](tools/coyodex/viewer/serve.py:806) | verified |  |  |  | [serve.py](tools/coyodex/viewer/serve.py:806) — the server hands the landing page address to the default browser · [Makefile](Makefile:119) — the start command asks for the browser to be opened |
+| **D12** | Claude Code | platform | Coding agents | AI coding agent that hosts the coyodex skill | Runs the coyodex method. Installing copies the skill into the Claude Code skills folder, with this clone's path baked in. | [Makefile](Makefile:17) | verified |  |  |  | [Makefile](Makefile:17) — the first skills folder written is the Claude Code one · [Makefile](Makefile:58) — the skill file is copied in with the clone's path substituted |
+| **D13** | Codex | platform | Coding agents | AI coding agent that hosts the coyodex skill | Runs the coyodex method. Installing copies the skill into the shared cross-agent skills folder Codex reads. | [Makefile](Makefile:17) | verified |  |  |  | [Makefile](Makefile:17) — the second skills folder written is the cross-agent one Codex reads · [Makefile](Makefile:58) — the skill file is copied in with the clone's path substituted |
+| **D14** | Cursor | platform | Coding agents | AI coding agent, and a code editor | Runs the coyodex method. Cursor reads both skills folders the installer writes, so it needs no folder of its own. | [Makefile](Makefile:17) | verified |  |  |  | [Makefile](Makefile:17) — both folders written are read by Cursor, so no third folder is created · [viewer.js](tools/coyodex/viewer/viewer.js:10610) — Cursor is also one of the editors a source link can open |
+| **D15** | GitHub | service | Code viewing | code-hosting website, reached as a plain link | Opens a box's source file in a browser. The link is pinned to the commit the map was built from. | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:125) | verified |  |  |  | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:125) — the repository address is derived from the project's `origin` remote · [viewer.js](tools/coyodex/viewer/viewer.js:10707) — the file link is built from that address plus the map's commit |
+| **D16** | code editor | platform | Code viewing | desktop editor, opened by a link scheme | Opens a box's source file at its line. The reader picks one editor once, from a list of eleven. | [viewer.js](tools/coyodex/viewer/viewer.js:10606) | verified |  |  |  | [viewer.js](tools/coyodex/viewer/viewer.js:10609) — one row of the editor table, holding the link that opens a file at a line · [viewer.js](tools/coyodex/viewer/viewer.js:10622) — only known editor link schemes are allowed through |
 
 ---
 
@@ -206,21 +311,16 @@ why: compares a fresh build against the baseline accepted in HP8
 
 | Action | Command | Source |
 |---|---|---|
-| Install the coyodex skill for all agents (also builds the venv and CLI) | make install | Makefile:52 |
-| Install the coyodex-eval skill (opt-in, separate from install) | make install-eval | Makefile:64 |
-| Uninstall the coyodex skill from every skills home | make uninstall | Makefile:72 |
-| Uninstall the coyodex-eval skill | make uninstall-eval | Makefile:78 |
-| Create the repo-local virtualenv (checks Python 3.10+) | make venv | Makefile:26 |
-| Install the CLI editable into the venv with the pre-index extra | make deps | Makefile:37 |
-| Contributor dev setup — deps plus pytest and pyright in the venv | make dev | Makefile:42 |
-| Start the local map server and open the landing page | make start   (PORT=8765 by default; wraps .venv/bin/coyodex serve --port $PORT --open) | Makefile:87 |
-| Remove the repo-local virtualenv | make clean | Makefile:91 |
-| Run the tests | .venv/bin/pytest            (testpaths cover tests/ and eval/tests/; .venv/bin/pytest tests runs the tool tests only) | pyproject.toml:35 |
-| Run the type checker | .venv/bin/pyright tools | pyrightconfig.json:2 |
-| Run the coyodex CLI directly | .venv/bin/coyodex <subcommand>   (validate, audit, render, assemble, preindex, serve, lint-fragment, ...) | pyproject.toml:30 |
-| Run the method-quality eval CLI directly | .venv/bin/coyodex-eval <subcommand>   (score, run, hash, claims, judge, protocol, bless, compare) | pyproject.toml:32 |
-| Stamp a built map with the conversation that produced it | .venv/bin/python tools/map_backup.py stamp <repo> --mode build --built-at '<YYYY-MM-DD HH:MM>' | tools/map_backup.py:568 |
-| Back up a map together with its build transcript | .venv/bin/python tools/map_backup.py backup <repo> [--keep] [--search] [--dry-run] | tools/map_backup.py:594 |
+| Install the coyodex skill into the coding agents | make install | Makefile:54 |
+| Install the coyodex command and the parser pack, without the skill | make deps | Makefile:39 |
+| Install the developer test and type-check tools | make dev | Makefile:44 |
+| Install the two developer skills, for evaluating and reviewing builds | make install-dev | Makefile:91 |
+| Start the local map server and open the landing page | make start | Makefile:118 |
+| Run the tests | .venv/bin/pytest tests eval/tests | pyproject.toml:35 |
+| Run the type checker | .venv/bin/pyright coyodex | pyrightconfig.json:2 |
+| Remove the coyodex skill from the coding agents | make uninstall | Makefile:97 |
+| Remove the two developer skills | make uninstall-dev | Makefile:94 |
+| Delete the private environment, so the next install rebuilds it | make clean | Makefile:122 |
 
 ---
 
@@ -228,67 +328,105 @@ why: compares a fresh build against the baseline accepted in HP8
 
 | Kind | Trigger | Code entity | Component | Cadence |
 |---|---|---|---|---|
-| cli | a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map | [cli.py](tools/coyodex/cli.py:79) | C30 |  |
-| cli | a developer or coding agent runs `coyodex validate` to check a map is well-formed | [cli.py](tools/coyodex/cli.py:82) | C30 |  |
-| cli | a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map | [cli.py](tools/coyodex/cli.py:85) | C30 |  |
-| cli | a developer or coding agent runs `coyodex render` to write the map's committed markdown view | [cli.py](tools/coyodex/cli.py:88) | C30 |  |
-| cli | a developer runs `coyodex serve` to start the local map server | [cli.py](tools/coyodex/cli.py:91) | C30 |  |
-| cli | a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map | [cli.py](tools/coyodex/cli.py:94) | C30 |  |
-| cli | a developer or coding agent runs `coyodex dump` to read the model back as JSON, whole or sliced | [cli.py](tools/coyodex/cli.py:97) | C30 |  |
-| cli | a developer or coding agent runs `coyodex balance` to report per-diagram fan-out and split proposals | [cli.py](tools/coyodex/cli.py:100) | C30 |  |
-| cli | a coding agent runs `coyodex reconcile` to expand path rules into an explicit reconcile assignment file | [cli.py](tools/coyodex/cli.py:103) | C30 |  |
-| cli | a build agent runs `coyodex lint-fragment` to self-check one fragment before returning it | [cli.py](tools/coyodex/cli.py:106) | C30 |  |
-| cli | a coding agent runs `coyodex anchor-drift` to flag claims whose stored line drifted from the line the skeptics found | [cli.py](tools/coyodex/cli.py:109) | C30 |  |
-| cli | a coding agent runs `coyodex fix`, which hands the rest of the command line to the fix module's own verb dispatch | [cli.py](tools/coyodex/cli.py:112) | C30 |  |
-| cli | a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found | [fix.py](tools/coyodex/fix.py:281) | C8 |  |
-| cli | a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map | [fix.py](tools/coyodex/fix.py:281) | C8 |  |
-| cli | a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations | [fix.py](tools/coyodex/fix.py:281) | C8 |  |
-| cli | a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile | [cli.py](eval/tools/coyodex_eval/cli.py:32) | C45 |  |
-| cli | a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run | [cli.py](eval/tools/coyodex_eval/cli.py:35) | C45 |  |
-| cli | a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash | [cli.py](eval/tools/coyodex_eval/cli.py:38) | C45 |  |
-| cli | a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores | [cli.py](eval/tools/coyodex_eval/cli.py:41) | C45 |  |
-| cli | a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file | [cli.py](eval/tools/coyodex_eval/cli.py:44) | C45 |  |
-| cli | a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint | [cli.py](eval/tools/coyodex_eval/cli.py:47) | C45 |  |
-| cli | a method maintainer runs `coyodex-eval bless` to promote a run to the baseline | [cli.py](eval/tools/coyodex_eval/cli.py:50) | C45 |  |
-| cli | a method maintainer runs `coyodex-eval compare` to apply the relative regression gates between a candidate and a baseline | [cli.py](eval/tools/coyodex_eval/cli.py:53) | C45 |  |
-| cli | installing the package puts the `coyodex` command on the PATH, pointing at the CLI dispatcher | [pyproject.toml](pyproject.toml:30) | C30 |  |
-| cli | installing the package puts the `coyodex-eval` command on the PATH, pointing at the eval dispatcher | [pyproject.toml](pyproject.toml:32) | C45 |  |
-| cli | a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance | [map_backup.py](tools/map_backup.py:568) | C41 |  |
-| cli | a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ | [map_backup.py](tools/map_backup.py:594) | C41 |  |
-| cli | a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) | [json_schema.py](tools/coyodex/json_schema.py:291) | C5 |  |
-| cli | a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2877) | C22 |  |
-| agent-skill | a coding agent picks up the `/coyodex` skill (or matches its triggers, e.g. "map this repo") and starts reading the method from the manifest | [SKILL.md](skill/coyodex/SKILL.md:2) | C2 |  |
-| agent-skill | a coding agent picks up the `/coyodex-eval` skill (or matches "eval this map") and starts the method-quality regression run | [SKILL.md](eval/SKILL.md:2) | C45 |  |
-| http-route | a browser requests the server root and gets the landing page listing the recent projects | [serve.py](tools/coyodex/viewer/serve.py:518) | C24 |  |
-| http-route | the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart | [serve.py](tools/coyodex/viewer/serve.py:548) | C24 |  |
-| http-route | the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map | [serve.py](tools/coyodex/viewer/serve.py:556) | C24 |  |
-| http-route | the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist | [serve.py](tools/coyodex/viewer/serve.py:521) | C24 |  |
-| http-route | a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell | [serve.py](tools/coyodex/viewer/serve.py:605) | C24 |  |
-| http-route | the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes | [serve.py](tools/coyodex/viewer/serve.py:609) | C24 |  |
-| http-route | the browser requests a project's whole view bundle — the graph plus every pre-rendered diagram — at `GET /p/<project>/api/view` | [serve.py](tools/coyodex/viewer/serve.py:611) | C24 |  |
-| http-route | the file browser requests `GET /p/<project>/api/tree` for the repo's file tree at the map's commit, overlaid with map coverage | [serve.py](tools/coyodex/viewer/serve.py:620) | C24 |  |
-| http-route | the search box lazily requests `GET /p/<project>/api/symbols` for the code symbols taken from the pre-index | [serve.py](tools/coyodex/viewer/serve.py:625) | C24 |  |
-| http-route | the code viewer requests one file's text at `GET /p/<project>/api/src?path=&at=` — from git at the map's commit by default, or from the working tree | [serve.py](tools/coyodex/viewer/serve.py:629) | C24 |  |
-| http-route | the impact explorer requests `GET /p/<project>/api/impact?base=&target=&…` to project a code diff onto the map | [serve.py](tools/coyodex/viewer/serve.py:655) | C24 |  |
-| http-route | the impact picker requests `GET /p/<project>/api/impactcommits` for the commits around the map's pin | [serve.py](tools/coyodex/viewer/serve.py:666) | C24 |  |
-| http-route | the impact code view requests `GET /p/<project>/api/impactsrcdiff?path=&base=&target=` for one file's inline diff across any two refs | [serve.py](tools/coyodex/viewer/serve.py:669) | C24 |  |
-| http-route | the landing page posts a folder to `POST /api/open` to add a project to the served list | [serve.py](tools/coyodex/viewer/serve.py:543) | C24 |  |
-| http-route | the landing page posts a folder to `POST /api/forget` to remove a project from the recents list | [serve.py](tools/coyodex/viewer/serve.py:543) | C24 |  |
-| http-route | the landing page posts the dragged card order to `POST /api/reorder` to persist the recents order | [serve.py](tools/coyodex/viewer/serve.py:541) | C24 |  |
-| middleware | every GET first passes the loopback-Host check, so a page on another domain that re-points its name at 127.0.0.1 is refused | [serve.py](tools/coyodex/viewer/serve.py:512) | C24 |  |
-| middleware | every POST must carry the `X-Coyodex: serve` header, which a cross-origin page cannot set — the CSRF gate before any recents change | [serve.py](tools/coyodex/viewer/serve.py:535) | C24 |  |
-| middleware | every request under `/p/<project>/` first re-checks the map file's timestamp and drops the cached diagrams when the map changed on disk | [serve.py](tools/coyodex/viewer/serve.py:527) | C24 |  |
-| ui-route | the reader clicks a project card on the landing page, which navigates the browser to that map's URL | [serve.py](tools/coyodex/viewer/serve.py:910) | C24 |  |
-| ui-route | the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it) | [viewer.js](tools/coyodex/viewer/viewer.js:6674) | C23 |  |
-| ui-route | the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol | [viewer.js](tools/coyodex/viewer/viewer.js:6641) | C23 |  |
-| ui-route | the reader opens the Impact popover to pick two commits and project that diff onto the map | [viewer.js](tools/coyodex/viewer/viewer.js:6906) | C23 |  |
-| ui-route | the reader switches the side pane between the file browser and the code viewer | [viewer.js](tools/coyodex/viewer/viewer.js:6178) | C23 |  |
-| ui-route | the reader clicks the page title to go back to the server's landing page listing all maps | [viewer.js](tools/coyodex/viewer/viewer.js:5234) | C23 |  |
-| startup-hook | the serve command finishes loading the projects and the HTTP server starts accepting connections on 127.0.0.1, handing each one to its own worker thread | [serve.py](tools/coyodex/viewer/serve.py:734) | C24 | continuous ([serve.py](tools/coyodex/viewer/serve.py:742)) |
-| startup-hook | with `coyodex serve --open`, the server opens the landing page in the developer's browser by itself as it starts listening | [serve.py](tools/coyodex/viewer/serve.py:740) | C24 | on-boot ([serve.py](tools/coyodex/viewer/serve.py:739)) |
-| startup-hook | the landing page's script runs itself as soon as the page loads, fetching the home folder and the recents list | [serve.py](tools/coyodex/viewer/serve.py:1040) | C24 | on-boot ([serve.py](tools/coyodex/viewer/serve.py:1040)) |
-| startup-hook | the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it | [viewer.js](tools/coyodex/viewer/viewer.js:107) | C23 | on-boot ([viewer.js](tools/coyodex/viewer/viewer.js:107)) |
-| startup-hook | the browser app probes the server once at load and, on success, reveals and wires the file browser and code viewer | [viewer.js](tools/coyodex/viewer/viewer.js:6659) | C23 | on-boot ([viewer.js](tools/coyodex/viewer/viewer.js:6659)) |
+| agent-skill | A coyodex developer runs the retro skill to review a build that has already finished. | [SKILL.md](eval/retro/SKILL.md:28) | C77 |  |
+| agent-skill | A coyodex developer runs the eval skill to score one project's map against an earlier map of the same code. | [SKILL.md](eval/SKILL.md:28) | C77 |  |
+| cli | coyodex-eval archive | [archive.py](eval/tools/coyodex_eval/archive.py:159) | C66 |  |
+| cli | coyodex-eval | [cli.py](eval/tools/coyodex_eval/cli.py:56) | C63 |  |
+| cli | coyodex-eval compare | [compare.py](eval/tools/coyodex_eval/compare.py:606) | C63 |  |
+| cli | coyodex-eval cost | [cost.py](eval/tools/coyodex_eval/cost.py:674) | C64 |  |
+| cli | coyodex-eval mutate plant | [mutate.py](eval/tools/coyodex_eval/mutate.py:244) | C63 |  |
+| cli | coyodex-eval mutate score | [mutate.py](eval/tools/coyodex_eval/mutate.py:249) | C63 |  |
+| cli | coyodex-eval process | [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3130) | C65 |  |
+| cli | coyodex-eval process --diff | [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3134) | C65 |  |
+| cli | coyodex-eval score | [profile.py](eval/tools/coyodex_eval/profile.py:443) | C63 |  |
+| cli | coyodex-eval retro-precheck | [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:249) | C66 |  |
+| cli | coyodex-eval run | [run.py](eval/tools/coyodex_eval/run.py:192) | C63 |  |
+| cli | coyodex-eval claims | [run.py](eval/tools/coyodex_eval/run.py:279) | C63 |  |
+| cli | coyodex-eval hash | [run.py](eval/tools/coyodex_eval/run.py:338) | C63 |  |
+| cli | coyodex-eval judge | [run.py](eval/tools/coyodex_eval/run.py:353) | C63 |  |
+| cli | coyodex-eval protocol | [run.py](eval/tools/coyodex_eval/run.py:418) | C63 |  |
+| cli | coyodex-eval bless | [run.py](eval/tools/coyodex_eval/run.py:463) | C63 |  |
+| cli | coyodex-eval transcript | [transcript.py](eval/tools/coyodex_eval/transcript.py:1067) | C64 |  |
+| agent-skill | A person asks coyodex to analyze, when a map exists and the code has moved on since it was pinned. | [dispatch.md](method/dispatch.md:151) | C75 |  |
+| agent-skill | A person says the change report looks right, so coyodex folds the report into the map. | [dispatch.md](method/dispatch.md:154) | C75 |  |
+| agent-skill | A person asks in plain words to move, rename, split or drill deeper into a part of the map. | [dispatch.md](method/dispatch.md:156) | C75 |  |
+| agent-skill | A person explicitly asks to regenerate the whole map from scratch, and confirms the warning. | [dispatch.md](method/dispatch.md:171) | C75 |  |
+| agent-skill | A person types the coyodex command in a project that has no map yet, so a first map is built. | [dispatch.md](method/dispatch.md:83) | C75 |  |
+| cli | Running `coyodex anchor-drift` lists every code link pointing at a line that cannot be doing the work. | [anchor_drift.py](tools/coyodex/anchor_drift.py:378) | C23 |  |
+| cli | `coyodex assemble` merges the build's fragments into one map and writes it. | [assemble.py](tools/coyodex/assemble.py:812) | C2 |  |
+| cli | coyodex audit | [audit_model.py](tools/coyodex/audit_model.py:1307) | C14 |  |
+| cli | coyodex balance | [balance.py](tools/coyodex/balance.py:231) | C15 |  |
+| cli | Running `coyodex` with no command, or asking for help or the version, prints a summary. | [cli.py](tools/coyodex/cli.py:115) | C4 |  |
+| cli | `coyodex contract` prints the brief one fan-out worker should receive. | [contract.py](tools/coyodex/contract.py:109) | C4 |  |
+| cli | `coyodex dump` prints the whole map, or one named part of it, as data. | [dump.py](tools/coyodex/dump.py:246) | C3 |  |
+| cli | coyodex finalize | [finalize.py](tools/coyodex/finalize.py:778) | C16 |  |
+| cli | Running `coyodex fix dedup-security` drops an access surface that two harvest fragments both recorded. | [fix.py](tools/coyodex/fix.py:1128) | C24 |  |
+| cli | Running `coyodex fix row` rewrites one row's own text inside the fragment that authored the row. | [fix.py](tools/coyodex/fix.py:1416) | C24 |  |
+| cli | Running `coyodex fix apply-drift` writes the corrected line into every code link a fresh reader found had moved. | [fix.py](tools/coyodex/fix.py:149) | C24 |  |
+| cli | Running `coyodex fix drop-edge` removes a disproved relation and heals the happy-path steps that rode it. | [fix.py](tools/coyodex/fix.py:399) | C24 |  |
+| cli | Running `coyodex fix dedup-relation` removes one chosen copy of a relation two data cards both declare. | [fix.py](tools/coyodex/fix.py:508) | C24 |  |
+| cli | Running `coyodex fix dedup-edge` keeps one code link for a relation declared at several different lines. | [fix.py](tools/coyodex/fix.py:739) | C24 |  |
+| cli | Running `coyodex fix security-row` rewrites one access surface's text, and refuses when the selector matches more than one row. | [fix.py](tools/coyodex/fix.py:976) | C24 |  |
+| cli | Running `coyodex grounding write` derives the four counts and writes them into a build fragment. | [grounding.py](tools/coyodex/grounding.py:1003) | C23 |  |
+| cli | Running `coyodex grounding by-element` shows, per map element, what a fresh reader proved against the label its author typed. | [grounding.py](tools/coyodex/grounding.py:1049) | C23 |  |
+| cli | Running `coyodex grounding report` lists which claims were disproved, tied, unsettled, or never voted on. | [grounding.py](tools/coyodex/grounding.py:1073) | C23 |  |
+| cli | Running `coyodex grounding lint` checks the verdict files for shape while the reader that wrote them is still reachable. | [grounding.py](tools/coyodex/grounding.py:924) | C23 |  |
+| cli | Running `coyodex grounding refutations` fails the build when the map still carries a claim a fresh reader disproved. | [grounding.py](tools/coyodex/grounding.py:974) | C23 |  |
+| cli | `python -m coyodex.json_schema` prints the published schema for the map file. | [json_schema.py](tools/coyodex/json_schema.py:432) | C1 |  |
+| cli | `coyodex lint-fragment` checks one worker's fragment before the worker returns it. | [lint_fragment.py](tools/coyodex/lint_fragment.py:353) | C2 |  |
+| cli | `coyodex diff` reports what changed between two versions of a map, row by row. | [mapdiff.py](tools/coyodex/mapdiff.py:198) | C3 |  |
+| cli | A coding agent reads an already measured codebase back as a readable summary. | [preindex.py](tools/coyodex/preindex.py:518) | C33 |  |
+| cli | A coding agent sizes a codebase before choosing how coarse the map should be. | [preindex.py](tools/coyodex/preindex.py:557) | C33 |  |
+| cli | Running `coyodex provenance show` prints the conversations that built this map, newest last. | [provenance.py](tools/coyodex/provenance.py:293) | C25 |  |
+| cli | Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. | [provenance.py](tools/coyodex/provenance.py:308) | C25 |  |
+| cli | Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. | [reconcile_build.py](tools/coyodex/reconcile_build.py:329) | C25 |  |
+| cli | `coyodex record` writes one accepted-advisory line under a named heading. | [record.py](tools/coyodex/record.py:194) | C3 |  |
+| cli | `coyodex scope` says which files will be analysed and which commit the map will name. | [scope.py](tools/coyodex/scope.py:167) | C4 |  |
+| cli | coyodex validate | [validate_model.py](tools/coyodex/validate_model.py:4663) | C13 |  |
+| cli | python -m coyodex.viewer.gen_viewer <graph file> <output file> | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3366) | C44 |  |
+| cli | coyodex render <map file> <output text file> | [render.py](tools/coyodex/viewer/render.py:53) | C45 |  |
+| poller | The server checks whether its own code changed since it started, and warns once | [serve.py](tools/coyodex/viewer/serve.py:180) | C43 | every 2s ([serve.py](tools/coyodex/viewer/serve.py:145)) |
+| poller | The server checks whether a map changed on disk, and drops what it cached | [serve.py](tools/coyodex/viewer/serve.py:210) | C43 | on every project request ([serve.py](tools/coyodex/viewer/serve.py:592)) |
+| http-route | GET / | [serve.py](tools/coyodex/viewer/serve.py:583) | C43 |  |
+| http-route | GET /static/<file> | [serve.py](tools/coyodex/viewer/serve.py:586) | C43 |  |
+| http-route | GET /api/recents | [serve.py](tools/coyodex/viewer/serve.py:614) | C43 |  |
+| http-route | GET /api/browse?path= | [serve.py](tools/coyodex/viewer/serve.py:621) | C43 |  |
+| http-route | POST /api/open | [serve.py](tools/coyodex/viewer/serve.py:643) | C43 |  |
+| http-route | POST /api/forget | [serve.py](tools/coyodex/viewer/serve.py:650) | C43 |  |
+| http-route | POST /api/reorder | [serve.py](tools/coyodex/viewer/serve.py:660) | C43 |  |
+| http-route | GET /p/<project>/ | [serve.py](tools/coyodex/viewer/serve.py:671) | C43 |  |
+| http-route | GET /p/<project>/api/health | [serve.py](tools/coyodex/viewer/serve.py:675) | C43 |  |
+| http-route | GET /p/<project>/api/view | [serve.py](tools/coyodex/viewer/serve.py:677) | C43 |  |
+| http-route | GET /p/<project>/api/tree | [serve.py](tools/coyodex/viewer/serve.py:686) | C43 |  |
+| http-route | GET /p/<project>/api/symbols | [serve.py](tools/coyodex/viewer/serve.py:691) | C43 |  |
+| http-route | GET /p/<project>/api/src?path=&at= | [serve.py](tools/coyodex/viewer/serve.py:695) | C43 |  |
+| http-route | GET /p/<project>/api/impact?base=&target= | [serve.py](tools/coyodex/viewer/serve.py:721) | C43 |  |
+| http-route | GET /p/<project>/api/impactcommits | [serve.py](tools/coyodex/viewer/serve.py:732) | C43 |  |
+| http-route | GET /p/<project>/api/impactsrcdiff?path=&base=&target= | [serve.py](tools/coyodex/viewer/serve.py:735) | C43 |  |
+| worker-thread | Each browser request gets its own worker thread | [serve.py](tools/coyodex/viewer/serve.py:800) | C43 | one per request ([serve.py](tools/coyodex/viewer/serve.py:800)) |
+| startup-hook | Starting with the open option pops the landing page up in a browser | [serve.py](tools/coyodex/viewer/serve.py:806) | C43 | on-boot ([serve.py](tools/coyodex/viewer/serve.py:805)) |
+| server-loop | The server takes requests until someone stops it | [serve.py](tools/coyodex/viewer/serve.py:808) | C43 | continuous ([serve.py](tools/coyodex/viewer/serve.py:808)) |
+| signal-handler | Pressing the stop key closes the listening port | [serve.py](tools/coyodex/viewer/serve.py:812) | C43 | on stop ([serve.py](tools/coyodex/viewer/serve.py:810)) |
+| cli | coyodex serve [folder] [--port N] [--open] | [serve.py](tools/coyodex/viewer/serve.py:852) | C43 |  |
+| ui-route | Opens the Features tab, under Product | [viewer.html](tools/coyodex/viewer/viewer.html:120) | C56 |  |
+| ui-route | Opens the Happy Path tab, under Product | [viewer.html](tools/coyodex/viewer/viewer.html:121) | C55 |  |
+| ui-route | Opens the Rules tab, under Product | [viewer.html](tools/coyodex/viewer/viewer.html:127) | C56 |  |
+| ui-route | Opens the Entities tab, under Data | [viewer.html](tools/coyodex/viewer/viewer.html:130) | C55 |  |
+| ui-route | Opens the Storage tab, under Data | [viewer.html](tools/coyodex/viewer/viewer.html:131) | C56 |  |
+| ui-route | Opens the Subsystems tab, under Under the hood | [viewer.html](tools/coyodex/viewer/viewer.html:136) | C55 |  |
+| ui-route | Opens the Dependencies tab, under Under the hood | [viewer.html](tools/coyodex/viewer/viewer.html:137) | C55 |  |
+| ui-route | Opens the Tests tab, under Under the hood | [viewer.html](tools/coyodex/viewer/viewer.html:138) | C56 |  |
+| ui-route | Opens the Deployment tab, under Under the hood | [viewer.html](tools/coyodex/viewer/viewer.html:140) | C55 |  |
+| ui-route | Opens the System tab, under Under the hood | [viewer.html](tools/coyodex/viewer/viewer.html:141) | C56 |  |
+| ui-route | Opens the Glossary tab, its own group | [viewer.html](tools/coyodex/viewer/viewer.html:145) | C56 |  |
+| event-consumer | The browser window changes size, so the drawing refits itself to the new space | [viewer.js](tools/coyodex/viewer/viewer.js:10593) | C55 | continuous ([viewer.js](tools/coyodex/viewer/viewer.js:10593)) |
+| startup-hook | A reader opens a map for the first time in this browser, so the guide to getting around opens by itself | [viewer.js](tools/coyodex/viewer/viewer.js:10853) | C57 | on-boot ([viewer.js](tools/coyodex/viewer/viewer.js:10853)) |
+| startup-hook | The map's page loads, so the viewer checks the server is alive and loads the project's file tree | [viewer.js](tools/coyodex/viewer/viewer.js:11366) | C58 | on-boot ([viewer.js](tools/coyodex/viewer/viewer.js:11366)) |
+| ui-route | Opens a project's map in a browser, landing on the first view the map offers | [viewer.js](tools/coyodex/viewer/viewer.js:11694) | C57 |  |
+| startup-hook | The map's page loads, so the viewer fetches the whole map from the server before drawing anything | [viewer.js](tools/coyodex/viewer/viewer.js:154) | C57 | on-boot ([viewer.js](tools/coyodex/viewer/viewer.js:154)) |
+| event-consumer | Any screen writes new text, so every glossary word inside that text becomes a link with no reader action | [viewer.js](tools/coyodex/viewer/viewer.js:479) | C56 | continuous ([viewer.js](tools/coyodex/viewer/viewer.js:479)) |
+| cli | python tools/map_backup.py stamp | [map_backup.py](tools/map_backup.py:452) | C66 |  |
+| cli | python tools/map_backup.py backup | [map_backup.py](tools/map_backup.py:478) | C66 |  |
 
 ---
 
@@ -296,508 +434,414 @@ why: compares a fresh build against the baseline accepted in HP8
 
 | ID | Subdomain | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
-| **SD1** | Map document | The committed map document as a whole — the typed record every other layer reads, plus the declarative directives and proposals that edit it between builds. |  | tools/coyodex/model.py:418 | high |
-| **SD2** | Behavioral layer | The part of the map that answers 'what does this system do, for whom, in what order' — roles, glossary, use cases, the Happy Path spine, and the use-case flows. | SD1 | tools/coyodex/model.py:38 | high |
-| **SD3** | Structural layer | The machine behind the behavior — components, their groups, external dependencies, entry points, the backbone edge list, the async channel catalog, and the citations grounding them. | SD1 | tools/coyodex/model.py:99 | high |
-| **SD4** | Domain-model layer | The map's own picture of the mapped project's data — entity cards with their fields, relations, storage and lifecycles, and the plumbing types deliberately left unmodelled. | SD1 | tools/coyodex/model.py:244 | high |
-| **SD5** | Operational & quality layer | How the mapped system is deployed, watched, secured and configured, plus the map's honesty record — test-coverage gaps, grounding coverage, and preserved freeform sections. | SD1 | tools/coyodex/model.py:338 | high |
-| **SD6** | Code pre-index | The mechanical reading of the source tree handed to a build — the file walk, the symbols and imports found in each file, and the component-count expectation derived from directory size. |  | tools/coyodex/preindex_lib.py:253 | high |
-| **SD7** | Viewer graph & file browser | The shape the map takes on its way to the screen — drawable nodes and arrows, flows, the change-impact report, the coverage-tagged file tree, and the list of recently opened projects. |  | tools/coyodex/viewer/build_graph.py:111 | high |
-| **SD8** | Change impact | What a code change does to an existing map — the raw diff pieces, the per-file picture of which pinned lines moved, each anchor it hits, and the ripple out to neighbouring elements. |  | tools/coyodex/impact_lib.py:170 | high |
-| **SD9** | Method-quality eval | The measurements that say whether a rebuilt map got better or worse — the deterministic profile, the judged semantic scores, and the gated comparison against the blessed baseline. |  | eval/tools/coyodex_eval/profile.py:37 | high |
+| **SD1** | What a map holds | Every kind of thing a finished map can say about a project. |  | tools/coyodex/model.py:646 | verified |
+| **SD2** | The product story | Who uses the product, what they come to do, and the one walk that tells it end to end. | SD1 | tools/coyodex/model.py:92 | verified |
+| **SD3** | The machine | The parts the product is built from, what it pulls in from outside, and how the parts reach each other. | SD1 | tools/coyodex/model.py:187 | verified |
+| **SD4** | The domain model | The named types a project stores, their fields, how they relate, and the states they move through. | SD1 | tools/coyodex/model.py:343 | verified |
+| **SD5** | Running and deciding | What runs where, what is watched, what is configured, and every decision the product makes. | SD1 | tools/coyodex/model.py:437 | verified |
+| **SD6** | The document and its record | The whole map as one file, plus the citations and judgements that say how far it can be trusted. | SD1 | tools/coyodex/model.py:646 | verified |
+| **SD7** | Building a map | What a build measures, merges, assigns and stamps on the way to a finished map. |  | tools/coyodex/preindex_lib.py:312 | verified |
+| **SD8** | Proving a map | The claims a map must defend, the verdicts on each, and the report saying which checks ran. |  | tools/coyodex/audit_model.py:421 | verified |
+| **SD9** | What the viewer holds | What the server keeps about each map it serves, and the shapes a view is drawn from. |  | tools/coyodex/viewer/build_graph.py:28 | verified |
+| **SD10** | Judging a map | How one map measures against another, and what the judges said about both. |  | eval/tools/coyodex_eval/profile.py:39 | verified |
 
 ---
 
 ## T5 — Domain model (domain cards)
 
-**E1 — ProjectModel** *(D2..coyodex/project-map.json — collection; the committed source of truth; the markdown map and the served diagram are generated views of it)*
-SUBDOMAIN: SD1
-MEANING: The whole map of one codebase — the single committed document holding everything the map knows, in a fixed key order so it diffs cleanly.
-FIELDS: format:string · title:string · goal:string · commit:string ? · committed:string ? · built:string ? · roles:E2 [] · glossary:E3 [] · use_cases:E4 [] · happy_path:E5 [] · subsystems:E9 [] · components:E10 [] · deps:E11 [] · run_commands:E14 [] · entry_points:E13 [] · subdomains:E9 [] · entities:E17 [] · non_entity_types:E23 [] · flows:E6 [] · subflows:E8 [] · edges:E12 [] · messaging:E16 [] · deployment:E24 [] · environments:list · observability:E26 [] · security:E27 [] · config:E28 [] · tests_note:string · tests:E29 [] · grounding:E31 ? · extras:E30 []
-RELATIONS: contains 1→* E2 roles · contains 1→* E3 glossary · contains 1→* E4 use cases · contains 1→* E5 Happy Path · contains 1→* E9 subsystems & subdomains · contains 1→* E10 components · contains 1→* E11 dependencies · contains 1→* E13 entry points · contains 1→* E14 run commands · contains 1→* E17 entities · contains 1→* E23 non-entity types · contains 1→* E6 flows · contains 1→* E8 sub-flows · contains 1→* E12 backbone edges · contains 1→* E16 channels · contains 1→* E24 deployment units · contains 1→* E26 observability · contains 1→* E27 security · contains 1→* E28 config · contains 1→* E29 test rows · contains 1→0..1 E31 grounding · contains 1→* E30 extras
-SOURCE: [model.py](tools/coyodex/model.py:418)
+**E1 — ProjectModel** *(project-map.json — collection; one file per project, written byte-identically so a rebuild diffs cleanly)*
+SUBDOMAIN: SD6
+MEANING: The whole map as one document, holding every element the analysis produced.
+FIELDS: format:string · title:string · goal:string · commit:string ? · built:string ? · roles:E2 [] · glossary:E4 [] · capabilities:E5 [] · use_cases:E6 [] · happy_path:E9 [] · subsystems:E5 [] · components:E13 [] · deps:E14 [] · run_commands:E17 [] · entry_points:E16 [] · subdomains:E5 [] · entities:E18 [] · non_entity_types:E22 [] · flows:E10 [] · subflows:E12 [] · edges:E15 [] · messaging:E25 [] · deployment:E26 [] · environments:string [] · observability:E28 [] · security:E29 [] · config:E30 [] · tests:E31 [] · grounding:E35 ? · blocks:E5 [] · rules:E33 [] · extras:E36 []
+RELATIONS: contains 1→* E2 · contains 1→* E4 · contains 1→* E5 · contains 1→* E6 · contains 1→* E9 · contains 1→* E10 · contains 1→* E12 · contains 1→* E13 · contains 1→* E14 · contains 1→* E15 · contains 1→* E16 · contains 1→* E17 · contains 1→* E18 · contains 1→* E22 · contains 1→* E25 · contains 1→* E26 · contains 1→* E28 · contains 1→* E29 · contains 1→* E30 · contains 1→* E31 · contains 1→* E33 · contains 1→0..1 E35 · contains 1→* E36
+SOURCE: [model.py](tools/coyodex/model.py:646)
 
-**E2 — Role** *(roles[] — embedded; inside .coyodex/project-map.json)*
+**E2 — Role** *(project-map.json — embedded)*
 SUBDOMAIN: SD2
-MEANING: Someone or something that uses the mapped system — a human user or another service — and what they want out of it.
-FIELDS: id:string PK · name:string · kind:string · wants:string · drives:string
-SOURCE: [model.py](tools/coyodex/model.py:38)
-
-**E3 — GlossaryRow** *(glossary[] — embedded; inside .coyodex/project-map.json)*
-SUBDOMAIN: SD2
-MEANING: One term of the project's shared language, explained in a line and pointed at the code that owns it.
-FIELDS: term:string PK · meaning:string · source:path ?
-SOURCE: [model.py](tools/coyodex/model.py:47)
-
-**E4 — UseCase** *(use_cases[] — embedded; inside .coyodex/project-map.json)*
-SUBDOMAIN: SD2
-MEANING: One thing a role can get done with the system, stated as what starts it and what comes out.
-FIELDS: id:string PK · name:string · actors:E2 [] FK→E2 · trigger_outcome:string
-RELATIONS: drivenBy *→* E2 actors
+MEANING: One kind of actor the code recognises, either a person or a program.
+FIELDS: id:string PK · name:string · kind:string · audience:string · wants:string · drives:string · relations:E3 []
+RELATIONS: contains 1→* E3
 SOURCE: [model.py](tools/coyodex/model.py:56)
 
-**E5 — HappyStep** *(happy_path[] — embedded; inside .coyodex/project-map.json)*
+**E3 — RoleRelation** *(project-map.json — embedded)*
 SUBDOMAIN: SD2
-MEANING: One position in the ordered walk through the system's main story — a use case shown where it naturally happens.
-FIELDS: id:string PK · title:string · uc:E4 ? FK→E4 · why:string ?
-RELATIONS: realizes *→1 E4
-SOURCE: [model.py](tools/coyodex/model.py:65)
+MEANING: A link saying one actor turns into another, or may do everything another may do.
+FIELDS: kind:string · role:string FK→E2 · at:string ?
+SOURCE: [model.py](tools/coyodex/model.py:40)
 
-**E6 — Flow** *(flows[] — embedded; inside .coyodex/project-map.json)*
+**E4 — GlossaryRow** *(project-map.json — embedded)*
 SUBDOMAIN: SD2
-MEANING: The inside story of one use case — the ordered exchanges between the pieces of the system that make it happen.
-FIELDS: uc:E4 PK FK→E4 · title:string · steps:E7 []
-RELATIONS: contains 1→* E7 steps · detailsUseCase 1→1 E4
-SOURCE: [model.py](tools/coyodex/model.py:293)
+MEANING: One product word, its plain meaning, and the place in code the word belongs to.
+FIELDS: term:string PK · meaning:string · source:string ? · aliases:string [] · no_autolink:bool
+SOURCE: [model.py](tools/coyodex/model.py:75)
 
-**E7 — FlowStep** *(flows[].steps[] — embedded; the same shape also fills subflows[].steps[])*
+**E5 — Group** *(project-map.json — embedded; four separate forests share this one shape)*
+SUBDOMAIN: SD3
+MEANING: A named box gathering members: a feature, a subsystem, a subdomain, or a decision area.
+FIELDS: id:string PK · name:string · purpose:string · parent:string ? FK→E5 · happy_path:string · stakes:E7 [] · story:E8 ? · source:string ? · confidence:string · tech:string · tech_source:string
+RELATIONS: contains 1→* E5 · contains 1→* E7 · contains 1→0..1 E8
+SOURCE: [model.py](tools/coyodex/model.py:145)
+
+**E6 — UseCase** *(project-map.json — embedded)*
 SUBDOMAIN: SD2
-MEANING: One interaction inside a flow — who talks to whom, what happens there, and the exact line of code where it happens.
-FIELDS: n:int · src:string · dst:string · phrase:string · note:string · where:path ? · no_call_site:bool · subflow:E8 ? FK→E8
-SOURCE: [model.py](tools/coyodex/model.py:269)
+MEANING: One job an actor comes to the product to get done.
+FIELDS: id:string PK · name:string · actors:string [] FK→E2 · trigger_outcome:string · capability:string ? FK→E5 · entry_points:string [] FK→E16
+RELATIONS: drivenBy *→* E2 · belongsTo *→1 E5 · startsAt *→* E16
+SOURCE: [model.py](tools/coyodex/model.py:92)
 
-**E8 — SubFlow** *(subflows[] — embedded; inside .coyodex/project-map.json)*
+**E7 — Stake** *(project-map.json — embedded)*
 SUBDOMAIN: SD2
-MEANING: A named run of steps shared by several use cases — written once and referenced, so every flow that rides it stays at the same level of detail.
-FIELDS: id:string PK · name:string · steps:E7 []
-RELATIONS: contains 1→* E7 steps
-SOURCE: [model.py](tools/coyodex/model.py:300)
+MEANING: What one actor comes to a feature to do, said in a short verb phrase.
+FIELDS: actor:string FK→E2 · stake:string
+RELATIONS: heldBy *→1 E2
+SOURCE: [model.py](tools/coyodex/model.py:121)
 
-**E9 — Group** *(subsystems[] — embedded; the same shape also fills subdomains[]; `tech` is subsystem-only)*
+**E8 — StoryAnchor** *(project-map.json — embedded)*
+SUBDOMAIN: SD2
+MEANING: Where a feature the main walk never reaches sits in the one product story.
+FIELDS: place:string · feature:string FK→E5
+SOURCE: [model.py](tools/coyodex/model.py:131)
+
+**E9 — HappyStep** *(project-map.json — embedded)*
+SUBDOMAIN: SD2
+MEANING: One position in the ordered walk through the product's main story.
+FIELDS: id:string PK · title:string · uc:string ? FK→E6 · why:string ?
+RELATIONS: realizes *→1 E6
+SOURCE: [model.py](tools/coyodex/model.py:113)
+
+**E10 — Flow** *(project-map.json — embedded)*
+SUBDOMAIN: SD2
+MEANING: The inside view of one job, as an ordered run of interactions.
+FIELDS: uc:string FK→E6 · title:string · steps:E11 []
+RELATIONS: realizes 1→1 E6 · contains 1→* E11
+SOURCE: [model.py](tools/coyodex/model.py:392)
+
+**E11 — FlowStep** *(project-map.json — embedded)*
+SUBDOMAIN: SD2
+MEANING: One interaction inside a job, from a starting box to a receiving box.
+FIELDS: n:int · src:string · dst:string · phrase:string · note:string · where:string ? · no_call_site:bool · subflow:string ? FK→E12
+SOURCE: [model.py](tools/coyodex/model.py:368)
+
+**E12 — SubFlow** *(project-map.json — embedded)*
+SUBDOMAIN: SD2
+MEANING: A named run of steps that several jobs share, written down once.
+FIELDS: id:string PK · name:string · steps:E11 []
+RELATIONS: contains 1→* E11
+SOURCE: [model.py](tools/coyodex/model.py:399)
+
+**E13 — Component** *(project-map.json — embedded)*
 SUBDOMAIN: SD3
-MEANING: A box that holds other boxes — a subsystem grouping components, or a subdomain grouping entities; both use the same shape and may nest.
-FIELDS: id:string PK · name:string · purpose:string · parent:E9 ? FK→E9 · source:path ? · confidence:string · tech:string · tech_source:path
-RELATIONS: contains 1→* E9 nested groups
-SOURCE: [model.py](tools/coyodex/model.py:73)
+MEANING: One module-sized piece of the code, named and described in plain words.
+FIELDS: id:string PK · name:string · subsystem:string ? FK→E5 · purpose:string · entry_point:string ? · depends_on:string · source:string ? · confidence:string · files:string [] · runs_in:string [] FK→E26 · evidence:E32 [] · states:E23 ? · extra:json
+RELATIONS: belongsTo *→1 E5 · contains 1→* E32 · has 1→0..1 E23 · runsIn *→* E26
+SOURCE: [model.py](tools/coyodex/model.py:187)
 
-**E10 — Component** *(components[] — embedded; inside .coyodex/project-map.json)*
+**E14 — Dep** *(project-map.json — embedded)*
 SUBDOMAIN: SD3
-MEANING: One named piece of the mapped system — roughly a module or folder — with what it is for, where it lives, and which files it owns.
-FIELDS: id:string PK · name:string · subsystem:E9 ? FK→E9 · purpose:string · entry_point:path ? · depends_on:string · source:path ? · confidence:string · files:list · runs_in:list · evidence:E15 [] · states:E21 ? · extra:dict
-RELATIONS: belongsTo *→0..1 E9 its subsystem · contains 1→* E15 evidence · contains 1→0..1 E21 its lifecycle
-SOURCE: [model.py](tools/coyodex/model.py:99)
+MEANING: One outside thing the product leans on, such as a database or a library.
+FIELDS: id:string PK · name:string · kind:string ? · type:string · used_for:string · bucket:string · where_configured:string · confidence:string · deployment_linked:bool · package:string · alternative:string · evidence:E32 [] · extra:json
+RELATIONS: contains 1→* E32
+SOURCE: [model.py](tools/coyodex/model.py:212)
 
-**E11 — Dep** *(deps[] — embedded; inside .coyodex/project-map.json)*
+**E15 — Edge** *(project-map.json — embedded)*
 SUBDOMAIN: SD3
-MEANING: Something the mapped project relies on but does not own — a database, a queue, an outside service, a framework or a library.
-FIELDS: id:string PK · name:string · kind:string ? · type:string · used_for:string · bucket:string · where_configured:path · confidence:string · deployment_linked:bool · package:string · alternative:string · evidence:E15 [] · extra:dict
-RELATIONS: contains 1→* E15 evidence
-SOURCE: [model.py](tools/coyodex/model.py:124)
+MEANING: One backbone arrow: a piece of code reaching another, plus the calling line.
+FIELDS: src:string · verb:string · dst:string · why:string ? · where:string ? · no_call_site:bool
+SOURCE: [model.py](tools/coyodex/model.py:412)
 
-**E12 — Edge** *(edges[] — embedded; one project-wide backbone list; entity-to-entity relations stay on the domain cards)*
+**E16 — EntryPoint** *(project-map.json — embedded)*
 SUBDOMAIN: SD3
-MEANING: One claimed relationship in the mapped system — this piece uses, writes or calls that one — with a witness line of code proving it.
-FIELDS: src:string · verb:string · dst:string · why:string ? · where:path ? · no_call_site:bool
-RELATIONS: connects *→* E10 {both endpoints hold an element identifier as plain text — a component, a dependency or an entity — so no typed column can back the arrow}
-SOURCE: [model.py](tools/coyodex/model.py:313)
+MEANING: One front door into the product, such as a route, a command, or a timed job.
+FIELDS: id:string PK · kind:string · trigger:string · source:string · component:string FK→E13 · activation:string · runs_in:string [] FK→E26 · cadence:string · cadence_source:string
+RELATIONS: livesIn *→1 E13 · runsIn *→* E26
+SOURCE: [model.py](tools/coyodex/model.py:238)
 
-**E13 — EntryPoint** *(entry_points[] — embedded; inside .coyodex/project-map.json)*
-SUBDOMAIN: SD3
-MEANING: A way in to the mapped system — a route, a command, a webhook or a background loop — with who or what starts it and how often.
-FIELDS: kind:string · trigger:string · source:path · component:E10 FK→E10 · activation:string · runs_in:list · cadence:string · cadence_source:path
-RELATIONS: triggers *→1 E10 its owning component
-STATES: self · external — [grammar.py](tools/coyodex/grammar.py:223)
-SOURCE: [model.py](tools/coyodex/model.py:150)
-
-**E14 — RunRow** *(run_commands[] — embedded; inside .coyodex/project-map.json)*
-SUBDOMAIN: SD3
-MEANING: One command a developer actually types to run, build or test the mapped project, pointed at where that command is defined.
-FIELDS: action:string PK · command:string · source:path
-SOURCE: [model.py](tools/coyodex/model.py:142)
-
-**E15 — EvidenceItem** *(components[].evidence[] — embedded; the same shape also fills deps[].evidence[] and tests[].tests[])*
-SUBDOMAIN: SD3
-MEANING: One citation backing something the map says — a line of code plus the reason it proves the claim.
-FIELDS: file:path · why:string
-SOURCE: [model.py](tools/coyodex/model.py:91)
-
-**E16 — MessagingRow** *(messaging[] — embedded; name-keyed: nothing points at a channel, so the row itself is the join)*
-SUBDOMAIN: SD3
-MEANING: One channel, queue or topic the mapped system passes messages through — who puts messages on it, who takes them off, and what they carry.
-FIELDS: name:string PK unique · kind:string · broker:E11 FK→E11 · publishers:E10 [] FK→E10 · consumers:E10 [] FK→E10 · payload:E17 FK→E17 · source:path
-RELATIONS: carriedBy *→0..1 E11 its broker · wiredTo *→* E10 publishers & consumers · carries *→0..1 E17 its payload
-SOURCE: [model.py](tools/coyodex/model.py:194)
-
-**E17 — Entity** *(entities[] — embedded; inside .coyodex/project-map.json)*
-SUBDOMAIN: SD4
-MEANING: One domain card — a real named type in the mapped code, with what it means, what it holds, how it relates to its neighbours and where it is stored.
-FIELDS: id:string PK · name:string · store:E20 ? · meaning:string · subdomain:E9 ? FK→E9 · source:path ? · fields:E18 [] · relations:E19 [] · states:E21 ?
-RELATIONS: belongsTo *→0..1 E9 its subdomain · contains 1→* E18 fields · contains 1→* E19 relations · contains 1→0..1 E20 where it is stored · contains 1→0..1 E21 its lifecycle
-SOURCE: [model.py](tools/coyodex/model.py:244)
-
-**E18 — EntityField** *(entities[].fields[] — embedded; lives only inside its entity card)*
-SUBDOMAIN: SD4
-MEANING: One attribute on a domain card — its name, its type, and the small markers saying whether it is a key, a list, or may be missing.
-FIELDS: name:string · type:string · markers:list
-SOURCE: [model.py](tools/coyodex/model.py:171)
-
-**E19 — EntityRelation** *(entities[].relations[] — embedded; authored on the source card only, so a pair is never stated twice)*
-SUBDOMAIN: SD4
-MEANING: One typed link from a domain card to another — what kind of link it is, how many of each side, and how it is wired when no field carries it.
-FIELDS: verb:string · target:E17 FK→E17 · src_card:string ? · dst_card:string ? · display:string · how:string ? · keyed_by:list
-SOURCE: [model.py](tools/coyodex/model.py:178)
-
-**E20 — Store** *(entities[].store — embedded; lives only inside its entity card)*
-SUBDOMAIN: SD4
-MEANING: Where one domain type physically lives — which datastore, which compartment inside it, and in what way it is kept there.
-FIELDS: dep:E11 ? FK→E11 · container:string · mode:string · notes:string
-RELATIONS: livesIn *→0..1 E11 the physical datastore
-STATES: collection · embedded · transient · cache · in-code · enum — [grammar.py](tools/coyodex/grammar.py:243)
+**E17 — RunRow** *(project-map.json — embedded)*
+SUBDOMAIN: SD5
+MEANING: One command a person runs on the project, and the file defining that command.
+FIELDS: action:string PK · command:string · source:string
 SOURCE: [model.py](tools/coyodex/model.py:230)
 
-**E21 — StateMachine** *(entities[].states — embedded; the same shape also fills components[].states)*
+**E18 — Entity** *(project-map.json — embedded)*
 SUBDOMAIN: SD4
-MEANING: A lifecycle the mapped code really implements — the named states a thing can be in, how it moves between them, and the line that declares them.
-FIELDS: states:list · transitions:E22 [] · source:path
-RELATIONS: contains 1→* E22 transitions
-SOURCE: [model.py](tools/coyodex/model.py:217)
+MEANING: One real named type the product works with, drawn as a box with its attributes.
+FIELDS: id:string PK · name:string · store:E21 ? · meaning:string · subdomain:string ? FK→E5 · source:string ? · fields:E19 [] · relations:E20 [] · states:E23 ?
+RELATIONS: belongsTo *→1 E5 · has 1→0..1 E21 · contains 1→* E19 · contains 1→* E20 · has 1→0..1 E23
+SOURCE: [model.py](tools/coyodex/model.py:343)
 
-**E22 — StateTransition** *(entities[].states.transitions[] — embedded; lives only inside its state machine)*
+**E19 — EntityField** *(project-map.json — embedded)*
 SUBDOMAIN: SD4
-MEANING: One move from one state to another, and what triggers it.
+MEANING: One attribute on a type: its name, the kind of value it holds, and its markers.
+FIELDS: name:string · type:string · markers:string []
+SOURCE: [model.py](tools/coyodex/model.py:268)
+
+**E20 — EntityRelation** *(project-map.json — embedded; authored on the source type only, never on both)*
+SUBDOMAIN: SD4
+MEANING: One arrow between two types, with its verb and how many sit at each end.
+FIELDS: verb:string · target:string FK→E18 · src_card:string ? · dst_card:string ? · display:string · how:string ? · keyed_by:string []
+SOURCE: [model.py](tools/coyodex/model.py:275)
+
+**E21 — Store** *(project-map.json — embedded)*
+SUBDOMAIN: SD4
+MEANING: Where a type physically lives: which outside store, which compartment, in what shape.
+FIELDS: dep:string ? FK→E14 · container:string · mode:string · notes:string
+RELATIONS: livesIn *→1 E14
+SOURCE: [model.py](tools/coyodex/model.py:327)
+
+**E22 — NonEntityType** *(project-map.json — embedded)*
+SUBDOMAIN: SD4
+MEANING: A named type left out of the domain model on purpose, carrying the reason why.
+FIELDS: name:string PK · source:string ? · why:string
+SOURCE: [model.py](tools/coyodex/model.py:358)
+
+**E23 — StateMachine** *(project-map.json — embedded)*
+SUBDOMAIN: SD4
+MEANING: A lifecycle the code really implements: its states, its moves, and the declaring line.
+FIELDS: states:string [] · transitions:E24 [] · source:string
+RELATIONS: contains 1→* E24
+SOURCE: [model.py](tools/coyodex/model.py:314)
+
+**E24 — StateTransition** *(project-map.json — embedded)*
+SUBDOMAIN: SD4
+MEANING: One move from one state to another, plus the trigger that causes the move.
 FIELDS: src:string · dst:string · on:string
-SOURCE: [model.py](tools/coyodex/model.py:210)
+SOURCE: [model.py](tools/coyodex/model.py:307)
 
-**E23 — NonEntityType** *(non_entity_types[] — embedded; inside .coyodex/project-map.json)*
-SUBDOMAIN: SD4
-MEANING: A named type in the mapped code that is deliberately NOT a domain concept — plumbing, recorded on purpose so the coverage check does not call it missing.
-FIELDS: name:string PK · source:path ? · why:string
-SOURCE: [model.py](tools/coyodex/model.py:259)
-
-**E24 — DeploymentRow** *(deployment[] — embedded; name-keyed by unit, like a messaging channel)*
+**E25 — MessagingRow** *(project-map.json — embedded)*
 SUBDOMAIN: SD5
-MEANING: One running process of the mapped system — where it runs, how it is reached, how it is configured, and which environments it belongs to.
-FIELDS: unit:string PK unique · runs_on:string · exposed_as:string · config_source:string · variants:E25 []
-RELATIONS: contains 1→* E25 environment placements
-SOURCE: [model.py](tools/coyodex/model.py:338)
+MEANING: One channel messages travel on, with who puts messages in and who takes them out.
+FIELDS: name:string PK · kind:string · broker:string FK→E14 · publishers:string [] FK→E13 · consumers:string [] FK→E13 · payload:string FK→E18 · source:string
+RELATIONS: carriedBy *→1 E14 · movedBy *→* E13 · carries *→0..1 E18
+SOURCE: [model.py](tools/coyodex/model.py:291)
 
-**E25 — VariantTag** *(deployment[].variants[] — embedded; lives only inside its deployment row)*
+**E26 — DeploymentRow** *(project-map.json — embedded)*
 SUBDOMAIN: SD5
-MEANING: One environment a deployment unit runs in, together with the manifest line that proves it belongs there.
-FIELDS: env:string · source:path
-SOURCE: [model.py](tools/coyodex/model.py:325)
+MEANING: One running process the product ships, where it runs and how it is reached.
+FIELDS: unit:string PK · runs_on:string · exposed_as:string · config_source:string · variants:E27 []
+RELATIONS: contains 1→* E27
+SOURCE: [model.py](tools/coyodex/model.py:437)
 
-**E26 — ObservabilityRow** *(observability[] — embedded; inside .coyodex/project-map.json)*
+**E27 — VariantTag** *(project-map.json — embedded)*
 SUBDOMAIN: SD5
-MEANING: One signal the mapped system emits — a log, metric or trace — with where it is produced, where it is read, and what alerts on it.
+MEANING: One environment a process belongs to, plus the setup line proving that placement.
+FIELDS: env:string · source:string
+SOURCE: [model.py](tools/coyodex/model.py:424)
+
+**E28 — ObservabilityRow** *(project-map.json — embedded)*
+SUBDOMAIN: SD5
+MEANING: One signal the product emits, where it comes out, and where a person reads it.
 FIELDS: signal:string PK · where_emitted:string · where_viewed:string · alerts:string
-SOURCE: [model.py](tools/coyodex/model.py:353)
+SOURCE: [model.py](tools/coyodex/model.py:452)
 
-**E27 — SecurityRow** *(security[] — embedded; inside .coyodex/project-map.json)*
+**E29 — SecurityRow** *(project-map.json — embedded; older storage for access facts; a new map states them as business rules)*
 SUBDOMAIN: SD5
-MEANING: One way into the mapped system that needs protecting — who may reach it, the code that checks that, and what is risky about it.
-FIELDS: surface:string PK · who:string · source:path · risk:string
-SOURCE: [model.py](tools/coyodex/model.py:361)
+MEANING: One guarded surface, who may pass it, and what the guard's limit costs.
+FIELDS: surface:string PK · who:string · source:string · risk:string
+SOURCE: [model.py](tools/coyodex/model.py:460)
 
-**E28 — ConfigRow** *(config[] — embedded; inside .coyodex/project-map.json)*
+**E30 — ConfigRow** *(project-map.json — embedded)*
 SUBDOMAIN: SD5
-MEANING: One setting that changes how the mapped system behaves — what it is for, its default, and whether it differs per environment.
+MEANING: One setting the product reads, what the setting is for, and its default.
 FIELDS: key:string PK · purpose:string · default:string · per_env:string
-SOURCE: [model.py](tools/coyodex/model.py:370)
+SOURCE: [model.py](tools/coyodex/model.py:469)
 
-**E29 — TestRow** *(tests[] — embedded; inside .coyodex/project-map.json)*
+**E31 — TestRow** *(project-map.json — embedded)*
 SUBDOMAIN: SD5
-MEANING: One honest statement about testing — which parts of the map this covers, whether they are tested, which suites do it, and what the gap is.
-FIELDS: targets:list · tested:string · label:string · tests:E15 [] · gap:string · confidence:string
-RELATIONS: contains 1→* E15 exercising suites · assesses *→* E10 {the assessed elements are listed as plain-text identifiers and may be of any kind, so no typed column backs the arrow}
-SOURCE: [model.py](tools/coyodex/model.py:378)
+MEANING: One line of the test gap table: what is covered, by which suites, and what is missing.
+FIELDS: targets:string [] · tested:string · label:string · tests:E32 [] · gap:string · confidence:string
+RELATIONS: contains 1→* E32
+SOURCE: [model.py](tools/coyodex/model.py:477)
 
-**E30 — ExtraSection** *(extras[] — embedded; inside .coyodex/project-map.json)*
+**E32 — EvidenceItem** *(project-map.json — embedded)*
+SUBDOMAIN: SD6
+MEANING: One citation: a line in the code, and why that line backs the claim beside it.
+FIELDS: file:string · why:string
+SOURCE: [model.py](tools/coyodex/model.py:179)
+
+**E33 — BusinessRule** *(project-map.json — embedded)*
 SUBDOMAIN: SD5
-MEANING: A section someone wrote by hand that the map does not otherwise know about, kept word for word so nothing is lost — and the place justified exceptions are recorded.
+MEANING: One decision the product makes, written in product words and naming no code.
+FIELDS: id:string PK · statement:string · name:string · block:string ? FK→E5 · sites:E34 [] · access:bool · risk:string · confidence:string
+RELATIONS: belongsTo *→1 E5 · contains 1→* E34
+SOURCE: [model.py](tools/coyodex/model.py:508)
+
+**E34 — RuleSite** *(project-map.json — embedded)*
+SUBDOMAIN: SD5
+MEANING: One line that actually enforces a decision, and what that line does for it.
+FIELDS: where:string ? · why:string · no_call_site:bool
+SOURCE: [model.py](tools/coyodex/model.py:490)
+
+**E35 — Grounding** *(project-map.json — embedded)*
+SUBDOMAIN: SD6
+MEANING: How much of the map the skeptics challenged, and how those challenges came out.
+FIELDS: claims_total:int · claims_challenged:int · claims_confirmed:int · claims_refuted:int · claims_unverifiable:int · claims_superseded:int · claims_added_since:int · live_claims_digest:string · claims_live_challenged:int · note:string
+RELATIONS: counts 1→* E41 {the record keeps totals only, so it names no single claim}
+SOURCE: [model.py](tools/coyodex/model.py:565)
+
+**E36 — ExtraSection** *(project-map.json — embedded)*
+SUBDOMAIN: SD6
+MEANING: An authored section the schema does not know, kept word for word.
 FIELDS: heading:string PK · body:string
-SOURCE: [model.py](tools/coyodex/model.py:391)
+SOURCE: [model.py](tools/coyodex/model.py:558)
 
-**E31 — Grounding** *(grounding — embedded; one object on the map document; absent means no grounding pass ran)*
-SUBDOMAIN: SD5
-MEANING: How much of the map's risky claims were actually challenged and how many turned out wrong — the map's own confidence, travelling with it.
-FIELDS: claims_total:int · claims_challenged:int · claims_confirmed:int · claims_refuted:int · claims_unverifiable:int · note:string
-SOURCE: [model.py](tools/coyodex/model.py:398)
-
-**E32 — Reconcile** *(reconcile file — transient; parsed from the JSON file passed to `assemble --reconcile`; the tool never writes it)*
-SUBDOMAIN: SD1
-MEANING: A re-runnable list of corrections applied to a map every time it is rebuilt, so a hand fix is never quietly lost on the next build.
-FIELDS: sets:E33 [] · drop_edges:E34 []
-RELATIONS: contains 1→* E33 assignments · contains 1→* E34 edge removals
-SOURCE: [reconcile.py](tools/coyodex/reconcile.py:76)
-
-**E33 — SetDirective** *(set[] — embedded; inside the reconcile file)*
-SUBDOMAIN: SD1
-MEANING: One bulk assignment applied after a build — put these elements in this group, run them in these units, or file this dependency under this purpose.
-FIELDS: ids:list · subsystem:string ? · subdomain:string ? · runs_in:list ? · bucket:string ?
-RELATIONS: assigns *→* E10 {the directive lists element identifiers as plain text, and whichever property it assigns decides which kind of element is legal}
-SOURCE: [reconcile.py](tools/coyodex/reconcile.py:55)
-
-**E34 — DropEdgeDirective** *(drop_edges[] — embedded; inside the reconcile file)*
-SUBDOMAIN: SD1
-MEANING: One instruction to remove a relationship the map got wrong, and to say what should happen to the flow steps that were riding it.
-FIELDS: src:string · verb:string · dst:string · drop_steps:bool · repoint:string ?
-RELATIONS: removes *→* E12 {matched against the backbone list by the triple that identifies an edge, rather than by a stored reference}
-SOURCE: [reconcile.py](tools/coyodex/reconcile.py:67)
-
-**E35 — Proposal** *(balance report — transient; computed and printed by `coyodex balance`; never stored)*
-SUBDOMAIN: SD1
-MEANING: One suggested new group for a diagram that shows too many boxes, with a name seed and the members that would move into it.
-FIELDS: name:string · name_basis:string · members:list
-RELATIONS: groups 1→* E10 {the suggested group lists the elements it would move as identifier and label pairs, not as typed references}
-SOURCE: [balance_lib.py](tools/coyodex/balance_lib.py:382)
-
-**E36 — WalkResult** *(walk — transient; computed per run; every consumer re-walks rather than reading a stored copy)*
-SUBDOMAIN: SD6
-MEANING: The set of real source files found in a repo, and whether git or a plain folder walk found them.
-FIELDS: files:list · root:path · used_git:bool · skipped_excluded:int
-SOURCE: [preindex_lib.py](tools/coyodex/preindex_lib.py:154)
-
-**E37 — Symbol** *(D2..coyodex/preindex.json — collection; written under `symbols` as name lookups plus line extents)*
-SUBDOMAIN: SD6
-MEANING: One definition found in the code — a class or function, its file, and the span of lines it covers.
-FIELDS: name:string · kind:string · file:path · line:int · end:int ?
-SOURCE: [preindex_lib.py](tools/coyodex/preindex_lib.py:253)
-
-**E38 — ImportRef** *(D2..coyodex/preindex.json — collection; written under `imports`; dynamic imports are not captured, so the list is a lower bound)*
-SUBDOMAIN: SD6
-MEANING: One import found in the code — which file pulls in which module, and on what line.
-FIELDS: file:path · line:int · module:string
-SOURCE: [preindex_lib.py](tools/coyodex/preindex_lib.py:262)
-
-**E39 — DirExpectation** *(D2..coyodex/preindex.json — collection; written under `granularity`; checkers re-compute it from the tree instead of reading it)*
-SUBDOMAIN: SD6
-MEANING: How many components one folder should reasonably become, worked out from its size — the anchor that says whether a map is drawn too coarse or too fine.
-FIELDS: path:path PK · files:int · loc:int · expected:int · children:E39 []
-RELATIONS: contains 1→* E39 sub-folders
-SOURCE: [preindex_lib.py](tools/coyodex/preindex_lib.py:474)
-
-**E40 — GraphDict** *(view bundle — transient; built on demand from the map document and served; never committed)*
+**E37 — Symbol** *(preindex.json — embedded)*
 SUBDOMAIN: SD7
-MEANING: The whole map rewritten for the screen — every drawable box, arrow, flow and side table the viewer needs, in one payload.
-FIELDS: commit:string ? · committed:string ? · built:string ? · format:string ? · title:string ? · goal:string ? · nodes:E41 [] · edges:E42 [] · happy_path:E43 [] · flows:E44 [] · subflows:E44 [] · roles:list · glossary:list · run_commands:list · entry_points:list · non_entity_types:list · deployment:list · environments:list · messaging:list · observability:list · security:list · config:list · data_view:dict · tests_note:string · tests:E46 [] · extras:list
-RELATIONS: contains 1→* E41 nodes · contains 1→* E42 arrows · contains 1→* E43 Happy Path · contains 1→* E44 flows & sub-flows · contains 1→* E46 test rows
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:111)
+MEANING: One definition found in the code: its name, its kind, its file, and its line span.
+FIELDS: name:string · kind:string · file:string · line:int · end:int ?
+SOURCE: [preindex_lib.py](tools/coyodex/preindex_lib.py:312)
 
-**E41 — Node** *(view bundle — transient; derived from the map document each time the viewer asks)*
+**E38 — DirExpectation** *(preindex.json — embedded)*
 SUBDOMAIN: SD7
-MEANING: One box on a diagram — whatever kind of map element it came from — carrying its display fields, the files it covers and the group it sits in.
-FIELDS: id:string PK · kind:string · name:string · file:path ? · line:int ? · fields:dict · parent:E41 ? FK→E41 · attrs:list · dep_kind:string ? · files:list · entry_points:list · runs_in:list · roles:list · store:dict ? · states_count:int · states_lines:list
-RELATIONS: has 1→* E41 child boxes
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:28)
+MEANING: How many components one folder should yield, worked out from its file count and size.
+FIELDS: path:string PK · files:int · loc:int · expected:int · children:E38 []
+RELATIONS: contains 1→* E38
+SOURCE: [preindex_lib.py](tools/coyodex/preindex_lib.py:533)
 
-**E42 — Edge (graph)** *(view bundle — transient; merged from the backbone edge list and the domain cards' relations)*
+**E39 — FragmentLoad** *(transient)*
 SUBDOMAIN: SD7
-MEANING: One arrow on a diagram, carrying everything the drawing needs — its kind, its cardinality, and the real field name to write on it.
-FIELDS: src:string · verb:string · dst:string · why:string ? · where:path ? · kind:string ? · src_card:string ? · dst_card:string ? · how:string ? · fk_fields:list · fk_side:string ? · keyed_by:list
-RELATIONS: connects *→* E41 {both endpoints hold a node identifier as plain text, resolved by the viewer at draw time}
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:67)
+MEANING: The result of reading the workers' map pieces: what loaded, what was skipped, what failed.
+FIELDS: parts:E1 [] · notes:string [] · errors:string []
+RELATIONS: contains 1→* E1
+SOURCE: [assemble.py](tools/coyodex/assemble.py:222)
 
-**E43 — HappyStep (graph)** *(view bundle — transient; carried straight from the map document)*
+**E40 — Reconcile** *(reconcile.json — collection)*
 SUBDOMAIN: SD7
-MEANING: One Happy Path position as the viewer shows it — a title, the use case it opens when clicked, and why it sits where it does.
-FIELDS: id:string PK · title:string · uc:string ? · why:string
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:86)
+MEANING: The lead's after-the-fact assignments, re-applied every time the map is rebuilt.
+FIELDS: sets:json [] · drop_edges:json [] · keep_edges:json [] · set_anchors:json [] · drop_relations:json []
+RELATIONS: assignsInto *→1 E1 {the file names map elements by id, and the merge applies it while building}
+SOURCE: [reconcile.py](tools/coyodex/reconcile.py:159)
 
-**E44 — Flow (view)** *(view bundle — transient; built per request from the map document's flows and sub-flows)*
-SUBDOMAIN: SD7
-MEANING: One use-case story as the viewer draws it, with its steps already resolved for display.
-FIELDS: uc:string PK · title:string · steps:E45 [] · line_no:int
-RELATIONS: contains 1→* E45 steps
-SOURCE: [grammar.py](tools/coyodex/grammar.py:533)
-
-**E45 — FlowStep (view)** *(view bundle — transient; derived from the map document's flow steps at build time)*
-SUBDOMAIN: SD7
-MEANING: One step as the viewer draws it — with each end already marked as either a system element or a person, so the arrow reads correctly.
-FIELDS: n:int · src:string · dst:string · src_is_id:bool · dst_is_id:bool · phrase:string · note:string · where:path ? · subflow:string ? · ok:bool
-SOURCE: [grammar.py](tools/coyodex/grammar.py:519)
-
-**E46 — TestRowView** *(view bundle — transient; resolved on the server so the browser needs no id parsing)*
-SUBDOMAIN: SD7
-MEANING: One test-coverage row prepared for the screen, with its targets already turned into readable names.
-FIELDS: targets:E47 [] · label:string · tested:string · tests:list · gap:string · confidence:string
-RELATIONS: contains 1→* E47 resolved targets
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:102)
-
-**E47 — TestTarget** *(view bundle — transient; lives only inside its test row)*
-SUBDOMAIN: SD7
-MEANING: One thing a test row assesses, shown by name, and clickable when it is a box actually drawn on a diagram.
-FIELDS: id:string PK · name:string · node:string ? FK→E41
-RELATIONS: locates *→0..1 E41 the drawn box
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:96)
-
-**E48 — DiffDict** *(change-impact report — transient; parsed from the markdown report on demand; the report itself is the artifact)*
-SUBDOMAIN: SD7
-MEANING: A change-impact report read back in — which map version it compares to which, what changed, and what new relationships appeared.
-FIELDS: base:string ? · new:string ? · changes:E49 [] · new_edges:list
-RELATIONS: contains 1→* E49 per-element changes
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:161)
-
-**E49 — DiffChange** *(change-impact report — transient; lives only inside a parsed report)*
-SUBDOMAIN: SD7
-MEANING: What happened to one map element between two versions — added, changed or gone — with a short note.
-FIELDS: id:string PK · change:string · name:string ? · kind:string ? · note:string
-SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:153)
-
-**E50 — FileTreeNode** *(view bundle — transient; rebuilt from the repo at the map's commit each time the browser is opened)*
-SUBDOMAIN: SD7
-MEANING: One folder or file in the browsable repo tree, tagged with how well the map covers it and which element a click should open.
-FIELDS: name:string · path:path PK · dir:bool · node:string ? FK→E41 · others:list · sel:string ? · cov:string · mapped:int · ref:int · children:E50 []
-RELATIONS: contains 1→* E50 children · mapsTo *→0..1 E41 the element anchored here
-SOURCE: [filetree.py](tools/coyodex/viewer/filetree.py:38)
-
-**E51 — RecentsStore** *(D2.~/.coyodex/serve-recents.json — collection; reloaded before every write so a concurrent build registering a project merges instead of clobbering)*
-SUBDOMAIN: SD7
-MEANING: The list of projects the user has opened in the map server, most recent first — the cards shown on its landing page.
-FIELDS: path:path PK · folders:list
-SOURCE: [recents.py](tools/coyodex/viewer/recents.py:22)
-
-**E52 — ImpactCore** *(impact run — transient; computed per run; the published artifact is the change-impact report)*
+**E41 — WorkItem** *(worklist.json — collection)*
 SUBDOMAIN: SD8
-MEANING: One change-impact run — which map version it is measured against, which two code versions are compared, and every changed file it looked at.
-FIELDS: pin:string · base:string · target:string · files:E53 [] · warnings:list
-RELATIONS: contains 1→* E53 changed files
-SOURCE: [impact_git.py](tools/coyodex/impact_git.py:184)
+MEANING: One claim the map makes, handed to a fresh reader with the job of disproving it.
+FIELDS: claim:string PK · anchor:string ? · why_risky:string · detail:string ? · drift_eligible:bool · theme:string
+RELATIONS: challenges *→1 E1 {the wording is copied in as plain text, and the map holds no pointer back}
+SOURCE: [audit_model.py](tools/coyodex/audit_model.py:421)
 
-**E53 — ImpactFile** *(impact run — transient; lives only inside an impact run)*
+**E42 — Audit finding** *(transient)*
 SUBDOMAIN: SD8
-MEANING: One changed file seen through the map's eyes — where it used to live, what happened to it, and which map anchors it touches.
-FIELDS: path:path PK · p_path:path ? · status:string · frame:E55 ? · hits:E59 []
-RELATIONS: contains 1→0..1 E55 its line picture · contains 1→* E59 hits
-SOURCE: [impact_git.py](tools/coyodex/impact_git.py:175)
+MEANING: One place the map contradicts itself, with how bad the contradiction is.
+FIELDS: check:string · severity:string · location:string · message:string
+RELATIONS: reports *→1 E1 {the place is written as plain prose, so nothing joins the two automatically}
+SOURCE: [audit_model.py](tools/coyodex/audit_model.py:413)
 
-**E54 — Change** *(impact run — transient; read from git per run, never stored)*
+**E43 — ElementCheck** *(projection; recomputed from the pinned claim list and the votes, never stored)*
 SUBDOMAIN: SD8
-MEANING: One entry from the raw list of what git says changed — added, modified, deleted or renamed, and under which name.
-FIELDS: status:string · path:path · old_path:path ?
-SOURCE: [impact_git.py](tools/coyodex/impact_git.py:68)
+MEANING: One map element beside what the skeptics actually did to the claims it makes.
+FIELDS: element_id:string · kind:string · label:string · stated:string · confirmed:int · refuted:int · unverifiable:int · unvoted:int
+RELATIONS: summarizes 1→* E41 {the row is counted afresh from the votes each time somebody asks}
+SOURCE: [grounding.py](tools/coyodex/grounding.py:412)
 
-**E55 — FileFrame** *(impact run — transient; lives only inside an impact file record)*
+**E44 — SurvivingRefutation** *(projection)*
 SUBDOMAIN: SD8
-MEANING: Which lines of a file — as the map saw them when it was built — this change actually disturbs, so an old anchor can be judged fairly.
-FIELDS: affected:list · insertions:list · p_absent:bool · binary:bool · whitespace_only:bool · fully_deleted:bool
-RELATIONS: foldedFrom 1→* E57 {two diffs against the map's pinned version are folded together — a hunk present on both sides cancels, and every remaining one marks the lines it disturbs}
-SOURCE: [impact_lib.py](tools/coyodex/impact_lib.py:94)
+MEANING: A claim the skeptics disproved that the shipped map still makes, word for word.
+FIELDS: claim:string FK→E41 · element_id:string · kind:string · label:string · refuted_by:int · note:string
+RELATIONS: refutes *→1 E41
+SOURCE: [grounding.py](tools/coyodex/grounding.py:631)
 
-**E56 — Hunk** *(impact run — transient; parsed from git output per run)*
+**E45 — Leg** *(finalize-report.json — embedded)*
 SUBDOMAIN: SD8
-MEANING: One block of a diff — which old lines it replaces and what replaces them.
-FIELDS: p_lo:int · p_len:int · plus:list · minus:list
-SOURCE: [impact_lib.py](tools/coyodex/impact_lib.py:36)
+MEANING: One check inside the end-of-build report, its findings, and whether the check ran.
+FIELDS: name:string PK · status:string · blocking:string [] · advisory:string [] · note:string ?
+STATES: ran · failed — [finalize.py](tools/coyodex/finalize.py:65)
+SOURCE: [finalize.py](tools/coyodex/finalize.py:70)
 
-**E57 — ParsedDiff** *(impact run — transient; parsed from git output per run)*
+**E46 — FinalizeReport** *(finalize-report.json — collection)*
 SUBDOMAIN: SD8
-MEANING: One file's diff after parsing — its blocks of change, or a flag saying the file is binary and cannot be read this way.
-FIELDS: hunks:E56 [] · binary:bool
-RELATIONS: contains 1→* E56 hunks
-SOURCE: [impact_lib.py](tools/coyodex/impact_lib.py:51)
+MEANING: The end-of-build verdict: every check, its findings, and a fingerprint of the map judged.
+FIELDS: map_path:string · map_sha256:string · legs:E45 [] · verdict:string · advisory_total:int · blocking_total:int
+RELATIONS: contains 1→* E45
+STATES: BLOCKED · INCOMPLETE · ADVISORIES · CLEAN — [finalize.py](tools/coyodex/finalize.py:488)
+SOURCE: [finalize.py](tools/coyodex/finalize.py:86)
 
-**E58 — AnchorRef** *(impact run — transient; collected from the map document at the start of every impact run)*
-SUBDOMAIN: SD8
-MEANING: One place in the code that the map points at, remembered with which element carries it and which of that element's fields it came from.
-FIELDS: eid:string · kind:string · path:path · lo:int ? · hi:int ? · field:string · is_dir:bool · owner:string ?
+**E47 — Provenance** *(provenance.json — collection)*
+SUBDOMAIN: SD7
+MEANING: The record of every build of one project's map, in the order the builds happened.
+FIELDS: project:string PK · repo_path:string · sessions:E48 [] · schema:string
+RELATIONS: contains 1→* E48
+SOURCE: [provenance.py](tools/coyodex/provenance.py:60)
+
+**E48 — SessionEntry** *(provenance.json — embedded)*
+SUBDOMAIN: SD7
+MEANING: One build: when it ran, in which mode, and the code commit it read.
+FIELDS: session_id:string PK · built_at:string · mode:string · code_commit:string ? · code_committed:string ?
+SOURCE: [provenance.py](tools/coyodex/provenance.py:33)
+
+**E49 — AnchorRef** *(projection; gathered from the map's own anchors whenever a change is analysed)*
+SUBDOMAIN: SD7
+MEANING: One code link a map element carries, split into a file and a line span.
+FIELDS: eid:string · kind:string · path:string · lo:int ? · hi:int ? · field:string · is_dir:bool · owner:string ?
+RELATIONS: landsIn *→0..1 E37 {the definition whose line span holds the anchor line is looked up at check time}
 SOURCE: [impact_lib.py](tools/coyodex/impact_lib.py:170)
 
-**E59 — DirectHit** *(impact run — transient; lives only inside an impact file record)*
-SUBDOMAIN: SD8
-MEANING: One map anchor the change actually reaches, with how precisely it was reached — the exact line, the surrounding definition, or only the file.
-FIELDS: eid:string · kind:string · path:path · change:string · resolution:string · field:string · owner:string ? · drift_to:int ? · territory:bool
-RELATIONS: resolves *→1 E58 {one hit is produced per anchor in a changed file, copying that anchor's details rather than keeping a reference to it}
-STATES: deleted · added · modified · drifted — [impact_ripple.py](tools/coyodex/impact_ripple.py:42)
-SOURCE: [impact_lib.py](tools/coyodex/impact_lib.py:278)
+**E50 — DirectHit** *(transient)*
+SUBDOMAIN: SD7
+MEANING: One code link a change really touched, and how tightly the touch was pinned down.
+FIELDS: eid:string FK→E49 · kind:string · path:string · change:string · resolution:string · field:string · owner:string ? · drift_to:int ? · territory:bool
+RELATIONS: resolves *→1 E49
+SOURCE: [impact_lib.py](tools/coyodex/impact_lib.py:289)
 
-**E60 — RippleOptions** *(impact run — transient; passed in per run; the defaults keep the noisy links switched off)*
-SUBDOMAIN: SD8
-MEANING: How far a change is allowed to spread beyond what it directly touches — which weaker kinds of link to follow, and how many hops.
-FIELDS: reads:bool · entity_graph:bool · callgraph:bool · callgraph_depth:int
-SOURCE: [impact_ripple.py](tools/coyodex/impact_ripple.py:56)
-
-**E61 — _Impact** *(impact run — transient; accumulated per run and serialized into the run's result payload)*
-SUBDOMAIN: SD8
-MEANING: The verdict on one map element in a change-impact run — whether the change hit it directly or reached it indirectly, how strongly, and by which path.
-FIELDS: eid:string PK · cause:string · change:string · resolution:string ? · strength:int · distance:int · via:list · files:set
-RELATIONS: consolidates 1→* E59 {built from every direct hit on the same element and then strengthened by the ripple rules, keyed by identifier rather than by a stored reference}
-SOURCE: [impact_ripple.py](tools/coyodex/impact_ripple.py:64)
-
-**E62 — RunResult** *(run directory — transient; its parts are archived separately as profile.json, judge.json and delta.md)*
+**E51 — Graph node** *(projection; built from the map each time a screen is served, never saved)*
 SUBDOMAIN: SD9
-MEANING: One eval run of a rebuilt map — its measurements, its judged scores, its comparison to the blessed baseline, and the verdict that follows.
-FIELDS: project:string PK · profile:E63 · judge:E64 ? · delta:E69 ? · verdict:string
-RELATIONS: contains 1→1 E63 the profile · contains 1→0..1 E64 the judge report · contains 1→0..1 E69 the comparison
-STATES: PASS · DRIFT · REGRESSED · BASELINE — [run.py](eval/tools/coyodex_eval/run.py:34)
-SOURCE: [run.py](eval/tools/coyodex_eval/run.py:45)
+MEANING: One box the browser draws, with its name, its code link, and its shown fields.
+FIELDS: id:string PK · kind:string · name:string · file:string ? · line:int ? · fields:json · parent:string ? · attrs:json [] · dep_kind:string ? · files:string [] · entry_points:json [] · runs_in:string [] · actors:string [] · roles:string [] · store:json ? · states_count:int · states_lines:string []
+SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:28)
 
-**E63 — MapProfile** *(D2.profile.json — collection; written into each run directory and into the blessed baseline, under .coyodex-eval/)*
+**E52 — Graph edge** *(projection)*
 SUBDOMAIN: SD9
-MEANING: Everything measurable about one built map — how big it is, how clean it validates, how well it covers the code — reduced to numbers two runs can be compared on.
-FIELDS: use_cases:int · subsystems:int · subdomains:int · components:int · deps:int · entities:int · edges:int · hp_steps:int · flows:int · security_surfaces:int · validate_ok:bool · validate_problems:int · validate_warnings:int · contradictions:int · advisories:int · audit_warnings:int · l2_claims:int · coverage_flags:int ? · edges_per_component:float ? · granularity_expected:int ? · root_fanout:int ? · max_fanout:int ? · fanout_in_band_pct:float ? · nesting_depth:int ? · subflows:int ? · max_flow_len:int ? · flows_over_band_pct:float ? · entry_points:int ? · external_entry_points:int ? · unclaimed_entry_points:int ? · off_spine_ucs:int ? · entities_in_flows:int ? · entities_in_flows_pct:float ? · auth_surfaces:list · use_case_names:list · entity_names:list
-RELATIONS: measures 1→1 E1 {every count is computed from a loaded map document at scoring time; only the numbers are kept, not the document}
-SOURCE: [profile.py](eval/tools/coyodex_eval/profile.py:37)
+MEANING: One arrow the browser draws, carrying its verb, its counts at each end, and its label.
+FIELDS: src:string FK→E51 · verb:string · dst:string FK→E51 · why:string ? · where:string ? · kind:string ? · src_card:string ? · dst_card:string ? · how:string ? · fk_fields:string [] · fk_side:string ? · keyed_by:string []
+RELATIONS: joins *→1 E51
+SOURCE: [build_graph.py](tools/coyodex/viewer/build_graph.py:72)
 
-**E64 — JudgeReport** *(D2.judge.json — collection; written beside the profile in each run directory and in the blessed baseline)*
-SUBDOMAIN: SD9
-MEANING: The quality signals only a reader can give — how many of the map's risky claims survived a skeptic, and how it scores on each rubric dimension.
-FIELDS: n_claims:int · n_grounded:int · grounding_passrate:float ? · dimensions:E65 [] · overall:float ? · n_worklist:int · n_failures:int · protocol:E68 ? · n_anchor_checked:int · n_anchor_drifted:int · anchor_drift_rate:float ?
-RELATIONS: contains 1→* E65 dimension scores · contains 1→0..1 E68 the judging regime · summarizes 1→* E66 {the pass rate is the majority outcome over the skeptic votes on each risky statement, which are counted and then dropped, never kept in the report}
+**E53 — MapProfile** *(profile.json — collection)*
+SUBDOMAIN: SD10
+MEANING: The countable quality signals of one built map, kept so two maps can be compared.
+FIELDS: use_cases:int · subsystems:int · subdomains:int · components:int · deps:int · entities:int · edges:int · hp_steps:int · flows:int · security_surfaces:int · validate_ok:bool · validate_problems:int · validate_warnings:int · contradictions:int · audit_advisories:int · audit_warnings:int · l2_claims:int · coverage_flags:int ? · granularity_expected:int ?
+RELATIONS: measures 1→1 E1 {every number is counted off the finished map, which stores none of them}
+SOURCE: [profile.py](eval/tools/coyodex_eval/profile.py:39)
+
+**E54 — JudgeReport** *(judge.json — collection)*
+SUBDOMAIN: SD10
+MEANING: The judged quality of one map: how many claims held up, and the rubric scores.
+FIELDS: n_claims:int · n_grounded:int · grounding_passrate:float ? · dimensions:json [] · overall:float ? · n_worklist:int · n_failures:int · protocol:json ? · n_anchor_checked:int · n_anchor_drifted:int · anchor_drift_rate:float ?
+RELATIONS: scores 1→1 E1 {fresh readers vote on a sample of claims, and the map records nothing of the vote}
 SOURCE: [judge.py](eval/tools/coyodex_eval/judge.py:101)
 
-**E65 — DimensionScore** *(dimensions[] — embedded; inside judge.json)*
-SUBDOMAIN: SD9
-MEANING: One rubric dimension's settled score for a map — the middle value of several independent readers, so one outlier cannot swing it.
-FIELDS: dimension:string PK · score:float · n_judges:int
-RELATIONS: medianOf 1→* E67 {the middle value of the individual readers' marks on this rubric axis; their separate judgements are not kept}
-SOURCE: [judge.py](eval/tools/coyodex_eval/judge.py:74)
+**E55 — DeltaReport** *(transient; rendered to a readable report at the end of a scoring run)*
+SUBDOMAIN: SD10
+MEANING: The verdict comparing a new map against the accepted one, check by check.
+FIELDS: verdict:string · gates:json [] · bands:json [] · notes:string [] · judge_bands:json [] · granularity:json ? · tool_delta:string ?
+RELATIONS: compares *→1 E53 {the report holds the two runs' numbers side by side, not the profiles themselves} · compares *→1 E54 {the judged scores are copied in as allowed drops, not linked}
+STATES: PASS · DRIFT · REGRESSED — [compare.py](eval/tools/coyodex_eval/compare.py:38)
+SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:176)
 
-**E66 — GroundingVerdict** *(grounding[] — transient; replayed from the raw verdict file the judging orchestration writes; the aggregated report keeps only the counts)*
+**E56 — RecentsStore** *(serve-recents.json — collection; kept in the reader's home folder; every change reloads it first, so two writers merge instead of overwriting)*
 SUBDOMAIN: SD9
-MEANING: One skeptic's attempt to disprove a claim the map makes — held, refuted, or could not be checked at all — with the line they read.
-FIELDS: claim:string · grounded:bool ? · evidence:string
-SOURCE: [judge.py](eval/tools/coyodex_eval/judge.py:56)
+MEANING: The project folders the reader has opened, kept in order with the newest first.
+FIELDS: path:string · folders:string []
+RELATIONS: resolvesTo *→* E57 {the list keeps directory names as text, and the server turns each one into a served map}
+SOURCE: [recents.py](tools/coyodex/viewer/recents.py:22)
 
-**E67 — RubricVerdict** *(judges[] — transient; replayed from the raw verdict file; only the median survives into judge.json)*
+**E57 — Project** *(transient; the cached tree, screen parcel and symbol list are keyed to one map version and dropped when the map file changes)*
 SUBDOMAIN: SD9
-MEANING: One judge's score for one rubric dimension, with the reason and the line of code backing it.
-FIELDS: dimension:string · score:int · justification:string · evidence:string
-SOURCE: [judge.py](eval/tools/coyodex_eval/judge.py:66)
+MEANING: One map the server is serving, pinned to the commit every code read uses.
+FIELDS: slug:string PK · repo_root:string · map_json:string · commit:string · title:string · goal:string · map_mtime:int ? · tree:E58 ? · view:json ? · symbols:json ?
+RELATIONS: has 1→0..1 E58 · loads *→1 E1 {the server reads the named file from disk on each change, and keeps no link to the loaded document}
+SOURCE: [serve.py](tools/coyodex/viewer/serve.py:67)
 
-**E68 — JudgeProtocol** *(protocol — embedded; one object inside judge.json; absent on reports written before fingerprinting existed)*
+**E58 — FileTreeNode** *(projection; built once per map version from the repository listing and the map)*
 SUBDOMAIN: SD9
-MEANING: The fingerprint of how a map was judged — which model, how many readers, how many claims, which rubric wording — so scores from different regimes are never compared.
-FIELDS: model:string · n_skeptics:int · grounding_cap:int · rubric_sha:string · prompt_version:string
-SOURCE: [judge.py](eval/tools/coyodex_eval/judge.py:81)
+MEANING: One entry in the file browser's tree, saying whether the map covers that path.
+FIELDS: name:string · path:string PK · dir:bool · node:string ? · others:string [] · sel:string ? · cov:string · mapped:int · ref:int · children:E58 [] · ignored:E59 ?
+RELATIONS: contains 1→* E58 · has 1→0..1 E59
+SOURCE: [filetree.py](tools/coyodex/viewer/filetree.py:66)
 
-**E69 — DeltaReport** *(delta.md — transient; rendered into the run's delta.md and printable as JSON; the structure itself is not archived)*
+**E59 — IgnoreNote** *(embedded; carried on the tree's root entry only)*
 SUBDOMAIN: SD9
-MEANING: The verdict on whether a rebuilt map got better or worse than the blessed one — which hard checks failed, which numbers drifted, and what could not be compared.
-FIELDS: verdict:string · gates:E70 [] · bands:E71 [] · notes:list · judge_bands:E72 [] · granularity:E73 ?
-RELATIONS: contains 1→* E70 hard gates · contains 1→* E71 count bands · contains 1→* E72 judge bands · contains 1→0..1 E73 the granularity check
-STATES: PASS · DRIFT · REGRESSED — [compare.py](eval/tools/coyodex_eval/compare.py:41)
-SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:173)
-
-**E70 — GateResult** *(gates[] — embedded; inside the comparison report)*
-SUBDOMAIN: SD9
-MEANING: One must-not-get-worse check and whether the new map passed it.
-FIELDS: name:string PK · passed:bool · detail:string
-SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:130)
-
-**E71 — BandResult** *(bands[] — embedded; inside the comparison report)*
-SUBDOMAIN: SD9
-MEANING: One measured number checked against how far it is allowed to move from the baseline before a human should look.
-FIELDS: metric:string PK · baseline:float · candidate:float · delta_pct:float · allowed_pct:float · within:bool · shrink_only:bool
-SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:137)
-
-**E72 — JudgeBand** *(judge_bands[] — embedded; inside the comparison report)*
-SUBDOMAIN: SD9
-MEANING: One judged quality score checked for a fall against the baseline — a rise is always fine, only a drop counts.
-FIELDS: metric:string PK · baseline:float · candidate:float · drop:float · allowed_drop:float · within:bool
-SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:148)
-
-**E73 — GranularityResult** *(granularity — embedded; one object inside the comparison report)*
-SUBDOMAIN: SD9
-MEANING: How far each map's component count sits from the count the code itself suggests — the fair check on whether a map is drawn at the right zoom.
-FIELDS: expected:int · baseline_components:int · candidate_components:int · baseline_delta_pct:float · candidate_delta_pct:float · allowed_pct:float · within:bool
-SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:158)
-
-**E74 — Thresholds** *(D2.thresholds.json — collection; read from the eval workspace config; global settings merged with per-project overrides)*
-SUBDOMAIN: SD9
-MEANING: The tuning for how strict a comparison is — which checks block, how far each number may drift, and how much a judged score may fall.
-FIELDS: validate_must_not_regress:bool · no_new_contradictions:bool · coverage_flags_may_increase_by:int · auth_surfaces_must_not_drop:bool · bands:dict · judge_bands:dict · granularity_band_pct:float
-SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:91)
+MEANING: What the skip list removed from this tree, so a narrowed tree cannot pass as the whole repository.
+FIELDS: files:int · patterns:string [] · unused:string []
+SOURCE: [filetree.py](tools/coyodex/viewer/filetree.py:48)
 
 ---
 
@@ -805,189 +849,578 @@ SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:91)
 
 | Type | Source | Why |
 |---|---|---|
-| ModelError | tools/coyodex/model.py:31 | an error class raised when a map document is malformed, not a concept the map describes |
-| ImpactError | tools/coyodex/impact_git.py:42 | an error class for a failed git call or an unsafe revision name, not a domain concept |
-| ReconcileError | tools/coyodex/reconcile.py:40 | an error class for a malformed reconcile file, raised at load time so the build fails loudly |
-| Extent | tools/coyodex/impact_lib.py:274 | a type alias for the four-part tuple of one symbol's line span, not a class of its own |
-| Extents | tools/coyodex/impact_git.py:196 | a type alias for the per-file table of symbol line spans, not a class of its own |
-| _Maps | tools/coyodex/impact_ripple.py:77 | a bundle of lookup tables built once per impact run so the ripple rules can be applied quickly — an index, not a concept |
-| _Dir | tools/coyodex/viewer/filetree.py:131 | a mutable scratch folder used only while nesting file paths into a tree, frozen into FileTreeNode at the end |
-| Judge | eval/tools/coyodex_eval/judge.py:139 | the injection seam standing in for the model that reads the code — an interface, so tests can pass a fake |
-| PrecomputedJudge | eval/tools/coyodex_eval/judge.py:266 | an adapter that replays verdicts produced outside the tool through the same aggregation path, not a data concept |
+| ModelError | tools/coyodex/model.py:33 | An error raised when a map file has the wrong shape, so it carries no map data. |
+| ReconcileError | tools/coyodex/reconcile.py:50 | An error raised when the lead's assignment file is malformed. |
+| ImpactError | tools/coyodex/impact_git.py:43 | An error raised when a change cannot be compared against the map's pinned commit. |
+| WalkResult | tools/coyodex/preindex_lib.py:156 | The file list one scan produced, used immediately and then dropped. |
+| ImportRef | tools/coyodex/preindex_lib.py:321 | One import line the pre-index notes as a hint; the map stores no such row. |
+| IgnoreSpec | tools/coyodex/ignorefile.py:63 | A parsed settings file saying which code the map is not meant to describe. |
+| IgnoreReport | tools/coyodex/ignorefile.py:99 | A tally of what the skip list did on one scan, printed and forgotten. |
+| Pin | tools/coyodex/scope.py:38 | The commit and the uncommitted files, read fresh from version control each run. |
+| FlowStep (parsed) | tools/coyodex/grammar.py:577 | A step shape for the retired text reader; the map's own step replaced it. |
+| Flow (parsed) | tools/coyodex/grammar.py:591 | A job shape for the retired text reader, kept beside the parsed step. |
+| Hunk | tools/coyodex/impact_lib.py:36 | One block of changed lines inside a file comparison. |
+| ParsedDiff | tools/coyodex/impact_lib.py:51 | The blocks of one file comparison, held only while the comparison runs. |
+| FileFrame | tools/coyodex/impact_lib.py:94 | Which lines of one file a change reaches, computed and discarded. |
+| Change | tools/coyodex/impact_git.py:69 | One changed file with its status, read straight from version control. |
+| ImpactFile | tools/coyodex/impact_git.py:176 | A wrapper holding one changed file beside the code links it touched. |
+| ImpactCore | tools/coyodex/impact_git.py:185 | A wrapper holding every changed file of one comparison. |
+| ClaimTarget | tools/coyodex/audit_model.py:170 | Which map element a claim is about, worked out in order to correct it. |
+| ClaimMatch | tools/coyodex/audit_model.py:185 | Whether a claim resolved to exactly one element, or to none, or to several. |
+| HPStep | tools/coyodex/audit_model.py:477 | A walk step with its citations pulled out, used only while checking order. |
+| RuleStepLink | tools/coyodex/validate_model.py:785 | A computed link from a decision to a job step, derived on every read. |
+| VerdictLint | tools/coyodex/grounding.py:733 | The answer of a shape check over the skeptics' files, printed and dropped. |
+| SetDirective | tools/coyodex/reconcile.py:75 | One line of the lead's assignment file, already covered by the file itself. |
+| KeepEdgeDirective | tools/coyodex/reconcile.py:110 | One recorded choice about which duplicate arrow survives a rebuild. |
+| AnchorDirective | tools/coyodex/reconcile.py:126 | One recorded correction of a code link, replayed on every rebuild. |
+| Proposal | tools/coyodex/balance_lib.py:451 | A suggested split for a crowded diagram, offered to the author and dropped. |
+| HeadingSpec | tools/coyodex/records.py:73 | The reading rule for one authored heading, a setting rather than map data. |
+| Finding (prose) | tools/coyodex/prose.py:143 | One readability observation about one sentence of the map. |
+| ArrayDiff | tools/coyodex/mapdiff.py:63 | One list's changes between two maps, shown once and not kept. |
+| DiffRow | tools/coyodex/viewer/diffmap.py:15 | One line of a file comparison as the browser shows it. |
+| FeatureIndex | tools/coyodex/features.py:117 | Everything the Features screen needs, worked out from the map on each request. |
+| GraphDict | tools/coyodex/viewer/build_graph.py:116 | The whole parcel of data one screen receives, an envelope around the boxes. |
+| ViewBundle | tools/coyodex/viewer/gen_viewer.py:3163 | The pre-drawn diagrams and data one served map hands the browser, all of it derived. |
+| Handler | tools/coyodex/viewer/serve.py:567 | The web server's request handling, which is behaviour rather than recorded data. |
+| _FileTreeOptional | tools/coyodex/viewer/filetree.py:59 | A typing workaround splitting out the one key only the tree's root entry carries. |
+| _Dir | tools/coyodex/viewer/filetree.py:159 | A changeable folder used only while the file tree is being assembled. |
+| Turn | eval/tools/coyodex_eval/transcript.py:162 | One message of a build conversation, read only to score how the build went. |
+| Usage | eval/tools/coyodex_eval/transcript.py:105 | The token counts one reply was billed for, part of the cost report. |
+| Actor | eval/tools/coyodex_eval/cost.py:105 | One participant in a build, counted for cost rather than mapped. |
+| MapFacts | eval/tools/coyodex_eval/cost.py:373 | A rough size of the map, read for cost per row rather than for meaning. |
+| Scorecard | eval/tools/coyodex_eval/process_scorecard.py:133 | Every score for one build conversation, about the process and not the product. |
+| Assertion | eval/tools/coyodex_eval/process_scorecard.py:106 | One scored line of a build conversation, a good count over an opportunity count. |
+| Planted | eval/tools/coyodex_eval/mutate.py:59 | One deliberate mistake planted to test whether the skeptics catch it. |
+| Thresholds | eval/tools/coyodex_eval/compare.py:91 | The settings deciding how much a map may move before it counts as worse. |
+| GranularityResult | eval/tools/coyodex_eval/compare.py:161 | One check inside the comparison verdict, already carried by that verdict. |
+| GroundingVerdict | eval/tools/coyodex_eval/judge.py:56 | One skeptic's vote on one claim, folded into the judged report. |
+| DimensionScore | eval/tools/coyodex_eval/judge.py:74 | One rubric score inside the judged report, carried by that report. |
+| RunResult | eval/tools/coyodex_eval/run.py:45 | A wrapper holding one scoring run's three results together. |
 
 ---
 
 ## T6 — Use-case flows
 
-**UC2 — Build a baseline map of a repo**
-1. Coding agent → C1 : reads the method's dispatch doc and picks the Build mode · no map file on disk means no baseline, even when git history still holds a committed copy
-2. C30 → C9 : routes the pre-index command so the code tree is sized and located before any reading starts @ [cli.py](tools/coyodex/cli.py:81)
-3. C9 → D1 : lists the repo's tracked files and reads per-file churn from the commit history @ [preindex_lib.py](tools/coyodex/preindex_lib.py:172)
-4. C9 → E37 : emits a symbol row for every class and function definition it parses @ [preindex_lib.py](tools/coyodex/preindex_lib.py:277)
-5. C9 → D2 : writes the pre-index artifact — weight tree, symbols, expected component count, coverage — beside the map @ [preindex.py](tools/coyodex/preindex.py:432) · advisory input the agent reconciles, never rows copied into the map
-6. Coding agent → C7 : self-checks each harvest and trace fragment before returning it · the agents fan out over the sized tree and each returns structured rows, so a bad row dies in its own author's turn instead of at the lead's validate
-7. C7 → C10 : runs the model rulebook's anchor, edge and flow checks over the one fragment @ [lint_fragment.py](tools/coyodex/lint_fragment.py:117)
-8. C7 → C14 : confirms every anchor in the fragment resolves to a real file in the analyzed repo @ [lint_fragment.py](tools/coyodex/lint_fragment.py:150)
-9. C6 → C3 : parses each returned fragment as a partial model, so one malformed fragment fails alone and by name @ [assemble.py](tools/coyodex/assemble.py:139)
-10. C6 → C8 : applies the synthesis assignments — subsystem, subdomain, runs_in, dropped edges — after the merge @ [assemble.py](tools/coyodex/assemble.py:456) · a re-assemble re-applies the same file, so the assignments survive a rebuild
-11. C6 → E1 : serializes the merged fragments into the canonical map document @ [assemble.py](tools/coyodex/assemble.py:474)
-12. C30 → C20 : ⟨runs SF10 — Run the map gates⟩
-13. C8 → C12 : re-derives the auditor's grounding worklist so each fresh-context skeptic's verdict pairs with the claim it answers @ [fix.py](tools/coyodex/fix.py:85) · the skeptics read the code themselves and report the true call site; this pass only judges the difference
-14. C8 → E1 : rewrites each drifted anchor in the stored map and re-serializes it @ [fix.py](tools/coyodex/fix.py:42)
-15. Coding agent → C41 : stamps the session it is running in into the map folder's provenance file, so the map can later be paired with the conversation that produced it
-16. Coding agent → D1 : commits the model, its markdown view and the pre-index into the repo's map folder, pinned to the build commit
+**UC1 — Install the coyodex skill into the coding agents**
+1. Map reader → C4 : runs the install command in a fresh clone
+2. C4 → D2 : checks the machine has Python 3.10 or newer @ [Makefile](Makefile:31) · stops with a plain message when Python is missing or older
+3. C4 → D2 : creates a private Python environment inside the clone, so nothing lands in the machine's own Python @ [Makefile](Makefile:33)
+4. C4 → D7 : installs coyodex into that private environment as an editable copy @ [Makefile](Makefile:40) · editable, so later edits need no reinstall
+5. C4 → C77 : reads the shipped skill file and replaces its placeholder with this clone's absolute path @ [Makefile](Makefile:58)
+6. C4 → D12 : writes the finished skill into the Claude Code skills folder @ [Makefile](Makefile:58)
+7. C4 → D13 : writes the same skill into the shared cross-agent skills folder Codex reads @ [Makefile](Makefile:58)
+8. C4 → Map reader : prints one line per skills folder, naming the clone the installed skill now points at @ [Makefile](Makefile:59)
 
-**UC6 — Analyze a code change against the map**
-1. Coding agent → C1 : reads the change-impact doc, which scopes the work to the diff against the pinned baseline instead of a rebuild
-2. Coding agent → E1 : reads the baseline's pinned commit off the stored map — the left end of every diff · the baseline is left untouched here; it lags the code on purpose, and that lag is exactly what the report describes
-3. Coding agent → D1 : diffs the pin against the working tree with rename detection, and lists the untracked files on their own · the right end is the working tree, so uncommitted edits count; a plain diff omits untracked files, so those are listed separately and treated as added
-4. Coding agent → E10 : places every changed file on at least the component that owns it, sharpening to an entity or a flow step only where reading the code allows · the report states the resolution each change reached rather than faking step-level precision
-5. Coding agent → E12 : follows each changed element's backbone links and flow steps outward to what they reach, instead of asking of every baseline element whether it was affected · tracing stops honestly at an injection seam, where callers hit a port rather than the implementation
-6. Coding agent → D2 : writes the report under `.coyodex/analysis-changes/<date>.md`, carrying the exact was → now text of every element it touches · patch-complete on purpose — accept transcribes this text and reads no code of its own
-7. Coding agent → Developer : hands back a report that is on disk but uncommitted, so it survives a lost session and can be reviewed, shared or accepted later
+**UC2 — Start the local map server**
+1. Map reader → C4 : runs the start command, which serves the maps on the chosen port and opens the page @ [Makefile](Makefile:119)
+2. C4 → C43 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C43 → C43 : reads the port and the open-a-browser choice off the command line @ [serve.py](tools/coyodex/viewer/serve.py:838)
+4. C43 → C43 : reads the remembered project folders from the small file in the reader's home folder @ [recents.py](tools/coyodex/viewer/recents.py:34) · no disk scan — the served set is exactly this list
+5. C43 → E1 : loads each remembered project's map for its title, its goal and the commit it is pinned to @ [serve.py](tools/coyodex/viewer/serve.py:123)
+6. C43 → C43 : binds the server to the loopback address on that port, so only this machine can reach it @ [serve.py](tools/coyodex/viewer/serve.py:800)
+7. C43 → D11 : opens the landing page in the reader's default browser @ [serve.py](tools/coyodex/viewer/serve.py:806) · only when the start command asked for it
+8. C43 → D11 : sends the landing page, one self-contained document that pulls in no outside file @ [serve.py](tools/coyodex/viewer/serve.py:583)
+9. C43 → Map reader : answers the page's request with one card per remembered project: its title, its pin, and whether its code can be read @ [serve.py](tools/coyodex/viewer/serve.py:620)
+10. C43 → C43 : writes the folder the reader adds back to that file, merging with what is on disk so a parallel writer is never lost @ [recents.py](tools/coyodex/viewer/recents.py:44)
+11. C43 → C43 : keeps answering requests until Ctrl-C, then says it stopped and closes the socket @ [serve.py](tools/coyodex/viewer/serve.py:808)
 
-**UC7 — Accept a change into the baseline**
-1. Coding agent → C1 : reads the accept half of the change-impact method, which forbids any fresh reading of code at accept time · if accept finds itself inferring, the report was incomplete — regenerate the report rather than invent here
-2. Coding agent → E1 : transcribes the report's was → now blocks into the stored map as surgical field edits, never a rebuild · the new baseline is the old one patched in place, so its own diff shows real semantic deltas and no wording drift
-3. Coding agent → D1 : reads the new code commit and its date, after checking that the code itself is committed · the pin gate: the map and the report are expected to be dirty — that is what this step commits — and a `-dirty` pin is recorded only if the developer picks that option
-4. Coding agent → E1 : re-pins the map to that commit, so the baseline again describes exactly one past commit
-5. Coding agent → C41 : re-stamps the map's provenance with this accept session and the repo's current sha
-6. Coding agent → C30 : re-runs the map gates over the patched map, because a hand patch can introduce a contradiction the report never had
-7. C30 → C20 : ⟨runs SF10 — Run the map gates⟩
-8. C30 → C9 : rebuilds the code pre-index at the new pin, so its line anchors match the re-pinned map @ [cli.py](tools/coyodex/cli.py:81) · only when the map already has a pre-index; skipping it leaves the viewer's symbol search on stale lines for exactly the files the change touched
-9. Coding agent → D1 : commits the map, the markdown view, the pre-index, the provenance and the report together with the code · the commit IS the acceptance — it is what keeps the baseline pin aligned with the code commit
-10. Coding agent → Developer : reports the local URL that opens the re-pinned map in the map server
+**UC21 — Open a project's map in a browser**
+1. Map reader → C43 : clicks a project card, which opens that project's own map address @ [serve.py](tools/coyodex/viewer/serve.py:978)
+2. C43 → D11 : sends the viewer shell, the same document for every project @ [serve.py](tools/coyodex/viewer/serve.py:671)
+3. C55 → C43 : fetches this map's whole view bundle before anything else on the page runs @ [viewer.js](tools/coyodex/viewer/viewer.js:154)
+4. C43 → C1 : ⟨runs SF2 — Load the map into memory⟩
+5. C45 → E51 : turns every map element into a graph box carrying its name, its kind, its source line and its parent @ [views.py](tools/coyodex/views.py:730)
+6. C45 → E52 : turns every recorded relation into a graph arrow carrying its verb and its call site @ [views.py](tools/coyodex/views.py:1183)
+7. C44 → C44 : renders that graph into one bundle holding every diagram, flow and colour @ [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3264)
+8. C43 → C55 : answers the fetch with the finished bundle, and keeps it for the next reader of the same map @ [serve.py](tools/coyodex/viewer/serve.py:682)
+9. C55 → C55 : copies the bundle into the page's own data, which every view below reads @ [viewer.js](tools/coyodex/viewer/viewer.js:156)
+10. C55 → C57 : opens the first view and records it as the first place in the trail @ [viewer.js](tools/coyodex/viewer/viewer.js:11694)
+11. C55 → D8 : draws that view's diagram @ [viewer.js](tools/coyodex/viewer/viewer.js:8953)
+12. C55 → D9 : wraps the drawing so the reader can pan it and zoom it @ [viewer.js](tools/coyodex/viewer/viewer.js:9025)
+13. C55 → Map reader : puts the drawn view on screen, ready to click into @ [viewer.js](tools/coyodex/viewer/viewer.js:8961)
 
-**UC8 — Change the map on request**
-1. Coding agent → C1 : reads the dispatch program's direct-map-change branch, which sends it to edit the stored map surgically instead of rebuilding it
-2. C13 → Coding agent : hands over a ready-to-apply split as an exact direct-map-change block — the new group's id and every member to move onto it @ [balance.py](tools/coyodex/balance.py:92) · only when the request came out of the balance report's over-dense-diagram proposal; the block is a starting point, never applied for the agent
-3. Coding agent → C30 : runs the read-only lookup for every element the request names, before touching anything
-4. C30 → C31 : hands the lookup to the model reader, filling in the standard map location when none was named @ [cli.py](tools/coyodex/cli.py:99)
-5. C31 → E1 : reads the stored map document off disk and parses it, then pulls out the named element's record, its links and its members @ [dump.py](tools/coyodex/dump.py:153)
-6. C31 → Coding agent : prints the resolved slice as JSON, so the edit is made against what the map actually stores @ [dump.py](tools/coyodex/dump.py:177)
-7. Coding agent → E1 : rewrites only the fields and arrays the request names, and refuses any element the code does not back · an added use case stands only when real code and a traced flow back it; otherwise the agent says so and adds nothing
-8. Coding agent → C8 : runs the bulk-edit toolkit for the corrections that must not be hand-scripted — dropping a refuted link and healing the flow steps that rode it · the toolkit matches a link on its full source-verb-target triple, so a paired link never swaps
-9. C8 → E1 : writes the edited map back through the one canonical serializer, so the file stays byte-stable and valid by construction @ [fix.py](tools/coyodex/fix.py:42)
-10. C30 → C20 : ⟨runs SF10 — Run the map gates⟩
-11. Coding agent → D1 : commits the edited model together with its regenerated markdown view
-12. D1 → Coding agent : hands back the commit that now pins the changed map beside the code it describes
+**UC25 — Report what a code change did to the map**
+1. Coding agent → C75 : opens the dispatch rules to decide which mode this invocation is
+2. C75 → C4 : runs the up-front briefing, before any mode is chosen @ [dispatch.md](method/dispatch.md:19)
+3. C4 → C25 : asks for the code paths that are changed but not committed @ [scope.py](tools/coyodex/scope.py:68)
+4. C25 → D1 : runs the version-control status command and returns the uncommitted paths @ [provenance.py](tools/coyodex/provenance.py:159) · coyodex's own folders are excluded, so its churn never makes the tree read as dirty
+5. C4 → Coding agent : prints the briefing: the file counts, the ignore patterns and what the pin will mean @ [scope.py](tools/coyodex/scope.py:172)
+6. C75 → E1 : reads the baseline map's pin, the commit the comparison starts from @ [dispatch.md](method/dispatch.md:132)
+7. C75 → D1 : compares the pin against the working tree and finds the code has moved on @ [dispatch.md](method/dispatch.md:139) · uncommitted edits count as moved on, and a dirty tree is the normal case here
+8. C75 → D1 : diffs the pin against the working tree, then adds the untracked files as added @ [change-impact.md](method/change-impact.md:57) · a plain diff omits untracked files, so they are listed separately
+9. C75 → C3 : asks the read-only reader which map element claims each changed file @ [change-impact.md](method/change-impact.md:67) · every change is placed at component level at least, and sharpened only where reading allows
+10. C3 → C1 : ⟨runs SF2 — Load the map into memory⟩
+11. C3 → E1 : reads the element records and the edges into and out of each claiming element @ [dump.py](tools/coyodex/dump.py:139)
+12. C75 → C3 : follows those edges outward to the downstream elements and happy-path steps the change reaches @ [change-impact.md](method/change-impact.md:64) · the walk is redone from the diff every run; nothing precomputed is consulted
+13. C75 → Coding agent : hands back each touched element's exact was-to-now text, classified added, modified or deleted @ [change-impact.md](method/change-impact.md:83) · the report is written to disk and left uncommitted; the baseline itself changes only at accept
 
-**UC11 — See what a change ripples to in the viewer**
-1. Developer → C32 : opens the impact explorer and picks the two commits to compare, or the one-click map-commit-to-working-tree range
-2. C32 → C24 : asks the local map server to project that range onto the map, switching the call-graph ripple on when the deepest setting is armed @ [viewer.js](tools/coyodex/viewer/viewer.js:6851)
-3. C24 → C40 : hands the pair of refs to the impact engine, which resolves every map anchor the diff touches and ripples once @ [serve.py](tools/coyodex/viewer/serve.py:370)
-4. C32 → E61 : reads back each element's verdict — hit directly or reached by ripple, how strongly, at which rung and by which path — and keeps the ones inside the chosen ripple depth @ [viewer.js](tools/coyodex/viewer/viewer.js:6720)
-5. C32 → C38 : marks every changed file in the browser and re-opens the file already on screen so it flips into diff mode @ [viewer.js](tools/coyodex/viewer/viewer.js:6866)
-6. C32 → C24 : asks for that file's inline diff over the armed range instead of its plain source @ [viewer.js](tools/coyodex/viewer/viewer.js:5801)
-7. C24 → C25 : turns git's unified diff for that one file into numbered add, delete and context rows @ [serve.py](tools/coyodex/viewer/serve.py:331)
-8. C32 → C37 : takes over the info pane with everything the diff reached, grouped by kind and clickable through to each element @ [viewer.js](tools/coyodex/viewer/viewer.js:6805)
-9. C32 → C23 : lands the reader on the view that carries the overlay and redraws it @ [viewer.js](tools/coyodex/viewer/viewer.js:6867)
-10. C32 → Developer : lights up every touched box with its change badge, each group box carrying whatever its subtree was hit by @ [viewer.js](tools/coyodex/viewer/viewer.js:2132)
+**UC22 — Follow the product's story end to end**
+1. Map reader → C55 : opens this project's map page in the browser
+2. C55 → C43 : ⟨runs SF11 — Build one view and send it to the browser⟩
+3. C17 → E6 : joins every use case onto the feature it belongs to @ [features.py](tools/coyodex/features.py:295)
+4. C17 → E9 : walks the happy path to fix where each feature sits in the story @ [features.py](tools/coyodex/features.py:230)
+5. C17 → E5 : orders every feature into the one story column @ [features.py](tools/coyodex/features.py:222)
+6. Map reader → C57 : clicks the Features tab @ [viewer.js](tools/coyodex/viewer/viewer.js:4342)
+7. C57 → C55 : re-renders the page for the state the trail now points at @ [viewer.js](tools/coyodex/viewer/viewer.js:4331)
+8. C55 → C56 : draws the Features page @ [viewer.js](tools/coyodex/viewer/viewer.js:8897)
+9. C56 → Map reader : shows one column holding every feature in story order, with the actors beside it @ [viewer.js](tools/coyodex/viewer/viewer.js:7766)
+10. Map reader → C56 : clicks the use-case pill on one feature's card
+11. C56 → C57 : pushes that feature's own page onto the trail @ [viewer.js](tools/coyodex/viewer/viewer.js:7660)
+12. C55 → C56 : lists that feature's use cases @ [viewer.js](tools/coyodex/viewer/viewer.js:8907)
 
-**UC9 — Check the method's quality**
-1. Method maintainer → C45 : runs the method-quality eval on a project that already has a committed map
-2. Coding agent → C45 : hands over the map it rebuilt at the baseline's pinned commit, with the sha256 taken the moment the build finished · the rebuild happens in an isolated checkout that cannot see the baseline map, earlier eval output or the gate settings, so its numbers cannot steer the build
-3. C45 → D2 : re-hashes the fresh map from disk and refuses the whole run when a single byte moved after the build @ [run.py](eval/tools/coyodex_eval/run.py:213) · a flag that lost its value fails closed rather than silently skipping the guard
-4. C45 → E63 : reduces the frozen fresh map to the deterministic signals two runs can be compared on ⟨runs SF50 — Measure a map's deterministic quality signals⟩
-5. C45 → E63 : measures the project's committed baseline map through exactly the same reduction, so the two sides are never scored differently ⟨runs SF50 — Measure a map's deterministic quality signals⟩ · only when the baseline's cached scoring is missing or was produced under an older judging regime; otherwise the cached profile and judge report are read straight back from the eval folder (eval/tools/coyodex_eval/run.py:77)
-6. Coding agent → C45 : hands over the raw votes its judge sub-agents produced — one row per skeptic per claim, plus each judge's rubric scores · the eval itself never calls a model; the judging runs in fresh-context sub-agents on a pinned model
-7. C45 → C46 : passes those raw votes to the scoring half to be aggregated by the same tested math a live judge would go through @ [run.py](eval/tools/coyodex_eval/run.py:362)
-8. C46 → E64 : settles each risky claim by majority of the usable votes, takes the median of every rubric dimension, and records which judging regime produced the scores @ [judge.py](eval/tools/coyodex_eval/judge.py:257) · a skeptic that could not check the code counts as a failure, excluded from the pass-rate denominator and never counted as a refutation
-9. C45 → C46 : hands the fresh profile and judge report to the comparison, alongside the baseline's own @ [run.py](eval/tools/coyodex_eval/run.py:67)
-10. C46 → E69 : applies the baseline-relative hard checks and the drift bands and settles on one verdict — a failed check is a regression, a breached band is drift, otherwise it passed @ [compare.py](eval/tools/coyodex_eval/compare.py:332)
-11. C45 → D2 : archives the whole run — the frozen map, its generated views, the profile, the judge report and the written-up delta @ [run.py](eval/tools/coyodex_eval/run.py:161) · the historical record a later baseline is blessed from
-12. C45 → Method maintainer : reports the verdict with the checks and bands that moved, and exits on a code an unattended run can gate on @ [run.py](eval/tools/coyodex_eval/run.py:255)
+**UC23 — Read the code under a box**
+1. Map reader → C56 : clicks the code link a box shows
+2. C45 → E13 : reads the component's source anchor, the line that code link names @ [views.py](tools/coyodex/views.py:1122) · derived once, when the view bundle is built
+3. C56 → C58 : hands that file and line to the source column @ [viewer.js](tools/coyodex/viewer/viewer.js:202)
+4. C58 → C43 : ⟨runs SF10 — Read a file out of git at the map's commit⟩
+5. C58 → D10 : colours the file's text with highlight.js @ [viewer.js](tools/coyodex/viewer/viewer.js:10186)
+6. C58 → Map reader : shows the file scrolled to the line the box named @ [viewer.js](tools/coyodex/viewer/viewer.js:10204)
+7. Map reader → C58 : opens the file browser to pick another file
+8. C58 → C43 : asks for the repository's file tree at the map's commit @ [viewer.js](tools/coyodex/viewer/viewer.js:9712)
+9. C43 → C46 : nests the commit's files into folders and marks the ones the map covers @ [serve.py](tools/coyodex/viewer/serve.py:436)
 
-**UC10 — Back up a map with its build transcript**
-1. Developer → C41 : later, from any session, runs the backup against the mapped repo, choosing whether to move the map out or leave a copy behind
-2. C41 → D2 : reads the stamped provenance back for the project name, the build time that names the backup folder, and every session that touched the map @ [map_backup.py](tools/map_backup.py:115) · a corrupt provenance file stops the backup instead of being silently ignored
-3. C41 → D3 : locates each stamped session's conversation in the agent's session store by globbing for that id @ [map_backup.py](tools/map_backup.py:217) · an unstamped map can still be recovered on request by scanning the store for the conversation that actually wrote a map file (tools/map_backup.py:458)
-4. C41 → D2 : copies the whole map folder — the map document and its generated views — into the bundle, without parsing it @ [map_backup.py](tools/map_backup.py:507) · a move with no conversation to bundle is refused before this point, so the map is never deleted without the conversation that produced it (tools/map_backup.py:477)
-5. C41 → D3 : copies each conversation transcript, and any sub-agent folder beside it, into the bundle @ [map_backup.py](tools/map_backup.py:365) · always copied, never moved — the store belongs to the running agent
-6. C41 → D2 : writes the bundle manifest — the project, the build time, whether the map was moved or copied, and exactly which sessions were bundled @ [map_backup.py](tools/map_backup.py:530)
-7. C41 → D2 : removes the source map folder only now, once its copy is safely in the bundle @ [map_backup.py](tools/map_backup.py:536) · skipped when the developer asked to keep the map in place
-8. C41 → Developer : reports the bundle path — the map paired with the exact conversation that produced it @ [map_backup.py](tools/map_backup.py:541)
+**UC24 — Open an element's source in the editor**
+1. Map reader → C58 : clicks the open-outside arrow beside the file the source column shows
+2. C45 → E13 : reads the component's own files, the paths a source link points at @ [views.py](tools/coyodex/views.py:1124) · derived once, when the view bundle is built
+3. C44 → D1 : derives the project's GitHub address from the repository's origin remote @ [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:121)
+4. C58 → Map reader : asks the reader to pick an editor and confirm the repository root @ [viewer.js](tools/coyodex/viewer/viewer.js:10722) · only the first time, before any source is opened outside
+5. C58 → D16 : opens the file at that line in the chosen editor through its URL scheme @ [viewer.js](tools/coyodex/viewer/viewer.js:10729)
+6. C58 → D15 : opens the file on GitHub at the map's commit @ [viewer.js](tools/coyodex/viewer/viewer.js:10732) · the fallback when no editor is chosen or its scheme is not allowed
 
-**UC1 — Install the coyodex skill**
-1. Developer → C2 : runs `make install` in the clone, which drops the skill manifest into every coding agent's skills folder with this clone's path baked in
-2. Developer → C30 : installs the repo into a repo-local virtualenv that holds the `coyodex` command · the same `make install` run does this first, so one command covers both the skill and the tools
-3. Coding agent → C2 : picks up the installed `/coyodex` skill and reads its manifest
-4. C2 → Coding agent : hands back the clone's absolute path as the one place the method docs and tools live · install substituted that path for the `__COYODEX_HOME__` placeholder, so nothing has to be looked up at run time
-5. C2 → C1 : sends the agent into the method's dispatch doc in the clone, which picks build / analyze / accept @ [SKILL.md](skill/coyodex/SKILL.md:28)
-6. C2 → C30 : points every tool run at the clone's virtualenv `coyodex` command @ [SKILL.md](skill/coyodex/SKILL.md:24)
+**UC3 — Brief the reader on what will be analysed**
+1. Coding agent → C4 : runs the scope briefing on the repo before any other work
+2. C4 → C33 : ⟨runs SF20 — Walk the repo for the files that may be analysed⟩
+3. C4 → C4 : names each ignore pattern with the number of files it removed @ [scope.py](tools/coyodex/scope.py:131) · only when the ignore file holds at least one usable pattern
+4. C4 → C4 : warns when a folder inside the analysed set holds a previous map @ [scope.py](tools/coyodex/scope.py:115) · keyed on a folder that contains project-map.json or project-map.md, not on its name
+5. C4 → C25 : asks for the code paths that are changed but not committed @ [scope.py](tools/coyodex/scope.py:68)
+6. C25 → C4 : returns those paths, with coyodex's own output folders left out @ [provenance.py](tools/coyodex/provenance.py:160)
+7. C4 → D1 : reads HEAD's short sha and its date, for the commit the map will name @ [scope.py](tools/coyodex/scope.py:62)
+8. C4 → Coding agent : prints the file count, what each exclusion removed, and what the pin will mean @ [scope.py](tools/coyodex/scope.py:172) · the agent must show this text to the reader unchanged
 
-**UC3 — Start the local map server**
-1. Developer → C30 : runs `make start`, which launches `coyodex serve --port 8765 --open` from the repo-local virtualenv
-2. C30 → C24 : hands the `serve` command line to the map server @ [cli.py](tools/coyodex/cli.py:93)
-3. C24 → C25 : asks the recents store for the project folders opened before @ [serve.py](tools/coyodex/viewer/serve.py:726)
-4. C25 → E51 : fills the recents store with the remembered project folders @ [recents.py](tools/coyodex/viewer/recents.py:30)
-5. C25 → D2 : reads the remembered-projects file out of the user's home folder @ [recents.py](tools/coyodex/viewer/recents.py:34) · a missing or unreadable file yields an empty list, so a first start simply shows no cards
-6. C24 → D2 : reads each remembered folder's map file to see which projects can still be served @ [serve.py](tools/coyodex/viewer/serve.py:121) · a folder whose map is gone or unloadable stays in the list but is not served
-7. C24 → D6 : opens the landing page in the developer's browser as the server starts listening on 127.0.0.1 @ [serve.py](tools/coyodex/viewer/serve.py:740) · only with `--open`, which `make start` passes
-8. C24 → D6 : returns the landing page, one card per remembered project @ [serve.py](tools/coyodex/viewer/serve.py:518)
-9. C24 → Developer : shows the developer a landing page listing every project they have mapped
+**UC4 — Declare code the map should not describe**
+1. Map reader → C4 : lists a fixture or vendored tree in the ignore file, one pattern per line
+2. C4 → C4 : reads a leading exclamation mark as a negation, and skips blank and comment lines @ [ignorefile.py](tools/coyodex/ignorefile.py:159)
+3. C4 → C4 : drops a line that carries a trailing comment and reports it as unusable @ [ignorefile.py](tools/coyodex/ignorefile.py:169) · a hash opens a comment only at the start of a line, so `pattern  # why` is one literal pattern
+4. C4 → C4 : matches a wildcard-free pattern against that folder and everything beneath it @ [pathmatch.py](tools/coyodex/pathmatch.py:52)
+5. C4 → C4 : keeps the last rule that matched, so a later negation puts a file back @ [ignorefile.py](tools/coyodex/ignorefile.py:88)
+6. C33 → C33 : ⟨runs SF20 — Walk the repo for the files that may be analysed⟩
+7. C33 → E38 : works out each folder's expected component count over the narrowed tree @ [preindex_lib.py](tools/coyodex/preindex_lib.py:625)
+8. C33 → Map reader : says on every pre-index run how many files the patterns removed, and which pattern removed nothing @ [preindex.py](tools/coyodex/preindex.py:610)
+9. C13 → Map reader : discloses the same per-pattern narrowing on every validate run @ [validate_analysis.py](tools/coyodex/validate_analysis.py:328) · unconditional, so the cheap check a lead runs most still carries the disclosure
 
-**UC4 — Explore a map top-down**
-1. Developer → C23 : opens the project's map in the browser
-2. C23 → C22 : ⟨runs SF20 — Open a served map in the browser⟩
-3. C23 → Developer : writes the map's title, pinned commit and one-line goal into the page header @ [viewer.js](tools/coyodex/viewer/viewer.js:170)
-4. C23 → D16 : turns the pre-rendered diagram source for this altitude into a drawn SVG @ [viewer.js](tools/coyodex/viewer/viewer.js:4562) · a source that fails to draw degrades to a message instead of freezing the view
-5. C23 → D17 : makes the drawn diagram pannable and zoomable, fitted to the pane @ [viewer.js](tools/coyodex/viewer/viewer.js:4626)
-6. C23 → Developer : shows this level's screen of boxes — the Happy Path, the context or the subsystem map @ [viewer.js](tools/coyodex/viewer/viewer.js:4570)
-7. Developer → C23 : drills a box to open the level beneath it
-8. C23 → Developer : leaves a trail of the levels descended, each step back up clickable @ [viewer.js](tools/coyodex/viewer/viewer.js:3961)
-9. Developer → C23 : clicks a box on the level below to read what it is
-10. C23 → C37 : hands the clicked element to the info pane beside the diagram @ [viewer.js](tools/coyodex/viewer/viewer.js:2266)
-11. C37 → E41 : reads that element's stored name, type and annotation @ [viewer.js](tools/coyodex/viewer/viewer.js:1072)
-12. C37 → Developer : shows the element's plain-language purpose with its type and its related elements @ [viewer.js](tools/coyodex/viewer/viewer.js:1121)
+**UC5 — Size the code tree before choosing altitude**
+1. Coding agent → C33 : runs the pre-index to weigh every folder before choosing the map's altitude
+2. C33 → C33 : ⟨runs SF20 — Walk the repo for the files that may be analysed⟩
+3. C33 → D1 : launches one git log pass and counts the commits that touched each file @ [preindex_lib.py](tools/coyodex/preindex_lib.py:289)
+4. C33 → C33 : adds each file's lines, its count and its churn into every folder above it @ [preindex.py](tools/coyodex/preindex.py:96) · the folders are then ordered heaviest first
+5. C33 → D4 : builds the parser for the file's language from the language pack @ [preindex_lib.py](tools/coyodex/preindex_lib.py:391) · Python is read with the standard library instead, so it needs no pack
+6. C33 → D3 : parses the file and collects every class and function definition with its line span @ [preindex_lib.py](tools/coyodex/preindex_lib.py:440)
+7. C33 → E37 : records each Symbol under its name, with its file, its kind and its line @ [preindex.py](tools/coyodex/preindex.py:148)
+8. C33 → E38 : works out how many components each folder should yield from its file count and size @ [preindex_lib.py](tools/coyodex/preindex_lib.py:625)
+9. C33 → C33 : turns the whole-tree expectation into a band, and says which cap decided it @ [preindex.py](tools/coyodex/preindex.py:240)
+10. C33 → C33 : writes the pre-index file with the weight tree, the symbols, the expectation and the coverage block @ [preindex.py](tools/coyodex/preindex.py:604)
+11. C33 → Coding agent : prints the counts, whether git and the parser pack were available, and the expected size @ [preindex.py](tools/coyodex/preindex.py:608)
+12. Coding agent → C33 : asks for the readable report of the pre-index it just wrote
+13. C33 → Coding agent : prints the weight tree, the per-folder expectation and what the pre-index could not see @ [preindex.py](tools/coyodex/preindex.py:441)
 
-**UC5 — Open the source behind a mapped element**
-1. Developer → C23 : opens the project's map in the browser
-2. C23 → C22 : ⟨runs SF20 — Open a served map in the browser⟩
-3. Developer → C23 : clicks the code anchor carried by a box, an arrow or a flow step
-4. C23 → C38 : hands that anchor's file and line to the code viewer @ [viewer.js](tools/coyodex/viewer/viewer.js:152)
-5. C38 → C24 : asks the local server for that file's text @ [viewer.js](tools/coyodex/viewer/viewer.js:5806)
-6. C24 → D1 : reads the file's contents at the commit the map is pinned to @ [serve.py](tools/coyodex/viewer/serve.py:223) · a file absent from that commit answers 404, so a local edit can never leak into the view
-7. C24 → C38 : answers with the file as plain text @ [serve.py](tools/coyodex/viewer/serve.py:654)
-8. C38 → D18 : colours the source by language before it is laid out @ [viewer.js](tools/coyodex/viewer/viewer.js:5650) · a blocked or offline CDN falls back to plain, uncoloured text
-9. C38 → E41 : reads every element anchored in this file so each is tagged on its own line @ [viewer.js](tools/coyodex/viewer/viewer.js:5496)
-10. C38 → Developer : shows the file's numbered source beside the diagram @ [viewer.js](tools/coyodex/viewer/viewer.js:5666)
-11. C38 → Developer : scrolls to and flashes the exact line the claim is anchored to @ [viewer.js](tools/coyodex/viewer/viewer.js:5638)
-12. Developer → C38 : asks to hand the shown file off to their own editor or to GitHub
-13. C38 → D8 : opens the file at that line in the local editor through its URL scheme @ [viewer.js](tools/coyodex/viewer/viewer.js:6021) · only when an editor is the chosen target and the local repo root is set
-14. C38 → D7 : opens the file's blob page pinned to the map's commit @ [viewer.js](tools/coyodex/viewer/viewer.js:6024) · the zero-setup default whenever the mapped repo has a GitHub remote
+**UC6 — Hand a fan-out worker its contract**
+1. Coding agent → C4 : asks for the briefing one fan-out worker should receive, by name
+2. C4 → C4 : resolves where the method and its briefings live, preferring the environment setting @ [contract.py](tools/coyodex/contract.py:51)
+3. C4 → C76 : reads the briefing file that name stands for @ [contract.py](tools/coyodex/contract.py:90)
+4. C4 → C4 : takes the quoted block as the worker's half, stripping the quote marker @ [contract.py](tools/coyodex/contract.py:65)
+5. C4 → C4 : otherwise takes everything after the single divider line @ [contract.py](tools/coyodex/contract.py:68)
+6. C4 → C4 : refuses a briefing with no boundary, rather than handing the lead's half to a worker @ [contract.py](tools/coyodex/contract.py:70)
+7. C4 → C76 : appends the writing rules for the briefings whose workers author map prose @ [contract.py](tools/coyodex/contract.py:93)
+8. C4 → Coding agent : prints only the worker's half, ready for the angle-bracket slots to be filled @ [contract.py](tools/coyodex/contract.py:118)
+
+**UC7 — Self-check one harvested fragment**
+1. Coding agent → C4 : runs the fragment self-check on the rows it has just written
+2. C4 → C2 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C2 → C1 : builds a typed map document out of the fragment's JSON text @ [assemble.py](tools/coyodex/assemble.py:155)
+4. C2 → E1 : reads every row of the parsed map document @ [lint_fragment.py](tools/coyodex/lint_fragment.py:452)
+5. C2 → C13 : runs the shared row checks over code-link format, arrows, flow steps and business rules @ [lint_fragment.py](tools/coyodex/lint_fragment.py:125)
+6. C2 → C13 : checks that every code link names a file that exists in the project @ [lint_fragment.py](tools/coyodex/lint_fragment.py:188)
+7. C2 → C25 : asks which files are changed and not committed @ [lint_fragment.py](tools/coyodex/lint_fragment.py:209) · only when the fragment carries a commit pin with no dirty marker
+8. C2 → C13 : counts the code links pointing at a line that cannot be acting @ [lint_fragment.py](tools/coyodex/lint_fragment.py:478)
+9. C2 → Coding agent : reports the verdict line first, with the problem, warning and drift counts @ [lint_fragment.py](tools/coyodex/lint_fragment.py:500)
+10. C2 → Coding agent : prints each problem and each advisory row under the verdict @ [lint_fragment.py](tools/coyodex/lint_fragment.py:505)
+
+**UC8 — Merge the workers' fragments into one map**
+1. Coding agent → C4 : runs the merge, naming every fragment and the assignment file
+2. C4 → C2 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C2 → C1 : ⟨runs SF30 — Merge the fragments into one map⟩
+4. C2 → C13 : asks which entity steps carry no backing arrow @ [assemble.py](tools/coyodex/assemble.py:119)
+5. C2 → E15 : adds the backbone arrow each of those steps implies, reading the verb off the step's own words @ [assemble.py](tools/coyodex/assemble.py:131)
+6. C2 → C1 : ⟨runs SF31 — Write the map and its readable view⟩
+7. C2 → Coding agent : says it added the scratch folder to the ignore file, so the build never dirties the project @ [assemble.py](tools/coyodex/assemble.py:970)
+8. C2 → Coding agent : warns about a fragment left in the scratch folder that this run did not merge @ [assemble.py](tools/coyodex/assemble.py:972)
+9. C2 → Coding agent : prints the one-line digest of everything the merge changed @ [assemble.py](tools/coyodex/assemble.py:977)
+
+**UC9 — Turn path rules into explicit assignments**
+1. Coding agent → C4 : runs the assignment pass with a rules file and the folder of fragments
+2. C4 → C25 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C25 → Coding agent : refuses a rules file holding a rule that assigns nothing @ [reconcile_build.py](tools/coyodex/reconcile_build.py:128)
+4. C25 → C2 : ⟨runs SF30 — Merge the fragments into one map⟩
+5. C25 → C1 : strips the line number off an element's code link, leaving the folder path a rule can match @ [reconcile_build.py](tools/coyodex/reconcile_build.py:105)
+6. C25 → C4 : matches one element's folder path against the rule's pattern @ [reconcile_build.py](tools/coyodex/reconcile_build.py:150)
+7. C25 → E16 : reads each front door's identifier together with its code link @ [reconcile_build.py](tools/coyodex/reconcile_build.py:213) · the code link is stored beside the identifier so a later renumber is caught
+8. C25 → Coding agent : names every rule that matched nothing and every rule pointing at a group nobody declared @ [reconcile_build.py](tools/coyodex/reconcile_build.py:373)
+9. C25 → Coding agent : prints how many rules were clean, matched nothing, or point at an undeclared group @ [reconcile_build.py](tools/coyodex/reconcile_build.py:377)
+10. C25 → E40 : writes the assignment file, carrying forward the directives it does not author @ [reconcile_build.py](tools/coyodex/reconcile_build.py:439)
+
+**UC10 — Look up one part of the map**
+1. Coding agent → C4 : runs the lookup, naming one file, one selector and one identifier
+2. C4 → C3 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C3 → C2 : loads the named file, accepting a finished map or a half-written build fragment @ [dump.py](tools/coyodex/dump.py:292)
+4. C3 → C1 : asks the map document which element carries that identifier @ [dump.py](tools/coyodex/dump.py:103)
+5. C3 → E1 : reads that element's full stored record out of the map document @ [dump.py](tools/coyodex/dump.py:132)
+6. C3 → E16 : reads a front door's record, whose identifier is minted only when the map is merged @ [dump.py](tools/coyodex/dump.py:99)
+7. C3 → C1 : asks the serializer for the whole document when no selector is given @ [dump.py](tools/coyodex/dump.py:297)
+8. C3 → Coding agent : refuses, saying the identifier is not defined in the map @ [dump.py](tools/coyodex/dump.py:318)
+9. C3 → Coding agent : prints the answer as JSON @ [dump.py](tools/coyodex/dump.py:320)
+
+**UC11 — Check the map is well formed**
+1. Coding agent → C4 : asks for the check over the map it just wrote, with the repo-reading flags on
+2. C4 → C13 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C13 → C1 : ⟨runs SF2 — Load the map into memory⟩
+4. C13 → E1 : reads every element the map document declares, as the set a reference may name @ [validate_model.py](tools/coyodex/validate_model.py:4359)
+5. C13 → C13 : reports every reference that names an element the map never defines @ [validate_model.py](tools/coyodex/validate_model.py:4362)
+6. C13 → C3 : ⟨runs SF40 — Read the recorded exceptions⟩
+7. C13 → C13 : counts the long sentences and the missing link words in the map's plain text @ [validate_model.py](tools/coyodex/validate_model.py:4431)
+8. C13 → C13 : fails the check when a code link names a file, or a line, the repo does not have @ [validate_model.py](tools/coyodex/validate_model.py:4444) · only under the check-sources flag
+9. C13 → C13 : warns when a code link resolves to a line that cannot be the acting statement @ [validate_model.py](tools/coyodex/validate_model.py:4448) · advisory, because the relation is usually real and only its line drifted
+10. C13 → C13 : walks the repo tree and names the folders no box on the map covers @ [validate_model.py](tools/coyodex/validate_model.py:4472) · only under the check-coverage flag
+11. C13 → C15 : asks which screens hold more boxes than a reader can hold at once @ [validate_model.py](tools/coyodex/validate_model.py:4501)
+12. C13 → Coding agent : prints the advisories, then the blocking problems, and exits non-zero when one stands @ [validate_model.py](tools/coyodex/validate_model.py:4818)
+
+**UC12 — Make the map's two layers refute each other**
+1. Coding agent → C4 : asks for the two-layer comparison and for the ranked claims to be cut into batches
+2. C4 → C14 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C14 → C1 : ⟨runs SF2 — Load the map into memory⟩
+4. C14 → C14 : builds the walk's ordered steps and each step's entity reads and writes @ [audit_model.py](tools/coyodex/audit_model.py:548)
+5. C14 → E42 : records a finding when a walk step reads something the walk only writes later @ [audit_model.py](tools/coyodex/audit_model.py:575)
+6. C14 → C14 : blocks the run when a walk step explains itself by a step that comes after it @ [audit_model.py](tools/coyodex/audit_model.py:615)
+7. C14 → C14 : reports a flow whose opening actor is not one the use case declares @ [audit_model.py](tools/coyodex/audit_model.py:692)
+8. C14 → C3 : ⟨runs SF40 — Read the recorded exceptions⟩
+9. C14 → C14 : drops the advisories an operator recorded and names every one it dropped @ [audit_model.py](tools/coyodex/audit_model.py:836) · a contradiction is never dropped
+10. C14 → E41 : ranks each access decision and the line enforcing it at the top of the worklist @ [audit_model.py](tools/coyodex/audit_model.py:969)
+11. C14 → C14 : cuts the ranked claims into even batches, one file per theme, riskiest first @ [audit_model.py](tools/coyodex/audit_model.py:1395)
+12. C14 → Coding agent : prints the findings and the ranked claims, exiting non-zero only on a contradiction @ [audit_model.py](tools/coyodex/audit_model.py:1432)
+
+**UC17 — Record an advisory the reader accepts**
+1. Coding agent → C4 : asks to write down the reason one advisory was accepted, naming the heading and the line
+2. C4 → C3 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C3 → C3 : refuses a line that names a key and states no reason @ [record.py](tools/coyodex/record.py:262)
+4. C3 → C3 : refuses a heading no check reads, and names the headings that are read @ [record.py](tools/coyodex/record.py:267)
+5. C3 → C2 : loads the fragment, remembering which sections it already held @ [record.py](tools/coyodex/record.py:277)
+6. C3 → E36 : appends the recorded line under the named heading, adding the section when it is missing @ [record.py](tools/coyodex/record.py:116)
+7. C3 → E36 : deletes one recorded line, and drops the whole heading when that was its last line @ [record.py](tools/coyodex/record.py:144) · the remove mode
+8. C3 → C3 : re-reads the lines it just added and refuses the whole batch when one adjudicates nothing @ [record.py](tools/coyodex/record.py:308)
+9. C3 → C2 : serializes the fragment once, with every line of the batch in it @ [record.py](tools/coyodex/record.py:318)
+10. C3 → Coding agent : says what was recorded, or that the fragment was left untouched @ [record.py](tools/coyodex/record.py:312)
+
+**UC18 — Re-balance the diagrams against the traced graph**
+1. Coding agent → C4 : asks how crowded each screen of the map is
+2. C4 → C15 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C15 → C1 : ⟨runs SF2 — Load the map into memory⟩
+4. C15 → E5 : reads every group and its parent, to build the child list of each screen @ [balance_lib.py](tools/coyodex/balance_lib.py:107)
+5. C15 → E13 : puts every component on the screen of the group it belongs to @ [balance_lib.py](tools/coyodex/balance_lib.py:110)
+6. C15 → C15 : counts the boxes on each screen and flags the crowded, the thin and the one-child ones @ [balance.py](tools/coyodex/balance.py:51)
+7. C15 → C15 : says how many screens sit inside the readable band @ [balance.py](tools/coyodex/balance.py:122)
+8. C15 → C15 : counts the arrows between components that cross from one group to another @ [balance.py](tools/coyodex/balance.py:176)
+9. C15 → C15 : proposes where a split of a crowded screen would fall, with the exact map change @ [balance.py](tools/coyodex/balance.py:87)
+10. C15 → Coding agent : prints the counts, the busiest seams and the proposals, and always exits clean @ [balance.py](tools/coyodex/balance.py:283) · grouping is a view choice, so the report never fails a build
+
+**UC13 — Disprove a claim against the code**
+1. Coding agent → C4 : runs the audit and asks it to cut one claims file per theme
+2. C4 → C14 : hands the auditor the batch directory and the per-batch cap @ [cli.py](tools/coyodex/cli.py:132)
+3. C14 → E41 : ranks every risky claim in the map into a work item carrying its anchor @ [audit_model.py](tools/coyodex/audit_model.py:1366)
+4. C14 → Coding agent : refuses to cut any batch while the audit still holds a blocking contradiction @ [audit_model.py](tools/coyodex/audit_model.py:1391)
+5. C14 → E41 : writes each theme's claims, anchors and details into their own batch file @ [audit_model.py](tools/coyodex/audit_model.py:1269) · most dangerous theme first, split at the cap
+6. C75 → Coding agent : tells the lead to give each batch a fresh worker and to copy the briefing with a command @ [method.md](method.md:1600)
+7. Coding agent → C76 : fills the briefing's four slots with the map, the repo, the batch id and its claims file @ [skeptic-contract.md](method/templates/skeptic-contract.md:7)
+8. Coding agent → C1 : opens each claim's own anchor and reads the file the map points at @ [skeptic-contract.md](method/templates/skeptic-contract.md:58)
+9. Coding agent → C23 : writes one answer per claim — confirmed, refuted or impossible to settle — with the true line @ [skeptic-contract.md](method/templates/skeptic-contract.md:97)
+10. Coding agent → C4 : runs the answer-file check at the barrier, naming every batch it sent out @ [method.md](method.md:1723)
+11. C4 → C23 : hands the check every answer file and the expected batch names @ [cli.py](tools/coyodex/cli.py:171)
+12. C23 → Coding agent : stops the barrier when an expected batch left no answer file behind @ [grounding.py](tools/coyodex/grounding.py:937)
+13. C23 → Coding agent : reports the files well formed and how many notes the evidence check could test @ [grounding.py](tools/coyodex/grounding.py:962)
+
+**UC14 — Record what the skeptics proved**
+1. Coding agent → C4 : runs the grounding write with the pinned claim list, every answer file and the built map
+2. C4 → C23 : hands over the pinned claim list, the answer files and the map @ [cli.py](tools/coyodex/cli.py:171)
+3. C23 → C14 : re-derives the built map's live claim surface from the auditor's ranking @ [grounding.py](tools/coyodex/grounding.py:1062)
+4. C23 → Coding agent : refuses the record when an answer names a claim the pinned list never held @ [grounding.py](tools/coyodex/grounding.py:164)
+5. C23 → Coding agent : refuses a pinned claim nobody voted on @ [grounding.py](tools/coyodex/grounding.py:182) · unless the run declares itself a partial pass with a note saying what was prioritized
+6. C23 → E35 : writes the four counts, the live claim digest and the note into the record @ [grounding.py](tools/coyodex/grounding.py:1086)
+7. C23 → Coding agent : prints the counts the build's note must quote instead of retyping one @ [grounding.py](tools/coyodex/grounding.py:1109)
+8. C23 → Coding agent : warns when the shipped map carries claims minted after the list was pinned @ [grounding.py](tools/coyodex/grounding.py:1121)
+9. C23 → E43 : recomputes, per element, what the pass did to the claims that element makes @ [grounding.py](tools/coyodex/grounding.py:1068)
+10. Coding agent → C13 : re-runs the validator over the map that now carries the record
+11. C13 → E35 : blocks the map when confirmed, refuted and unsettled do not add up to challenged @ [validate_model.py](tools/coyodex/validate_model.py:2549)
+
+**UC15 — Correct a code link that points at the wrong line**
+1. Coding agent → C4 : runs the drift check over the map with every answer file
+2. C4 → C23 : hands the drift check the map and the answer files @ [cli.py](tools/coyodex/cli.py:165)
+3. C23 → C14 : re-derives the ranked claim list so every claim keeps the line the map stores @ [anchor_drift.py](tools/coyodex/anchor_drift.py:419)
+4. C23 → Coding agent : reports each confirmed claim whose stored line differs from the line the skeptics found @ [anchor_drift.py](tools/coyodex/anchor_drift.py:434)
+5. Coding agent → C4 : runs the repair, asking for the correction to be recorded rather than written into the map
+6. C4 → C24 : hands the repair the map, the answer files and the reconcile file @ [cli.py](tools/coyodex/cli.py:174)
+7. C24 → C23 : asks for one truer line per drifted claim, at the line the skeptics settled on @ [fix.py](tools/coyodex/fix.py:192)
+8. C24 → E40 : records each claim and its corrected line in the reconcile file @ [fix.py](tools/coyodex/fix.py:331) · editing the built map instead would be undone by the next merge
+9. C2 → C25 : ⟨runs SF50 — Apply the recorded reconcile at the next merge⟩
+10. C25 → C14 : hands the corrected lines to the one writer both repair paths share @ [reconcile.py](tools/coyodex/reconcile.py:526)
+11. C14 → E15 : writes the corrected line onto the relation whose claim names it @ [audit_model.py](tools/coyodex/audit_model.py:382)
+
+**UC16 — Drop a claim the code refutes**
+1. Coding agent → C4 : runs the repair, asking to drop the refuted relation and record the drop for the next merge
+2. C4 → C24 : hands the repair the map, the three parts of the relation and the reconcile file @ [cli.py](tools/coyodex/cli.py:174)
+3. C24 → C1 : refuses the drop when no relation in the map matches those three parts @ [fix.py](tools/coyodex/fix.py:352)
+4. C24 → E40 : records the drop, and how the riding walk steps should be healed, in the reconcile file @ [fix.py](tools/coyodex/fix.py:384)
+5. C24 → Coding agent : warns when walk steps ride the relation and the record says nothing about healing them @ [fix.py](tools/coyodex/fix.py:389)
+6. C2 → C25 : ⟨runs SF50 — Apply the recorded reconcile at the next merge⟩
+7. C25 → E15 : removes every relation matching the three parts @ [reconcile.py](tools/coyodex/reconcile.py:576)
+8. C25 → E11 : re-points or removes the walk steps that rode the dropped relation @ [reconcile.py](tools/coyodex/reconcile.py:584)
+9. C25 → Coding agent : names each walk step left with no backing relation when the record healed nothing @ [reconcile.py](tools/coyodex/reconcile.py:588)
+
+**UC19 — Run the pre-commit read**
+1. Coding agent → C4 : runs the pre-commit read over the map with every answer file
+2. C4 → C16 : hands the gate run the map, the repo root and the answer files @ [cli.py](tools/coyodex/cli.py:168)
+3. C16 → C1 : refuses to start when the map cannot be loaded at all @ [finalize.py](tools/coyodex/finalize.py:863)
+4. C16 → C13 : runs the validator inside this same process, capturing both its streams @ [finalize.py](tools/coyodex/finalize.py:108)
+5. C16 → C14 : runs the auditor the same way and splits its findings into blocking and advisory @ [finalize.py](tools/coyodex/finalize.py:111)
+6. C16 → C23 : runs the drift check and the surviving-refutation check against the answer files @ [finalize.py](tools/coyodex/finalize.py:114)
+7. C16 → E45 : records one leg per gate, saying whether it ran and what it found @ [finalize.py](tools/coyodex/finalize.py:472)
+8. C16 → Coding agent : reports a leg it could have run but was not asked to, rather than staying silent @ [finalize.py](tools/coyodex/finalize.py:393)
+9. C16 → E46 : settles one verdict from the legs and hashes the map into the report @ [finalize.py](tools/coyodex/finalize.py:495) · a leg that failed forbids a clean verdict
+10. C16 → Coding agent : writes the whole finding list to a file beside the map, where a pipe cannot eat it @ [finalize.py](tools/coyodex/finalize.py:877)
+11. C16 → Coding agent : names the files that must be committed with the map, and the ones still missing @ [finalize.py](tools/coyodex/finalize.py:894)
+12. C16 → Coding agent : prints the verdict, the two counts, and which gates did not run @ [finalize.py](tools/coyodex/finalize.py:920)
+
+**UC20 — Stamp which conversation built the map**
+1. Coding agent → C4 : runs the stamp, pointing it at the build's header fragment
+2. C4 → C25 : hands the stamp the repo, the mode and the header fragment @ [cli.py](tools/coyodex/cli.py:180)
+3. C25 → Coding agent : refuses when no session id is in the environment and none was passed @ [provenance.py](tools/coyodex/provenance.py:197)
+4. C25 → D1 : launches git for the short commit, its date and whether the tree holds uncommitted code @ [provenance.py](tools/coyodex/provenance.py:120)
+5. C25 → E48 : builds this session's entry — the id, the minute, the mode and the pinned commit @ [provenance.py](tools/coyodex/provenance.py:199)
+6. C25 → E47 : writes the record, replacing this session's own entry rather than adding a second @ [provenance.py](tools/coyodex/provenance.py:217)
+7. C25 → C1 : writes the same minute and the same pin into the header fragment @ [provenance.py](tools/coyodex/provenance.py:362)
+8. C25 → Coding agent : prints the minute on its own line so nothing has to be retyped @ [provenance.py](tools/coyodex/provenance.py:324)
+9. C16 → Coding agent : names the stamp command when the pre-commit read finds no record file @ [finalize.py](tools/coyodex/finalize.py:918)
+
+**UC38 — See the change overlaid on the map**
+1. Map reader → C43 : asks what a code change did to the map, naming where the change starts and where it ends @ [serve.py](tools/coyodex/viewer/serve.py:721) · the request reaches the map server over the loopback address; the working tree is the default end point
+2. C43 → C1 : ⟨runs SF2 — Load the map into memory⟩
+3. C43 → C34 : reads the symbol table saved beside the map, so an anchor can resolve to a whole definition @ [serve.py](tools/coyodex/viewer/serve.py:419) · an older map with no symbol table resolves every anchor at file level instead
+4. C43 → C34 : hands the map, its pinned commit and the two ends of the change to the impact engine @ [serve.py](tools/coyodex/viewer/serve.py:420)
+5. C34 → E49 : builds one anchor reference for every code link the map carries @ [impact_lib.py](tools/coyodex/impact_lib.py:196)
+6. C34 → D1 : launches git to list every file the change touched and to diff each one against the pinned commit @ [impact_git.py](tools/coyodex/impact_git.py:50)
+7. C34 → E50 : records one hit per anchor, saying whether the change reached its line, its definition or only its file @ [impact_lib.py](tools/coyodex/impact_lib.py:367)
+8. C43 → C34 : asks for every hit to be spread along the map's own relations, one hop only @ [serve.py](tools/coyodex/viewer/serve.py:423)
+9. C43 → Coding agent : answers with every part of the map the change reaches, what happened to it and how strongly it is reached @ [serve.py](tools/coyodex/viewer/serve.py:726)
+
+**UC26 — Fold a change report into the map**
+1. Coding agent → C75 : reads the accept instructions once the reader says the report is right @ [dispatch.md](method/dispatch.md:154)
+2. C75 → E1 : rewrites the map's rows from the report's was-to-now text, element by element @ [change-impact.md](method/change-impact.md:123) · accept re-reads no code: the report already carries the exact new text
+3. C75 → E1 : re-pins the map to the code commit it now describes @ [change-impact.md](method/change-impact.md:124)
+4. C75 → C25 : re-stamps who folded the report in and when, as an accept entry @ [method.md](method.md:2286)
+5. C25 → E47 : writes this session's entry into the provenance file @ [provenance.py](tools/coyodex/provenance.py:217)
+6. C75 → C13 : ⟨runs SF70 — Put a changed map through the gates⟩
+7. C75 → C33 : rebuilds the pre-index at the new pin, so its file and line numbers match the re-pinned map @ [change-impact.md](method/change-impact.md:133)
+8. C75 → Coding agent : commits the map, its readable view, the pre-index and the report together @ [change-impact.md](method/change-impact.md:138)
+
+**UC27 — Change the map by asking in plain words**
+1. Map reader → C75 : asks in plain words to split, rename, move or drill deeper into a part of the map @ [dispatch.md](method/dispatch.md:68) · a plain-words request is a direct map change, never a re-analysis of the code
+2. C75 → E1 : edits the named part of the map field by field, never by rebuilding it @ [dispatch.md](method/dispatch.md:161)
+3. C75 → C24 : rewrites a row's own text inside the fragment that authored it, so the edit survives the next merge @ [method.md](method.md:794)
+4. C24 → C2 : re-merges the edited fragments in a temporary copy first, refusing an edit that makes a row appear or vanish @ [fix.py](tools/coyodex/fix.py:1399)
+5. C24 → Map reader : names the field it rewrote and the fragment it wrote it in @ [fix.py](tools/coyodex/fix.py:1589)
+6. C75 → E1 : drills deeper by retiring a leaf part, putting a group in its place and re-pointing every relation that named it @ [method.md](method.md:2305)
+7. C75 → C13 : ⟨runs SF70 — Put a changed map through the gates⟩
+8. C75 → Map reader : commits the edited map together with its regenerated readable view @ [dispatch.md](method/dispatch.md:168)
+
+**UC28 — See what an edit changed, row by row**
+1. Coding agent → C4 : asks what changed between the map before an edit and the map after it @ [cli.py](tools/coyodex/cli.py:147) · the two maps must be two writes of the same work, never two independent builds
+2. C4 → C3 : ⟨runs SF1 — Run a coyodex subcommand⟩
+3. C3 → E1 : loads each of the two map files as a map document, refusing one that is malformed @ [mapdiff.py](tools/coyodex/mapdiff.py:193)
+4. C3 → C1 : asks which arrays carry an authored identifier, so those rows are matched by identifier @ [mapdiff.py](tools/coyodex/mapdiff.py:123) · relations and entry points are matched on their own text instead, because their identifiers are minted afresh on every write
+5. C3 → Coding agent : lists the rows dropped and the rows added in each array @ [mapdiff.py](tools/coyodex/mapdiff.py:175)
+6. C3 → Coding agent : names each surviving row that changed, with the exact fields that moved @ [mapdiff.py](tools/coyodex/mapdiff.py:179)
+7. C3 → Coding agent : flags an identity held by more than one row and reports it by count instead of pairing the rows @ [mapdiff.py](tools/coyodex/mapdiff.py:181)
+8. C3 → Coding agent : prints the same answer as data when asked for it @ [mapdiff.py](tools/coyodex/mapdiff.py:256)
+
+**UC29 — Score a rebuilt map against the accepted one**
+1. coyodex developer → C63 : runs the scoring command with the new map and the accepted baseline @ [cli.py](eval/tools/coyodex_eval/cli.py:62)
+2. C63 → E53 : reads the accepted map's stored quality signals out of the baseline folder @ [run.py](eval/tools/coyodex_eval/run.py:78) · a baseline folder that is missing or holds no signals stops the run instead of reporting nothing got worse
+3. C63 → C1 : turns the frozen map file into the typed document @ [profile.py](eval/tools/coyodex_eval/profile.py:250)
+4. C63 → C13 : counts the map's well-formedness problems and warnings @ [profile.py](eval/tools/coyodex_eval/profile.py:257)
+5. C63 → C14 : counts the map's contradictions, advisories and risky claims @ [profile.py](eval/tools/coyodex_eval/profile.py:259)
+6. C63 → E53 : records the counted quality signals of the new map @ [profile.py](eval/tools/coyodex_eval/profile.py:337)
+7. C63 → E55 : settles on pass, drift or regressed from every hard check and band @ [compare.py](eval/tools/coyodex_eval/compare.py:510)
+8. C63 → coyodex developer : prints the verdict with the checks and the bands that moved @ [run.py](eval/tools/coyodex_eval/run.py:274)
+
+**UC30 — Have judges read both maps**
+1. coyodex developer → C63 : asks for the riskiest claims one map makes @ [cli.py](eval/tools/coyodex_eval/cli.py:68) · run once for the new map and once for the accepted one
+2. C63 → C14 : ⟨runs SF80 — List the riskiest claims a map makes⟩
+3. coyodex developer → C63 : checks whether a stored judgement was made under the current judging protocol @ [cli.py](eval/tools/coyodex_eval/cli.py:74)
+4. C63 → E54 : reads the fingerprint recorded with the stored judgement @ [run.py](eval/tools/coyodex_eval/run.py:450) · a different model, skeptic count, sample cap or rubric makes the stored judgement unusable
+5. coyodex developer → C63 : hands back one row per skeptic vote plus each judge's rubric scores @ [cli.py](eval/tools/coyodex_eval/cli.py:71)
+6. C63 → C1 : re-reads the frozen map so every vote is matched against the same document @ [judge.py](eval/tools/coyodex_eval/judge.py:234)
+7. C63 → E54 : records the pass rate, the excluded failures and the median rubric scores @ [judge.py](eval/tools/coyodex_eval/judge.py:257)
+8. C63 → coyodex developer : prints how many claims held up and the overall score @ [run.py](eval/tools/coyodex_eval/run.py:408)
+
+**UC31 — Accept a run as the new baseline**
+1. coyodex developer → C63 : takes the map's freeze hash before anything scores it @ [cli.py](eval/tools/coyodex_eval/cli.py:65)
+2. coyodex developer → C63 : scores the older accepted map so it can serve as the baseline @ [cli.py](eval/tools/coyodex_eval/cli.py:59)
+3. C63 → C1 : reads a map an older coyodex wrote, after dropping the block that no longer exists @ [legacy_map.py](eval/tools/coyodex_eval/legacy_map.py:63) · only for reading; every writing path still refuses an out-of-date map
+4. coyodex developer → C63 : archives the finished run, handing back the freeze hash @ [cli.py](eval/tools/coyodex_eval/cli.py:62)
+5. C63 → coyodex developer : refuses the whole run when the map no longer matches its freeze hash @ [run.py](eval/tools/coyodex_eval/run.py:220) · only when the map was edited after the hash was taken
+6. C63 → C45 : renders the map's readable view into the run folder @ [run.py](eval/tools/coyodex_eval/run.py:163)
+7. C63 → E53 : writes the run's counted quality signals into the run folder @ [run.py](eval/tools/coyodex_eval/run.py:166)
+8. C63 → E54 : writes the judged pass rate and rubric scores beside them @ [run.py](eval/tools/coyodex_eval/run.py:168)
+9. coyodex developer → C63 : promotes that run folder to the baseline @ [cli.py](eval/tools/coyodex_eval/cli.py:77)
+10. C63 → coyodex developer : reports the baseline now holds the map, its view, its signals and its judgement @ [run.py](eval/tools/coyodex_eval/run.py:472)
+
+**UC32 — Measure how many planted falsehoods the skeptics catch**
+1. coyodex developer → C63 : asks for the riskiest claims, to use as the batch to corrupt @ [cli.py](eval/tools/coyodex_eval/cli.py:68)
+2. C63 → C14 : ⟨runs SF80 — List the riskiest claims a map makes⟩
+3. coyodex developer → C63 : asks for ten planted falsehoods, spread evenly across the four shapes @ [cli.py](eval/tools/coyodex_eval/cli.py:98)
+4. C63 → coyodex developer : writes the corrupted batch and, beside it, the answer key naming every planted claim @ [mutate.py](eval/tools/coyodex_eval/mutate.py:258)
+5. coyodex developer → C63 : hands back the skeptics' verdicts on the corrupted batch @ [mutate.py](eval/tools/coyodex_eval/mutate.py:273)
+6. C63 → coyodex developer : reports how many planted falsehoods were caught, shape by shape @ [mutate.py](eval/tools/coyodex_eval/mutate.py:278) · a moved anchor counts as caught on the evidence line the skeptic found, never on the verdict
+
+**UC33 — Refuse to review a build that has not finished**
+1. coyodex developer → C66 : runs the pre-check before reviewing a finished build @ [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:278)
+2. C66 → E47 : reads the recorded build stamp and takes its session list @ [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:179)
+3. C66 → E48 : takes the newest recorded session as the build being reviewed @ [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:180)
+4. C66 → coyodex developer : refuses the review and tells the developer to open a new chat @ [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:192) · when the newest recorded session is this very chat, so the review would read the file it is writing
+5. C66 → coyodex developer : refuses the review and names the file that just changed @ [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:202) · when anything under .coyodex/ was written in the last three minutes; the stamp is written near the end of a build and the build keeps going after it
+6. C66 → coyodex developer : refuses the review and names the other chat that is still writing @ [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:237) · only a chat whose newest real message is recent counts as live; a file merely touched does not
+7. C66 → coyodex developer : clears the review, naming the build's chat and the minute it was built @ [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:243)
+
+**UC34 — Read a build transcript in slices**
+1. coyodex developer → C25 : asks which chat built this map
+2. C25 → E47 : loads the recorded build stamp @ [provenance.py](tools/coyodex/provenance.py:296)
+3. C25 → E48 : walks every recorded session, reading its build minute, its mode and its chat id @ [provenance.py](tools/coyodex/provenance.py:304)
+4. C25 → coyodex developer : prints the recorded sessions, newest last, so the build's chat id can be turned into a log path @ [provenance.py](tools/coyodex/provenance.py:305)
+5. coyodex developer → C64 : runs the transcript reader on that chat's log with no range asked for @ [transcript.py](eval/tools/coyodex_eval/transcript.py:1085)
+6. C64 → coyodex developer : prints one line per tool call with its turn number, counting every record of one reply as one turn @ [transcript.py](eval/tools/coyodex_eval/transcript.py:1174)
+7. coyodex developer → C64 : asks for one turn range, because the whole log is far too big to open @ [transcript.py](eval/tools/coyodex_eval/transcript.py:1097)
+8. C64 → coyodex developer : lists every coyodex command the build ran inside that range, with the turn that ran it @ [transcript.py](eval/tools/coyodex_eval/transcript.py:1123)
+9. C64 → coyodex developer : counts the tools used and the size of each fan-out inside that range @ [transcript.py](eval/tools/coyodex_eval/transcript.py:1140)
+
+**UC35 — Score a build's behaviour against the method**
+1. coyodex developer → C77 : opens the retrospective on a build that has already finished
+2. C77 → coyodex developer : sends the developer into the retrospective recipe, which names the scorecard command @ [SKILL.md](eval/retro/SKILL.md:28)
+3. coyodex developer → C65 : runs the scorecard on the build's chat log, naming the map that build produced
+4. C65 → coyodex developer : refuses before scoring anything, saying which rules would have stopped measuring @ [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3182) · only when a map was named and cannot be read
+5. C65 → C64 : asks the reader for the build's turns, every record of one reply folded into one turn @ [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:2941)
+6. C65 → E1 : loads the built map, so the rules whose subject is the map can be checked against it @ [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:1615)
+7. C65 → coyodex developer : saves the scorecard beside the chat log, so a later build can be compared against this one @ [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3198)
+8. C65 → coyodex developer : prints one line per rule: how many chances the build had, and how many it took @ [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3202) · a rule the run gave no chance to reads as not applicable, never as zero
+9. coyodex developer → C65 : later asks it to compare two saved scorecards @ [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3151)
+10. C65 → coyodex developer : prints each rule before and after, which way it moved, and a warning when a score rose only because the chances vanished @ [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:3160)
+
+**UC36 — Measure what a build spent**
+1. coyodex developer → C64 : runs the spend report on the build's chat log, naming the map that build produced @ [cost.py](eval/tools/coyodex_eval/cost.py:715)
+2. coyodex developer → C64 : bounds the report to the build's own turns @ [cost.py](eval/tools/coyodex_eval/cost.py:705) · a chat keeps answering questions after the map lands, and those turns are not the build
+3. C64 → E1 : counts every row of the produced map, the divisor the whole report is stated against @ [cost.py](eval/tools/coyodex_eval/cost.py:392)
+4. C64 → coyodex developer : reports the wall clock of the run and the active time, with the stretches nobody was working cut out @ [cost.py](eval/tools/coyodex_eval/cost.py:575)
+5. C64 → coyodex developer : reports the tokens and the money, one row per kind of worker and a total across the lead chat and every worker chat @ [cost.py](eval/tools/coyodex_eval/cost.py:606)
+6. C64 → coyodex developer : reports the money and the seconds per row of map, so two builds of different size compare @ [cost.py](eval/tools/coyodex_eval/cost.py:631)
+7. C64 → coyodex developer : warns that the numbers cover the lead chat alone @ [cost.py](eval/tools/coyodex_eval/cost.py:726) · when no worker chat logs sit beside the session, which is about four fifths of a fan-out build's spend
+
+**UC37 — Archive a map so the next run builds from scratch**
+1. coyodex developer → C66 : runs the archive command on the mapped repo before starting a rebuild @ [archive.py](eval/tools/coyodex_eval/archive.py:185)
+2. C66 → E1 : moves the map document, with the rest of the build output, into the next numbered archive folder @ [archive.py](eval/tools/coyodex_eval/archive.py:107) · moved rather than deleted, because the old map is the baseline the new one is compared against
+3. C66 → coyodex developer : names the archive folder and lists every entry that moved into it @ [archive.py](eval/tools/coyodex_eval/archive.py:196)
+4. C66 → coyodex developer : says the working tree now holds no map, so the next run will build, and tells the developer to keep the archived one @ [archive.py](eval/tools/coyodex_eval/archive.py:202)
+5. C75 → E1 : looks for the map document in the working tree, finds none, and sends the next run down the build-from-scratch branch @ [dispatch.md](method/dispatch.md:75) · the working tree alone decides; a copy still in git history is never treated as the baseline
 
 ---
 
 ## T6b — Sub-flows (shared step sequences, referenced by the flows above)
 
-**SF10 — Run the map gates**
-1. C30 → C15 : hands the stored model to the validation run, which blocks on a broken reference or a malformed anchor @ [cli.py](tools/coyodex/cli.py:84)
-2. C30 → C12 : hands the same model to the adversarial pass, which makes the narrative and the mechanism refute each other @ [cli.py](tools/coyodex/cli.py:87)
-3. C30 → C20 : regenerates the committed markdown view so it never drifts from the model @ [cli.py](tools/coyodex/cli.py:90)
+**SF1 — Run a coyodex subcommand**
+1. C4 → C4 : switches the normal output to line buffering, so notes and errors stay in the order they happened @ [cli.py](tools/coyodex/cli.py:114)
+2. C4 → C4 : takes the first argument as the command word and keeps the rest for the command @ [cli.py](tools/coyodex/cli.py:123)
+3. C4 → C4 : matches the command word against every command it knows @ [cli.py](tools/coyodex/cli.py:139)
+4. C4 → C4 : loads the matching command's code only inside that branch, then runs it and returns its exit code @ [cli.py](tools/coyodex/cli.py:141) · the late load is what keeps a stdlib-only command free of the pre-index's parser packages
+5. C4 → C4 : prints the command list on the error stream and returns code 2 when the word matches nothing @ [cli.py](tools/coyodex/cli.py:182)
 
-**SF50 — Measure a map's deterministic quality signals**
-1. C45 → C3 : loads the map through the product's own model loader, so a scored map is never parsed by a second grammar @ [profile.py](eval/tools/coyodex_eval/profile.py:122)
-2. C45 → C10 : counts the well-formedness problems and warnings the shipped validator finds @ [profile.py](eval/tools/coyodex_eval/profile.py:129) · deliberately without the view-freshness check — that is repo hygiene, not map quality
-3. C45 → C12 : counts the contradictions and advisories the shipped auditor raises, and sizes its risk-ranked list of actually-does claims @ [profile.py](eval/tools/coyodex_eval/profile.py:131)
-4. C45 → C11 : measures how much of the source tree the map's anchors actually reach @ [profile.py](eval/tools/coyodex_eval/profile.py:141) · only when the source repo was given; otherwise the coverage signal is left empty rather than faked
-5. C45 → C9 : re-derives from the code tree how many components a map of this repo is expected to have, the anchor the map's zoom is judged against @ [profile.py](eval/tools/coyodex_eval/profile.py:143)
-6. C45 → C13 : reads the fan-out and nesting depth the map's diagrams would render at @ [profile.py](eval/tools/coyodex_eval/profile.py:149)
-7. C45 → E63 : writes every signal into one profile — the counts, the findings, the coverage, the granularity and the density ratios @ [profile.py](eval/tools/coyodex_eval/profile.py:162)
+**SF2 — Load the map into memory**
+1. C1 → C1 : turns the map file's text into plain values, naming the exact spot a broken file goes wrong @ [model.py](tools/coyodex/model.py:1069)
+2. C1 → C1 : refuses a document whose format word is not the coyodex map format @ [model.py](tools/coyodex/model.py:1075)
+3. C1 → C1 : rewrites the older shapes it still accepts, before any type is checked @ [model.py](tools/coyodex/model.py:1077)
+4. C1 → E1 : builds the typed map document field by field, naming the exact path of a wrong type @ [model.py](tools/coyodex/model.py:1080)
+5. C1 → C1 : refuses an element whose identifier does not carry its own list's letter @ [model.py](tools/coyodex/model.py:1084)
 
-**SF20 — Open a served map in the browser**
-1. C23 → C24 : fetches this project's whole view bundle before anything is drawn @ [viewer.js](tools/coyodex/viewer/viewer.js:107) · no bundle means no map: the page says so and stops rather than rendering half a view
-2. C24 → C20 : hands the project's stored map document to the graph builder @ [serve.py](tools/coyodex/viewer/serve.py:397)
-3. C20 → E1 : walks the map document element by element @ [views.py](tools/coyodex/views.py:684)
-4. C20 → E41 : builds one graph node per mapped element, carrying its name, type and source anchor @ [views.py](tools/coyodex/views.py:472)
-5. C20 → E42 : builds one graph edge per authored relationship, so the arrows have something to draw @ [views.py](tools/coyodex/views.py:791)
-6. C24 → C22 : asks for the view bundle — the graph plus every pre-rendered diagram and flow @ [serve.py](tools/coyodex/viewer/serve.py:399)
-7. C22 → C26 : renders the context and subsystem diagram sources into the bundle @ [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2778)
-8. C22 → C29 : renders the Happy Path and each use case's flow diagram into the bundle @ [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2840)
-9. C24 → C23 : answers with the whole bundle as one JSON payload @ [serve.py](tools/coyodex/viewer/serve.py:616) · the built bundle is cached per map version and dropped when the map file changes on disk
-10. C38 → C24 : asks for the repo's file tree once the server answers a health probe @ [viewer.js](tools/coyodex/viewer/viewer.js:5240)
-11. C24 → C25 : builds the tree of the files tracked at the map's commit, shaded by how the map covers them @ [serve.py](tools/coyodex/viewer/serve.py:384)
-12. C25 → E50 : builds one tree entry per folder and file, tagged with the element anchored there @ [filetree.py](tools/coyodex/viewer/filetree.py:147)
+**SF10 — Read a file out of git at the map's commit**
+1. C58 → C43 : asks for one file's text at the map's commit @ [viewer.js](tools/coyodex/viewer/viewer.js:10343)
+2. C43 → D1 : asks git for the blob's type and size at that commit @ [serve.py](tools/coyodex/viewer/serve.py:261) · a directory or an oversized file is refused before the bytes are read
+3. C43 → D1 : runs git show to read the file's bytes at that commit @ [serve.py](tools/coyodex/viewer/serve.py:279)
+4. C43 → C58 : returns the file's bytes as plain text @ [serve.py](tools/coyodex/viewer/serve.py:720)
+
+**SF11 — Build one view and send it to the browser**
+1. C55 → C43 : fetches this map's view bundle @ [viewer.js](tools/coyodex/viewer/viewer.js:154)
+2. C43 → C45 : turns the map document into the graph the browser page draws @ [serve.py](tools/coyodex/viewer/serve.py:455)
+3. C45 → E1 : reads the map document's use cases, components and edges @ [views.py](tools/coyodex/views.py:1030)
+4. C43 → C44 : asks for every derived view artifact for this map @ [serve.py](tools/coyodex/viewer/serve.py:460)
+5. C44 → C17 : derives the feature index and the one story order @ [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3262)
+6. C43 → C55 : returns the whole view bundle as JSON @ [serve.py](tools/coyodex/viewer/serve.py:682)
+
+**SF20 — Walk the repo for the files that may be analysed**
+1. C33 → D1 : lists the files git tracks, plus the files created but never added @ [preindex_lib.py](tools/coyodex/preindex_lib.py:190) · when the folder is not a git repo the files are read off disk instead, and .gitignore cannot apply
+2. C33 → C4 : loads the repo's ignore file, or an empty one when there is none @ [preindex_lib.py](tools/coyodex/preindex_lib.py:227)
+3. C33 → C33 : drops the files under the built-in excluded folders, names and suffixes @ [preindex_lib.py](tools/coyodex/preindex_lib.py:236)
+4. C33 → C4 : asks which rule decides each remaining path @ [preindex_lib.py](tools/coyodex/preindex_lib.py:242)
+5. C4 → C33 : returns the last rule that matched the path, or nothing @ [ignorefile.py](tools/coyodex/ignorefile.py:89)
+6. C33 → C33 : counts the hit against that rule, and leaves the file out when the rule is a positive one @ [preindex_lib.py](tools/coyodex/preindex_lib.py:246)
+7. C33 → C33 : returns the file set with both skip counts and the per-rule tally @ [preindex_lib.py](tools/coyodex/preindex_lib.py:249)
+
+**SF30 — Merge the fragments into one map**
+1. C2 → C1 : builds a typed map document out of one fragment's JSON text @ [assemble.py](tools/coyodex/assemble.py:155)
+2. C2 → E39 : records which fragments loaded, which were skipped and which failed @ [assemble.py](tools/coyodex/assemble.py:294)
+3. C2 → Coding agent : refuses the merge and names both fragments that defined the same identifier @ [assemble.py](tools/coyodex/assemble.py:394)
+4. C2 → C13 : asks whether two business rules state the same decision at the same lines @ [assemble.py](tools/coyodex/assemble.py:475)
+5. C2 → C1 : re-points every reference at the identifier that survived a merge @ [assemble.py](tools/coyodex/assemble.py:497)
+6. C2 → C3 : folds two authored headings that differ only in case or spacing into one @ [assemble.py](tools/coyodex/assemble.py:440)
+7. C2 → E16 : mints one identifier per front door, ordered by the front door's own content @ [assemble.py](tools/coyodex/assemble.py:688)
+
+**SF31 — Write the map and its readable view**
+1. C2 → E40 : reads the assignment file the lead recorded beside the map @ [assemble.py](tools/coyodex/assemble.py:916)
+2. C2 → C25 : refuses a directive that names an element the merged map does not hold @ [assemble.py](tools/coyodex/assemble.py:921)
+3. C2 → C25 : applies the assignments and heals the steps that rode a dropped arrow @ [assemble.py](tools/coyodex/assemble.py:928)
+4. C2 → C25 : stamps which build of coyodex produced this map @ [assemble.py](tools/coyodex/assemble.py:1075)
+5. C2 → C1 : asks the serializer for the document text and writes it to the map file @ [assemble.py](tools/coyodex/assemble.py:963)
+6. C1 → E1 : writes the whole map document in one fixed key order @ [model.py](tools/coyodex/model.py:892)
+7. C2 → C45 : renders the readable markdown view beside the map @ [assemble.py](tools/coyodex/assemble.py:964)
+8. C2 → C43 : registers the map's folder so the local viewer can offer this project @ [assemble.py](tools/coyodex/assemble.py:968)
+
+**SF40 — Read the recorded exceptions**
+1. C3 → E36 : keeps every extra section whose heading is the one being asked about @ [records.py](tools/coyodex/records.py:165)
+2. C3 → C3 : splits each matching section into its non-empty lines, stripping the list bullets @ [records.py](tools/coyodex/records.py:170)
+3. C3 → C3 : matches the comma list at the start of each line against this heading's key pattern @ [records.py](tools/coyodex/records.py:183)
+4. C3 → C3 : reads nothing from a list where one token is not a key @ [records.py](tools/coyodex/records.py:190) · a half-read line would silence part of a finding while the reader believes it is answered
+5. C3 → C3 : collects the keys of every line into the set the calling check honours @ [records.py](tools/coyodex/records.py:251)
+6. C3 → C3 : lists the lines that open like a record and silence nothing, so a dropped one is visible @ [records.py](tools/coyodex/records.py:233)
+
+**SF50 — Apply the recorded reconcile at the next merge**
+1. Coding agent → C2 : re-runs the merge over the fragments with the reconcile file
+2. C2 → C25 : loads the recorded directives, refusing one whose shape is wrong @ [assemble.py](tools/coyodex/assemble.py:916)
+3. C2 → C25 : checks each directive still names something the merged map holds @ [assemble.py](tools/coyodex/assemble.py:921)
+4. C2 → C25 : applies every directive against the whole merged map @ [assemble.py](tools/coyodex/assemble.py:928)
+
+**SF70 — Put a changed map through the gates**
+1. C75 → C13 : checks the changed map against the schema, the semantic rules and the freshness of its readable view @ [dispatch.md](method/dispatch.md:181)
+2. C75 → C14 : re-runs the adversarial pass, so the story and the traced flows can refute each other @ [dispatch.md](method/dispatch.md:182)
+3. C75 → C45 : re-renders the committed readable view from the changed map @ [dispatch.md](method/dispatch.md:187)
+
+**SF80 — List the riskiest claims a map makes**
+1. C63 → C1 : turns the map file into the typed document @ [run.py](eval/tools/coyodex_eval/run.py:322)
+2. C63 → C14 : asks the auditor to rank every risky claim, most dangerous first @ [run.py](eval/tools/coyodex_eval/run.py:322)
+3. C63 → E41 : keeps the top forty work items as the sample @ [run.py](eval/tools/coyodex_eval/run.py:324)
+4. C63 → E41 : reads each work item's claim, anchor and context into a plain row @ [run.py](eval/tools/coyodex_eval/run.py:328)
 
 ---
 
@@ -996,59 +1429,442 @@ SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:91)
 One decision per rule, with every place it is enforced. The component on each site line and the
 use-case steps under it are DERIVED from the site anchors — no field carries them.
 
-### Who may reach the local server *(BLK1)*
+### What counts as source *(BLK1)*
 
-what the map server accepts, and from whom
+Which of a project's files the map is allowed to describe, and which are deliberately outside it.
 
-**BR1 — The map server answers only callers on the machine it runs on.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:734](tools/coyodex/viewer/serve.py:734) — Map server (C24) · binds the listener to the loopback address
+**BR1 — Version control owns the file set** — Version control decides which files a map may describe. A project with no version control falls back to a walk of the disk.  *(verified)*
+- [tools/coyodex/preindex_lib.py:198](tools/coyodex/preindex_lib.py:198) — Pre-index (C33) · asks version control for the files it tracks, instead of walking the disk
+- [tools/coyodex/preindex_lib.py:201](tools/coyodex/preindex_lib.py:201) — Pre-index (C33) · adds files a person created but never added, and drops everything version control is told to ignore
+- [tools/coyodex/preindex_lib.py:224](tools/coyodex/preindex_lib.py:224) — Pre-index (C33) · falls back to reading the disk when the folder is not under version control
 
-**BR2 — A request whose Host header does not name loopback is refused.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) — Map server (C24) · refuses the request with 403 before routing it
+**BR2 — Generated code is not authored code** — Installed packages, build output, lock files and images are never analysed, so the map measures code people wrote.  *(verified)*
+- [tools/coyodex/preindex_lib.py:148](tools/coyodex/preindex_lib.py:148) — Pre-index (C33) · drops any file sitting under a folder on the built-in list of generated and vendored trees
+- [tools/coyodex/preindex_lib.py:236](tools/coyodex/preindex_lib.py:236) — Pre-index (C33) · applies that built-in list before anything the project itself declares
+- [tools/coyodex/preindex_lib.py:257](tools/coyodex/preindex_lib.py:257) — Pre-index (C33) · prunes the same folders in the disk walk, so both ways of listing files give the same shape
+- enforced at: Brief the reader on what will be analysed (UC3) → SF20 step 3 · Declare code the map should not describe (UC4) → SF20 step 3 · Size the code tree before choosing altitude (UC5) → SF20 step 3
 
-**BR3 — A page on another origin may not add, forget or reorder a project.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:540](tools/coyodex/viewer/serve.py:540) — Map server (C24) · requires a custom header a cross-origin page cannot set without a preflight
+**BR3 — Committed code can be declared out of the map** — A project can name committed folders and files that the map is not meant to describe.  *(verified)*
+- [tools/coyodex/preindex_lib.py:242](tools/coyodex/preindex_lib.py:242) — Pre-index (C33) · tests each surviving file against the project's own exclusion list, kept separate from the built-in list
+- [tools/coyodex/preindex_lib.py:245](tools/coyodex/preindex_lib.py:245) — Pre-index (C33) · takes the file out of the analysed tree when the deciding pattern is an exclusion
+- [tools/coyodex/pathmatch.py:52](tools/coyodex/pathmatch.py:52) — Command shell and build setup (C4) · a pattern naming a folder and no wildcard also covers everything beneath that folder
+- enforced at: Brief the reader on what will be analysed (UC3) → SF20 step 4 · Declare code the map should not describe (UC4) step 4 · Declare code the map should not describe (UC4) → SF20 step 4 · Size the code tree before choosing altitude (UC5) → SF20 step 4
 
-**BR9 — A folder is served only when it already holds a `.coyodex/` directory.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:574](tools/coyodex/viewer/serve.py:574) — Map server (C24) · refuses a folder with no map directory
+**BR4 — The last pattern written decides** — When several exclusion patterns match one file, the last pattern written decides. So a later line can put one file back.  *(verified)*
+- [tools/coyodex/ignorefile.py:88](tools/coyodex/ignorefile.py:88) — Command shell and build setup (C4) · keeps scanning after a match, so the answer is the last matching pattern and not the first
+- [tools/coyodex/ignorefile.py:95](tools/coyodex/ignorefile.py:95) — Command shell and build setup (C4) · reads the file as excluded only when that deciding pattern is an exclusion, not a put-back
+- [tools/coyodex/preindex_lib.py:245](tools/coyodex/preindex_lib.py:245) — Pre-index (C33) · keeps the file when the deciding pattern is a put-back line
+- enforced at: Declare code the map should not describe (UC4) step 5
 
-**BR14 — A request body over 64 KB is not parsed at all.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:694](tools/coyodex/viewer/serve.py:694) — Map server (C24) · refuses an unstated, zero or oversized Content-Length
+**BR5 — A narrowed tree always says so** — Every check and every screen reading a narrowed tree reports which patterns narrowed it and how many files went.  *(verified)*
+- [tools/coyodex/validate_model.py:4464](tools/coyodex/validate_model.py:4464) — Map validator (C13) · the disclosure runs on every validate, before the coverage checks, not only in the expensive pass
+- [tools/coyodex/scope.py:132](tools/coyodex/scope.py:132) — Command shell and build setup (C4) · the briefing shown before a build states how many files the project's own list removed
+- [tools/coyodex/preindex.py:431](tools/coyodex/preindex.py:431) — Pre-index (C33) · the pre-index report names the removed count and every pattern behind it
+- [tools/coyodex/viewer/filetree.py:261](tools/coyodex/viewer/filetree.py:261) — File browser tree (C46) · puts the note on the root of the file browser, so a narrowed tree is never shown as the whole project
 
-### What the server will read off disk *(BLK2)*
+**BR6 — A pattern that removed nothing is named** — A pattern that removed no file is named on its own, including a line whose spelling can never match anything.  *(verified)*
+- [tools/coyodex/ignorefile.py:133](tools/coyodex/ignorefile.py:133) — Command shell and build setup (C4) · collects the patterns that decided nothing, so no report can offer only a total
+- [tools/coyodex/validate_analysis.py:336](tools/coyodex/validate_analysis.py:336) — Map validator (C13) · validate names those patterns in a warning of their own
+- [tools/coyodex/scope.py:135](tools/coyodex/scope.py:135) — Command shell and build setup (C4) · the briefing before a build warns about them too
+- [tools/coyodex/ignorefile.py:170](tools/coyodex/ignorefile.py:170) — Command shell and build setup (C4) · a line carrying a comment after the pattern is dropped and reported, because a comment only opens at the start of a line
+- [tools/coyodex/ignorefile.py:176](tools/coyodex/ignorefile.py:176) — Command shell and build setup (C4) · a line made only of slashes is dropped and reported instead of being stored as a pattern that can never fire
 
-which files leave the machine, and at which commit
+### What a code link must point at *(BLK2)*
 
-**BR4 — A file is read at the map's pinned commit, never from a path that escapes the repository.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:636](tools/coyodex/viewer/serve.py:636) — Map server (C24) · rejects absolute paths, backslashes, NUL bytes and any `..` segment before reading
+The one shape every code link takes, and which line inside a file it is allowed to name.
 
-**BR5 — The one route that reads real disk still resolves inside the repository.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:275](tools/coyodex/viewer/serve.py:275) — Map server (C24) · re-resolves the real path inside the work tree, refusing a symlink that escapes
+**BR20 — No line, no claim** — A relationship, a step or a decision must name the code line that proves it, or the map is refused.  *(verified)*
+- [tools/coyodex/validate_model.py:3540](tools/coyodex/validate_model.py:3540) — Map validator (C13) · refuses a relationship that gives no line and does not declare that none exists
+- [tools/coyodex/validate_model.py:1133](tools/coyodex/validate_model.py:1133) — Map validator (C13) · refuses a decision that lists no place where it is enforced
+- [tools/coyodex/validate_model.py:1140](tools/coyodex/validate_model.py:1140) — Map validator (C13) · refuses one enforcement place carrying neither a line nor a declared absence
+- [tools/coyodex/validate_model.py:401](tools/coyodex/validate_model.py:401) — Map validator (C13) · refuses a step between two parts of the product that gives no line of its own
 
-**BR6 — A commit value can never be parsed by git as a flag.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:643](tools/coyodex/viewer/serve.py:643) — Map server (C24) · accepts a bare hex SHA and nothing else
+**BR21 — A missing line is said out loud** — A claim may declare that no single line enforces it. Declaring no line and naming a line at once is refused.  *(verified)*
+- [tools/coyodex/validate_model.py:1143](tools/coyodex/validate_model.py:1143) — Map validator (C13) · refuses an enforcement place that both declares no line and gives a line
+- [tools/coyodex/validate_model.py:3546](tools/coyodex/validate_model.py:3546) — Map validator (C13) · warns when a relationship declares no line and still carries one
+- [tools/coyodex/validate_model.py:407](tools/coyodex/validate_model.py:407) — Map validator (C13) · warns when a step declares no line and still carries one
+- [tools/coyodex/audit_model.py:966](tools/coyodex/audit_model.py:966) — Map auditor (C14) · leaves a declared absence out of the claim list a checker is asked to read
 
-**BR7 — A branch or revision expression can never be parsed by git as a flag.**  *(access)*  *(inferred)*
-- [tools/coyodex/impact_git.py:59](tools/coyodex/impact_git.py:59) — Change-impact engine (C40) · guards the ref on the path that actually reaches git's argv
+**BR22 — One real line that can act** — A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts.  *(verified)*
+- [tools/coyodex/validate_model.py:3840](tools/coyodex/validate_model.py:3840) — Map validator (C13) · refuses an enforcement place that names a file without a line
+- [tools/coyodex/validate_model.py:1146](tools/coyodex/validate_model.py:1146) — Map validator (C13) · refuses the same file-only place while a worker is still writing its own rows
+- [tools/coyodex/validate_model.py:4060](tools/coyodex/validate_model.py:4060) — Map validator (C13) · blocks a link whose file is not in the project
+- [tools/coyodex/validate_model.py:4078](tools/coyodex/validate_model.py:4078) — Map validator (C13) · blocks a link naming a line past the end of the file
+- [tools/coyodex/anchors.py:128](tools/coyodex/anchors.py:128) — Map document (C1) · counts a blank line as a line that cannot act
+- [tools/coyodex/anchors.py:131](tools/coyodex/anchors.py:131) — Map document (C1) · matches the named line against shapes that never act, such as a comment or a function opening
+- [tools/coyodex/validate_model.py:4148](tools/coyodex/validate_model.py:4148) — Map validator (C13) · runs that shape test over every link claiming an action fires there
 
-**BR8 — The folder picker walks the whole filesystem; nothing on that route narrows it.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) — Map server (C24) · the origin guard is the only barrier this route has
+**BR23 — An example, or the exact place** — A relationship shows one example line where it happens. A step shows the exact line, which the reader can open. A change to that line hits the step it belongs to.  *(verified)*
+- [tools/coyodex/views.py:649](tools/coyodex/views.py:649) — Graph builder (C45) · shows exactly one line for each relationship, as a witness rather than a list of every call
+- [tools/coyodex/views.py:490](tools/coyodex/views.py:490) — Graph builder (C45) · renders a step's own line as a link the reader can open
+- [tools/coyodex/impact_lib.py:236](tools/coyodex/impact_lib.py:236) — Change impact (C34) · registers a step's line, so a code change on it points back at that step
 
-**BR10 — A frontend asset is served by exact name, never by a path.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/serve.py:702](tools/coyodex/viewer/serve.py:702) — Map server (C24) · matches the request against a fixed whitelist of names
+**BR24 — Same line, one claim** — Two workers reporting the same relationship at the same line are folded into one claim. Two different lines are both kept, so a person decides which one is right.  *(verified)*
+- [tools/coyodex/assemble.py:713](tools/coyodex/assemble.py:713) — Fragment merge (C2) · makes the line part of what identifies a relationship, so only an exact match folds
+- [tools/coyodex/assemble.py:710](tools/coyodex/assemble.py:710) — Fragment merge (C2) · keeps a relationship that names no line, because nothing tells two of them apart
+- [tools/coyodex/validate_model.py:3570](tools/coyodex/validate_model.py:3570) — Map validator (C13) · flags one relationship declared twice at two different lines, for a person to settle
 
-### What the viewer page will run or render *(BLK3)*
+**BR25 — A moved link is a question, not a verdict** — A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right.  *(verified)*
+- [tools/coyodex/lint_fragment.py:479](tools/coyodex/lint_fragment.py:479) — Fragment merge (C2) · sends every moved link out on the advisory channel, beside the other nudges
+- [tools/coyodex/lint_fragment.py:491](tools/coyodex/lint_fragment.py:491) — Fragment merge (C2) · prints the moved-link count on a passing verdict, so a clean check still says how many moved
+- [tools/coyodex/anchor_drift.py:229](tools/coyodex/anchor_drift.py:229) — Grounding record (C23) · drops one report the reader has recorded as a false alarm
+- [tools/coyodex/anchor_drift.py:169](tools/coyodex/anchor_drift.py:169) — Grounding record (C23) · requires the whole claim and a non-empty reason, so one record answers one report
+- [tools/coyodex/anchor_drift.py:246](tools/coyodex/anchor_drift.py:246) — Grounding record (C23) · reports back a record that silences nothing, because the claim changed or the line was fixed
 
-which code executes in the reader's browser, and which text reaches the page
+**BR26 — A place in the running system is not a link** — Where a unit runs, how it is reached, and where a signal is emitted stay plain words. No single code line is that place.  *(verified)*
+- [tools/coyodex/views.py:619](tools/coyodex/views.py:619) — Graph builder (C45) · writes what a unit runs on and how it is reached as plain cells, with no link
+- [tools/coyodex/views.py:623](tools/coyodex/views.py:623) — Graph builder (C45) · writes where a signal is emitted and where it is watched as plain cells, with no link
+- [tools/coyodex/viewer/viewer.js:8178](tools/coyodex/viewer/viewer.js:8178) — Map canvas (C55), Map reading pages (C56), Trail and history (C57), Source column (C58) · shows the emit place in the browser as text, unlike the fields the viewer turns into links
 
-**BR11 — An editor hand-off link may only use a scheme on the allowlist.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/viewer.js:5976](tools/coyodex/viewer/viewer.js:5976) — Diagram canvas & drill navigation (C23), Change-impact overlay (C32), Element info pane & selection (C37), File browser & code viewer (C38), Map search sidebar (C39) · refuses a template whose scheme is not allowlisted
+### What blocks a map, and how a finding is closed *(BLK3)*
 
-**BR12 — A third-party script runs only when its content hash matches.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/viewer.html:17](tools/coyodex/viewer/viewer.html:17) — Diagram canvas & drill navigation (C23), Change-impact overlay (C32), Map search sidebar (C39) · carries Subresource Integrity on every tag
+Which findings stop a build, which only advise, and what it takes to close one for good.
 
-**BR13 — Text authored in the map is escaped before it reaches a diagram label.**  *(access)*  *(inferred)*
-- [tools/coyodex/viewer/gen_viewer.py:97](tools/coyodex/viewer/gen_viewer.py:97) — View bundle assembler (C22), Context & subsystem diagram generator (C26), Domain diagram generator (C27), Deployment & messaging diagram generator (C28), Behavioural flow generator (C29) · escapes label text before the renderer sees it
+**BR40 — Blocking only where a fix exists** — A finding stops the work only when whoever receives it can still fix it. A judgement call only advises.  *(verified)*
+- [tools/coyodex/finalize.py:345](tools/coyodex/finalize.py:345) — Pre-commit gate run (C16) · A disproved claim still standing in the map stops the run, because correcting or dropping it is always possible.
+- [tools/coyodex/finalize.py:316](tools/coyodex/finalize.py:316) — Pre-commit gate run (C16) · A code link pointing at the wrong line is only advice, because the repair tool cannot apply every one.
+- [tools/coyodex/finalize.py:420](tools/coyodex/finalize.py:420) — Pre-commit gate run (C16) · How boxes are grouped on a screen is recorded as information, and never allowed to move the verdict.
+- [tools/coyodex/lint_fragment.py:174](tools/coyodex/lint_fragment.py:174) — Fragment merge (C2) · An access rule that names no stake stops the worker writing it, the one person able to answer.
+- [tools/coyodex/lint_fragment.py:480](tools/coyodex/lint_fragment.py:480) — Fragment merge (C2) · A judgement-shaped nudge is printed for the worker and never fails the worker's own check.
+
+**BR41 — Silence is not a pass** — A check that did not run never counts as a check that passed. The run names each check that was missing.  *(verified)*
+- [tools/coyodex/finalize.py:490](tools/coyodex/finalize.py:490) — Pre-commit gate run (C16) · One check that should have run and did not makes the whole verdict incomplete.
+- [tools/coyodex/finalize.py:934](tools/coyodex/finalize.py:934) — Pre-commit gate run (C16) · An incomplete read exits as a failure, exactly like a finding that blocks.
+- [tools/coyodex/lint_fragment.py:487](tools/coyodex/lint_fragment.py:487) — Fragment merge (C2) · A fragment that could not be read gives a did-not-run verdict instead of a clean one.
+- [tools/coyodex/finalize.py:393](tools/coyodex/finalize.py:393) — Pre-commit gate run (C16) · A check this run could have done, and was not asked to do, is reported as its own line.
+- [tools/coyodex/finalize.py:511](tools/coyodex/finalize.py:511) — Pre-commit gate run (C16) · The written report lists every check that did not run, and says their silence is not a pass.
+- enforced at: Run the pre-commit read (UC19) step 8
+
+**BR42 — A reason, or nothing is recorded** — Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused.  *(verified)*
+- [tools/coyodex/record.py:264](tools/coyodex/record.py:264) — Map lookups (C3) · A line that names a finding and gives no reason is refused as a dismissal.
+- [tools/coyodex/records.py:151](tools/coyodex/records.py:151) — Map lookups (C3) · The one reader of these lines needs text after the separator before it reads a line as a record.
+- [tools/coyodex/record.py:269](tools/coyodex/record.py:269) — Map lookups (C3) · A heading no check reads is refused, because a line under it would silence nothing.
+- [tools/coyodex/record.py:309](tools/coyodex/record.py:309) — Map lookups (C3) · The batch is re-read after writing, and refused whole when one line answers no finding.
+- [tools/coyodex/validate_model.py:3489](tools/coyodex/validate_model.py:3489) — Map validator (C13) · A stored line that tries to be a record and answers nothing is reported on every run.
+
+**BR43 — One line answers one finding** — A written reason answers only the findings it names. A line that would silence a whole family of findings silences none of them.  *(verified)*
+- [tools/coyodex/validate_model.py:3439](tools/coyodex/validate_model.py:3439) — Map validator (C13) · An unscoped deployment exception is reported as silencing nothing, because it once switched off every deployment finding at once.
+- [tools/coyodex/records.py:271](tools/coyodex/records.py:271) — Map lookups (C3) · A free-text key answers a line only when the line starts with that key, never when it merely contains it.
+- [tools/coyodex/validate_model.py:1487](tools/coyodex/validate_model.py:1487) — Map validator (C13) · A recorded folder covers itself and what sits under it, never a neighbour whose name starts the same.
+- [tools/coyodex/records.py:191](tools/coyodex/records.py:191) — Map lookups (C3) · A key list holding one token that is not a key records nothing, rather than the part it could read.
+
+**BR44 — Every silence is reported** — A run always says what each written reason did. The count of findings that reason silenced is shown, or the fact that it silenced none.  *(verified)*
+- [tools/coyodex/validate_model.py:3395](tools/coyodex/validate_model.py:3395) — Map validator (C13) · Names how many deployment findings the written reasons swallowed, and which groups they covered.
+- [tools/coyodex/validate_model.py:1262](tools/coyodex/validate_model.py:1262) — Map validator (C13) · Names the decision-sounding steps a written reason silenced, and says they were counted as done because of it.
+- [tools/coyodex/validate_model.py:3418](tools/coyodex/validate_model.py:3418) — Map validator (C13) · Names a written reason silencing nothing today, so an inert line and a mistyped one are told apart.
+- [tools/coyodex/validate_model.py:4744](tools/coyodex/validate_model.py:4744) — Map validator (C13) · Drops every written reason for one read, so a person sees the findings they hide without editing the map.
+
+**BR45 — Advice open is not clean** — A map with open advice is never reported as clean. A run marks one piece of advice answered only where it can name the written line that answers it.  *(verified)*
+- [tools/coyodex/finalize.py:492](tools/coyodex/finalize.py:492) — Pre-commit gate run (C16) · Open advice gives the run its own verdict, which is not the clean one.
+- [tools/coyodex/finalize.py:929](tools/coyodex/finalize.py:929) — Pre-commit gate run (C16) · Says on screen that advice is not a pass, and that each piece is fixed or recorded.
+- [tools/coyodex/finalize.py:719](tools/coyodex/finalize.py:719) — Pre-commit gate run (C16) · Marks a piece of advice unanswered when the finding it names carries no recorded line.
+- [tools/coyodex/finalize.py:715](tools/coyodex/finalize.py:715) — Pre-commit gate run (C16) · Says the pairing cannot be decided, rather than guessing that a piece of advice was answered.
+
+**BR46 — The merge refuses to pick a winner** — When two workers state the same thing differently, the merge stops and writes nothing. Neither version is quietly chosen over the other.  *(verified)*
+- [tools/coyodex/assemble.py:394](tools/coyodex/assemble.py:394) — Fragment merge (C2) · Two workers claiming one identifier is a conflict, never one silently overwriting the other.
+- [tools/coyodex/assemble.py:382](tools/coyodex/assemble.py:382) — Fragment merge (C2) · One fact stated twice with different values stops the merge, and both workers are named.
+- [tools/coyodex/assemble.py:558](tools/coyodex/assemble.py:558) — Fragment merge (C2) · Two rows for one channel disagreeing on a value is reported, because the merge will not choose between them.
+- [tools/coyodex/assemble.py:891](tools/coyodex/assemble.py:891) — Fragment merge (C2) · A merge conflict leaves no map written at all.
+- enforced at: Merge the workers' fragments into one map (UC8) → SF30 step 3 · Turn path rules into explicit assignments (UC9) → SF30 step 3
+
+### How coarse the map may be *(BLK4)*
+
+How big one box may get, how many may share a screen, and when a box should become a group.
+
+**BR60 — Where one box stops** — A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead.  *(verified)*
+- [tools/coyodex/preindex_lib.py:599](tools/coyodex/preindex_lib.py:599) — Pre-index (C33) · stops at a folder that fits both size limits and counts it as exactly one box
+- [tools/coyodex/preindex_lib.py:616](tools/coyodex/preindex_lib.py:616) — Pre-index (C33) · goes inside a folder that is over the limits, so its parts are counted one by one
+- [tools/coyodex/preindex_lib.py:615](tools/coyodex/preindex_lib.py:615) — Pre-index (C33) · counts an oversized folder with no sub-folders as several boxes, never as one
+
+**BR61 — Only product code raises the expected count** — The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.  *(verified)*
+- [tools/coyodex/preindex_lib.py:577](tools/coyodex/preindex_lib.py:577) — Pre-index (C33) · drops documentation, settings and other text files before counting anything
+- [tools/coyodex/preindex_lib.py:579](tools/coyodex/preindex_lib.py:579) — Pre-index (C33) · drops test folders, internal folders and asset folders such as icons, images and translations
+- [tools/coyodex/preindex_lib.py:609](tools/coyodex/preindex_lib.py:609) — Pre-index (C33) · folds a nearly empty sub-folder into its parent rather than counting a box for it
+- [tools/coyodex/preindex_lib.py:619](tools/coyodex/preindex_lib.py:619) — Pre-index (C33) · counts the loose files of a folder as a box only when they hold real code
+
+**BR62 — Coarseness advises, it never blocks** — How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes.  *(verified)*
+- [tools/coyodex/validate_model.py:4481](tools/coyodex/validate_model.py:4481) — Map validator (C13) · files the box-count comparison under notes, never under failures
+- [tools/coyodex/validate_model.py:4501](tools/coyodex/validate_model.py:4501) — Map validator (C13) · files the crowded-screen and thin-screen findings under notes, never under failures
+- [tools/coyodex/validate_analysis.py:382](tools/coyodex/validate_analysis.py:382) — Map validator (C13) · says nothing at all while the number of boxes stays inside the forty percent margin
+- enforced at: Check the map is well formed (UC11) step 11
+
+**BR63 — About five boxes to a screen** — One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them.  *(verified)*
+- [tools/coyodex/balance_lib.py:613](tools/coyodex/balance_lib.py:613) — Diagram balance report (C15) · counts a screen as reading well while it carries three to nine boxes
+- [tools/coyodex/balance_lib.py:294](tools/coyodex/balance_lib.py:294) — Diagram balance report (C15) · raises the crowding note when the first screen carries more than twelve boxes
+- [tools/coyodex/balance_lib.py:307](tools/coyodex/balance_lib.py:307) — Diagram balance report (C15) · raises the same crowding note when a group carries more than twelve boxes
+
+**BR64 — A family of look-alike boxes may be crowded** — A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes.  *(verified)*
+- [tools/coyodex/balance_lib.py:194](tools/coyodex/balance_lib.py:194) — Diagram balance report (C15) · reads the children as one family when two thirds of them sit in the same folder
+- [tools/coyodex/balance_lib.py:198](tools/coyodex/balance_lib.py:198) — Diagram balance report (C15) · reads the children as one family when two thirds of their names end in the same word
+- [tools/coyodex/balance_lib.py:309](tools/coyodex/balance_lib.py:309) — Diagram balance report (C15) · leaves such a family alone until it passes fifteen boxes
+
+**BR65 — Where a thin screen is a fault** — A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out.  *(verified)*
+- [tools/coyodex/balance_lib.py:290](tools/coyodex/balance_lib.py:290) — Diagram balance report (C15) · raises the thin note when the first screen shows under three boxes and the map holds many
+- [tools/coyodex/balance_lib.py:303](tools/coyodex/balance_lib.py:303) — Diagram balance report (C15) · raises a note when a group holds exactly one box, so the level earns nothing
+- [tools/coyodex/balance.py:147](tools/coyodex/balance.py:147) — Diagram balance report (C15) · names the thin screens deeper in the map and states plainly that none of them is a fault
+
+**BR66 — Re-grouping moves boxes, never changes them** — A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested.  *(verified)*
+- [tools/coyodex/balance_lib.py:524](tools/coyodex/balance_lib.py:524) — Diagram balance report (C15) · starts from exactly the boxes already on the screen, so none is created and none is dropped
+- [tools/coyodex/balance.py:103](tools/coyodex/balance.py:103) — Diagram balance report (C15) · the only thing a suggestion adds to the map is a group row
+- [tools/coyodex/balance.py:107](tools/coyodex/balance.py:107) — Diagram balance report (C15) · the only change asked of an existing box is which group it belongs to
+
+### What the story must reach *(BLK5)*
+
+Which features the walk has to visit, who counts as an actor, and who a feature is for.
+
+**BR80 — A claimed place in the story** — Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.  *(verified)*
+- [tools/coyodex/validate_model.py:1693](tools/coyodex/validate_model.py:1693) — Map validator (C13) · reports a feature claiming the story must reach it, when no story step does
+- [tools/coyodex/validate_model.py:1726](tools/coyodex/validate_model.py:1726) — Map validator (C13) · reports a story step whose work sits in a feature claiming the story skips it
+- [tools/coyodex/validate_model.py:1701](tools/coyodex/validate_model.py:1701) — Map validator (C13) · separates a feature that answered nothing from a feature claiming the story skips it
+- [tools/coyodex/validate_model.py:2883](tools/coyodex/validate_model.py:2883) — Map validator (C13) · rejects any answer outside the two allowed words, so an unanswered feature stays visible
+
+**BR81 — The driver is the one with the goal** — The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver.  *(verified)*
+- [tools/coyodex/validate_model.py:1803](tools/coyodex/validate_model.py:1803) — Map validator (C13) · blocks a use case that names no driving party at all
+- [tools/coyodex/validate_model.py:1820](tools/coyodex/validate_model.py:1820) — Map validator (C13) · reports a use case naming a person and a program together, because the program is usually delivery machinery
+- [tools/coyodex/audit_model.py:692](tools/coyodex/audit_model.py:692) — Map auditor (C14) · reports a traced scenario whose opening party is not one of the declared drivers
+- enforced at: Make the map's two layers refute each other (UC12) step 7
+
+**BR82 — Who a feature is for, decided by its people** — Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.  *(verified)*
+- [tools/coyodex/validate_model.py:725](tools/coyodex/validate_model.py:725) — Map validator (C13) · sorts each driving party's vote by whether that party is a person or a program
+- [tools/coyodex/validate_model.py:726](tools/coyodex/validate_model.py:726) — Map validator (C13) · counts the people's votes, and falls back to the programs only when no person voted
+- [tools/coyodex/features.py:353](tools/coyodex/features.py:353) — Feature index (C17) · the feature's record takes the derived answer, so nothing on the feature can contradict its parties
+- [tools/coyodex/validate_model.py:3057](tools/coyodex/validate_model.py:3057) — Map validator (C13) · reports a feature whose people pull to opposite sides, unless the map records why
+
+**BR83 — Off the walk is not off the story** — A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.  *(verified)*
+- [tools/coyodex/features.py:193](tools/coyodex/features.py:193) — Feature index (C17) · uses the author's named neighbour when the feature carries one
+- [tools/coyodex/features.py:203](tools/coyodex/features.py:203) — Feature index (C17) · falls back to the last walk step the feature's own parties drive
+- [tools/coyodex/features.py:207](tools/coyodex/features.py:207) — Feature index (C17) · puts a feature with nothing to hang on at the end of the column
+- [tools/coyodex/validate_model.py:2915](tools/coyodex/validate_model.py:2915) — Map validator (C13) · rejects a named neighbour that is not a defined feature
+- [tools/coyodex/validate_model.py:2899](tools/coyodex/validate_model.py:2899) — Map validator (C13) · blocks a story place on a code area or a data area, because only a feature sits in the column
+
+**BR84 — Every front door answers to somebody** — A front door is accounted for when a traced scenario reaches it, or a use case names it. A door nothing claims is reported, including one that starts itself with no caller. Writing a door off silences the report, and the map still counts it as a gap.  *(verified)*
+- [tools/coyodex/validate_model.py:1313](tools/coyodex/validate_model.py:1313) — Map validator (C13) · lists every outside-facing door that neither a traced scenario nor a use case reaches
+- [tools/coyodex/validate_model.py:1335](tools/coyodex/validate_model.py:1335) — Map validator (C13) · keeps a self-starting job in the same test, so having no caller is not an excuse
+- [tools/coyodex/validate_model.py:1365](tools/coyodex/validate_model.py:1365) — Map validator (C13) · drops a door the map has written off, so the report stays quiet about it
+- [tools/coyodex/validate_model.py:1530](tools/coyodex/validate_model.py:1530) — Map validator (C13) · counts the written-off doors out loud, so a silenced gap is still visible
+
+**BR85 — Each party says why it comes** — Every party that drives a feature states in its own words what it comes there to do. A blank line does not count as an answer. A line written for a party that drives nothing is reported too.  *(verified)*
+- [tools/coyodex/validate_model.py:2971](tools/coyodex/validate_model.py:2971) — Map validator (C13) · reports a driving party that has no line of its own
+- [tools/coyodex/validate_model.py:2944](tools/coyodex/validate_model.py:2944) — Map validator (C13) · blocks an empty line, which would count the party as covered while the arrow still falls back
+- [tools/coyodex/validate_model.py:2981](tools/coyodex/validate_model.py:2981) — Map validator (C13) · reports a line written for a party that drives none of this feature's work
+- [tools/coyodex/validate_model.py:2930](tools/coyodex/validate_model.py:2930) — Map validator (C13) · blocks these lines on a code area or a data area, because only a feature has parties coming to it
+
+**BR86 — One person, several hats** — When one person wears several roles, the map records the link between those roles. A role that turns into another names the action where the change happens.  *(verified)*
+- [tools/coyodex/validate_model.py:3017](tools/coyodex/validate_model.py:3017) — Map validator (C13) · blocks a role change that names no action where the change happens
+- [tools/coyodex/validate_model.py:3014](tools/coyodex/validate_model.py:3014) — Map validator (C13) · allows only two kinds of link, so a misspelled one cannot pass unseen
+
+### Who owns a piece of data *(BLK6)*
+
+Which part of a project is the system of record for a type, and where that type actually lives.
+
+**BR100 — No card without a real type** — The map draws a kind of data only when the code defines it as a named type.  *(verified)*
+- [tools/coyodex/validate_model.py:3754](tools/coyodex/validate_model.py:3754) — Map validator (C13) · rejects a data card that points at no definition in the code
+- [tools/coyodex/validate_model.py:3832](tools/coyodex/validate_model.py:3832) — Map validator (C13) · requires that pointer to be a real file location, so a reader can open the type
+
+**BR101 — Only the writer owns the data** — The map credits a part of the project with owning data only when that part's own code writes it.  *(verified)*
+- [tools/coyodex/validate_model.py:4533](tools/coyodex/validate_model.py:4533) — Map validator (C13) · counts only save and write links when deciding which part owns a kind of data
+- [tools/coyodex/assemble.py:89](tools/coyodex/assemble.py:89) — Fragment merge (C2) · turns an unclear touch into a read, so a filled-in link never grants ownership
+- [tools/coyodex/assemble.py:128](tools/coyodex/assemble.py:128) — Fragment merge (C2) · raises a filled-in link to ownership only when some step shows a real write
+
+**BR102 — Data nothing writes needs no owner** — Data that lives inside another record, in the source, or only during a call needs no owner.  *(verified)*
+- [tools/coyodex/grammar.py:295](tools/coyodex/grammar.py:295) — Map document (C1) · names the five ways of being stored that mean nothing in the project writes the data
+- [tools/coyodex/validate_model.py:4551](tools/coyodex/validate_model.py:4551) — Map validator (C13) · excuses data stored in one of those ways from the missing-owner report
+
+**BR103 — Every save must name what it stores** — A save into a store must be explained by a named type that records the same store.  *(verified)*
+- [tools/coyodex/validate_model.py:2747](tools/coyodex/validate_model.py:2747) — Map validator (C13) · accepts the save when the saving part writes a named type kept in that store
+- [tools/coyodex/validate_model.py:2748](tools/coyodex/validate_model.py:2748) — Map validator (C13) · also accepts it when the part saves on behalf of the type's owner, one step away
+
+**BR104 — Name the store, do not describe it** — Where data lives must be recorded exactly enough for a reader to find it in the running system.  *(verified)*
+- [tools/coyodex/validate_model.py:2795](tools/coyodex/validate_model.py:2795) — Map validator (C13) · flags a compartment named with no store linked to it
+- [tools/coyodex/validate_model.py:2817](tools/coyodex/validate_model.py:2817) — Map validator (C13) · flags a compartment name that reads as a description, spotted by the space inside it
+
+**BR105 — Each link between two types is written once** — A relation between two kinds of data is recorded on one side only, never twice.  *(verified)*
+- [tools/coyodex/validate_model.py:3780](tools/coyodex/validate_model.py:3780) — Map validator (C13) · rejects a pair where both kinds of data declare the same link
+- [tools/coyodex/validate_model.py:3680](tools/coyodex/validate_model.py:3680) — Map validator (C13) · rejects the same link written twice on one card
+
+**BR106 — A lifecycle may be a guess** — A lifecycle whose states no line declares is kept as a guess rather than thrown away.  *(verified)*
+- [tools/coyodex/validate_model.py:2658](tools/coyodex/validate_model.py:2658) — Map validator (C13) · marks a lifecycle citing no declaring line as guessed instead of rejecting it
+- [tools/coyodex/model.py:322](tools/coyodex/model.py:322) — Map document (C1) · makes the declaring line optional, with nothing written meaning guessed
+
+### What the grounding record may say *(BLK7)*
+
+What a map may claim about how hard its own statements were tested, and what it may not.
+
+**BR120 — Contradiction blocks, thin testing only warns** — A map is blocked when the numbers in its testing record contradict each other. Having tested very little only raises a warning.  *(verified)*
+- [tools/coyodex/validate_model.py:2548](tools/coyodex/validate_model.py:2548) — Map validator (C13) · Blocks a record whose held-up, disproved and unsettled tallies do not sum to the number of statements checked.
+- [tools/coyodex/validate_model.py:2555](tools/coyodex/validate_model.py:2555) — Map validator (C13) · Blocks a record claiming more statements were checked than the list ever held.
+- [tools/coyodex/validate_model.py:2530](tools/coyodex/validate_model.py:2530) — Map validator (C13) · Blocks negative tallies, which can make a wrong record add up.
+- [tools/coyodex/validate_model.py:4427](tools/coyodex/validate_model.py:4427) — Map validator (C13) · Sends those arithmetic failures to the blocking list, so a map cannot ship carrying them.
+- [tools/coyodex/validate_model.py:4423](tools/coyodex/validate_model.py:4423) — Map validator (C13) · Sends every judgement about how much was checked to the warning list instead, so effort never blocks a map.
+- [tools/coyodex/validate_model.py:2413](tools/coyodex/validate_model.py:2413) — Map validator (C13) · Warns when a map carries no testing record at all, so silence cannot read as a clean pass.
+- [tools/coyodex/validate_model.py:2435](tools/coyodex/validate_model.py:2435) — Map validator (C13) · Warns when under three statements in five held up, and asks which statements were checked first.
+
+**BR121 — Only three answers** — A check on one statement comes back held up, disproved, or impossible to settle from the code. A fourth answer is refused, never rounded into one of the three.  *(verified)*
+- [tools/coyodex/grounding.py:157](tools/coyodex/grounding.py:157) — Grounding record (C23) · Refuses to write the record when any check carries a word outside the three answers.
+- [tools/coyodex/grounding.py:767](tools/coyodex/grounding.py:767) — Grounding record (C23) · Runs the same refusal the moment a checker returns, where the fix is still cheap.
+- [tools/coyodex/grounding.py:103](tools/coyodex/grounding.py:103) — Grounding record (C23) · Reaches the third answer only when a checker actually said the code cannot settle the statement.
+
+**BR122 — A split vote settles nothing** — A statement counts as held up only when more than half of its checks agree. An even split is filed as unsettled and credited to neither side.  *(verified)*
+- [tools/coyodex/grounding.py:99](tools/coyodex/grounding.py:99) — Grounding record (C23) · Requires a strict majority of the checks before a statement counts as held up.
+- [tools/coyodex/grounding.py:107](tools/coyodex/grounding.py:107) — Grounding record (C23) · Files an even split as unsettled rather than giving it to the larger-looking side.
+- [tools/coyodex/anchor_drift.py:90](tools/coyodex/anchor_drift.py:90) — Grounding record (C23) · Applies the same majority before the code-link check will touch a statement at all.
+- [tools/coyodex/grounding.py:281](tools/coyodex/grounding.py:281) — Grounding record (C23) · Lists a split apart from a checker's own cannot-settle answer, so a person adjudicates it.
+
+**BR123 — Stopping early must be declared** — A pass that left statements unchecked is refused until the operator declares that stopping early was deliberate. The declaration must name what was checked first.  *(verified)*
+- [tools/coyodex/grounding.py:181](tools/coyodex/grounding.py:181) — Grounding record (C23) · Refuses the record while any statement has no verdict, unless the pass is declared partial.
+- [tools/coyodex/grounding.py:187](tools/coyodex/grounding.py:187) — Grounding record (C23) · Refuses the partial declaration when every statement did get a verdict, so a finished pass cannot understate itself.
+- [tools/coyodex/grounding.py:192](tools/coyodex/grounding.py:192) — Grounding record (C23) · Refuses a partial pass that carries no note saying which statements were checked first.
+
+**BR124 — Scored against the list as it was pinned** — How much of a map was checked is counted against the statement list as it stood before any fixes. Statements nobody voted on stay in that list.  *(verified)*
+- [tools/coyodex/grounding.py:163](tools/coyodex/grounding.py:163) — Grounding record (C23) · Refuses a verdict for a statement missing from the pinned list, which proves the wrong snapshot was used.
+- [tools/coyodex/grounding.py:203](tools/coyodex/grounding.py:203) — Grounding record (C23) · Keeps the whole pinned list as the total, so a short pass cannot shrink what it is measured against.
+- [tools/coyodex/grounding.py:204](tools/coyodex/grounding.py:204) — Grounding record (C23) · Subtracts an unvoted statement from the number checked, never from the total.
+- [tools/coyodex/grounding.py:225](tools/coyodex/grounding.py:225) — Grounding record (C23) · Counts separately how many statements the shipped map carries that a checker actually saw.
+
+**BR125 — A disproved statement may not stay** — A statement the checkers disproved may not remain in the map word for word. A run that finds one fails.  *(verified)*
+- [tools/coyodex/grounding.py:992](tools/coyodex/grounding.py:992) — Grounding record (C23) · Fails the run when any disproved statement still matches the shipped map.
+- [tools/coyodex/grounding.py:298](tools/coyodex/grounding.py:298) — Grounding record (C23) · Names each disproved statement the map still carries word for word, which the counts alone cannot show.
+
+**BR126 — A moved code link is a correction, not a disproof** — Correcting the code link under a statement never counts against the statement itself. The check that finds a moved link reports it and never fails a run.  *(verified)*
+- [tools/coyodex/anchor_drift.py:435](tools/coyodex/anchor_drift.py:435) — Grounding record (C23) · Ends the code-link check as a report, so a moved link cannot block a map.
+- [tools/coyodex/anchor_drift.py:86](tools/coyodex/anchor_drift.py:86) — Grounding record (C23) · Skips statements whose link deliberately points at a definition rather than the acting line, so a different line is not a move.
+- [tools/coyodex/anchor_drift.py:229](tools/coyodex/anchor_drift.py:229) — Grounding record (C23) · Lets a person record for good that the stored link is the right one, so the finding stops repeating.
+
+### Whether a build may proceed, and in which mode *(BLK8)*
+
+What coyodex does when asked to work on a project, and what it refuses to do without being told.
+
+**BR140 — The working tree decides the mode** — What coyodex does next is decided by the working tree, never by what the project's history still holds.  *(verified)*
+- [method/dispatch.md:75](method/dispatch.md:75) — The build method (C75) · looks for an existing map only in the working tree, not in the project's history
+- [method/dispatch.md:77](method/dispatch.md:77) — The build method (C75) · refuses to restore a deleted map from history, so deleting it is how a person asks for a fresh build
+- [method/dispatch.md:147](method/dispatch.md:147) — The build method (C75) · stops and says the baseline is up to date when the code matches the pin, instead of writing an empty report
+- [method/dispatch.md:150](method/dispatch.md:150) — The build method (C75) · routes to change analysis when the code differs from the pin, uncommitted edits included
+- enforced at: Archive a map so the next run builds from scratch (UC37) step 5
+
+**BR141 — Briefing before any work** — Before any work starts, the person is told which files will be read and what the pin means.  *(verified)*
+- [method/dispatch.md:22](method/dispatch.md:22) — The build method (C75) · requires the briefing to be the first message, shown word for word
+- [tools/coyodex/scope.py:172](tools/coyodex/scope.py:172) — Command shell and build setup (C4) · prints the briefing: how many files will be read and what the map's commit will claim
+- [tools/coyodex/scope.py:135](tools/coyodex/scope.py:135) — Command shell and build setup (C4) · names every ignore pattern that removed nothing, so a narrowing of the file set cannot pass unseen
+- enforced at: Brief the reader on what will be analysed (UC3) step 8 · Report what a code change did to the map (UC25) step 5
+
+**BR142 — A rebuild never reads the old map** — A rebuild never opens the map it is replacing, so the new map cannot copy the old one.  *(verified)*
+- [method/dispatch.md:119](method/dispatch.md:119) — The build method (C75) · forbids opening any earlier map during a build, filed archives included
+- [tools/coyodex/scope.py:116](tools/coyodex/scope.py:116) — Command shell and build setup (C4) · warns when a map sits inside the set of files to be read, so a hand-made copy is not analyzed as source
+
+**BR143 — Uncommitted code is pinned as uncommitted** — A map built on uncommitted code records a commit marked as not containing that code.  *(verified)*
+- [method.md:2043](method.md:2043) — The build method (C75) · requires the marked pin whenever the person chooses to go on without committing
+- [method/dispatch.md:49](method/dispatch.md:49) — The build method (C75) · states, at the moment of the choice, that the marked pin means the code is in no commit
+- [tools/coyodex/provenance.py:177](tools/coyodex/provenance.py:177) — Assignment pass (C25) · computes the pin and marks it whenever the tree holds uncommitted code
+- [tools/coyodex/provenance.py:360](tools/coyodex/provenance.py:360) — Assignment pass (C25) · writes that same pin into the map's header, so the header cannot claim a clean commit
+
+**BR144 — Nothing of the user's is changed unasked** — Nothing the user owns is committed, stashed or overwritten unless the user asks for it.  *(access)*  *(verified)*
+- [method/dispatch.md:46](method/dispatch.md:46) — The build method (C75) · forbids committing or stashing the person's code, even to make the pin clean
+- [method.md:2040](method.md:2040) — The build method (C75) · repeats the same ban at the moment the pin is recorded
+- [method/dispatch.md:171](method/dispatch.md:171) — The build method (C75) · regenerates a map from scratch only on an explicit request, after a warning and a confirmation
+
+**BR145 — The old map is filed, never deleted** — Clearing the way for a rebuild files the old map away instead of deleting it.  *(verified)*
+- [eval/tools/coyodex_eval/archive.py:107](eval/tools/coyodex_eval/archive.py:107) — Map archive and build guard (C66) · moves each part of the map into the archive folder rather than removing it
+- [eval/tools/coyodex_eval/archive.py:113](eval/tools/coyodex_eval/archive.py:113) — Map archive and build guard (C66) · puts back everything already moved when a move fails, so no half-filed map is left behind
+- enforced at: Archive a map so the next run builds from scratch (UC37) step 2
+
+**BR146 — No review of a running build** — A review of a build is refused while anything is still writing that build's map.  *(verified)*
+- [eval/tools/coyodex_eval/retro_precheck.py:201](eval/tools/coyodex_eval/retro_precheck.py:201) — Map archive and build guard (C66) · refuses when any map file was written moments ago
+- [eval/tools/coyodex_eval/retro_precheck.py:235](eval/tools/coyodex_eval/retro_precheck.py:235) — Map archive and build guard (C66) · refuses when another session has been active moments ago
+- [eval/tools/coyodex_eval/retro_precheck.py:191](eval/tools/coyodex_eval/retro_precheck.py:191) — Map archive and build guard (C66) · refuses when the review would be reading the map its own session just wrote
+
+### What the viewer may show and read *(BLK9)*
+
+Who may reach the map server, which files it will open, and which version of each it shows.
+
+**BR160 — Local machine only** — The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header.  *(access)*  *(verified)*
+- [tools/coyodex/viewer/serve.py:800](tools/coyodex/viewer/serve.py:800) — Map server (C43) · The server binds to the loopback address, so nothing off this machine can connect.
+- [tools/coyodex/viewer/serve.py:577](tools/coyodex/viewer/serve.py:577) — Map server (C43) · Every read request whose claimed site is not loopback is refused.
+- [tools/coyodex/viewer/serve.py:599](tools/coyodex/viewer/serve.py:599) — Map server (C43) · The same site check refuses a write request.
+- [tools/coyodex/viewer/serve.py:601](tools/coyodex/viewer/serve.py:601) — Map server (C43) · A write request without the private marker header is refused.
+- enforced at: Start the local map server (UC2) step 6
+
+**BR161 — Only folders you opened** — The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.  *(access)*  *(verified)*
+- [tools/coyodex/viewer/serve.py:799](tools/coyodex/viewer/serve.py:799) — Map server (C43) · The served set is built from the remembered list alone, with no disk search.
+- [tools/coyodex/viewer/serve.py:590](tools/coyodex/viewer/serve.py:590) — Map server (C43) · An address that does not name a served project is refused.
+- [tools/coyodex/viewer/serve.py:640](tools/coyodex/viewer/serve.py:640) — Map server (C43) · Adding a folder is refused unless it holds a coyodex folder.
+- [tools/coyodex/viewer/serve.py:794](tools/coyodex/viewer/serve.py:794) — Map server (C43) · A folder named at startup is skipped under the same condition.
+
+**BR162 — Only in-project, tracked files** — The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served.  *(access)*  *(verified)*
+- [tools/coyodex/viewer/serve.py:285](tools/coyodex/viewer/serve.py:285) — Map server (C43) · An absolute or otherwise malformed path is rejected before any read.
+- [tools/coyodex/viewer/serve.py:287](tools/coyodex/viewer/serve.py:287) — Map server (C43) · A path containing a step up to the parent folder is rejected.
+- [tools/coyodex/viewer/serve.py:697](tools/coyodex/viewer/serve.py:697) — Map server (C43) · The code request refuses a bad path before touching disk or version control.
+- [tools/coyodex/viewer/serve.py:324](tools/coyodex/viewer/serve.py:324) — Map server (C43) · A working-tree read refuses anything inside the version-control folder.
+- [tools/coyodex/viewer/serve.py:331](tools/coyodex/viewer/serve.py:331) — Map server (C43) · The real resolved location must still sit inside the project, so a link cannot escape.
+- [tools/coyodex/viewer/serve.py:338](tools/coyodex/viewer/serve.py:338) — Map server (C43) · A file version control ignores is refused, so an ignored secrets file never leaks.
+
+**BR163 — Always the map's own version** — What a reader sees always matches the map. Each file is read from version control at the commit the map was pinned to, not from the working copy. A map edited while the server runs is picked up on the next page load.  *(verified)*
+- [tools/coyodex/viewer/serve.py:701](tools/coyodex/viewer/serve.py:701) — Map server (C43) · A code request defaults to the map's pinned commit; another version is asked for explicitly.
+- [tools/coyodex/viewer/serve.py:435](tools/coyodex/viewer/serve.py:435) — Map server (C43) · The file browser lists the files present at the map's pinned commit.
+- [tools/coyodex/viewer/serve.py:592](tools/coyodex/viewer/serve.py:592) — Map server (C43) · Every project request first checks whether the map changed on disk.
+- [tools/coyodex/viewer/serve.py:210](tools/coyodex/viewer/serve.py:210) — Map server (C43) · A changed map drops the stored copies of the browser tree, the views and the code symbols.
+
+**BR164 — A narrowed tree says so** — The file browser never presents a shortened tree as the whole project. When the skip list hid files, the tree carries a note. The note says how many files went, which pattern removed each one, and which pattern removed nothing.  *(verified)*
+- [tools/coyodex/viewer/filetree.py:261](tools/coyodex/viewer/filetree.py:261) — File browser tree (C46) · The note about what the skip list removed is attached to the top of the tree.
+
+**BR165 — Editor links only** — A link that leaves the page may open only a known code editor. The address must start with one of a fixed list of editor schemes. A hand-typed link template using any other scheme is refused.  *(access)*  *(verified)*
+- [tools/coyodex/viewer/viewer.js:10684](tools/coyodex/viewer/viewer.js:10684) — Map canvas (C55), Map reading pages (C56), Trail and history (C57), Source column (C58) · An address outside the allowed editor list never becomes a clickable link.
+- [tools/coyodex/viewer/viewer.js:10815](tools/coyodex/viewer/viewer.js:10815) — Map canvas (C55), Map reading pages (C56), Trail and history (C57), Source column (C58) · Saving a custom link template is refused when its scheme is not on the list.
+
+**BR166 — Pinned outside libraries** — The viewer page loads its two diagram libraries from the internet at exact pinned versions. Each one carries a fingerprint of the expected file. The browser refuses to run a file whose content does not match that fingerprint.  *(access)*  *(verified)*
+- [tools/coyodex/viewer/viewer.html:17](tools/coyodex/viewer/viewer.html:17) — Map canvas (C55), Trail and history (C57), Source column (C58) · The pan and zoom library is pinned by fingerprint.
+- [tools/coyodex/viewer/viewer.html:20](tools/coyodex/viewer/viewer.html:20) — Map canvas (C55), Trail and history (C57), Source column (C58) · The diagram drawing library is pinned by fingerprint.
+
+### When a rebuilt map counts as worse *(BLK10)*
+
+What has to move, and by how much, before a new map is called a regression rather than a change.
+
+**BR180 — Drift asks, a failure stops** — A measurement that moved too far asks for a human look, while a failed check stops the work.  *(verified)*
+- [eval/tools/coyodex_eval/compare.py:503](eval/tools/coyodex_eval/compare.py:503) — Map quality score and verdict (C63) · any failed hard check makes the answer the blocking one, before anything else is considered
+- [eval/tools/coyodex_eval/compare.py:505](eval/tools/coyodex_eval/compare.py:505) — Map quality score and verdict (C63) · a breached allowance only reaches the softer answer, which asks for a person rather than blocking
+- [eval/tools/coyodex_eval/compare.py:670](eval/tools/coyodex_eval/compare.py:670) — Map quality score and verdict (C63) · the three answers leave three different exit codes, so an unattended run can tell them apart
+- [eval/tools/coyodex_eval/run.py:275](eval/tools/coyodex_eval/run.py:275) — Map quality score and verdict (C63) · the full run returns the same three codes, keeping the meaning identical wherever the comparison is invoked
+
+**BR181 — A finer map is never worse** — A count that grew is never called worse, while a count that fell by thirty percent is.  *(verified)*
+- [eval/tools/coyodex_eval/compare.py:195](eval/tools/coyodex_eval/compare.py:195) — Map quality score and verdict (C63) · a shrink-only limit passes any growth and only breaches on a fall past the allowance
+- [eval/tools/coyodex_eval/compare.py:454](eval/tools/coyodex_eval/compare.py:454) — Map quality score and verdict (C63) · the name of each limit decides whether it is shrink-only or reacts to movement in both directions
+- [eval/tools/coyodex_eval/compare.py:57](eval/tools/coyodex_eval/compare.py:57) — Map quality score and verdict (C63) · sets the allowed fall for a raw count at thirty percent of the accepted map's count
+
+**BR182 — Zoom is judged against the code** — The number of boxes is measured against a count derived from the code, not against the accepted map.  *(verified)*
+- [eval/tools/coyodex_eval/profile.py:271](eval/tools/coyodex_eval/profile.py:271) — Map quality score and verdict (C63) · the expected number of boxes is computed fresh from the source tree at scoring time
+- [eval/tools/coyodex_eval/compare.py:444](eval/tools/coyodex_eval/compare.py:444) — Map quality score and verdict (C63) · the new map's distance is measured from that code-derived expectation, not from the accepted map
+- [eval/tools/coyodex_eval/compare.py:450](eval/tools/coyodex_eval/compare.py:450) — Map quality score and verdict (C63) · only the new map's distance decides the check; the accepted map's distance is shown but never decides
+
+**BR183 — No score from judging that failed** — Judging that did not happen never becomes a score, for the map or against it.  *(verified)*
+- [eval/tools/coyodex_eval/judge.py:241](eval/tools/coyodex_eval/judge.py:241) — Map quality score and verdict (C63) · claims nobody could read are removed from the divisor, so they never lower the pass rate
+- [eval/tools/coyodex_eval/judge.py:303](eval/tools/coyodex_eval/judge.py:303) — Map quality score and verdict (C63) · a reader who says it could not reach the code is recorded as a failure, never as a disproof
+- [eval/tools/coyodex_eval/judge.py:336](eval/tools/coyodex_eval/judge.py:336) — Map quality score and verdict (C63) · a scoring stage that produced nothing yields no dimension scores instead of zeros
+- [eval/tools/coyodex_eval/compare.py:212](eval/tools/coyodex_eval/compare.py:212) — Map quality score and verdict (C63) · caps how much of the reading may fail before the whole reading is called untrustworthy
+- [eval/tools/coyodex_eval/compare.py:493](eval/tools/coyodex_eval/compare.py:493) — Map quality score and verdict (C63) · either side missing its reading breaches, so a skipped reading can never end in a clean pass
+
+**BR184 — A skipped check says so** — A check that cannot run is reported as skipped, because silence would read as a check that passed.  *(verified)*
+- [eval/tools/coyodex_eval/compare.py:282](eval/tools/coyodex_eval/compare.py:282) — Map quality score and verdict (C63) · the source-coverage check names itself as skipped when a map was scored without the code
+- [eval/tools/coyodex_eval/compare.py:385](eval/tools/coyodex_eval/compare.py:385) — Map quality score and verdict (C63) · a check that is always true against an older accepted map is announced as empty rather than reported as passing
+- [eval/tools/coyodex_eval/compare.py:437](eval/tools/coyodex_eval/compare.py:437) — Map quality score and verdict (C63) · the zoom check says it was skipped when the new map carries no code-derived expectation
+- [eval/tools/coyodex_eval/compare.py:534](eval/tools/coyodex_eval/compare.py:534) — Map quality score and verdict (C63) · the comparison of enforcement locations says it was skipped rather than reading absence as agreement
+- [eval/tools/coyodex_eval/process_scorecard.py:3182](eval/tools/coyodex_eval/process_scorecard.py:3182) — Build behaviour scorecard (C65) · the scorecard refuses to score at all when the map cannot be read, rather than letting three map-reading rules score zero while the run still reports success
+- enforced at: Score a build's behaviour against the method (UC35) step 4
+
+**BR185 — No verdict without the frozen map** — The run refuses a verdict when the map changed after freezing, or when the accepted map is missing.  *(verified)*
+- [eval/tools/coyodex_eval/run.py:212](eval/tools/coyodex_eval/run.py:212) — Map quality score and verdict (C63) · an empty freeze value is refused, so the guard is never switched off by an unnoticed typing mistake
+- [eval/tools/coyodex_eval/run.py:219](eval/tools/coyodex_eval/run.py:219) — Map quality score and verdict (C63) · refuses to score a map whose bytes no longer match the ones frozen when the run was picked
+- [eval/tools/coyodex_eval/run.py:242](eval/tools/coyodex_eval/run.py:242) — Map quality score and verdict (C63) · a named accepted map that is not there stops the run instead of quietly comparing nothing
+- [eval/tools/coyodex_eval/run.py:247](eval/tools/coyodex_eval/run.py:247) — Map quality score and verdict (C63) · an accepted map holding no scores stops the run, because an empty standard cannot produce a verdict
+
+**BR186 — Stored judgements die with the method** — Judgements kept from an earlier run are thrown away when the judging method has changed since.  *(verified)*
+- [eval/tools/coyodex_eval/run.py:451](eval/tools/coyodex_eval/run.py:451) — Map quality score and verdict (C63) · a stored reading that does not record which judging method made it is treated as unusable
+- [eval/tools/coyodex_eval/run.py:455](eval/tools/coyodex_eval/run.py:455) — Map quality score and verdict (C63) · a stored reading made under a different judging method is refused, and the map must be judged again
+- [eval/tools/coyodex_eval/compare.py:477](eval/tools/coyodex_eval/compare.py:477) — Map quality score and verdict (C63) · two sides judged under different methods breach, so the comparison cannot end in a clean pass
+
+**BR187 — The checkers are graded on planted lies** — The checkers are scored on how many deliberately false claims they refuse to confirm.  *(verified)*
+- [eval/tools/coyodex_eval/mutate.py:228](eval/tools/coyodex_eval/mutate.py:228) — Map quality score and verdict (C63) · confirming a claim that was made false on purpose is the only outcome scored as a miss
+- [eval/tools/coyodex_eval/mutate.py:216](eval/tools/coyodex_eval/mutate.py:216) — Map quality score and verdict (C63) · a moved code link counts as caught only when the checker reports a different line than the planted one
+- [eval/tools/coyodex_eval/mutate.py:161](eval/tools/coyodex_eval/mutate.py:161) — Map quality score and verdict (C63) · the four kinds of falsehood are planted in turn, so no single easy kind can dominate the score
+- [eval/tools/coyodex_eval/mutate.py:113](eval/tools/coyodex_eval/mutate.py:113) — Map quality score and verdict (C63) · a planted moved link must land on a real line of code, so the hard case is not quietly replaced by the easy one
 
 ---
 
@@ -1058,23 +1874,20 @@ which code executes in the reader's browser, and which text reaches the page
 
 | Unit | Runs on | Exposed as | Config source |
 |---|---|---|---|
-| coyodex CLI | The developer's own machine, on CPython 3.10+ inside the repo-local virtualenv, installed editable so the clone stays the source of truth. | The `coyodex` console script — one command with sub-commands (preindex, validate, audit, render, assemble, lint-fragment, anchor-drift, fix, dump, reconcile, balance). Invoked by the coding agent following the method, or by hand. | Command-line arguments only, defaulting the map path to `.coyodex/project-map.json`. No config file and no environment variables on this path; the optional extras decide whether the pre-index sub-command has its parser available. |
-| Map server | The same developer machine, as a long-lived foreground process (`coyodex serve`, usually via `make start`), stdlib http.server with a thread per request. | HTTP on 127.0.0.1 at the chosen port: a landing page, a shared frontend asset route, and a per-project API (view, tree, symbols, src, impact) under /p/<slug>/. | The `--port` and `--open` flags plus any folders passed on the command line; the served project set comes from `~/.coyodex/serve-recents.json`, re-read on every recents request so a freshly built map appears without a restart. |
-| Browser viewer page | The user's web browser, loading the shared frontend from the local server and two libraries from public CDNs. | http://127.0.0.1:<port>/ for the landing page and /p/<slug>/ for a map; opened automatically when the server is started with --open. | The per-map view bundle fetched from the server at boot, overlaid with the user's own settings from browser localStorage (editor target, source root, GitHub URL, panel sizes). |
-| coyodex-eval CLI | The developer machine, same virtualenv and interpreter as the main CLI; a separate self-contained package that depends on the core but is never referenced by it. | The `coyodex-eval` console script, run when someone wants a method-quality regression check. | Command-line arguments plus the eval bundle shipped in the repo (thresholds and rubric); all output goes to a git-ignored `.coyodex-eval/` directory in the evaluated project. |
-| Map backup script | The developer machine, run directly as a standalone script by the venv interpreter. Deliberately stdlib-only so it still works when the project venv is broken. | Not a console script — invoked as `python tools/map_backup.py stamp\|backup <repo>` by the method's build and accept flows, or by the user later. | Command-line arguments, the `CLAUDE_CODE_SESSION_ID` environment variable for the stamp, and the committed `provenance.json` for the backup; the backup destination is derived from the coyodex clone's own location. |
+| coyodex command | the user's own machine, in a private Python environment inside the coyodex folder | a terminal command, started by hand or by the coding agent following the method | The package file declares the command name. The setup target builds the environment and installs the package editable, so the clone stays the live source. |
+| map server | the same machine, as a long-running Python process bound to the loopback address only | a web address on port 8765, reachable from that machine and no other | The port comes from the start option, defaulting to 8765. The projects served come from the recents file in the user's home folder; there is no disk scan. |
+| viewer page | the reader's web browser | the landing page the map server serves, showing one card per project | Per-machine choices kept by the browser itself: the chosen editor, the project's folder on disk, and the code-hosting address. Defaults for the last two are delivered with the map. |
 
 ### Observability
 
 | Signal | Where emitted | Where viewed | Alerts |
 |---|---|---|---|
-| Command-line progress and summary output | Every CLI sub-command prints a human summary as it works — the pre-index prints its coverage line (git available, tree-sitter available, files walked), the server prints how many projects it is serving and the URL it is listening on, and errors and skip notices go to stderr. | The terminal of whoever ran the command — in practice the coding agent's tool output, since the agent is the usual caller. | None. This is a local developer tool with no alerting of any kind. |
-| Process exit codes | Each sub-command returns a status the shell sees: zero on success, non-zero when a gate fails, and a distinct code for a usage error such as an unknown command or a bad --port value. | The calling shell, the Makefile, and the agent driving the method — this is the machine-readable signal the method's gates actually branch on. | None. |
-| Map validation findings | The validator reports blocking problems separately from advisory warnings, covering schema shape, semantic checks such as nesting kind and cycles, anchor existence, and map-fidelity advisories like code-coverage and granularity bands. | Read in the terminal by the agent, which is required to clear the blocking findings before the map is considered built. | None — the gate is the exit code, not a notification. |
-| Fragment lint findings | The per-fragment self-check each harvest agent runs before returning, reporting schema errors, anchor format and existence problems, unknown id references, and extra-key convention breaches in one pass. | In the sub-agent's own terminal output, deliberately so the agent that has the context fixes its own rows instead of the lead guessing later. | None. |
-| Map audit findings | The adversarial pass over an assembled map: deterministic contradiction checks plus a grounding worklist of claims a skeptic should re-verify against the code. | The terminal, during the method's check phase; the worklist then drives further agent work. | None. |
-| Balance report | The balance command reports per-diagram fan-out against the target band, the inter-subsystem edge matrix, and advisory split proposals for over-dense diagrams. | The terminal. Its proposals are advisory only — a human decides whether to apply them as a direct map change. | None. |
-| Method-quality eval delta report | The eval builds a fresh map with the current method, profiles and judges it, and compares it against the project's committed map, producing a delta report scored against declared thresholds. | The terminal and the files written under the git-ignored `.coyodex-eval/` directory in the evaluated project. | None. There is no CI in this repo — no workflow files exist — so nothing runs these gates automatically; every signal above is produced only when a human or an agent runs the command. |
+| Map check findings | The check command prints an inventory line, then the warnings, then the blocking failures. A machine-readable flag prints the same findings as data, with no list shortened. | The terminal of whoever ran the check, usually the coding agent building the map. | None. A blocking failure is reported as a non-zero exit, which stops the build step that ran the check. |
+| Map server start and stop lines | On start the server prints how many projects it has and the address it listens on. On stop it prints one line. | The terminal the map server runs in. | None. |
+| Per-request access log | Nothing. The map server deliberately silences the request log it would otherwise print. | Nowhere. There is no request history to read. | None. |
+| Stale-server warning | The map server checks its own Python files while it runs. When one is newer than the start time it prints a warning saying to restart. | The terminal the map server runs in. The warning appears once per change, not once per request. | None. |
+| Build stamp | Each build records its session id and its build time in a provenance file inside the project's map folder. | That file. The finalize step refuses to bless a commit whose provenance file is missing. | None. |
+| Change-impact report | A change-impact run writes a markdown report next to the map in the project's map folder. | The file itself, and the viewer, which lays the report over the map when the file is present. | None. |
 
 ### Security & auth
 
@@ -1082,38 +1895,28 @@ Derived from the business rules marked `access` (T7) — the decision IS the sur
 
 | Decision | Enforced at | Risk note |
 |---|---|---|
-| **BR1** — The map server answers only callers on the machine it runs on. | [tools/coyodex/viewer/serve.py:734](tools/coyodex/viewer/serve.py:734) | Any process on the same machine that can reach the loopback interface — there is no authentication, no login, and no token of any kind. The bind address is the only access control: 127.0.0.1 is hardcoded, so the server is unreachable from the network. On a shared or multi-user machine, however, ANY local process or local user can read every served map and every file in every served repo at the pinned commit. Accepted as the trust model of a single-user developer tool, but it is a real surface. |
-| **BR2** — A request whose Host header does not name loopback is refused. | [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) | A web page on an attacker-controlled domain that re-points its hostname at 127.0.0.1 to read the victim's source through the browser. Enforced: a request whose Host header does not name loopback is refused with 403. An ABSENT Host (HTTP/1.0, curl) is allowed on purpose — a deliberate, documented hole, on the reasoning that a header-less request is not a browser-driven rebinding vector. |
-| **BR3** — A page on another origin may not add, forget or reorder a project. | [tools/coyodex/viewer/serve.py:540](tools/coyodex/viewer/serve.py:540) | A cross-origin page in the user's browser trying to add or remove projects behind their back. Enforced by requiring a custom request header a cross-origin page cannot set without a CORS preflight the server never answers. There is no token and no origin check, so the guard rests entirely on the browser's preflight behaviour; a non-browser local client can set the header freely. |
-| **BR4** — A file is read at the map's pinned commit, never from a path that escapes the repository. | [tools/coyodex/viewer/serve.py:636](tools/coyodex/viewer/serve.py:636) | Anyone who can reach the loopback server — the viewer page, or any local process. Path traversal is blocked before anything is read: absolute paths, backslashes, NUL bytes and any `..` segment are rejected with 400, and the read then goes through git rather than the filesystem, so only objects that exist in the named commit can come back. A blob over the size cap is refused before it is buffered. |
-| **BR5** — The one route that reads real disk still resolves inside the repository. | [tools/coyodex/viewer/serve.py:275](tools/coyodex/viewer/serve.py:275) | The impact explorer, which must show the uncommitted side of a diff — the one route that touches real disk instead of git objects. Enforced in layers: the resolved real path must stay inside the repo (so a tracked symlink cannot escape), any `.git` component is excluded, and only files git accounts for — tracked, or untracked but not ignored — are served, which keeps a gitignored secrets file from leaking through the viewer. This is the highest-risk read path in the product; the containment depends on all three checks staying together. |
-| **BR6** — A commit value can never be parsed by git as a flag. | [tools/coyodex/viewer/serve.py:643](tools/coyodex/viewer/serve.py:643) | Whoever writes the map JSON, or a caller passing `at=` on the src route — a value that reaches git's argv. Enforced: only a bare hex SHA is accepted, so a value starting with `-` can never be parsed by git as a flag. Commands are run as an argument list with no shell, which removes shell injection separately. |
-| **BR7** — A branch or revision expression can never be parsed by git as a flag. | [tools/coyodex/impact_git.py:59](tools/coyodex/impact_git.py:59) | The impact explorer's base/target parameters, which accept branch names and revision expressions rather than bare SHAs. Enforced, but NOT where the map first claimed: the guard in the server's own ref resolver never sees a request value (its only caller passes the map's own pin). The user-supplied base/target refs are gated in the impact engine, which rejects a leading dash and requires a revision-shaped character class before `git rev-parse --verify --end-of-options` peels it to a SHA. Verified live: `base=--output=/tmp/pwn` returns 400. |
-| **BR8** — The folder picker walks the whole filesystem; nothing on that route narrows it. | [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) | Anyone who can reach the loopback server; the landing page uses it to walk the disk. NO CONTAINMENT ON THE ROUTE ITSELF — the weakest surface in the product, and the anchor here is the only barrier that actually applies. Any absolute path is expanded, resolved and listed: `/`, `/Users` and `~/.ssh` all return 200 with a real listing (verified live against a throwaway server). Only directory NAMES leak, never file contents, and symlinked directories are skipped. What protects it is not the route but the loopback bind (serve.py:734), this Host guard, and the absence of CORS headers — i.e. it is safe on a single-user machine and not on a shared one. |
-| **BR9** — A folder is served only when it already holds a `.coyodex/` directory. | [tools/coyodex/viewer/serve.py:574](tools/coyodex/viewer/serve.py:574) | The landing page, or any local caller that can set the CSRF header. The only gate is that the folder must contain a `.coyodex/` directory. That is a low bar: creating such a directory anywhere makes that folder — and, through the src route, its git-tracked contents — servable. Mitigated by the loopback bind and the fact that reads stay inside a single repo at a pinned commit. |
-| **BR10** — A frontend asset is served by exact name, never by a path. | [tools/coyodex/viewer/serve.py:702](tools/coyodex/viewer/serve.py:702) | The browser fetching the viewer's script and stylesheet. Enforced by an exact-name whitelist rather than path joining, so no traversal is possible on this route at all — an unknown name is a flat 404. |
-| **BR11** — An editor hand-off link may only use a scheme on the allowlist. | [tools/coyodex/viewer/viewer.js:5976](tools/coyodex/viewer/viewer.js:5976) | The user, who may type a custom URI template into the viewer's Settings dialog. Enforced in the browser: only schemes on the editor allowlist may land in an anchor href, which blocks `javascript:`, `data:`, `file:` and `http(s):` templates from running script or hijacking navigation. The dialog re-checks the same allowlist on save, so a rejected template is never stored. Note the URI is fired by the page, so the guard is client-side only — a tampered localStorage value is still filtered at the href, which is the right place. |
-| **BR12** — A third-party script runs only when its content hash matches. | [tools/coyodex/viewer/viewer.html:17](tools/coyodex/viewer/viewer.html:17) | The two CDNs the page loads its diagram and highlighting libraries from. Enforced with Subresource Integrity on every tag, including the lazily injected highlighter and its stylesheet, so a tampered or swapped file is rejected by the browser. Residual risk: the page still depends on reachable third-party hosts, and there is no Content-Security-Policy header, so SRI is the only barrier. |
-| **BR13** — Text authored in the map is escaped before it reaches a diagram label. | [tools/coyodex/viewer/gen_viewer.py:97](tools/coyodex/viewer/gen_viewer.py:97) | Whoever authors or edits the map JSON — including an agent writing a fragment. The diagram renderer runs with HTML labels enabled, so label text is a script-injection path in principle. Enforced by a single sanitizer every diagram label passes through, which neutralises quotes, backticks, brackets, braces, pipes and angle brackets before the label reaches the browser. The risk concentrates in that one function: a caller that builds a label without it would bypass the guard. |
-| **BR14** — A request body over 64 KB is not parsed at all. | [tools/coyodex/viewer/serve.py:694](tools/coyodex/viewer/serve.py:694) | Any local caller. Enforced: a missing, zero, or over-64KB Content-Length yields no parsed body, so a large or malformed request cannot exhaust memory. Paired with a 4MB cap on served file contents and a row cap on diff responses. |
+| **BR144** — Nothing of the user's is changed unasked | [method/dispatch.md:46](method/dispatch.md:46) · [method.md:2040](method.md:2040) · [method/dispatch.md:171](method/dispatch.md:171) | A reviewed map, or a commit the person never intended, is lost, and coyodex cannot undo either. |
+| **BR160** — Local machine only | [tools/coyodex/viewer/serve.py:800](tools/coyodex/viewer/serve.py:800) · [tools/coyodex/viewer/serve.py:577](tools/coyodex/viewer/serve.py:577) · [tools/coyodex/viewer/serve.py:599](tools/coyodex/viewer/serve.py:599) · [tools/coyodex/viewer/serve.py:601](tools/coyodex/viewer/serve.py:601) | Without this limit, a web page open in the reader's browser could read the whole project's source code. |
+| **BR161** — Only folders you opened | [tools/coyodex/viewer/serve.py:799](tools/coyodex/viewer/serve.py:799) · [tools/coyodex/viewer/serve.py:590](tools/coyodex/viewer/serve.py:590) · [tools/coyodex/viewer/serve.py:640](tools/coyodex/viewer/serve.py:640) · [tools/coyodex/viewer/serve.py:794](tools/coyodex/viewer/serve.py:794) | Without this limit, a page could name any folder on the machine and read the code inside it. |
+| **BR162** — Only in-project, tracked files | [tools/coyodex/viewer/serve.py:285](tools/coyodex/viewer/serve.py:285) · [tools/coyodex/viewer/serve.py:287](tools/coyodex/viewer/serve.py:287) · [tools/coyodex/viewer/serve.py:697](tools/coyodex/viewer/serve.py:697) · [tools/coyodex/viewer/serve.py:324](tools/coyodex/viewer/serve.py:324) · [tools/coyodex/viewer/serve.py:331](tools/coyodex/viewer/serve.py:331) · [tools/coyodex/viewer/serve.py:338](tools/coyodex/viewer/serve.py:338) | Without this limit, a reader could pull any file on the machine, including secrets kept out of version control. |
+| **BR165** — Editor links only | [tools/coyodex/viewer/viewer.js:10684](tools/coyodex/viewer/viewer.js:10684) · [tools/coyodex/viewer/viewer.js:10815](tools/coyodex/viewer/viewer.js:10815) | Without this limit a typed link template could run script inside the viewer. A reader could also be sent to an attacker's site. |
+| **BR166** — Pinned outside libraries | [tools/coyodex/viewer/viewer.html:17](tools/coyodex/viewer/viewer.html:17) · [tools/coyodex/viewer/viewer.html:20](tools/coyodex/viewer/viewer.html:20) | Without this check, a changed library file could run any code inside the viewer and read the project it shows. |
 
 ### Config & environments
 
 | Key | Purpose | Default | Per-env / secret? |
 |---|---|---|---|
-| coyodex serve --port | TCP port the local map server listens on. | 8765 | No environment axis — a per-run flag, useful when 8765 is already taken on the machine. |
-| PORT (Makefile variable) | Port the `make start` convenience target passes through to the server. | 8765, overridable on the make command line (`PORT ?= 8765`) | No environment axis — a per-invocation override on the developer's own machine. |
-| map server listen address | The interface the HTTP server binds to. | 127.0.0.1 — hardcoded, with no flag or variable to change it; the server is loopback-only by design. | Not configurable at all. Reaching it from another machine would require editing the source. |
-| coyodex serve --open | Whether to launch the user's default browser at the landing page when the server starts. | off; `make start` passes it explicitly | No environment axis — a per-run flag. |
-| ~/.coyodex/serve-recents.json | The ordered list of project folders the server offers as cards. The server does no disk scan, so this file is the entire served set. Holds absolute folder paths only — no secrets. | Absent until the first project is opened or a build registers one; an unreadable file is treated as an empty list. | Per user (under the home directory), shared by every map that user opens. |
-| COYODEX_NO_SERVE_REGISTER | Opt out of a build automatically adding the project it just built to the recents list. Set by the regression eval so its throwaway maps do not pollute the user's landing page. | unset (auto-registration on) | Set per process by whoever runs the build; no committed value anywhere. |
-| CLAUDE_CODE_SESSION_ID | Identifies the agent conversation that produced a map; written into the committed provenance stamp so a later backup can find the matching transcript. | Provided by the Claude Code runtime inside a session; unset elsewhere, in which case the stamp command refuses to run unless `--session-id` is passed. | Per session, injected by the agent runtime — never stored in the repo except as the recorded id inside provenance.json. |
-| preindex optional extra | Pulls in tree-sitter and its grammar pack so `coyodex preindex` can extract symbols from non-Python languages. | Not installed by a plain install; `make deps` and `make install` install it explicitly. | Per install. Its absence is a supported state — the pre-index degrades rather than fails. |
-| dev optional extra | Pulls in the test runner and the type checker for contributors. | Not installed; `make dev` installs it into the repo-local venv. | Per install; contributor machines only. |
-| map path argument | Which map file a command operates on. | .coyodex/project-map.json, filled in by the CLI when no positional path is given | Per invocation. |
-| SKILLS_DIRS (Makefile variable) | Where `make install` copies the agent skill manifest, with this repo's absolute path substituted in so the skill points back at the clone. | $HOME/.claude/skills and $HOME/.agents/skills | Per user home; deliberately two directories to cover the Claude Code and cross-agent families without duplicate discovery. |
-| viewer settings in browser localStorage | The user's source hand-off choices: editor target, custom URI template, on-disk repo root, GitHub repo URL, plus panel sizes. The repo root and GitHub URL are namespaced per map so a root saved for one repo cannot open files from another. | Repo root and GitHub URL are seeded from the map's build-time git values; editor target is unset until the user saves the Settings dialog once. | Per browser profile and per map. Never sent to the server — there is no server-side settings endpoint. |
-| VERSION file | The single source of the package version, read dynamically by the build backend and printed by `coyodex --version`. | 0.3.0 | One value per release; no per-environment variation. |
+| map server port | Which port the local map server listens on. | 8765, overridable with the start option or the make variable |  |
+| COYODEX_HOME | Which clone the method files and templates are read from. | the folder of the installed package, when the variable is unset |  |
+| CLAUDE_CODE_SESSION_ID | Names the agent session that built a map, so the build stamp can record it. | unset, and the stamp command then refuses to run rather than guess |  |
+| COYODEX_NO_SERVE_REGISTER | Stops a finished build from adding its project to the map server's landing page. | unset, so every build registers its own project |  |
+| recents file | The list of project folders the map server offers as cards. | `~/.coyodex/serve-recents.json`, treated as empty until it is first written |  |
+| analysis ignore file | Extra file patterns to leave out of the analysis, on top of what git already ignores. | absent, so nothing beyond the git rules is left out |  |
+| GIT_TERMINAL_PROMPT | Keeps a git read from stopping to ask for a password. | `0`, set by coyodex on every git call it makes |  |
+| GIT_OPTIONAL_LOCKS | Keeps a git read from taking a lock in the project being mapped. | `0`, set by coyodex on every git call it makes |  |
+| chosen code editor | Which editor a source link opens in, remembered per machine by the browser. | unset, so the reader is asked once on the first source link |  |
+| project folder on disk | The absolute folder a source link is resolved against before the editor opens it. | the project's git top level, as found when the map was built |  |
+| code-hosting address | The website a source link opens on when no editor is chosen. | derived from the project's `origin` remote, when that remote points at GitHub |  |
 
 ---
 
@@ -1121,377 +1924,232 @@ Derived from the business rules marked `access` (T7) — the decision IS the sur
 
 | From | Verb | To | Why | Where (example) |
 |---|---|---|---|---|
-| C1 | uses | C30 | prescribes the exact `coyodex` command lines every build phase runs, so the method drives the tooling instead of restating what it does | [method.md](method.md:573) |
-| C3 | persists | E1 | the single loader and serializer for the map document — parses it into the typed model and writes the byte-stable canonical form every writer stores | [model.py](tools/coyodex/model.py:612) |
-| C3 | uses | C4 | takes the id-token, verb and dep vocabulary from the one place that decides them, so ids and verbs mean the same thing in every module | [model.py](tools/coyodex/model.py:529) |
-| C5 | reads | C3 | walks the model's dataclasses to generate the map's JSON Schema from the types themselves, so the schema can never drift from the stored shape | [json_schema.py](tools/coyodex/json_schema.py:271) |
-| C5 | uses | C4 | pulls the closed vocabularies (dep kinds, entry-point kinds, store modes) into the generated schema's enums | [json_schema.py](tools/coyodex/json_schema.py:81) |
-| C6 | calls | C3 | builds every fragment and the merged result through the model's own parser and serializer, so the stored map is never hand-authored | [assemble.py](tools/coyodex/assemble.py:139) |
-| C6 | calls | C10 | reuses the validator's unbacked-entity-step rule to derive the C→E backbone edge a trace agent authored a step for but forgot | [assemble.py](tools/coyodex/assemble.py:103) |
-| C6 | calls | C8 | applies the declarative reconcile file after the merge and before the write, so a re-assemble never loses the synthesis assignments | [assemble.py](tools/coyodex/assemble.py:456) |
-| C6 | calls | C20 | regenerates the committed markdown view in the same pass that writes the model, so the view ships fresh | [assemble.py](tools/coyodex/assemble.py:475) |
-| C6 | writes | E1 | the build's only writer of the canonical map document — every fragment lands in the map through here | [assemble.py](tools/coyodex/assemble.py:474) |
-| C6 | writes | E12 | derives and appends the backbone edge each unbacked entity flow-step implies, so an entity is never left without an owning component | [assemble.py](tools/coyodex/assemble.py:115) |
-| C6 | writes | D2 | writes the assembled model, its markdown view and the scratch-dir ignore entry into the analyzed repo's map folder | [assemble.py](tools/coyodex/assemble.py:474) |
-| C7 | calls | C6 | loads and schema-checks the fragment through the assembler's own fragment parser, so lint and assemble can never disagree on what is valid | [lint_fragment.py](tools/coyodex/lint_fragment.py:238) |
-| C7 | calls | C10 | runs the model rulebook's row-local checks over a single partial fragment, shifting the fix into the authoring agent's own context | [lint_fragment.py](tools/coyodex/lint_fragment.py:117) |
-| C7 | calls | C14 | checks each anchor and entity source in the fragment against the real repo, so a wrong path prefix dies at the source | [lint_fragment.py](tools/coyodex/lint_fragment.py:150) |
-| C7 | calls | C4 | asks the shared vocabulary whether a step endpoint is a role id or an element id before judging it | [lint_fragment.py](tools/coyodex/lint_fragment.py:91) |
-| C8 | calls | C12 | re-derives the auditor's L2 grounding worklist so each skeptic verdict pairs with the exact claim it answers | [fix.py](tools/coyodex/fix.py:85) |
-| C8 | calls | C5 | compares a stored anchor with the skeptics' reported lines through the shared anchor parser and drift rule | [anchor_drift.py](tools/coyodex/anchor_drift.py:64) |
-| C8 | calls | C14 | falls back to the same deterministic operative-line classifier when no skeptic verdicts exist, so a serial build gets the same grounding floor | [anchor_drift.py](tools/coyodex/anchor_drift.py:110) |
-| C8 | calls | C3 | loads the assembled map and re-serializes it after every in-place fix, so the terminal edits keep the canonical form | [fix.py](tools/coyodex/fix.py:42) |
-| C8 | calls | C11 | reuses the hierarchy rules to reject a reconcile assignment whose parent is the wrong kind of group | [reconcile.py](tools/coyodex/reconcile.py:227) |
-| C8 | writes | E1 | the terminal writer of the stored map after assembly — drifted anchors and refuted edges are corrected here | [fix.py](tools/coyodex/fix.py:42) |
-| C8 | persists | E32 | expands the lead's path rules into the explicit reconcile document and writes it beside the map, so the assignments are replayable | [reconcile_build.py](tools/coyodex/reconcile_build.py:234) |
-| C8 | writes | D2 | writes the corrected map and the expanded reconcile document back into the analyzed repo's map folder | [fix.py](tools/coyodex/fix.py:42) |
-| C9 | reads | D1 | enumerates the repo's tracked files and reads per-file churn from the commit history, so generated output never inflates the weight tree | [preindex_lib.py](tools/coyodex/preindex_lib.py:172) |
-| C9 | reads | D2 | walks the source tree when git is unavailable and opens every file it counts, parses or measures | [preindex_lib.py](tools/coyodex/preindex_lib.py:197) |
-| C9 | writes | D2 | writes the committed pre-index artifact — weight tree, symbols, imports, granularity, coverage — into the analyzed repo's map folder | [preindex.py](tools/coyodex/preindex.py:432) |
-| C9 | uses | D12 | parses non-Python sources with tree-sitter to extract their definitions and import statements | [preindex_lib.py](tools/coyodex/preindex_lib.py:381) |
-| C9 | uses | D13 | loads a per-language grammar from the language pack, and records the language unparsed when none exists | [preindex_lib.py](tools/coyodex/preindex_lib.py:331) |
-| C9 | calls | C5 | parses Python sources through the shared AST helper rather than its own reader | [preindex_lib.py](tools/coyodex/preindex_lib.py:271) |
-| C9 | emits | E36 | returns the enumerated source-file set together with how it was obtained and what was excluded | [preindex_lib.py](tools/coyodex/preindex_lib.py:191) |
-| C9 | persists | E37 | produces a symbol row for every class and function definition it parses, the pre-index's file:line lookup | [preindex.py](tools/coyodex/preindex.py:146) |
-| C9 | persists | E38 | produces an import reference per import statement, the lower-bound cross-check for named component pairs | [preindex.py](tools/coyodex/preindex.py:219) |
-| C9 | writes | E39 | builds the per-directory expected-component record that the pre-index artifact carries as a flattened path-to-count map | [preindex_lib.py](tools/coyodex/preindex_lib.py:541) |
-| C10 | calls | C16 | asks the adjudication readers which ids the operator already recorded under an extras heading, so a settled finding stays quiet | [validate_model.py](tools/coyodex/validate_model.py:522) |
-| C10 | uses | C4 | decides what a step endpoint, a dep kind or an FK marker means from the shared vocabulary instead of its own patterns | [validate_model.py](tools/coyodex/validate_model.py:208) |
-| C11 | calls | C5 | normalizes each stored source anchor through the shared anchor parser before resolving it against the repo | [validate_analysis.py](tools/coyodex/validate_analysis.py:322) |
-| C11 | uses | C4 | takes the nesting-depth advisory threshold from the shared vocabulary | [validate_analysis.py](tools/coyodex/validate_analysis.py:66) |
-| C12 | calls | C3 | loads the assembled map and expands sub-flow references, so a referencing flow is audited with the shared steps inlined | [audit_model.py](tools/coyodex/audit_model.py:124) |
-| C12 | calls | C4 | classifies each dep from the shared vocabulary so a folded framework claim is skipped instead of sent to a skeptic | [audit_model.py](tools/coyodex/audit_model.py:372) |
-| C12 | uses | C5 | pulls the file:line out of a stored cell with the shared anchor finder | [audit_model.py](tools/coyodex/audit_model.py:56) |
-| C12 | reads | E1 | reads the whole stored map to produce its contradiction findings and the ranked grounding worklist the skeptics work | [audit_model.py](tools/coyodex/audit_model.py:578) |
-| C13 | reads | E1 | reads the stored map to measure per-diagram fan-out and the inter-subsystem edge matrix | [balance.py](tools/coyodex/balance.py:193) |
-| C13 | calls | C3 | loads and schema-validates the map through the shared loader before measuring anything | [balance.py](tools/coyodex/balance.py:193) |
-| C13 | emits | E35 | builds the advisory split proposals for an over-dense diagram, each with a seeded name and its member ids | [balance_lib.py](tools/coyodex/balance_lib.py:499) |
-| C14 | reads | D2 | opens every anchored source file in the analyzed repo to confirm it exists and that the cited line can act | [validate_model.py](tools/coyodex/validate_model.py:2113) |
-| C14 | calls | C5 | parses each anchor and asks the shared classifier whether the cited line could be the acting statement | [validate_model.py](tools/coyodex/validate_model.py:2119) |
-| C14 | calls | C11 | resolves anchors against the repo roots and runs the shared coverage measures over the referenced paths | [validate_model.py](tools/coyodex/validate_model.py:2105) |
-| C14 | calls | C20 | regenerates the markdown view and compares it to the committed one, so a stale generated view is visible | [validate_model.py](tools/coyodex/validate_model.py:2288) |
-| C15 | calls | C10 | runs the whole model-only rulebook over the loaded map and collects its problems and warnings | [validate_model.py](tools/coyodex/validate_model.py:2307) |
-| C15 | calls | C14 | adds the source-grounding and coverage checks when the run asks for them, the opt-in half of the gate | [validate_model.py](tools/coyodex/validate_model.py:2364) |
-| C15 | calls | C11 | checks the subsystem and subdomain hierarchy and the code-coverage measures through the shared helpers | [validate_model.py](tools/coyodex/validate_model.py:2376) |
-| C15 | calls | C13 | folds the always-on diagram-balance warnings into every validation report | [validate_model.py](tools/coyodex/validate_model.py:2415) |
-| C15 | calls | C3 | loads and schema-validates the stored map before any semantic check runs, so a shape violation fails first | [validate_model.py](tools/coyodex/validate_model.py:2532) |
-| C15 | reads | E1 | reads the stored map document as the input of every validation run | [validate_model.py](tools/coyodex/validate_model.py:2532) |
-| C16 | calls | C13 | reads the map's extras bodies through the shared balance helper, so one place decides what an extras heading holds | [validate_model.py](tools/coyodex/validate_model.py:557) |
-| C30 | calls | C9 | routes the preindex command into the pre-index — the only path allowed to load tree-sitter, keeping every other command third-party free | [cli.py](tools/coyodex/cli.py:81) |
-| C30 | calls | C15 | routes validate into the validation run, which loads the map and reports its problems and warnings | [cli.py](tools/coyodex/cli.py:84) |
-| C30 | calls | C12 | routes audit into the adversarial pass over an assembled map | [cli.py](tools/coyodex/cli.py:87) |
-| C30 | calls | C20 | routes render into the markdown view generator — the map's only generated file | [cli.py](tools/coyodex/cli.py:90) |
-| C30 | calls | C24 | routes serve into the local viewer server that builds each diagram on demand | [cli.py](tools/coyodex/cli.py:93) |
-| C30 | calls | C6 | routes assemble into the fragment merger that writes the canonical map and its view | [cli.py](tools/coyodex/cli.py:96) |
-| C30 | calls | C31 | routes dump into the read-only model lookup | [cli.py](tools/coyodex/cli.py:99) |
-| C30 | calls | C13 | routes balance into the per-diagram fan-out reporter | [cli.py](tools/coyodex/cli.py:102) |
-| C30 | calls | C7 | routes lint-fragment into the per-fragment self-check an authoring agent runs before returning its rows | [cli.py](tools/coyodex/cli.py:108) |
-| C40 | reads | D1 | runs read-only git to get the change set with renames, the rename maps and each side's file text | [impact_git.py](tools/coyodex/impact_git.py:49) |
-| C40 | reads | D2 | reads a working-tree file straight off disk — the one side of a comparison git cannot serve from a commit | [impact_git.py](tools/coyodex/impact_git.py:128) |
-| C40 | reads | C3 | reads the typed map — its pin, every anchor-bearing element, and the grouping, flows and links a hit spreads along — as the graph a diff is projected onto | [impact_lib.py](tools/coyodex/impact_lib.py:212) |
-| C40 | calls | C5 | parses every stored anchor into a comparable path and line range, and drops the prose ones that only look like a path | [impact_lib.py](tools/coyodex/impact_lib.py:189) |
-| C40 | reads | C9 | reads the symbol-extent table out of the pre-index document, so a hit can name the enclosing definition instead of only the file | [impact_git.py](tools/coyodex/impact_git.py:202) |
-| C40 | writes | E54 | records each changed file's fate from git's name-status output, keeping both names when a file moved | [impact_git.py](tools/coyodex/impact_git.py:82) |
-| C40 | writes | E57 | collects one file pair's parsed diff, flagged binary when that pair can only ever resolve at file rung | [impact_lib.py](tools/coyodex/impact_lib.py:58) |
-| C40 | writes | E56 | turns each diff header and its lines into one hunk expressed in the pin's coordinate frame | [impact_lib.py](tools/coyodex/impact_lib.py:66) |
-| C40 | writes | E55 | folds the two diffs against the pin into the pin lines a change really affects, cancelling the hunks both sides share | [impact_lib.py](tools/coyodex/impact_lib.py:135) |
-| C40 | writes | E58 | indexes every anchor the map carries into the seed set a change can hit, keeping which element and which field each came from | [impact_lib.py](tools/coyodex/impact_lib.py:196) |
-| C40 | writes | E59 | records each hit at the finest rung that honestly holds — the line, the enclosing definition, or just the file — and marks a moved-but-unchanged anchor as drift rather than a change | [impact_lib.py](tools/coyodex/impact_lib.py:353) |
-| C40 | writes | E53 | records one changed file as the engine sees it: its target-side name, its name in the pin's frame, its fate, its line frame and the elements it hit | [impact_git.py](tools/coyodex/impact_git.py:244) |
-| C40 | writes | E52 | assembles the projection's whole result — the points it is expressed between, every changed file, and a warning for anything it could not do exactly | [impact_git.py](tools/coyodex/impact_git.py:228) |
-| C40 | reads | E60 | keeps the noisy links — read-only data links, the entity graph, the transitive call graph — switched off unless the caller asks for them | [impact_ripple.py](tools/coyodex/impact_ripple.py:276) |
-| C40 | reads | E12 | walks the map's backbone links to learn which entities a hit component owns and which components it can reach | [impact_ripple.py](tools/coyodex/impact_ripple.py:138) |
-| C40 | reads | E6 | expands every flow, inlining its sub-flow references, to learn which use cases each hit element's steps belong to | [impact_ripple.py](tools/coyodex/impact_ripple.py:102) |
-| C40 | writes | E61 | accumulates, per reached element, the strongest cause that found it, how far it came, and the path it came by | [impact_ripple.py](tools/coyodex/impact_ripple.py:174) |
-| C31 | reads | E1 | reads a stored map straight off disk to answer a lookup — the whole document, one element's record, the links at a node, or a group's members | [dump.py](tools/coyodex/dump.py:153) |
-| C31 | calls | C3 | parses every map it reads through the one model loader and re-serializes the whole-map dump through the one canonical writer, so a dump is exactly what the file holds | [dump.py](tools/coyodex/dump.py:158) |
-| C32 | calls | C24 | asks the local map server for everything the overlay shows: a base-to-target diff projected onto the map, the pin's neighbouring commits for the picker, and one changed file's diff rows | [viewer.js](tools/coyodex/viewer/viewer.js:6851) |
-| C32 | reads | E61 | reads each element's impact verdict out of the returned run — direct or rippled, its strength, its rung and its provenance chain — and turns it into the badge, the summary row and the 'why is this hit' explanation | [viewer.js](tools/coyodex/viewer/viewer.js:6720) |
-| C32 | calls | C23 | drives the diagram for an armed diff — lands on the view that carries the overlay, stamps a change badge on every impacted box, and forces the redraw when a new range or ripple depth is picked | [viewer.js](tools/coyodex/viewer/viewer.js:6867) |
-| C32 | writes | C37 | takes the element info pane over with the impact summary — every element the diff reached, grouped by kind, each row a link into its home view | [viewer.js](tools/coyodex/viewer/viewer.js:6805) |
-| C32 | calls | C38 | puts the change dots on the file browser's rows, offers the changed-files-only filter, and re-opens the shown file so a changed one reads as an inline diff | [viewer.js](tools/coyodex/viewer/viewer.js:6866) |
-| C45 | calls | C3 | loads every map it scores through the product's own model loader, so the eval never reads a map with a second grammar | [profile.py](eval/tools/coyodex_eval/profile.py:122) |
-| C45 | calls | C10 | measures a map's well-formedness with the shipped validator, and reuses its entry-point and flow-coverage helpers for the completeness counts | [profile.py](eval/tools/coyodex_eval/profile.py:154) |
-| C45 | calls | C12 | counts a map's contradictions and advisories with the shipped auditor, and takes its risk-ranked claim worklist as both a profile signal and the judge's input list | [profile.py](eval/tools/coyodex_eval/profile.py:131) |
-| C45 | calls | C11 | measures a map's coverage of the source tree with the same helper the validator's coverage check runs | [profile.py](eval/tools/coyodex_eval/profile.py:141) |
-| C45 | calls | C9 | re-derives the code's own component expectation from the repo tree at scoring time, so the granularity check is anchored in the code rather than in the baseline map | [profile.py](eval/tools/coyodex_eval/profile.py:143) |
-| C45 | calls | C13 | takes the diagram fan-out and nesting depth a map would render at as report-only balance signals in the profile | [profile.py](eval/tools/coyodex_eval/profile.py:149) |
-| C45 | calls | C20 | renders each archived run's markdown view and diagram graph from the frozen model, so a past run stays readable after a later rebuild | [run.py](eval/tools/coyodex_eval/run.py:158) |
-| C45 | calls | C22 | builds the served viewer's data snapshot for each archived run, so the run keeps its own diagram data | [run.py](eval/tools/coyodex_eval/run.py:131) |
-| C45 | calls | C46 | drives the scoring half — aggregating the orchestrator's raw judge votes, then gating the fresh profile against the baseline for the run's verdict | [run.py](eval/tools/coyodex_eval/run.py:67) |
-| C45 | persists | D2 | keeps every eval run in the project's ignored eval folder — the frozen map, its generated views, the profile, the judge report and the delta — and reads the blessed baseline back from the same tree | [run.py](eval/tools/coyodex_eval/run.py:161) |
-| C45 | writes | E63 | produces the deterministic profile of every map it scores — the counts, findings, coverage, granularity and density two runs are compared on | [profile.py](eval/tools/coyodex_eval/profile.py:162) |
-| C45 | writes | E62 | assembles one run's outcome — its profile, its judge report, its comparison against the baseline, and the verdict that follows | [run.py](eval/tools/coyodex_eval/run.py:69) |
-| C45 | reads | E64 | loads the judge report the orchestrator produced, and the baseline's cached one, to attach to a run and hand to the comparison | [run.py](eval/tools/coyodex_eval/run.py:228) |
-| C46 | calls | C12 | draws the claims it grounds from the auditor's risk-ranked worklist instead of extracting claims a second way | [judge.py](eval/tools/coyodex_eval/judge.py:234) |
-| C46 | calls | C3 | loads the map through the product's model loader before selecting which claims to ground | [judge.py](eval/tools/coyodex_eval/judge.py:234) |
-| C46 | calls | C5 | compares each confirmed claim's stored anchor against the line the skeptics actually read, turning anchor drift into a measured rate that is kept separate from truth | [judge.py](eval/tools/coyodex_eval/judge.py:250) |
-| C46 | writes | E64 | aggregates raw skeptic votes and rubric scores into the judge report — pass-rate, medians, drift rate, and the fingerprint that says two reports were judged the same way | [judge.py](eval/tools/coyodex_eval/judge.py:257) |
-| C46 | writes | E69 | produces the comparison outcome — which hard checks failed, which numbers drifted, what could not be compared, and the single verdict | [compare.py](eval/tools/coyodex_eval/compare.py:332) |
-| C46 | reads | E63 | diffs the blessed baseline's profile against the fresh candidate's to derive every hard check and drift band | [compare.py](eval/tools/coyodex_eval/compare.py:238) |
-| C46 | reads | E74 | reads the gate settings — which checks block, how far each count may drift, how much a judged score may fall — merging per-project overrides onto the built-in defaults | [compare.py](eval/tools/coyodex_eval/compare.py:374) |
-| C46 | reads | D2 | reads the gate settings file and, on the direct compare path, the two profile files it is asked to diff, straight off disk | [compare.py](eval/tools/coyodex_eval/compare.py:436) |
-| C41 | reads | D3 | finds and reads the conversations that produced a map in the agent's session store — by the stamped session id, or by scanning the store for the session that wrote the map when nothing was stamped | [map_backup.py](tools/map_backup.py:232) |
-| C41 | persists | D2 | writes the map's provenance record into the repo, and later the backup bundle — copied map files, transcripts and a manifest — under the coyodex clone's backup folder, removing the source only after the copy is in place | [map_backup.py](tools/map_backup.py:409) |
-| C41 | calls | D1 | asks git for the analyzed repo's short HEAD sha and that commit's date, so a provenance stamp records which code state the map describes | [map_backup.py](tools/map_backup.py:145) |
-| C2 | routes-to | C1 | sends the agent into the method docs in the clone, which hold the actual instructions | [SKILL.md](skill/coyodex/SKILL.md:28) |
-| C2 | uses | C30 | points every tool run at the clone's virtualenv `coyodex` command | [SKILL.md](skill/coyodex/SKILL.md:24) |
-| C30 | calls | C8 | routes the reconcile, anchor-drift and fix subcommands to the post-assemble edit tools | [cli.py](tools/coyodex/cli.py:105) |
-| C25 | persists | E51 | keeps the remembered project folders, reloading before every change so a concurrent build merges instead of clobbering | [recents.py](tools/coyodex/viewer/recents.py:44) |
-| C25 | persists | D2 | writes and re-reads the remembered-projects file in the user's home folder | [recents.py](tools/coyodex/viewer/recents.py:44) |
-| C25 | writes | E50 | builds the file-tree nodes the browser pane renders, folders before files, with map coverage overlaid | [filetree.py](tools/coyodex/viewer/filetree.py:147) |
-| C25 | calls | C9 | walks the mapped repo's source files through the pre-index's shared file walker | [filetree.py](tools/coyodex/viewer/filetree.py:218) |
-| C24 | calls | D6 | opens the landing page in the developer's browser on start and serves the map UI to it from there on | [serve.py](tools/coyodex/viewer/serve.py:740) |
-| C24 | reads | D2 | reads each mapped project's map file and the shared frontend assets off the local disk | [serve.py](tools/coyodex/viewer/serve.py:121) |
-| C23 | calls | C24 | fetches this map's whole view bundle from the local server at boot, and everything it draws comes from that one payload | [viewer.js](tools/coyodex/viewer/viewer.js:107) |
-| C23 | calls | D16 | turns every pre-rendered diagram source into the SVG the canvas shows | [viewer.js](tools/coyodex/viewer/viewer.js:4562) |
-| C23 | calls | D17 | wraps each rendered diagram so the reader can pan and zoom it, and restores where they left the camera | [viewer.js](tools/coyodex/viewer/viewer.js:4626) |
-| C23 | reads | D4 | loads the pinned diagram and pan-zoom libraries from it, integrity-checked, when the viewer page opens | [viewer.html](tools/coyodex/viewer/viewer.html:16) |
-| C23 | calls | C37 | fills the side info pane with whichever element the reader selects on the canvas | [viewer.js](tools/coyodex/viewer/viewer.js:4611) |
-| C23 | routes-to | C38 | opens the code viewer on the file and line behind any source anchor clicked on the canvas or in the pane | [viewer.js](tools/coyodex/viewer/viewer.js:152) |
-| C24 | reads | D1 | runs read-only git commands so every file and listing it serves comes from the commit the map is pinned to | [serve.py](tools/coyodex/viewer/serve.py:180) |
-| C24 | calls | C20 | turns each served project's map document into the viewer's graph | [serve.py](tools/coyodex/viewer/serve.py:397) |
-| C24 | calls | C22 | builds the per-project view bundle it answers the view route with, and caches it per map version | [serve.py](tools/coyodex/viewer/serve.py:399) |
-| C24 | calls | C25 | builds the file-browser tree of the commit's files, shaded by map coverage | [serve.py](tools/coyodex/viewer/serve.py:384) |
-| C24 | reads | E1 | loads each served project's map document from its map folder, and reloads it when the file changes on disk | [serve.py](tools/coyodex/viewer/serve.py:397) |
-| C20 | reads | E1 | walks the whole map document — every element, relationship and reference table — to derive the viewer's graph | [views.py](tools/coyodex/views.py:684) |
-| C20 | writes | E41 | builds one graph node for every mapped element the diagrams draw | [views.py](tools/coyodex/views.py:472) |
-| C20 | writes | E42 | builds one graph edge for every authored relationship and every domain relation | [views.py](tools/coyodex/views.py:791) |
-| C20 | writes | E40 | assembles the finished graph payload every diagram generator and the whole frontend read | [views.py](tools/coyodex/views.py:850) |
-| C22 | calls | C26 | asks it for the context and subsystem diagram sources the bundle carries | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2778) |
-| C22 | calls | C27 | asks it for the domain-model diagram sources the bundle carries | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2821) |
-| C22 | calls | C28 | asks it for the deployment and messaging diagram sources the bundle carries | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2828) |
-| C22 | calls | C29 | asks it for the Happy Path and per-use-case flow diagrams the bundle carries | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2840) |
-| C22 | calls | C21 | parses the optional change-impact report beside the map into the overlay the bundle carries | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2775) |
-| C22 | reads | E40 | reads the graph — its commit, title and which layers exist — to decide and assemble what the bundle holds | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2785) |
-| C22 | reads | D1 | asks git for the mapped repo's root and its GitHub remote, so the viewer's source links resolve out of the box | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:57) |
-| C21 | reads | D2 | reads the change-impact report markdown that sits next to the map | [build_graph.py](tools/coyodex/viewer/build_graph.py:239) |
-| C21 | writes | E48 | produces the parsed change-impact overlay the viewer badges the diagram with | [build_graph.py](tools/coyodex/viewer/build_graph.py:277) |
-| C21 | writes | E49 | classifies each reported element as added, modified or deleted | [build_graph.py](tools/coyodex/viewer/build_graph.py:254) |
-| C29 | reads | E44 | reads each use case's flow to draw it as a sequence diagram | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:2597) |
-| C37 | reads | E41 | reads the selected element's stored name, type and annotation to fill the info pane | [viewer.js](tools/coyodex/viewer/viewer.js:1072) |
-| C38 | calls | C24 | fetches the repo's file tree and every file's text from the server, which serves both at the map's commit | [viewer.js](tools/coyodex/viewer/viewer.js:5806) |
-| C38 | calls | D18 | colours the fetched source by language before laying it out line by line | [viewer.js](tools/coyodex/viewer/viewer.js:5650) |
-| C38 | reads | D5 | lazily loads the pinned syntax highlighter and its stylesheet from it, the first time a file is shown | [viewer.js](tools/coyodex/viewer/viewer.js:5407) |
-| C38 | calls | D7 | opens the shown file's blob page there, pinned to the map's commit and line | [viewer.js](tools/coyodex/viewer/viewer.js:6024) |
-| C38 | calls | D8 | hands the shown file and line to the developer's own editor through its URL scheme | [viewer.js](tools/coyodex/viewer/viewer.js:6021) |
-| C38 | reads | E41 | reads the elements anchored in the shown file so each is tagged on its own source line | [viewer.js](tools/coyodex/viewer/viewer.js:5496) |
-| C39 | calls | C24 | fetches the code-symbol index from the server the first time search opens, so definitions are searchable too | [viewer.js](tools/coyodex/viewer/viewer.js:6325) |
-| C39 | calls | C38 | opens a file or code-symbol hit straight in the code viewer at its line | [viewer.js](tools/coyodex/viewer/viewer.js:6345) |
+| C77 | routes-to | C78 | The eval skill file carries only how to find the coyodex clone, then sends the reader to the scoring recipe. | [SKILL.md](eval/SKILL.md:28) |
+| C77 | routes-to | C79 | sends the reader on to the review recipe, which names every other document and tool | [SKILL.md](eval/retro/SKILL.md:28) |
+| C63 | reads | C78 | The comparison step opens the pass marks file to learn which gates and bands a map must clear. | [compare.py](eval/tools/coyodex_eval/compare.py:601) |
+| C78 | prescribes | C63 | The scoring recipe tells the reviewer to compare the new map against the accepted one. | [method.md](eval/method.md:352) |
+| C79 | prescribes | C63 | The review recipe tells the reviewer to reduce the map to numbers before reading the chat. | [method.md](eval/retro/method.md:298) |
+| C79 | prescribes | C64 | The review recipe tells the reviewer to report the time and the money the build spent. | [method.md](eval/retro/method.md:384) |
+| C79 | prescribes | C65 | The review recipe tells the reviewer to score what the build did against the method's rules. | [method.md](eval/retro/method.md:359) |
+| C79 | prescribes | C66 | The review recipe tells the reviewer to refuse a review while a build is still writing. | [method.md](eval/retro/method.md:62) |
+| C1 | loads | E1 | turns the map file's text into the typed map document every command works on | [model.py](tools/coyodex/model.py:1080) |
+| C4 | invokes | D2 | builds a private Python environment inside the clone and runs every coyodex command from it | [Makefile](Makefile:33) |
+| C4 | installs with | D7 | installs the coyodex commands into that private environment through the declared build backend | [Makefile](Makefile:40) |
+| C4 | reads | C77 | reads the shipped skill file and substitutes this clone's absolute path into the copy it installs | [Makefile](Makefile:58) |
+| C4 | writes | D12 | writes the finished skill into Claude Code's skills folder | [Makefile](Makefile:58) |
+| C4 | writes | D13 | writes the finished skill into the cross-agent skills folder Codex reads | [Makefile](Makefile:58) |
+| C4 | writes | D14 | writes the finished skill into the two folders Cursor already reads | [Makefile](Makefile:17) |
+| C4 | starts | C43 | loads the map server's code late and hands it the rest of the command line | [cli.py](tools/coyodex/cli.py:141) |
+| C43 | reads | E1 | reads every served project's map document for its title, its goal and its pinned commit | [serve.py](tools/coyodex/viewer/serve.py:123) |
+| C43 | calls | D11 | opens the landing page in the reader's default browser when the start command asks for it | [serve.py](tools/coyodex/viewer/serve.py:806) |
+| C43 | calls | C45 | turns each loaded map document into the graph the viewer draws from | [serve.py](tools/coyodex/viewer/serve.py:455) |
+| C43 | calls | C44 | asks for the whole view bundle in one call, diagrams, flows and colours together | [serve.py](tools/coyodex/viewer/serve.py:460) |
+| C45 | creates | E51 | builds one graph box per map element, carrying its name, kind, source line and parent | [views.py](tools/coyodex/views.py:730) |
+| C45 | creates | E52 | builds one graph arrow per recorded relation, carrying its verb and its call site | [views.py](tools/coyodex/views.py:1183) |
+| C55 | fetches | C43 | fetches this map's whole view bundle from the server at page load | [viewer.js](tools/coyodex/viewer/viewer.js:154) |
+| C55 | calls | C57 | hands every new place to the trail, which records it and drives the change of view | [viewer.js](tools/coyodex/viewer/viewer.js:11694) |
+| C55 | draws with | D8 | draws every diagram on the page | [viewer.js](tools/coyodex/viewer/viewer.js:8953) |
+| C55 | pans and zooms with | D9 | wraps each drawn diagram so the reader can pan it and zoom it | [viewer.js](tools/coyodex/viewer/viewer.js:9025) |
+| C43 | persists | E56 | writes the remembered project list back to the reader's home folder | [recents.py](tools/coyodex/viewer/recents.py:44) |
+| C77 | routes-to | C75 | sends the coding agent from the installed pointer into the method's dispatch document, which names every other doc and tool | [SKILL.md](skill/coyodex/SKILL.md:27) |
+| C75 | routes-to | C76 | names each worker briefing and tells the agent to fetch it with the contract verb instead of copying the file | [method.md](method.md:1960) |
+| C4 | reads | C76 | opens the briefing template and the writing rules and prints the agent's half of them | [contract.py](tools/coyodex/contract.py:90) |
+| C75 | prescribes | C33 | prescribes the pre-index run that surveys the repo before any altitude is chosen | [method.md](method.md:860) |
+| C75 | prescribes | C2 | prescribes the assemble run that merges the workers' fragments into the stored map | [method.md](method.md:2100) |
+| C75 | prescribes | C25 | prescribes the reconcile run that expands the path rules into an explicit assignment file | [method.md](method.md:1298) |
+| C75 | prescribes | C13 | prescribes the validate run that checks the assembled map is well-formed | [method.md](method.md:2112) |
+| C75 | prescribes | C14 | prescribes the audit run that hunts contradictions and emits the grounding worklist | [method.md](method.md:2127) |
+| C75 | prescribes | C23 | prescribes the grounding run that derives the map's verification record from the skeptics' verdicts | [method.md](method.md:1655) |
+| C75 | prescribes | C24 | prescribes the mechanical repairs, so a drifted anchor or a duplicate relation is never hand-scripted | [method.md](method.md:1943) |
+| C75 | prescribes | C15 | prescribes the balance run whose per-diagram findings the synthesis phase must reconcile | [method.md](method.md:1421) |
+| C75 | prescribes | C3 | prescribes looking an id up with the dump verb rather than reading the stored map by hand | [method.md](method.md:1580) |
+| C75 | prescribes | C16 | prescribes the finalize run as the pre-commit read over the finished map | [method.md](method.md:2164) |
+| C75 | prescribes | C43 | prescribes starting the map server so a reader can look at the change in the viewer | [change-impact.md](method/change-impact.md:142) |
+| C16 | reads | C1 | parses the map file into the typed document before running the gate legs over it | [finalize.py](tools/coyodex/finalize.py:570) |
+| C17 | reads | C1 | walks the document's flows, expanding each sub-flow reference, to build the feature index | [features.py](tools/coyodex/features.py:312) |
+| C23 | reads | C1 | parses the live map into the typed document to measure the verification record against it | [grounding.py](tools/coyodex/grounding.py:979) |
+| C24 | reads | C1 | reads the document's access rules and its id arrays to decide what a repair must touch | [fix.py](tools/coyodex/fix.py:1007) |
+| C34 | reads | C1 | walks the document's group forests to index every anchor a changed line could hit | [impact_lib.py](tools/coyodex/impact_lib.py:251) |
+| C44 | reads | C1 | parses the map file into the typed document before generating the viewer bundle | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3257) |
+| C45 | reads | C1 | reads every element of the typed document to turn it into graph nodes and markdown | [views.py](tools/coyodex/views.py:661) |
+| C65 | reads | C1 | parses the built map into the typed document to check the build's behaviour against it | [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:2851) |
+| C64 | reads | D12 | streams the Claude Code build transcript file, one JSON record per line, to report the turns and the spend | [transcript.py](eval/tools/coyodex_eval/transcript.py:305) |
+| C66 | reads | D12 | scans the Claude Code transcript folder for a session still writing, before it moves a map | [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:216) |
+| C75 | reads | E1 | reads the baseline map's pin and its element rows, the model every code diff is measured against | [dispatch.md](method/dispatch.md:132) |
+| C3 | reads | E1 | reads element records, member lists and the backbone edges out of the loaded map | [dump.py](tools/coyodex/dump.py:139) |
+| C75 | queries | D1 | diffs the pinned commit against the working tree and lists the untracked files as added | [change-impact.md](method/change-impact.md:57) |
+| C25 | queries | D1 | asks the version-control program for the paths changed but not committed | [provenance.py](tools/coyodex/provenance.py:159) |
+| C43 | calls | D1 | launches git as a separate process to list and read files at the map's commit | [serve.py](tools/coyodex/viewer/serve.py:236) |
+| C44 | calls | D1 | runs git for the commit's date, the repository root and the origin remote | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:60) |
+| C58 | calls | D10 | loads highlight.js from the content-delivery network and colours the file it shows | [viewer.js](tools/coyodex/viewer/viewer.js:9916) |
+| C55 | calls | D8 | asks Mermaid to draw the open view's diagram in the page | [viewer.js](tools/coyodex/viewer/viewer.js:8953) |
+| C58 | calls | D16 | opens the shown file at its line in the reader's editor by URL scheme | [viewer.js](tools/coyodex/viewer/viewer.js:10729) |
+| C58 | calls | D15 | opens the shown file on GitHub, pinned to the map's commit | [viewer.js](tools/coyodex/viewer/viewer.js:10732) |
+| C45 | reads | E1 | reads the whole map document to project it into the browser's graph | [views.py](tools/coyodex/views.py:1030) |
+| C45 | reads | E13 | reads each component's source anchor and files to make its code links | [views.py](tools/coyodex/views.py:1122) |
+| C17 | reads | E5 | reads every feature to order the story column and count what it holds | [features.py](tools/coyodex/features.py:222) |
+| C17 | reads | E6 | reads every use case to join it onto its feature and its actors | [features.py](tools/coyodex/features.py:295) |
+| C17 | reads | E9 | reads the happy path to place each feature and each actor in the story | [features.py](tools/coyodex/features.py:230) |
+| C43 | calls | C46 | builds the file browser tree from the commit's file list | [serve.py](tools/coyodex/viewer/serve.py:436) |
+| C44 | calls | C17 | derives the feature index and the story order for the bundle | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3262) |
+| C56 | calls | C58 | opens a box's code link in the source column | [viewer.js](tools/coyodex/viewer/viewer.js:202) |
+| C33 | calls | D1 | launches git as a separate process to list the analysable files and to count each file's commits | [preindex_lib.py](tools/coyodex/preindex_lib.py:289) |
+| C33 | calls | D4 | builds a parser for each non-Python language it must read symbols and imports from | [preindex_lib.py](tools/coyodex/preindex_lib.py:391) |
+| C33 | calls | D3 | parses a source file and walks its syntax tree for definitions and imports | [preindex_lib.py](tools/coyodex/preindex_lib.py:440) |
+| C4 | calls | D1 | launches git to read HEAD and its date for the briefing's commit pin | [scope.py](tools/coyodex/scope.py:48) |
+| C33 | writes | E37 | records every class and function definition it finds, with its file, kind and line span | [preindex.py](tools/coyodex/preindex.py:148) |
+| C33 | writes | E38 | works out how many components each folder of the tree should yield | [preindex_lib.py](tools/coyodex/preindex_lib.py:625) |
+| C2 | reads | E1 | reads every row of a fragment's map document to check it | [lint_fragment.py](tools/coyodex/lint_fragment.py:452) |
+| C1 | writes | E1 | serializes the whole map document in one fixed key order | [model.py](tools/coyodex/model.py:892) |
+| C2 | writes | E39 | records which fragments loaded, which were skipped and which failed | [assemble.py](tools/coyodex/assemble.py:294) |
+| C2 | writes | E16 | mints each front door's identifier from the front door's own content | [assemble.py](tools/coyodex/assemble.py:688) |
+| C2 | writes | E15 | adds the backbone arrow an entity step implies but no fragment authored | [assemble.py](tools/coyodex/assemble.py:131) |
+| C2 | reads | E40 | reads the lead's assignment file before the map is written | [assemble.py](tools/coyodex/assemble.py:916) |
+| C25 | writes | E40 | writes the assignment file that the next merge applies | [reconcile_build.py](tools/coyodex/reconcile_build.py:439) |
+| C25 | reads | E16 | reads each front door's identifier and code link to witness it in the assignment file | [reconcile_build.py](tools/coyodex/reconcile_build.py:213) |
+| C3 | reads | E16 | reads a front door's record, whose identifier exists only in the merged map | [dump.py](tools/coyodex/dump.py:99) |
+| C2 | calls | C1 | builds the typed document from a fragment's JSON, re-points merged identifiers, and asks it to serialize the map | [assemble.py](tools/coyodex/assemble.py:155) |
+| C2 | calls | C13 | runs the shared row checks over a fragment and over the merged map | [lint_fragment.py](tools/coyodex/lint_fragment.py:125) |
+| C2 | calls | C25 | loads, validates and applies the lead's assignment file, and stamps which build produced the map | [assemble.py](tools/coyodex/assemble.py:928) |
+| C2 | calls | C3 | matches two authored headings that differ only in case or spacing | [assemble.py](tools/coyodex/assemble.py:440) |
+| C2 | calls | C45 | renders the readable markdown view of the merged map | [assemble.py](tools/coyodex/assemble.py:964) |
+| C2 | calls | C43 | registers the map's folder so the local viewer can offer this project | [assemble.py](tools/coyodex/assemble.py:968) |
+| C25 | calls | C2 | reads and merges the build fragments the path rules resolve against | [reconcile_build.py](tools/coyodex/reconcile_build.py:302) |
+| C25 | calls | C1 | strips the line number off a code link, leaving the folder path a rule can match | [reconcile_build.py](tools/coyodex/reconcile_build.py:105) |
+| C25 | calls | C4 | matches an element's folder path against a rule's pattern | [reconcile_build.py](tools/coyodex/reconcile_build.py:150) |
+| C3 | calls | C2 | loads the named file, accepting a finished map or a half-written build fragment | [dump.py](tools/coyodex/dump.py:292) |
+| C3 | calls | C1 | resolves an identifier against the map document and serializes the whole document | [dump.py](tools/coyodex/dump.py:103) |
+| C13 | reads | E1 | reads the whole map document to check its references, code links and coverage | [validate_model.py](tools/coyodex/validate_model.py:4359) |
+| C13 | calls | C1 | parses the map file into the typed document, and reuses its code-link and word rules | [validate_model.py](tools/coyodex/validate_model.py:4727) |
+| C13 | calls | C3 | reads the recorded lines that silence an advisory, and reports the ones that silence nothing | [validate_model.py](tools/coyodex/validate_model.py:3468) |
+| C13 | calls | C15 | asks for the per-screen box-count advisories on every validate run | [validate_model.py](tools/coyodex/validate_model.py:4501) |
+| C14 | writes | E42 | creates one finding for every contradiction and advisory it raises | [audit_model.py](tools/coyodex/audit_model.py:575) |
+| C14 | calls | C1 | parses the map file into the typed document before comparing its two layers | [audit_model.py](tools/coyodex/audit_model.py:1361) |
+| C14 | calls | C3 | reads the recorded lines that judge one advisory acceptable | [audit_model.py](tools/coyodex/audit_model.py:782) |
+| C14 | calls | C13 | reuses the file-to-component owner table when detailing a business rule's site | [audit_model.py](tools/coyodex/audit_model.py:962) |
+| C3 | reads | E36 | reads the recorded lines under every heading a check honours | [records.py](tools/coyodex/records.py:165) |
+| C3 | writes | E36 | appends, replaces and removes the recorded lines under a named heading | [record.py](tools/coyodex/record.py:116) |
+| C15 | reads | E5 | reads every group and its parent to build the child list of each screen | [balance_lib.py](tools/coyodex/balance_lib.py:107) |
+| C15 | reads | E13 | counts the components each screen draws and which group each one sits in | [balance_lib.py](tools/coyodex/balance_lib.py:110) |
+| C15 | calls | C1 | parses the map file into the typed document before counting its screens | [balance.py](tools/coyodex/balance.py:271) |
+| C4 | calls | C14 | dispatches the audit subcommand and its batch options | [cli.py](tools/coyodex/cli.py:132) |
+| C4 | calls | C23 | dispatches the grounding record and drift-check subcommands | [cli.py](tools/coyodex/cli.py:171) |
+| C4 | calls | C24 | dispatches the map-repair subcommand and its verbs | [cli.py](tools/coyodex/cli.py:174) |
+| C4 | calls | C16 | dispatches the pre-commit gate run | [cli.py](tools/coyodex/cli.py:168) |
+| C4 | calls | C25 | dispatches the provenance stamp | [cli.py](tools/coyodex/cli.py:180) |
+| C14 | writes | E41 | ranks the map's riskiest claims into work items and cuts them into themed batch files | [audit_model.py](tools/coyodex/audit_model.py:1269) |
+| C14 | writes | E15 | writes each skeptic-corrected line onto the relation whose claim names it | [audit_model.py](tools/coyodex/audit_model.py:382) |
+| C23 | calls | C14 | re-derives the live claim surface from the auditor's ranked worklist | [grounding.py](tools/coyodex/grounding.py:1062) |
+| C23 | writes | E35 | derives the map's grounding record from the pinned worklist and the verdict files | [grounding.py](tools/coyodex/grounding.py:1086) |
+| C23 | derives | E43 | recomputes, per element, what the verdicts did to the claims that element makes | [grounding.py](tools/coyodex/grounding.py:1068) |
+| C13 | reads | E35 | reads the grounding record and blocks a verdict split that does not add up | [validate_model.py](tools/coyodex/validate_model.py:2549) |
+| C24 | calls | C23 | reads the confirmed drift records the verdict comparison produced | [fix.py](tools/coyodex/fix.py:192) |
+| C24 | writes | E40 | records corrected anchors and refuted-edge drops as durable reconcile directives | [fix.py](tools/coyodex/fix.py:331) |
+| C25 | calls | C14 | reuses the auditor's anchor writer so both repair paths agree on the target | [reconcile.py](tools/coyodex/reconcile.py:526) |
+| C25 | removes | E15 | removes the relations a reconcile directive drops from the merged map | [reconcile.py](tools/coyodex/reconcile.py:576) |
+| C25 | writes | E11 | re-points or removes the flow steps that rode a dropped relation | [reconcile.py](tools/coyodex/reconcile.py:584) |
+| C16 | calls | C13 | runs the validator in-process with its streams captured | [finalize.py](tools/coyodex/finalize.py:108) |
+| C16 | calls | C14 | runs the auditor in-process and splits its findings into blocking and advisory | [finalize.py](tools/coyodex/finalize.py:111) |
+| C16 | calls | C23 | runs the anchor-drift and surviving-refutation legs against the verdict files | [finalize.py](tools/coyodex/finalize.py:114) |
+| C16 | writes | E45 | records one leg per gate, saying whether it ran and what it found | [finalize.py](tools/coyodex/finalize.py:472) |
+| C16 | writes | E46 | assembles the verdict, the two counts and the map's hash into the pre-commit report | [finalize.py](tools/coyodex/finalize.py:495) |
+| C25 | persists | E47 | writes the session-stamp record beside the map | [provenance.py](tools/coyodex/provenance.py:217) |
+| C25 | writes | E48 | builds one entry per build session with its id, minute, mode and pinned commit | [provenance.py](tools/coyodex/provenance.py:199) |
+| C25 | calls | D1 | launches git as a separate process for the head commit, its date and whether the tree is dirty | [provenance.py](tools/coyodex/provenance.py:120) |
+| C43 | calls | C34 | asks the impact engine which parts of the map a code change reaches | [serve.py](tools/coyodex/viewer/serve.py:420) |
+| C34 | queries | D1 | queries git for the changed-file list and for each file diffed against the map pinned commit | [impact_git.py](tools/coyodex/impact_git.py:50) |
+| C34 | writes | E49 | builds one anchor reference for every code link the map carries | [impact_lib.py](tools/coyodex/impact_lib.py:196) |
+| C34 | writes | E50 | records one hit per anchor, with the precision it reached | [impact_lib.py](tools/coyodex/impact_lib.py:367) |
+| C75 | writes | E1 | the accept and direct-change instructions rewrite the map's rows and its commit pin in place | [change-impact.md](method/change-impact.md:123) |
+| C25 | writes | E47 | writes this session's entry into the provenance file | [provenance.py](tools/coyodex/provenance.py:217) |
+| C24 | calls | C2 | re-merges the edited fragments to check that no row appears or disappears | [fix.py](tools/coyodex/fix.py:1399) |
+| C75 | prescribes | C45 | re-renders the readable view from the changed map | [dispatch.md](method/dispatch.md:187) |
+| C63 | calls | C1 | parses every map it scores or judges through the shared map reader | [profile.py](eval/tools/coyodex_eval/profile.py:250) |
+| C63 | calls | C13 | runs the validator over a map to count its well-formedness problems and warnings | [profile.py](eval/tools/coyodex_eval/profile.py:257) |
+| C63 | calls | C14 | runs the auditor and its risk-ranked claim list over every map it scores | [profile.py](eval/tools/coyodex_eval/profile.py:259) |
+| C63 | calls | C44 | builds each run's diagram data so an archived run stays viewable after a rebuild | [run.py](eval/tools/coyodex_eval/run.py:136) |
+| C63 | calls | C45 | renders the readable view archived beside every run's map | [run.py](eval/tools/coyodex_eval/run.py:163) |
+| C63 | persists | E53 | writes each map's counted quality signals to profile.json and reads the accepted map's back | [run.py](eval/tools/coyodex_eval/run.py:166) |
+| C63 | persists | E54 | writes the judged pass rate and rubric scores to judge.json and reads a cached one back | [run.py](eval/tools/coyodex_eval/run.py:403) |
+| C63 | writes | E55 | builds the pass, drift or regressed verdict and renders it into the run's report | [compare.py](eval/tools/coyodex_eval/compare.py:510) |
+| C63 | reads | E41 | reads the auditor's work items to build the claim sample a skeptic is given | [run.py](eval/tools/coyodex_eval/run.py:328) |
+| C66 | reads | E47 | reads the recorded build stamp to name the build a review would be about | [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:179) |
+| C66 | reads | E48 | takes the newest recorded session's chat id and build minute | [retro_precheck.py](eval/tools/coyodex_eval/retro_precheck.py:180) |
+| C66 | persists | E1 | moves the previous map document into a numbered archive folder and keeps it there as the baseline | [archive.py](eval/tools/coyodex_eval/archive.py:107) |
+| C25 | reads | E47 | loads the recorded build stamp so the sessions that built this map can be listed | [provenance.py](tools/coyodex/provenance.py:296) |
+| C25 | reads | E48 | reads each recorded session's build minute, mode, chat id and code commit for the listing | [provenance.py](tools/coyodex/provenance.py:304) |
+| C65 | reads | E1 | loads the built map, so the rules whose subject is the map are scored against it rather than against the chat log | [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:1615) |
+| C65 | calls | C64 | reads the build's chat log through the transcript reader, one turn per reply | [process_scorecard.py](eval/tools/coyodex_eval/process_scorecard.py:2941) |
+| C64 | reads | E1 | counts the rows of the produced map, the divisor the spend report is stated against | [cost.py](eval/tools/coyodex_eval/cost.py:392) |
 
 ---
 
 ## Test completeness — gaps against the map
 
-> **Tests run for this table?** The suite was NOT run to build this table — every row is inferred by reading the test files and the code they exercise, never from a coverage run or an observed pass. That means a cited suite may touch a code path without asserting the behaviour named here, and an untested verdict is a reading of the test corpus rather than a proven absence; only running the suite with coverage would upgrade any row to verified.
+> **Tests run for this table?** The suite was never run for this table. Every row comes from reading the test files, so every row is a reading and not a measurement. Confidence is inferred on all 35 rows.
 
 | Target | Tested? | Test(s) | Gap / risk | Confidence |
 |---|---|---|---|---|
-| State-changing POST endpoints: CSRF header, request-body cap, open/forget/reorder handlers (Map server) | no | [test_serve.py](tests/test_serve.py:142) — drives the recents store directly (add / remove / dedupe / persist) — the state the POST handlers mutate, but never through an HTTP POST · [test_serve.py](tests/test_serve.py:194) — reorder semantics asserted on the store object, bypassing the /api/reorder route and its guard | Nothing in the corpus issues an HTTP POST. The custom-header CSRF guard, the 403 it returns when the header is absent, the 64KB Content-Length cap and the malformed-body path, and the /api/open folder gate (must contain a .coyodex/ dir), /api/forget and /api/reorder handlers are all unexercised end to end. This is the product's only write surface reachable from a browser: if the header check regressed to a no-op, every test still passes and any web page the developer visits could add or forget projects — and adding a project makes that folder's git-tracked contents servable. | inferred |
-| Filesystem browser (/api/browse) — the unconfined path walk (Map server) | partial | [test_serve.py](tests/test_serve.py:255) — asserts the directory lister flags a .coyodex/ folder and offers a parent entry, called as a plain function on a temp dir | Only the lister function is tested, never the route. Untested: that an arbitrary absolute path or ~-expansion is accepted with no root and no allowlist, that a non-directory yields 404, that symlinked directories are skipped and unreadable entries dropped, and that file NAMES never leak (only subfolders). The map itself calls this the weakest surface in the product; the deliberate absence of a containment check is exactly the property no test pins down, so a future change that started returning file names or file contents here would break nothing. | inferred |
-| DNS-rebinding guard actually enforced on every request (Map server) | partial | [test_serve.py](tests/test_serve.py:90) — table-tests the loopback-host predicate itself: absent Host allowed, localhost/127.0.0.1/[::1] allowed, evil.com and a LAN address refused · [test_serve.py](tests/test_serve.py:385) — drives real HTTP GETs against a live server, but only on the happy path — every request carries a loopback Host | The predicate is tested; the WIRING is not. No test sends a request with a foreign Host header and asserts a 403, on either the GET or the POST dispatch. A refactor that dropped the guard call from either entry point would leave the whole suite green while re-opening the rebinding path to every served repo's source. | inferred |
-| Editor hand-off URI scheme allowlist in the viewer (File browser & code viewer) | no | [test_viewer_js.py](tests/test_viewer_js.py:33) — runs `node --check` over the frontend bundle — a syntax gate only, it never executes a line | The repo has no JS test harness, so the scheme allowlist that keeps a user-typed editor template from putting javascript:, data:, file: or http(s): into an anchor href is completely unexercised, as is the second check the Settings dialog runs on save. This guard is client-side and its only defence is that one allowlist; a typo that widened or skipped it would ship silently, and the whole viewer's behaviour is likewise unasserted beyond the file parsing. | inferred |
-| Diagram label sanitizer — the single chokepoint against map-supplied script injection (View bundle assembler, Context & subsystem diagram generator, Domain diagram generator, Deployment & messaging diagram generator, Behavioural flow generator) | no | [test_grouping.py](tests/test_grouping.py:2012) — asserts relation-label TEXT for foreign keys and keyed-by, i.e. what a label says — not that quotes, backticks, brackets, braces, pipes or angle brackets are neutralised · [test_gen_deployment.py](tests/test_gen_deployment.py:165) — generates deployment and overview diagrams from built maps, so labels pass through the sanitizer incidentally, but no assertion targets the escaping | No test feeds a hostile name (a `<script>` tag, a quote, a pipe) through label generation and asserts the output is neutralised, and no test asserts that every generator routes its labels through the one sanitizer. The diagram renderer runs with HTML labels enabled, so a single generator that builds a label by hand is a script-injection path into the viewer, driven by text an agent wrote into the map. The map names this as the concentrated risk and nothing pins it. | inferred |
-| Source read at the pinned commit (/api/src) — traversal rejection and the size cap (Map server) | partial | [test_serve.py](tests/test_serve.py:101) — the path guard: empty, absolute, `..` traversal at head and mid-path, backslash and NUL byte all rejected · [test_serve.py](tests/test_serve.py:113) — real temp git repo — listing and showing a blob at a SHA, with a missing path and an unsafe path both returning nothing · [test_serve.py](tests/test_serve.py:123) — blob size distinguishes file from directory from missing, and refuses an unsafe path before any git call · [test_impact_serve.py](tests/test_impact_serve.py:89) — drives /api/src over HTTP for both the worktree frame and a SHA frame | The guards are well covered as functions and the route is reached over HTTP, but no test asserts the 413 refusal for a blob over the 4MB cap, nor that the size check happens BEFORE the blob is buffered — the ordering that keeps a huge file from being read into memory. Also unasserted: the 400 on a bad path and the 404 on a path absent from the commit, as HTTP status codes rather than helper return values. | inferred |
-| Working-tree file read — repo containment, .git exclusion, gitignore respect (Map server) | yes | [test_impact_serve.py](tests/test_impact_serve.py:61) — a tracked file and an untracked-but-not-ignored file are both served from the working tree · [test_impact_serve.py](tests/test_impact_serve.py:70) — the three refusals in one place: a gitignored file, anything under .git, and a path escaping the repo root | The named refusals are asserted, but not the symlink case the design calls out — no test plants a tracked symlink pointing outside the repo and checks the resolved real path still refuses it. That is the specific escape the containment check exists for, and it is the one route in the product that touches real disk instead of git objects. | inferred |
-| Git argument injection through commit values and user-supplied refs (Map server) | yes | [test_serve.py](tests/test_serve.py:80) — the commit validator rejects a leading dash, a `--output=` flag smuggle, a ref name and a path-suffixed SHA; accepts short and full SHAs · [test_impact_serve.py](tests/test_impact_serve.py:162) — the ref resolver over the impact base/target parameters, including injection-shaped input | Both validators are asserted, but nothing asserts the second layer — that git is always invoked as an argument list with no shell, and that the `--end-of-options` terminator is present on the rev-parse call. Those are the defences that hold if the character class is ever widened, and a refactor could drop them invisibly. | inferred |
-| Validator blocking rules — the gate a wrong map must not pass (Map validator, Source & coverage grounding checks, Validation run & CLI, Advisory adjudication readers) | yes | [test_validate_model.py](tests/test_validate_model.py:521) — roughly 186 tests across referential integrity, anchor syntax, entry-point kind and cadence contracts, structured stores, flow-step call sites, sub-flows, use-case and Happy-Path completeness, deployment and coverage walls · [test_operative_lines.py](tests/test_operative_lines.py:114) — the anchor-quality check: a definition-header anchor is flagged, an operative line accepted, and the check stays advisory rather than blocking · [test_granularity.py](tests/test_granularity.py:174) — the granularity advisory recomputed inside validate, asserted as non-fatal | Every row is built from a synthetic map constructed to trip one rule, so the suite proves each rule fires on its own trigger — it cannot show the absence of a false PASS, which is the failure that matters here (a wrong map shipping as validated). Nothing runs the validator against this repo's own committed map as a fixture, and nothing asserts the process exit-code contract that callers and CI actually branch on. | inferred |
-| Fragment assembly — duplicate-id refusal, merge determinism, dedup and edge collapse (Fragment assembler) | yes | [test_assemble.py](tests/test_assemble.py:131) — the same id in two fragments is reported as a conflict rather than silently overwritten · [test_assemble.py](tests/test_assemble.py:365) — the CLI fails on duplicate ids AND writes nothing — the property that keeps a half-assembled map off disk · [test_assemble.py](tests/test_assemble.py:58) — arrays concatenate, singletons are taken, and conflicting singletons are a conflict · [test_assemble.py](tests/test_assemble.py:91) — component dedup merges same-file entries and repoints test targets; edges collapse only when call sites match · [test_assemble.py](tests/test_assemble.py:217) — a malformed fragment fails alone, named by its own path, instead of poisoning the run | The refusal is proven for ids within the fragment set, but not for the crash-mid-write case: no test interrupts the write and checks the previous map survived, and no test asserts the write is atomic. Also unasserted: what happens when a fragment file appears or changes during assembly, and whether the 'writes nothing' guarantee holds for the generated markdown view and pre-index as well as the JSON. | inferred |
-| Reconcile and fix — the in-place edits to a stored map (Reconcile & post-assemble fixes) | partial | [test_assemble.py](tests/test_assemble.py:414) — reconcile directives assign fields and survive a reassemble; unknown ids, wrong kinds and bad parents are rejected; zero-match drops warn without failing · [test_assemble.py](tests/test_assemble.py:490) — malformed directives are refused at load · [test_fix.py](tests/test_fix.py:49) — apply-drift rewrites a drifted security anchor, leaves paired persists/reads edges alone, and skips an ambiguous multi-where edge · [test_fix.py](tests/test_fix.py:130) — drop-edge removes the edge, reports riding flow steps, heals them on repoint, and errors on a missing edge · [test_reconcile_build.py](tests/test_reconcile_build.py:49) — the rule language: glob depth, override order, wrong-typed ids reported, rules that match nothing reported, and a leading `**` that cannot sweep the whole map | The transformations are well covered but the WRITE is not. These verbs rewrite the repo's only copy of the map in place: no test asserts the write is atomic, that a failure mid-write leaves the original intact, or that a backup exists. Contrast the archive script, where exactly that rollback property IS tested. A partial write here silently destroys a map that took a full agent fan-out to build. | inferred |
-| Change-impact engine and ripple — diff parsing, anchor resolution, and what a hit reaches (Analyze a code change against the map, Change-impact engine) | yes | [test_impact.py](tests/test_impact.py:124) — diff parsing, cancelling identical edits, the anchor-resolution ladder, enclosing-extent innermost-wins, renames with and without edits, deletions, untracked files and cross-commit cancellation · [test_impact_ripple.py](tests/test_impact_ripple.py:96) — a component hit ripples to structure, behaviour and data; data does not chain; entity hits reverse into subdomains; step hits stay inside their use case; sub-flow steps reach every referencing use case · [test_impact_ripple.py](tests/test_impact_ripple.py:236) — the impact API endpoint end to end · [test_diffmap.py](tests/test_diffmap.py:10) — unified-diff line numbering, added files, preamble skipping and the no-newline marker · [test_anchor_drift.py](tests/test_anchor_drift.py:20) — drift detection on confirmed claims, with the corrected anchor recorded | Ripple rules are asserted on hand-built miniature maps of a few elements. Nothing checks the ripple against a real map at real scale, where the risk is not a wrong rule but an overwhelming or misleading result — the map itself frames a wrong ripple as sending a reader to the wrong code. Also unasserted: the callgraph opt-in's decay behaviour beyond one depth case, and any bound on ripple size. | inferred |
-| Map backup with its build transcript (Back up a map with its build transcript, Map backup & provenance) | no |  | No test file references the backup tool at all. The whole use case is unexercised: finding the session id in the provenance file, locating the matching transcript, bundling it with the map, and every failure mode (missing provenance, a session id that matches nothing, a partially written bundle). This is the only path that preserves how a map was built; if it silently produces an empty or mismatched bundle, nothing catches it. Note that the archive script, a DIFFERENT tool, is well covered and is easy to mistake for this one. | inferred |
-| Installing the skill — manifest path baking and the repo-local environment (Install the coyodex skill, Method docs, Agent skill manifest) | no | [test_granularity.py](tests/test_granularity.py:213) — asserts the method doc still carries the leaf rule — a docs-content check, not an install check | Nothing exercises the install target: that the skill manifest lands in the agent's skills folder, that this clone's path is baked into it correctly, that the virtualenv gets the command, or that reinstalling and uninstalling are clean. A broken install makes the whole product unreachable for a new user, and it is the first thing anyone does. Only the CONTENT of the method docs is checked, never the wiring. | inferred |
-| Exploring a map top-down in the browser — drill navigation, info pane, search (Explore a map top-down, Diagram canvas & drill navigation, Element info pane & selection, Map search sidebar) | no | [test_viewer_js.py](tests/test_viewer_js.py:33) — `node --check` parses the bundle so a stray syntax error cannot ship — no execution · [test_viewer_js.py](tests/test_viewer_js.py:37) — a grep-style check that no internal model field name is rendered into the UI · [test_viewer_js.py](tests/test_viewer_js.py:61) — a grep-style check that source links are bound by one delegated listener rather than per render | The repo has no JS test harness by design, so the entire browser viewer — drilling from one diagram level into the next, selecting an element and rendering its pane, the search sidebar — has zero behavioural coverage. The three existing checks are a parser gate and two text greps; they would not notice a drill that navigates to the wrong level or a pane that renders the wrong element. This is the primary way a human consumes a map. | inferred |
-| Seeing a change ripple in the viewer — the impact overlay (See what a change ripples to in the viewer, Change-impact overlay) | partial | [test_impact_serve.py](tests/test_impact_serve.py:112) — the commit picker's data: ancestors and descendants of the pin · [test_impact_serve.py](tests/test_impact_serve.py:130) — one file's inline diff across an arbitrary commit range · [test_impact_ripple.py](tests/test_impact_ripple.py:236) — the impact endpoint the overlay consumes, end to end | The server half is covered; the browser half is not. Nothing asserts that the overlay lights the right nodes for a given impact payload, that picking two commits drives the right request, or that the in-place diff view renders. A correct payload rendered onto the wrong boxes is indistinguishable from a correct result to every test here. | inferred |
-| Starting the local map server — bind, startup registration, browser launch (Start the local map server) | no | [test_serve.py](tests/test_serve.py:385) — stands up the request handler on an ephemeral port directly, bypassing the runner entirely | No test calls the serve runner. Untested: that the bind address is 127.0.0.1 rather than all interfaces (the map states this hardcoded bind IS the access control), the default port and what happens when it is taken, the folders passed on the command line being registered at startup, and the optional browser launch. A regression that widened the bind to 0.0.0.0 would expose every served repo to the network and no test would fail. | inferred |
-| Accepting a change into the baseline (Accept a change into the baseline) | no | [test_assemble.py](tests/test_assemble.py:345) — the assemble CLI writes a canonical map plus its generated views — one step of the accept sequence, run on its own | The accept flow is orchestrated by the agent skill, so no test covers the sequence: patch the model in place, re-pin to the new commit, re-run the gates, regenerate the markdown view and pre-index, commit. Untested in particular is the ordering guarantee — that the gates run BEFORE the commit — and what state the map is left in when a middle step fails. This path rewrites the committed baseline, so a partial accept ships a map that no longer matches its pin. | inferred |
-| Building a baseline map end to end, and the per-fragment lint that gates it (Build a baseline map of a repo, Fragment linter) | partial | [test_lint_fragment.py](tests/test_lint_fragment.py:24) — anchor and extra misuse in one pass, malformed ids refused at load, unknown references against the id universe, unknown-prefix targets, and the warning-vs-problem split · [test_lint_fragment.py](tests/test_lint_fragment.py:148) — the completeness family never fires per fragment — the boundary between lint and validate · [test_lint_fragment.py](tests/test_lint_fragment.py:208) — the lint CLI exit codes · [test_assemble.py](tests/test_assemble.py:332) — the assemble CLI writes the fragments gitignore and the canonical map with its views | Every stage is tested alone; the build as a whole is not. No test walks pre-index to fragments to lint to assemble to validate on a fixture repo and asserts a committed, commit-pinned map comes out. That means stage-boundary defects — a fragment shape lint accepts but assemble mishandles, or a map assemble writes that validate then rejects — are invisible, and they are exactly the failures an agent hits mid-build. | inferred |
-| Opening the source behind a mapped element — file tree, coverage overlay, code read (Open the source behind a mapped element, File browser, recents & diff rows) | partial | [test_filetree.py](tests/test_filetree.py:54) — the path index strips anchors and skips URLs, resolves collisions leaf-first, and maps owned files to their owner · [test_filetree.py](tests/test_filetree.py:121) — tree nesting and ordering, coverage shading including the partial case, mapped counts summed at each level, and the click target picking the finest ancestor folder · [test_serve.py](tests/test_serve.py:272) — the git-backed tree built from a real commit · [test_serve.py](tests/test_serve.py:294) — symbol flattening from the pre-index, with missing and malformed pre-index both degrading to empty rather than failing | The backend that finds and serves the file is covered; the claim the use case makes is not. Nothing asserts that clicking a given element's anchor lands on the file and LINE that grounds it — the round trip from a map anchor to a scrolled code view lives entirely in the untested frontend. The hand-off to an editor or GitHub is likewise unasserted. | inferred |
-| Changing the map on request in plain language (Change the map on request) | partial | [test_reconcile_build.py](tests/test_reconcile_build.py:126) — rule output feeds the reconcile step unchanged, and the coverage report names elements left unassigned · [test_fix.py](tests/test_fix.py:162) — dedup-relation lists both sides then drops the chosen one | The mechanical verbs are covered, but the use case's stated guarantee — that the agent refuses anything the code does not back, and that a requested edit passes the same gates as any other write — has no test. Nothing asserts that a surgical edit is re-validated before it lands, so an edit that satisfies a directive while breaking referential integrity depends on the operator remembering to re-run the gate. | inferred |
-| Method-quality eval — profiling, judging, comparison gates and the runner (Check the method's quality, Eval runner, Eval scoring) | yes | [test_compare.py](eval/tests/test_compare.py:57) — the gate matrix: new validate problems and contradictions regress, coverage and auth-surface drops regress, bands and density collapse, granularity gating the candidate only, judge pass-rate and dimension-score drops, and hard-fail precedence · [test_judge.py](eval/tests/test_judge.py:335) — grounding majority vote with dissenters, ties, failed and unverifiable votes; the sampling cap keeping the highest-risk claims; protocol fingerprinting; median and mean score assembly · [test_profile.py](eval/tests/test_profile.py:691) — exact structural counts, completeness and granularity fields, density ratios, and old baselines without newer fields still loading · [test_run.py](eval/tests/test_run.py:107) — first run without a baseline, bless round trip, and the map-hash freeze that refuses a map edited after the run started · [test_model_pipeline.py](eval/tests/test_model_pipeline.py:90) — the model-format path end to end, including the protocol-cache guard and drift on a protocol mismatch | Judges are injected in every test, so the real LLM call, its prompt-to-parse round trip, retries and malformed-response handling are never exercised — the part most likely to break in practice. Nothing asserts the eval's own conclusion is meaningful: a scoring change that makes every map look good would still pass this suite. | inferred |
-| Map model, grammar vocabularies, anchors and the JSON schema (Map model & serializer, Map grammar & vocabularies, Anchor & schema utilities, ProjectModel) | yes | [test_model.py](tests/test_model.py:157) — round-trip identity, deterministic serialization across builds, canonical key order, and every element keyed by id · [test_model.py](tests/test_model.py:215) — load refuses a wrong format, wrong types with a path, unknown fields, missing required fields and wrong or suffixed id prefixes · [test_model.py](tests/test_model.py:59) — id remapping reaches every referenced site including the store's dep reference · [test_anchors.py](tests/test_anchors.py:7) — anchor forms (file, file:line, file:range, extensionless, directory) and the drift tolerance rules · [test_json_schema.py](tests/test_json_schema.py:21) — the committed schema is not stale, every ref resolves, id patterns carry their array prefix, and a markdown link or retired hash anchor is rejected · [test_grammar_roles.py](tests/test_grammar_roles.py:15) — edge verbs map to roles per family, dep roles union incoming verbs, and entry-point kind aliases fold without ever folding a minted kind · [test_retired_parser.py](tests/test_retired_parser.py:53) — the retired v1 parser stays deleted and no command dispatches to it | Round-trip identity is proven for maps the suite builds, not for the repo's own large committed map — no fixture asserts it survives a load-and-write byte-identically at real scale. Unicode, very long strings and deeply nested extras are unexercised, and nothing asserts the id-remap covers a field added in future without being updated. | inferred |
-| Code pre-index — weighting, symbol extraction, imports and compression advisories (Code pre-index) | yes | [test_preindex.py](tests/test_preindex.py:83) — weights count lines and files, exclude vendored code and lockfiles, and degrade without git · [test_preindex.py](tests/test_preindex.py:124) — symbol extraction reports all matches for an ambiguous name, records kind and line, and records a parse failure instead of swallowing it · [test_preindex.py](tests/test_preindex.py:155) — import edges reported as named pairs, dynamic imports honestly reported as a lower bound, and no false positive on a substring match · [test_preindex.py](tests/test_preindex.py:229) — the compression advisories: collapsed plugins, monorepo layout, small unreferenced folds, and the non-product dirs it skips | Symbol extraction is asserted mostly for Python, with non-Python languages covered by a single present-or-self-reported check — so a silently degraded extractor for another language reads as success. Nothing asserts behaviour on a very large tree, where the pre-index's cost and its truncation choices actually matter. | inferred |
-| Map auditor and balance reporter — the advisory checks (Map auditor, Balance reporter) | yes | [test_audit.py](tests/test_audit.py:1320) — read-before-create and actor attribution stay advisory and never block, guarded against known false positives · [test_audit.py](tests/test_audit.py:1468) — the L2 worklist and its tiers: structured stores, messaging, state machines, cadence · [test_balance.py](tests/test_balance.py:72) — the small-map advisory, root and per-subsystem rules, homogeneity, the extras escape hatch, the subdomain forest mirror, graph machinery, naming, and its integration into validate | Both are advisory by design, so the tests prove they do not block — but nothing asserts their output is actionable or that they fire on the real map. An auditor that went quiet on every real defect while staying green here would look identical. | inferred |
-| Views builder, graph builder and the diagram generators (Map views builder, Viewer graph builder, Context & subsystem diagram generator, Domain diagram generator, Deployment & messaging diagram generator, Behavioural flow generator) | yes | [test_grouping.py](tests/test_grouping.py:2012) — roughly 95 tests over the grouping and diagram-generation rules across context, subsystem and domain diagrams · [test_gen_deployment.py](tests/test_gen_deployment.py:38) — derived dep roles, injection, overview, environments, cards, process topology from the async catalog, co-residency, the all-in-one fold and the readable-cap container grouping · [test_data_view.py](tests/test_data_view.py:1) — the data view's entity, relation and store rendering · [test_convert_and_views.py](tests/test_convert_and_views.py:71) — golden equivalence over a real committed map fixture — the one place a full real map drives generation | Coverage is on generated STRUCTURE, not on whether a diagram is readable or correct to a human — a layout that renders every box on top of another would pass. The golden fixture pins one real map, so a change that improves that map's output while degrading every other shape reads as a pass, and the fixture must be refreshed by hand or it silently ossifies. | inferred |
-| Recents store and served-project discovery (File browser, recents & diff rows) | yes | [test_serve.py](tests/test_serve.py:142) — add, remove, dedupe and persist; a missing file reads as empty; an external change made while the server runs is merged rather than clobbered; the same directory reached via a symlink dedupes · [test_serve.py](tests/test_serve.py:229) — loading a valid and an invalid project, and slug collisions resolved while invalid folders are skipped · [test_serve_fresh.py](tests/test_serve_fresh.py:41) — a map edited while the server runs is picked up; an unchanged map keeps the cached bundle; a broken edit keeps serving the old bundle and retries; a missing file keeps the cache · [test_serve.py](tests/test_serve.py:350) — the served view bundle and its cache, tolerating a malformed change report | The store is mutated from request threads behind a lock, but no test exercises concurrent writes — two simultaneous adds, or a reload racing an add. The dedupe and merge tests all run single-threaded, so a lock removed by refactor would not be caught. | inferred |
-| Command front door and the model dump (CLI dispatcher, Model dump) | partial | [test_cli.py](tests/test_cli.py:63) — version flag, no-args usage, unknown command exit code 2, and dispatch propagating not-found and usage errors for validate, audit, balance, fix and render · [test_cli.py](tests/test_cli.py:38) — the core path does not import the heavy parser dependency — an import-cost guard · [test_dump.py](tests/test_dump.py:60) — resolving a component, group, entity and unknown id; edge slices in and out; group members; and the CLI's whole-dump, id-slice, unknown-id and two-slice-flag error paths | Only a subset of the twelve registered commands is dispatch-tested; the rest are reached only through their own module's tests, so a broken registration or a renamed flag on those would surface at runtime rather than in the suite. Argument parsing for the commands that take several flags is largely unasserted. | inferred |
-
----
-
-## Grounding — how much of this map was challenged
-
-**185 of 185 claim(s) challenged** by fresh-context skeptics — 182 confirmed, 3 refuted, 0 unverifiable. That is the PINNED worklist: the claim surface the skeptics were handed.
-
-> No `live_claims_digest`: nothing can confirm this record describes the map as it now stands.
-
-Full Phase-4 coverage: all 185 L2 claims from the audit worklist were challenged by 8 fresh-context skeptics that never saw the build reasoning, batched by theme (security, external dependencies + persistence, domain ownership x2, backbone edges x2) and told to default to refuted on doubt. The 14 security claims were judged three times independently with different lenses — read-the-check, attack-the-surface, and prove-the-call-chain — and decided by majority; one skeptic verified them against a live throwaway server rather than by reading. 3 claims were refuted and reconciled: the /api/browse route has no containment of its own (re-anchored to the loopback Host guard that is its real barrier, with the gap stated), the pre-index builds rather than owns its per-directory expectation record, and the backup script copies the map folder without owning the map document (edge dropped). The ref-injection guard was confirmed real but anchored at a copy that never sees user input; its anchor was repointed. All 5 state machines were checked against their declaring lines and none was invented.
-
----
-
-## Coverage exceptions
-
-- tests/: the test suite is measured as coverage of the map's targets in the Tests table, not modelled as components of the product.
-- eval/tests/: same — the eval's own test suite.
-- assets/: two images used by the README.
-- .github/: issue and pull-request templates only; there is no CI workflow in this repo.
-- method/templates/: a documentation-only template showing the shape of the generated markdown view.
-
----
-
-## Audit checks and the L2 worklist
-
-`coyodex audit` exits 1 only on a CONTRADICTION-severity finding (`audit_model.py:593`). Everything else prints and exits 0.
-
-**Blocking (CONTRADICTION)**
-- `dangling-why-ref` — a step's `why:` cites a Happy-Path position that is not a step, or a use case that does not exist in the map (`audit_model.py:230`, `audit_model.py:242`).
-- `backward-why-ref` — a step's `why:` cites a Happy-Path position that comes AFTER it in the walk (`audit_model.py:234`).
-
-**Advisory / warning (never blocks)**
-- `read-before-create` / `read-never-created` — a step reads an entity the walk writes later, or never (`audit_model.py:196`, `audit_model.py:202`). Advisory because component-granular attribution is lossy in both directions (`audit_model.py:142`).
-- `forward-uc-why-ref` / `offspine-why-ref` — a use-case id in a `why:` may be ordinary prose, so blocking would fail a build on a sentence (`audit_model.py:256`, `audit_model.py:247`).
-- `actor-attribution` — the flow's opening role id is not in the use case's declared actors (`audit_model.py:281`).
-- `why-less-step` (WARNING) — a step states no precondition while its siblings do (`audit_model.py:296`).
-- `dependency-phrasing` — step or edge text reads as "A needs B" instead of an action (`audit_model.py:318`, `audit_model.py:324`).
-
-Findings print sorted by severity, then check, then location (`audit_model.py:336`).
-
-**L2 worklist ranking** (highest risk first, then deduplicated by claim string at `audit_model.py:510`)
-1. Auth-surface protection claims (`audit_model.py:411`).
-2. `enforces` / `encrypts` edges — security-critical verbs (`audit_model.py:423`).
-3. Component→external-dependency edges (`audit_model.py:430`), skipping deps explicitly folded as framework/library (`audit_model.py:431`).
-4. Component→entity ownership edges (`audit_model.py:435`).
-5. All remaining backbone edges (`audit_model.py:441`).
-6. Appended after the edge tiers: entity store claims (`audit_model.py:458`), messaging-channel publisher/consumer claims (`audit_model.py:471`), state-machine claims (`audit_model.py:483`), and entry-point cadence claims (`audit_model.py:500`).
+| Adding, removing and reordering projects on the map server's landing page (EP64, EP65, EP66) | no | [test_serve.py](tests/test_serve.py:385) — The only test that sends real requests to the server, and only for page assets and one project's view. | No test sends an add, a remove or a reorder request. The header check that blocks other websites is never exercised. A break there lets any page you visit rewrite your project list. | inferred |
+| The helper script that stamps a build and moves a map out of a project (EP98, EP99) | no |  | Nothing runs the script. Moving is the default rather than copying. A wrong folder sends the only copy of a map somewhere unexpected. Recovery means hunting for the files by hand. | inferred |
+| The recent-projects list and the folder browser on the landing page (EP62, EP63) | no | [test_serve.py](tests/test_serve.py:255) — Checks the folder listing helper marks which folders hold a map, but never through a request. | No test sends either request. The folder browser answers for any directory on the machine, including folders far outside every served project. A widened answer there stays invisible until a person notices. | inferred |
+| The landing page, a project's own page and the server's health answer (EP60, EP67, EP68) | no | [test_serve.py](tests/test_serve.py:385) — Sends real requests for the shared page assets and for one project's view, and for nothing else. | No test asks for those three addresses. A break leaves the server running while no page ever loads. Only a person opening a browser would find out. | inferred |
+| Opening an element's line in the editor or on the code hosting site (Open an element's source in the editor, Source column) | no |  | Nothing exercises how the link is built or which editor schemes are allowed. A wrong link opens the wrong file, or a scheme the reader never wanted. The reader would trust a line the map does not name. | inferred |
+| Starting the map server, popping the browser open, and stopping on the stop key (Start the local map server, EP77, EP78, EP79, EP80) | no | [test_cli_contract.py](tests/test_cli_contract.py:57) — Records the server as the one command no test may call, because starting it takes a port. | The start command is deliberately never called by any test. A bad option or a failed start ships unnoticed. Every reading path begins here, so a break blocks the whole browser page. | inferred |
+| Folding a change report back into the map and re-pinning it to the new commit (Fold a change report into the map) | no | [test_method_contract.py](tests/test_method_contract.py:1) — Checks the written instructions still name commands that exist, without ever performing the fold. | No test performs the fold. The step is written instructions an agent follows by hand. A wrong fold quietly loses map rows, or pins the map to the wrong commit. | inferred |
+| The three browser libraries that draw the diagrams, pan them and colour the code (Mermaid, svg-pan-zoom, highlight.js) | partial | [test_grouping.py](tests/test_grouping.py:1823) — Checks the served page text asks for the drawing library and hands it the diagram to build. | No test draws a diagram in a real browser. A library upgrade that changes drawing rules passes every check here. The reader meets the broken picture first. | inferred |
+| How the browser page behaves when a reader clicks a box, drills in and goes back (Map canvas, Map reading pages, Trail and history, Open a project's map in a browser) | partial | [test_viewer_js.py](tests/test_viewer_js.py:44) — Parses the page's script so a broken edit cannot ship silently. · [test_viewer_js.py](tests/test_viewer_js.py:70) — Reads the script's own text to check well over a hundred screen rules, without running the page. · [test_grouping.py](tests/test_grouping.py:1851) — Checks the served page and its script agree on what each view draws. | Nothing loads the page and clicks it. Almost every check reads the script as text, so a rule can be present and still not work. A reader meets the break before any test does. | inferred |
+| The one story column that lists every feature in the order the product runs (Follow the product's story end to end, Feature index) | partial | [test_features.py](tests/test_features.py:1) — Pins which use cases, rules and components each feature reaches, read from the stored map. · [test_viewer_js.py](tests/test_viewer_js.py:3125) — Checks the script text draws the story diagram on the features landing screen. | The join behind the column is well pinned. The drawing itself is only checked as script text. A layout break in the story column fails nothing. | inferred |
+| The written method, the worker briefings, and the skill copied into the coding agents (The build method, The worker briefings, The installed skill and the project's own writing, Install the coyodex skill into the coding agents) | partial | [test_method_contract.py](tests/test_method_contract.py:1) — Checks every command the written method names still exists and still takes the options named. · [test_method_rationale.py](tests/test_method_rationale.py:1) — Checks the reason for each rule stays attached to the rule. · [test_skill_pointers.py](tests/test_skill_pointers.py:1) — Checks the installed copies do not point at files that were renamed or deleted. · [test_retro_checks.py](tests/test_retro_checks.py:1) — Checks a promised outcome and the review that reads it still point at each other. | The install step itself never runs in a test. Only the words inside the files are checked. A broken install leaves a coding agent that cannot answer to the product at all. | inferred |
+| Judges reading both maps and returning grounding and rubric verdicts (Have judges read both maps) | partial | [test_judge.py](eval/tests/test_judge.py:1) — Feeds a scripted stand-in judge, so gathering the verdicts and taking the middle score are pinned. | No real reader is ever asked to judge. A change to what the judges are asked, or to how their answers are read, is invisible here. A judge that quietly reads worse makes every later comparison wrong. | inferred |
+| The harness that plants false claims to measure how many the skeptics catch (Measure how many planted falsehoods the skeptics catch) | partial | [test_mutate.py](eval/tests/test_mutate.py:1) — Eight checks over the planting step and the answer key it writes. | Eight checks cover a harness whose own correctness decides a published score. A planted claim that turns out to be true makes a correct skeptic look wrong. The resulting number would still be believed. | inferred |
+| Changing the map by asking for a split, a rename, a move or a deeper drill (Change the map by asking in plain words) | partial | [test_method_contract.py](tests/test_method_contract.py:1) — Checks the written instructions for the edit still name real commands. · [test_finalize.py](tests/test_finalize.py:1) — Pins the gate run the edited map has to pass afterwards. | The edit is agent work, so no test performs one. Only the gates that follow are covered. An edit that drops rows passes whenever the gates do not look for those rows. | inferred |
+| Finding names in files written in languages other than Python (tree-sitter, tree-sitter-language-pack) | partial | [test_preindex.py](tests/test_preindex.py:1) — Runs the sizing pass; the checks for other languages only run when the grammar pack is installed. · [test_granularity.py](tests/test_granularity.py:1) — Pins the leaf rule that decides how coarse the map may be. | The checks for other languages skip themselves when the grammar pack is missing. A machine without the pack reports a green suite that proved less. A grammar upgrade that changes what counts as a name would not fail here. | inferred |
+| Picking up a map edited while the server runs, and warning when the tool's own code changed (Map server, EP58, EP59) | partial | [test_serve_fresh.py](tests/test_serve_fresh.py:46) — An edited map is served on the next request instead of the cached one. · [test_serve_fresh.py](tests/test_serve_fresh.py:71) — A broken edit keeps the last good drawings and retries later. | The map freshness check is well pinned. The warning about the tool's own code changing has no test. A stale server would keep serving old drawings with no notice to the reader. | inferred |
+| The gate that checks a finished map is well formed before anyone trusts it (Check the map is well formed, Map validator) | yes | [test_validate_model.py](tests/test_validate_model.py:1) — Around three hundred checks over unresolved references, missing code links and softer advice. · [test_cli_sweep.py](tests/test_cli_sweep.py:218) — Drives the gate through the real command against a committed map. | Nothing proves the list of checks is complete. A map defect nobody has thought of still passes. The list grows only after a defect is found in a real build. | inferred |
+| The gate that makes the map's two layers refute each other (Make the map's two layers refute each other, Map auditor) | yes | [test_audit.py](tests/test_audit.py:1) — Scenario maps written in the same format the gate reads, so the live path is exercised. · [test_trapdoor_tools.py](tests/test_trapdoor_tools.py:1) — Runs the gate against a small planted project and its expected map. | The scenarios are hand written, so a contradiction nobody imagined goes unjudged. A real map is far larger than any scenario here. | inferred |
+| Merging the workers' fragments into one map (Merge the workers' fragments into one map, Fragment merge, FragmentLoad) | yes | [test_assemble.py](tests/test_assemble.py:1) — Sixty-six checks over clashing ids, dropped rows and the order rows come out in. · [test_assembly_fixture.py](tests/test_assembly_fixture.py:1) — Merges a committed set of real fragments end to end and compares against the expected map. · [test_fragment_io.py](tests/test_fragment_io.py:1) — Reading and writing one fragment on its own, before the merge. | Cover is strong for dropped rows and clashing ids, which is the risk that matters. The end to end corpus is one committed project, so an unusual fragment shape stays untried. | inferred |
+| Handing a worker its brief, and the worker's own check before it hands work back (Hand a fan-out worker its contract, Self-check one harvested fragment) | yes | [test_contract.py](tests/test_contract.py:1) — Pins that each worker gets its own half of the brief, not the whole file. · [test_lint_fragment.py](tests/test_lint_fragment.py:1) — Forty-three checks over the per-fragment self-check, including invented ids. | The brief and the self-check are pinned as text and as exit codes. Nothing proves a worker actually reads the brief it is handed. | inferred |
+| The record of what the skeptics proved, and the counts the gate reads (Record what the skeptics proved, Grounding record, ElementCheck, SurvivingRefutation) | yes | [test_grounding.py](tests/test_grounding.py:1) — Fifty checks that the four counts are worked out from the verdicts, never typed by hand. · [test_element_checks.py](tests/test_element_checks.py:1) — Shows, per element, what was proved beside what the author claimed. · [test_cli_sweep.py](tests/test_cli_sweep.py:190) — Drives every grounding verb through the real command against a realistic map. | The counts are worked out rather than typed, and the working is pinned. Nothing checks that the verdict files a real skeptic writes are honest in the first place. | inferred |
+| Correcting a code link, dropping a refuted claim, and writing down an accepted advisory (Correct a code link that points at the wrong line, Drop a claim the code refutes, Record an advisory the reader accepts, Map repairs) | yes | [test_fix.py](tests/test_fix.py:1) — Over a hundred checks across the repair verbs that edit a map in place. · [test_records.py](tests/test_records.py:1) — One reader for accepted advisories, after four separate readers each silenced more than named. · [test_anchor_drift.py](tests/test_anchor_drift.py:1) — Lists every code link that has slid off the line it should point at. · [test_operative_lines.py](tests/test_operative_lines.py:1) — Checks a code link points at a line that could really be doing the work. | Silencing more than was named is directly tested, which is the risk that matters most here. A repair still rewrites a committed map in place with no way back. | inferred |
+| The pre-commit run that puts a map through every gate at once (Run the pre-commit read, Pre-commit gate run) | yes | [test_finalize.py](tests/test_finalize.py:1) — Forty-six checks, and they state plainly that the run is a convenience, not an enforcement point. · [test_access_surface.py](tests/test_access_surface.py:1) — Catches a security claim that vanished between two maps of unchanged code. | Nothing forces a build to make the run at all. A map can reach a commit with no gate ever having read it. The tests say so rather than fixing it. | inferred |
+| Reporting what a code change did to the map (Report what a code change did to the map, Change impact, AnchorRef, DirectHit) | yes | [test_impact.py](tests/test_impact.py:1) — Named code changes replayed in real temporary projects, not imitations. · [test_impact_ripple.py](tests/test_impact_ripple.py:1) — Pins how far a change spreads through the map's own relations. · [test_impact_serve.py](tests/test_impact_serve.py:1) — Pins the reading guards, so a file outside the served project is refused. | Real temporary projects back the checks, which is the right shape. The code changes replayed are a fixed set, so an unusual change stays unmeasured. | inferred |
+| Seeing what an edit changed in the map, row by row (See what an edit changed, row by row) | yes | [test_mapdiff.py](tests/test_mapdiff.py:1) — Twenty-five checks, written after a count-only report cost an hour of hand reading. | The row by row comparison is pinned on small hand built maps. A very large map's report has never been checked for readability or for speed. | inferred |
+| The briefing, the ignore list, and the sizing pass that runs before any map is built (Brief the reader on what will be analysed, Declare code the map should not describe, Size the code tree before choosing altitude, Pre-index, Symbol, DirExpectation) | yes | [test_scope.py](tests/test_scope.py:1) — Checks the briefing says which files will be read and what the commit pin means. · [test_ignorefile.py](tests/test_ignorefile.py:1) — Twenty-six checks over the file that declares code the map should not describe. · [test_preindex.py](tests/test_preindex.py:1) — Thirty checks over the sizing pass and the summary a coding agent reads back. · [test_source_walk_git.py](tests/test_source_walk_git.py:1) — Pins which files the walk enumerates, since a missed file is invisible to everything after. | The file walk is pinned to what the project tracks, which decides everything downstream. A file the walk misses stays invisible to every later check, including the coverage ones. | inferred |
+| Turning path rules into an explicit list of assignments (Turn path rules into explicit assignments, Assignment pass, Reconcile) | yes | [test_reconcile_build.py](tests/test_reconcile_build.py:1) — Fifty-two checks, written after a build reported no components while assigning four hundred. | The failure that prompted the command, a rule matching nothing, is pinned. Very large assignment files are covered by one committed example only. | inferred |
+| The map document itself, and looking up one part of it (Look up one part of the map, Map document, Map lookups, ProjectModel) | yes | [test_model.py](tests/test_model.py:1) — Saving and loading a map gives back exactly what went in, in a fixed order. · [test_dump.py](tests/test_dump.py:1) — Twenty-seven checks over the fixed slices a reader can ask for. · [test_json_schema.py](tests/test_json_schema.py:1) — Checks the published description of the map file still matches the map. · [test_retired_parser.py](tests/test_retired_parser.py:1) — Guards that the deleted text format stays deleted everywhere. | Saving and loading round trips exactly, and the old text format stays gone. A map written by a much older release is tolerated only on the scoring side, never here. | inferred |
+| Reading the code under a box, at the commit the map names (Read the code under a box, EP72) | yes | [test_serve.py](tests/test_serve.py:101) — Refuses absolute paths, paths that climb out, backslashes and hidden characters. · [test_impact_serve.py](tests/test_impact_serve.py:61) — Refuses ignored files, project internals, and a link that points outside the project. · [test_serve.py](tests/test_serve.py:113) — Reads real files out of a real project at a named commit. | Reading outside the served project is refused several ways, which is the risk that matters. Nothing checks the coloured code the reader actually sees on screen. | inferred |
+| Scoring a rebuilt map against the accepted one, and accepting a run as the new baseline (Score a rebuilt map against the accepted one, Accept a run as the new baseline, Map quality score and verdict, MapProfile, DeltaReport) | yes | [test_profile.py](eval/tests/test_profile.py:1) — Thirty-four checks over the score, the reusable heart of the whole comparison. · [test_compare.py](eval/tests/test_compare.py:1) — Sixty-eight checks over the bands that decide the pass, drift and blocking verdicts. · [test_run.py](eval/tests/test_run.py:1) — The whole run end to end, with a scripted stand-in judge. · [test_legacy_map.py](eval/tests/test_legacy_map.py:1) — Reads a map an older release wrote, so a comparison against an archive can still run. | Scoring and the three verdicts are heavily pinned. The thresholds themselves are a judgement call no test can defend. A threshold set too loose passes a map that got worse. | inferred |
+| Reading a build transcript, scoring the build's behaviour, and reporting what it spent (Read a build transcript in slices, Score a build's behaviour against the method, Measure what a build spent, Build transcript reader and spend report, Build behaviour scorecard) | yes | [test_transcript.py](eval/tests/test_transcript.py:1) — Thirty checks over reading a build transcript in slices. · [test_process_scorecard.py](eval/tests/test_process_scorecard.py:1) — Over two hundred checks over the ten behaviour assertions, on made-up turn sequences. · [test_cost.py](eval/tests/test_cost.py:1) — Twenty-four checks over what a build spent. · [test_process_corpus.py](eval/tests/test_process_corpus.py:1) — Runs the scorecard against eight real build transcripts, but only when switched on. | The run against eight real transcripts is opt in, so an ordinary run skips it. Only made-up turn sequences are checked by default, and a real build looks nothing like them. | inferred |
+| Refusing to review an unfinished build, and archiving a map for a fresh rebuild (Refuse to review a build that has not finished, Archive a map so the next run builds from scratch, Map archive and build guard) | yes | [test_archive.py](eval/tests/test_archive.py:1) — Eighteen checks aimed at not losing the map while moving it aside. · [test_retro_precheck.py](eval/tests/test_retro_precheck.py:1) — Pins the guard that spots a build still running, since the stamp is written near the end. | Not losing the map during an archive is directly tested. Recovering from an archive that stopped halfway is not covered anywhere. | inferred |
+| Building the diagrams, the graph behind them, and the file browser tree (Diagram builder, Graph builder, File browser tree) | yes | [test_grouping.py](tests/test_grouping.py:1) — Over a hundred checks across the graph, the views and the diagram text. · [test_convert_and_views.py](tests/test_convert_and_views.py:1) — A committed real world map is the golden case every view is measured against. · [test_gen_deployment.py](tests/test_gen_deployment.py:1) — Fifty-four checks over the deployment drawing alone. · [test_data_view.py](tests/test_data_view.py:1) — Pins how stores group, who writes them and who reads them. · [test_filetree.py](tests/test_filetree.py:1) — Pins the file tree and the overlay showing which files the map covers. | A committed real world map as the golden case catches drift well. What is checked is diagram text, never a drawn picture. A diagram that describes correctly and draws badly passes. | inferred |
+| Re-balancing the diagrams so no box has too many or too few children (Re-balance the diagrams against the traced graph, Diagram balance report) | yes | [test_balance.py](tests/test_balance.py:1) — Forty-six checks over the fan-out bands, the exemptions and the escape hatch. | The bands and the escape hatch are pinned. Whether those bands match what a reader finds readable is never measured. Only a person can say a diagram is too busy. | inferred |
+| Stamping which conversation built the map (Stamp which conversation built the map, Provenance, SessionEntry) | yes | [test_provenance.py](tests/test_provenance.py:1) — Thirteen checks, written after the stamp existed only in a script the product does not install. | Writing and reading the stamp are covered by the shipped command. The older helper script that also writes the same stamp has no test at all. | inferred |
 
 ---
 
 ## Entry-point coverage
 
-Attribution convention: every row is anchored on the line that REGISTERS or DISPATCHES the entry point, and belongs to the component that owns that line. So each `coyodex <cmd>` row sits on its `if cmd == …` line in the CLI dispatcher (C30), not on the implementing module's `main`; the only exceptions are the second-level `coyodex fix <verb>` rows (the verb table lives in the fix module, C8) and the two module-only commands that no dispatcher exposes.
-
-- cli: complete — read the CLI dispatcher's dispatch chain top to bottom (12 `coyodex` subcommands), the fix module's verb table (3 verbs), the eval dispatcher's chain (8 `coyodex-eval` subcommands), `[project.scripts]` in `pyproject.toml` (2 console commands), the backup script's argparse subparsers (2), and then a repo-wide grep for `__main__` blocks to catch modules with a runnable `main` that the dispatchers do NOT expose — exactly two: the schema printer and the view-bundle debug dump. Not counted as rows: the global `--version` / `--help` flags, and the `Makefile` targets (`make dev` / `install` / `start`), which are build wrappers around these same commands and have no owning component.
-- agent-skill: complete — a project-specific kind for the two agent-invoked skill manifests (`/coyodex`, `/coyodex-eval`); a coding agent, not a human shell, is the caller. Found by listing every `SKILL.md` in the repo (there are exactly two). The eval manifest is filed under the eval runner (C45) because no canonical component lists `eval/SKILL.md`.
-- http-route: complete — walked the request handler's path dispatch in the map server end to end: the GET router (root → landing page; `/api/*` → recents + folder browser; `/static/<name>` → whitelisted assets; `/p/<slug>/…` → the shell and the per-project API branch, whose 8 endpoints are matched one by one), plus the POST router's 3-name whitelist. 16 routes. Any other verb falls through to the base handler's 501.
-- middleware: complete — the three per-request hooks that run before any route body: the loopback-Host guard on GET, the CSRF-header guard on POST, and the map-staleness refresh on every project request.
-- ui-route: sampled — the browser app is a 6900-line single file and was not read in full. Enumerated by grepping it for navigation and listener registrations (`location.`, `history.`, `addEventListener`, `data-view`) plus the button set in `viewer.html`. The app has NO hash routes and NO query-parameter deep links: one URL per project, and all navigation is in-page. The 6 rows cover the landing-page card click, the 10-way view tab bar (one row on the loop that binds every tab), search, the impact explorer, the file/code pane switch, and the title link home. Not recorded: the in-diagram drill gestures, breadcrumbs, back/forward history, the settings and help modals, and the keyboard shortcuts — all reached from inside an already-open view.
-- startup-hook: complete — Pass-2 sweep for self-activation across the whole repo: grepped Python for `threading`, `Thread(`, `atexit`, `signal.`, `webbrowser`, `while True`, `cron`/`schedul`, and the browser app for `setInterval`, `setTimeout`, `EventSource`, and the observer APIs. Findings, asserted either way: the map server is the only long-running service, and it self-starts exactly three things — the accept loop (continuous), the thread-per-connection worker spawned by the threading HTTP server (folded into the accept-loop row; its trigger is an inbound request, not a schedule), and the optional `--open` browser launch. The browser app self-runs two boot steps (the view-bundle fetch that gates the whole module, and the one-shot server probe) and the landing page one. There are NO timers, NO polling loops, NO file watchers, NO signal handlers and NO `atexit` hooks anywhere in the repo: the only `signal`-shaped code is the audit vocabulary's word list, the server stops on a caught `KeyboardInterrupt` rather than an installed handler, freshness is checked per request rather than on a timer, the two `while True` loops outside the server are tree walks, and every `setTimeout` in the browser app is a UI animation or flash. `threading` is used only for a lock guarding the recents state.
-- Kinds with nothing to record: `webhook`, `mcp-tool`, `job`, `poller`, `event-consumer`, `signal-handler` — no instance of any of them exists in this repo.
-- Deliberately out of scope: `internal/` is git-ignored, so its scripts are not part of the committed repo the map is pinned to; the archive helper that lives there is therefore not recorded as an entry point.
-
----
-
-## Viewer UI surfaces
-
-What a reader can actually do in the browser viewer (each grounded in the line that implements it):
-
-- **Switch view** — the tab row over the diagram (Happy Path · Use Cases · Subsystems · Entities · Dependencies · Data · Deployment · System · Glossary · Tests); a tab with no content is hidden, and clicking the tab you are already on resets it to its overview (`tools/coyodex/viewer/viewer.js:6674`).
-- **Drill a box** — double-click or Option-click a subsystem / subdomain / process box to replace the diagram with that box's own card, at any depth (`tools/coyodex/viewer/viewer.js:3103`).
-- **Click a box or arrow** — its detail fills the pane under the diagram, the element glows and everything unrelated fades (`tools/coyodex/viewer/viewer.js:1121`).
-- **Cmd-click more elements** — each one stacks its own card in the pane instead of replacing the last (`tools/coyodex/viewer/viewer.js:454`).
-- **Hover anything** — a small tooltip previews its meaning without changing the selection (`tools/coyodex/viewer/viewer.js:1799`).
-- **Go back / forward** — the header arrows, Cmd+arrow or Option+arrow return each view to the zoom, position and selection it was left at (`tools/coyodex/viewer/viewer.js:5870`).
-- **Pan and zoom** — scroll or drag to move, Ctrl/Cmd-scroll or pinch to zoom, and the header percentage button fits the diagram to the screen (`tools/coyodex/viewer/viewer.js:6681`, `tools/coyodex/viewer/viewer.js:6680`).
-- **Walk a use-case flow** — on a flow view a small player steps through the actions one arrow at a time, also driven by the left/right arrow keys (`tools/coyodex/viewer/viewer.js:6682`).
-- **Search everything** — press `/` or Cmd-K for elements, files, folders, glossary terms, fields and code symbols; `@` scopes to symbols of the open file (`tools/coyodex/viewer/viewer.js:6654`).
-- **Browse the repo** — the file tree is shaded by map coverage; clicking a mapped row selects the matching element on the diagram (`tools/coyodex/viewer/viewer.js:4822`).
-- **Read the source** — the code pane shows the file at the map's commit, syntax-highlighted, scrolled to the element's line (`tools/coyodex/viewer/viewer.js:5666`).
-- **Open source links** — any `path:line` in the pane, the glossary or the System tables opens in the code viewer (`tools/coyodex/viewer/viewer.js:148`).
-- **Open externally** — the ↗ control re-opens the shown file in your editor or on GitHub, configured once in the settings dialog (`tools/coyodex/viewer/viewer.js:5258`, `tools/coyodex/viewer/viewer.js:6114`).
-- **Switch environment** — on the Deployment overview a floating picker dims what a chosen environment excludes, without redrawing (`tools/coyodex/viewer/viewer.js:3313`).
-- **See a change overlay** — the Impact button projects any diff onto the map, with a ripple-depth choice and badged boxes (`tools/coyodex/viewer/viewer.js:6906`, `tools/coyodex/viewer/viewer.js:6928`).
-- **Filter to changes** — the file browser can show only the files the active diff touched (`tools/coyodex/viewer/viewer.js:6704`).
-- **Show or hide the legend** — the `?` beside the tabs toggles the one key for shapes and colours; the header `?` reopens the first-run gesture guide (`tools/coyodex/viewer/viewer.js:6128`, `tools/coyodex/viewer/viewer.js:6126`).
-- **Pin the file browser** — keep it beside the code viewer instead of letting it share the slot (`tools/coyodex/viewer/viewer.js:6180`).
-- **Clear the selection** — Escape, or a click on empty canvas (`tools/coyodex/viewer/viewer.js:5877`).
-
+cli: complete — every subcommand and verb in both command dispatch tables, checked against each implementing module
+http-route: complete — walked both request handlers end to end, through every branch of the path dispatch
+ui-route: complete — every view button in the page's view tab row, plus the route the page lands on at boot
+agent-skill: complete — every skill pointer file in the repo, and every mode branch of the dispatch document
+startup-hook: complete — swept the server and the page for every boot-time side effect
+poller: complete — the two timed checks the server makes; no other interval exists anywhere
+event-consumer: sampled — the two page listeners that act with no reader action; every other listener needs a click or a key
+server-loop: complete — the one accept loop the server runs
+worker-thread: complete — the one thread the server starts per request
+signal-handler: complete — the one interrupt path that closes the listening port
 
 ---
 
-## The method as a program
+## Bucket vocabulary
 
-coyodex ships two halves that only work together: prose the agent executes, and a CLI that checks what the agent wrote.
-
-**Entry.** The installed skill manifest carries no method content — it pins this clone's absolute path and says to read `method/dispatch.md` and follow it (`skill/coyodex/SKILL.md:28`). `make install` bakes that path in by substituting `__COYODEX_HOME__` while copying the manifest into each skills home (`Makefile:56`), which is why the docs keep evolving without a reinstall.
-
-**Dispatch decides the mode.** It first looks for an explicitly named verb — build, analyze, accept (`method/dispatch.md:14`). Otherwise it looks *only at the working tree* for `.coyodex/project-map.json`: no file means no baseline, and a deleted one must never be recovered from git (`method/dispatch.md:26`). With a baseline it defaults to Analyze and never silently rebuilds, because a rebuild overwrites curated work and the pin history (`method/dispatch.md:38`). A plain-language request to change the map itself is a fourth path, edited surgically into the model rather than regenerated (`method/dispatch.md:69`).
-
-**The prose never writes the stored file.** Build sub-agents return JSON fragments and `coyodex assemble` serializes the model, so the stored map's validity comes from the tool, not from the agent's typing (`method.md:18`).
-
-**Gates after every write.** The invariant — for Build, Accept *and* a direct map change alike — is validate, then audit, then render (`method/dispatch.md:89`). Validate checks schema and semantics and that the committed markdown view is fresh; audit is the adversarial pass that makes the narrative Happy Path and the mechanism flows refute each other, blocking only on a hard contradiction and printing a grounding worklist to disprove against the code (`method/dispatch.md:90`). Render regenerates the markdown view; the diagram is served live, never committed.
-
-**Beyond the first build.** The same docs cover the lifecycle: Analyze writes an uncommitted report, Accept transcribes it into the model and bumps the pin (`method/change-impact.md:12`), while the impact engine computes the machine half of that picture from an arbitrary diff. The eval closes the loop by rebuilding a map with the current method and scoring it against the committed one — and it scores through the very same validate/audit pipeline the gates use, so there is only ever one grammar (`eval/tools/coyodex_eval/profile.py:129`).
-
----
-
-## How the viewer reads source
-
-Every element in the map stores a bare `path:line`; the graph view keeps the file and line on the node (`tools/coyodex/views.py:472`) and the component's owned files with anchors stripped (`tools/coyodex/views.py:115`), which is what the code-viewer switcher pages through.
-
-- **The pin.** The map's own commit, `-dirty` stripped (`tools/coyodex/viewer/serve.py:124`), must be a bare hex SHA before any git call (`tools/coyodex/viewer/serve.py:99`) — a leading `-` would otherwise reach git's argv as a flag.
-- **Opening a file.** `api/src` size-checks the blob (`tools/coyodex/viewer/serve.py:645`) then reads it with `git show <commit>:<path>` (`tools/coyodex/viewer/serve.py:650`), so the code a reader sees is the code the map was built from — local edits never leak in.
-- **Browsing.** The file tree lists exactly what `git ls-tree` reports at that commit (`tools/coyodex/viewer/serve.py:383`, `tools/coyodex/viewer/serve.py:191`), overlaid with map coverage (`tools/coyodex/viewer/filetree.py:203`); a mapped row carries the element to select (`tools/coyodex/viewer/filetree.py:166`).
-- **The one exception.** `api/src?at=<sha>|WORKTREE` serves another commit or the working tree for the impact explorer; worktree reads are contained by realpath (`tools/coyodex/viewer/serve.py:275`) and limited to files git accounts for, so an ignored `.env` is never served (`tools/coyodex/viewer/serve.py:281`).
-- **Diffs.** One file's inline diff across an arbitrary range comes from `git diff` (`tools/coyodex/viewer/serve.py:325`) parsed into numbered rows (`tools/coyodex/viewer/diffmap.py:51`).
-- **Hand-off to an editor / GitHub.** The per-project view bundle is built with the map's own `.coyodex/` folder as the source-link anchor (`tools/coyodex/viewer/serve.py:399`), which is where the repo-root and GitHub-URL link config comes from.
-- **Reading the markdown view instead.** There, every stored bare anchor is emitted as a basename-labelled markdown link (`tools/coyodex/views.py:91`), so the committed file is clickable too.
-
----
-
-## Validator advisory catalogue
-
-Every NON-BLOCKING warning `coyodex validate` can print, with the `extras` heading that silences it durably.
-
-**Silenced by a `Balance exceptions` heading** (the listed id or literal, at line start):
-
-- flow / sub-flow outside the 3-15 step band — its `UC`/`SF` id
-- component listing 6+ sub-units in its Purpose (altitude) — its `C` id
-- diagram fan-out off the 5±2 target, sparse roots, single-child levels — the diagram id
-- no flow step touches any entity — literal `entity-flows`
-- self-activated entry points recording no cadence — literal `cadence`
-- deployment units enumerated but nothing sets `runs_in`, plus the whole deployment-quality family (non-atomic unit names, formula-filled `runs_in`, unlinked units, ambiguous thread hosts, variant tagging) — literal `runs-in`; the suppressed COUNT is still printed
-- emit/listen edges into a bus while the `messaging` catalog is empty — literal `messaging`
-- components carrying no backbone edge and no channel role — literal `isolated`
-- unstructured, dep-less or prose-named entity stores — literal `store`
-- component count outside the ±40% granularity band (`--check-coverage`) — literal `granularity`
-
-**Silenced by another named heading:**
-
-- 4+ identical consecutive steps shared by two flows — `Accepted duplications` (`UC4 & UC9: <why>`)
-- externally-activated entry points no use case reaches — `Unclaimed surfaces` (`C7: <why>`; `validate --emit-unclaimed` prints the whole block)
-- role driving no on-spine use case / off-spine use case unrecorded — `Happy Path coverage` (`R2: <why>`)
-- write edge into a store no entity explains — `Persistence exceptions` (`C3: <why>`)
-- entry-point kind with no completeness statement — `Entry-point coverage` (`http-route: complete — <how enumerated>`)
-- directory compression, absent dirs, uncovered loose files, under-harvested domain types (`--check-coverage`) — `Coverage exceptions` (`pkg/dir/: <why>`, boundary-aware; also silences unclaimed surfaces under that dir)
-
-**No escape — fix it or accept the nudge:** use case with no flow; entity step with no backing C→E edge; entry point owned by no component; dead role; human+service actor mix; sub-flow referenced fewer than 2 times; use-case/sub-flow name joining two clauses with "and"; duplicate or role-less C→D edges; `where` set together with `no_call_site`; minted or drift-spelled dep buckets and entry-point kinds; oversized catch-all bucket; messaging broker of the wrong kind, edge-less publishers/consumers, one-sided or unplaced channels, no channel naming a payload; missing or partial `grounding` record; base class not tagged where its subclass runs; state machine citing no `source`, isolated states; `tech_source` with no `tech`; deployment-flavoured `extra` keys; empty subsystems/subdomains, ungrouped entities, redundant and deep nesting; entities with no owning component; deps with no incoming edge or a wrong `deployment_linked` marker; drifted call-site anchors and state names missing from the cited file (`--check-sources`); a stale or missing generated `project-map.md`.
-
----
-
-## Viewer diagrams
-
-Every view the server pre-renders, with the Mermaid diagram type it uses.
-
-| View | What it draws | Diagram |
-|---|---|---|
-| Context | the system, its actors, and external systems grouped by purpose; in-process libraries folded into one box (`gen_viewer.py:1325`) | flowchart LR |
-| Libraries drill | the folded in-process dependencies, grouped by purpose (`gen_viewer.py:1372`) | flowchart LR |
-| Bucket drill | one folded purpose bucket's members drawn by name (`gen_viewer.py:1349`) | flowchart LR |
-| Subsystems overview | top-level subsystems with count-labelled crossings (`gen_viewer.py:863`) | flowchart TB |
-| Subsystem card | one subsystem framed around its direct members, its dependencies and collapsed neighbours (`gen_viewer.py:1003`) | flowchart TB |
-| Subsystem edge card | two subsystems framed with the concrete crossings between them (`gen_viewer.py:1096`) | flowchart LR |
-| Flat components map | every component and dependency at once — kept dormant, not wired to a tab (`gen_viewer.py:149`) | flowchart TB |
-| Entities | the whole domain model: entity boxes with fields, store, retention, lifecycle (`gen_viewer.py:455`) | classDiagram |
-| Subdomains overview | one box per subdomain, arrows counted from crossing entity relations (`gen_viewer.py:564`) | flowchart TB |
-| Subdomain card | one subdomain framed full, neighbours collapsed, plus the subsystems that touch it (`gen_viewer.py:682`) | classDiagram |
-| Domain edge card | two subdomains framed with the entity relations crossing between them (`gen_viewer.py:758`) | classDiagram |
-| Bridge card | a subsystem and a subdomain side by side with the component-to-entity links (`gen_viewer.py:799`) | classDiagram |
-| Deployment overview | processes, shared infrastructure banded by role, and process-to-process traffic (`gen_viewer.py:1943`) | flowchart TB |
-| Process group card | a product-area container's member processes and the real arrows between them (`gen_viewer.py:2128`) | flowchart TB |
-| Process card | one process with what it runs, the stores it uses and the peers it talks to (`gen_viewer.py:2200`) | flowchart TB |
-| Happy Path | the ordered walk of use cases as messages from each actor to the system (`gen_viewer.py:2392`) | sequenceDiagram |
-| Use-case flow | one use case's ordered steps between the actor and the elements it touches (`gen_viewer.py:2507`) | sequenceDiagram |
-| Broker channels | per broker: publishing components, the channels, and the consumers (`gen_viewer.py:2669`) | flowchart LR |
-
+Code parsing: the tree sizing needs a source parser, and no library seed names parsing
+Testing & type checking: the test runner and the type checker are neither a framework nor a driver, and no seed names them
+Build & packaging: the build backend is neither a framework nor a driver, and no seed names packaging
+Coding agents: the skill installs into three AI agents, which share one real purpose no seed names
+Code viewing: the browser, the hosting site and the editor share one purpose, which is showing the reader a file
 
 ---
 
@@ -1501,21 +2159,23 @@ These sections answer this tool's own checks: each line records an element and w
 
 ### Balance exceptions
 
-- granularity: 36 components against a code-derived expectation of ~11 (band 6–16). The expectation is bound by the LOC ceiling over a 294-LOC median file, which reads a toolkit of single-purpose stdlib modules as far fewer units than it has. Each component here is one module or one clearly separable unit inside an oversized file (the 2.5 kLOC validator is four; the 2.9 kLOC viewer generator is five; the 6.9 kLOC browser app is five), each with its own job, its own command or view, and its own tests. Folding them to reach the band would hide exactly the pipeline this map exists to explain — the altitude is deliberate.
-- store: the entities whose store mode is `transient`, `embedded`, `in-code` or `enum` deliberately carry no `dep`. This project has no database: the only physical store is the local filesystem, already linked on the eight entities that really land in a file. Tagging in-memory view, impact and eval structures with a filesystem dep would state a persistence that does not happen.
-- UC2: 16 steps against the 3–15 band. This is the product's whole spine — read the method, size the tree, fan out, self-check each fragment, merge, apply the synthesis assignments, run the gates, ground the claims, stamp provenance, commit. The gate run is already extracted as a sub-flow (SF10) and counts as one; the remaining steps each carry a distinct call site, so compressing further would drop a real anchor rather than reduce altitude.
-BLK1: the rules here are a 1:1 migration of the security rows; fusing them is the T7 authoring pass, which has not been run on this map
-BLK2: same — a 1:1 migration, not an authored sweep
-BLK3: same — a 1:1 migration, not an authored sweep
+store: coyodex writes plain files and depends on no datastore, so no entity can name one; each container is a file name
+granularity: 31 components against a code-derived 19, because five of them are the written method and its two developer recipes, which are markdown and outside the count entirely; the remaining 26 follow real module seams
+SF11, SF31: the lead prescribed both names in the shared sub-flow catalogue before running them past the naming check, and eight agents then referenced them; renaming mid-fan-out would have broken the contract, so the names stand and the mistake is recorded rather than tidied away
+security-granularity: family — one rule per surface family, so a decision enforced at several endpoints is one rule with several sites; the loopback rule alone carries four sites across the bind, the host refusal and the write-path marker
 
+### Sweep debt
 
-### Unclaimed surfaces
+eval/tools/coyodex_eval/process_scorecard.py:3160: prints each rule's before and after value and which way it moved; reporting a comparison is not a decision the product makes
 
-- C5: `python -m coyodex.json_schema` prints the generated JSON Schema of the map document. It is a maintainer/tooling surface for regenerating `method/project-map.schema.json` and for IDE autocomplete — no product use case runs it, and the schema it prints is documentation, not a gate (`coyodex validate`'s checks are hand-rolled and semantic). Deliberately off the use-case list rather than a dead surface.
+### Audit exceptions
 
-### Persistence exceptions
-
-- C41: the backup writes a BUNDLE, not a modelled record — a byte copy of the map folder, the conversation transcripts beside it, and a small manifest naming the project and build time. The bundle has no named type in the code (map_backup.py is stdlib-only and never parses the map), so there is no entity to link. This was confirmed by the grounding pass, which refuted the earlier claim that the backup owns the map document.
+read-before-create HP2: the briefing does not read an entry point; the command shell owns both the briefing and the whole command surface, so another flow's entry-point read leaks onto this step through one shared box
+read-before-create HP5: a worker's self-check does read a testing record, because a testing record is an ordinary fragment; the record it reads belongs to an earlier build, not to the one the walk is describing
+read-never-created HP17: a use case is written into the map by the fan-out workers at HP5, inside their own fragments, which the walk narrates as writing the whole map rather than each element type
+read-never-created HP6: a component is written by the fan-out workers at HP5, inside their own fragments; the walk names the whole map at that step, never each element type it contains
+read-never-created HP8: a group is assigned at HP7, which the walk narrates as writing the assignment file rather than as writing each group it names
+why-less-step HP15: starting the map server is a second way into the story and needs nothing earlier; a reader may start it before any map exists and see an empty landing page
 
 
 ---

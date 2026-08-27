@@ -238,6 +238,54 @@ def test_expect_is_silent_inside_the_band_and_speaks_outside_it():
     assert len(under) == 1 and "under" in under[0]
 
 
+def test_a_slice_over_its_budget_says_so_in_the_VERDICT_line(tmp_path, capsys):
+    """The verdict is the line a reader keeps — it already carries the anchor-drift count for exactly
+    that reason, so it carries the budget ratio too.
+
+    Stated honestly, because the first version of this docstring was wrong: on the mcpolis build that
+    shipped 118 components against a code-derived 56, the warning fired for five slices and all five
+    agents quoted it verbatim to the lead, which then recorded a deliberate `granularity` exception.
+    Nobody lost the signal. This is redundancy for a `head -1` reader, not a repair."""
+    frag = tmp_path / "h6.json"
+    frag.write_text(json.dumps({"components": [
+        {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+        for i in range(1, 13)]}), encoding="utf-8")
+    assert lint_fragment.main(["--expect", "4", str(frag)]) == 0     # advisory: still exit 0
+    out = capsys.readouterr()
+    assert "3.0x the slice budget" in out.err.splitlines()[0]
+
+
+def test_the_verdict_note_and_the_warning_share_one_threshold(tmp_path, capsys):
+    """Exactly `_BUDGET_HI`, the boundary the note and the row could drift apart on. Both are silent
+    at 1.5x and both speak past it — one threshold, checked here so it stays one."""
+    def frag(n: int) -> str:
+        p = tmp_path / f"f{n}.json"
+        p.write_text(json.dumps({"components": [
+            {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+            for i in range(1, n + 1)]}), encoding="utf-8")
+        return str(p)
+    assert lint_fragment.main(["--expect", "10", frag(15)]) == 0          # exactly 1.5x
+    at_band = capsys.readouterr()
+    assert "slice budget" not in at_band.out + at_band.err
+    assert "0 advisory warning(s)" in at_band.err
+    assert lint_fragment.main(["--expect", "10", frag(16)]) == 0          # 1.6x
+    past = capsys.readouterr()
+    assert "1.6x the slice budget" in past.err.splitlines()[0]
+    assert "1 advisory warning(s)" in past.err
+
+
+def test_a_slice_inside_its_budget_leaves_the_verdict_line_alone(tmp_path, capsys):
+    """The negative half. A note on every verdict is a note nobody reads, so it appears only at or
+    beyond the band the warning itself uses — one threshold, not two that can drift apart."""
+    frag = tmp_path / "h6.json"
+    frag.write_text(json.dumps({"components": [
+        {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+        for i in range(1, 13)]}), encoding="utf-8")
+    assert lint_fragment.main(["--expect", "10", str(frag)]) == 0
+    out = capsys.readouterr()
+    assert "slice budget" not in out.out + out.err
+
+
 def test_expect_says_nothing_about_a_fragment_that_defines_no_component():
     """A trace fragment carries flows and edges, not components. Comparing 0 against a budget would
     fire on every one of them — the budget belongs to the harvest slices that were given one."""
