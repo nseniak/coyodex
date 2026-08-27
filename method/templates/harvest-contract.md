@@ -52,7 +52,7 @@ lead; nothing above this line goes into an agent prompt.
 > cannot fill one, return its header with `(none found)` and say why; never silently omit a
 > section.** Your output is **ONE JSON fragment** — a partial map model per
 > [model.md](«COYODEX_HOME»/method/model.md): an object holding only the top-level arrays your slice owns
-> («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`, `security`,
+> («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`,
 > `config`»), each entry using that array's exact field names. **WRITE the fragment to
 > `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
 > one-line inventory (row count per array)** — never inline the fragment in your reply: a large
@@ -61,7 +61,7 @@ lead; nothing above this line goes into an agent prompt.
 > **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
 > rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
 > `deps[].where_configured`, `edges[].where`, `entry_points[].source`, `evidence[].file`,
-> `run_commands[].source`, `security[].source`, `non_entity_types[].source`,
+> `run_commands[].source`, `non_entity_types[].source`,
 > **`rules[].sites[].where`** (the OPERATIVE line — its `:line` is REQUIRED, never a bare file),
 > **and the group `source`
 > fields** (`subsystems[].source` / `subdomains[].source` / `capabilities[].source` /
@@ -92,7 +92,11 @@ lead; nothing above this line goes into an agent prompt.
 > deployment-unit names are minted by a DIFFERENT slice running beside you, so a plausible guess
 > like `["backend"]` passes your own lint and hard-fails the lead's `validate`; `subsystem`;
 > `subdomain`; `bucket`; `block`; an `id` key on `entry_points` (`assemble` mints `EP` ids from
-> content); and a `security` array unless your slice was told it owns one.
+> content); and a `security` array, ever — an auth surface is a BUSINESS RULE (`access: true`),
+> written after the trace by the rules fan-out, and the Security & auth table is derived from those
+> rules. `security[]` is legacy storage on old maps; `lint-fragment` warns on any fragment that
+> authors it. Note the auth-relevant facts you see (the guard, its file:line) in your REPLY so the
+> lead can seed the rules fan-out; do not author rows for them.
 > **Scratch files: put your AGENT_ID in the name.** Every agent in this fan-out shares one
 > scratchpad directory. A helper script called `build.py` or `notes.py` WILL be overwritten by a
 > sibling mid-run — it has happened, and one agent's script then wrote another agent's output file.

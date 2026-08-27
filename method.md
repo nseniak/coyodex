@@ -1130,7 +1130,7 @@ synthesis → parallel trace.**
   - **Pre-size the slices from the pre-index so no slice becomes the critical path.** The whole
     phase ends when the SLOWEST agent does, so one oversized slice stalls the barrier for everybody.
     The pre-index already counts files/symbols per area — aim for roughly EQUAL estimated work per
-    slice, and specifically split the entry-points+security harvest **by router / surface** on a
+    slice, and specifically split the entry-points harvest **by router / surface** on a
     large route surface (per-kind coverage statements merge cleanly; the coverage sweep catches seam
     misses, so splitting costs no completeness).
   - **Resilience: write a DRAFT fragment early, finalize at the end.** An agent that dies mid-run
@@ -1193,7 +1193,7 @@ synthesis → parallel trace.**
     block that is optional per slice is a block that will be missing from one.
   - **Dispatch the known-longest slice FIRST, in every fan-out.** Launch order is the one lever you
     have over when the barrier closes: a straggler dispatched last holds it for its whole runtime.
-    T5 and the security slice are the reliably heaviest in Phase 1; in Phase 3 it is whichever use
+    T5 and the entry-points slice are the reliably heaviest in Phase 1; in Phase 3 it is whichever use
     case owns the most sub-flows and the widest "where to look" list. Send those first, the small
     ones last. (L3 assertion 16 watches this.)
 
