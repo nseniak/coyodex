@@ -302,30 +302,33 @@ heading takes the leg from 1 advisory to 0).
 **Reopened** — the Step-0 briefing. It IS shown verbatim, but after 10 tool calls, and
 `method/dispatch.md` says "before the first tool call". Do not close it against its own probe.
 
+**Seven of these landed the same day, in commits `019f1b6` and `5569348`** — marked LANDED below.
+The ledger rows carry the commit. Fifteen keeps are genuinely still open.
+
 **The keeps, ranked.** Full evidence on each ledger row.
 
 | rank | item | size |
 |---|---|---|
-| 1 | The process scorecard cannot parse `bash -c`, so it is blind to 94 % of the commands it scores | small |
+| 1 | The process scorecard cannot parse `bash -c`, so it is blind to 94 % of the commands it scores | small |  **[LANDED 2026-08-27]**
 | 2 | The behavioural half of the map ships with no grounding claim at all — 235 elements, 461 step phrases | large |
 | 3 | Two builds of one commit produce different maps; the box count is the loudest symptom | see below |
-| 4 | Two access rules carry `confidence: verified` with zero votes | small |
-| 5 | `R1 includes R2` is not enforced by the code, and a role relation cannot carry an anchor | medium |
-| 6 | The fabricated-evidence check covers 2 % of verdict rows and treats any filename token as "opened" | medium |
+| 4 | Two access rules carry `confidence: verified` with zero votes | small |  **[LANDED 2026-08-27]**
+| 5 | `R1 includes R2` is not enforced by the code, and a role relation cannot carry an anchor | medium |  **[LANDED 2026-08-27]**
+| 6 | The fabricated-evidence check covers 2 % of verdict rows and treats any filename token as "opened" | medium |  **[LANDED 2026-08-27]**
 | 7 | 136 of 188 customer-facing surfaces carry none of the method's three dispositions | medium |
-| 8 | `Drift exceptions` records are inert on the shape-only pass, which finalize always runs — NEW | small |
+| 8 | `Drift exceptions` records are inert on the shape-only pass, which finalize always runs — NEW | small |  **[LANDED 2026-08-27]**
 | 9 | `grounding report` says "challenge these 21"; `grounding write` then refuses them with a false diagnosis | small |
 | 10 | Access enforcement lines agree 55 % at file level between two builds of one commit | restate + one agent |
 | 11 | Four fifths of the map's reader-facing prose is never checked | small |
 | 12 | The prose batches are minted every build and dispatched on none, three builds running | small |
 | 13 | Fan-out scheduling wastes a third of active build time | method prose |
-| 14 | `grounding.note` publishes "136 redundant rows" where the true count is 272 | tiny |
+| 14 | `grounding.note` publishes "136 redundant rows" where the true count is 272 | tiny |  **[LANDED 2026-08-27]**
 | 15 | `read-never-created HP3-files` parses to `HP3`, so one key silences two findings | small |
 | 16 | `coyodex record` accepts a key no reader of that heading honours | small |
 | 17 | `lint-fragment` runs no prose check, so 16 long sentences shipped | tiny |
 | 18 | `fix row --set-<field>` refuses to create a field the row omits | small |
 | 19 | The build hand-scripted 3 mutations a fix verb owns; the detector flagged only the one that never ran | method prose |
-| 20 | `finalize` accepts any non-empty `grounding.note` as the answer — a note reading "no." passes — NEW | small |
+| 20 | `finalize` accepts any non-empty `grounding.note` as the answer — a note reading "no." passes — NEW | small |  **[LANDED 2026-08-27]**
 | 21 | Nothing notices a sub-agent dispatched and returned empty | small |
 | 22 | The retro method gives slice readers no filename rule | one line |
 
