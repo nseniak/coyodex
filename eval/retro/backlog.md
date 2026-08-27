@@ -345,6 +345,64 @@ against the budget its own brief stated.** Build that check and the cause stops 
 13 of 47 flow titles; **0 of 76 test-area labels**. `compare` measures name overlap for access
 enforcement lines only, and `profile` already collects `entity_names` that nothing reads.
 
+### Investigated 2026-08-27 — why two builds of one commit produce different maps
+
+The question: 70 components then 118, on commit `5dccb1c`, 21 hours apart, no product file
+changed. Answered from the 22 archived rebuilds under `.coyodex/dev-rebuilds/`; no build was run.
+
+**What is established.**
+
+1. **The instability is real and it is concentrated in INVENTED names.** Median survival of a
+   baseline name across 10 same-commit rebuild pairs: entities 96 %, glossary 70 %, deps 67 % —
+   all names COPIED from the code; components 4 %, box groups 5 %, data areas 14 % — all names the
+   model composes. 55 files carry a box in both builds and only 6 kept their name. The map points at
+   the same code and offers a different vocabulary each time.
+2. **The 70 -> 118 growth was every slice running about twice its own budget.** Ten harvest slices,
+   ten overshoots: 6->13, 6->10, 2->6, 6->22, 4->8, 5->9, 6->9, 11->20, 4->12, 4->8. Told 54, made
+   117, 2.17x — which IS the 2.11 C/E ratio. Not a lost signal: `lint-fragment --expect` fired on
+   five slices, all five agents quoted the warning verbatim to the lead, and the lead recorded a
+   deliberate `granularity` exception. It was a judgement, taken with the numbers in front of
+   everyone.
+3. **The operator judges build 23's names consistently better than build 22's.** Four explanations
+   were offered for that. THREE WERE WRONG, and each was wrong the same way — a line drawn through
+   two points before anyone looked at the distribution that was already on disk:
+   - *"Finer boxes name better."* Mostly wrong. Across 446 boxes on three maps the share of
+     list-shaped names runs 1 % (one file), 20 % (2-3), 25 % (4-6), 30 % (7-10), 28 % (11+). The only
+     sharp break is at ONE file; above that it is flat. On the 49 renames the operator judged
+     better, list-shaped names fell only 40 % -> 34 %.
+   - *"The granularity band is too coarse."* Not supported. Boxes at the band's ceiling are named
+     about as well as boxes of three files.
+   - *"List-shaped names are rising, 4 % -> 27 %."* Wrong as first measured: builds 0003, 0014, 0015
+     and 0018 name boxes with CODE IDENTIFIERS (`AsgiAppFactory`, `DrainCoordinator`), and an
+     identifier cannot contain "and", so their 0 % was arithmetic. Restricted to the 19
+     plain-English builds the rise SURVIVES (first half median 4 %, second half 21 %, last four
+     builds 29/28/33/27 %) — real, and with no cause found. Do not treat it as explained.
+   - *"Build 23 is better."* True but backwards: **build 22 is the outlier.** Its share of vague
+     words (plumbing / chrome / machinery / helpers / shell / bundle / glue) is 15 %, the WORST of
+     all 22 earlier builds, against a median of 6 %. Build 23's 3 % ranks 4th best of 23. The gap
+     the operator saw is one bad build, not a better method.
+
+**The one actionable thing this found.** `method.md`'s leaf rule says a component is "a directory of
+<= ~10 source files / <= ~3 kLOC **with one purpose**". The file-count half is computed, banded and
+nudged. **The one-purpose half is checked nowhere, and nothing in the toolchain reads a component's
+NAME at all** (grep `c.name` in `validate_model.py`: no hits outside id/source/files handling; no
+naming rule in `method.md` or `method/templates/`). Yet the name already states the violation: a name
+joining two things with "and" or a comma is the build saying in writing that the box holds two
+purposes. 32 of the current map's 118 boxes say it. PROPOSED: an ADVISORY on a list-shaped component
+name — split the box, or rename it to the one purpose it has. Advisory, not a gate: some joined names
+are legitimately one thing.
+
+**Still open, and unaffected by any of the above.** The cut is not reproducible. Nothing makes the
+next build land on build 23's granularity rather than build 22's; the better map was luck. And eight
+test suites entered build 23 as components while `method.md:988` computes E with test trees excluded,
+so that part of the growth is not a better reading of the code.
+
+**Ruled out by the operator, 2026-08-27:** carrying names forward from the previous map. A full
+rebuild must not peek at the map it replaces (scorecard assertion 29, and the reason is recorded
+there: a build that reads its predecessor is not independent of it, and an eval then reads copying as
+convergence). If name stability is ever wanted, the only sanctioned position is AFTER the map is
+written and before the commit — where `finalize --access-baseline` already sits, for the same reason.
+
 ## Open — questions a retro could not answer
 
 A retro's `Not assessed` block names the tool that owns each question it parked. That naming used to
