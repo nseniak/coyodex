@@ -4221,7 +4221,7 @@ function textScroller() {
 // The sideways-scrolling board on screen, if the page draws one. Named by the SAME selector the edge
 // shadows are bound by, so a board can never be one without being the other.
 function laneScroller() {
-  return diagram.querySelector(HFADE_SCROLLERS);
+  return diagram.querySelector('.journey-board, .story-wrap');
 }
 // The last state visited under each top-level tab (keyed by topView(kind)), so switching AWAY from a tab
 // and back reopens it exactly where it was left — drill depth, selection, camera and right-pane included —
@@ -8102,7 +8102,7 @@ function roleKindOfName(name) {
 // inside a scroll box scrolls away with the content, and the whole point is that it does not move.
 // Building the wrapper here rather than in each board's markup is what lets the three call sites
 // stay as they are — one function owns both the shape and the behaviour.
-const HFADE_SCROLLERS = '.walk-board, .journey-board, .story-wrap';
+const HFADE_SCROLLERS = '.walk-strip, .journey-board, .story-wrap';
 function bindHFades(root) {
   for (const el of (root || document).querySelectorAll(HFADE_SCROLLERS)) bindHFade(el);
 }
@@ -8197,10 +8197,21 @@ function capabilityOfUc(ucId) {
   const p = (GRAPH.nodes[ucId] || {}).parent;
   return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
 }
-// The person standing in a break: their glyph, and their name under it. No pill and no ring round
-// the glyph — the break in the line is what says somebody new took over, and a shape drawn round
-// them competed with the boxes on either side. Several names when the step's use case lets either of
-// them start it, joined by the same quiet "or" a feature box's driver label uses.
+// The walk's ROWS: one per run of consecutive steps under one person. The line already broke at
+// every change of person — the box ended, an arrow head closed it, and the new person stood in the
+// gap — so putting a ROW break at exactly that point joins nothing that was joined. What it buys is
+// the axis: measured on the four maps the viewer reads, the walk was 3.2 and 3.6 screens WIDE, and
+// as rows it is about 2 screens DOWN, which is the gesture every other page already uses. Only one
+// row on two of those maps is still wider than a window (MCP Hero's run of 9 steps under the admin,
+// and this project's run of 13 under the agent), and that row scrolls on its own.
+function walkRows() {
+  const segs = walkSegments();
+  return runsOf(segs, (sg) => zoneKey(sg.acts))
+    .map((run) => ({ acts: run.items[0].acts, segs: run.items }));
+}
+// The person NAMES their row now, in a gutter on the left, which is where the journey rail has
+// always put them. They used to stand in the gap between two boxes; a row break says the same thing
+// and leaves the name somewhere a reader can scan straight down.
 function walkHandHtml(acts) {
   const list = (acts || []).filter(Boolean);
   // No driver recorded at all: the break is still drawn, and it says so rather than standing empty.
@@ -8245,10 +8256,11 @@ function walkBoxHtml(sg) {
   // The box is exactly as wide as its steps. Letting it size to its LABEL instead made a one-step
   // box as wide as the feature's name, and the steps then stopped lining up down the walk.
   const tint = sg.fid ? featureTint(sg.fid) : '';
-  // Where this box's line STARTS and ENDS, in the journey rail's own three lengths. A box whose
-  // person carries on into the next reaches half the gap on that side (WALK_BRIDGE), so the two
-  // boxes read as one line running through them. A box that opens or closes a person's run gets the
-  // rail's tips instead: WALK_TIP stands clear of the person, WALK_END carries the arrow head.
+  // Where this box's line STARTS and ENDS, in the journey rail's own three lengths. Inside a row a
+  // box reaches half the gap on each side (WALK_BRIDGE), so two boxes of one person read as one line
+  // running through them. At the row's two ends it takes the rail's tips instead: WALK_TIP at the
+  // start, WALK_END at the finish, where the arrow head's point sits. Every row IS one person's run,
+  // so those ends are the row's ends and nothing else has to be asked.
   return `<div class="walk-box${sg.closes ? ' walk-closes' : ''}" `
     + `style="width:${sg.steps.length * WALK_STEP_W}px`
     + `${tint ? ';background:' + tint : ''}`
@@ -8271,24 +8283,41 @@ function walkPos(hpId) {
   return i < 0 ? '' : i + 1;
 }
 function renderHappyPath() {
-  const segs = walkSegments();
-  if (!segs.length) {
+  const rows = walkRows();
+  if (!rows.length) {
     diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">'
       + 'This map records no happy path.</p></div>';
     return;
   }
-  const feats = new Set(segs.map((sg) => sg.fid).filter(Boolean)).size;
-  let html = '';
-  for (const sg of segs) {
-    if (sg.opens) html += walkHandHtml(sg.acts);
-    html += walkBoxHtml(sg);
-  }
+  const feats = new Set(rows.flatMap((r) => r.segs.map((sg) => sg.fid)).filter(Boolean)).size;
+  // Each row is its OWN sideways scroller. One scroller for the whole board would tie a row of three
+  // steps to a row of thirteen: scrolling to see the end of the long one would drag the short ones
+  // off screen with it, showing empty space where their line has already finished.
+  const html = rows.map((r) =>
+    `<div class="walk-row">${walkHandHtml(r.acts)}`
+    + `<div class="walk-strip"><div class="walk">`
+    + r.segs.map(walkBoxHtml).join('')
+    + '</div></div></div>').join('');
   const n = (GRAPH.happy_path || []).length;
   diagram.innerHTML = '<div class="usecases-wrap">'
     + `<p class="block-lbl">The walk — ${n} step${n === 1 ? '' : 's'}, `
-    + `${feats} feature${feats === 1 ? '' : 's'}</p>`
-    + `<div class="walk-board"><div class="walk">${html}</div></div></div>`;
+    + `${feats} feature${feats === 1 ? '' : 's'}, ${rows.length} `
+    + `hand${rows.length === 1 ? '' : 's'}</p>`
+    + `<div class="walk-board">${html}</div></div>`;
+  levelWalkBoxes(diagram);
   bindWalk(diagram);
+}
+// One height for every box on the page, measured once. Each row stretches its boxes to its own
+// tallest step, which levels a row but not the page: a row whose titles are all short drew a band
+// half the height of the one above it. The tallest step anywhere sets a floor for all of them, so
+// the boxes read as one band down the page.
+function levelWalkBoxes(root) {
+  const lines = [...root.querySelectorAll('.walk-line')];
+  const board = root.querySelector('.walk-board');
+  if (!lines.length || !board) return;
+  board.style.removeProperty('--walk-h');   // measure the natural height, never the last one set
+  const tallest = Math.max(...lines.map((el) => el.getBoundingClientRect().height));
+  board.style.setProperty('--walk-h', Math.ceil(tallest) + 'px');
 }
 // Arriving FROM a station on an actor's rail, from a feature's rail, or from a story arrow's label:
 // all three navigate here naming one step, on the same one-shot `sel` a diagram's selection rides.
@@ -8308,7 +8337,7 @@ function ringWalkStep() {
   // The board is scrolled DIRECTLY, not through scrollIntoView. That walks every scrollable
   // ancestor, and the page's own wrap is one — it took part of the movement, and the step then
   // stopped 5px past the board's right edge instead of arriving inside it.
-  const board = el.closest('.walk-board');
+  const board = el.closest('.walk-strip');
   if (board) {
     // Measured, not `offsetLeft`: a box is `position: relative`, so the step's offset parent is its
     // own box and the number was a few pixels inside it rather than the distance down the board.

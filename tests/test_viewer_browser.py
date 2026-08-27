@@ -220,17 +220,21 @@ def test_every_bullet_of_the_walk_sits_on_the_line() -> None:
     person's glyph must all be one number."""
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
-        mids = page.evaluate("""() => {
+        # Per ROW, because each row draws its own line: every bullet on it, and the person naming it,
+        # must share that line's centre to the decimal.
+        off = page.evaluate("""() => {
             const mid = (el) => { const r = el.getBoundingClientRect(); return +(r.top + r.height / 2).toFixed(1); };
-            const line = document.querySelector('.walk-line').getBoundingClientRect();
-            return {
-              dots: [...new Set([...document.querySelectorAll('.walk-dot')].map(mid))],
-              icons: [...new Set([...document.querySelectorAll('.walk-ico')].map(mid))],
-              line: +(line.top + 21).toFixed(1),
-            };
+            const bad = [];
+            [...document.querySelectorAll('.walk-row')].forEach((row, i) => {
+                const line = +(row.querySelector('.walk-line').getBoundingClientRect().top + 21).toFixed(1);
+                const dots = [...new Set([...row.querySelectorAll('.walk-dot')].map(mid))];
+                const who = row.querySelector('.walk-who');
+                if (dots.length !== 1 || dots[0] !== line) bad.push({ row: i, dots, line });
+                else if (who && Math.abs(mid(who) - line) > 1) bad.push({ row: i, who: mid(who), line });
+            });
+            return bad;
         }""")
-        assert mids["dots"] == [mids["line"]], mids
-        assert mids["icons"] == [mids["line"]], mids
+        assert off == [], off
         assert not page.js_errors, page.js_errors
 
 
@@ -262,18 +266,19 @@ def test_the_walk_has_three_doors_and_each_opens_that_thing_s_own_page() -> None
 def test_a_link_naming_one_step_arrives_scrolled_to_it() -> None:
     """A station on an actor's rail, a feature's rail and a story arrow's label all navigate here
     naming one step. The board has no scene to select into, so it scrolls that step into view and
-    rings it — the same answer a card list gives to "show in context". Step 12 of the fixture's 14
-    is well off the right edge on arrival, so a board that ignored the name would leave it there."""
+    rings it — the same answer a card list gives to "show in context". The walk is a stack of rows
+    now, so the step is brought into view inside ITS OWN row, which is the only thing that scrolls."""
     with _served() as url, _page(url + "#v=hp&sel=hpstep:HP12") as page:
         _settle(page)
         seen = page.evaluate("""() => {
             const el = document.querySelector('.walk-step[data-step="HP12"]');
             if (!el) return null;
-            const r = el.getBoundingClientRect(), b = document.querySelector('.walk-board').getBoundingClientRect();
-            return { scrolled: document.querySelector('.walk-board').scrollLeft > 0,
-                     inside: r.left >= b.left - 1 && r.right <= b.right + 1 };
+            const strip = el.closest('.walk-strip');
+            const r = el.getBoundingClientRect(), b = strip.getBoundingClientRect();
+            return { onScreen: r.left >= b.left - 1 && r.right <= b.right + 1,
+                     row: strip.querySelectorAll('.walk-step').length > 0 };
         }""")
-        assert seen == {"scrolled": True, "inside": True}, seen
+        assert seen == {"onScreen": True, "row": True}, seen
         assert not page.js_errors, page.js_errors
 
 
@@ -288,25 +293,33 @@ def test_every_feature_box_is_the_same_height_and_the_line_bridges_the_gap() -> 
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
         seen = page.evaluate("""() => {
-            const boxes = [...document.querySelectorAll('.walk-box')];
-            const heights = [...new Set(boxes.map((b) => Math.round(b.getBoundingClientRect().height)))];
+            const all = [...document.querySelectorAll('.walk-box')];
+            const heights = [...new Set(all.map((b) => Math.round(b.getBoundingClientRect().height)))];
             const px = (el, k) => parseFloat(getComputedStyle(el).getPropertyValue(k)) || 0;
-            const joined = [], broken = [];
-            for (let i = 0; i < boxes.length - 1; i++) {
-                const a = boxes[i].querySelector('.walk-line').getBoundingClientRect();
-                const b = boxes[i + 1].querySelector('.walk-line').getBoundingClientRect();
-                const gap = b.left - a.right;
-                const reach = -px(boxes[i], '--walk-r') - px(boxes[i + 1], '--walk-l');
-                (reach >= gap ? joined : broken).push(boxes[i].classList.contains('walk-closes'));
+            // Pairs WITHIN a row: two boxes of one person, so the line must cross the gap. Across
+            // rows there is nothing to bridge — the row break is the hand-over.
+            const gaps = [];
+            for (const row of document.querySelectorAll('.walk-row')) {
+                const boxes = [...row.querySelectorAll('.walk-box')];
+                for (let i = 0; i < boxes.length - 1; i++) {
+                    const a = boxes[i].querySelector('.walk-line').getBoundingClientRect();
+                    const b = boxes[i + 1].querySelector('.walk-line').getBoundingClientRect();
+                    const reach = -px(boxes[i], '--walk-r') - px(boxes[i + 1], '--walk-l');
+                    gaps.push({ joined: reach >= b.left - a.right,
+                                closes: boxes[i].classList.contains('walk-closes') });
+                }
             }
-            return { heights, joined, broken,
-                     arrows: boxes.filter((b) => b.classList.contains('walk-closes')).length };
+            return { heights, gaps,
+                     rows: document.querySelectorAll('.walk-row').length,
+                     arrows: all.filter((b) => b.classList.contains('walk-closes')).length,
+                     lastOfRow: [...document.querySelectorAll('.walk-row')]
+                       .every((r) => r.querySelector('.walk-box:last-child').classList.contains('walk-closes')) };
         }""")
         assert len(seen["heights"]) == 1, seen["heights"]
-        # a joined pair is never one that closes; a broken pair always is, and wears the arrow head
-        assert not any(seen["joined"]), seen
-        assert all(seen["broken"]), seen
-        assert seen["arrows"] == 6, seen
+        # inside a row the line always crosses, and no box but the last of a row closes
+        assert all(g["joined"] and not g["closes"] for g in seen["gaps"]), seen
+        # …and every row ends in one, because a row IS one person's run
+        assert seen["arrows"] == seen["rows"] == 6 and seen["lastOfRow"], seen
         assert not page.js_errors, page.js_errors
 
 
@@ -316,9 +329,14 @@ def test_a_board_that_scrolls_sideways_shades_the_edge_there_is_more_on() -> Non
     always there says "more" at the end of the board too, which is a lie about the one thing it
     exists to answer. Walk the board from one end to the other and read which shade is up."""
     with _served() as url, _page(url + "#v=hp") as page:
+        # Narrow, so a row HAS something to scroll to. At a wide window every row of the fixture's
+        # walk fits, which is the point of the row break — and then there is no shadow to look at.
+        page.set_viewport_size({"width": 700, "height": 720})
         _settle(page)
         seen = page.evaluate("""async () => {
-            const board = document.querySelector('.walk-board');
+            // the WIDEST row: the only one with anything to scroll to
+            const board = [...document.querySelectorAll('.walk-strip')]
+                .reduce((a, b) => (b.scrollWidth - b.clientWidth > a.scrollWidth - a.clientWidth ? b : a));
             const wrap = board.parentElement;
             // the shades are synced on the board's own scroll event, which is asynchronous
             const settle = () => new Promise((r) => setTimeout(r, 80));
@@ -382,7 +400,7 @@ def test_the_walk_keeps_the_step_a_link_named_in_the_address() -> None:
         _settle(page)
         seen = page.evaluate("""() => {
             const el = document.querySelector('.walk-step[data-step="HP12"]');
-            const b = document.querySelector('.walk-board');
+            const b = el.closest('.walk-strip');
             const r = el.getBoundingClientRect(), br = b.getBoundingClientRect();
             return { hash: location.hash, inside: r.left >= br.left - 1 && r.right <= br.right + 1 };
         }""")
@@ -391,22 +409,16 @@ def test_the_walk_keeps_the_step_a_link_named_in_the_address() -> None:
 
 
 def test_back_from_a_step_returns_to_that_step_not_to_the_start_of_the_walk() -> None:
-    """The board is up to three screens wide. Clicking a step and pressing Back put the reader at
-    step 1, thousands of pixels from where they were, because only the up-and-down scroll of a page
-    was ever remembered. The step you leave by is now the step you come back to."""
+    """Clicking a step and pressing Back put the reader at the start of the walk, screens away from
+    where they were, because nothing remembered the place. The step you leave by is now the step you
+    come back to: the address names it, and the page arrives scrolled to it."""
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
-        page.evaluate("""() => {
-            const b = document.querySelector('.walk-board');
-            b.scrollLeft = b.scrollWidth;
-        }""")
-        _settle(page)
         left_by = page.evaluate("""() => {
-            const b = document.querySelector('.walk-board').getBoundingClientRect();
-            const el = [...document.querySelectorAll('.walk-step[data-uc]')].find((s) => {
-                const r = s.getBoundingClientRect();
-                return r.left >= b.left && r.right <= b.right;
-            });
+            // a step near the END of the walk, so coming back to the top of the page would miss it
+            const all = [...document.querySelectorAll('.walk-step[data-uc]')];
+            const el = all[all.length - 1];
+            el.scrollIntoView({ block: 'center' });
             el.click();
             return el.dataset.step;
         }""")
@@ -416,13 +428,13 @@ def test_back_from_a_step_returns_to_that_step_not_to_the_start_of_the_walk() ->
         _settle(page)
         seen = page.evaluate("""(step) => {
             const el = document.querySelector(`.walk-step[data-step="${step}"]`);
-            const b = document.querySelector('.walk-board');
-            const r = el.getBoundingClientRect(), br = b.getBoundingClientRect();
-            return { hash: location.hash, scrolled: b.scrollLeft > 0,
-                     inside: r.left >= br.left - 1 && r.right <= br.right + 1 };
+            const wrap = document.querySelector('.usecases-wrap');
+            const r = el.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+            return { hash: location.hash, scrolled: wrap.scrollTop > 0,
+                     onScreen: r.top >= w.top - 1 && r.bottom <= w.bottom + 1 };
         }""", left_by)
         assert seen == {"hash": "#v=hp&sel=hpstep%3A" + left_by,
-                        "scrolled": True, "inside": True}, seen
+                        "scrolled": True, "onScreen": True}, seen
         assert not page.js_errors, page.js_errors
 
 

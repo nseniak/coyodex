@@ -2024,14 +2024,26 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    a 15px bullet, an arrow head at the line's end — laid out as ONE line instead of one lane per
    subject. The board scrolls sideways rather than shrinking: Mermaid scaled the sequence diagram
    this replaced down to 9.5px of step text on the biggest of the four maps the viewer reads. */
+/* The board is a STACK of rows now, one per run of steps under one person, and it does not scroll
+   sideways itself: each row does, on its own. One scroller for the whole board would tie a row of
+   three steps to a row of thirteen, dragging the short ones off screen to reach the long one's end. */
 .walk-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
-              overflow-x: auto; padding: 14px 0; margin: 10px 0 6px; }
+              padding: 6px 0 10px; margin: 10px 0 6px; }
+.walk-row { display: flex; align-items: flex-start; }
+.walk-row + .walk-row { border-top: 1px solid #f2f3f8; }
+/* The row's own scroller. `min-width: 0` or a flex item refuses to shrink below its content, and the
+   row would push the page sideways instead of scrolling inside itself.
+   The rule below is on the WRAPPER, not on the strip: `bindHFade` puts a wrapper round every
+   scroller to hang the edge shadows on, so the row's flex item is that wrapper. Without this the
+   wrapper sized itself to its content and a 13-step row pushed the whole page 900px sideways. */
+.walk-strip { min-width: 0; overflow-x: auto; padding: 8px 0 10px; }
+.walk-row > .hfade-wrap, .walk-row > .walk-strip { flex: 1; min-width: 0; }
 /* `stretch`, so every feature box is the same height: the tallest step title sets it once for the
    whole walk, instead of each box ending where its own longest title happens to end. The person in
    a break keeps its own height, or the glyph would be dragged down the full box.
    The 14px gap is the journey rail's own `column-gap`; the line bridges it (see --walk-l/--walk-r). */
 .walk { display: flex; align-items: stretch; column-gap: 14px;
-        min-width: max-content; padding: 0 24px; }
+        min-width: max-content; padding: 0 24px 0 8px; }
 /* A box holds a run of steps sharing one feature AND one set of people. Its width comes from the
    step count (set inline), never from its own label: a one-step box sized to "Page tracking · Page
    owner" stopped the bullets lining up down the walk. */
@@ -2078,38 +2090,39 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .walk-n { display: block; font-size: 10px; font-weight: 700; color: #8a90a4; }
 .walk-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; margin-top: 1px; }
 .walk-step:hover .walk-t { color: #4f46e5; }
-/* The person in a break: glyph, then name under it. Nothing is drawn around them — the break in
-   the line is what says somebody new took over, and a ring competed with the boxes either side.
-   The 33px of top margin puts the glyph's middle on the line the boxes draw at 51.5px. */
-/* The person stands 41px clear of the line's tip on their right and 10px clear of the arrow head
-   that ends the previous box on their left, which read as a person parked between two lines rather
-   than as the one who takes the next one over. The right side is halved, to 20px, by pulling the
-   box that follows back over the block's own padding and half the gap after it. The name is
-   centred in an 84px column and never wider, so it stays clear of the box it is pulled towards. */
-.walk-hand { flex: none; align-self: flex-start; position: relative; z-index: 2;
-             margin-top: 40px; padding: 0 10px; margin-right: -21px;
-             display: flex; align-items: flex-start; gap: 6px; }
+/* Measured once per render by `levelWalkBoxes`: the tallest line of steps anywhere sets a floor for
+   all of them, so a row whose titles are all short does not draw a band half the height of the one
+   above it. On the LINE, never on the step: a button centres its own content box, so a step given a
+   floor taller than its text dropped its bullet 8px below the line, which is the same trick that
+   caught `align-items` on this board once already. */
+.walk-line { min-height: var(--walk-h, auto); }
+/* The person NAMES their row, in a gutter on the left — where the journey rail has always put the
+   thing a lane is about. They used to stand in the gap between two boxes; a row break says the same
+   thing, and this puts the name somewhere a reader can scan straight down. Icon then name on one
+   line, because a gutter is read across and not down. The 44px of top padding puts the name's line
+   on the line the boxes draw, which sits 51.5px into a box less the row's own 8px of padding. */
+.walk-hand { flex: none; width: 150px; padding: 50px 12px 0 18px;
+             display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+             justify-content: flex-end; }
 .walk-one { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
-            display: flex; flex-direction: column; align-items: center; width: 84px; }
-.walk-ico { width: 26px; height: 26px; display: flex; align-items: center;
-            justify-content: center; }
-#diagram .walk-ico .story-glyph { width: 22px; height: 22px; }
-.walk-who { margin-top: 5px; font-size: 10.5px; line-height: 1.25; font-weight: 650;
-            color: #39405a; text-align: center; }
+            display: inline-flex; align-items: baseline; gap: 5px; }
+.walk-ico { display: inline-flex; align-items: baseline; }
+#diagram .walk-ico .story-glyph { width: 15px; height: 15px; }
+.walk-who { font-size: 11.5px; line-height: 1.3; font-weight: 650; color: #39405a;
+            text-align: right; }
 .walk-one:hover .walk-who { color: #4f46e5; text-decoration: underline; }
 /* A person the map never declared: drawn, because the walk really does hand over to them, but not a
    door — there is no page behind them. Quieter, and with no pointer, so nothing invites the click. */
 .walk-one-dead { cursor: default; }
 .walk-one-dead .walk-who { color: #8a90a4; }
 .walk-one-dead:hover .walk-who { color: #8a90a4; text-decoration: none; }
-.walk-nowho { font-size: 10.5px; font-weight: 650; color: #8a90a4; width: 84px; text-align: center;
-              display: block; margin-top: 33px; }
+.walk-nowho { font-size: 11.5px; font-weight: 650; color: #8a90a4; text-align: right; }
 /* …and a step whose use case the map never recorded: the same rule, for the same reason. */
 .walk-step-dead { cursor: default; }
 .walk-step-dead:hover .walk-dot { background: #fff; }
 .walk-step-dead:hover .walk-t { color: #1e2235; }
 /* Between two INTERCHANGEABLE people, in the same quiet lower case a feature box's label uses. */
-.walk-or { font-size: 10px; font-weight: 500; color: #8a90a4; margin-top: 9px; }
+.walk-or { font-size: 10px; font-weight: 500; color: #8a90a4; }
 /* "Show in context" on this board: a station on an actor's rail, a feature's rail or a story
    arrow's label lands here naming one step, and the step is ringed the way a card list rings a
    card (`.ecard-flash`), since there is no scene to select into. */

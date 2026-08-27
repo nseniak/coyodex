@@ -152,18 +152,20 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     (named after the project) so there is always a structural altitude. The flat-map generators are kept
     dormant and restorable.)*
 - **Happy Path** *(when the map has a Happy Path)* — the behavioural overlay, in two levels:
-  - **Level 1** is the walk on **one line**, read left to right. A **box** holds a run of consecutive
-    steps sharing one feature AND one person, tinted in that feature's own colour (the same
-    `featureTint` the two rails use, so the three screens agree). The line **breaks at every change of
-    person**: the box's line ends in an arrow head, the new person stands in the break as their glyph
-    with their name under it, and the next box's line reaches back to meet them. A box that only
-    changes feature keeps one unbroken line running into the next. Each step is a bullet carrying its
-    position in the whole walk — the number both rails drop, because this is the view whose subject it
-    is. Three doors: a step opens its use case's flow, a feature's name that feature's page, a
-    person's name theirs. It is HTML (`renderHappyPath`), not a diagram, so it scrolls sideways
-    rather than shrinking: Mermaid scaled the sequence diagram this replaced down to 9.5px of step
-    text on a 29-step map, and 44% of another map's drawing width was the empty channel between the
-    last actor's lifeline and the System's.
+  - **Level 1** is the walk as a stack of **rows**, one per run of steps under one person, named in a
+    gutter on the left. Inside a row, a **box** holds a run of consecutive steps in one feature,
+    tinted in that feature's own colour (the same `featureTint` the two rails use, so the three
+    screens agree); two boxes of one person are joined by one unbroken line, and the row's line ends
+    in an arrow head. Each step is a bullet carrying its position in the whole walk — the number both
+    rails drop, because this is the view whose subject it is. Three doors: a step opens its use
+    case's flow, a feature's name that feature's page, a person's name theirs. Every box on the page
+    is one height (`levelWalkBoxes`), and each row scrolls sideways on its own, so a row of three
+    steps is not dragged off screen to reach the end of a row of thirteen.
+    It is HTML (`renderHappyPath`), not a diagram, so it never shrinks: Mermaid scaled the sequence
+    diagram this replaced down to 9.5px of step text on a 29-step map, and 44% of another map's
+    drawing width was the empty channel between the last actor's lifeline and the System's. The walk
+    ran 3.2 and 3.6 screens WIDE as one line; as rows it is about 2 screens DOWN, and only one row on
+    two of the four maps is still wider than a window.
   - **Level 2** (a step) opens its **use case's T6 flow**: a **sequence diagram** of the actor plus the
     components/deps/entities it touches, each step an ordered message (the verb comes from the backbone
     edge). The side panel keeps the use case's outside summary — it does **not** repeat the steps, since
