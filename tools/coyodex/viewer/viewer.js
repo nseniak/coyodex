@@ -7892,6 +7892,23 @@ function journeyMarksHtml(ucId) {
   return (changed || untraced) ? `<span class="journey-marks">${changed}${untraced}</span>` : '';
 }
 
+// THE TWO LANES, for both boards. Everything else about a board differs between the two pages and
+// stays with them — what names a box, what colours it, what heads the board, which zones come first.
+// What does NOT differ is the pair of lanes: the gutter carrying their names, and the two classes that
+// switch them on and off. That was written twice, once per page, so the words "Happy path" and "Off
+// the happy path" each existed in two places and a rename could have landed on one page only.
+//
+// `hasPath` false is a board with no station anywhere: the upper lane is dropped rather than drawn
+// empty, and with one lane there is no cut for the dashed line to make. The gutter still names the
+// lane it kept, because "everything here is off the happy path" is an answer, not an absence.
+function journeyRailHtml(hasPath, offLane, boxes) {
+  const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
+    + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
+    + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
+  return `<div class="journey-rail${offLane ? ' journey-has-off' : ''}`
+    + `${hasPath ? '' : ' journey-no-path'}">${gutter}${boxes}</div>`;
+}
+
 // One feature's box on the rail. The box is not a nested container: the whole board is ONE grid
 // with three rows — the feature name, the happy-path lane, and the lane for everything else — and
 // this returns that feature's four CELLS in its own column. Rows shared across every column are
@@ -8030,9 +8047,6 @@ function renderActorPage(actorName) {
   // Each lane name sits ON its own lane. The upper one is centred on the rail — 22.5px down its row,
   // where the rail is drawn — so it reads as a caption on that line rather than as a heading over the
   // whole band. The lower one keeps the dashed cut it shares with the boxes.
-  const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
-    + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
-    + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
   // No legend. With the two lanes named, every line it carried was either restating a label or
   // teaching a click the reader finds by trying it.
   const rail = onHtml + offHtml;
@@ -8040,9 +8054,8 @@ function renderActorPage(actorName) {
   // off the happy path (argus's Page owner is one): the figure says whose board this is, and that is
   // as true of a board with one lane as of a board with two.
   const board = rail
-    ? `<div class="journey-board">${journeyActorHeadHtml(actorName)}<div class="journey-rail`
-      + `${offLane ? ' journey-has-off' : ''}${noPath ? ' journey-no-path' : ''}">`
-      + `${gutter}${rail}</div></div>`
+    ? `<div class="journey-board">${journeyActorHeadHtml(actorName)}`
+      + `${journeyRailHtml(hasPath, offLane, rail)}</div>`
     : '<p class="empty">This map records nothing this actor does.</p>';
   diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}</div>`;
   bindActorPage(diagram, actorName);
@@ -8245,16 +8258,11 @@ function featureRailHtml(capId) {
     // a colour that changed per zone would claim a difference the zones do not have.
     tint: featureTint(capId),
   })).join('');
-  const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
-    + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
-    + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
   // The feature heads its own board, in the same slot and the same hand the actor page uses — icon
   // then name on one line. Every box below is named after an ACTOR, so without it a reader scanning
   // the board sees only actors and can read it as a page about them.
   return `<div class="journey-board">${journeyHeadHtml(storyFeatureGlyphSvg(), featureName(capId))}`
-    + '<div class="journey-rail'
-    + `${offLane ? ' journey-has-off' : ''}${noPath ? ' journey-no-path' : ''}">`
-    + `${gutter}${boxes(zones, true)}${boxes(offZones, false)}</div></div>`;
+    + `${journeyRailHtml(hasPath, offLane, boxes(zones, true) + boxes(offZones, false))}</div>`;
 }
 // An actor's kind from their NAME, for the glyph a zone label carries. The rail speaks names (that
 // is what the walk records), while the kind lives on the role — ROLE_BY_NAME is the one table that

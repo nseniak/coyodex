@@ -673,11 +673,14 @@ def test_the_actor_heads_their_own_board_above_both_lanes() -> None:
               js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
     # The head opens the board, OUTSIDE the rail grid, and is drawn whatever the lanes are — an actor
     # whose every use case is off the happy path still owns their board.
-    assert '<div class="journey-board">${journeyActorHeadHtml(actorName)}<div class="journey-rail' in page
+    assert '<div class="journey-board">${journeyActorHeadHtml(actorName)}`' in page
+    assert "journeyRailHtml(hasPath, offLane, rail)" in page, "…and the two lanes come from one place"
     assert "hasPath ? `<div" not in page and "hasPath ? '<span" not in page, \
         "the head is not conditional on there being a happy path"
-    assert "journey-actorhead" not in page.split("const gutter")[1].split("const rail")[0], \
-        "…and it is not one of the gutter's cells"
+    railfn = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
+                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
+    assert "journey-actorhead" not in railfn, "…and it is not one of the gutter's cells"
+    assert "journey-actorhead" not in page, "…nor written by the page: it comes from the shared slot"
     assert ".journey-actorhead { position: sticky; left: 0;" in css, \
         "sticky like the gutter, so the head stays put when the board scrolls sideways"
     # One LINE — icon then name — not a figure with a name under it.
@@ -780,12 +783,16 @@ def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None
     assert "o.offLane ?" in zone, "the lower lane is drawn for every box, or for none"
     assert "journey-alsolbl" not in js and "journey-alsolbl" not in css, "the per-box label is gone"
     assert ">also here:<" not in js, "…and so is the text it drew"
-    # Named once, in a gutter that survives the board's sideways scroll.
+    # Named once, in a gutter that survives the board's sideways scroll \u2014 and named for BOTH boards
+    # in one function, so the words exist once in the file rather than once per page.
     page = js[js.index("function renderActorPage(actorName) {"):
               js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
-    assert ">Happy path<" in page and ">Off the happy path<" in page
-    assert page.count(">Happy path<") == 1 and page.count(">Off the happy path<") == 1, \
-        "one label each, built once for the page and not once per feature"
+    rail = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
+              js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
+    assert ">Happy path<" in rail and ">Off the happy path<" in rail
+    assert js.count(">Happy path</div>") == 1 and js.count(">Off the happy path</div>") == 1, \
+        "one label each in the whole file, so a rename cannot land on one page only"
+    assert ">Happy path<" not in page, "…and neither page writes them itself"
     assert ".journey-gutter { grid-column: 1; position: sticky; left: 0;" in css
     assert ".journey-gutter-off { grid-row: 3; border-top: 1px dashed" in css, \
         "the gutter carries the same cut, so the two lanes read as one band"
@@ -793,7 +800,7 @@ def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None
     assert "journey-legend" not in js and "journey-legend" not in css
     # An actor with nothing off their happy path gets no empty band and no label for it.
     assert "const offLane = onRail.concat(off).some((b) => (b.z.sides || []).length);" in page
-    assert "offLane ? ' journey-has-off' : ''" in page
+    assert "offLane ? ' journey-has-off' : ''" in rail
     assert ".journey-rail:not(.journey-has-off) .journey-track { padding-bottom: 12px; }" in css
     # The gutter is prose-shaped, so the glossary matcher must leave it alone like the other labels.
     assert ".journey-zkind, .journey-gutter'" in js
@@ -862,7 +869,9 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     assert "const noPath = !hasPath;" in page and "offLane, noPath," in page
     assert "o.noPath ? '' :" in js, "the upper-lane cell is dropped, not drawn empty"
     assert ".journey-no-path .journey-sides, .journey-no-path .journey-gutter-off { grid-row: 2;" in css
-    assert "journey-gutter-off\">Off the happy path" in page, "…and the one lane is still named"
+    railfn = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
+                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
+    assert "journey-gutter-off\">Off the happy path" in railfn, "…and the one lane is still named"
 
 
 
@@ -2639,11 +2648,13 @@ def test_a_feature_the_walk_never_enters_still_draws_the_board() -> None:
     assert "if (!zones.length && !offZones.length) return '';" in rail, \
         "only a feature with no use cases at all draws nothing"
     assert "const hasPath = zones.some((z) => z.stations.length);" in rail
-    assert "hasPath ? '<div class=\"journey-gutter journey-gutter-on\">Happy path</div>' : ''" in rail
-    assert "noPath ? ' journey-no-path' : ''" in rail, "one lane, and no cut to draw"
+    # The two lanes are switched on and off in ONE place, shared with the actor board.
+    assert "journeyRailHtml(hasPath, offLane, boxes(zones, true) + boxes(offZones, false))" in rail
+    shared = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
+                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
+    assert "hasPath ? '<div class=\"journey-gutter journey-gutter-on\">Happy path</div>' : ''" in shared
+    assert "hasPath ? '' : ' journey-no-path'" in shared, "one lane, and no cut to draw"
     assert ".journey-no-path .journey-sides, .journey-no-path .journey-gutter-off" in css
-    # The trailing zones are drawn by the same cell builder, and the rail's tip clears them.
-    assert "boxes(zones, true)}${boxes(offZones, false)}" in rail
     assert "gapBefore: !lead && i === 0 && zones.length," in rail
 
 
