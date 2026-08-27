@@ -8236,7 +8236,7 @@ function walkHandHtml(acts) {
 // The NUMBER stays. Both rails drop it deliberately — "which of the walk's twenty steps is this"
 // answers no question either of those pages asks. It is the question THIS page asks, so the number
 // belongs here and nowhere else.
-function walkBoxHtml(sg) {
+function walkBoxHtml(sg, finalRow) {
   const name = sg.fid ? featureName(sg.fid) : '';
   const label = name
     ? `<button type="button" class="walk-fname" data-cap="${esc(sg.fid)}" `
@@ -8261,14 +8261,15 @@ function walkBoxHtml(sg) {
   const tint = sg.fid ? featureTint(sg.fid) : '';
   // Where this box's line STARTS and ENDS, in the journey rail's own three lengths. Inside a row a
   // box reaches half the gap on each side (WALK_BRIDGE), so two boxes of one person read as one line
-  // running through them. At the row's two ends it takes the rail's tips instead: WALK_TIP at the
-  // start, WALK_END at the finish, where the arrow head's point sits. Every row IS one person's run,
-  // so those ends are the row's ends and nothing else has to be asked.
-  return `<div class="walk-box${sg.closes ? ' walk-closes' : ''}" `
+  // running through them. WALK_TIP starts the row. What ENDS it depends on whether the walk carries
+  // on: the last row finishes at WALK_END with the rail's arrow head, and every other row stops at
+  // its own edge, where the elbow picks the line up and turns it down to the row below.
+  const ends = sg.closes ? (finalRow ? WALK_END : 0) : WALK_BRIDGE;
+  return `<div class="walk-box${sg.closes && finalRow ? ' walk-closes' : ''}" `
     + `style="min-width:${sg.steps.length * WALK_STEP_W}px`
     + `${tint ? ';background:' + tint : ''}`
     + `;--walk-l:${sg.opens ? WALK_TIP : WALK_BRIDGE}px`
-    + `;--walk-r:${sg.closes ? WALK_END : WALK_BRIDGE}px">`
+    + `;--walk-r:${ends}px">`
     + `<div class="walk-flabel">${label}</div>`
     + `<div class="walk-line">${steps}</div></div>`;
 }
@@ -8296,11 +8297,21 @@ function renderHappyPath() {
   // Each row is its OWN sideways scroller. One scroller for the whole board would tie a row of three
   // steps to a row of thirteen: scrolling to see the end of the long one would drag the short ones
   // off screen with it, showing empty space where their line has already finished.
-  const html = rows.map((r) =>
-    `<div class="walk-row">${walkHandHtml(r.acts)}`
-    + `<div class="walk-strip"><div class="walk">`
-    + r.segs.map(walkBoxHtml).join('')
-    + '</div></div></div>').join('');
+  // The line WRAPS, the way a line of text does: it turns down at the row's end, and the next row's
+  // line comes in from above and turns right. Two hooks and never one connector — the rows scroll on
+  // their own, so neither may depend on where the other row's end happens to sit. The elbow rides
+  // inside the lane, where the line it continues is; the hook hangs off the ROW, because a strip is
+  // `overflow-x: auto` and that clips the other axis too — a hook reaching up out of the row was cut
+  // off. Off the row it also stays put when a long row is scrolled.
+  const html = rows.map((r, i) => {
+    const final = i === rows.length - 1;
+    return `<div class="walk-row">${i ? '<span class="walk-hook"></span>' : ''}`
+      + `${walkHandHtml(r.acts)}`
+      + '<div class="walk-strip"><div class="walk">'
+      + r.segs.map((sg) => walkBoxHtml(sg, final)).join('')
+      + `${final ? '' : '<span class="walk-elbow"></span>'}`
+      + '</div></div></div>';
+  }).join('');
   const n = (GRAPH.happy_path || []).length;
   diagram.innerHTML = '<div class="usecases-wrap">'
     + `<p class="block-lbl">The walk — ${n} step${n === 1 ? '' : 's'}, `

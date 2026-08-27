@@ -195,8 +195,9 @@ def test_the_happy_path_draws_one_line_broken_at_every_change_of_person() -> Non
         steps draw 11 boxes;
       * the line BREAKS wherever the person changes, and that person stands in the break — 6 of
         them here, one per hand-over;
-      * an arrow head closes a box only when somebody else is about to take over, so a box that
-        merely changes feature runs on unbroken into the next.
+      * the line WRAPS: every row but the last ends in an elbow that turns down, and every row but
+        the first opens with a hook coming in from above. Only the walk's final row ends in the
+        arrow head, because only there does the walk actually stop.
 
     Read from the rendered page, not from the source: every other viewer test asserts on text."""
     with _served() as url, _page(url + "#v=hp") as page:
@@ -205,9 +206,12 @@ def test_the_happy_path_draws_one_line_broken_at_every_change_of_person() -> Non
             steps: document.querySelectorAll('.walk-step').length,
             boxes: document.querySelectorAll('.walk-box').length,
             hands: document.querySelectorAll('.walk-hand').length,
+            elbows: document.querySelectorAll('.walk-elbow').length,
+            hooks: document.querySelectorAll('.walk-hook').length,
             closed: document.querySelectorAll('.walk-box.walk-closes').length,
         })""")
-        assert counts == {"steps": 14, "boxes": 11, "hands": 6, "closed": 6}, counts
+        assert counts == {"steps": 14, "boxes": 11, "hands": 6,
+                          "elbows": 5, "hooks": 5, "closed": 1}, counts
         # …and no sequence diagram is left anywhere on the page.
         assert page.evaluate("() => !document.querySelector('#diagram svg .actor-line')")
         assert not page.js_errors, page.js_errors
@@ -319,17 +323,36 @@ def test_every_feature_box_is_the_same_height_and_the_line_bridges_the_gap() -> 
                                 closes: boxes[i].classList.contains('walk-closes') });
                 }
             }
-            return { heights, gaps,
+            // …and every part of the wrap must sit ON the line it continues, never near it.
+            const off = [];
+            document.querySelectorAll('.walk-row').forEach((row, i) => {
+                const bs = [...row.querySelectorAll('.walk-box')];
+                const f = bs[0].querySelector('.walk-line').getBoundingClientRect();
+                const l = bs[bs.length - 1].querySelector('.walk-line').getBoundingClientRect();
+                const left = f.left + px(bs[0], '--walk-l');
+                const right = l.right + px(bs[bs.length - 1], '--walk-r');
+                const mid = f.top + 21;
+                const el = row.querySelector('.walk-elbow'), hk = row.querySelector('.walk-hook');
+                if (el) {
+                    const b = el.getBoundingClientRect();
+                    if (Math.abs(b.left - right) > 1 || Math.abs(b.top + 1.5 - mid) > 1) off.push(i);
+                }
+                if (hk) {
+                    const b = hk.getBoundingClientRect();
+                    if (Math.abs(b.left + 1.5 - left) > 1.5 || Math.abs(b.bottom - 1.5 - mid) > 1) off.push(i);
+                }
+            });
+            return { heights, gaps, off,
                      rows: document.querySelectorAll('.walk-row').length,
-                     arrows: all.filter((b) => b.classList.contains('walk-closes')).length,
-                     lastOfRow: [...document.querySelectorAll('.walk-row')]
-                       .every((r) => r.querySelector('.walk-box:last-child').classList.contains('walk-closes')) };
+                     arrows: all.filter((b) => b.classList.contains('walk-closes')).length };
         }""")
         assert len(seen["heights"]) == 1, seen["heights"]
         # inside a row the line always crosses, and no box but the last of a row closes
         assert all(g["joined"] and not g["closes"] for g in seen["gaps"]), seen
-        # …and every row ends in one, because a row IS one person's run
-        assert seen["arrows"] == seen["rows"] == 6 and seen["lastOfRow"], seen
+        # ONE arrow head on the whole board: the walk stops once, at the end
+        assert seen["arrows"] == 1 and seen["rows"] == 6, seen
+        # every elbow starts at its row's line end, every hook lands on its row's line start
+        assert seen["off"] == [], seen
         assert not page.js_errors, page.js_errors
 
 
@@ -474,4 +497,32 @@ def test_the_walk_offers_no_door_it_cannot_open() -> None:
         assert seen["personName"] == "Actor", seen
         assert seen["stepDrawn"] and seen["stepIsDoor"] is False, seen
         assert seen["stepTitle"] == "This map does not say how this step works", seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_arrow_head_that_turns_the_line_down_is_centred_on_it() -> None:
+    """An absolutely positioned child is placed against its parent's PADDING box, and the elbow's
+    padding box stops inside its own 3px right border. Offset from there, the head sat 3px left of
+    the line it ends, which at a 4x zoom is plainly a head beside a line rather than on it.
+
+    Measured, not eyeballed: the head's own centre against the border's own middle, on every elbow."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        off = page.evaluate("""() => {
+            const bad = [];
+            [...document.querySelectorAll('.walk-elbow')].forEach((el, i) => {
+                const b = el.getBoundingClientRect();
+                const cs = getComputedStyle(el, '::after');
+                const lineX = b.right - 1.5;                       // the 3px border's own middle
+                const headRight = (b.right - 3) - parseFloat(cs.right);   // …from the PADDING box
+                const headCx = headRight
+                    - (parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth)) / 2;
+                if (Math.abs(headCx - lineX) > 0.6) {
+                    bad.push({ i, headCx: +headCx.toFixed(2), lineX: +lineX.toFixed(2) });
+                }
+            });
+            return bad;
+        }""")
+        assert off == [], off
+        assert page.evaluate("() => document.querySelectorAll('.walk-elbow').length") == 5
         assert not page.js_errors, page.js_errors

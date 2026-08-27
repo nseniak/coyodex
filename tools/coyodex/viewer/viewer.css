@@ -2029,7 +2029,38 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    three steps to a row of thirteen, dragging the short ones off screen to reach the long one's end. */
 .walk-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
               padding: 6px 0 10px; margin: 10px 0 6px; }
-.walk-row { display: flex; align-items: flex-start; }
+.walk-row { display: flex; align-items: flex-start; position: relative; }
+/* THE WRAP. The line turns down at the row's end and comes back in from above at the next row's
+   start, the way a wrapped line of text does. Both are pinned to the line the boxes draw, which
+   sits 51.5px below the lane's top: 10px of box padding, an 18px feature label, 4px of gap, and the
+   line's own 19.5 + 1.5. Placed by eye instead, all three parts were out by 6 to 20px.
+   The elbow rides INSIDE the lane, where the line it continues is, and its -14px of left margin
+   cancels the lane's column gap so it touches that line. */
+.walk-elbow { flex: none; align-self: flex-start; width: 22px; height: 30px;
+              margin: 51.5px 0 0 -14px; position: relative;
+              border-top: 3px solid #4f46e5; border-right: 3px solid #4f46e5;
+              border-top-right-radius: 10px; }
+/* -7.5px, not -4.5px: an absolutely positioned child is placed against its parent's PADDING box,
+   which stops inside the elbow's own 3px right border. Offset from there, the head sat 3px left of
+   the line it ends. 19px of padding box, plus 7.5, less half the head's 12px width, centres it on
+   the border's own middle at 20.5. */
+.walk-elbow::after { content: ''; position: absolute; right: -7.5px; bottom: -11px;
+                     border-top: 11px solid #4f46e5;
+                     border-left: 6px solid transparent; border-right: 6px solid transparent; }
+/* …and the hook hangs off the ROW, not off the strip: a strip is `overflow-x: auto`, and that clips
+   the other axis too, so a hook reaching up out of the row was sliced off. Off the row it also stays
+   put when a long row is scrolled. 144.5px puts its left border on the line's own left end: a 150px
+   gutter, plus the lane's 8px of padding, less the 12px the first box's line reaches back. */
+.walk-hook { position: absolute; z-index: 3; left: 144.5px; top: 16.5px; width: 26px; height: 46px;
+             border-bottom: 3px solid #4f46e5; border-left: 3px solid #4f46e5;
+             border-bottom-left-radius: 10px;
+             /* The tail FADES IN at its top rather than starting on a hard edge. It used to reach up
+                out of the row and stop dead, which read as a line cut off rather than as one arriving
+                — and the row it appeared to come from is anywhere from 400 to 800px to the right, so
+                there was never a line up there for it to be cut from. Short and faded says "this
+                carries on from above" without claiming a join it cannot draw. */
+             -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), #000 55%);
+             mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), #000 55%); }
 .walk-row + .walk-row { border-top: 1px solid #f2f3f8; }
 /* The row's own scroller. `min-width: 0` or a flex item refuses to shrink below its content, and the
    row would push the page sideways instead of scrolling inside itself.
