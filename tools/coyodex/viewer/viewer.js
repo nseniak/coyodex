@@ -8312,11 +8312,13 @@ function renderHappyPath() {
       + `${final ? '' : '<span class="walk-elbow"></span>'}`
       + '</div></div></div>';
   }).join('');
+  // The counts only. "The walk" repeated the tab and the breadcrumb, which already name this page,
+  // and the hand count named a thing nobody looks up: the rows themselves are the hand-overs, and
+  // counting them said nothing a reader acts on.
   const n = (GRAPH.happy_path || []).length;
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + `<p class="block-lbl">The walk — ${n} step${n === 1 ? '' : 's'}, `
-    + `${feats} feature${feats === 1 ? '' : 's'}, ${rows.length} `
-    + `hand${rows.length === 1 ? '' : 's'}</p>`
+    + `<p class="block-lbl">${n} step${n === 1 ? '' : 's'}, `
+    + `${feats} feature${feats === 1 ? '' : 's'}</p>`
     + `<div class="walk-board">${html}</div></div>`;
   levelWalkBoxes(diagram);
   bindWalk(diagram);
