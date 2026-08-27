@@ -1728,7 +1728,10 @@ svg.story-wires path.story-ref.story-hot { stroke-width: 1.8; }
 svg.story-wires path.story-glow { stroke: #4f46e5; stroke-width: 3.2; opacity: 1;
                                   filter: drop-shadow(0 0 4px rgba(79,70,229,.55)); }
 svg.story-wires path.story-cold { opacity: .14; }
-svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
+/* `context-stroke`: the head takes the colour of the LINE IT SITS ON, so it goes indigo with a lit
+   wire and stays grey on a resting one — one marker, every state. It was a fixed grey, and a marker
+   is shared by every path, so a selected wire ended in a grey point. */
+svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .story-col { display: flex; flex-direction: column; gap: 14px; }
 /* The PILLAR. It is the answer to the page's question, so it is RAISED and the other two columns are
    flattened to let it rise: without that, a column on the left and a column on the right pull the eye

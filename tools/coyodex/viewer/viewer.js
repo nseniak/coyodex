@@ -7978,8 +7978,15 @@ function storyDiagramHtml() {
   return `<div class="story-wrap"><div class="story-stage${areas.length ? ' story-has-areas' : ''}" `
     + 'id="storystage">'
     + '<svg class="story-wires" aria-hidden="true"><defs>'
-    + '<marker id="story-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" '
-    + 'orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
+    // TWO settings carry this head, and both were wrong:
+    // `markerUnits="userSpaceOnUse"` — a marker scales with the line's STROKE WIDTH by default, so
+    // the head grew and shifted every time a wire went from grey (1.4) to lit (2.2) to glowing
+    // (3.2). Fixed size means the head sits still while the line under it changes.
+    // `refX` at the TIP (8, the point of the triangle) — it was 7, so the tip overshot the line's
+    // end by a unit and the head hung off the box it points at.
+    + '<marker id="story-arr" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="9" markerHeight="9" '
+    + 'markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
+    + '<path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
     + '<div class="story-col story-col-cast"><p class="story-colhead">Actors</p>'
     + (st.cast || []).map(storyActorCardHtml).join('') + '</div>'
     + '<div class="story-col story-col-spine"><p class="story-colhead">Features</p>'

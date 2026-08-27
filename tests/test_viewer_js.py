@@ -3419,6 +3419,38 @@ def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -
     # that a regression.
     assert "'no journey reaches this'" in bind
     assert "story-elabel-noev" in bind and ".story-elabel-noev" in css
+    # A SHARED area draws no ownership wire and says its owners in WORDS instead. No dashed border:
+    # dashed already means "a container, open it" on every diagram in this viewer.
+    assert ".story-shared {" in css, "a shared area says its owners in words"
+    assert "border-style: dashed" not in css[css.index(".story-area-owned"):
+                                             css.index(".story-shared")]
+    # Both lines SOLID: at rest the gutter speaks one visual language, and a reader should not have
+    # to learn a dash code before the diagram has told them anything. Scoped to the story wires —
+    # other diagrams on other screens use a dash for their own reasons.
+    wires = [l for l in css.splitlines() if l.startswith("svg.story-wires path")]
+    assert not [l for l in wires if "dasharray" in l], f"a story wire is dashed: {wires}"
+
+
+def test_the_arrow_head_sits_at_the_line_end_and_takes_the_line_s_colour() -> None:
+    """Two faults in one marker, both seen on screen.
+
+    A marker scales with its line's STROKE WIDTH by default, so the head grew and shifted every time
+    a wire went grey (1.4) → lit (2.2) → glowing (3.2), which is what made the join look broken.
+    `userSpaceOnUse` fixes its size, and `refX` at the TIP (8, the triangle's point, not 7) puts
+    that point exactly where the line ends instead of a unit past it.
+
+    And ONE marker is shared by every path, so a fixed `fill` left a selected indigo wire ending in
+    a grey point. `context-stroke` takes the colour of the line the head sits on — every state, one
+    marker."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = _story_fn(js, "storyDiagramHtml")
+    assert 'refX="8"' in html and 'markerUnits="userSpaceOnUse"' in html
+    assert 'refX="7"' not in html
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    marker = css[css.index("svg.story-wires marker path {"):]
+    marker = marker[:marker.index("}")]
+    assert "context-stroke" in marker, "the head takes the colour of the line it sits on"
+    assert "#c3c8d9" not in marker, "no fixed colour: a lit wire would end in a grey point"
 
 
 def test_hovering_a_label_glows_the_one_wire_it_names() -> None:
@@ -3437,16 +3469,6 @@ def test_hovering_a_label_glows_the_one_wire_it_names() -> None:
     assert "'story-hot', 'story-cold', 'story-glow'" in bind
     assert "p.classList.remove('story-glow');   // a new picture starts with no wire singled out" in bind
     assert "svg.story-wires path.story-glow {" in (VIEWER_DIR / "viewer.css").read_text()
-    # A SHARED area draws no ownership wire and says its owners in WORDS instead. No dashed border:
-    # dashed already means "a container, open it" on every diagram in this viewer.
-    assert ".story-shared {" in css, "a shared area says its owners in words"
-    assert "border-style: dashed" not in css[css.index(".story-area-owned"):
-                                             css.index(".story-shared")]
-    # Both lines SOLID: at rest the gutter speaks one visual language, and a reader should not have
-    # to learn a dash code before the diagram has told them anything. Scoped to the story wires —
-    # other diagrams on other screens use a dash for their own reasons.
-    wires = [l for l in css.splitlines() if l.startswith("svg.story-wires path")]
-    assert not [l for l in wires if "dasharray" in l], f"a story wire is dashed: {wires}"
 
 
 def test_a_feature_card_wears_the_same_colour_it_wears_on_the_journey_board() -> None:
