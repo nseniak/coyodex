@@ -77,10 +77,17 @@ def build_areas(m: ProjectModel, column: Sequence[str] = ()) -> list[DataArea]:
     inside a shared sequence still counts for the feature that rides it. Counting sides, not steps,
     is deliberate: a step writing one record and reading another is two facts about the data.
 
-    Order is fixed HERE, never in the browser: an area with exactly one authored owner sits at that
-    owner's position in `column` (the story order the feature pillar draws), so the right column
-    reads down beside its owner; a shared or undecided area follows, in map order. `column` is
-    optional — `validate` asks the same question with no screen to order, and passes nothing."""
+    Order is fixed HERE, never in the browser: an area sits at the position of the FIRST feature in
+    `column` (the story order the feature pillar draws) whose walks reach it — the moment the data
+    is introduced, reading the product's story top to bottom. So the right column reads in the same
+    direction as the pillar beside it, and an area appears level with the feature that first needs
+    it rather than with whoever happens to own it.
+    Deliberately NOT ordered by the OWNER's position: ownership is authored and most maps do not
+    carry it yet, so an owner-driven order would rearrange the column the day someone fills the
+    field in, and would leave every undecided area in a heap at the bottom. First reference is a
+    derived fact, present on every map, and it is the order a reader is already following.
+    An area no walk reaches has no introduction; it goes last, in map order. `column` is optional —
+    `validate` asks the same question with no screen to order, and passes nothing."""
     cap_ids = {c.id for c in m.capabilities}
     uc_cap = {u.id: u.capability for u in m.use_cases if u.capability in cap_ids}
     saved_area: dict[str, str] = {}          # saved entity -> the sub-domain holding it
@@ -119,5 +126,10 @@ def build_areas(m: ProjectModel, column: Sequence[str] = ()) -> list[DataArea]:
         areas.append(DataArea(id=sid, name=subs[sid].name, purpose=subs[sid].purpose,
                               entities=sorted_ids(set(ents)), owners=owners, touched_by=touched))
     sub_pos = {g.id: i for i, g in enumerate(m.subdomains)}
-    return sorted(areas, key=lambda a: (pos.get(a.owners[0], len(pos)) if len(a.owners) == 1
-                                        else len(pos), sub_pos[a.id]))
+
+    def introduced(a: DataArea) -> int:
+        """Where the story first reaches this area: the earliest column position among the features
+        whose walks touch it. `len(pos)` — past the end — for an area no walk reaches."""
+        return min((pos[t.feature] for t in a.touched_by if t.feature in pos), default=len(pos))
+
+    return sorted(areas, key=lambda a: (introduced(a), sub_pos[a.id]))

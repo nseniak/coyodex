@@ -107,18 +107,34 @@ def test_touches_count_sides_and_name_the_records() -> None:
     assert next(t for t in snapshots.touched_by if t.feature == "CAP2").entities == ["E2", "E3"]
 
 
-def test_areas_order_follows_the_owning_features_story_position() -> None:
+def test_areas_are_ordered_by_the_feature_that_first_reaches_them() -> None:
+    """The order the reader is already following: down the story, an area appears level with the
+    feature that first needs it. SD1 is reached only by CAP1; SD2 by CAP1 and CAP2 — both are
+    introduced at CAP1, so map order breaks the tie."""
     m = make_map()
-    m.subdomains[0].owners = ["CAP2"]        # Tracked pages authored to the LATER feature
-    m.subdomains[1].owners = ["CAP1"]
+    assert [a.id for a in build_areas(m, ["CAP1", "CAP2"])] == ["SD1", "SD2"]
+    # Move the first touch of SD1 to the LATER feature and it moves down the column with it.
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="E2", phrase="takes the first snapshot")]
+    m.flows[1].steps.append(FlowStep(n=3, src="E2", dst="E1", phrase="names the page"))
     assert [a.id for a in build_areas(m, ["CAP1", "CAP2"])] == ["SD2", "SD1"]
 
 
-def test_a_shared_area_sorts_after_the_owned_ones() -> None:
+def test_the_authored_owner_does_not_move_an_area_in_the_column() -> None:
+    """Ownership is authored and most maps do not carry it. An owner-driven order would rearrange
+    the whole column the day someone fills the field in, and heap every undecided area at the
+    bottom — so the order reads off the walks, which every map has."""
     m = make_map()
-    m.subdomains[1].owners = ["CAP1", "CAP2"]
-    m.subdomains[0].owners = ["CAP2"]
-    assert [a.id for a in build_areas(m, ["CAP1", "CAP2"])] == ["SD1", "SD2"]
+    before = [a.id for a in build_areas(m, ["CAP1", "CAP2"])]
+    m.subdomains[0].owners = ["CAP2"]        # authored to the LATER feature
+    m.subdomains[1].owners = ["CAP1"]
+    assert [a.id for a in build_areas(m, ["CAP1", "CAP2"])] == before
+
+
+def test_an_area_no_walk_reaches_goes_last() -> None:
+    m = make_map()
+    m.entities.append(make_saved("E5", "Retention", "SD3"))
+    m.subdomains.append(Group(id="SD3", name="Retention", purpose="kept rules"))
+    assert [a.id for a in build_areas(m, ["CAP1", "CAP2"])][-1] == "SD3"
 
 
 # --- inheritance ----------------------------------------------------------------
