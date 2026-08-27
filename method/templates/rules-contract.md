@@ -34,6 +34,10 @@ $CX dump --map $MAP --edges C50        # a component's incoming and outgoing bac
 $CX dump --map $MAP --id UC31          # a use case: its flow steps and their anchors
 ```
 
+**Do NOT read the map file whole** — it is tens of thousands of tokens, and `dump` serves exactly
+the slice a rule needs. Start from `--members` on your block's components and the anchors the map
+already holds in them.
+
 **Do this work yourself — do NOT spawn sub-agents and do NOT write a program that writes your
 fragment.** Author the rows.
 

@@ -444,6 +444,16 @@ the same per-agent input as the one above it — so both arrive together or not 
 
 ---
 
+## Cost log
+
+What each build SPENT, one row per build, appended by the retro's "What it cost" step (decision of
+2026-08-27). `coyodex-eval cost <transcript> --map <map>` prints every number. Compare per row,
+never per build — absolute dollars track how big the map got.
+
+| date | project | rows | active min | $ total | $ / 100 rows | per-role split ($ lead / harvest / trace / verify / other) |
+|---|---|---|---|---|---|---|
+| — | (four mcpolis builds pre-log measured $189–$207, 61–71 min active, 1,195→1,564 rows; per-role split not recorded) | | | | | |
+
 ## Sources
 
 - 2026-08-20, argus (`446bbaeb`) — 25 findings, 22 landed. Report and a `findings.json` ledger were

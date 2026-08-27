@@ -396,6 +396,11 @@ coyodex-eval cost <prev-transcript> --map <archive>/project-map.json
 
 Wall time, tokens, and both PER ROW of map produced, plus the straggler waste in each fan-out.
 
+**Append this build's line to the Cost log in `backlog.md`** (decision of 2026-08-27: the backlog
+is the durable home for spend — reports are git-ignored and evaporate). One row: date, project,
+rows, active minutes, $ total, $ per 100 rows, and the per-role split. The log is what makes any
+future "did this method change pay?" answerable without re-running `cost` on an old transcript.
+
 **Compare per row, never per build.** Absolute minutes and dollars track how big the map got: over
 four consecutive mcpolis builds the map grew 1,195 → 1,564 rows while the method changed under it,
 so the build that was *cheapest per unit of work* read as the slowest and most expensive one. Cost
