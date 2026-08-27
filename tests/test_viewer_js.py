@@ -3323,7 +3323,7 @@ def test_the_three_columns_read_left_to_right_with_the_features_in_the_middle() 
     assert ".story-stage.story-has-areas { grid-template-columns: 300px 130px 420px 130px 270px; }" in css
     assert ".story-col-cast { grid-column: 1;" in css
     assert ".story-col-spine { grid-column: 3;" in css
-    assert ".story-col-areas { grid-column: 5; }" in css
+    assert ".story-col-areas { grid-column: 5; justify-content: space-between; }" in css
     # The pillar carries its own ground: the middle column has to stay the thing the eye lands on
     # once there is a column on each side of it.
     spine = css[css.index(".story-col-spine {"):]

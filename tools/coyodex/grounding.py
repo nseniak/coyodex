@@ -1106,8 +1106,17 @@ def main(argv: list[str] | None = None) -> int:
         buckets = json.loads(format_report(claims, rows, as_json=True, live_claims=live_claims))
         sup_confirmed = sum(1 for r in buckets["superseded"] if r.get("verdict") == "confirmed")
         labels = sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")})
+        # REDUNDANT ROWS, spelled out, because the note has to state it and the arithmetic is the
+        # kind nobody re-does. A three-voted theme produces three rows per claim; "136 redundant
+        # rows" was published in a shipped map and in the operator report for a pass whose four
+        # security batches held 136 CLAIMS and 408 rows — 272 redundant. The note's author had the
+        # row count here and the claim count nowhere, so it quoted the number it could see.
+        voted = len({str(r.get("claim")) for r in rows if r.get("claim")})
+        redundant = max(0, len(rows) - voted)
         print(f"  NOTE FACTS — quote these, do not retype them from an earlier run:\n"
-              f"    verdict rows {len(rows)} · distinct skeptic labels {len(labels)} "
+              f"    verdict rows {len(rows)} over {voted} distinct claim(s) — "
+              f"{redundant} redundant row(s) (a re-vote, not a claim)\n"
+              f"    distinct skeptic labels {len(labels)} "
               f"(a label is not an agent: one agent may carry several batches)\n"
               f"    confirmed {record['claims_confirmed']} · refuted {record['claims_refuted']} · "
               f"unverifiable {record['claims_unverifiable']} · tied {len(buckets['tied'])}"

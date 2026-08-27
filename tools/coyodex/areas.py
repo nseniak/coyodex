@@ -58,6 +58,9 @@ class DataArea:
     ownership question. `is_saved` is that filter."""
     id: str                             # SDn
     name: str
+    purpose: str = ""                   # the area's own sentence — the box reads like every other
+                                        # card on the page (name, sentence, counts), and without it
+                                        # the reader has to open the area to learn what it holds
     entities: list[str] = field(default_factory=list)     # the SAVED records it holds, id order
     owners: list[str] = field(default_factory=list)       # the EFFECTIVE authored owners (its own,
                                                           # else inherited); [] = nobody decided
@@ -113,8 +116,8 @@ def build_areas(m: ProjectModel, column: Sequence[str] = ()) -> list[DataArea]:
                                     entities=sorted_ids(hit[(cap, a)]))
                           for (cap, a), n in counts.items() if a == sid),
                          key=lambda t: (-t.touches, pos.get(t.feature, len(pos)), t.feature))
-        areas.append(DataArea(id=sid, name=subs[sid].name, entities=sorted_ids(set(ents)),
-                              owners=owners, touched_by=touched))
+        areas.append(DataArea(id=sid, name=subs[sid].name, purpose=subs[sid].purpose,
+                              entities=sorted_ids(set(ents)), owners=owners, touched_by=touched))
     sub_pos = {g.id: i for i, g in enumerate(m.subdomains)}
     return sorted(areas, key=lambda a: (pos.get(a.owners[0], len(pos)) if len(a.owners) == 1
                                         else len(pos), sub_pos[a.id]))

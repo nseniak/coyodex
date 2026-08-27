@@ -1748,9 +1748,12 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 /* The cast spreads over the spine's height, so its six cards meet the seven features they drive at
    comparable heights instead of bunching at the top with every wire fanning down. */
 .story-col-cast { grid-column: 1; justify-content: space-between; }
-/* The data areas sit beside the features they belong to (the server orders them by their owning
-   feature's story position), so they stack from the top rather than spreading. */
-.story-col-areas { grid-column: 5; }
+/* The data areas SPREAD over the pillar's height, the same as the cast on the other side, so each
+   box meets the feature it belongs to at a comparable height instead of the whole column bunching
+   at the top with every wire fanning down. Their ORDER already puts each area beside its owning
+   feature (the server sorts them by that feature's story position); spreading is what turns that
+   order into a position the eye can use. */
+.story-col-areas { grid-column: 5; justify-content: space-between; }
 /* A data area is a quieter box than a feature: it is what the middle column KEEPS, not a thing the
    reader chose to come for. */
 .story-area { background: #fcfcfe; }

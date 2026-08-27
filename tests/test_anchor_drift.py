@@ -285,6 +285,41 @@ def make_map_with_drift_exceptions(body: str) -> ProjectModel:
     }))
 
 
+def test_the_shape_only_pass_says_a_recorded_drift_line_does_nothing_here():
+    """A `Drift exceptions` line keys to a VERDICT-based finding, and `finalize` always runs the
+    shape-only pass too. Nothing said so, so an operator who wrote one watched the finding survive
+    with no way to tell a dead key from a live one that had not fired — the silently-inert record
+    this heading was created to end, at the one address it still had. The findings on this pass have
+    no recorded escape BY DESIGN (`KNOWN_NO_ESCAPE` carries that decision), so the answer is to name
+    the pass, not to accept a second key vocabulary under one heading."""
+    m = make_map_with_drift_exceptions("- anchor-drift `C1 calls C2`: read it, the anchor stands.")
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "m.json"
+        mp.write_text(m.model_dump_json() if hasattr(m, "model_dump_json") else json.dumps(
+            {"format": FORMAT, "title": "T", "goal": "g",
+             "extras": [{"heading": ad.DRIFT_EXCEPTIONS_HEADING,
+                         "body": "- anchor-drift `C1 calls C2`: read it, the anchor stands."}]}),
+            encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert ad.main(["--map", str(mp)]) == 0
+    out = buf.getvalue()
+    assert "silence nothing HERE" in out
+    assert "shape-only pass" in out and "--verdicts" in out
+
+
+def test_the_shape_only_pass_stays_quiet_when_nothing_is_recorded():
+    """The note appears only when a line exists to be wrong about. A note on every run is a note
+    nobody reads."""
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "m.json"
+        mp.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g"}), encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert ad.main(["--map", str(mp)]) == 0
+    assert "silence nothing HERE" not in buf.getvalue()
+
+
 def test_a_cadence_claim_with_quotes_can_be_recorded():
     claim = "Entry point [poller] hourly sweep runs on cadence 'every 1h'"
     m = make_map_with_drift_exceptions(

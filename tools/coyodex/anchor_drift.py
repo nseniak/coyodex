@@ -415,6 +415,22 @@ def main(argv: list[str] | None = None) -> int:
             print(head + "\n".join(f"  - {f}" for f in found) if found else
                   "Shape-only anchor drift: no findings — every call-site anchor points at a "
                   "line that can act.")
+            # A recorded `Drift exceptions` line reaches the VERDICT-based pass only, and this pass
+            # ran instead. Nothing said so, so the record was silently inert: an operator who wrote
+            # one watched the finding survive with no way to tell a dead key from a live one that
+            # simply had not fired. The findings here are deliberately unrecordable — the message
+            # says "anchor the operative statement", and `KNOWN_NO_ESCAPE` carries that decision
+            # with its reason — so the answer is to say which pass the line belongs to, not to
+            # invent a second key vocabulary under one heading.
+            recorded, malformed = drift_exceptions(m)
+            if recorded or malformed:
+                print(f"\n  NOTE: {len(recorded) + len(malformed)} line(s) are recorded under "
+                      f"'{DRIFT_EXCEPTIONS_HEADING}'. They silence nothing HERE — a drift exception "
+                      f"keys to a verdict-based finding, and this is the shape-only pass. A "
+                      f"shape-only finding has no recorded escape by design: the anchored line "
+                      f"cannot be the acting statement whatever anyone judges, so fix the `where` "
+                      f"or set `no_call_site`. Re-run with `--verdicts` for the pass those lines "
+                      f"answer.")
         return 0
     worklist = l2_worklist_model(m)
     grounding, notes = load_verdicts(verdicts_paths)

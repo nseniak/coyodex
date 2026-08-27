@@ -453,7 +453,8 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
              "areas": f.areas}
             for f in ix.features],
         "areas": [
-            {"id": a.id, "name": a.name, "entities": a.entities, "owners": a.owners,
+            {"id": a.id, "name": a.name, "purpose": a.purpose, "entities": a.entities,
+             "owners": a.owners,
              "touchedBy": [{"feature": t.feature, "touches": t.touches, "entities": t.entities}
                            for t in a.touched_by]}
             for a in ix.areas],

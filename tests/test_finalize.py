@@ -712,10 +712,29 @@ def _disposition_for(note: str | None, advisory: str) -> tuple[str, str]:
 
 
 def test_an_advisory_escaped_through_a_map_field_is_not_carried_with_no_escape():
-    disposition, where = _disposition_for("Nine claims were minted after the pin; here is why.",
+    disposition, where = _disposition_for("One claim was minted after the pin; here is why.",
                                           _POSTPIN)
     assert disposition == "recorded", disposition
     assert where == "grounding.note", where
+
+
+def test_a_note_that_does_not_name_the_count_is_UNANSWERED_not_recorded():
+    """This field was the one escape in the map with no KEY. Every other family keys a recorded line
+    to the id it silences and refuses a line that keys to nothing; here any non-empty string filed
+    the advisory as answered, so a note reading `no.` closed it. Naming the number the advisory is
+    about is the smallest key prose can carry, and it cannot be met without reading the finding."""
+    assert _disposition_for("no.", _POSTPIN)[0] == "UNANSWERED"
+    assert _disposition_for("Every claim in this map was challenged.", _POSTPIN)[0] == "UNANSWERED"
+    # a note about a DIFFERENT number is the realistic failure: it reads as an answer and is not one
+    assert _disposition_for("Nine claims were minted after the pin.", _POSTPIN)[0] == "UNANSWERED"
+
+
+def test_the_count_may_be_spelled_out_because_a_note_is_prose():
+    """The shipped mcpolis note says "Twenty-one claims in the shipped map were never in the pinned
+    worklist". A digit-only check would have called that honest note unanswered."""
+    adv = _POSTPIN.replace("1 of the shipped map's 376", "21 of the shipped map's 376")
+    assert _disposition_for("Twenty-one claims were minted after the pin.", adv)[0] == "recorded"
+    assert _disposition_for("The 21 post-pin claims were read line by line.", adv)[0] == "recorded"
 
 
 def test_the_same_advisory_with_an_empty_note_is_unrecorded_not_unsure():

@@ -537,13 +537,13 @@ def format_report(r: FinalizeReport) -> str:
                    + " · ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
         out.append("")
         for d, h, a in disp:
-            tag = f"**{d}**" if d in ("UNRECORDED", "UNSURE") else d
+            tag = f"**{d}**" if d in ("UNRECORDED", "UNSURE", "UNANSWERED") else d
             out.append(f"- {tag}{f' [{h}]' if h else ''} — {a}")
         out.append("")
         # The UNRECORDED rows are the ones asking to be written, so name the writer beside them.
         # See the same footer in `validate`: sixty advisory strings name a heading and none names
         # the command, and a measured build hand-appended every record instead.
-        if any(d in ("UNRECORDED", "UNSURE") for d, _, _ in disp):
+        if any(d in ("UNRECORDED", "UNSURE", "UNANSWERED") for d, _, _ in disp):
             out.append("Write the missing records with `coyodex record --map <the FRAGMENT that "
                        "owns extras> --heading \"<heading>\" --line \"<key>: <why>\"` — it "
                        "shape-checks each line, so one that would silence nothing is refused "
@@ -675,6 +675,11 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
       id, so the pairing cannot be decided here. Say so; do not guess either way.
     - `disclosure` — the advisory reports what a record silenced. Asking whether it is recorded is
       a category error.
+    - `UNANSWERED` — a map-field escape (`grounding.note`) holds text, but the text does not state
+      the count the advisory is about. Every other family keys a record to the id it silences and
+      refuses a line that keys to nothing; this field had no key at all, so a note reading `no.`
+      filed as `recorded`. Naming the number is the smallest key a prose field can carry, and it
+      cannot be satisfied without having read the finding.
     - `carried (no escape)` — names no heading AND no map-field escape; can only be fixed.
 
     An advisory may offer a MAP FIELD instead of an extras heading — `grounding.note` is one — and
@@ -740,6 +745,40 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
 _MAP_FIELD_ESCAPES = ("grounding.note",)
 
 
+#: Written-out forms of the small numbers, because a note is prose and prose spells them. The
+#: shipped mcpolis note says "Twenty-one claims in the shipped map were never in the pinned
+#: worklist" — a digit check alone would have called that note unanswered.
+_SPELLED: tuple[str, ...] = (
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+    "nineteen", "twenty")
+
+
+def _advisory_counts(advisory: str) -> list[int]:
+    """The count(s) an advisory demands an answer about — the first number in it, and nothing more.
+
+    Deliberately ONE number, not every number in the text. The post-pin advisory names 21, 736, 715,
+    728 and 728 again; requiring all five would fail every honest note. The first is the one the
+    finding is about, and it is the one a note that has read the finding will state."""
+    nums = [int(x.replace(",", "")) for x in re.findall(r"\b\d[\d,]*\b", advisory)]
+    return nums[:1]
+
+
+def _note_names(note: str, n: int) -> bool:
+    """Does the note state `n`, as a digit or spelled out (`21` or `twenty-one`)?"""
+    low = note.lower()
+    if re.search(rf"\b{n:,}\b".replace(",", "[,]?"), low.replace(",", "")):
+        return True
+    if 0 <= n <= 20:
+        return _SPELLED[n] in low
+    if 21 <= n <= 99:
+        tens, ones = divmod(n, 10)
+        word = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty",
+                "ninety"][tens]
+        return (word in low if ones == 0 else f"{word}-{_SPELLED[ones]}" in low)
+    return False
+
+
 def _map_field_escape(m: "ProjectModel", advisory: str) -> tuple[str, str, str] | None:
     """`(disposition, field, advisory)` when the advisory names a map-field escape, else None.
 
@@ -751,7 +790,19 @@ def _map_field_escape(m: "ProjectModel", advisory: str) -> tuple[str, str, str] 
             continue
         if field == "grounding.note":
             note = (m.grounding.note if m.grounding else "") or ""
-            return ("recorded" if note.strip() else "UNRECORDED", field, advisory)
+            if not note.strip():
+                return ("UNRECORDED", field, advisory)
+            # A NON-EMPTY note used to be the whole test, which made this the one escape in the map
+            # with no key: every other family keys a recorded line to the id it silences and refuses
+            # a line that keys to nothing. Here a note reading `no.` filed the advisory as answered.
+            # The advisory states its own numbers ("21 of the shipped map's 736 claim(s) have NO
+            # verdict"), so the note has to name the count it is excusing — the smallest thing that
+            # cannot be satisfied without having read the finding.
+            missing = _advisory_counts(advisory)
+            unnamed = [n for n in missing if not _note_names(note, n)]
+            if unnamed:
+                return ("UNANSWERED", field, advisory)
+            return ("recorded", field, advisory)
     return None
 
 

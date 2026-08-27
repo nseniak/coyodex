@@ -7901,6 +7901,7 @@ function storyAreaCardHtml(a) {
     + `<button type="button" class="story-name story-namelink" `
     + `data-sd="${esc(a.id)}" title="Open the details page of ${esc(a.name || a.id)}">`
     + `${esc(a.name || a.id)}</button></span>`
+    + (a.purpose ? `<p class="story-desc">${mdInline(a.purpose)}</p>` : '')
     + shared
     + '<div class="story-pills"><span class="story-pill" title="Kinds of thing this area keeps a '
     + 'record of. Read-only views, value shapes and enums are not counted.">'
