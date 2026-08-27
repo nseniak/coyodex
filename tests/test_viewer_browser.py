@@ -284,3 +284,62 @@ def test_every_feature_box_is_the_same_height_and_the_line_bridges_the_gap() -> 
         assert all(seen["broken"]), seen
         assert seen["arrows"] == 6, seen
         assert not page.js_errors, page.js_errors
+
+
+def test_a_board_that_scrolls_sideways_shades_the_edge_there_is_more_on() -> None:
+    """A board cut off at the window edge looks like a board that ENDS there. Each edge wears a
+    shade, and each is shown only while there is something that way to scroll to — a shade that is
+    always there says "more" at the end of the board too, which is a lie about the one thing it
+    exists to answer. Walk the board from one end to the other and read which shade is up."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        seen = page.evaluate("""async () => {
+            const board = document.querySelector('.walk-board');
+            const wrap = board.parentElement;
+            // the shades are synced on the board's own scroll event, which is asynchronous
+            const settle = () => new Promise((r) => setTimeout(r, 80));
+            const at = () => ({ l: wrap.classList.contains('hfade-on-l'),
+                                r: wrap.classList.contains('hfade-on-r') });
+            const out = { wrapped: wrap.classList.contains('hfade-wrap'),
+                          shades: wrap.querySelectorAll('.hfade').length, start: at() };
+            board.scrollLeft = Math.round((board.scrollWidth - board.clientWidth) / 2);
+            await settle();
+            out.middle = at();
+            board.scrollLeft = board.scrollWidth;
+            await settle();
+            out.end = at();
+            return out;
+        }""")
+        assert seen == {"wrapped": True, "shades": 2,
+                        "start": {"l": False, "r": True},
+                        "middle": {"l": True, "r": True},
+                        "end": {"l": True, "r": False}}, seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_lane_with_a_fixed_left_part_shadows_it_instead_of_fading_it() -> None:
+    """The journey rail's gutter names the two lanes and stays put while the boxes slide under it.
+    Fading it out would fade the one thing that is not moving, so it gets no fade over it: it casts
+    a shadow to its right instead, and only once the lane has been scrolled. Same signal, drawn the
+    way a fixed thing should be."""
+    with _served() as url, _page(url + "#v=actor&act=Org%20admin") as page:
+        _settle(page)
+        seen = page.evaluate("""async () => {
+            const board = document.querySelector('.journey-board');
+            const wrap = board.parentElement;
+            const gutter = board.querySelector('.journey-gutter');
+            const read = () => ({
+                onL: wrap.classList.contains('hfade-on-l'),
+                leftFade: getComputedStyle(wrap.querySelector('.hfade-l')).display,
+                shadow: getComputedStyle(gutter).boxShadow !== 'none',
+            });
+            const out = { start: read() };
+            board.scrollLeft = 600;
+            await new Promise((r) => setTimeout(r, 80));
+            out.scrolled = read();
+            return out;
+        }""")
+        # the left fade is off on this lane at BOTH ends: the gutter answers for that edge
+        assert seen["start"] == {"onL": False, "leftFade": "none", "shadow": False}, seen
+        assert seen["scrolled"] == {"onL": True, "leftFade": "none", "shadow": True}, seen
+        assert not page.js_errors, page.js_errors

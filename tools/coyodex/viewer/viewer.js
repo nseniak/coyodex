@@ -6646,6 +6646,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   return trail;
 }
 function renderChrome(s) {
+  bindHFades(diagram);   // a board that scrolls sideways says so, on both edges
   // The baseline⇄diff change-impact overlay lives on the Subsystems views now (overview + cards),
   // not the removed flat Components map: the overview badges each subsystem with its subtree's change,
   // and the cards badge their member components (via bindNodes).
@@ -8070,6 +8071,53 @@ function featureRailHtml(capId) {
 function roleKindOfName(name) {
   const r = ROLE_BY_NAME[String(name || '').trim().toLowerCase()];
   return r ? r.kind : '';
+}
+
+// ── The SIDEWAYS-SCROLLING BOARDS: a fade on each edge ───────────────────────────────────────────
+// Three boards run wider than the window and scroll sideways: the Happy Path's walk, the journey
+// rail the actor page and a feature's page share, and the Features story diagram. Nothing said so.
+// A board cut off at the window edge looks like a board that ENDS there, and the reader has to
+// discover by accident that there is more — measured on Meerbot's walk, 3.2 screens of it, of which
+// only the first arrives on screen.
+//
+// So each edge wears a soft fade, shown ONLY while there is something that way to scroll to. A
+// fade that is always there says "more" at the end of the board too, which is a lie about the one
+// thing it exists to answer. A lane whose left part is FIXED (the journey rail's gutter, which names
+// the two lanes) gets no fade over it: fading out the one thing that does not move says nothing.
+// That gutter casts a shadow to its right instead, on the same signal (see viewer.css).
+//
+// The two fades hang off a WRAPPER this function inserts, not off the board itself: an overlay
+// inside a scroll box scrolls away with the content, and the whole point is that it does not move.
+// Building the wrapper here rather than in each board's markup is what lets the three call sites
+// stay as they are — one function owns both the shape and the behaviour.
+const HFADE_SCROLLERS = '.walk-board, .journey-board, .story-wrap';
+function bindHFades(root) {
+  for (const el of (root || document).querySelectorAll(HFADE_SCROLLERS)) bindHFade(el);
+}
+function bindHFade(scroller) {
+  if (!scroller || scroller.parentNode?.classList.contains('hfade-wrap')) return;  // already bound
+  const wrap = document.createElement('div');
+  wrap.className = 'hfade-wrap';
+  scroller.parentNode.insertBefore(wrap, scroller);
+  wrap.appendChild(scroller);
+  for (const side of ['l', 'r']) {
+    const s = document.createElement('span');
+    s.className = 'hfade hfade-' + side;
+    s.setAttribute('aria-hidden', 'true');   // it is an affordance, with nothing to read
+    wrap.appendChild(s);
+  }
+  const sync = () => {
+    // A 1px tolerance: a fractional scroll width leaves scrollLeft a hair short of its own maximum
+    // at the far end, and the right-hand shade then never goes out.
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    wrap.classList.toggle('hfade-on-l', scroller.scrollLeft > 1);
+    wrap.classList.toggle('hfade-on-r', scroller.scrollLeft < max - 1);
+  };
+  scroller.addEventListener('scroll', sync, { passive: true });
+  // The board's width changes without a scroll: the window resizes, or the source column slides in
+  // and out beside it. Without this the shades keep answering for the width they were bound at.
+  if (window.ResizeObserver) new ResizeObserver(sync).observe(scroller);
+  sync();
 }
 
 // ── The HAPPY PATH: the walk as one line ─────────────────────────────────────────────────────────
