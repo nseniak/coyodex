@@ -2097,6 +2097,17 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .walk-who { margin-top: 5px; font-size: 10.5px; line-height: 1.25; font-weight: 650;
             color: #39405a; text-align: center; }
 .walk-one:hover .walk-who { color: #4f46e5; text-decoration: underline; }
+/* A person the map never declared: drawn, because the walk really does hand over to them, but not a
+   door — there is no page behind them. Quieter, and with no pointer, so nothing invites the click. */
+.walk-one-dead { cursor: default; }
+.walk-one-dead .walk-who { color: #8a90a4; }
+.walk-one-dead:hover .walk-who { color: #8a90a4; text-decoration: none; }
+.walk-nowho { font-size: 10.5px; font-weight: 650; color: #8a90a4; width: 84px; text-align: center;
+              display: block; margin-top: 33px; }
+/* …and a step whose use case the map never recorded: the same rule, for the same reason. */
+.walk-step-dead { cursor: default; }
+.walk-step-dead:hover .walk-dot { background: #fff; }
+.walk-step-dead:hover .walk-t { color: #1e2235; }
 /* Between two INTERCHANGEABLE people, in the same quiet lower case a feature box's label uses. */
 .walk-or { font-size: 10px; font-weight: 500; color: #8a90a4; margin-top: 9px; }
 /* "Show in context" on this board: a station on an actor's rail, a feature's rail or a story

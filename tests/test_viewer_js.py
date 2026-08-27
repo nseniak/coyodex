@@ -890,7 +890,8 @@ def test_a_feature_the_happy_path_enters_twice_gets_two_boxes() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     jrn = js[js.index("function actorJourney(actorName) {"):
              js.index("\nfunction ", js.index("function actorJourney(actorName) {") + 10)]
-    assert "if (!run || run.fid !== fid)" in jrn, "a new zone opens when the feature CHANGES"
+    assert "runsOf(stations, (s) => featureOfUc(s.uc))" in jrn, \
+        "a zone is a RUN of consecutive stations, cut when the FEATURE changes"
     assert "zoneOf" not in jrn and "byFid" not in jrn, "the one-zone-per-feature index is gone"
     assert "for (const z of zones) if (!(z.fid in firstOf)) firstOf[z.fid] = z;" in jrn
     assert "if (firstOf[fid]) { firstOf[fid].sides.push(uc); continue; }" in jrn
@@ -2147,7 +2148,11 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "close.hidden = false;" in fn, "the way out is offered everywhere the column can be open"
     assert "function codePaneOpen() { return codeOpen; }" in js, "one flag, one answer"
     # …and it runs for every state, before render's early returns, exactly like syncInfoPane.
-    assert "syncCodePane(s);" in js[js.index("async function render(sArg, transient) {"):][:1400]
+    # Searched over the whole of `renderView`, not a byte window into it: the window was 1400 and a
+    # one-line comment added at the top of the function pushed the call past it, which is a test that
+    # fails on prose rather than on the thing it guards.
+    body = js[js.index("async function renderView(sArg, transient, seq) {"):]
+    assert "syncCodePane(s);" in body[: body.index("\n// ")]
     # A file anchor is a request for code, wherever it is clicked — and it opens the column through the
     # SAME door the toggle does. It used to set the flag itself, which changed the layout without
     # re-framing the drawing: measured on MCP Hero's "Create an organization" flow, the diagram kept the
@@ -2543,8 +2548,13 @@ def test_a_feature_page_draws_the_walk_as_a_rail_not_a_grid() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     fj = js[js.index("function featureJourney(capId) {"):
             js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
-    assert "HP_ACTORS_OF_STEP[st.id]" in fj, "the walk's own record of who drives a step"
-    assert "run.stations.push(st);" in fj, "a station IS the walk step, the shape the actor rail uses"
+    assert "actorsOfStep(" in fj, "the walk's own record of who drives a step"
+    assert "stations: run.items" in fj, "a station IS the walk step, the shape the actor rail uses"
+    # …and that record is read in ONE place, in the authored name space, by all three boards. It was
+    # written out at each of them, and the copies had begun to drift.
+    aos = js[js.index("function actorsOfStep(stepId) {"):
+             js.index("\n}", js.index("function actorsOfStep(stepId) {"))]
+    assert "HP_ACTORS_OF_STEP[stepId]" in aos and "authoredActorName(d.name)" in aos
     rail = js[js.index("function featureRailHtml(capId) {"):
               js.index("\nfunction ", js.index("function featureRailHtml(capId) {") + 10)]
     assert "journeyZoneHtml(z, {" in rail, "the same cells the actor rail is built from"
@@ -2625,7 +2635,10 @@ def test_a_side_stop_hangs_under_the_actor_who_drives_it() -> None:
     # The zone's name is the AUTHORED one. The walk records the folded spelling the diagrams draw, and
     # every other reader of `act` \u2014 the label, the link, roleKindOfName, the actorGroups match \u2014
     # speaks the authored space. One table crosses the two, which is what ROLE_BY_NAME's comment asks.
-    assert "map((d) => authoredActorName(d.name))" in fj
+    assert "actorsOfStep(" in fj
+    aos = js[js.index("function actorsOfStep(stepId) {"):
+             js.index("\n}", js.index("function actorsOfStep(stepId) {"))]
+    assert "map((d) => authoredActorName(d.name))" in aos
     auth = js[js.index("function authoredActorName(drawn) {"):
               js.index("\nfunction ", js.index("function authoredActorName(drawn) {") + 10)]
     assert "ROLE_BY_SAFENAME[String(drawn || '').trim().toLowerCase()]" in auth
@@ -2702,15 +2715,22 @@ def test_a_feature_rail_breaks_a_zone_on_a_new_driver_and_on_nothing_else() -> N
     js = (VIEWER_DIR / "viewer.js").read_text()
     fj = js[js.index("function featureJourney(capId) {"):
             js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
-    assert "if (!run || zoneKey(run.acts) !== zoneKey(acts)) {" in fj
+    assert "runsOf(mine, (st) => zoneKey(actorsOfStep(st.id)))" in fj, \
+        "a new zone on a change of the whole driver SET, and on nothing else"
     assert "function zoneKey(acts) {" in js, "a zone's identity is the SET of its drivers"
+    # One rule under all three boards: consecutive items answering a key the same way. Each board
+    # brings its own key — the feature, the drivers, or both — and none of them keeps a loop.
+    runs = js[js.index("function runsOf(items, keyOf) {"):
+              js.index("\n}", js.index("function runsOf(items, keyOf) {"))]
+    assert "if (last && last.key === key) last.items.push(it);" in runs
+    assert js.count("let run = null;") == 0, "no board keeps a run loop of its own"
     assert "prev + 1" not in fj and "prev = i" not in fj, \
         "the walk position is not compared any more, so it is not tracked"
     # …and the actor rail's own rule is the mirror: a new box on a change of FEATURE, never on a gap,
     # because on that page a gap is only other people acting.
     aj = js[js.index("function actorJourney(actorName) {"):
             js.index("\nfunction ", js.index("function actorJourney(actorName) {") + 10)]
-    assert "if (!run || run.fid !== fid)" in aj
+    assert "runsOf(stations, (s) => featureOfUc(s.uc))" in aj
     assert 'class="journey-n"' not in js, "no rail numbers its stations"
 
 

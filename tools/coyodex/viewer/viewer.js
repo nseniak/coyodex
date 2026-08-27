@@ -4209,10 +4209,19 @@ const vpByView = {};
 // exactly what `vpByView` does for a diagram. The per-entry copy (`s.scroll`, written by
 // captureViewState) is what back/forward restores.
 const scrollByView = {};
+// …and the same again for the boards that scroll SIDEWAYS (the walk, the journey rail, the story
+// diagram). Their position is the reader's place in a picture up to 3.2 screens wide, and leaving
+// for one step's flow and pressing Back put them 3000px from where they were.
+const hscrollByView = {};
 // The scrolling element of whichever text view is on screen. ONE selector: a tab added later is
 // covered by naming its wrapper here, rather than by a second remember-my-position mechanism.
 function textScroller() {
   return diagram.querySelector('.usecases-wrap, .glossary-wrap, .dv-content');
+}
+// The sideways-scrolling board on screen, if the page draws one. Named by the SAME selector the edge
+// shadows are bound by, so a board can never be one without being the other.
+function laneScroller() {
+  return diagram.querySelector(HFADE_SCROLLERS);
 }
 // The last state visited under each top-level tab (keyed by topView(kind)), so switching AWAY from a tab
 // and back reopens it exactly where it was left — drill depth, selection, camera and right-pane included —
@@ -4271,6 +4280,10 @@ function newStackStamp() { return Math.random().toString(36).slice(2) + '.' + Da
 // here as one selection key of the same `<what>:<id>` shape a scene uses ('sfeat:CAP_X'), so ONE `sel`
 // field in the URL covers both kinds of screen and there is no second concept to carry.
 let storyPinNow = null;   // {key, id} of the pinned card while the Features page is on show
+// The step the walk is showing: the one a link named and the board ringed, or the one the reader
+// clicked on their way out. The Happy Path's twin of `storyPinNow` — a page with no scene still has
+// a place in it, and this is what carries that place into the address and into history.
+let walkStepNow = null;
 const STORY_PIN_KEYS = ['sfeat', 'sactor', 'sarea'];
 function storyPinKey(p) { return p ? p.key + ':' + p.id : null; }
 function storyPinFromKey(k) {
@@ -4286,6 +4299,7 @@ function storyPinFromKey(k) {
 // cannot answer this differently — they did, which is how the pin reached neither.
 function liveSelKeys() {
   if (mainScene) return mainScene.selection.map((d) => d.key);
+  if (walkStepNow) return ['hpstep:' + walkStepNow];
   const k = storyPinKey(storyPinNow);
   return k ? [k] : [];
 }
@@ -4420,6 +4434,11 @@ function captureViewState() {  // stash the leaving entry's pan/zoom + selection
   if (sc) {
     history[hi].scroll = sc.scrollTop;
     scrollByView[stateKey(history[hi])] = sc.scrollTop;
+  }
+  const ln = laneScroller();
+  if (ln) {
+    history[hi].hscroll = ln.scrollLeft;
+    hscrollByView[stateKey(history[hi])] = ln.scrollLeft;
   }
   // Same answer the URL gets (liveSelKeys), so a tab switch and back/forward restore the Features
   // page's pinned card too — which they did not while this line could only ask a scene.
@@ -7572,11 +7591,8 @@ function actorJourney(actorName) {
   // feature under that feature's FIRST appearance made the rail run backwards — on this project's
   // own map the coyodex developer's rail read 21, 25, 22, 23, 24. The rail is the one thing on this
   // page that claims an order, so a feature entered twice gets TWO zones, one at each position.
-  let run = null;
-  for (const s of stations) {
-    const fid = featureOfUc(s.uc);
-    if (!run || run.fid !== fid) { run = { fid, stations: [], sides: [] }; zones.push(run); }
-    run.stations.push(s);
+  for (const run of runsOf(stations, (s) => featureOfUc(s.uc))) {
+    zones.push({ fid: run.key, stations: run.items, sides: [] });
   }
   // A feature's side stops hang under its FIRST zone: they belong to the feature, not to a position
   // in the walk, so repeating them under every zone of a twice-entered feature would say a thing
@@ -7913,9 +7929,7 @@ function featureJourney(capId) {
   const f = FEAT_BY_ID[capId] || {};
   const own = new Set(f.useCases || []);
   const zones = [];   // [{acts:[name], stations:[hpStep], sides:[ucNode]}], in WALK order
-  let run = null;
-  (GRAPH.happy_path || []).forEach((st) => {
-    if (!own.has(st.uc)) return;
+  const mine = (GRAPH.happy_path || []).filter((st) => own.has(st.uc));
     // EVERY driver of the step, not the leftmost one. The actor page files a step under its leftmost
     // driver on purpose — that page narrates ONE person's journey, and a co-actor gets the use case
     // as a side stop instead. This page narrates a FEATURE, so it owes the reader every actor who
@@ -7929,7 +7943,8 @@ function featureJourney(capId) {
     //
     // …in the AUTHORED name space, which is what a zone's label, its link and roleKindOfName all
     // read. The walk records the folded spelling; every other reader of `acts` speaks the other one.
-    const acts = (HP_ACTORS_OF_STEP[st.id] || []).map((d) => authoredActorName(d.name));
+    // `actorsOfStep` makes that crossing, in the one place all three boards ask it.
+    //
     // A new zone on a change of DRIVER, and on nothing else — the actor page's rule with the two keys
     // swapped, which is what makes the two boards one picture drawn twice. A change of driver now
     // means a change of the WHOLE SET: "Assistant" and "Assistant or Page owner" are two different
@@ -7948,12 +7963,9 @@ function featureJourney(capId) {
     // of its stations and never their adjacency. A driver who really does return after somebody else
     // still gets two boxes, because the driver changed in between: on the Mio map "Paying for Mio"
     // draws Workspace admin, Payment provider, Workspace admin, and that picture explains itself.
-    if (!run || zoneKey(run.acts) !== zoneKey(acts)) {
-      run = { acts, stations: [], sides: [] };
-      zones.push(run);
-    }
-    run.stations.push(st);
-  });
+  for (const run of runsOf(mine, (st) => zoneKey(actorsOfStep(st.id)))) {
+    zones.push({ acts: actorsOfStep(run.items[0].id), stations: run.items, sides: [] });
+  }
   // Everything the feature can do that the walk never reaches, filed under WHOEVER DRIVES IT — the
   // mirror of the actor page, where a side stop hangs under its own feature. They used to be dumped
   // into `zones[0]`, whose box belongs to whoever drives the FIRST step, so on any feature with more
@@ -8141,17 +8153,10 @@ function bindHFade(scroller) {
 // breaks at every change of person, the new person stands in the break, and the box that follows
 // reopens after them: who takes over is the one thing a walk's picture must not make you look up.
 function walkSegments() {
-  const segs = [];
-  (GRAPH.happy_path || []).forEach((st) => {
-    // The AUTHORED name space, like every zone label, link and glyph lookup on the two rails: the
-    // walk records the folded spelling, and reading a token of one space in the other index is this
-    // area's whole bug class (see the ROLE_BY_NAME comment).
-    const acts = (HP_ACTORS_OF_STEP[st.id] || []).map((d) => authoredActorName(d.name));
-    const fid = capabilityOfUc(st.uc);
-    const last = segs[segs.length - 1];
-    if (last && last.fid === fid && zoneKey(last.acts) === zoneKey(acts)) last.steps.push(st);
-    else segs.push({ fid, acts, steps: [st] });
-  });
+  const segs = runsOf(GRAPH.happy_path || [],
+    (st) => capabilityOfUc(st.uc) + '\u0000' + zoneKey(actorsOfStep(st.id)))
+    .map((run) => ({ fid: capabilityOfUc(run.items[0].uc),
+                     acts: actorsOfStep(run.items[0].id), steps: run.items }));
   // Two flags per box, both about the NEIGHBOUR's actors and never about its feature: `opens` when
   // somebody new has just taken over, which is what pulls the line left to meet them, and `closes`
   // when somebody else is about to, which is what puts an arrow head on the line's end. A box that
@@ -8162,6 +8167,29 @@ function walkSegments() {
     sg.closes = i === segs.length - 1 || zoneKey(segs[i + 1].acts) !== zoneKey(sg.acts);
   });
   return segs;
+}
+// Who drives one step of the walk, in the AUTHORED name space every board speaks. The walk records
+// the folded spelling, and reading a token of one space in an index keyed by the other is this area's
+// whole bug class (see the ROLE_BY_NAME comment) — so the crossing is made HERE, once, and the three
+// boards that ask it cannot answer differently. It was written out at each of them, and the copies
+// had already begun to drift: one checked whether the map declares the person before linking to
+// them and the other did not.
+function actorsOfStep(stepId) {
+  return (HP_ACTORS_OF_STEP[stepId] || []).map((d) => authoredActorName(d.name));
+}
+// Consecutive items that answer a key the same way, in order — the ONE rule under all three boards.
+// The actor page cuts its rail on a change of FEATURE, a feature's page on a change of DRIVER, and
+// the walk on a change of either; each is this function with its own key, and none of them owns a
+// loop of its own any more.
+function runsOf(items, keyOf) {
+  const out = [];
+  for (const it of items) {
+    const key = keyOf(it);
+    const last = out[out.length - 1];
+    if (last && last.key === key) last.items.push(it);
+    else out.push({ key, items: [it] });
+  }
+  return out;
 }
 // The feature a use case belongs to: its parent, when that parent is a feature. The same lookup
 // actorJourney makes, in one place now that a third board asks it.
@@ -8174,12 +8202,21 @@ function capabilityOfUc(ucId) {
 // them competed with the boxes on either side. Several names when the step's use case lets either of
 // them start it, joined by the same quiet "or" a feature box's driver label uses.
 function walkHandHtml(acts) {
-  const one = (name) =>
-    `<button type="button" class="walk-one" data-act="${esc(name)}" `
-    + `title="Open the page of ${esc(name)}">`
-    + `<span class="walk-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
-    + `<span class="walk-who">${esc(name)}</span></button>`;
-  return `<div class="walk-hand">${(acts || []).map(one).join('<span class="walk-or">or</span>')}</div>`;
+  const list = (acts || []).filter(Boolean);
+  // No driver recorded at all: the break is still drawn, and it says so rather than standing empty.
+  if (!list.length) return '<div class="walk-hand"><span class="walk-nowho">no actor recorded</span></div>';
+  // A DOOR only when the map declares this person. `journeyDriverLabelHtml` has always checked, and
+  // this board did not: a step with no use case gets an invented driver called "Actor", which was
+  // drawn as a live link to a page that knows nothing about them. Same guard, same source of truth.
+  const one = (name) => (actorNodeId(name)
+    ? `<button type="button" class="walk-one" data-act="${esc(name)}" `
+      + `title="Open the page of ${esc(name)}">`
+      + `<span class="walk-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
+      + `<span class="walk-who">${esc(name)}</span></button>`
+    : `<span class="walk-one walk-one-dead">`
+      + `<span class="walk-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
+      + `<span class="walk-who">${esc(name)}</span></span>`);
+  return `<div class="walk-hand">${list.map(one).join('<span class="walk-or">or</span>')}</div>`;
 }
 // One box: the feature's name over a line of its steps. The step's title drops the leading actor
 // designator (stationTitle), because the person who does it is named on the line a few pixels away,
@@ -8196,8 +8233,12 @@ function walkBoxHtml(sg) {
       + `<span class="walk-fnm">${esc(name)}</span></button>`
     : '<span class="walk-fkind">not in any feature</span>';
   const steps = sg.steps.map((st) =>
-    `<button type="button" class="walk-step" data-step="${esc(st.id)}" data-uc="${esc(st.uc)}" `
-    + `title="Open how this works: ${esc(st.title || 'this step')}">`
+    // No use case behind the step, no door: the drill had nowhere to go and landed on "Not in this
+    // map" under a title promising to open something.
+    `<button type="button" class="walk-step${st.uc ? '' : ' walk-step-dead'}" `
+    + `data-step="${esc(st.id)}"${st.uc ? ` data-uc="${esc(st.uc)}"` : ''} `
+    + `title="${st.uc ? 'Open how this works: ' + esc(st.title || 'this step')
+                      : 'This map does not say how this step works'}">`
     + '<span class="walk-dot"></span>'
     + `<span class="walk-n">${esc(String(walkPos(st.id)))}</span>`
     + `<span class="walk-t">${esc(stationTitle(st.title, sg.acts))}</span></button>`).join('');
@@ -8253,11 +8294,16 @@ function renderHappyPath() {
 // all three navigate here naming one step, on the same one-shot `sel` a diagram's selection rides.
 // This board has no scene to select into, so the step is scrolled to and ringed — exactly how a card
 // list answers "show in context".
-function ringWalkStep(s) {
+// The step a state names, if it names one. Both spellings, because a freshly built navigation
+// carries the scalar `sel` while a restored history point carries the `sels` list.
+function walkStepOf(s) {
   const key = ((s && s.sels) || [s && s.sel]).filter(Boolean)
     .find((k) => String(k).startsWith('hpstep:'));
-  if (!key) return;
-  const el = diagram.querySelector(`.walk-step[data-step="${CSS.escape(key.slice(7))}"]`);
+  return key ? key.slice(7) : null;
+}
+function ringWalkStep() {
+  if (!walkStepNow) return;
+  const el = diagram.querySelector(`.walk-step[data-step="${CSS.escape(walkStepNow)}"]`);
   if (!el) return;
   // The board is scrolled DIRECTLY, not through scrollIntoView. That walks every scrollable
   // ancestor, and the page's own wrap is one — it took part of the movement, and the step then
@@ -8278,8 +8324,11 @@ function ringWalkStep(s) {
 // realizes (the same flow the Features tab drills to, so a use case keeps ONE home), a feature's
 // name to that feature's page, a person's name to theirs.
 function bindWalk(root) {
-  root.querySelectorAll('.walk-step').forEach((b) => b.addEventListener('click', () =>
-    go({ kind: 'usecase', uc: b.getAttribute('data-uc') })));
+  root.querySelectorAll('.walk-step[data-uc]').forEach((b) => b.addEventListener('click', () => {
+    // The step this reader was on, so leaving and coming Back returns to it rather than to step 1.
+    walkStepNow = b.getAttribute('data-step');
+    go({ kind: 'usecase', uc: b.getAttribute('data-uc') });
+  }));
   root.querySelectorAll('.walk-fname').forEach((b) => b.addEventListener('click', () =>
     go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
   root.querySelectorAll('.walk-one').forEach((b) => b.addEventListener('click', () =>
@@ -9759,6 +9808,11 @@ function applyPendingFlash() {
   flashCard(id);
 }
 function restoreTextScroll(s) {
+  const ln = laneScroller();
+  if (ln) {
+    const left = (s.hscroll != null) ? s.hscroll : hscrollByView[stateKey(s)];
+    if (left) ln.scrollLeft = left;
+  }
   const sc = textScroller();
   if (!sc) return;
   const top = (s.scroll != null) ? s.scroll : scrollByView[stateKey(s)];
@@ -9801,6 +9855,7 @@ async function renderView(sArg, transient, seq) {
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   storyPinNow = null;   // a pin belongs to the Features page; a render of anything else leaves none behind
+  walkStepNow = null;   // …and a step belongs to the walk, on the same rule
   const s = sArg || history[hi];
   syncInfoPane(s, transient);   // every navigation starts with no card (one rule, before any return)
   syncCodePane(s);   // …and no source pane either, until the reader asks for a file
@@ -9843,10 +9898,14 @@ async function renderView(sArg, transient, seq) {
   if (s.kind === 'hp') {
     renderHappyPath();
     mainScene = null;
+    // Claimed BEFORE the chrome, because that is where the address is written (refreshUrl). Claimed
+    // after it, the step was ringed on a screen whose address had already forgotten it — so the link
+    // you copied, and a reload, came back to step 1.
+    walkStepNow = walkStepOf(s);
     renderChrome(s); restoreTextScroll(s); applyPendingFlash();
-    // AFTER the remembered offset is put back, for the reason applyPendingFlash states: an arrival
-    // scroll that lands first is undone by the restore.
-    ringWalkStep(s);
+    // …and the ring lands AFTER the remembered offset is put back, for the reason applyPendingFlash
+    // states: an arrival scroll that goes first is undone by the restore.
+    ringWalkStep();
     return;
   }
   // One actor's page — the journey line: their happy-path stations on one rail, zoned by feature,

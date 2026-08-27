@@ -39,6 +39,30 @@ def make_served_map(parent: Path, name: str) -> Path:
 
 
 @contextmanager
+def _served_map(mutate: Any) -> Iterator[str]:
+    """The same server, over a map this test has changed first — for the shapes the committed
+    fixture cannot hold (a step with no use case behind it, say)."""
+    import json
+    with tempfile.TemporaryDirectory() as td:
+        folder = make_served_map(Path(td), "alpha")
+        f = folder / ".coyodex" / "project-map.json"
+        m = json.loads(f.read_text())
+        mutate(m)
+        f.write_text(json.dumps(m))
+        projects = build_projects([str(folder)])
+        slug = next(iter(projects))
+        Handler.store = RecentsStore()
+        Handler.projects = projects
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            yield f"http://127.0.0.1:{httpd.server_address[1]}/p/{slug}/"
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+
+@contextmanager
 def _served() -> Iterator[str]:
     """The real HTTP server on an ephemeral port, yielding the map's base URL."""
     with tempfile.TemporaryDirectory() as td:
@@ -342,4 +366,90 @@ def test_a_lane_with_a_fixed_left_part_shadows_it_instead_of_fading_it() -> None
         # the left fade is off on this lane at BOTH ends: the gutter answers for that edge
         assert seen["start"] == {"onL": False, "leftFade": "none", "shadow": False}, seen
         assert seen["scrolled"] == {"onL": True, "leftFade": "none", "shadow": True}, seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_walk_keeps_the_step_a_link_named_in_the_address() -> None:
+    """A link that names one step must still name it once you are there. The board rings the step and
+    then the address was rewritten from the page's own state, which for a page with no diagram was
+    "nothing selected" — so the address fell back to a bare `#v=hp`, and the link you copied, or a
+    reload, came back to step 1. The step is claimed BEFORE the chrome writes the address."""
+    with _served() as url, _page(url + "#v=hp&sel=hpstep:HP12") as page:
+        _settle(page)
+        assert page.evaluate("() => location.hash") == "#v=hp&sel=hpstep%3AHP12"
+        page.reload()
+        page.wait_for_selector("#crumb")
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const el = document.querySelector('.walk-step[data-step="HP12"]');
+            const b = document.querySelector('.walk-board');
+            const r = el.getBoundingClientRect(), br = b.getBoundingClientRect();
+            return { hash: location.hash, inside: r.left >= br.left - 1 && r.right <= br.right + 1 };
+        }""")
+        assert seen == {"hash": "#v=hp&sel=hpstep%3AHP12", "inside": True}, seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_back_from_a_step_returns_to_that_step_not_to_the_start_of_the_walk() -> None:
+    """The board is up to three screens wide. Clicking a step and pressing Back put the reader at
+    step 1, thousands of pixels from where they were, because only the up-and-down scroll of a page
+    was ever remembered. The step you leave by is now the step you come back to."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        page.evaluate("""() => {
+            const b = document.querySelector('.walk-board');
+            b.scrollLeft = b.scrollWidth;
+        }""")
+        _settle(page)
+        left_by = page.evaluate("""() => {
+            const b = document.querySelector('.walk-board').getBoundingClientRect();
+            const el = [...document.querySelectorAll('.walk-step[data-uc]')].find((s) => {
+                const r = s.getBoundingClientRect();
+                return r.left >= b.left && r.right <= b.right;
+            });
+            el.click();
+            return el.dataset.step;
+        }""")
+        _settle(page)
+        assert page.evaluate("() => location.hash").startswith("#v=usecase")
+        page.go_back()
+        _settle(page)
+        seen = page.evaluate("""(step) => {
+            const el = document.querySelector(`.walk-step[data-step="${step}"]`);
+            const b = document.querySelector('.walk-board');
+            const r = el.getBoundingClientRect(), br = b.getBoundingClientRect();
+            return { hash: location.hash, scrolled: b.scrollLeft > 0,
+                     inside: r.left >= br.left - 1 && r.right <= br.right + 1 };
+        }""", left_by)
+        assert seen == {"hash": "#v=hp&sel=hpstep%3A" + left_by,
+                        "scrolled": True, "inside": True}, seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_walk_offers_no_door_it_cannot_open() -> None:
+    """A step the map records with no use case behind it. The generator then invents a driver called
+    "Actor", whom the map never declares. Both were drawn as live links: the person to a page that
+    knows nothing about them, the step to "Not in this map" under a title promising to open
+    something. Both are still DRAWN — the walk really does pass through them — and neither is a
+    door. The guard is the one `journeyDriverLabelHtml` has always applied."""
+    def strip_the_last_step(m: Any) -> None:
+        m["happy_path"][-1]["uc"] = None
+
+    with _served_map(strip_the_last_step) as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const person = document.querySelector('.walk-one-dead');
+            const step = document.querySelector('.walk-step-dead');
+            return {
+                personDrawn: !!person, personIsButton: person ? person.tagName === 'BUTTON' : null,
+                personName: person ? person.textContent.trim() : null,
+                stepDrawn: !!step, stepIsDoor: step ? step.hasAttribute('data-uc') : null,
+                stepTitle: step ? step.getAttribute('title') : null,
+                liveButtons: document.querySelectorAll('.walk-one').length,
+            };
+        }""")
+        assert seen["personDrawn"] and seen["personIsButton"] is False, seen
+        assert seen["personName"] == "Actor", seen
+        assert seen["stepDrawn"] and seen["stepIsDoor"] is False, seen
+        assert seen["stepTitle"] == "This map does not say how this step works", seen
         assert not page.js_errors, page.js_errors
