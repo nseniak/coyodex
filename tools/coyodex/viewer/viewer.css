@@ -1997,10 +1997,19 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    Each fade is shown only while there is something that way to scroll to (`hfade-on-l` / `-r`),
    because a fade that is always there says "more" at the end of the board too. */
 .hfade-wrap { position: relative; }
-.hfade { position: absolute; top: 0; bottom: 0; width: 26px; pointer-events: none;
-          opacity: 0; transition: opacity .12s; z-index: 8; border-radius: 10px; }
-.hfade-l { left: 0; background: linear-gradient(90deg, rgba(30, 34, 53, .13), rgba(30, 34, 53, 0)); }
-.hfade-r { right: 0; background: linear-gradient(270deg, rgba(30, 34, 53, .13), rgba(30, 34, 53, 0)); }
+/* An INSET shadow at the board's own edge, so the content reads as passing UNDER that edge and
+   carrying on. It is the same shadow the fixed gutter casts, turned inwards — one drawing for one
+   meaning, wherever the board says there is more this way.
+   Two drafts came first and both said the wrong thing. A translucent dark gradient lay ON TOP of
+   the board, like a stain rather than an edge. A white one dissolved the content into the page,
+   which reads as content ENDING, not as content continuing. Inset by the board's 1px border, so
+   the shadow falls inside the border rather than over it. */
+.hfade { position: absolute; top: 1px; bottom: 1px; width: 24px; pointer-events: none;
+         opacity: 0; transition: opacity .12s; z-index: 8; }
+.hfade-l { left: 1px; border-radius: 9px 0 0 9px;
+           box-shadow: inset 6px 0 10px -8px rgba(30, 34, 53, .45); }
+.hfade-r { right: 1px; border-radius: 0 9px 9px 0;
+           box-shadow: inset -6px 0 10px -8px rgba(30, 34, 53, .45); }
 .hfade-on-l > .hfade-l, .hfade-on-r > .hfade-r { opacity: 1; }
 /* A lane whose LEFT part is fixed shows no fade over it. The journey rail's gutter names the two
    lanes and stays put while the boxes slide under it; fading it out would fade the one thing that
