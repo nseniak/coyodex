@@ -8156,16 +8156,25 @@ function walkBoxHtml(sg) {
   // The box is exactly as wide as its steps. Letting it size to its LABEL instead made a one-step
   // box as wide as the feature's name, and the steps then stopped lining up down the walk.
   const tint = sg.fid ? featureTint(sg.fid) : '';
+  // Where this box's line STARTS and ENDS, in the journey rail's own three lengths. A box whose
+  // person carries on into the next reaches half the gap on that side (WALK_BRIDGE), so the two
+  // boxes read as one line running through them. A box that opens or closes a person's run gets the
+  // rail's tips instead: WALK_TIP stands clear of the person, WALK_END carries the arrow head.
   return `<div class="walk-box${sg.closes ? ' walk-closes' : ''}" `
     + `style="width:${sg.steps.length * WALK_STEP_W}px`
-    + `${tint ? ';background:' + tint : ''};--walk-l:${sg.opens ? WALK_REACH : 0}px">`
+    + `${tint ? ';background:' + tint : ''}`
+    + `;--walk-l:${sg.opens ? WALK_TIP : WALK_BRIDGE}px`
+    + `;--walk-r:${sg.closes ? WALK_END : WALK_BRIDGE}px">`
     + `<div class="walk-flabel">${label}</div>`
     + `<div class="walk-line">${steps}</div></div>`;
 }
 const WALK_STEP_W = 150;   // one step's column, in px — the width every box is a multiple of
-// How far a box's line reaches back past its own left edge to touch the person who just took over:
-// the hand's 10px of padding plus half the gap between the 26px glyph and its 84px column.
-const WALK_REACH = -39;
+// The three lengths the line runs past a box's own edge, all taken from the journey rail so the two
+// pictures are drawn in one hand: half the 14px gap between boxes (which bridges them into one
+// line), the left tip, and the right tip where the arrow head's point sits.
+const WALK_BRIDGE = -7;
+const WALK_TIP = -12;
+const WALK_END = -20;
 // A step's place in the whole walk, 1-based, read from the walk itself — so a board built from any
 // slice of it still numbers by the real position.
 function walkPos(hpId) {

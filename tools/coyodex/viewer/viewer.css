@@ -1998,7 +1998,12 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    this replaced down to 9.5px of step text on the biggest of the four maps the viewer reads. */
 .walk-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
               overflow-x: auto; padding: 14px 0; margin: 10px 0 6px; }
-.walk { display: flex; align-items: flex-start; min-width: max-content; padding: 0 24px; }
+/* `stretch`, so every feature box is the same height: the tallest step title sets it once for the
+   whole walk, instead of each box ending where its own longest title happens to end. The person in
+   a break keeps its own height, or the glyph would be dragged down the full box.
+   The 14px gap is the journey rail's own `column-gap`; the line bridges it (see --walk-l/--walk-r). */
+.walk { display: flex; align-items: stretch; column-gap: 14px;
+        min-width: max-content; padding: 0 24px; }
 /* A box holds a run of steps sharing one feature AND one set of people. Its width comes from the
    step count (set inline), never from its own label: a one-step box sized to "Page tracking · Page
    owner" stopped the bullets lining up down the walk. */
@@ -2019,12 +2024,13 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    the tallest, and a BUTTON centres its content box inside itself — which put the bullet of a step
    with a short title 8px below the line, measured on Meerbot's steps 14, 17 and 20. */
 .walk-line { display: flex; align-items: flex-start; position: relative; margin-top: 4px; }
-.walk-line::before { content: ''; position: absolute; left: var(--walk-l, 0px); right: 0;
+.walk-line::before { content: ''; position: absolute; left: var(--walk-l, -7px);
+                     right: var(--walk-r, -7px);
                      top: 19.5px; height: 3px; background: #4f46e5; border-radius: 2px; }
 /* …and the arrow head closes it wherever the next step belongs to somebody else. The same triangle
    the journey rail's right tip draws, with its POINT at the line's end. */
-.walk-closes .walk-line::after { content: ''; position: absolute; right: -9px; top: 16px;
-                                 width: 0; height: 0; border-left: 9px solid #4f46e5;
+.walk-closes .walk-line::after { content: ''; position: absolute; right: -20px; top: 16px;
+                                 width: 0; height: 0; border-left: 8px solid #4f46e5;
                                  border-top: 5px solid transparent;
                                  border-bottom: 5px solid transparent; }
 /* `display: block`, the same rule `.journey-station` carries and for the same reason: a BUTTON
@@ -2033,10 +2039,11 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .walk-step { font: inherit; background: none; border: 0; text-align: left; color: inherit;
              display: block; width: 150px; flex: none; position: relative;
              padding: 0 16px 0 14px; cursor: pointer; border-radius: 8px; }
+/* Hollow, and filled on hover: the same bullet `.journey-dot` draws on the two rails. */
 .walk-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
-            border-radius: 50%; background: #4f46e5; border: 3.5px solid #4f46e5;
+            border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
             box-sizing: border-box; margin: 13.5px 0 4px; }
-.walk-step:hover .walk-dot { background: #fff; }
+.walk-step:hover .walk-dot { background: #4f46e5; }
 .walk-step:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
 /* The step's place in the WHOLE walk. Both rails drop this number on purpose; this is the view
    whose subject it is, so here it stays. */
@@ -2046,7 +2053,13 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* The person in a break: glyph, then name under it. Nothing is drawn around them — the break in
    the line is what says somebody new took over, and a ring competed with the boxes either side.
    The 33px of top margin puts the glyph's middle on the line the boxes draw at 51.5px. */
-.walk-hand { flex: none; position: relative; z-index: 2; margin-top: 40px; padding: 0 10px;
+/* The person stands 41px clear of the line's tip on their right and 10px clear of the arrow head
+   that ends the previous box on their left, which read as a person parked between two lines rather
+   than as the one who takes the next one over. The right side is halved, to 20px, by pulling the
+   box that follows back over the block's own padding and half the gap after it. The name is
+   centred in an 84px column and never wider, so it stays clear of the box it is pulled towards. */
+.walk-hand { flex: none; align-self: flex-start; position: relative; z-index: 2;
+             margin-top: 40px; padding: 0 10px; margin-right: -21px;
              display: flex; align-items: flex-start; gap: 6px; }
 .walk-one { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
             display: flex; flex-direction: column; align-items: center; width: 84px; }

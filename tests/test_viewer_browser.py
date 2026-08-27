@@ -251,3 +251,36 @@ def test_a_link_naming_one_step_arrives_scrolled_to_it() -> None:
         }""")
         assert seen == {"scrolled": True, "inside": True}, seen
         assert not page.js_errors, page.js_errors
+
+
+def test_every_feature_box_is_the_same_height_and_the_line_bridges_the_gap() -> None:
+    """Two claims the eye makes about the board, and neither is safe to eyeball.
+
+    Every box is as tall as the tallest step title in the WHOLE walk, not as tall as its own: a
+    short feature's tint used to end above its neighbours and read as a stub. And the 14px gap the
+    boxes now stand apart does not cut the line — a box whose person carries on into the next
+    reaches half that gap on each side, so the two read as one line running through them. Only a
+    change of PERSON breaks it, and that break carries an arrow head."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const boxes = [...document.querySelectorAll('.walk-box')];
+            const heights = [...new Set(boxes.map((b) => Math.round(b.getBoundingClientRect().height)))];
+            const px = (el, k) => parseFloat(getComputedStyle(el).getPropertyValue(k)) || 0;
+            const joined = [], broken = [];
+            for (let i = 0; i < boxes.length - 1; i++) {
+                const a = boxes[i].querySelector('.walk-line').getBoundingClientRect();
+                const b = boxes[i + 1].querySelector('.walk-line').getBoundingClientRect();
+                const gap = b.left - a.right;
+                const reach = -px(boxes[i], '--walk-r') - px(boxes[i + 1], '--walk-l');
+                (reach >= gap ? joined : broken).push(boxes[i].classList.contains('walk-closes'));
+            }
+            return { heights, joined, broken,
+                     arrows: boxes.filter((b) => b.classList.contains('walk-closes')).length };
+        }""")
+        assert len(seen["heights"]) == 1, seen["heights"]
+        # a joined pair is never one that closes; a broken pair always is, and wears the arrow head
+        assert not any(seen["joined"]), seen
+        assert all(seen["broken"]), seen
+        assert seen["arrows"] == 6, seen
+        assert not page.js_errors, page.js_errors
