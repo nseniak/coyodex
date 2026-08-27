@@ -4281,6 +4281,30 @@ const URL_LOAD = Math.random().toString(36).slice(2);
 // The open file in the source column is deliberately NOT carried. Back/forward already reopens it from
 // the history point's own `content`, and only the diagram views restore `content` on arrival — putting
 // it in a shared link would work on a diagram and silently do nothing on a text view.
+//
+// WHAT IS SELECTED on the Features page is the pinned story card, not a scene selection: that page is
+// HTML, so `mainScene` is null there and `mainScene.selection` cannot answer for it. The pin is written
+// here as one selection key of the same `<what>:<id>` shape a scene uses ('sfeat:CAP_X'), so ONE `sel`
+// field in the URL covers both kinds of screen and there is no second concept to carry.
+let storyPinNow = null;   // {key, id} of the pinned card while the Features page is on show
+const STORY_PIN_KEYS = ['sfeat', 'sactor', 'sarea'];
+function storyPinKey(p) { return p ? p.key + ':' + p.id : null; }
+function storyPinFromKey(k) {
+  const i = String(k || '').indexOf(':');
+  if (i < 0) return null;
+  const key = k.slice(0, i);
+  // The key half is checked against the three the page draws, so a junk `sel` from a hand-edited URL
+  // cannot become a lookup for a card kind that does not exist.
+  return STORY_PIN_KEYS.indexOf(key) >= 0 ? { key, id: k.slice(i + 1) } : null;
+}
+// The selection keys a state is CURRENTLY showing: a scene's, or the Features page's pinned card. One
+// function, so `captureViewState` (what back/forward restores) and `urlFromState` (what a link carries)
+// cannot answer this differently — they did, which is how the pin reached neither.
+function liveSelKeys() {
+  if (mainScene) return mainScene.selection.map((d) => d.key);
+  const k = storyPinKey(storyPinNow);
+  return k ? [k] : [];
+}
 function urlFromState(s, live) {
   const q = new URLSearchParams();
   q.set('v', s.kind);
@@ -4288,11 +4312,11 @@ function urlFromState(s, live) {
     const v = s[f];
     if (v !== undefined && v !== null && v !== '') q.set(f, String(v));
   }
-  // The live scene is the truth for the selection: `sels` is written on LEAVE, so while a screen is on
-  // show its own entry still holds the selection from the PREVIOUS visit. A text view has no scene and
-  // no selection, so it must emit none rather than fall back to that stale list.
+  // What is on screen NOW is the truth for the selection: `sels` is written on LEAVE, so while a screen
+  // is showing, its own entry still holds the selection from the PREVIOUS visit. A text view with no
+  // scene and no pin emits none, rather than falling back to that stale list.
   const sels = live
-    ? (mainScene ? mainScene.selection.map((d) => d.key) : [])
+    ? liveSelKeys()
     : ((s.sels && s.sels.length) ? s.sels : (s.sel ? [s.sel] : []));
   for (const k of sels) if (k) q.append('sel', k);
   return q.toString();
@@ -4398,7 +4422,10 @@ function captureViewState() {  // stash the leaving entry's pan/zoom + selection
     history[hi].scroll = sc.scrollTop;
     scrollByView[stateKey(history[hi])] = sc.scrollTop;
   }
-  history[hi].sels = mainScene ? mainScene.selection.map((d) => d.key) : null;
+  // Same answer the URL gets (liveSelKeys), so a tab switch and back/forward restore the Features
+  // page's pinned card too — which they did not while this line could only ask a scene.
+  const keys = liveSelKeys();
+  history[hi].sels = keys.length ? keys : null;
   history[hi].flow = flowSnapshot();
   history[hi].content = (pendingLeaveContent !== undefined) ? pendingLeaveContent : snapContent();
   pendingLeaveContent = undefined;
@@ -8452,17 +8479,24 @@ function bindStoryDiagram(root) {
   // A pin stays ON THIS PAGE: it lights the card's wires and labels and nothing else. It used to
   // also fill the selection drawer, and the drawer only ever repeated the card the reader had just
   // clicked — the one thing it added, the door to an actor's own page, is the card's NAME now.
+  // `storyPinNow` mirrors `selected` outside this closure, because what is pinned is part of WHERE YOU
+  // ARE: the URL restates it and back/forward restores it, the same as a selected box on a diagram.
+  // refreshUrl is replaceState only, so pinning a card never grows the browser's Back button.
   const unpin = () => {
     if (!selected) return;
     selected = null;
+    storyPinNow = null;
     stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
     clearWires();
+    refreshUrl();
   };
   const pin = (key, id, card) => {
     selected = { key, id };
+    storyPinNow = { key, id };
     stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
     card.classList.add('story-selected');
     show(key, id);
+    refreshUrl();
   };
   const wireCards = (cards, key) => {
     for (const card of cards) {
@@ -9492,6 +9526,7 @@ async function render(sArg, transient) {
   hideActionIconTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
+  storyPinNow = null;   // a pin belongs to the Features page; a render of anything else leaves none behind
   const s = sArg || history[hi];
   syncInfoPane(s, transient);   // every navigation starts with no card (one rule, before any return)
   syncCodePane(s);   // …and no source pane either, until the reader asks for a file
@@ -9508,6 +9543,12 @@ async function render(sArg, transient) {
   // The Features tab is an HTML catalog, not a mermaid diagram — same shape as Glossary. Its landing
   // level is the feature cards; a map that records no features keeps the flat use-case list instead.
   if (s.kind === 'usecases') {
+    // The card this screen was left pinned on (back/forward, or a tab reopened where it was left), or
+    // the one a shared link names. A one-shot pin already asked for by "show in context" wins: that is
+    // a deliberate act, and this is only memory. Rides the same `sels` field a diagram's selection uses.
+    if (!transient && !pendingStoryPin && storyDiagramDraws()) {
+      pendingStoryPin = storyPinFromKey((s.sels || [])[0]);
+    }
     if (HAS_CAPABILITIES) renderOverview(); else renderUseCases();
     mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
   }

@@ -3883,6 +3883,59 @@ console.log(JSON.stringify({
     assert got["every"] == {"kind": "rules", **{f: "X_" + f for f in fields}}, got["every"]
 
 
+def test_the_features_pages_pinned_card_is_part_of_where_you_are() -> None:
+    """The Features page is HTML, so it has no scene and `mainScene` is null on it. What is selected
+    there is the PINNED story card, and while the selection could only be read off a scene, the pin
+    reached neither the URL nor the history point: a link lost it, a reload lost it, and a tab switch
+    away and back lost it too.
+
+    One function answers "what is selected on this screen" for both kinds of screen, so `captureViewState`
+    and `urlFromState` cannot disagree about it — they did, which is how the pin fell through both.
+
+    The pin rides the SAME `sel` field a diagram's selection uses, in the same `<what>:<id>` shape, so
+    there is no second concept in the URL. The key half is checked against the three card kinds the page
+    draws, so a hand-edited URL cannot ask for a card kind that does not exist."""
+    got = json.loads(_run_js_region(
+        "let storyPinNow = null;", "function urlFromState(s, live) {",
+        """
+console.log(JSON.stringify({
+  feat: storyPinFromKey(storyPinKey({ key: 'sfeat', id: 'CAP2' })),
+  actor: storyPinFromKey(storyPinKey({ key: 'sactor', id: 'R1' })),
+  area: storyPinFromKey(storyPinKey({ key: 'sarea', id: 'SD3' })),
+  colonInId: storyPinFromKey('sfeat:a:b'),
+  none: storyPinKey(null),
+  junkKind: storyPinFromKey('node:S2'),
+  noColon: storyPinFromKey('sfeat'),
+  empty: storyPinFromKey(''),
+  undef: storyPinFromKey(undefined),
+}));
+"""))
+    assert got["feat"] == {"key": "sfeat", "id": "CAP2"}
+    assert got["actor"] == {"key": "sactor", "id": "R1"}
+    assert got["area"] == {"key": "sarea", "id": "SD3"}
+    # Only the FIRST colon splits, so an id carrying one survives the round trip.
+    assert got["colonInId"] == {"key": "sfeat", "id": "a:b"}
+    assert got["none"] is None
+    # A scene's own key shape is not a story pin, and neither is anything malformed.
+    assert got["junkKind"] is None and got["noColon"] is None
+    assert got["empty"] is None and got["undef"] is None
+
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    # ONE function answers the question, and both readers call it.
+    assert js.count("function liveSelKeys() {") == 1
+    assert "const sels = live\n    ? liveSelKeys()" in js
+    assert "const keys = liveSelKeys();" in js and "history[hi].sels = keys.length ? keys : null;" in js
+    # The pin is mirrored out of bindStoryDiagram's closure, and both ends restate the URL in place.
+    bind = js[js.index("function bindStoryDiagram(root) {"): js.index("function renderOverview() {")]
+    assert "storyPinNow = { key, id };" in bind and "storyPinNow = null;" in bind
+    assert bind.count("refreshUrl();") == 2, "pin and unpin, and nothing else"
+    # A render of any other screen leaves no pin behind…
+    assert "storyPinNow = null;   // a pin belongs to the Features page" in js
+    # …and arriving on Features restores the remembered one, without overriding a "show in context" pin.
+    assert "if (!transient && !pendingStoryPin && storyDiagramDraws()) {" in js
+    assert "pendingStoryPin = storyPinFromKey((s.sels || [])[0]);" in js
+
+
 def test_back_and_forward_belong_to_the_browser_alone() -> None:
     """Two Back buttons that keep separate lists can disagree, and the one that is wrong is whichever
     the reader pressed. Every screen has a URL now, so the browser's own buttons already walk the map:
