@@ -7813,7 +7813,10 @@ function storyFeatureCardHtml(id) {
   // TWO bands of pill, the same split the cast card makes. Beside the NAME goes the pill that changes
   // how the name itself reads: who the feature is for. The LAST line is counts only, so the two
   // columns' bottom lines are the same kind of line and can be compared down the page.
-  return `<article class="story-card story-feature" `
+  // The feature's OWN colour, from `featureTint` — the same hash the actor journey board tints each
+  // feature band with, so one feature is one colour everywhere it appears and the reader carries
+  // the association between the two screens. Inline, because the tint is per-card data, not a class.
+  return `<article class="story-card story-feature" style="background:${featureTint(id)}" `
     + `data-sfeat="${esc(id)}" tabindex="0">`
     + `<span class="story-who">${storyFeatureGlyphSvg()}`
     + `<span class="story-name">${esc(name)}</span>${aud}</span>`
@@ -8026,6 +8029,11 @@ function bindStoryDiagram(root) {
     const lab = document.createElement('div');
     lab.className = 'story-elabel';
     Object.assign(lab.dataset, keys);
+    // Every label on this page belongs to a FEATURE — an actor's stake in one, or the records one
+    // reaches — so it wears that feature's own colour, the same `featureTint` its card wears and
+    // its band on the journey board wears. A label used to be one indigo pill whatever it labelled,
+    // which made a lit card's several labels read as one voice instead of as that feature's.
+    if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);
     lab.style.left = ((sx + tx) / 2) + 'px';
     lab.style.top = ((sy + ty) / 2 - 8) + 'px';
     return lab;

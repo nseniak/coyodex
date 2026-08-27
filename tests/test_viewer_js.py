@@ -3413,10 +3413,33 @@ def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -
     assert "path.story-own {" not in css, "an ownership wire takes no look of its own at rest"
     assert ".story-elabel-own" not in css and ".story-elabel-own" not in js
     assert "'owns'" not in bind, "the wire carries the records it reaches, not the word"
-    assert "border-style: dashed" not in css[css.index(".story-area-owned"):
-                                             css.index(".story-shared")], \
-        "dashed already means `a container, open it` on every diagram here"
+    # A SHARED area draws no ownership wire and says its owners in WORDS instead. No dashed border:
+    # dashed already means "a container, open it" on every diagram in this viewer.
     assert ".story-shared {" in css, "a shared area says its owners in words"
+    assert "border-style: dashed" not in css[css.index(".story-area-owned"):
+                                             css.index(".story-shared")]
+    # Both lines SOLID: at rest the gutter speaks one visual language, and a reader should not have
+    # to learn a dash code before the diagram has told them anything. Scoped to the story wires —
+    # other diagrams on other screens use a dash for their own reasons.
+    wires = [l for l in css.splitlines() if l.startswith("svg.story-wires path")]
+    assert not [l for l in wires if "dasharray" in l], f"a story wire is dashed: {wires}"
+
+
+def test_a_feature_card_wears_the_same_colour_it_wears_on_the_journey_board() -> None:
+    """ONE hash, two screens. `featureTint` already tints each feature's band on an actor's journey;
+    the pillar card reuses it, so a reader carries the association across instead of meeting a
+    feature as a white box here and a coloured one there."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    card = _story_fn(js, "storyFeatureCardHtml")
+    assert "style=\"background:${featureTint(id)}\"" in card
+    assert js.count("const FEATURE_TINTS = [") == 1, "one palette, not a second copy"
+    # ...and every LABEL on the page wears the same colour as the feature it belongs to, both hops.
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);" in bind
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "background: #fff" not in css[css.index(".story-col-spine > .story-card"):
+                                         css.index(".story-col-spine > .story-card") + 200], \
+        "the pillar must not paint over a card's own colour"
 
 
 def test_a_record_page_says_who_owns_it_only_when_the_map_does() -> None:

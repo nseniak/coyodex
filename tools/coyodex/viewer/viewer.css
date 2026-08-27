@@ -1710,10 +1710,11 @@ svg.story-wires { position: absolute; inset: 0; width: 100%; height: 100%; point
    pin makes ONE card's wires the picture: bold accent + label, everything else faded hard. */
 svg.story-wires path { fill: none; stroke: #c3c8d9; stroke-width: 1.4; opacity: .75;
                        transition: stroke .15s, opacity .15s, stroke-width .15s; }
-/* A reference arrow (a feature's walks reach these records) is thinner and dashed at rest than an
-   actor's wire: it is a fact about the code, where the wire beside it is a person's reason to be
-   here. Hover and pin treat the two identically — one card, one picture. */
-svg.story-wires path.story-ref { stroke-dasharray: 4 3; stroke-width: 1.2; opacity: .6; }
+/* A reference arrow (a feature's walks reach these records) is a touch lighter than an actor's wire
+   and nothing else — SOLID, like every line on this page. It was dashed for one round: at rest the
+   gutter then carried two visual languages at once, and a reader had to learn which meant what
+   before the diagram had told them anything. Hover and pin treat every wire identically. */
+svg.story-wires path.story-ref { stroke-width: 1.2; opacity: .6; }
 /* An OWNERSHIP wire — the map's authored answer to "this area exists for that feature" — carries the
    `story-own` class so the wire is identifiable, and takes NO styling of its own: at rest it is the
    same grey line as an actor's, and hover/pin light it the same way. Ownership was drawn as a bold
@@ -1735,7 +1736,9 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
                    border-radius: 16px; padding: 14px 16px 16px;
                    box-shadow: 0 6px 22px rgba(40,44,90,.13), 0 1px 3px rgba(40,44,90,.08); }
 .story-col-spine > .story-colhead { color: #3730a3; font-size: 11.5px; letter-spacing: .08em; }
-.story-col-spine > .story-card { background: #fff; border-width: 1.5px; border-color: #b9c0ee;
+/* No `background` here: a feature card carries its OWN colour inline (`featureTint`, the same hash
+   the actor journey board uses), so one feature is one colour on both screens. */
+.story-col-spine > .story-card { border-width: 1.5px; border-color: #b9c0ee;
                                  box-shadow: 0 2px 8px rgba(40,44,90,.13); }
 .story-col-spine > .story-card:hover { box-shadow: 0 4px 16px rgba(79,70,229,.24); }
 /* The two side columns sit ON the page, not above it — flat, so the pillar is the only thing with
@@ -1787,10 +1790,14 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
    same specificity to stay one. */
 #diagram .story-glyph { width: 17px; height: 17px; flex: 0 0 auto; }
 /* The stake label rides its wire's midpoint, shown only while its card's wires are the picture. */
-.story-elabel { position: absolute; background: #4f46e5; color: #fff; font-size: 10.5px;
+/* The pill takes its FEATURE's colour inline (see `wire`), so the text is dark and it carries a
+   border: a pale fill needs an edge to sit on top of the page, where the old solid indigo did not.
+   The background here is the fallback for a label with no feature behind it. */
+.story-elabel { position: absolute; background: #eef0fd; color: #1e2235; font-size: 10.5px;
                 padding: 2px 9px; border-radius: 99px; white-space: nowrap;
+                border: 1px solid rgba(40,44,90,.18);
                 transform: translate(-50%,-50%); display: none; z-index: 5;
-                box-shadow: 0 2px 6px rgba(79,70,229,.35); cursor: default; }
+                box-shadow: 0 2px 8px rgba(30,34,53,.20); cursor: default; }
 .story-elabel.story-lab-on { display: block; }
 .story-elabel-live { cursor: pointer; }
 .story-elabel-live:hover { text-decoration: underline; box-shadow: 0 3px 10px rgba(79,70,229,.5); }
@@ -1799,9 +1806,10 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
    it is a door the way every other name-door here does: an underline on hover. */
 .story-elabel-ent { font: inherit; color: inherit; background: none; border: 0; padding: 0;
                     cursor: pointer; text-decoration: underline;
-                    text-decoration-color: rgba(255,255,255,.45); text-underline-offset: 2px; }
-.story-elabel-ent:hover { text-decoration-color: #fff; }
-.story-elabel-ent:focus-visible { outline: 2px solid #fff; outline-offset: 1px; border-radius: 3px; }
+                    text-decoration-color: rgba(30,34,53,.35); text-underline-offset: 2px; }
+.story-elabel-ent:hover { text-decoration-color: #1e2235; }
+.story-elabel-ent:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px;
+                                  border-radius: 3px; }
 /* An owned area is the settled case: a firmer border, in the wire's own colour, so the box and the
    line that reaches it read as one statement. A SHARED area says its owners in WORDS instead — no
    wire can carry "these two, deliberately", and no border can either. A dashed border was tried and
