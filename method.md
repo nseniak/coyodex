@@ -1413,65 +1413,30 @@ synthesis → parallel trace.**
   the agent's half, so the lead-facing header cannot travel with it. This was the largest fan-out
   with no contract of its own, and the rules fan-out shows what that costs: composed from memory, it
   told eleven agents to author a field they must never author, which lint treats as blocking.
-  Trace-prompt discipline — what the contract carries, here so you can see what you hand over:
-  - **Prescribe likely sub-flows in the prompts.** The lead can usually see from the use-case list
+  Trace-prompt discipline — the LEAD's half only. The agent's half (entity steps, the sub-flow
+  shape, sibling sub-flow references, the entity-TYPE rule for `reads`, return-direction steps, the
+  three overclaim shapes, the catalog-row rules) lives in the contract itself — read it there, and
+  never restate it in a prompt: a restated copy is the one that drifts. What the contract cannot
+  know is per-slice, and that is yours:
+  - **Prescribe likely sub-flows in the briefs.** The lead can usually see from the use-case list
     which machinery is shared ("UC10 and UC13 walk the same tool-call path — EXTRACT it as a
     sub-flow") — say so explicitly; the duplication detector is the safety net, not the plan. **Do
     NOT blanket-ban sub-flows** ("no subflows" in every trace prompt) — that contradicts this rule
     and forgoes the cross-flow consistency sub-flows buy. Ban them for a genuinely independent flow,
     never as a global default; where machinery repeats across ≥2 flows, prescribe the `SFn`.
-  - **Name `En` as a valid step endpoint in the prompts, with a worked example step** — e.g. `6a. C5
-    → E2 : upserts the Membership document @ repo.py:155` — and require each flow's 1–2 central
-    entity touches. Prompts that channel ALL entity mentions into the edges array ship a domain
-    model with zero flow traceability, and every gate stays green. The callee's operative read/write
-    line is one hop from the call site the agent already read for the calling step's `where`.
   - **Assign each trace agent an `SFn` id range** (SF1–9, SF10–19, …), exactly like the per-agent
     component id ranges, so parallel extractions never collide.
-  - **Show the sub-flow SHAPE in the prompt** — `{"id": "SFn", "name": "<display text>", "steps":
-    [...]}`. A flow's display text is `title` but a sub-flow's is **`name`** — agents write
-    `subflows[].title` by analogy and burn a lint round each (the loader now accepts `title` as an
-    alias, but the prompt should still show the canonical shape).
-  - **A step MAY reference a sibling agent's sub-flow** (the id ranges make it unambiguous): pass
-    `--ids build-fragments/` (a directory scans every fragment) so the reference resolves at
-    lint time instead of forcing the agent to duplicate the shared trace inline. The sub-flow
-    refcount nudge ("referenced once — consider inlining") is ADVISORY on the fragment channel:
-    the other reference may live in a sibling fragment, so never rewrite just to silence it.
-  - **A named queue/topic in the trace is a `messaging` row** — when a step or edge goes through a
-    named channel (`JOB_QUEUE`, a per-org pub/sub channel), record the catalog row (name, broker
-    dep, publishers, consumers, payload) alongside the `C→broker` edge — the edges on their own
-    leave the catalog empty.
-  - **A `C→E` `reads` edge — or entity step — requires the entity TYPE at the site** — a function
-    operating on a string/field extracted from an entity is not reading the entity (the
-    false-reads class the grounding pass keeps refuting).
-  - When the lead has assembled a legend or an earlier map, pass `--ids «legend»` to each agent's
-    `lint-fragment` self-check, so a plausible-but-invented element id dies in the agent's own turn.
-    **Pass the legend as a FILE PATH** (`--ids path/to/legend`), never inline as `--ids "$(cat …)"`
-    — a whole-map legend overflows the shell arg limit. The legend should list the full id universe
+  - **Fill «LEGEND» with a FILE PATH** (`--ids path/to/legend`), never inline contents — a
+    whole-map legend overflows the shell arg limit. The legend should list the full id universe
     **including `UC`/`SF`/`HP` ids** (or just pass the assembled `project-map.json`), so a trace
-    fragment's flow `uc` values resolve; `lint-fragment` now tolerates a legend that omits a whole
+    fragment's flow `uc` values resolve; `lint-fragment` tolerates a legend that omits a whole
     namespace (it can't adjudicate one it doesn't cover), so a reduced element-only legend no longer
     false-flags `uc` — but a complete legend still catches an invented one.
-  - A **return-direction step** usually has no invoking line of its own: set `no_call_site: true`
-    (or anchor the callee's `return` statement when that aids drilling) — either is fine; silence is not.
-  - **Name the three overclaim shapes the skeptics keep refuting** — they are predictable enough to
-    prevent in the prompt instead of paying for later, and between them they account for most
-    refutations: (1) **transitive attribution** — a component calling a first-party wrapper credited
-    with the external call the *wrapper's owner* makes; (2) **ownership overclaim** — a controller
-    that calls `.save()` credited as the system of record when the real upsert lives in the
-    repository/model component; (3) **constructs ≠ persists** — a storage/client factory recorded as
-    writing to the stores it only *builds clients for*. In all three the rule is the same:
-    **attribute the edge to the component whose own code contains the operative line**, and if the
-    line you found is a call into another component, the edge belongs to that one.
-  - **Fill the `messaging` catalog from the SAME line that proves the edge.** The catalog is the
-    weakest-quality area measured — wrong brokers and duplicated rows. A catalog row is a claim like
-    any other: its `source` is the line that DECLARES the channel name, its `broker` is the dep that
-    line connects to (not the one the component happens to use elsewhere), and a channel already in
-    the catalog is never added twice under a second spelling. **NAME THE OWNER in the slice brief.**
-    A rule that stays in this doc and never reaches the dispatched contract has no effect: several
-    agents each told to record the same channel row will each comply, in their own spelling, and
-    `assemble` then hard-fails on the conflict. A fragment that lints CLEAN on its own proves
-    nothing here — a cross-fragment conflict is invisible per fragment by construction. One fragment
-    owns each catalog row; the others reference it.
+  - **NAME THE OWNER of every `messaging` catalog row in the slice briefs.** Several agents each
+    told to record the same channel row will each comply, in their own spelling, and `assemble`
+    then hard-fails on the conflict; a fragment that lints clean on its own proves nothing here,
+    because a cross-fragment conflict is invisible per fragment by construction. One fragment owns
+    each catalog row; the others reference it.
 
 ### After the trace — EVERY build (serial included)
 
@@ -1668,11 +1633,10 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and a
   verb is not. The verb also prints only the agent's half: a build once filled this template with
   one text replacement and sent the WHOLE file, so all ten skeptics read the lead's instructions as
-  their own and four were told to open a claims file that does not exist. For the riskiest claims run **N skeptics + majority vote — with N ODD, and N ≥ 3.**
-  **Where the cut falls: the WHOLE `security` theme, every batch of it.** "the riskiest claims
-  (auth, scoping, encryption)" and "the `security` theme" were both written here and they are not
-  the same instruction, so a build had to guess: one triple-voted 80 of the security theme's 123
-  claims and single-voted the other 43, and 8 of its 10 applied refutations then came from
+  their own and four were told to open a claims file that does not exist. **The WHOLE `security` theme — every batch of it — gets N skeptics + a majority
+  vote, with N ODD and N ≥ 3.** The scope is the theme, never a hand-picked "riskiest" subset: a
+  build left to cut its own subset triple-voted 80 of the security theme's 123 claims and
+  single-voted the other 43, and 8 of its 10 applied refutations then came from
   single-vote batches. Before spending the budget, weigh what the vote actually bought on that run:
   across 160 redundant rows the three skeptics disagreed on the verdict ZERO times and on the
   evidence anchor once. Unanimity is a real result — it is the only evidence that the

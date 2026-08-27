@@ -249,7 +249,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R42 — Trace-prompt discipline was all measured
 - **Where**: `method.md`
-- **Anchor**: `Trace-prompt discipline — what the contract carries, here so you can see what you hand over: - **Prescribe likely sub-flows in the prompts.**`
+- **Anchor**: `Trace-prompt discipline — the LEAD's half only. The agent's half (entity steps, the sub-flow`
 - **Evidence**: Every item under this heading was proven on a live build.
 
 ### R43 — The build that shipped zero sub-flows
@@ -258,38 +258,38 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 - **Evidence**: A live coarse-altitude build shipped zero sub-flows that way.
 
 ### R44 — Entity mentions channeled into the edges array
-- **Where**: `method.md`
-- **Anchor**: `and require each flow's 1–2 central entity touches. Prompts that channel ALL`
+- **Where**: `method/templates/trace-contract.md`
+- **Anchor**: ``En` is a valid step endpoint. A flow that narrates only components leaves the whole domain model`
 - **Evidence**: A live rebuild whose prompts channeled ALL entity mentions into the edges array shipped a domain model with zero flow traceability, every gate green.
 
 ### R45 — Five agents wrote subflows[].title by analogy
-- **Where**: `method.md`
-- **Anchor**: `**Show the sub-flow SHAPE in the prompt** — `{"id": "SFn", "name": "<display`
+- **Where**: `method/templates/trace-contract.md`
+- **Anchor**: `A flow's display text is **`title`**; a sub-flow's is **`name`**. They are not the same key.`
 - **Evidence**: Five trace agents in one live rebuild wrote `subflows[].title` by analogy and each burned a lint round.
 
 ### R46 — Rich broker edges with an empty catalog
-- **Where**: `method.md`
-- **Anchor**: `record the catalog row (name, broker`
+- **Where**: `method/templates/trace-contract.md`
+- **Anchor**: `alongside the `C→broker` edge: the channel name, the broker dep, its publishers and consumers`
 - **Evidence**: Three live rebuilds shipped rich broker EDGES with an empty catalog.
 
 ### R47 — The legend that overflowed the shell arg limit
 - **Where**: `method.md`
-- **Anchor**: `**Pass the legend as a FILE PATH** (`--ids path/to/legend`), never inline as`
+- **Anchor**: `**Fill «LEGEND» with a FILE PATH** (`--ids path/to/legend`), never inline contents — a`
 - **Evidence**: A live build hit the shell argument limit this way on macOS.
 
 ### R48 — How often each overclaim shape was refuted
-- **Where**: `method.md`
-- **Anchor**: `**Name the three overclaim shapes the skeptics keep refuting** — they are predictable`
+- **Where**: `method/templates/trace-contract.md`
+- **Anchor**: `Between them these account for most refutations, so avoid them here rather than paying for them`
 - **Evidence**: On one build, transitive attribution accounted for 5 of 40 dependency claims, and ownership overclaim for another 5 of 40.
 
 ### R49 — The messaging batch's 11 refutations
-- **Where**: `method.md`
-- **Anchor**: `weakest-quality area measured — wrong brokers and duplicated rows. A catalog`
+- **Where**: `method/templates/trace-contract.md`
+- **Anchor**: `payload entity, and the `source` line that DECLARES the channel name — not a line that merely uses`
 - **Evidence**: After earlier builds shipped rich broker edges with an EMPTY catalog, one build filled it and its messaging skeptic returned 11 refutations — the most of any batch.
 
 ### R50 — Four agents, four spellings of one channel row
 - **Where**: `method.md`
-- **Anchor**: `**NAME THE OWNER in the slice brief.** A rule that stays in this doc and never`
+- **Anchor**: `**NAME THE OWNER of every `messaging` catalog row in the slice briefs.** Several agents each`
 - **Evidence**: Four trace agents were each told to record the same channel row and each complied: three spellings of `kind` (`pubsub`, `pub-sub`, and a free-text sentence) and two of `name`. `assemble` hard-failed twice ("nothing was written"), and it took two hand-normalisations and four assemble rounds to clear. Every one of those fragments linted CLEAN on its own.
 
 ### R51 — Rules used to be a sentence with no title
@@ -334,7 +334,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R58b — The vote's scope was written twice and differently
 - **Where**: `method.md`
-- **Anchor**: `**Where the cut falls: the WHOLE `security` theme, every batch of it.** "the riskiest claims`
+- **Anchor**: `**The WHOLE `security` theme — every batch of it — gets N skeptics + a majority`
 - **Evidence**: "the riskiest claims (auth, scoping, encryption)" and "the `security` theme" both stood as the rule, so a build guessed: it triple-voted 80 of the security theme's 123 claims and single-voted 43, and 8 of its 10 applied refutations then came from single-vote batches. The same build's three-way batches disagreed on the verdict 0 times across 160 rows.
 
 ### R59 — Ties described as unverifiable

@@ -840,6 +840,14 @@ narrowed self-checks the report went on to under-count
   method change that would have caught it, and stop there.
 - **A single build proves nothing about a trend.** Where a number moved against the previous build,
   say it moved; do not say the method improved. Two data points are two data points.
+- **A proposal lands as a TOOL CHANGE first, prose last.** For each proposal, answer in this order:
+  can a tool refuse the behaviour, do the step itself, or lint it? Else, can a check count it? Only
+  when neither is possible does the fix become a method sentence — and a prose-only proposal SAYS
+  SO ("no tool can carry this, because ...") and names the retro that should re-read it. WHY the
+  order is fixed: `method.md` records at least four times that a rule "stated as prose was read as
+  advice and skipped", while every rule that moved into a tool stopped recurring; each prose fix
+  also grows the file every build re-reads. A proposal written as prose when a verb could carry it
+  is the expensive kind of cheap.
 - **Propose, do not apply.** End by asking which proposals the user wants implemented — and then
   **write the answer into `findings.json` as each row's `decision`.** That is the one input the
   carry-forward needs and the one the retro cannot compute: without it every row stays `proposed`,
