@@ -68,6 +68,20 @@ design principles these come from)
   optional on every screen. The **source rail**, a strip on the right edge,
   opens it; the × in its header closes it.
 - **product overview** — the product description, leading the Features page.
+- **objective** — the labelled sentence at the top of a feature's page or an
+  actor's page, saying what that feature or that actor is for.
+- **timeline** — the picture on a feature's page and on an actor's page: one
+  line of boxes, read left to right, in the order the happy path takes.
+- **box** (on a timeline) — one block of the timeline. On a feature's page each
+  box is one actor. On an actor's page each box is one feature. A second
+  meaning of *box*: on a view it is one drawn thing (see above).
+- **station** — a dot on the timeline's line, carrying the title of one happy
+  path step.
+- **side stop** — a circle under the timeline's line: something this feature or
+  this actor can do that the happy path never reaches.
+- **lane** — one of the timeline's two bands. The happy path is the upper lane,
+  everything else is the lower one.
+- **gutter** — the strip on the left of the timeline that names the two lanes.
 
 **How coyodex is delivered**
 

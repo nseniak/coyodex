@@ -7334,34 +7334,44 @@ function featRulesHtml(ids) {
 // A plain `div`, never a `<header>`: the page's own top bar is styled by a bare `header` selector (dark
 // navy, flex row), and a semantic header here inherited all of it and rendered unreadable.
 function pageHeroHtml(o) {
+  // `lbl` NAMES the sentence. Standing alone under a breadcrumb, one line of prose does not say what
+  // kind of statement it is, and the two pages that lead with a goal (a feature's, an actor's) were
+  // read as leading with a description. The label rides the sentence rather than sitting over it, so
+  // it costs no line, and it stays on the recorded-nothing case too: what the slot IS does not depend
+  // on the map having filled it.
+  // `lbl` names the SENTENCE, `metaLbl` names the row of context under it. Same span, because they are
+  // the same kind of thing: a word saying what the line beside it is.
+  const lbl = o.lbl ? `<span class="page-hero-lbl">${esc(o.lbl)}</span>` : '';
   // The NAME is not here: the breadcrumb's last item is the page's h1. What is left is what hung off
   // that name — the pills it earns, the sentence saying what it is, and one line of context.
   return '<div class="page-hero">'
     + (o.pills ? `<p class="page-hero-pills">${o.pills}</p>` : '')
     // `noDesc: false` = this page HAS no sentence by design (an entry-point kind is a bare word), as
     // opposed to a page whose sentence the map failed to record, which says so.
-    + (o.desc ? `<p class="page-hero-purpose">${o.desc}</p>`
+    + (o.desc ? `<p class="page-hero-purpose">${lbl}${o.desc}</p>`
               : o.noDesc === false ? ''
-              : `<p class="page-hero-purpose feat-empty">${esc(o.noDesc || 'Nothing recorded.')}</p>`)
-    + (o.meta ? `<p class="page-hero-meta">${o.meta}</p>` : '')
+              : `<p class="page-hero-purpose feat-empty">${lbl}${esc(o.noDesc || 'Nothing recorded.')}</p>`)
+    + (o.meta ? `<p class="page-hero-meta">${o.metaLbl
+        ? `<span class="page-hero-lbl">${esc(o.metaLbl)}</span>` : ''}${o.meta}</p>` : '')
     + '</div>';
 }
 // What this feature IS, in the three lines a reader needs before anything else.
 function featureHeadHtml(capId) {
   const f = FEAT_BY_ID[capId];
   if (!f) return '';
-  const roles = f.roles.length
-    ? f.roles.map((rid) => `<button type="button" class="featrole" data-act="${esc(roleName(rid))}">`
-        + `${esc(roleName(rid))}</button>`).join('')
-    : '<span class="feat-empty">not recorded</span>';
   // The feature's card words — `feature`, and `staff` where it varies — ride the breadcrumb beside the
   // name now, which is where a card puts them. So this page draws none of its own, and the helper that
   // built them here went with them: one function decides that set, and the card owns it.
+  //
+  // There is no `Used by` row either. It listed this feature's actors as buttons, and the rail one line
+  // below now names every one of them on its boxes — the drivers on the happy-path lane, and since the
+  // side stops moved under their own driver, the off-walk ones too. Two rows of the same names, the
+  // second of which claims no order, is the duplication the rail was built to remove.
   return pageHeroHtml({
     name: f.name,
+    lbl: 'Feature objective:',
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
-    meta: `<span class="page-hero-lbl">Used by</span> ${roles}`,
   });
 }
 
@@ -7404,8 +7414,6 @@ function bindFeaturePage(root) {
     b.addEventListener('click', open);
     b.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(); });
   });
-  root.querySelectorAll('.featrole').forEach((b) =>
-    b.addEventListener('click', () => go({ kind: 'actor', act: b.getAttribute('data-act') })));
   root.querySelectorAll('.featep').forEach((b) =>
     b.addEventListener('click', () => selectEntryPoint(
       b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0)));
@@ -7476,28 +7484,37 @@ function renderUseCases(sel) {
   // page hero above. Sections stay where they are a real cut: one per role on the flat catalog.
   const solo = one === '-';
   const secs = [];
+  // A feature's page draws its board BARE, exactly as the actor page draws its own: no section frame,
+  // no heading, no chip. It was wrapped in a "What you can do" section, and all three parts of that
+  // wrapper said something the page already says. The frame was a card containing a card, which is the
+  // shape this viewer removes everywhere it appears. The heading named the page's own subject a second
+  // time, under a breadcrumb that is the page's title. The chip jumped to the top of the page, which is
+  // where the reader already was. The two pages now draw one picture one way.
+  //
+  // The board leads the page, under the hero — the actor page's order — and the chip bar then indexes
+  // the four sections that actually follow it.
+  const board = page ? featureRailHtml(page) : '';
   const sections = shown.map((g, gi) => {
     const ids = g.ucs.map((n) => n.id);
     const secId = 'ucsec-' + gi;
     const count = `${ids.length} use case${ids.length === 1 ? '' : 's'}`;
     if (solo) return elementCardGridHtml(ids, per);
     if (byCapability) {
+      // The board is placed by the assembler below, outside any section, so this group emits nothing.
+      if (board) return '';
       // ONE feature, opened from a card: this is the PAGE's body, not a list with the feature's name on
       // it again. The hero above carries the name, the label and the purpose, so the heading here names
       // what the section IS, and carries its own count like every other section of the page.
+      // Only reached with no board to draw: the "not assigned to a feature" list, and a feature whose
+      // use cases the map lost, where the cards' sentences are the only thing left to read.
       const title = page ? 'What you can do' : (g.cap ? g.cap.name : 'Not assigned to a feature');
       secs.push({ id: secId, title, count: ids.length });
-      // The RAIL when the walk enters this feature, which is what the map knows and the grid threw
-      // away: the steps in walk order, zoned by who drives each run. The grid stays as the answer
-      // for a feature the walk never reaches, where a rail would be a bare list of names and the
-      // cards' sentences are the only thing left to read.
-      const body = page ? featureRailHtml(page) : '';
       // On a feature's PAGE the chip above states the count, so the heading does not; the
       // "not assigned to a feature" list is not that page and keeps its own.
       return `<section class="uc-group" id="${secId}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
         + `<h3 class="uc-actor">${esc(title)}`
         + (page ? '' : `<span class="uc-actor-wants">${count}</span>`) + '</h3>'
-        + (body || elementCardGridHtml(ids, per)) + '</section>';
+        + elementCardGridHtml(ids, per) + '</section>';
     }
     // An actor's section, or one section per actor on the flat fallback. Several INTERCHANGEABLE actors
     // agree on their kind or the header shows none, and "wants" is only shown for a lone role, because
@@ -7529,8 +7546,8 @@ function renderUseCases(sel) {
   // contents and its summary in one line — "what is in here, and how much of it" answered before
   // any scrolling. The sections' own headings then drop the count they were stating twice.
   const index = tabIndexHtml(extra ? secs.concat(extra.secs) : secs);
-  diagram.innerHTML = `<div class="usecases-wrap">${head}${index}`
-    + (sections || '<p class="empty">No use cases recorded.</p>')
+  diagram.innerHTML = `<div class="usecases-wrap">${head}${board}${index}`
+    + (sections || (board ? '' : '<p class="empty">No use cases recorded.</p>'))
     + (extra ? extra.html : '') + '</div>';
   bindTabIndex(diagram.querySelector('.usecases-wrap'));
   bindProductLead();
@@ -7676,6 +7693,18 @@ function safeMsgName(s) {
     .replace(/[`*]/g, '').replace(/\n/g, ' ').replace(/;/g, ',')
     .replace(/#/g, '').replace(/</g, '(').replace(/>/g, ')').replace(/\s+/g, ' ').trim();
 }
+// A DRAWN driver's name back to the role's AUTHORED one. HP_ACTORS names live in the folded space
+// safeMsgName defines; every page, every group and every link speaks the AUTHORED space — and the
+// ROLE_BY_NAME comment records that a token from one space read in the other index is this area's
+// whole bug class. One table per key space, both filled from the same source, exactly as that comment
+// asks. An actor the map never declared is left as drawn: there is no authored name to reach.
+const ROLE_BY_SAFENAME = {};
+for (const r of GRAPH.roles || []) ROLE_BY_SAFENAME[safeMsgName(r.name || '').toLowerCase()] = r;
+function authoredActorName(drawn) {
+  const r = ROLE_BY_SAFENAME[String(drawn || '').trim().toLowerCase()];
+  return r ? (r.name || drawn) : drawn;
+}
+
 // The steps THIS actor drives on the walk, 1-based-numbered by walk position. Driven = the step's
 // DRAWN driver: the leftmost of its interchangeable actors, the same choice gen_hp_mermaid makes
 // (hp_step_source) — HP_ACTORS_OF_STEP lists a step's actors in participant order, so [0] is that
@@ -7698,19 +7727,30 @@ function actorStations(actorName) {
 // every one of its words is a word of the actor's name or a prefix of one ("Prospect" ⊂
 // "Prospective customer") — a leading capitalized run that is NOT the actor ("Ops on-call rotates
 // keys" on someone else's page) keeps every word, since dropping a stranger's name changes who acts.
+// `actorName` is one name or SEVERAL — a box on a feature's page can be named after every actor who
+// may drive its steps, and then the title is stripped if it names ANY of them. The walk narrates one
+// story, so its step titles name ONE doer even where the use case allows several: on the Mio map, step
+// "Admin signs in to the dashboard" belongs to a use case both the admin and the member can start. Under
+// a box reading "Workspace admin or Workspace member", the untouched title named only half of it. Strip
+// the designator and the line reads "signs in to the dashboard", which is true of both.
 function stationTitle(title, actorName) {
   const s = String(title || '').trim();
-  const full = String(actorName || '').trim();
-  if (full && s.toLowerCase().startsWith(full.toLowerCase() + ' ')) {
-    const rest = s.slice(full.length).trim();
-    if (rest) return rest;
+  const names = (Array.isArray(actorName) ? actorName : [actorName])
+    .map((n) => String(n || '').trim()).filter(Boolean);
+  for (const full of names) {
+    if (s.toLowerCase().startsWith(full.toLowerCase() + ' ')) {
+      const rest = s.slice(full.length).trim();
+      if (rest) return rest;
+    }
   }
   const m = s.match(/^((?:[A-Z][^\s]*\s+){1,3})([a-z].*)$/);
   if (!m) return s;
-  const actorWords = full.toLowerCase().split(/\s+/).filter(Boolean);
   const runWords = m[1].trim().toLowerCase().split(/\s+/);
-  const ofActor = runWords.every((w) =>
-    actorWords.some((aw) => aw === w || (w.length >= 4 && aw.startsWith(w))));
+  const ofActor = names.some((full) => {
+    const actorWords = full.toLowerCase().split(/\s+/).filter(Boolean);
+    return runWords.every((w) =>
+      actorWords.some((aw) => aw === w || (w.length >= 4 && aw.startsWith(w))));
+  });
   return ofActor ? m[2] : s;
 }
 // One actor's rail, derived: the zones the walk drags them through (in first-station order), then
@@ -7778,17 +7818,33 @@ function actorJourney(actorName) {
 function actorHeroMetaHtml(actorName) {
   const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
   if (!role) return '';
-  const parts = [];
+  // Each note is its LEAD WORD and the rest, kept apart for one reason: the note that opens the row
+  // starts a sentence and takes a capital, and which note that is depends on what the map recorded.
+  // Capitalising every note instead would put a capital in the middle of the row, after each dot.
+  const parts = [];   // [{lead, tail}]
+  const at = (rel, word) => {
+    const uc = GRAPH.nodes[rel.at];
+    return uc ? ` ${word} “${esc(uc.name)}”` : '';
+  };
   // "was <role> until <use case>" — read off the PREDECESSOR's `becomes`, so the fact is authored
   // once, on the role that changes. A self-`becomes` is meaningless and stays undrawn.
   for (const p of GRAPH.roles || []) {
     if (p.id === role.id) continue;
     for (const rel of p.relations || []) {
       if (rel.kind !== 'becomes' || rel.role !== role.id) continue;
-      const uc = GRAPH.nodes[rel.at];
-      parts.push('<span>was <b>' + esc(p.name) + '</b>'
-        + (uc ? ' until “' + esc(uc.name) + '”' : '') + '</span>');
+      parts.push({ lead: 'was', tail: ' <b>' + esc(p.name) + '</b>' + at(rel, 'until') });
     }
+  }
+  // …and the SAME fact read forwards, off this role's own `becomes`. It was drawn in one direction
+  // only, so a role that turns into another said nothing about it while the role they turn INTO said
+  // it all: on the MCP Hero map the Visitor page was silent about becoming an Organization admin,
+  // and the Organization admin page carried "was Visitor until …". One relation, two pages, and only
+  // one of them told the reader.
+  for (const rel of role.relations || []) {
+    if (rel.kind !== 'becomes' || rel.role === role.id) continue;
+    const other = ROLE_BY_ID[rel.role];
+    if (!other) continue;
+    parts.push({ lead: 'becomes', tail: ' <b>' + esc(other.name) + '</b>' + at(rel, 'at') });
   }
   for (const rel of role.relations || []) {
     if (rel.kind !== 'includes' || rel.role === role.id) continue;
@@ -7796,11 +7852,13 @@ function actorHeroMetaHtml(actorName) {
     if (!other) continue;
     // A sentence, not a pill: it states a fact about this role, and a pill reads as a control. Only
     // the other role's NAME stays a door, drawn as a quiet link inside the sentence.
-    parts.push('<span>may also do everything a '
+    parts.push({ lead: 'may', tail: ' also do everything a '
       + `<button type="button" class="journey-inclink" data-act="${esc(other.name)}" `
-      + `title="Open ${esc(other.name)}">${esc(other.name)}</button> may do</span>`);
+      + `title="Open ${esc(other.name)}">${esc(other.name)}</button> may do` });
   }
-  return parts.join('<span class="journey-metasep">·</span>');
+  const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  return parts.map((p, i) => '<span>' + (i === 0 ? cap(p.lead) : p.lead) + p.tail + '</span>')
+    .join('<span class="journey-metasep">·</span>');
 }
 function actorPageHeroHtml(actorName) {
   const g = actorGroups().find((x) => x.actor === actorName);
@@ -7811,10 +7869,27 @@ function actorPageHeroHtml(actorName) {
   // service` where the side varies — ride the breadcrumb beside the name, read from the one
   // function that decides them (crumbPillsHtml via cardFacts).
   return pageHeroHtml({
+    lbl: 'Actor objective:',
     desc: role && role.wants ? mdInline(wantsSentence(role.wants)) : '',
     noDesc: 'This map does not say what this actor wants.',
+    metaLbl: 'Notes:',
     meta: actorHeroMetaHtml(actorName),
   });
+}
+
+// The two marks a use-case CARD carries, drawn on a station and on a side stop as well. The rail
+// REPLACED those cards on a feature's page, and it took both marks with it: in change-impact mode the
+// page could no longer say which use cases changed, and an untraced use case stopped being
+// distinguishable from a phantom one. Both pages get them, because both pages replaced the same cards.
+// Read from the SAME two sources the card reads (usecaseDiffState, FLOWS_MM), so a card and a station
+// can never disagree about one use case.
+function journeyMarksHtml(ucId) {
+  const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(ucId))
+    ? '<span class="journey-mark journey-mark-changed">changed</span>' : '';
+  const untraced = (FLOWS_MM && FLOWS_MM[ucId]) ? ''
+    : '<span class="journey-mark journey-mark-untraced" '
+      + 'title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
+  return (changed || untraced) ? `<span class="journey-marks">${changed}${untraced}</span>` : '';
 }
 
 // One feature's box on the rail. The box is not a nested container: the whole board is ONE grid
@@ -7851,10 +7926,12 @@ function journeyZoneHtml(z, opts) {
     + `data-step="${esc(s.id)}" `
     + `title="Open the Happy Path: ${esc(s.title || 'this step')}">`
     + '<span class="journey-dot"></span>'
-    + `<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span></button>`).join('');
+    + `<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span>`
+    + `${journeyMarksHtml(s.uc)}</button>`).join('');
   const sides = (z.sides || []).map((uc) =>
     `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
-    + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`).join('');
+    + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>`
+    + `<span class="journey-sidet">${esc(uc.name)}${journeyMarksHtml(uc.id)}</span></button>`).join('');
   // The zone's own feature decides its colour on the actor rail. The FEATURE rail passes one tint
   // for every zone instead: that whole board is one feature, and a colour changing from zone to zone
   // would claim a difference the zones do not have.
@@ -7905,11 +7982,17 @@ function journeyZoneHtml(z, opts) {
 // The SAME drawing the cast card gives them — person or service, in the actor tints — because one
 // figure means "who" wherever a who is drawn, and a second hand for it here would read as a second
 // kind of thing.
+// The SLOT itself: an icon, then a name, on one line. TWO callers now — an actor's figure and name
+// on the actor page, a feature's sparkle and name on a feature's page — which is the slot the one-line
+// shape was chosen for. The class names still say `actor` because the CSS is keyed on them; what they
+// draw is "the element this board is about", whichever element that is.
+function journeyHeadHtml(glyph, name) {
+  return '<div class="journey-actorhead">' + glyph
+    + `<span class="journey-actorname">${esc(name || '')}</span></div>`;
+}
 function journeyActorHeadHtml(actorName) {
   const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
-  return '<div class="journey-actorhead">'
-    + `${storyGlyphSvg(role && role.kind)}`
-    + `<span class="journey-actorname">${esc(actorName || '')}</span></div>`;
+  return journeyHeadHtml(storyGlyphSvg(role && role.kind), actorName);
 }
 function renderActorPage(actorName) {
   const { zones, offZones } = actorJourney(actorName);
@@ -8002,75 +8085,176 @@ function bindActorPage(root, actorName) {
 // asks the mirror question — "what happens in this feature" — so it draws the mirror board: the same
 // stations, the same dashed cut, the same gutter, zoned by the DRIVER instead.
 //
-// It replaces a card grid that threw away an order the map already knows. "Building a map" owns
+// It replaced a card grid that threw away an order the map already knows. "Building a map" owns
 // steps 2 to 7 of the walk, in that order; the grid drew eight cards in model order and said nothing
 // about which came first. Measured on this project's own map: 570px of cards for 8 use cases,
-// against a rail that fits the same eight in one band.
+// against a rail that fits the same eight in one band. The grid is no longer the fallback for a
+// feature the walk never enters either — that draws the board with one lane, as the actor page does.
 //
-// A zone is a RUN of consecutive steps under ONE driver, exactly the rule actorJourney uses with the
-// two keys swapped — because both failure modes are real here too. On this map 2 of the 7 features
-// are entered by the walk TWICE ("Getting set up" at steps 1 and 15, "Reviewing a finished build" at
-// 21 and 25), and filing both runs under one box would draw a rail that claims they are adjacent.
+// A zone is a RUN of steps sharing ONE set of drivers. The two rules that decide a zone each have
+// their own argument, written where they are applied inside featureJourney: which actors name a box
+// (all of a step's interchangeable drivers, not the leftmost), and when a new box opens (a change of
+// that set, and nothing else — never a gap in the walk, which is the actor rail's mirror rule).
 function featureJourney(capId) {
   const f = FEAT_BY_ID[capId] || {};
   const own = new Set(f.useCases || []);
-  const zones = [];   // [{act, stations:[hpStep], sides:[ucNode]}], in WALK order
-  let run = null, prev = -2;
-  (GRAPH.happy_path || []).forEach((st, i) => {
+  const zones = [];   // [{acts:[name], stations:[hpStep], sides:[ucNode]}], in WALK order
+  let run = null;
+  (GRAPH.happy_path || []).forEach((st) => {
     if (!own.has(st.uc)) return;
-    // The step's DRAWN driver — the leftmost of its interchangeable actors, the same choice
-    // actorStations makes, so a step lands under the same actor on both pages.
-    const drivers = HP_ACTORS_OF_STEP[st.id] || [];
-    const act = drivers.length ? drivers[0].name : '';
-    // A new zone on a change of driver OR on a GAP in the walk. The gap matters as much as the
-    // driver: "Getting set up" is entered at step 1 and again at step 15, and one box holding both
-    // draws them as neighbours — the rail is the one thing on this page that claims an order, so it
-    // must not claim that one. The walk POSITION is only ever compared here, never carried onto a
-    // station: no station shows a number, so `i` is a fact about this loop and nothing else.
-    if (!run || run.act !== act || i !== prev + 1) {
-      run = { act, stations: [], sides: [] };
+    // EVERY driver of the step, not the leftmost one. The actor page files a step under its leftmost
+    // driver on purpose — that page narrates ONE person's journey, and a co-actor gets the use case
+    // as a side stop instead. This page narrates a FEATURE, so it owes the reader every actor who
+    // can start each step, and taking the leftmost here silently deleted the others.
+    //
+    // Measured on the Meerbot map, where it was not a nicety: "Page tracking" drew one box named
+    // Assistant over four stations, three of them titled "Owner browses…", "Owner rewrites…",
+    // "Owner stops…". Page owner drives all three, and the words "Page owner" appeared nowhere on
+    // that page. Same on "Plans and limits". 2 of that map's 7 features, and 3 of the 34 features
+    // across the four maps the viewer reads.
+    //
+    // …in the AUTHORED name space, which is what a zone's label, its link and roleKindOfName all
+    // read. The walk records the folded spelling; every other reader of `acts` speaks the other one.
+    const acts = (HP_ACTORS_OF_STEP[st.id] || []).map((d) => authoredActorName(d.name));
+    // A new zone on a change of DRIVER, and on nothing else — the actor page's rule with the two keys
+    // swapped, which is what makes the two boards one picture drawn twice. A change of driver now
+    // means a change of the WHOLE SET: "Assistant" and "Assistant or Page owner" are two different
+    // answers to "who can do this", so they are two boxes, and the two names say why.
+    //
+    // It also cut on a GAP in the walk, meaning the walk left this feature and came back. That cut was
+    // unreadable HERE, and readable on the actor page, for the same reason: a cut is only legible when
+    // the two boxes it makes carry different names. On the actor page they always do, because the
+    // thing that changed IS the box's name. On this page the driver has not changed, so the reader
+    // met two boxes with one name, side by side, and nothing between them saying why. The reason lived
+    // on a page they were not on. Measured across the four maps the viewer reads: 5 of the 34 features
+    // drew such a pair, MCP Hero's "Tool access through the gateway" among them.
+    //
+    // Nothing is lost that the page ever showed. The stations stay in walk order, and no station has
+    // carried its position in the walk since the step numbers were dropped — so a box claims the ORDER
+    // of its stations and never their adjacency. A driver who really does return after somebody else
+    // still gets two boxes, because the driver changed in between: on the Mio map "Paying for Mio"
+    // draws Workspace admin, Payment provider, Workspace admin, and that picture explains itself.
+    if (!run || zoneKey(run.acts) !== zoneKey(acts)) {
+      run = { acts, stations: [], sides: [] };
       zones.push(run);
     }
     run.stations.push(st);
-    prev = i;
   });
-  // Everything the feature can do that the walk never reaches. They hang under the FIRST zone: they
-  // belong to the feature, not to a position in it, so repeating them under a second run would say
-  // the same thing twice. With no run at all they open a lane of their own.
+  // Everything the feature can do that the walk never reaches, filed under WHOEVER DRIVES IT — the
+  // mirror of the actor page, where a side stop hangs under its own feature. They used to be dumped
+  // into `zones[0]`, whose box belongs to whoever drives the FIRST step, so on any feature with more
+  // than one driver the rail said that actor does things they never do. Measured on this project's
+  // own map: 4 of the 7 features have two or more drivers.
+  //
+  // The driver comes from actorGroups(), the one grouping the actor page and the cast cards already
+  // read, so three screens cannot disagree about who drives a use case. Two of its rules come along
+  // and both are wanted here: a use case naming several INTERCHANGEABLE actors is listed under every
+  // one of them (either of them can really start it), and one undeclared name sends the whole use
+  // case to `Other` rather than to a half-known home.
   const onWalk = new Set(zones.flatMap((z) => z.stations.map((s) => s.uc)));
-  const sides = (f.useCases || []).filter((id) => !onWalk.has(id))
-    .map((id) => GRAPH.nodes[id]).filter(Boolean);
-  return { zones, sides };
+  // Which actors each use case belongs to, from that one grouping, read once.
+  const actorsOfUc = {};
+  for (const g of actorGroups()) for (const n of g.ucs) (actorsOfUc[n.id] || (actorsOfUc[n.id] = [])).push(g.actor);
+  // ONE box per actor: their first on-rail zone, the same rule the actor page applies to a feature
+  // entered twice — a side stop belongs to the actor, not to a position in the walk, so a second run
+  // must not repeat it. A box naming several interchangeable actors is the box for each of them.
+  const firstOf = {};
+  for (const z of zones) for (const a of z.acts) if (a && !(a in firstOf)) firstOf[a] = z;
+  // A driver the walk never reaches opens a TRAILING zone, drawn exactly like the others — an actor
+  // is not demoted for missing this feature's walk. They order by the story diagram's CAST column,
+  // the one derived actor order every screen agrees on; an actor outside it comes last.
+  const cast = ((FEATURES.story || {}).cast || []).map((rid) => roleName(rid));
+  const offZones = [];
+  const offByActor = {};
+  // In the FEATURE's own use-case order, so a box's side stops read in the order the model records
+  // them rather than in the order the actor groups happened to be built.
+  for (const id of f.useCases || []) {
+    if (onWalk.has(id)) continue;
+    const node = GRAPH.nodes[id];
+    if (!node) continue;
+    // Once per ACTOR, and at most once per BOX: a use case naming two interchangeable actors belongs
+    // to both, but when one box already names both of them it must not draw the same circle twice.
+    const placed = new Set();
+    for (const a of actorsOfUc[id] || ['']) {
+      let z = firstOf[a];
+      if (!z) z = offByActor[a] || (offZones.push(offByActor[a] = { acts: [a], stations: [], sides: [] }), offByActor[a]);
+      if (placed.has(z)) continue;
+      placed.add(z);
+      z.sides.push(node);
+    }
+  }
+  const pos = (z) => { const at = cast.indexOf(z.acts[0]); return at >= 0 ? at : cast.length; };
+  offZones.sort((a, b) => pos(a) - pos(b));
+  return { zones, offZones };
 }
-// One feature's board. Returns '' when the walk never enters this feature — the caller then keeps
-// the card grid, which is the better answer there: a rail with no stations is a bare list of names,
-// and the grid's cards carry each use case's sentence.
+// A zone's identity: the SET of actors who can drive its steps, in participant order. Compared as one
+// string, because two zones merge only when they answer "who can do this" with the same list.
+function zoneKey(acts) { return (acts || []).join('\u0000'); }
+// The zone's name: its DRIVER, and a door to that actor's page — the mirror of the actor rail, where
+// a zone is named by its feature and opens the feature's page. The feature's own name is NOT drawn on
+// a box: the head above the board carries it, and a box repeating it per run would name the page two
+// or three times.
+//
+// The name is a DOOR only when it leads somewhere. `Other` is the bucket actorGroups() files a use
+// case in when the map never declared its actor, so it names no page — the same condition the use-case
+// card's driver pill already tests before it lets its name be clicked. A control that looks live and
+// goes nowhere teaches a reader to distrust the ones that work, so it stays plain text.
+function journeyDriverLabelHtml(acts) {
+  const list = (acts || []).filter(Boolean);
+  if (!list.length) return '<span class="journey-zkind">no actor recorded</span>';
+  // Each name carries its OWN glyph. A box naming a person and a program cannot draw one figure for
+  // both without claiming they are the same kind of thing, and picking the first one's figure is the
+  // same silent deletion this box exists to undo.
+  const one = (act) => (actorNodeId(act)
+    ? `<button type="button" class="journey-zname" data-act="${esc(act)}" `
+      + `title="Open the details page of ${esc(act)}">${storyGlyphSvg(roleKindOfName(act))}`
+      + `<span>${esc(act)}</span></button>`
+    : `<span class="journey-zkind">${esc(act)}</span>`);
+  // "or", not a comma: the map says these actors are INTERCHANGEABLE, and either of them can really
+  // start the steps in this box. A comma would read as "both of them, together".
+  return list.map(one).join('<span class="journey-zor">or</span>');
+}
+// One feature's board — the actor page's board with the two keys swapped, in EVERY case it draws.
+//
+// It used to return '' when the walk never enters this feature, and the caller then drew a card grid
+// instead, so the page changed shape depending on the map. The actor page answers the same situation
+// (argus's Page owner never appears on the walk) by drawing the board with one lane, because
+// "everything here is off the happy path" is an answer, not an absence. This does the same. The cost
+// is real and worth naming: a card carried each use case's sentence and a side stop does not, so a
+// feature the walk never enters trades its sentences for the one thing the grid could never say —
+// who drives what. Only a feature with no use cases at all draws nothing, and the caller's grid
+// fallback still stands behind that.
 function featureRailHtml(capId) {
-  const { zones, sides } = featureJourney(capId);
-  if (!zones.length) return '';
-  if (sides.length) zones[0].sides = sides;
-  const offLane = sides.length > 0;
+  const { zones, offZones } = featureJourney(capId);
+  if (!zones.length && !offZones.length) return '';
+  const offLane = zones.concat(offZones).some((z) => (z.sides || []).length);
+  // No station anywhere means no upper lane: the row is dropped rather than drawn empty, and with one
+  // lane there is nothing for the dashed cut to cut. The gutter still names the lane it kept.
+  const hasPath = zones.some((z) => z.stations.length);
+  const noPath = !hasPath;
+  // Column 1 is the gutter; each driver takes the next column.
   let col = 1;
-  const boxes = zones.map((z, i) => journeyZoneHtml(z, {
-    col: ++col, offLane, actor: z.act, first: i === 0, last: i === zones.length - 1,
-    // The zone is named by its DRIVER, and the name is a door to that actor's page — the mirror of
-    // the actor rail, where the zone is named by its feature and opens the feature's page. The
-    // feature's own name is NOT drawn: the breadcrumb is this page's title, and a box repeating it
-    // once per run would name the page two or three times.
-    label: z.act
-      ? `<button type="button" class="journey-zname" data-act="${esc(z.act)}" `
-        + `title="Open the details page of ${esc(z.act)}">${storyGlyphSvg(roleKindOfName(z.act))}`
-        + `<span>${esc(z.act)}</span></button>`
-      : '<span class="journey-zkind">no actor recorded</span>',
+  const boxes = (list, lead) => list.map((z, i) => journeyZoneHtml(z, {
+    col: ++col, offLane, noPath, actor: z.acts,
+    first: lead && i === 0, last: lead && i === list.length - 1,
+    // The FIRST driver the walk never reaches opens a wider gap, so the rail's right tip ends in
+    // clear space instead of pointing at a box the rail does not run through.
+    gapBefore: !lead && i === 0 && zones.length,
+    label: journeyDriverLabelHtml(z.acts),
     // Every zone takes the FEATURE's tint, not one of its own: this whole board is one feature, and
     // a colour that changed per zone would claim a difference the zones do not have.
     tint: featureTint(capId),
   })).join('');
   const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
-    + '<div class="journey-gutter journey-gutter-on">Happy path</div>'
+    + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
     + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
-  return '<div class="journey-board"><div class="journey-rail'
-    + `${offLane ? ' journey-has-off' : ''}">${gutter}${boxes}</div></div>`;
+  // The feature heads its own board, in the same slot and the same hand the actor page uses — icon
+  // then name on one line. Every box below is named after an ACTOR, so without it a reader scanning
+  // the board sees only actors and can read it as a page about them.
+  return `<div class="journey-board">${journeyHeadHtml(storyFeatureGlyphSvg(), featureName(capId))}`
+    + '<div class="journey-rail'
+    + `${offLane ? ' journey-has-off' : ''}${noPath ? ' journey-no-path' : ''}">`
+    + `${gutter}${boxes(zones, true)}${boxes(offZones, false)}</div></div>`;
 }
 // An actor's kind from their NAME, for the glyph a zone label carries. The rail speaks names (that
 // is what the walk records), while the kind lives on the role — ROLE_BY_NAME is the one table that
