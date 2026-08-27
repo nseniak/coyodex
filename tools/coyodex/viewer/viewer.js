@@ -8013,6 +8013,10 @@ function bindStoryDiagram(root) {
   stage.querySelectorAll('.story-feature').forEach((el) => { featEl[el.dataset.sfeat] = el; });
   stage.querySelectorAll('.story-area').forEach((el) => { areaEl[el.dataset.sarea] = el; });
   const paths = [], labels = [];
+  // Which wire does a label belong to? Set where BOTH are made, never inferred from array position:
+  // the two arrays are filled by different code paths (a label is appended by the caller, after its
+  // own handlers), so index-pairing would be one refactor away from lighting the wrong wire.
+  const pathOfLabel = new Map();
   // ONE wire drawer for both hops of the page, so the actor→feature and feature→area arrows cannot
   // drift apart in shape, in hover behaviour or in how their label is placed. `keys` are the data
   // attributes the wire answers to — a wire lights when ANY of its ends is the hovered/pinned card.
@@ -8036,6 +8040,7 @@ function bindStoryDiagram(root) {
     if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);
     lab.style.left = ((sx + tx) / 2) + 'px';
     lab.style.top = ((sy + ty) / 2 - 8) + 'px';
+    pathOfLabel.set(lab, path);
     return lab;
   };
   for (const e of (st.edges || [])) {
@@ -8130,11 +8135,12 @@ function bindStoryDiagram(root) {
       const hit = p.dataset[key] === id;
       p.classList.toggle('story-hot', hit);
       p.classList.toggle('story-cold', !hit);
+      p.classList.remove('story-glow');   // a new picture starts with no wire singled out
     }
     for (const l of labels) l.classList.toggle('story-lab-on', l.dataset[key] === id);
   };
   const clearWires = () => {
-    for (const p of paths) p.classList.remove('story-hot', 'story-cold');
+    for (const p of paths) p.classList.remove('story-hot', 'story-cold', 'story-glow');
     for (const l of labels) l.classList.remove('story-lab-on');
   };
   const restore = () => { if (selected) show(selected.key, selected.id); else clearWires(); };
@@ -8172,9 +8178,20 @@ function bindStoryDiagram(root) {
   wireCards(stage.querySelectorAll('.story-feature'), 'sfeat');
   wireCards(stage.querySelectorAll('.story-actor'), 'sactor');
   wireCards(stage.querySelectorAll('.story-area'), 'sarea');
+  // A lit card lights ALL its wires at once, and its labels sit over a gutter several of them cross.
+  // Hovering one label glows the single wire it names, which is the only way to tell from the page
+  // which of a feature's five arrows a given label belongs to.
   for (const l of labels) {
-    l.addEventListener('mouseenter', () => clearTimeout(hideTimer));
-    l.addEventListener('mouseleave', scheduleHide);
+    l.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimer);
+      const p = pathOfLabel.get(l);
+      if (p) p.classList.add('story-glow');
+    });
+    l.addEventListener('mouseleave', () => {
+      const p = pathOfLabel.get(l);
+      if (p) p.classList.remove('story-glow');
+      scheduleHide();
+    });
   }
   // Empty background clears the pin — bound on the WRAP, not the stage: the stage is only as wide
   // as its columns, and since the third column left, the whitespace right of the cast sits outside

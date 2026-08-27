@@ -3419,6 +3419,24 @@ def test_an_ownership_wire_is_drawn_only_where_exactly_one_owner_is_authored() -
     # that a regression.
     assert "'no journey reaches this'" in bind
     assert "story-elabel-noev" in bind and ".story-elabel-noev" in css
+
+
+def test_hovering_a_label_glows_the_one_wire_it_names() -> None:
+    """A lit card lights ALL its wires, and its labels sit over a gutter several of them cross —
+    without this there is no way to tell from the page which of a feature's five arrows a given
+    label belongs to. The pairing is set where BOTH are made, never inferred from array position:
+    the label is appended by the caller, after the path, so index-pairing is one refactor away from
+    glowing the wrong wire."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const pathOfLabel = new Map();" in bind
+    assert "pathOfLabel.set(lab, path);" in bind
+    assert "p.classList.add('story-glow');" in bind
+    assert "p.classList.remove('story-glow');" in bind
+    # a new picture (a pin, or clearing) must never leave a stale wire singled out
+    assert "'story-hot', 'story-cold', 'story-glow'" in bind
+    assert "p.classList.remove('story-glow');   // a new picture starts with no wire singled out" in bind
+    assert "svg.story-wires path.story-glow {" in (VIEWER_DIR / "viewer.css").read_text()
     # A SHARED area draws no ownership wire and says its owners in WORDS instead. No dashed border:
     # dashed already means "a container, open it" on every diagram in this viewer.
     assert ".story-shared {" in css, "a shared area says its owners in words"

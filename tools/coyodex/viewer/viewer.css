@@ -1722,6 +1722,11 @@ svg.story-wires path.story-ref { stroke-width: 1.2; opacity: .6; }
    shouts before the reader has picked anything spends the page's one loud voice on it. */
 svg.story-wires path.story-hot { stroke: #4f46e5; stroke-width: 2.2; opacity: 1; }
 svg.story-wires path.story-ref.story-hot { stroke-width: 1.8; }
+/* The ONE wire a hovered label names, picked out of the bundle its card lit. Heavier and haloed
+   rather than a different colour: the picture already belongs to one feature, and a second colour
+   would read as a second thing rather than as "this line, of those". */
+svg.story-wires path.story-glow { stroke: #4f46e5; stroke-width: 3.2; opacity: 1;
+                                  filter: drop-shadow(0 0 4px rgba(79,70,229,.55)); }
 svg.story-wires path.story-cold { opacity: .14; }
 svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-col { display: flex; flex-direction: column; gap: 14px; }
