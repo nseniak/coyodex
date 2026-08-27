@@ -7472,9 +7472,9 @@ function safeMsgName(s) {
 function actorStations(actorName) {
   const key = safeMsgName(actorName);
   const out = [];
-  (GRAPH.happy_path || []).forEach((st, i) => {
+  (GRAPH.happy_path || []).forEach((st) => {
     const drivers = HP_ACTORS_OF_STEP[st.id] || [];
-    if (drivers.length && drivers[0].name === key) out.push({ st, n: i + 1 });
+    if (drivers.length && drivers[0].name === key) out.push(st);
   });
   return out;
 }
@@ -7507,7 +7507,7 @@ function actorJourney(actorName) {
   const stations = actorStations(actorName);
   const g = actorGroups().find((x) => x.actor === actorName);
   const ucs = g ? g.ucs : [];
-  const zones = [];              // [{fid, stations:[{st,n}], sides:[ucNode]}], in WALK order
+  const zones = [];              // [{fid, stations:[hpStep], sides:[ucNode]}], in WALK order
   const featureOfUc = (ucId) => {
     const p = (GRAPH.nodes[ucId] || {}).parent;
     return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
@@ -7520,7 +7520,7 @@ function actorJourney(actorName) {
   // page that claims an order, so a feature entered twice gets TWO zones, one at each position.
   let run = null;
   for (const s of stations) {
-    const fid = featureOfUc(s.st.uc);
+    const fid = featureOfUc(s.uc);
     if (!run || run.fid !== fid) { run = { fid, stations: [], sides: [] }; zones.push(run); }
     run.stations.push(s);
   }
@@ -7533,7 +7533,7 @@ function actorJourney(actorName) {
   // never enters on the walk. Trailing zones follow the rail, drawn exactly like the others — a
   // feature is not demoted for missing this actor's walk — and they order by the story column, the
   // one derived order every screen agrees on; a no-feature zone comes last.
-  const stationUcs = new Set(stations.map((s) => s.st.uc));
+  const stationUcs = new Set(stations.map((s) => s.uc));
   const column = (FEATURES.story || {}).column || [];
   const offZones = [];
   const offByFid = {};
@@ -7628,14 +7628,17 @@ function journeyZoneHtml(z, opts) {
       + `<span>${esc(name)}</span></button>`
     : (z.stations || []).length || (z.sides || []).length
       ? '<span class="journey-zkind">not in any feature</span>' : '');
-  // The station carries its number's DIGIT COUNT, because the title lines its left edge up with the
-  // number and a number centred on the dot starts further left the more digits it has.
+  // A dot and a title. The station carried its position in the whole walk as a number over the
+  // title, and the number told the reader nothing they act on: the rail already runs left to right,
+  // and which of the walk's twenty steps this one is answers no question this page asks. It cost an
+  // alignment rule per digit count, because a number centred on the dot starts further left the more
+  // digits it has, and the title had to line up with the number rather than with the dot.
   const stations = (z.stations || []).map((s) =>
-    `<button type="button" class="journey-station journey-d${String(s.n).length}" `
-    + `data-step="${esc(s.st.id)}" `
-    + `title="Open the Happy Path: ${esc(s.st.title || 'this step')}">`
-    + `<span class="journey-dot"></span><span class="journey-n">${s.n}</span>`
-    + `<span class="journey-t">${esc(stationTitle(s.st.title, o.actor))}</span></button>`).join('');
+    '<button type="button" class="journey-station" '
+    + `data-step="${esc(s.id)}" `
+    + `title="Open the Happy Path: ${esc(s.title || 'this step')}">`
+    + '<span class="journey-dot"></span>'
+    + `<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span></button>`).join('');
   const sides = (z.sides || []).map((uc) =>
     `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
     + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`).join('');
@@ -7648,10 +7651,8 @@ function journeyZoneHtml(z, opts) {
   // lower lane still sits in row 3 with everyone else's. Empty, it draws no rail line — the rule is
   // `.journey-track:empty`, so an off-path feature is not crossed by a path it never joins.
   // The off-path list lines its circles up with the station titles above it, so the box has ONE text
-  // column. The titles hang off their number, whose left edge depends on its digit count, so the
-  // list takes the indent of this box's FIRST station — the one the reader's eye starts from.
-  const sideIndent = (z.stations || []).length
-    ? ' journey-d' + String(z.stations[0].n).length : '';
+  // column. Both now start at the box's own 16px of padding and need no extra indent: with the step
+  // numbers gone, a title starts at its dot's left edge instead of under a number of unknown width.
   // Every cell of a box carries `gapBefore`, because the box is four separate grid items in one
   // column and a margin on one of them would move that cell alone.
   const gap = o.gapBefore ? ' journey-gap-before' : '';
@@ -7660,7 +7661,7 @@ function journeyZoneHtml(z, opts) {
     + (o.noPath ? '' : `<div class="journey-track${gap}${o.first ? ' journey-track-first' : ''}`
       + `${o.last ? ' journey-track-last' : ''}" `
       + `style="grid-column:${col}">${stations}</div>`)
-    + (o.offLane ? `<div class="journey-sides${gap}${sideIndent}" `
+    + (o.offLane ? `<div class="journey-sides${gap}" `
       + `style="grid-column:${col}">${sides}</div>` : '');
 }
 // This page once opened with a greyed BEFORE-segment: the steps of the role this actor used to be,
@@ -7669,6 +7670,30 @@ function journeyZoneHtml(z, opts) {
 // "before" — on the argus map the Page owner's own steps are 6, 9, 11, 15, 19, 20 and the Visitor's
 // are 1, 2, 16, so step 16 was drawn as happening before step 6. The role change survives as the
 // hero's "was <role> until <use case>" line, which states it once and cannot be out of order.
+// The actor themself, heading the board: icon THEN name, on one line, over the gutter and above both
+// lane names. It was first drawn ON the rail, centred on the line, and that placement said the wrong
+// thing: the figure sat inside the happy-path band, so the band below it read as somebody else's use
+// cases. This page is everything ONE actor does, on the path and off it, so the head titles the whole
+// board and both lanes hang under it.
+//
+// One line, in the hand every other title on this page uses, is what makes this a SLOT rather than an
+// actor's portrait: a feature's sparkle and a feature's name drop in with nothing redrawn. The draft
+// that centred the name under a 30px figure had a shape nothing else on the page had, and one that
+// only fits a figure.
+//
+// It is deliberately NOT a fourth cell of the rail grid. A cell in row 1 would grow that row for
+// every feature too, and each feature's tinted box would open with 26px of empty colour above its
+// name. Outside the grid, the boxes are untouched.
+//
+// The SAME drawing the cast card gives them — person or service, in the actor tints — because one
+// figure means "who" wherever a who is drawn, and a second hand for it here would read as a second
+// kind of thing.
+function journeyActorHeadHtml(actorName) {
+  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
+  return '<div class="journey-actorhead">'
+    + `${storyGlyphSvg(role && role.kind)}`
+    + `<span class="journey-actorname">${esc(actorName || '')}</span></div>`;
+}
 function renderActorPage(actorName) {
   const { zones, offZones } = actorJourney(actorName);
   const onRail = zones.map((z) => ({ z, o: { actor: actorName } }));
@@ -7701,14 +7726,21 @@ function renderActorPage(actorName) {
   // Three cells, one per row, so the gutter is a solid white strip the board's contents slide
   // UNDER when it scrolls sideways. Two cells left the feature names and the step titles showing
   // through the gaps between the labels, cut off mid-word.
+  //
+  // Each lane name sits ON its own lane. The upper one is centred on the rail — 22.5px down its row,
+  // where the rail is drawn — so it reads as a caption on that line rather than as a heading over the
+  // whole band. The lower one keeps the dashed cut it shares with the boxes.
   const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
     + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
     + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
   // No legend. With the two lanes named, every line it carried was either restating a label or
   // teaching a click the reader finds by trying it.
   const rail = onHtml + offHtml;
+  // The actor heads the board WHATEVER the lanes are, including for an actor whose every use case is
+  // off the happy path (argus's Page owner is one): the figure says whose board this is, and that is
+  // as true of a board with one lane as of a board with two.
   const board = rail
-    ? '<div class="journey-board"><div class="journey-rail'
+    ? `<div class="journey-board">${journeyActorHeadHtml(actorName)}<div class="journey-rail`
       + `${offLane ? ' journey-has-off' : ''}${noPath ? ' journey-no-path' : ''}">`
       + `${gutter}${rail}</div></div>`
     : '<p class="empty">This map records nothing this actor does.</p>';

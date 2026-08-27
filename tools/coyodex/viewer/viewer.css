@@ -1841,6 +1841,21 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    never enters follow, in story-column order, drawn as normal boxes with an EMPTY upper lane. */
 .journey-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
                  overflow-x: auto; padding: 22px 18px 16px 0; margin: 14px 0 6px; }
+/* The actor heads the board, over the gutter and ABOVE both lanes: this page is everything one actor
+   does, on the path and off it, and a figure drawn inside the upper lane made the lower one read as
+   somebody else's use cases. Outside the rail grid on purpose — a fourth cell in row 1 would grow
+   that row for every feature, opening each tinted box with 26px of empty colour above its name.
+   Sticky like the gutter under it, so the head stays put while the board scrolls sideways, and it
+   starts at the gutter's own 18px so it lines up with the lane names below.
+   ICON THEN NAME, on one line — the hand every title on this page is written in (a feature box's
+   name, a cast card's name). It was a figure with the name centred under it, which was a shape
+   nothing else on the page had. One line means the slot takes a feature's sparkle and a feature's
+   name, or any other element's, with nothing to redraw. */
+.journey-actorhead { position: sticky; left: 0; z-index: 5; background: #fff; width: max-content;
+                     padding-left: 18px; padding-right: 12px;
+                     display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+#diagram .journey-actorhead .story-glyph { width: 17px; height: 17px; }
+.journey-actorname { font-size: 13.5px; font-weight: 650; color: #1e2235; line-height: 1.3; }
 /* ONE grid for the whole board: row 1 the feature name, row 2 the happy-path lane, row 3 the lane
    for everything else this actor can do. Column 1 is the gutter that names the two lanes; every
    feature takes one column after it. Sharing the rows is the point — the dashed cut between the
@@ -1895,29 +1910,19 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                                                                         padding-top: 12px; }
 .journey-station { font: inherit; background: none; border: 0; padding: 0; text-align: left;
                    position: relative; width: 126px; cursor: pointer; display: block; color: inherit; }
-/* The dot sits at the station's left edge, and the number and the title start at its CENTRE (half
-   of the 15px dot), so the text hangs from the point the rail actually passes through. The station
-   is 8px wider than the text needs, to give that indent back to the title rather than take a line. */
+/* The dot sits at the station's left edge, and the title starts at that same edge under it, so both
+   hang from the point the rail actually passes through. */
 .journey-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
                border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
                margin: 2px 0 3px; box-sizing: border-box; }
 .journey-station:hover .journey-dot { background: #4f46e5; }
 .journey-station:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
-/* The number is CENTRED on the dot: a block exactly the dot's width, text centred in it, sitting at
-   the dot's left edge. Starting it at the dot's centre put the digit beside the dot, not under it. */
-.journey-n { display: block; width: 15px; text-align: center; font-size: 10px; font-weight: 700;
-             color: #4f46e5; line-height: 1.2; }
-/* The title's left edge lines up with the NUMBER's, not with the dot's centre. The number is centred
-   on the dot, so where it starts depends on how many digits it has: measured, one digit starts 4.9px
-   from the dot's left edge and two start 1.5px. Three or more are wider than the dot, so the number
-   leads and the title starts with it at 0. */
+/* The step's position in the whole walk was drawn here as a number over the title. It answered no
+   question this page asks — the rail already runs left to right — and it cost an indent rule per
+   digit count on the title and on the off-path list under it, because a number centred on the dot
+   starts further left the more digits it has. Gone, and both columns now start at the box's own
+   16px of padding, which is what makes the box read as ONE text column. */
 .journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; }
-.journey-d1 .journey-t { padding-left: 4.9px; }
-.journey-d2 .journey-t { padding-left: 1.5px; }
-/* …and the off-path list under them takes the same indent, on top of the box's own 16px, so the
-   circles start where the titles start and the box reads as one column. */
-.journey-sides.journey-d1 { padding-left: 20.9px; }
-.journey-sides.journey-d2 { padding-left: 17.5px; }
 .journey-station:hover .journey-t { color: #4f46e5; }
 /* The lower lane. Its dashed top edge spans the full width of every box at one height, and the
    gutter's own lower label carries the same line, so the cut reads as one band across the board. */
@@ -1938,7 +1943,11 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                   font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
                   color: #5a6072; line-height: 1.35; }
 .journey-gutter-top { grid-row: 1; }
-.journey-gutter-on { grid-row: 2; padding-top: 14px; }
+/* The upper lane's name sits ON the rail: 15.75px of padding puts the 13.5px line box's middle at
+   22.5px, which is where the rail is drawn (`top: 21px` plus half of `height: 3px`). At the row's
+   top it read as a heading over the whole band, which is the same thing the lower lane's name is,
+   and the two lanes are not the same kind of thing — only one of them has a line. */
+.journey-gutter-on { grid-row: 2; padding-top: 15.75px; }
 .journey-gutter-off { grid-row: 3; border-top: 1px dashed #c9cdde; padding-top: 7px; }
 /* Trailing features need no marker before them: their happy-path lane is empty, and the rail stops. */
 .journey-metasep { margin: 0 2px; color: #9aa0b4; }

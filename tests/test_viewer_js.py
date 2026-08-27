@@ -641,11 +641,102 @@ def test_features_owns_the_actor_page_and_the_actors_view_is_gone() -> None:
     assert "renderRoleGrid" not in js
 
 
+def test_the_actor_heads_their_own_board_above_both_lanes() -> None:
+    """The board opens with the actor themself — icon then name on one line, over the gutter and
+    above BOTH lane names.
+
+    The figure was first drawn ON the rail, centred on the line, which is where the eye wants it.
+    That placement said the wrong thing: it sat inside the happy-path band, so the band under it read
+    as somebody else's use cases. The page is everything ONE actor does, on the path and off it, so
+    the head titles the whole board and the two lanes hang under it.
+
+    Icon THEN name, on one line, is the hand every other title on this page is written in — a feature
+    box's name, a cast card's name. The first draft stacked the name under a 30px figure, a shape
+    nothing else on the page had, and a shape that only fits a figure. One line makes the head a
+    SLOT: a feature's sparkle and a feature's name drop in with nothing redrawn.
+
+    The head is deliberately NOT a fourth cell of the rail grid. A cell in row 1 would grow that row
+    for every feature too, and each tinted box would open with 26px of empty colour above its name —
+    measured. Outside the grid the boxes are untouched, and the head is sticky like the gutter under
+    it, so it stays put while the board scrolls sideways.
+
+    The drawing is the cast card's — `storyGlyphSvg`, person or service in the actor tints — because
+    one figure means "who" wherever a who is drawn.
+
+    With the figure gone from the rail, the upper lane's name takes the rail's own height: 15.75px of
+    padding puts its 13.5px line box's middle at 22.5px, which is `top: 21px` plus half of
+    `height: 3px`. At the row's top it read as a heading over the band, which is what the lower
+    lane's name is — and only one of the two lanes has a line to caption."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    page = js[js.index("function renderActorPage(actorName) {"):
+              js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
+    # The head opens the board, OUTSIDE the rail grid, and is drawn whatever the lanes are — an actor
+    # whose every use case is off the happy path still owns their board.
+    assert '<div class="journey-board">${journeyActorHeadHtml(actorName)}<div class="journey-rail' in page
+    assert "hasPath ? `<div" not in page and "hasPath ? '<span" not in page, \
+        "the head is not conditional on there being a happy path"
+    assert "journey-actorhead" not in page.split("const gutter")[1].split("const rail")[0], \
+        "…and it is not one of the gutter's cells"
+    assert ".journey-actorhead { position: sticky; left: 0;" in css, \
+        "sticky like the gutter, so the head stays put when the board scrolls sideways"
+    # One LINE — icon then name — not a figure with a name under it.
+    head_css = css[css.index(".journey-actorhead { position: sticky"):
+                   css.index(".journey-actorname {")]
+    assert "display: flex; align-items: center; gap: 8px;" in head_css
+    assert "flex-direction: column" not in head_css, "icon then name, side by side"
+    assert "#diagram .journey-actorhead .story-glyph { width: 17px; height: 17px; }" in css, \
+        "icon at the size a title carries one, not a 30px portrait"
+    assert ".journey-actorname { font-size: 13.5px;" in css
+    # Row 1 is the feature-name row and nothing else, so the tinted boxes are untouched.
+    assert ".journey-gutter-top { grid-row: 1; }" in css
+    assert ".journey-zlabel { grid-row: 1; white-space: nowrap; padding-top: 8px;" in css
+    # The upper lane's name sits ON the rail, which is drawn at top 21 with height 3.
+    assert ".journey-track::before" in css and "top: 21px;" in css and "height: 3px;" in css
+    assert ".journey-gutter-on { grid-row: 2; padding-top: 15.75px; }" in css
+    # Same drawing as the cast card's, read off the same role record, and the name beside it.
+    head = js[js.index("function journeyActorHeadHtml(actorName) {"):
+              js.index("\nfunction ", js.index("function journeyActorHeadHtml(actorName) {") + 10)]
+    assert "ROLE_BY_NAME[(actorName || '').trim().toLowerCase()]" in head
+    assert "storyGlyphSvg(role && role.kind)" in head, "one hand for who, wherever a who is drawn"
+    assert '<span class="journey-actorname">${esc(actorName || \'\')}</span>' in head
+
+
+def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
+    """A station on the rail is a dot and a title. Its position in the whole walk was drawn over the
+    title as a number, and the number answered no question this page asks: the rail already runs left
+    to right, and which of the walk's twenty steps this one is changes nothing the reader does.
+
+    It was not free. A number centred on the dot starts further left the more digits it has, so the
+    title had to line up with the NUMBER rather than with the dot — an indent rule per digit count,
+    on the title AND on the off-path list under it, which took the indent of its box's first station.
+    All of that goes with the number. The title now starts at the dot's own left edge, the off-path
+    list starts at the box's own padding, and the two are one column because they are one number.
+
+    The station index is gone from the data too: `actorStations` returns the walk's steps, not steps
+    wrapped in a counter that nothing reads."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    zone = js[js.index("function journeyZoneHtml(z, opts) {"):
+              js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
+    assert 'class="journey-n"' not in js and ".journey-n {" not in css, "no number on the dot"
+    assert "journey-d1" not in js and "journey-d2" not in css, "and no per-digit indent rule"
+    assert "sideIndent" not in zone, "…nor the off-path list's copy of it"
+    assert '<span class="journey-dot"></span>' in zone
+    assert '<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span>' in zone
+    assert 'class="journey-station" ' in zone, "one class, no digit-count variant"
+    # The counter is gone from the data, not just from the markup.
+    stations = js[js.index("function actorStations(actorName) {"):
+                  js.index("\nfunction ", js.index("function actorStations(actorName) {") + 10)]
+    assert "out.push(st);" in stations and "n: i + 1" not in stations
+    assert "s.st." not in js, "a station IS a step now, not a wrapper around one"
+
+
 def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None:
     """An actor's page cuts every feature box into two lanes: the happy-path steps above a dashed
     line, everything else the actor drives below it. Six signals already separated them (dot vs
-    circle, the rail, the step numbers, ink vs grey, the dashed line, the legend) and readers still
-    read one stacked list, for two reasons this fixes.
+    circle, the rail, the step numbers — since removed — ink vs grey, the dashed line, the legend)
+    and readers still read one stacked list, for two reasons this fixes.
 
     The lanes were never NAMED where the reader looks — the words "happy path" appeared only in the
     legend under the board — and the one label that did exist, "also here:", was drawn per box and
@@ -706,8 +797,10 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     """Four things this page drew are gone, and each for its own reason.
 
     The hero opened with the actor's place in the story ("2nd to appear"). The rail below already
-    numbers this actor's steps by their position in the walk, so an actor whose first station is 1
-    was told the same fact twice in two vocabularies.
+    puts this actor's steps in the walk's order, left to right, so an actor whose first station
+    opens the walk was told the same fact twice in two vocabularies. (The rail said it in figures
+    too, until the step numbers came out; see
+    `test_a_station_is_a_dot_and_a_title_with_no_step_number`.)
 
     A greyed BEFORE-segment drew the steps of the role this actor used to be (a `becomes`
     predecessor). It was untrue, not merely noisy: it drew EVERY step that role drives, wherever
