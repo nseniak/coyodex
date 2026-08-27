@@ -3030,7 +3030,10 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     reader visits it once and never returns. As the lead of the landing page it cannot be missed and
     costs nothing to scroll past."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    landing = js[js.index("const LANDING ="): js.index("go({ kind: LANDING });")]
+    # The boot call now reads the URL first and falls back to LANDING, so the end marker is the fallback
+    # itself, searched from the table — `{ kind: LANDING }` also appears in the URL-adopt path above.
+    start = js.index("const LANDING =")
+    landing = js[start: js.index("{ kind: LANDING });", start)]
     assert "HAS_USECASES ? 'usecases'" in landing
     assert "HAS_HP ? 'hp'" in landing
     assert "'actors'" not in landing, "the Actors view left the fallback chain with its tab"
@@ -3833,3 +3836,161 @@ def test_a_feature_card_counts_its_joined_rules_and_hides_a_zero() -> None:
     bind = _story_fn(js, "bindStoryDiagram")
     assert "featsec-rules" not in bind, "no count opens a section of the feature page"
     assert "'featsec-' + key" in js, "the feature page's section ids are untouched"
+
+
+# --- the URL carries the screen -----------------------------------------------------------------
+
+def test_the_url_carries_every_field_that_names_a_screen_and_reads_it_back() -> None:
+    """A shared link, and a reload, have to land on the screen you were on. So the part of the URL after
+    `#` carries the screen: its kind, every field `stateKey` tells screens apart by, and the selection.
+
+    The encoder READS STATE_FIELDS rather than listing the fields again. That list has silently dropped a
+    field three times when it was maintained by hand (see the comment on `pushContentPoint`), so the
+    round-trip below sets every field STATE_FIELDS names and demands all of them back: a field added
+    there is carried by the URL with no second edit, and cannot be forgotten here."""
+    every = "Object.fromEntries([['kind', 'rules']].concat(STATE_FIELDS.map((f) => [f, 'X_' + f])))"
+    got = json.loads(_run_js_regions(
+        [("const STATE_FIELDS = [", "function stateKey(s) {"),
+         ("function urlFromState(s, live) {", "// `history` (the app's own stack) SHADOWS")],
+        """
+const trip = (s) => stateFromUrl('#' + urlFromState(s, false));
+console.log(JSON.stringify({
+  plain: trip({ kind: 'usecases' }),
+  drill: trip({ kind: 'subsystem', sid: 'SUB_A' }),
+  edge: trip({ kind: 'edge', a: 'C1', b: 'C2' }),
+  sels: trip({ kind: 'container', sels: ['C1', 'C1>C2'] }),
+  one: trip({ kind: 'container', sel: 'C9' }),
+  every: trip(""" + every + """),
+  odd: trip({ kind: 'actor', act: 'Owner & friend / other' }),
+  nohash: stateFromUrl(''),
+  junk: stateFromUrl('#nothing=here'),
+}));
+"""))
+    assert got["plain"] == {"kind": "usecases"}
+    assert got["drill"] == {"kind": "subsystem", "sid": "SUB_A"}
+    assert got["edge"] == {"kind": "edge", "a": "C1", "b": "C2"}
+    assert got["sels"] == {"kind": "container", "sels": ["C1", "C1>C2"]}
+    # A single requested key (a focus-drill / flow-step link) comes back as the general list.
+    assert got["one"] == {"kind": "container", "sels": ["C9"]}
+    # An actor's name is the state field, and names carry spaces, `&` and `/`.
+    assert got["odd"] == {"kind": "actor", "act": "Owner & friend / other"}
+    # No hash, and a hash naming no view, both mean "no screen" — the caller falls back to LANDING.
+    assert got["nohash"] is None and got["junk"] is None
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fields = re.findall(r"'(\w+)'", js[js.index("const STATE_FIELDS = ["): js.index("function stateKey(s) {")])
+    assert got["every"] == {"kind": "rules", **{f: "X_" + f for f in fields}}, got["every"]
+
+
+def test_the_browser_buttons_and_the_apps_own_are_one_history() -> None:
+    """Two Back buttons that keep separate lists can disagree, and the one that is wrong is whichever
+    the reader pressed. So the app's Back and Forward hand the step to the BROWSER, and the browser's
+    own buttons come back through `popstate` into exactly the move the app used to make inline.
+
+    The internal stack stays the source of truth: each browser entry only names the point it stands for.
+    An entry from an earlier page load carries an index that means nothing to this load's stack, so the
+    match is on the load stamp too — without it, Back after a reload would jump to an unrelated screen."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function back() { stepHistory(-1); }" in js
+    assert "function fwd() { stepHistory(1); }" in js
+    assert ("if (URL_SYNC && urlStarted) { if (delta < 0) window.history.back();"
+            " else window.history.forward(); return; }") in js
+    assert "const target = (st && st.load === URL_LOAD && typeof st.coy === 'number') ? st.coy : null;" in js
+    # `hi` still gates the step, so the browser can never be walked out of the map by the app's buttons.
+    assert "if (target < 0 || target >= history.length) return;" in js
+
+
+def test_the_drill_zoom_survives_the_browser_buttons() -> None:
+    """The zoom-in / zoom-out between two screens is decided by `driveTransition` from the screen being
+    LEFT and the screen ARRIVING, and by nothing else — not by the history stack. So a step driven by the
+    browser plays the same animation as the app's own button, as long as it passes the leaving screen.
+
+    A jump of more than one screen has no meaningful zoom between its two ends, and the browser can make
+    one (hold Back down, or pick from the history menu). Those cut straight there, on the same instant
+    path a tab click already uses."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    pop = js[js.index("window.addEventListener('popstate'"): js.index("window.addEventListener('hashchange'")]
+    assert "const from = history[hi];" in pop and "captureViewState();" in pop
+    assert "const jump = Math.abs(target - hi);" in pop
+    assert "driveTransition(from, jump > 1);" in pop
+    # The animation reads only the two states, which is why it needs no change at all here.
+    drive = js[js.index("function driveTransition(from, instant) {"): js.index("async function runDrill(")]
+    assert "history" not in drive.replace("history[hi]", ""), "the zoom must not read the stack"
+
+
+def test_a_selection_restates_the_url_and_never_grows_the_back_button() -> None:
+    """Clicking a box is part of where you are, so it belongs in the URL. It is NOT a navigation: it
+    makes no history point, and it must make no browser entry either, or the Back button would fill up
+    with selections and stop meaning "the previous screen".
+
+    One `pushState` exists in the whole file, inside `pushUrl`, which is called only where a history
+    point is created. Everything else restates the entry in place."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert len(re.findall(r"window\.history\.pushState", js)) == 1, "pushState belongs to pushUrl alone"
+    assert js.count("pushUrl();") == 2, "one per history point: go() and pushContentPoint()"
+    sel = js[js.index("function selApply(scene) {"): js.index("function flowSuspendIfDeselected")]
+    assert "if (scene === mainScene) refreshUrl();" in sel
+    # …and the one place every render ends, so a drill's own fields land in the URL once it has settled.
+    chrome = js[js.index("function renderChrome(s) {"):]
+    assert "if (s === history[hi]) refreshUrl();" in chrome[: chrome.index("\n}\n")]
+
+
+def test_a_url_from_before_this_page_load_starts_a_fresh_stack() -> None:
+    """A reload, or a link pasted into a tab already showing a map, lands on a browser entry the app has
+    no record of. It starts a fresh stack at the screen the URL names rather than appending to the one it
+    has: appending would leave the app's own Back button pointing at a screen the BROWSER would not go
+    to, so the button would lie. With a fresh stack `hi` is 0, the button is honestly disabled, and the
+    browser's own Back keeps working from there."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    adopt = js[js.index("function adoptUrlState(from) {"):]
+    adopt = adopt[: adopt.index("\n}\n")]
+    assert "const s = stateFromUrl(location.hash) || { kind: LANDING };" in adopt
+    assert "history = [s];" in adopt and "hi = 0;" in adopt
+    assert "driveTransition(from);" in adopt, "the zoom still plays: it reads the two screens only"
+    # A hash typed into the address bar fires hashchange and never popstate, so it routes here too.
+    assert "window.addEventListener('hashchange'" in js
+
+
+def test_a_browser_step_arrives_once_not_twice() -> None:
+    """A history step between two entries with different fragments fires popstate AND hashchange. Both
+    handlers move the view, so without a guard every Back arrived twice: once as the step it is, and
+    once as "a reader typed a new hash", which throws the internal stack away. Measured in a browser
+    before the guard: one Back collapsed the stack to a single point, and the next Forward then showed
+    the right screen under a stale index, so a later Back did nothing at all.
+
+    The guard is the hash this file last wrote or claimed. Recomputing the expected hash instead does
+    not work: at hashchange time the new screen has not rendered, so the recomputed hash still carries
+    the previous screen's selection and never matches."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "let urlLast = null;" in js
+    pop = js[js.index("window.addEventListener('popstate'"): js.index("window.addEventListener('hashchange'")]
+    assert "urlLast = location.hash;" in pop, "popstate must claim the hash before hashchange sees it"
+    hc = js[js.index("window.addEventListener('hashchange'"):]
+    hc = hc[: hc.index("\n});") + 4]
+    assert "if (location.hash === urlLast) return;" in hc
+    # Every writer keeps it current, or the next reader edit would be mistaken for one of our own.
+    for fn in ("function pushUrl() {", "function refreshUrl() {", "function adoptUrlState(from) {"):
+        body = js[js.index(fn):]
+        assert "urlLast = " in body[: body.index("\n}\n")], fn
+
+
+def test_a_map_opened_as_a_plain_file_syncs_no_url() -> None:
+    """`pushState` on a `file://` page is rejected by the browser, the same reason API_BASE is null
+    there. So the whole mechanism is off for a map opened as a file, and Back / Forward step the internal
+    stack directly, exactly as they did before. Every call is wrapped as well, so a browser that refuses
+    anyway leaves the URL alone instead of half-syncing it."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "const URL_SYNC = /^https?:$/.test(location.protocol);" in js
+    for fn in ("function pushUrl() {", "function refreshUrl() {"):
+        body = js[js.index(fn):]
+        body = body[: body.index("\n}\n")]
+        assert "if (!URL_SYNC" in body and "try {" in body and "catch (_)" in body
+
+
+def test_the_url_uses_the_fragment_so_the_server_is_untouched() -> None:
+    """The screen rides in the part of the URL after `#`, which a browser never sends to the server. So
+    serve.py keeps its `/p/<slug>/` routes and needs no change to make a link shareable."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "'#' + urlFromState(history[hi], false)" in js
+    assert "'#' + urlFromState(history[hi], true)" in js
+    serve = (VIEWER_DIR / "serve.py").read_text()
+    assert "urlFromState" not in serve and "coy=" not in serve

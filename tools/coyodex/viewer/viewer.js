@@ -944,6 +944,9 @@ function selApply(scene) {
   scene._selClear = () => undos.forEach((f) => f && f());
   if (scene.selection.length) scene.focusUnion(scene, scene.selection); else clearFocus(scene);
   renderSelPanel(scene);
+  // Selecting is not a navigation — it makes no history point — but it IS part of where you are, so the
+  // URL is restated in place. replaceState only, or every click on a box would grow the Back button.
+  if (scene === mainScene) refreshUrl();
   flowSuspendIfDeselected(scene);
   flowMapRefreshStepLabels();
   // Deselecting the last element (⌘-click it off) returns to the empty state: clear the file-browser
@@ -4263,6 +4266,87 @@ function stateKey(s) {
     + (s.sys ? ':' + s.sys : '')   // one System collection, the drill out of its cards
     + (s.id ? ':' + s.id : '');    // …and one element's own details page
 }
+// --- the URL says which screen you are on ---------------------------------------
+// The part of the URL after `#` carries the screen: its kind, every field `stateKey` distinguishes
+// screens by, and the selection. The FRAGMENT is used rather than a path because a fragment never
+// reaches the server — serve.py's /p/<slug>/ routes are untouched by any of this. STATE_FIELDS is read
+// here too, so a field added there rides along with no second list to keep in step.
+//
+// Only over http(s). A map opened as a plain file gets no URL sync at all, because pushState on a
+// file:// page is rejected by the browser — the same reason API_BASE is null there.
+const URL_SYNC = /^https?:$/.test(location.protocol);
+// Stamped into every browser history entry this page load creates. An entry from an EARLIER load (the
+// page was reloaded, or a link was opened into a tab that already held a map) still carries an index,
+// but that index means nothing to the stack this load built — matching on it would jump to an
+// unrelated screen. The stamp is what tells the two apart.
+const URL_LOAD = Math.random().toString(36).slice(2);
+// The open file in the source column is deliberately NOT carried. Back/forward already reopens it from
+// the history point's own `content`, and only the diagram views restore `content` on arrival — putting
+// it in a shared link would work on a diagram and silently do nothing on a text view.
+function urlFromState(s, live) {
+  const q = new URLSearchParams();
+  q.set('v', s.kind);
+  for (const f of STATE_FIELDS) {
+    const v = s[f];
+    if (v !== undefined && v !== null && v !== '') q.set(f, String(v));
+  }
+  // The live scene is the truth for the selection: `sels` is written on LEAVE, so while a screen is on
+  // show its own entry still holds the selection from the PREVIOUS visit. A text view has no scene and
+  // no selection, so it must emit none rather than fall back to that stale list.
+  const sels = live
+    ? (mainScene ? mainScene.selection.map((d) => d.key) : [])
+    : ((s.sels && s.sels.length) ? s.sels : (s.sel ? [s.sel] : []));
+  for (const k of sels) if (k) q.append('sel', k);
+  return q.toString();
+}
+function stateFromUrl(hash) {
+  const raw = String(hash || '').replace(/^#/, '');
+  if (!raw) return null;
+  const q = new URLSearchParams(raw);
+  const kind = q.get('v');
+  if (!kind) return null;
+  const s = { kind };
+  for (const f of STATE_FIELDS) { const v = q.get(f); if (v) s[f] = v; }
+  const sels = q.getAll('sel').filter(Boolean);
+  if (sels.length) s.sels = sels;
+  return s;
+}
+// `history` (the app's own stack) SHADOWS the global `history` in this module, so every browser-history
+// call below has to name `window.history` explicitly.
+let urlStarted = false;
+// The hash this file last WROTE or last took responsibility for. A history step whose two entries have
+// different fragments fires popstate AND hashchange, in that order — so without this, every Back would
+// arrive twice: once as the step it is, and once as "a reader typed a new hash", which throws the
+// internal stack away. Comparing against the recomputed hash instead is not enough: at hashchange time
+// the new screen has not rendered yet, so the recomputed hash still carries the OLD screen's selection
+// and never matches. Measured: Back collapsed the stack to one point every time.
+let urlLast = null;
+// A NEW screen: one new browser entry, stamped with the index of the internal point it stands for. The
+// internal stack stays the source of truth; the entry only has to say which point it is.
+function pushUrl() {
+  if (!URL_SYNC || hi < 0 || !history[hi]) return;
+  const h = '#' + urlFromState(history[hi], false);
+  const stamp = { coy: hi, load: URL_LOAD };
+  try {
+    // The FIRST point of a page load restates the entry the browser already has for this page; only a
+    // later navigation adds one. Pushing here instead would leave a duplicate entry behind on every
+    // load, and the first Back press would look like it did nothing.
+    if (urlStarted) window.history.pushState(stamp, '', h);
+    else window.history.replaceState(stamp, '', h);
+  } catch (_) { return; }  // history not writable here — leave the URL alone rather than half-syncing
+  urlStarted = true;
+  urlLast = h;
+}
+// The SAME screen, restated: after a render (the drill fields have settled) and after a selection
+// change. Never adds an entry, so clicking boxes cannot fill the browser's Back button with selections.
+function refreshUrl() {
+  if (!URL_SYNC || !urlStarted || hi < 0 || !history[hi]) return;
+  const st = (window.history.state && typeof window.history.state.coy === 'number')
+    ? window.history.state : { coy: hi, load: URL_LOAD };
+  const h = '#' + urlFromState(history[hi], true);
+  try { window.history.replaceState(st, '', h); } catch (_) { return; }
+  urlLast = h;
+}
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
 // scroll offset, or the file browser showing. Restored on back/forward so returning to a point reopens
 // the exact file (where you were) or the browser — not merely whatever the selection would imply.
@@ -4342,6 +4426,7 @@ function pushContentPoint(content) {
   for (const f of STATE_FIELDS) if (c[f] !== undefined) kept[f] = c[f];
   history.push(kept);
   hi = history.length - 1;
+  pushUrl();
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
 function go(state, instant) {
@@ -4351,10 +4436,72 @@ function go(state, instant) {
   history = history.slice(0, hi + 1);  // a new branch drops any forward history
   history.push(state);
   hi = history.length - 1;
+  pushUrl();   // one browser entry per internal point, so the two stacks step together
   driveTransition(from, instant);
 }
-function back() { if (hi > 0) { const from = history[hi]; captureViewState(); hi -= 1; driveTransition(from); } }
-function fwd() { if (hi < history.length - 1) { const from = history[hi]; captureViewState(); hi += 1; driveTransition(from); } }
+// Back and Forward hand the step to the BROWSER, so the browser's buttons and the app's own are one
+// mechanism instead of two that can drift apart. The popstate handler below makes the actual move, by
+// exactly the steps this pair used to make inline. `hi` still gates them, so a step is only delegated
+// when there IS an internal point to land on, and the browser can never be walked out of the map.
+// Without URL sync (a map opened as a plain file) they step the internal stack directly, as before.
+function stepHistory(delta) {
+  const target = hi + delta;
+  if (target < 0 || target >= history.length) return;
+  if (URL_SYNC && urlStarted) { if (delta < 0) window.history.back(); else window.history.forward(); return; }
+  const from = history[hi];
+  captureViewState();
+  hi = target;
+  driveTransition(from);
+}
+function back() { stepHistory(-1); }
+function fwd() { stepHistory(1); }
+// The browser's Back / Forward. The entry names the internal point it stands for, so the move is the
+// same one `stepHistory` makes: remember the screen being left, step the index, and let driveTransition
+// decide the zoom from those two screens alone. That is why the drill animations survive the change —
+// the zoom is a function of the leaving screen and the arriving screen, never of the stack.
+window.addEventListener('popstate', (ev) => {
+  if (!URL_SYNC) return;
+  urlLast = location.hash;   // claim this hash, so the hashchange that follows the step is not a second arrival
+  const st = ev.state;
+  const target = (st && st.load === URL_LOAD && typeof st.coy === 'number') ? st.coy : null;
+  const from = history[hi];
+  captureViewState();
+  if (target !== null && history[target]) {
+    // A jump of more than one screen (holding Back down, or picking from the history menu) has no
+    // meaningful zoom between its two ends, so it cuts straight there — the instant path a tab click
+    // already uses.
+    const jump = Math.abs(target - hi);
+    hi = target;
+    driveTransition(from, jump > 1);
+    return;
+  }
+  adoptUrlState(from);
+});
+// A hash typed or pasted into the address bar of a tab that already holds a map. The browser adds an
+// entry and fires hashchange, never popstate, so the move is made here. pushState/replaceState fire
+// neither, so nothing this file writes can reach this handler.
+window.addEventListener('hashchange', () => {
+  if (!URL_SYNC || hi < 0) return;
+  if (location.hash === urlLast) return;   // this file wrote it, or a popstate already handled it
+  const from = history[hi];
+  captureViewState();
+  adoptUrlState(from);
+});
+// An entry from BEFORE this page load: a reload, or a link pasted into a tab already showing a map.
+// The app kept no record of the path that produced it, so it starts a FRESH stack at the screen the URL
+// names, and re-stamps the entry so a later step has an index to read. Starting fresh (rather than
+// appending) is what keeps the app's own Back button honest: `hi` is 0, so the button is disabled, and
+// it can never claim a step that would actually send the browser somewhere else. The browser's own Back
+// keeps working from here, adopting each older entry the same way.
+function adoptUrlState(from) {
+  const s = stateFromUrl(location.hash) || { kind: LANDING };
+  history = [s];
+  hi = 0;
+  urlStarted = true;
+  urlLast = location.hash;
+  try { window.history.replaceState({ coy: 0, load: URL_LOAD }, '', location.hash); } catch (_) { /* ignore */ }
+  driveTransition(from);
+}
 // A top-bar tab click. Switching to a DIFFERENT tab reopens it where it was last left (its remembered
 // drill + selection + camera + pane); its first visit lands on the overview. Clicking the tab you are
 // ALREADY on is a "reset" — it zooms back out to that tab's plain overview (see resetTab).
@@ -6775,6 +6922,10 @@ function renderChrome(s) {
       if (pills) seg.insertAdjacentHTML('afterend', pills);
     }
   });
+  // Every path through render() ends here, so this is the ONE place the URL has to be restated after a
+  // screen is drawn. The identity test skips the drill animation's intermediate flashes, which render a
+  // throwaway state that is not where the reader ends up.
+  if (s === history[hi]) refreshUrl();
 }
 
 // Icons are drawn in DIAGRAM units, so without this they'd shrink right along with the boxes as the
@@ -12169,4 +12320,9 @@ const LANDING = (HAS_DIFF && HAS_GROUPING) ? 'container'
   : HAS_HP ? 'hp'
   : HAS_GROUPING ? 'container'
   : 'context';
-go({ kind: LANDING });
+// A shared link, or a reload: the URL names the screen to open, and the landing view is only the
+// fallback. A link built against an OLDER map can name a box that is gone; no id list is kept here to
+// catch that, because every screen already carries its own answer — the pages that take an id say "not
+// in the map", and the diagram path degrades to "This view could not be rendered". A second list would
+// be one more thing to keep in step with the map's own kinds.
+go((URL_SYNC && stateFromUrl(location.hash)) || { kind: LANDING });
