@@ -699,7 +699,14 @@ def test_the_actor_heads_their_own_board_above_both_lanes() -> None:
               js.index("\nfunction ", js.index("function journeyActorHeadHtml(actorName) {") + 10)]
     assert "ROLE_BY_NAME[(actorName || '').trim().toLowerCase()]" in head
     assert "storyGlyphSvg(role && role.kind)" in head, "one hand for who, wherever a who is drawn"
-    assert '<span class="journey-actorname">${esc(actorName || \'\')}</span>' in head
+    # …and the markup is the SLOT, filled twice: the actor's figure and name here, a feature's sparkle
+    # and name on a feature's board. One line was chosen so the slot would take either.
+    slot = js[js.index("function journeyHeadHtml(glyph, name) {"):
+              js.index("\nfunction ", js.index("function journeyHeadHtml(glyph, name) {") + 10)]
+    assert '<span class="journey-actorname">${esc(name || \'\')}</span>' in slot
+    assert "journeyHeadHtml(storyGlyphSvg(role && role.kind), actorName)" in head
+    assert "journeyHeadHtml(storyFeatureGlyphSvg(), featureName(capId))" in js, \
+        "the feature's board is headed by the feature, in the same slot and the same hand"
 
 
 def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
@@ -833,7 +840,21 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     assert "▶" not in page, "…and the page draws no arrowhead"
     # The "may also do" line: a sentence carrying a link, not a pill.
     assert "journey-incpill" not in js and "journey-incpill" not in css
-    assert "'<span>may also do everything a '" in meta
+    assert "lead: 'may', tail: ' also do everything a '" in meta
+    # …and the row reads as a sentence: the note that OPENS it takes a capital, and only that one, or
+    # a capital would land after every dot in the middle of the row.
+    assert "const cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);" in meta
+    assert "(i === 0 ? cap(p.lead) : p.lead)" in meta
+    # The row is labelled like the sentence above it, from the same slot in the shared hero.
+    hero = js[js.index("function actorPageHeroHtml(actorName) {"):
+              js.index("\nfunction ", js.index("function actorPageHeroHtml(actorName) {") + 10)]
+    assert "metaLbl: 'Notes:'," in hero
+    # The role change is drawn from BOTH ends. It was read off the predecessor only, so the role who
+    # turns into another said nothing about it: MCP Hero's Visitor page was silent about becoming an
+    # Organization admin while the Organization admin page carried "was Visitor until ...".
+    assert "rel.kind !== 'becomes' || rel.role === role.id" in meta, "…this role's own becomes"
+    assert "lead: 'becomes'" in meta and "at(rel, 'at')" in meta
+    assert "lead: 'was'" in meta and "at(rel, 'until')" in meta
     assert 'class="journey-inclink"' in meta and ".journey-inclink {" in css
     assert "root.querySelectorAll('.journey-inclink')" in js, "the other actor's page is still a click away"
     # …and an actor the happy path never touches (argus's Page owner) loses the upper lane entirely
@@ -2442,7 +2463,27 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     head = js[js.index("function featureHeadHtml(capId) {"):
               js.index("\nfunction ", js.index("function featureHeadHtml(capId) {") + 10)]
-    assert "pageHeroHtml({" in head and "Used by" in head
+    assert "pageHeroHtml({" in head
+    # No `Used by` row: it listed the feature's actors as buttons, and the rail one line below names
+    # every one of them on its boxes — the walk's drivers, and since the side stops moved under their
+    # own driver, the off-walk ones too. Two rows of the same names is what the rail exists to remove.
+    # The hero's line SAYS what kind of line it is. Standing alone under a breadcrumb, one line of
+    # prose does not say whether it describes the feature or states its goal.
+    assert "lbl: 'Feature objective:'," in head
+    hero = js[js.index("function pageHeroHtml(o) {"):
+              js.index("\nfunction ", js.index("function pageHeroHtml(o) {") + 10)]
+    assert "o.lbl ? `<span class=\"page-hero-lbl\">${esc(o.lbl)}</span>` : ''" in hero
+    assert "o.metaLbl" in hero, "…and the row of context under it is labelled from the same slot"
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    # BASELINE, so the label's capitals end where the sentence's letters end. It is the default, so it
+    # is stated by the rule carrying no `vertical-align` at all.
+    lblcss = css[css.index(".page-hero-lbl {"): css.index("}", css.index(".page-hero-lbl {"))]
+    assert "vertical-align" not in lblcss
+    assert ".page-hero-meta { display: flex; align-items: baseline;" in css
+    # …and the width cap is gone, so the line runs the full column.
+    assert "max-width: 68ch" not in css
+    assert '<span class="page-hero-lbl">Used by</span>' not in head
+    assert "featrole" not in js, "the row's buttons went with it"
     assert "f.rules" not in head and "f.components" not in head, "the header holds no counts"
     # A feature's page and a decision area's page are the same shape, so they are the same function.
     assert "function pageHeroHtml(o) {" in js
@@ -2452,7 +2493,9 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     order = re.findall(r"featSection\(secs, '(\w+)', '([^']+)'", secs)
     assert [t for _, t in order] == ["How you reach it", "What it decides", "What it knows",
                                      "What it runs on"], order
-    # The use cases are the FIRST section, emitted by the one list renderer, not by a second copy.
+    # The use cases are emitted by the one list renderer, not by a second copy. On a feature's PAGE
+    # they are the BOARD, drawn bare above the chip bar; the title below is the fallback for a list
+    # that has no board (the "not assigned to a feature" one).
     assert "const title = page ? 'What you can do'" in js
     assert "secs.concat(extra.secs)" in js, "the pinned index is built from the sections themselves"
     # Only the CODE folds. It is the lowest-priority thing on the page and its count is on its chip;
@@ -2489,32 +2532,172 @@ def test_a_feature_page_draws_the_walk_as_a_rail_not_a_grid() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     fj = js[js.index("function featureJourney(capId) {"):
             js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
-    assert "HP_ACTORS_OF_STEP[st.id]" in fj, "the same drawn driver the actor rail files a step under"
+    assert "HP_ACTORS_OF_STEP[st.id]" in fj, "the walk's own record of who drives a step"
     assert "run.stations.push(st);" in fj, "a station IS the walk step, the shape the actor rail uses"
-    # The off-walk use cases hang under the FIRST zone \u2014 they belong to the feature, not to a
-    # position in it, so a second run must not repeat them.
-    assert "zones[0].sides = sides" in js
     rail = js[js.index("function featureRailHtml(capId) {"):
               js.index("\nfunction ", js.index("function featureRailHtml(capId) {") + 10)]
-    assert "if (!zones.length) return '';" in rail, "no walk here keeps the grid, which has sentences"
     assert "journeyZoneHtml(z, {" in rail, "the same cells the actor rail is built from"
-    assert "data-act=" in rail and "data-cap=" not in rail, "a zone is named by its driver here"
+    assert "data-cap=" not in rail, "a zone is named by its driver here, never by the feature"
     assert "tint: featureTint(capId)" in rail, "one feature, so one colour for every zone"
-    # The caller keeps the grid as the fallback, in the SAME section, so the page shape never changes.
-    assert "(body || elementCardGridHtml(ids, per))" in js
+    lbl = js[js.index("function journeyDriverLabelHtml(acts) {"):
+             js.index("\nfunction ", js.index("function journeyDriverLabelHtml(acts) {") + 10)]
+    assert "data-act=" in lbl and "storyGlyphSvg(roleKindOfName(act))" in lbl
+    # EVERY interchangeable driver of the box is named, each with its OWN glyph: a box naming a person
+    # and a program cannot draw one figure for both, and picking the first one's figure is the same
+    # silent deletion that naming only the leftmost driver made.
+    assert "list.map(one).join(" in lbl and "journey-zor" in lbl
+    assert "actorNodeId(act)" in lbl, "…and a name is a door only when it leads somewhere"
+    # `Other` is the bucket an undeclared actor falls in, and it names no page \u2014 the same test the
+    # use-case card's driver pill already makes before it lets its name be clicked.
+    assert "journey-zkind" in lbl
+    assert ".journey-zor {" in (VIEWER_DIR / "viewer.css").read_text()
+    # The caller draws the board BARE, above the chip bar, and keeps the grid only for a list with no
+    # board of its own.
+    assert "const board = page ? featureRailHtml(page) : '';" in js
+    assert "if (board) return '';" in js, "the use-case group emits nothing when the board draws"
+    assert '<div class="usecases-wrap">${head}${board}${index}' in js
 
 
-def test_a_feature_rail_breaks_a_zone_on_a_new_driver_or_a_gap_in_the_walk() -> None:
-    """Two boxes, not one, when the walk leaves and comes back. On this project's own map "Getting set
-    up" is entered at step 1 and again at step 15, and "Reviewing a finished build" at 21 and 25 \u2014 one
-    box holding both draws them as neighbours, and the rail is the one thing on the page that claims
-    an order. The walk POSITION is only ever compared, never carried onto a station: no station shows
-    a number, so the index is a fact about the loop and nothing else."""
+def test_a_feature_board_wears_no_section_frame() -> None:
+    """The feature board was wrapped in a "What you can do" section, and all three parts of that wrapper
+    said something the page already says. The frame was a card containing a card, the shape this viewer
+    removes everywhere it appears. The heading named the page's own subject under a breadcrumb that is
+    the page's title. The chip jumped to the top of the page, where the reader already was.
+
+    The actor board never had any of the three, so the two pages drew one picture two ways. They draw it
+    one way now: bare, under the hero, with the chip bar indexing the four sections that follow it."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    # The board is not registered as a section, so it gets no chip and no heading.
+    ren = js[js.index("function renderUseCases(sel) {"):
+             js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
+    assert ren.count("secs.push({ id: secId, title, count: ids.length });") == 1, \
+        "the one push left is the no-board fallback's"
+    assert "${board}${index}" in ren, "the board leads the page, the chip bar indexes what follows"
+    # …and the board keeps its own frame, because there is no section around it to be the card.
+    assert ".journey-board { background: #fff; border: 1px solid" in css
+
+
+def test_a_side_stop_hangs_under_the_actor_who_drives_it() -> None:
+    """An off-walk use case used to be dumped into `zones[0]`, whose box belongs to whoever drives the
+    FIRST step of the feature. So on any feature with more than one driver \u2014 4 of the 7 on this
+    project's own map \u2014 the rail said that actor does things they never do. It is the mirror of a
+    bug the actor page never had: there a side stop hangs under its own FEATURE, not under the first.
+
+    The driver comes from `actorGroups()`, the one grouping the actor page and the cast cards already
+    read, so three screens cannot disagree about who drives a use case. Two of its rules come along and
+    both are wanted: a use case naming several INTERCHANGEABLE actors is listed under every one of them,
+    and one undeclared name sends the whole use case to `Other` rather than to a half-known home.
+
+    A driver the walk never reaches opens a TRAILING zone, drawn exactly like the others \u2014 the actor
+    page's rule for a feature it never enters, with the two keys swapped. They order by the story
+    diagram's CAST column, the one derived actor order every screen agrees on."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     fj = js[js.index("function featureJourney(capId) {"):
             js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
-    assert "run.act !== act || i !== prev + 1" in fj
-    assert "prev = i;" in fj
+    assert "zones[0].sides" not in js, "a side stop is not filed under whoever drives step one"
+    assert "for (const g of actorGroups()) for (const n of g.ucs)" in fj, \
+        "one grouping answers who drives a use case"
+    assert "if (onWalk.has(id)) continue;" in fj
+    # A driver's FIRST zone takes them, the rule the actor page applies to a feature entered twice.
+    # A box naming several interchangeable drivers is the box for each of them.
+    assert "for (const z of zones) for (const a of z.acts) if (a && !(a in firstOf)) firstOf[a] = z;" in fj
+    # Once per ACTOR, and at most once per BOX: a use case naming two interchangeable actors belongs
+    # to both, but one box naming both of them must not draw the same circle twice.
+    assert "const placed = new Set();" in fj and "if (placed.has(z)) continue;" in fj
+    # ...and a driver with no zone gets one after the rail, in cast order.
+    assert "offZones.push(offByActor[a] = { acts: [a], stations: [], sides: [] })" in fj
+    assert "((FEATURES.story || {}).cast || []).map((rid) => roleName(rid))" in fj
+    assert "offZones.sort((a, b) => pos(a) - pos(b));" in fj
+    # Side stops read in the FEATURE's own use-case order, not in the order the groups were built.
+    assert "for (const id of f.useCases || []) {" in fj
+    # The zone's name is the AUTHORED one. The walk records the folded spelling the diagrams draw, and
+    # every other reader of `act` \u2014 the label, the link, roleKindOfName, the actorGroups match \u2014
+    # speaks the authored space. One table crosses the two, which is what ROLE_BY_NAME's comment asks.
+    assert "map((d) => authoredActorName(d.name))" in fj
+    auth = js[js.index("function authoredActorName(drawn) {"):
+              js.index("\nfunction ", js.index("function authoredActorName(drawn) {") + 10)]
+    assert "ROLE_BY_SAFENAME[String(drawn || '').trim().toLowerCase()]" in auth
+    assert "ROLE_BY_SAFENAME[safeMsgName(r.name || '').toLowerCase()] = r;" in js
+
+
+def test_a_feature_the_walk_never_enters_still_draws_the_board() -> None:
+    """The feature page used to drop the rail and draw a card grid when the walk never enters the
+    feature, so the page changed shape depending on the map. The actor page answers the same situation
+    (argus's Page owner never appears on the walk) by drawing the board with ONE lane, because
+    "everything here is off the happy path" is an answer, not an absence. The feature page now does the
+    same, and the gutter still names the lane it kept.
+
+    The cost is real: a card carried each use case's sentence and a side stop does not. What the board
+    buys instead is the one thing the grid could never say, which is who drives what. Only a feature
+    with no use cases at all draws nothing."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    rail = js[js.index("function featureRailHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featureRailHtml(capId) {") + 10)]
+    assert "if (!zones.length && !offZones.length) return '';" in rail, \
+        "only a feature with no use cases at all draws nothing"
+    assert "const hasPath = zones.some((z) => z.stations.length);" in rail
+    assert "hasPath ? '<div class=\"journey-gutter journey-gutter-on\">Happy path</div>' : ''" in rail
+    assert "noPath ? ' journey-no-path' : ''" in rail, "one lane, and no cut to draw"
+    assert ".journey-no-path .journey-sides, .journey-no-path .journey-gutter-off" in css
+    # The trailing zones are drawn by the same cell builder, and the rail's tip clears them.
+    assert "boxes(zones, true)}${boxes(offZones, false)}" in rail
+    assert "gapBefore: !lead && i === 0 && zones.length," in rail
+
+
+def test_the_rail_keeps_the_marks_the_cards_carried() -> None:
+    """The rail replaced the use-case cards on a feature's page, and it took both of their marks with
+    it: in change-impact mode the page could no longer say which use cases changed, and an untraced use
+    case stopped being distinguishable from a phantom one. Both are back, on a station and on a side
+    stop, read from the SAME two sources the card reads so the two can never disagree."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    marks = js[js.index("function journeyMarksHtml(ucId) {"):
+               js.index("\nfunction ", js.index("function journeyMarksHtml(ucId) {") + 10)]
+    assert "mode === 'diff' && hasDiff() && usecaseDiffState(ucId)" in marks
+    assert "(FLOWS_MM && FLOWS_MM[ucId]) ? ''" in marks
+    zone = js[js.index("function journeyZoneHtml(z, opts) {"):
+              js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
+    assert "${journeyMarksHtml(s.uc)}" in zone and "${journeyMarksHtml(uc.id)}" in zone, \
+        "a station and a side stop both carry them"
+    # The card's own two colours, so one mark means one thing wherever it is drawn.
+    assert ".journey-mark-changed { background: #fff8c5; color: #9a6700; }" in css
+    assert ".journey-mark-untraced { background: #fef3c7; color: #92400e; }" in css
+    assert ".badge.modified { background: #fff8c5; color: #9a6700; }" in css
+    assert "background: #fef3c7; color: #92400e; }" in css[css.index(".uc-untraced"):]
+
+
+def test_a_feature_rail_breaks_a_zone_on_a_new_driver_and_on_nothing_else() -> None:
+    """A new box on a change of DRIVER, and on nothing else \u2014 the actor page's rule with the two keys
+    swapped, which is what makes the two boards one picture drawn twice.
+
+    It also cut on a GAP in the walk, meaning the walk left this feature and came back. That cut was
+    unreadable here and readable on the actor page, for the same reason: a cut is only legible when the
+    two boxes it makes carry different names. On the actor page they always do, because the thing that
+    changed IS the box's name. Here the driver has not changed, so the reader met two boxes with one
+    name, side by side, and nothing between them saying why \u2014 the reason lived on a page they were
+    not on. Measured across the four maps the viewer reads: 5 of the 34 features drew such a pair, MCP
+    Hero's "Tool access through the gateway" among them (its steps 13 and 15, with step 14 in another
+    feature between them).
+
+    Nothing is lost that the page ever showed. The stations stay in walk order, and no station has
+    carried its position in the walk since the step numbers were dropped, so a box claims the ORDER of
+    its stations and never their adjacency. A driver who really does return after somebody else still
+    gets two boxes, because the driver changed in between: on the Mio map "Paying for Mio" draws
+    Workspace admin, Payment provider, Workspace admin, and that picture explains itself."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fj = js[js.index("function featureJourney(capId) {"):
+            js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
+    assert "if (!run || zoneKey(run.acts) !== zoneKey(acts)) {" in fj
+    assert "function zoneKey(acts) {" in js, "a zone's identity is the SET of its drivers"
+    assert "prev + 1" not in fj and "prev = i" not in fj, \
+        "the walk position is not compared any more, so it is not tracked"
+    # …and the actor rail's own rule is the mirror: a new box on a change of FEATURE, never on a gap,
+    # because on that page a gap is only other people acting.
+    aj = js[js.index("function actorJourney(actorName) {"):
+            js.index("\nfunction ", js.index("function actorJourney(actorName) {") + 10)]
+    assert "if (!run || run.fid !== fid)" in aj
     assert 'class="journey-n"' not in js, "no rail numbers its stations"
 
 
@@ -2536,8 +2719,9 @@ def test_one_board_and_one_binder_serve_both_rails() -> None:
               js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
     assert "o.tint || (z.fid ? featureTint(z.fid) : '')" in zone
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert ".usecases-wrap:has(.journey-board)" in css, "a nested board earns the same measure"
-    assert ".uc-group > .journey-board" in css, "inside a section the section is the card"
+    assert ".usecases-wrap:has(.journey-board)" in css, "a board earns the same measure on both pages"
+    # Neither board is nested in a section, so neither needs the rule that used to strip its frame.
+    assert ".uc-group > .journey-board" not in css
 
 
 def test_a_long_list_on_the_feature_page_is_grouped_not_dumped() -> None:
@@ -2626,8 +2810,13 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
     bind = js[js.index("function bindFeaturePage(root) {"):
               js.index("\nfunction ", js.index("function bindFeaturePage(root) {") + 10)]
     assert "selectFromTree(b.getAttribute('data-id'))" in bind
-    assert "go({ kind: 'actor', act: b.getAttribute('data-act') })" in bind
     assert "kind: 'container'" not in bind and "kind: 'domain'" not in bind
+    # The role links on this page are the RAIL's zone names now, wired by the binder both boards share
+    # rather than by a second handler of this page's own.
+    assert "bindJourney(root, {});" in bind
+    jbind = js[js.index("function bindJourney(root, o) {"):
+               js.index("\nfunction ", js.index("function bindJourney(root, o) {") + 10)]
+    assert "go({ kind: 'actor', act: b.getAttribute('data-act') })" in jbind
     # A feature has no box on any diagram, so its home is its own page — without this case a feature
     # id fell through to the default and opened Dependencies.
     target = js[js.index("function selectTargetFor(id) {"):

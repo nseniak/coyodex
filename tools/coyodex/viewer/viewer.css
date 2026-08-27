@@ -196,11 +196,6 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    block's last line start at the same x.
    The pills and the sentence reuse the element page's own hero classes (.page-hero-pills /
    .page-hero-purpose), so a subsystem reads the same here as on its own page. */
-/* FULL WIDTH, unlike every other place the hero is drawn. On an element's page the sentence is the first
-   line of a page of prose, and prose needs a reading cap or the eye loses the start of the next line.
-   Here it is ONE line of chrome above a drawing: capped at 68ch it wrapped to three short lines and left
-   two thirds of the strip empty, which cost the diagram height for nothing. So both caps come off — the
-   block's own, and the shared hero's 68ch. */
 #pagehero { padding: 9px 20px 12px; }
 #pagehero[hidden] { display: none; }
 /* The shared hero draws its own closing rule, for a page where the body scrolls on under it. Here the
@@ -208,7 +203,9 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    twice — so the wrapper keeps only its contents. */
 #pagehero .page-hero { padding: 0; border-bottom: 0; margin-bottom: 0; }
 #pagehero .page-hero-pills { margin: 0; }
-#pagehero .page-hero-purpose { margin: 6px 0 0; font-size: 13.5px; color: #4b5563; max-width: none; }
+/* Smaller and quieter here: one line of chrome above a drawing, not the lead of a page of prose. The
+   width cap it used to lift is gone from the shared hero itself. */
+#pagehero .page-hero-purpose { margin: 6px 0 0; font-size: 13.5px; color: #4b5563; }
 #pagehero .ecard-extra { margin: 6px 0 0; }
 #pagehero .page-hero-meta { margin: 7px 0 0; }
 /* THE DOOR TO A PROCESS'S DETAILS PAGE. A link, not a button: it goes somewhere, it does not act on what
@@ -631,11 +628,21 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    same as the component list and the reader had to work out what mattered. */
 .page-hero { padding: 4px 0 14px; border-bottom: 1px solid #eef2f7; margin-bottom: 4px; }
 .page-hero-pills { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0 0 8px; }
-.page-hero-purpose { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: #374151;
-                     max-width: 68ch; }
-.page-hero-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0; }
+/* Full width. It was held to 68ch for readability, and under a breadcrumb that runs the whole width
+   the short line read as a column the page did not otherwise have. */
+.page-hero-purpose { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: #374151; }
+/* BASELINE, not centre: the row opens with the same kind of label the sentence above it carries, and
+   a label centred on a row of taller text does not end where that text ends. */
+.page-hero-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0; }
+/* What KIND of line this is ("feature objective", "actor objective", "notes"). It rides the line
+   rather than sitting over it, so naming the line costs no line.
+   BASELINE, which is the default and is therefore stated by having no `vertical-align` at all. It
+   carried `vertical-align: 1px` for a moment, and 1px is exactly what that cost: measured on the
+   Organization admin page, the label's baseline sat at y=183.75 against the sentence's 184.75. The
+   label is all capitals, so its baseline IS the bottom of its letters, and the two rows of letters
+   have to end on one line. */
 .page-hero-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-                 color: #6b7280; margin-right: 2px; }
+                 color: #6b7280; margin-right: 7px; }
 /* What the map does NOT hold. Quiet, but never blank: an empty box and "nothing recorded" are
    different facts, and only one of them is honest. */
 .feat-empty { margin: 0; font-size: 13px; color: #9ca3af; }
@@ -646,9 +653,9 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .feat-chipgroup + .feat-chipgroup { margin-top: 12px; }
 .feat-chipgroup-name { font-size: 11px; font-weight: 700; text-transform: uppercase;
                        letter-spacing: .05em; color: #6b7280; margin: 0 0 6px; }
-.featref, .featrole { font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer;
+.featref { font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer;
                       border: 1px solid #e5e7eb; border-radius: 9px; background: #fff; color: #374151; }
-.featref:hover, .featrole:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
+.featref:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
 /* The code section folds. It is the lowest priority thing on a feature page, and its heading already
    states the count, which is the fact worth scanning. */
 .feat-fold > summary { cursor: pointer; color: #4338ca; font-size: 13px; }
@@ -1853,10 +1860,6 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    which of the two pages it is drawing, which is the point. */
 .journey-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
                  overflow-x: auto; padding: 22px 18px 16px 0; margin: 14px 0 6px; }
-/* Inside a section the section IS the card, so the board drops its own frame rather than drawing a
-   card inside a card — the one shape this viewer removes everywhere it appears. It keeps the
-   sideways scroll, which is the only thing the element is really for there. */
-.uc-group > .journey-board { border: 0; border-radius: 0; padding: 6px 0 0; margin: 0; }
 /* The actor heads the board, over the gutter and ABOVE both lanes: this page is everything one actor
    does, on the path and off it, and a figure drawn inside the upper lane made the lower one read as
    somebody else's use cases. Outside the rail grid on purpose — a fourth cell in row 1 would grow
@@ -1891,12 +1894,21 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* Single-line, so a long feature name WIDENS its column instead of clipping, and every feature's
    name is exactly one line high — which is what keeps the two lanes level across the board. */
 .journey-zlabel { grid-row: 1; white-space: nowrap; padding-top: 8px; padding-bottom: 2px; }
+/* BASELINE, not centre. An inline-flex box whose items are centred has no text baseline to offer the
+   line it sits on, so the browser synthesises one from the box's bottom edge — and the word "or" beside
+   two such buttons then sat 2.63px below the names, measured on the Mio map's "Setting Mio up".
+   Aligning the button's own items on the baseline gives the line the NAME's baseline, so the name, the
+   "or" and the next name all end on one line. The figure's feet land on that line too, which is where
+   an icon beside a word belongs. */
 .journey-zname { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .03em;
                  color: #1e2235; background: none; border: 0; padding: 0; cursor: pointer;
-                 display: inline-flex; align-items: center; gap: 5px; }
+                 display: inline-flex; align-items: baseline; gap: 5px; }
 #diagram .journey-zname .story-glyph { width: 13px; height: 13px; }
 .journey-zname:hover { color: #4f46e5; text-decoration: underline; }
 .journey-zkind { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; color: #5a6072; }
+/* Between two INTERCHANGEABLE drivers of one box. Lower case and quiet, because it is the one word on
+   the label that is not a name, and the names are what the reader is scanning for. */
+.journey-zor { font-size: 10.5px; font-weight: 500; color: #8a90a4; margin: 0 5px; }
 /* The upper lane: the rail runs at one height and bridges the gaps between boxes, each side
    reaching half the gap. */
 .journey-track { grid-row: 2; display: flex; gap: 30px; align-items: flex-start;
@@ -1947,9 +1959,23 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .journey-side { font: inherit; background: none; border: 0; padding: 0; text-align: left;
                 display: flex; gap: 7px; align-items: baseline; font-size: 11px; color: #5a6072;
                 cursor: pointer; max-width: 190px; }
+/* The name and its marks are ONE column beside the circle, never two items on the circle's row: as a
+   row item the marks pushed the name onto a line of its own as soon as the two passed 190px. */
+.journey-sidet { display: block; }
 .journey-side:hover { color: #4f46e5; }
 .journey-o { font-size: 12px; color: #9aa0b4; line-height: 1; }
 .journey-side:hover .journey-o { color: #4f46e5; }
+/* The two marks a use-case CARD carries, kept on the rail that replaced those cards: "changed" in
+   change-impact mode, and "not traced" for a use case the map describes but never walked. Same two
+   colours the card's own chips use (`.badge.modified`, `.uc-untraced`), so one mark means one thing
+   wherever it is drawn. Smaller, because a station's title is 11.5px and the mark is its footnote.
+   Under the title in a station and under the name in a side stop: one place, so the mark reads as a
+   footnote on the thing above it rather than as a second column of its own. */
+.journey-marks { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.journey-mark { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+                padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+.journey-mark-changed { background: #fff8c5; color: #9a6700; }
+.journey-mark-untraced { background: #fef3c7; color: #92400e; }
 /* The lane names, once each, pinned to the left edge while the board scrolls sideways. One cell per
    row and `stretch`, so the gutter is a solid strip the boxes pass under — sized to the labels only,
    it left the feature names and the step titles showing through the gaps, cut off mid-word. */
