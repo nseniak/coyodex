@@ -228,9 +228,19 @@ def test_every_bullet_of_the_walk_sits_on_the_line() -> None:
             [...document.querySelectorAll('.walk-row')].forEach((row, i) => {
                 const line = +(row.querySelector('.walk-line').getBoundingClientRect().top + 21).toFixed(1);
                 const dots = [...new Set([...row.querySelectorAll('.walk-dot')].map(mid))];
-                const who = row.querySelector('.walk-who');
+                // The person's BLOCK is what sits on the line: an icon with the name under it, so the
+                // line runs between the two. And where two people share a row, the little "or"
+                // between them sits on their ICONS, not on their block — its own middle would fall
+                // in the names, and it would read as a word joining them rather than a choice.
+                const one = row.querySelector('.walk-one, .walk-nowho');
+                const or = row.querySelector('.walk-or');
+                const ico = row.querySelector('.walk-ico');
                 if (dots.length !== 1 || dots[0] !== line) bad.push({ row: i, dots, line });
-                else if (who && Math.abs(mid(who) - line) > 1) bad.push({ row: i, who: mid(who), line });
+                else if (one && Math.abs(mid(one) - line) > 1) bad.push({ row: i, one: mid(one), line });
+                else if (or && Math.abs((or.getBoundingClientRect().top + 10.5) - mid(ico)) > 1.5) {
+                    bad.push({ row: i, or: +(or.getBoundingClientRect().top + 10.5).toFixed(1),
+                               ico: mid(ico) });
+                }
             });
             return bad;
         }""")

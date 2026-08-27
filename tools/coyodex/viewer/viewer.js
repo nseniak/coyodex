@@ -8253,8 +8253,11 @@ function walkBoxHtml(sg) {
     + '<span class="walk-dot"></span>'
     + `<span class="walk-n">${esc(String(walkPos(st.id)))}</span>`
     + `<span class="walk-t">${esc(stationTitle(st.title, sg.acts))}</span></button>`).join('');
-  // The box is exactly as wide as its steps. Letting it size to its LABEL instead made a one-step
-  // box as wide as the feature's name, and the steps then stopped lining up down the walk.
+  // A FLOOR of one column per step, and the feature's own name may push it wider — the rule the
+  // journey rail states as `minmax(150px, max-content)`. Fixed at the step count instead, half the
+  // feature names on the board were clipped: 6 of 16 on the Mio map and 9 of 18 on MCP Hero, where
+  // "Tool access through the gateway" showed as "Tool access thr…" three times. The feature is the
+  // thing this board exists to add, so it is not the thing to truncate.
   const tint = sg.fid ? featureTint(sg.fid) : '';
   // Where this box's line STARTS and ENDS, in the journey rail's own three lengths. Inside a row a
   // box reaches half the gap on each side (WALK_BRIDGE), so two boxes of one person read as one line
@@ -8262,7 +8265,7 @@ function walkBoxHtml(sg) {
   // start, WALK_END at the finish, where the arrow head's point sits. Every row IS one person's run,
   // so those ends are the row's ends and nothing else has to be asked.
   return `<div class="walk-box${sg.closes ? ' walk-closes' : ''}" `
-    + `style="width:${sg.steps.length * WALK_STEP_W}px`
+    + `style="min-width:${sg.steps.length * WALK_STEP_W}px`
     + `${tint ? ';background:' + tint : ''}`
     + `;--walk-l:${sg.opens ? WALK_TIP : WALK_BRIDGE}px`
     + `;--walk-r:${sg.closes ? WALK_END : WALK_BRIDGE}px">`

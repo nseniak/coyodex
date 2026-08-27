@@ -2049,13 +2049,12 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    owner" stopped the bullets lining up down the walk. */
 .walk-box { flex: none; border-radius: 10px; padding: 10px 0 12px; position: relative;
             background: #f7f8fb; }
-.walk-flabel { height: 18px; padding: 0 14px; display: flex; align-items: center; gap: 5px;
-               overflow: hidden; min-width: 0; }
+.walk-flabel { height: 18px; padding: 0 14px; display: flex; align-items: center; gap: 5px; }
 .walk-fname { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
               color: #1e2235; background: none; border: 0; padding: 0; cursor: pointer;
-              display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; }
+              display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .walk-fname:hover { color: #4f46e5; text-decoration: underline; }
-.walk-fnm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.walk-fnm { white-space: nowrap; }
 #diagram .walk-fname .story-glyph { width: 13px; height: 13px; }
 .walk-fkind { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; color: #5a6072; }
 /* The line. `--walk-l` pulls its left end BACK past the box edge, to touch the person who just
@@ -2101,28 +2100,41 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    thing, and this puts the name somewhere a reader can scan straight down. Icon then name on one
    line, because a gutter is read across and not down. The 44px of top padding puts the name's line
    on the line the boxes draw, which sits 51.5px into a box less the row's own 8px of padding. */
-.walk-hand { flex: none; width: 150px; padding: 50px 12px 0 18px;
-             display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
-             justify-content: flex-end; }
+/* 122px tall and its items CENTRED, so their middle lands 61px down — which is where the row draws
+   its line (8px of row padding, an 18px feature label, 4px of gap and the line's own 21px). A fixed
+   padding above the block cannot do it: a two-line name is taller than a one-line one, and the two
+   would sit at different heights against the same line. */
+.walk-hand { flex: none; width: 150px; height: 122px; padding: 0 12px 0 14px;
+             display: flex; align-items: center; justify-content: center; gap: 6px; }
+/* Icon over name, the way a person is drawn everywhere else on this board's family of pages. The
+   two blocks of an "either of them may start it" row sit side by side, and `align-items: center` on
+   the row is what puts the little "or" on their middle instead of on a baseline one of them owns. */
 .walk-one { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
-            display: inline-flex; align-items: baseline; gap: 5px; }
-.walk-ico { display: inline-flex; align-items: baseline; }
-#diagram .walk-ico .story-glyph { width: 15px; height: 15px; }
-.walk-who { font-size: 11.5px; line-height: 1.3; font-weight: 650; color: #39405a;
-            text-align: right; }
+            display: inline-flex; flex-direction: column; align-items: center; gap: 4px;
+            min-width: 0; min-height: 56px; }
+.walk-ico { display: inline-flex; }
+#diagram .walk-ico .story-glyph { width: 21px; height: 21px; }
+.walk-who { font-size: 11px; line-height: 1.25; font-weight: 650; color: #39405a;
+            text-align: center; }
 .walk-one:hover .walk-who { color: #4f46e5; text-decoration: underline; }
 /* A person the map never declared: drawn, because the walk really does hand over to them, but not a
    door — there is no page behind them. Quieter, and with no pointer, so nothing invites the click. */
 .walk-one-dead { cursor: default; }
 .walk-one-dead .walk-who { color: #8a90a4; }
 .walk-one-dead:hover .walk-who { color: #8a90a4; text-decoration: none; }
-.walk-nowho { font-size: 11.5px; font-weight: 650; color: #8a90a4; text-align: right; }
+.walk-nowho { font-size: 11px; font-weight: 650; color: #8a90a4; text-align: center; }
 /* …and a step whose use case the map never recorded: the same rule, for the same reason. */
 .walk-step-dead { cursor: default; }
 .walk-step-dead:hover .walk-dot { background: #fff; }
 .walk-step-dead:hover .walk-t { color: #1e2235; }
 /* Between two INTERCHANGEABLE people, in the same quiet lower case a feature box's label uses. */
-.walk-or { font-size: 10px; font-weight: 500; color: #8a90a4; }
+/* On the ICON's middle, not the block's. The block is an icon with a name under it, so its own
+   middle falls in the name — and the little "or" then read as a word belonging to the two names
+   rather than as a choice between the two people. It takes the block's own 56px height, so the row
+   centres the two identically, and then walks down to the icon's centre: half of the 21px glyph,
+   less half of its own line. The two 56px must stay in step, which is why they sit together here. */
+.walk-or { font-size: 10px; font-weight: 500; color: #8a90a4; height: 56px;
+           display: flex; align-items: flex-start; padding-top: 4px; }
 /* "Show in context" on this board: a station on an actor's rail, a feature's rail or a story
    arrow's label lands here naming one step, and the step is ringed the way a card list rings a
    card (`.ecard-flash`), since there is no scene to select into. */
