@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -301,6 +302,7 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             notes.append(f"{len(dropped)} auth surface(s) in baseline but not (by name) in candidate "
                          f"— names drift with LLM wording, so verify rather than trust: {head}{more}")
         notes.extend(_auth_site_notes(baseline, candidate))
+    notes.extend(_reproducibility_notes(baseline, candidate))
 
     if t.deployment_linkage_must_not_drop and not baseline.deployment_units:
         # Silence here is indistinguishable from "the gate passed". A baseline blessed before this
@@ -513,6 +515,124 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────────
 
 
+def _overlap(b: set[str], c: set[str]) -> tuple[int, int]:
+    """`(in both, in either)` for two name sets — the two numbers every agreement line here needs.
+
+    One function because two callers computed the same Jaccard by hand and could have drifted apart
+    on the empty case: `max(len(union), 1)` is what keeps a percentage of nothing from dividing by
+    zero, and it belongs in one place."""
+    return len(b & c), max(len(b | c), 1)
+
+
+#: The element kinds a rebuild is compared on. ACCESSORS, not attribute-name strings: a typo in a
+#: string is invisible to pyright and reports the kind as "a profile predates the field", which is a
+#: false explanation rather than an error. One was injected during review and the type checker
+#: passed it.
+_REBUILD_KINDS: tuple[tuple[str, Callable[[MapProfile], list[str] | None]], ...] = (
+    ("component names", lambda p: p.component_names),
+    ("component SOURCE files", lambda p: p.component_sources),
+    ("use-case names", lambda p: p.use_case_names),
+    ("entity names", lambda p: p.entity_names),
+    ("test FILES cited", lambda p: p.test_files),
+)
+
+
+def _same_commit(baseline: MapProfile, candidate: MapProfile) -> tuple[bool, str]:
+    """`(the two maps pin one commit, what to say about the pin)`.
+
+    Two normalisations, both found by comparing real profiles rather than by reasoning:
+
+    * `-dirty` is stripped before comparing, the way `impact_git` already strips it. Without that
+      `5dccb1c` and `5dccb1c-dirty` read as different commits and the comparison went silent between
+      two builds of the same code. A dirty pin is still WORTH SAYING, because uncommitted code can
+      differ between the two builds and then a changed name may be the code after all.
+    * The shorter pin is compared as a PREFIX of the longer. `git rev-parse --short` lengthens as a
+      repo grows and different repos stamp different widths — mcpolis stamps 7 characters, coworker
+      stamps 9 — so requiring equal length disabled the measure on a pair that shared a commit."""
+    b = (baseline.commit or "").strip().removesuffix("-dirty")
+    c = (candidate.commit or "").strip().removesuffix("-dirty")
+    if not b or not c:
+        return False, ""
+    short, long = (b, c) if len(b) <= len(c) else (c, b)
+    if not long.startswith(short):
+        return False, ""
+    dirty = [w for w, p in (("baseline", baseline), ("candidate", candidate))
+             if (p.commit or "").strip().endswith("-dirty")]
+    note = (f" (the {' and '.join(dirty)} pin says `-dirty`, so uncommitted code could differ "
+            f"between the two builds)" if dirty else "")
+    return True, note
+
+
+def _reproducibility_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
+    """How much of the baseline map SURVIVES a rebuild, name by name. Reported, never gated.
+
+    Every gate in this file compares COUNTS, and a count is exactly the measurement this failure
+    walks through. Two mcpolis builds of commit `5dccb1c`, 21 hours apart with no product file
+    changed, sat in band on every count that gates — and 61 of the baseline's 70 component names do
+    not appear in the rebuild at all. Nothing measured that until this ran; the only reason anyone
+    knew was a hand count during a retrospective.
+
+    THE DENOMINATOR IS THE BASELINE, not the union, and the difference is not cosmetic. Union
+    punishes a candidate for SPLITTING: a rebuild that keeps every one of 70 baseline names and adds
+    48 new ones scores 59 % of union while having renamed nothing. "How much of the baseline
+    survived" is the question a reader actually has, and it separates renaming from splitting. The
+    union figure rides along in parentheses because it is what a Jaccard-shaped reader expects.
+
+    EXACT match, and it under-reports. Measured across 39 same-commit pairs, a fuzzy match (case,
+    punctuation, light stemming, token overlap >= 0.6) roughly quadruples the component-name figure —
+    on the pair above, 9 exact becomes 22 fuzzy, because `Log-forwarding pipeline` / `Log forwarding
+    pipeline` and `Tool call router` / `Tool router` are the same box named twice. The exact figure
+    is kept because it is reproducible and has no threshold to argue about, and the line says which
+    it is so nobody quotes it as "87 % of the map was rebuilt differently".
+
+    THE COMMIT GUARD IS A LABEL, NOT A FILTER. Measured over 48 same-commit and 10 consecutive
+    different-commit pairs, the medians are indistinguishable (component names 2 % vs 1 %, sources
+    39 % vs 40 %, entities 76 % vs 78 %). So the commit does not predict agreement, and an earlier
+    draft of this function suppressed the numbers across two commits on a theory the data does not
+    support. It now always reports, and says which case the reader is looking at.
+
+    NOT gated, following `_auth_site_notes`: two independent LLM builds legitimately differ, no
+    threshold has been defended across enough pairs, and a gate on an undefended threshold fails
+    every rebuild. Sources are reported beside names on purpose — names low with sources high says
+    the two builds CUT the code the same way and NAMED it differently, a different repair from
+    cutting it differently."""
+    same, dirty_note = _same_commit(baseline, candidate)
+    if same:
+        head = (f"REBUILD AGREEMENT — both maps pin commit {(candidate.commit or '').strip()}, so a "
+                f"name only one of them carries is the map moving{dirty_note}:")
+    elif (baseline.commit or "").strip() and (candidate.commit or "").strip():
+        head = (f"REBUILD AGREEMENT — the maps pin different commits "
+                f"({baseline.commit} -> {candidate.commit}), so some renaming is the CODE moving. "
+                f"Measured across 58 pairs the commit barely predicts these numbers, so they are "
+                f"still worth reading:")
+    else:
+        head = ("REBUILD AGREEMENT — at least one profile carries no `commit` pin, so whether the "
+                "two maps describe the same code is unknown. Re-bless it to label these numbers:")
+    rows: list[str] = []
+    missing: list[str] = []
+    for label, get in _REBUILD_KINDS:
+        b, c = get(baseline), get(candidate)
+        if b is None or c is None:
+            missing.append(label)
+            continue
+        bs, cs = set(b), set(c)
+        if not bs and not cs:
+            continue
+        shared, union = _overlap(bs, cs)
+        kept = f"{shared} of {len(bs)} survive ({100 * shared // max(len(bs), 1)} %)"
+        rows.append(f"    {label}: {len(bs)} -> {len(cs)}, {kept}"
+                    f" · {100 * shared // union} % of the union · exact match, which under-reports")
+    # The skipped list is emitted even when NO kind could be compared. An earlier draft returned
+    # early on an empty `rows`, so a pair of profiles that both predate every field printed nothing
+    # at all — silence, which is the one thing every escape family here has had to stop doing.
+    notes = ([head] + rows) if rows else []
+    if missing:
+        notes = notes or ["REBUILD AGREEMENT — nothing could be compared:"]
+        notes.append(f"    ({len(missing)} kind(s) skipped — a profile predates the field: "
+                     f"{', '.join(missing)}; re-bless whichever profile is older)")
+    return notes
+
+
 def _auth_site_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
     """How much of the auth surface's ENFORCEMENT LOCATIONS the two maps agree on.
 
@@ -536,9 +656,9 @@ def _auth_site_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
     b, c = set(baseline.auth_sites), set(candidate.auth_sites)
     if not b and not c:
         return []
-    shared = b & c
-    notes = [f"auth ENFORCEMENT LINES: {len(b)} -> {len(c)}, {len(shared)} in both "
-             f"({100 * len(shared) // max(len(b | c), 1)} % of the union). A statement count can hold "
+    shared, union = _overlap(b, c)
+    notes = [f"auth ENFORCEMENT LINES: {len(b)} -> {len(c)}, {shared} in both "
+             f"({100 * shared // union} % of the union). A statement count can hold "
              f"steady while the lines it points at change wholesale, so read this beside the gate."]
     bf = {a.rsplit(":", 1)[0] for a in b}
     cf = {a.rsplit(":", 1)[0] for a in c}

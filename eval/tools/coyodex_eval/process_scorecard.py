@@ -195,9 +195,66 @@ def _strip_multiline_quotes(text: str) -> str:
     return "".join(out)
 
 
+#: The opening of `bash -c '<script>'` — an interpreter whose `-c` body is SHELL, not data. Path is
+#: optional (`/bin/bash`), and any flags may precede `-c` (`bash -lc` is written `bash -l -c` here;
+#: the combined form is deliberately not matched, because `-lc` is one token and unwrapping it would
+#: need a flag table this module has no business carrying).
+_SHELL_C_OPEN = re.compile(
+    r"""(?:^|(?<=[\s;&|(]))            # a command position, not the middle of a word
+        (?:[\w./-]*/)?(?:ba|z|k|da)?sh  # sh / bash / zsh / ksh / dash, with an optional path
+        (?:\s+-[a-zA-Z]+)*              # its flags
+        \s+-c\s+                       # ending in -c
+        (['"])                          # the quote opening the script
+    """, re.X)
+
+#: A `bash -c` chain deeper than this is not shell any build writes; the cap stops a pathological
+#: input from looping.
+_SHELL_C_MAX_DEPTH = 5
+
+
+def _unwrap_shell_c(text: str) -> str:
+    """`bash -c '<script>'` with the WRAPPER removed and the script left in place, as shell.
+
+    The distinction this draws is between two `-c` flags that look identical and are not: a
+    `python3 -c "…"` body is DATA (it is Python, and naming a command in it does not run it), while a
+    `bash -c '…'` body is SHELL — every command in it really ran. `_strip_multiline_quotes` cannot
+    tell them apart, so it deleted both, and a multi-line `bash -c` body became the two dead tokens
+    `bash -c`.
+
+    The cost was total on a real build: 116 of its 123 Bash calls were `bash -c` wrapped, so the
+    scorecard could not read 94 % of the commands it was scoring. Sixteen assertion lines moved when
+    this was patched, and seven that had printed `n/a` — including `preindex --report used`, which
+    read as "the build skipped it" over a build that ran it — recovered. An instrument that cannot
+    see the command cannot be used to judge the build, and a retrospective reading `n/a` as "no
+    opportunity" blames the wrong thing.
+
+    The closing quote is found by the same ALTERNATION rule `_strip_multiline_quotes` documents —
+    the next occurrence of the same character. That is wrong for a body containing the `'\''`
+    idiom, which closes and reopens; such a body unwraps only up to that point, which is a partial
+    read and never a false invocation. Nothing in either measured corpus uses it."""
+    for _ in range(_SHELL_C_MAX_DEPTH):
+        m = _SHELL_C_OPEN.search(text)
+        if not m:
+            return text
+        quote = m.group(1)
+        close = text.find(quote, m.end())
+        if close == -1:                          # unbalanced: leave it for the quote scanner
+            return text
+        # The trailing side is spliced with a NEWLINE, not a space, and the difference is a false
+        # positive. `_HEREDOC` ends a body on `^\s*TERM\s*$`, so a terminator that sat on the last
+        # line of the wrapped script — `bash -c 'python3 - <<PY … PY' | tail -2` — stops matching
+        # the moment its line continues into the trailing shell. The heredoc body, which is DATA,
+        # then reads as commands: three shapes were found this way, each promoting a `coyodex …`
+        # line that never ran. Neither measured corpus contains one, but `bash -c '… | head -N'` is
+        # one build's dominant idiom and `bash -c 'python3 - <<PY … PY'` appears in it too; only
+        # their combination was missing.
+        text = text[:m.start()] + " " + text[m.end():close] + "\n" + text[close + 1:]
+    return text
+
+
 def _shell_only(command: str) -> str:
     """The command with embedded PROGRAM TEXT removed — heredoc bodies and multi-line quoted
-    strings.
+    strings. A `bash -c` wrapper is unwrapped FIRST, because its body is shell rather than data.
 
     Without this, a `python3 - <<'PY' … PY` block whose body merely MENTIONS `coyodex anchor-drift`
     (in a comment, or in a string it is about to print) reads as an invocation. That was a real
@@ -205,7 +262,8 @@ def _shell_only(command: str) -> str:
     post-change corpus where one had happened. The bodies are still available to callers that want
     them — `ToolCall.text()` returns the whole input — but nothing that asks 'was this command RUN'
     may look inside them."""
-    without_heredoc = _HEREDOC.sub(" ", command)
+    unwrapped = _unwrap_shell_c(command)
+    without_heredoc = _HEREDOC.sub(" ", unwrapped)
     return _strip_multiline_quotes(without_heredoc)
 
 
@@ -2214,6 +2272,37 @@ _SHELL_WRITE = (r"(?:>>?\s*|tee\s+(?:-a\s+)?)[^\s;&|]*{art}"
 #: The coyodex verbs that legitimately write a map or a fragment.
 _MODEL_WRITERS = ("fix", "record", "assemble", "grounding", "reconcile")
 
+#: Subverbs inside a `_MODEL_WRITERS` group that write NOTHING. The group match alone counted them,
+#: which inflated assertion 27's denominator with read-only calls: on one measured build five of its
+#: 35 "writes" were `grounding lint` (twice), `grounding report`, `fix drop-edge --help` and a
+#: `fix dedup-edge` run with neither `--keep` nor `--accept-suggested`, which only LISTS. The score
+#: barely moved (34/35 -> 29/30) but the sentence "35 opportunities to hand-write the model" was
+#: false, and a denominator is the half of a scorecard nobody re-derives.
+_READ_ONLY_SUBVERBS = ("grounding lint", "grounding report", "grounding by-element",
+                       "grounding refutations", "fix show")
+
+
+def _writes_the_model(command: str) -> bool:
+    """Did this command actually WRITE the model or a fragment, rather than read it?
+
+    `_MODEL_WRITERS` matches a whole subcommand group, and three of those groups hold read-only
+    verbs. `--help` is excluded for the same reason `_invokes` excludes a mention: printing usage is
+    not doing the thing. `fix dedup-edge` is the one verb whose write depends on a FLAG rather than
+    on its name — without `--keep` or `--accept-suggested` it lists its suggestions and stops."""
+    if not any(_invokes(command, v) for v in _MODEL_WRITERS):
+        return False
+    for seg in _segments(command):
+        if not any(_invokes(seg, v) for v in _MODEL_WRITERS):
+            continue
+        if "--help" in seg or " -h" in f" {seg} ":
+            continue
+        if any(ro in seg for ro in _READ_ONLY_SUBVERBS):
+            continue
+        if "dedup-edge" in seg and not ("--keep" in seg or "--accept-suggested" in seg):
+            continue
+        return True
+    return False
+
 
 def _program_rewrites(blob: str, artifact: str) -> bool:
     """Does an ad-hoc PROGRAM in this blob write `artifact`?
@@ -2275,7 +2364,7 @@ def assert_27_no_hand_script_mutated_the_model(turns: Sequence[Turn]) -> Asserti
             if art is not None:
                 bad.append(Evidence(turn.index, {"artifact": art, "tool": call.name,
                                                  "text": _raw_blob(call)[:160]}))
-            elif call.name == "Bash" and any(_invokes(call.command, v) for v in _MODEL_WRITERS):
+            elif call.name == "Bash" and _writes_the_model(call.command):
                 good.append(Evidence(turn.index, {"command": call.command[:160]}))
     return Assertion(27, "no hand script mutated the map or a fragment", len(good),
                      len(good) + len(bad), tuple(bad or good))
@@ -2803,6 +2892,22 @@ def _expand_shell_vars(text: str, variables: "Mapping[str, str]") -> str:
     return _SHELL_VAR.sub(lambda m: variables.get(m.group(1), m.group(0)), text)
 
 
+def _read_after_write_in_one_call(command: str, target: str) -> bool:
+    """Was `target` named again AFTER the statement that redirected into it, inside one Bash call?
+
+    Split on the same operators `_segments` uses, then ask whether any statement past the redirect
+    names the file. Naming it is the whole test — the same standard the cross-turn arm applies —
+    because a gate's JSON is read by whatever tool the build reaches for, and enumerating those is
+    the guessing this module avoids."""
+    vars_ = _shell_vars(command)
+    segs = [_expand_shell_vars(x, vars_) for x in _segments(command)]
+    wrote_at = next((i for i, seg in enumerate(segs)
+                     if target in seg and any(target in t for t in _redirect_targets(seg))), None)
+    if wrote_at is None:
+        return False
+    return any(target in seg for seg in segs[wrote_at + 1:])
+
+
 def assert_38_written_json_is_read(turns: Sequence[Turn]) -> Assertion:
     """38 — a `--json` output that was WRITTEN is afterwards read.
 
@@ -2813,21 +2918,27 @@ def assert_38_written_json_is_read(turns: Sequence[Turn]) -> Assertion:
 
     `of` counts files a gate's `--json` was redirected into; `observed` counts those a later turn
     names again."""
-    written: dict[str, int] = {}
+    written: dict[str, tuple[int, str]] = {}
     for idx, cmd in bash_commands(turns):
         for seg in _gate_statements(cmd):
             if "--json" not in seg:
                 continue
             for target in _redirect_targets(seg):
-                written.setdefault(_expand_shell_vars(target, _shell_vars(cmd)), idx)
+                written.setdefault(_expand_shell_vars(target, _shell_vars(cmd)), (idx, cmd))
     if not written:
         return Assertion(38, "a written --json is read", 0, 0, (),
                          "no gate --json was redirected to a file")
     good: list[Evidence] = []
     bad: list[Evidence] = []
-    for target, at in written.items():
-        later = any(target in _expand_shell_vars(cmd, _shell_vars(cmd))
-                    for idx, cmd in bash_commands(turns) if idx > at)
+    for target, (at, wrote_in) in written.items():
+        # LATER used to mean a later TURN, which was right while one Bash call was one command. It
+        # is not any more: `_unwrap_shell_c` makes a `bash -c '…; …; …'` body visible as several
+        # commands, so "afterwards" is now sometimes inside the SAME call. Without this the
+        # assertion accused the build it was written for of never reading two files that a
+        # `python3 -c` in the very same call reads one statement later.
+        later = _read_after_write_in_one_call(wrote_in, target) or any(
+            target in _expand_shell_vars(cmd, _shell_vars(cmd))
+            for idx, cmd in bash_commands(turns) if idx > at)
         (good if later else bad).append(Evidence(at, {"file": target, "read later": str(later)}))
     return Assertion(38, "a written --json is read", len(good), len(good) + len(bad),
                      tuple(bad or good))

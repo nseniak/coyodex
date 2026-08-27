@@ -15,6 +15,7 @@ from pathlib import Path
 
 from coyodex_eval.compare import (DEFAULT_BANDS, DRIFT, PASS, REGRESSED, Thresholds, compare,
                                   format_report, load_thresholds)
+from coyodex_eval import compare as C
 from coyodex_eval.judge import DimensionScore, JudgeReport
 from coyodex_eval.profile import MapProfile
 
@@ -32,6 +33,7 @@ def make_profile(**over: object) -> MapProfile:
         coverage_flags=0, edges_per_component=2.0,
         auth_surfaces=["a", "b", "c", "d", "e"], use_case_names=[], entity_names=[],
         auth_sites=["gate.py:1", "gate.py:2", "org.py:9"],
+        commit="c0ffee", component_names=[], component_sources=[], test_files=[],
     )
     base.update(over)
     return MapProfile(**base)  # type: ignore[arg-type]
@@ -732,3 +734,103 @@ def test_a_baseline_blessed_before_the_variant_field_gets_no_excuse_either():
                         deployment_distinct_hosted_sets=2, deployment_units_multi_variant=2)
     report = compare_profiles(base, cand)
     assert not any("FOLDED units into variants" in n for n in report.notes), report.notes
+
+
+# --- rebuild agreement: how much of the baseline survives a rebuild ---------------
+def test_rebuild_agreement_reports_how_much_of_the_baseline_survives() -> None:
+    """The failure every COUNT gate walks through. Two mcpolis builds of commit `5dccb1c`, 21 hours
+    apart with no product file changed, passed every count band that gates while 61 of the
+    baseline's 70 component names did not appear in the rebuild at all."""
+    base = make_profile(commit="5dccb1c", component_names=["Alpha", "Beta", "Gamma", "Delta"])
+    cand = make_profile(commit="5dccb1c", component_names=["Alpha", "Epsilon"])
+    rep = compare(base, cand)
+    assert any("REBUILD AGREEMENT" in n and "5dccb1c" in n for n in rep.notes)
+    assert any("component names: 4 -> 2, 1 of 4 survive (25 %)" in n for n in rep.notes)
+
+
+def test_the_denominator_is_the_baseline_so_a_SPLIT_is_not_read_as_a_RENAME() -> None:
+    """Union punishes a candidate for splitting. A rebuild that keeps every one of the baseline's
+    names and adds more has renamed NOTHING, and scored 59 % of union on the real pair — which is
+    why the survival figure leads and the union figure rides in parentheses."""
+    base = make_profile(commit="x", component_names=["A", "B"])
+    cand = make_profile(commit="x", component_names=["A", "B", "C", "D", "E", "F"])
+    rep = compare(base, cand)
+    assert any("2 of 2 survive (100 %)" in n for n in rep.notes)
+    assert any("33 % of the union" in n for n in rep.notes)
+
+
+def test_a_dirty_pin_still_counts_as_the_same_commit_and_says_so() -> None:
+    """`5dccb1c` and `5dccb1c-dirty` are the same commit; comparing the raw strings went silent
+    between two builds of one tree. `impact_git` already strips the suffix for this reason. The
+    dirtiness is still WORTH SAYING — uncommitted code can differ between the two builds."""
+    base = make_profile(commit="5dccb1c-dirty", component_names=["A"])
+    cand = make_profile(commit="5dccb1c", component_names=["A"])
+    rep = compare(base, cand)
+    head = next(n for n in rep.notes if "REBUILD AGREEMENT" in n)
+    assert "both maps pin commit" in head and "-dirty" in head
+
+
+def test_two_pins_of_different_LENGTH_are_the_same_commit() -> None:
+    """`git rev-parse --short` lengthens as a repo grows, and different repos stamp different widths
+    — mcpolis stamps 7 characters, coworker stamps 9. Requiring equal length disabled the measure on
+    a pair that shared a commit."""
+    rep = compare(make_profile(commit="5dccb1c9a2", component_names=["A"]),
+                  make_profile(commit="5dccb1c", component_names=["A"]))
+    assert any("both maps pin commit" in n for n in rep.notes)
+
+
+def test_two_commits_are_labelled_not_silenced() -> None:
+    """An earlier draft suppressed the numbers across two commits, on a theory the data refutes:
+    over 48 same-commit and 10 different-commit pairs the medians are indistinguishable (component
+    names 2 % vs 1 %, sources 39 % vs 40 %). The commit is a LABEL on the reading, not a filter."""
+    base = make_profile(commit="aaaaaaa", component_names=["Alpha"])
+    cand = make_profile(commit="bbbbbbb", component_names=["Beta"])
+    rep = compare(base, cand)
+    assert any("different commits" in n and "the CODE moving" in n for n in rep.notes)
+    assert any("component names: 1 -> 1, 0 of 1 survive" in n for n in rep.notes)
+
+
+def test_an_empty_commit_string_is_not_read_as_a_matching_pin() -> None:
+    """`""` on both sides is two maps with NO pin, not two maps of one commit. Reading it as a match
+    printed `both maps pin commit ` and the whole table over two unrelated maps."""
+    rep = compare(make_profile(commit="", component_names=["A"]),
+                  make_profile(commit="", component_names=["B"]))
+    assert any("carries no `commit` pin" in n for n in rep.notes)
+    assert not any("both maps pin commit" in n for n in rep.notes)
+
+
+def test_a_kind_missing_from_one_profile_is_named_not_read_as_zero_overlap() -> None:
+    """`None` is "this profile never carried the field"; `[]` is "the map has none". Reading the
+    first as the second reports 0 % agreement for a field nobody measured."""
+    base = make_profile(commit="x", component_names=None, test_files=["t/a.py"])
+    cand = make_profile(commit="x", component_names=["Alpha"], test_files=["t/a.py"])
+    rep = compare(base, cand)
+    assert not any("component names:" in n for n in rep.notes)
+    assert any("kind(s) skipped" in n and "component names" in n for n in rep.notes)
+    assert any("test FILES cited: 1 -> 1, 1 of 1 survive" in n for n in rep.notes)
+
+
+def test_profiles_that_predate_EVERY_name_field_still_say_so() -> None:
+    """An early return on an empty row list printed NOTHING for a pair of old profiles — silence,
+    which every escape family in this file has had to stop doing in its own turn."""
+    old = make_profile(commit="x", component_names=None, component_sources=None,
+                       use_case_names=[], entity_names=[], test_files=None)
+    rep = compare(old, old)
+    assert any("nothing could be compared" in n for n in rep.notes)
+    assert any("kind(s) skipped" in n for n in rep.notes)
+
+
+def test_rebuild_agreement_never_gates() -> None:
+    """Two independent LLM builds legitimately differ and no threshold has been defended across
+    enough pairs. A total disagreement must leave the verdict alone."""
+    base = make_profile(commit="x", component_names=["a", "b", "c"])
+    cand = make_profile(commit="x", component_names=["d", "e", "f"])
+    rep = compare(base, cand)
+    assert any("0 of 3 survive" in n for n in rep.notes)
+    assert rep.verdict == compare(make_profile(commit="x"), make_profile(commit="x")).verdict
+
+
+def test_overlap_of_two_empty_sets_does_not_divide_by_zero() -> None:
+    """The guard both callers of `_overlap` need, in one place instead of two."""
+    assert C._overlap(set(), set()) == (0, 1)
+    assert C._overlap({"a"}, {"a", "b"}) == (1, 2)

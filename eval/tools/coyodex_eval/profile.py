@@ -216,6 +216,33 @@ class MapProfile:
     use_case_names: list[str] = field(default_factory=list)
     entity_names: list[str] = field(default_factory=list)
 
+    # ── reproducibility: does a REBUILD of the same code produce the same map? ───────────────────
+    #: The mapped repo's own commit. Not the tool's — `tool_commit` above is that. Without it a name
+    #: comparison cannot tell the one case where it means something (two builds of ONE commit, where
+    #: a changed name is instability) from the ordinary case (two commits, where a changed name is
+    #: the code moving). `None` on a profile written before this field existed.
+    commit: str | None = None
+    #: The NAMES a build chose, per element kind. Counts already travel as `components`, `flows` and
+    #: the rest; a count is the one thing that cannot see this failure. Two mcpolis builds of commit
+    #: `5dccb1c`, 21 hours apart, both scored in band on every count that gates — and shared 9
+    #: component names of 70 and 118, 13 use-case names of 47, and 0 test labels of 76, while
+    #: agreeing on 55 of 70 component SOURCE anchors. The two maps point at the same code and call
+    #: almost none of it by the same name. Nothing in the toolchain measured that until this field.
+    #: `None`, never `[]`, on a profile that predates it — an empty list would read as "no overlap".
+    component_names: list[str] | None = None
+    #: Where each component points, as a bare path with the line dropped. Wording-independent, so it
+    #: separates "the two builds cut the code differently" from "the two builds named it differently".
+    component_sources: list[str] | None = None
+    # `flow_titles` was here and was REMOVED before it shipped: a flow is titled after its use case,
+    # so the set was byte-identical to `use_case_names` on four of five real maps and shared 51 of 54
+    # on the fifth. Two rows printing one measurement makes the disagreement look twice as broad.
+    #: The test FILES the map cites, as bare paths. Not the test-row LABELS: measured across 48
+    #: same-commit build pairs the labels agree 0 % in 44 of them and 0 % under fuzzy matching too, so
+    #: the row was a constant and could signal neither a regression nor a repair. The files a build
+    #: chose to cite are wording-independent, which is the same reason `auth_sites` beat
+    #: `auth_surfaces` and `component_sources` beats `component_names`.
+    test_files: list[str] | None = None
+
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
@@ -398,6 +425,13 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         auth_sites=auth_sites,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
+        commit=m.commit or None,
+        component_names=sorted({c.name.strip() for c in m.components if c.name.strip()}),
+        component_sources=sorted({(c.source or "").rsplit(":", 1)[0]
+                                  for c in m.components if (c.source or "").strip()}),
+        test_files=sorted({(inner.file or "").rsplit(":", 1)[0]
+                           for t in m.tests for inner in (t.tests or [])
+                           if (inner.file or "").strip()}),
     )
 
 

@@ -108,9 +108,11 @@ lead; nothing above this line goes into an agent prompt.
 > `assemble`. Pass `--expect «N»` with the component budget this slice was dispatched with: it is
 > advisory, and it puts the over/undershoot in front of the agent that can explain it — otherwise
 > nobody sees it until the lead's granularity advisory fires after assembly.
-> **With `--repo`, the verdict line ends with an anchor-drift count when any of your anchors point
-> at a line that cannot be acting** — an import, a comment, a `def`, a blank line. Read the FIRST
-> line: `LINT OK — 0 problems, 3 advisory warning(s) (3 anchor drift)`. Those rows are advisory and
+> **The verdict line carries the two counts worth acting on, so a reader who takes only the first
+> line still sees them.** With `--repo` it ends with an anchor-drift count when any of your anchors
+> point at a line that cannot be acting — an import, a comment, a `def`, a blank line. With
+> `--expect` it also carries how far past its budget the slice landed. Read the FIRST line:
+> `LINT OK — 0 problems, 4 advisory warning(s) (3 anchor drift) (3.7x the slice budget)`. Those rows are advisory and
 > never fail the lint, and they are the defect this self-check was blind to until now: six
 > fragments once passed clean and produced 86 drifted anchors at the lead's `validate`, costing
 > fifty turns of repair after their authors were gone. Anchor the operative statement — the call,

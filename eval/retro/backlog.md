@@ -273,6 +273,78 @@ that dropped an `assemble` WARNING (the dangerous half is fixed by line-bufferin
 is a filter habit no test can hold); and a method sentence about the post-hoc `granularity` record
 (hygiene, and no test reaches a timing habit).
 
+### Answered 2026-08-27 — the whole 2026-08-26_2158 ledger, 40 rows of 77
+
+Scope: every row open two or more retrospectives, plus every new HIGH row. Verified against the code
+and the real maps, not against the rows' own prose. Two adversarial refuters overturned two of the
+kills below before they were written. The ledger itself is git-ignored, which is why the answers are
+repeated here.
+
+**Rejected — do not re-propose. Each was checked; the evidence is on the row.**
+
+| # | item | why it is dead |
+|---|---|---|
+| 19 | The readable map file is read by nobody | False. `validate_model.py` re-renders the model and flags a stale or hand-edited `project-map.md`, and `eval/rubric.md` hands it to the judge. |
+| 20 | No use case names any entry point | False against the map it was written about: 30 of 30 use cases name entry points, 52 distinct ids. `_trigger_arm_warnings` returns `[]`, which is the check that would fire. |
+| 21 | `--agent-transcripts` never passed (open 4 retros) | Superseded. I ran the check it would have run: `evidence check covered 20 of 1000 row(s)`. The defect is the check, not the missing flag — see the KEEP row for it. |
+| 22 | A recorded exception silences one advisory but not its sibling | Wrong reading. The sub-flow refcount advisory is deliberately unescapable and is registered in `KNOWN_NO_ESCAPE` (`tests/test_method_contract.py`), with the reason in `method.md`. The real residual moved to the inert-record row. |
+| 23 | The prose counter reads 400 of ~1,437 fields | Duplicate of the prose-coverage row, and its totals do not reproduce (true unwalked: 1,534 and 2,208). |
+| 24 | 389 prose fields batched and dispatched on none | Duplicate of the better-evidenced dispatch row. Killing it also removes two probes that both give the wrong answer: `grep -ri 'prose batch'` returns 0 while the instruction exists in `method.md`, and `verdicts-prose-*.json` is a filename the method never asks anyone to write. |
+| 25 | The scorecard cannot see `open(var,'w')` | Landed. The class stays open under the `bash -c` and script-by-path rows; decide it there. |
+| 26 | Post-pin claims have no lister | Landed. `grounding report` prints `ADDED SINCE THE PIN (n)`. What remains is that `grounding write` REFUSES those verdicts, which is its own KEEP row. |
+
+**Confirmed fixed, verified rather than trusted** — refuted claims no longer ship; `lint-fragment`
+runs the operative-line check; both CLI entry points are line-buffered; NOTE FACTS carries
+superseded-that-were-CONFIRMED; the description theme is live and caught 5 false descriptions;
+`record` ran 15 times; the access-baseline escape works (moving the 20 recorded paths to the new
+heading takes the leg from 1 advisory to 0).
+
+**Reopened** — the Step-0 briefing. It IS shown verbatim, but after 10 tool calls, and
+`method/dispatch.md` says "before the first tool call". Do not close it against its own probe.
+
+**The keeps, ranked.** Full evidence on each ledger row.
+
+| rank | item | size |
+|---|---|---|
+| 1 | The process scorecard cannot parse `bash -c`, so it is blind to 94 % of the commands it scores | small |
+| 2 | The behavioural half of the map ships with no grounding claim at all — 235 elements, 461 step phrases | large |
+| 3 | Two builds of one commit produce different maps; the box count is the loudest symptom | see below |
+| 4 | Two access rules carry `confidence: verified` with zero votes | small |
+| 5 | `R1 includes R2` is not enforced by the code, and a role relation cannot carry an anchor | medium |
+| 6 | The fabricated-evidence check covers 2 % of verdict rows and treats any filename token as "opened" | medium |
+| 7 | 136 of 188 customer-facing surfaces carry none of the method's three dispositions | medium |
+| 8 | `Drift exceptions` records are inert on the shape-only pass, which finalize always runs — NEW | small |
+| 9 | `grounding report` says "challenge these 21"; `grounding write` then refuses them with a false diagnosis | small |
+| 10 | Access enforcement lines agree 55 % at file level between two builds of one commit | restate + one agent |
+| 11 | Four fifths of the map's reader-facing prose is never checked | small |
+| 12 | The prose batches are minted every build and dispatched on none, three builds running | small |
+| 13 | Fan-out scheduling wastes a third of active build time | method prose |
+| 14 | `grounding.note` publishes "136 redundant rows" where the true count is 272 | tiny |
+| 15 | `read-never-created HP3-files` parses to `HP3`, so one key silences two findings | small |
+| 16 | `coyodex record` accepts a key no reader of that heading honours | small |
+| 17 | `lint-fragment` runs no prose check, so 16 long sentences shipped | tiny |
+| 18 | `fix row --set-<field>` refuses to create a field the row omits | small |
+| 19 | The build hand-scripted 3 mutations a fix verb owns; the detector flagged only the one that never ran | method prose |
+| 20 | `finalize` accepts any non-empty `grounding.note` as the answer — a note reading "no." passes — NEW | small |
+| 21 | Nothing notices a sub-agent dispatched and returned empty | small |
+| 22 | The retro method gives slice readers no filename rule | one line |
+
+**Why the map doubled, 70 boxes to 118 on the same commit.** Not a method change: the slice-sizing
+paragraph is byte-identical between the two tool commits, and `EXPECTED COMPONENTS (E):` was never
+in the method at either — the earlier lead invented that field. Not a missing pre-index read: both
+builds ran `preindex --report` and saw the full per-directory E table (the scorecard says otherwise,
+and the scorecard is wrong — see rank 1). Not bad budgets: the numbers handed out match the table.
+What differs is only obedience — the earlier build ran 1.29× over budget with 2 of 7 slices exactly
+on target, this one 2.17× with 10 of 10 over. The one visible difference is the FORM of the line, a
+labelled field against a `~6 components` aside, and that is a hypothesis across two builds, not a
+proven cause. **What is certain: nothing anywhere compares a returned fragment's component count
+against the budget its own brief stated.** Build that check and the cause stops mattering.
+
+**The deeper number, which nothing in the toolchain measures.** Two builds of one commit share 55 of
+70 component SOURCE anchors but only **9 component NAMES of 70 and 118**; 13 of 47 use-case names;
+13 of 47 flow titles; **0 of 76 test-area labels**. `compare` measures name overlap for access
+enforcement lines only, and `profile` already collects `entity_names` that nothing reads.
+
 ## Open — questions a retro could not answer
 
 A retro's `Not assessed` block names the tool that owns each question it parked. That naming used to
