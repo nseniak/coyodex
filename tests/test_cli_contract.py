@@ -352,3 +352,37 @@ def test_no_new_function_returns_two_same_typed_collections_unnamed():
         f"non-empty, the suite can cover it: prove that with a swap test, then add it to the list.")
     gone = sorted(SAME_TYPED_COLLECTION_RETURNS - found)
     assert not gone, f"listed but no longer of this shape (remove from the list): {gone}"
+
+
+# --- the child process reads the SAME checkout as this one -------------------------------
+
+def test_a_subprocess_test_reads_the_same_tools_this_run_reads() -> None:
+    """Seventeen test files start a python CHILD, and only two hand it an environment of their own.
+    The rest inherit `PYTHONPATH=tools` — a RELATIVE path — and most run the child with `cwd=` set to
+    a fixture directory, where no `tools` exists. The import then falls through to the editable
+    install, which points at whichever checkout was installed.
+
+    In the main checkout the two agree and nothing shows. In a WORKTREE they do not, and a whole
+    day's subprocess tests were green about code that was not under edit: `test_assembly_fixture`
+    passed against a stale pinned fixture because the child was assembling with the OTHER checkout's
+    model. It surfaced only at merge, after several honest-looking green runs.
+
+    `conftest.py` re-anchors every relative `PYTHONPATH` entry on the repo root. This is the guard
+    that says so out loud if that is ever undone — it reproduces the exact shape that hid the bug:
+    a child started somewhere else entirely.
+    """
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    elsewhere = root / "eval" / "fixtures" / "trapdoor"
+    if not elsewhere.is_dir():                      # the fixture moved; any other dir proves it too
+        elsewhere = root.parent
+    child = subprocess.run(
+        [sys.executable, "-c", "import coyodex, sys; sys.stdout.write(coyodex.__file__)"],
+        cwd=elsewhere, capture_output=True, text=True)
+    assert child.returncode == 0, f"the child could not import coyodex at all:\n{child.stderr}"
+    import coyodex
+    assert child.stdout.strip() == str(Path(coyodex.__file__).resolve()), (
+        "a child process started outside the repo root reads a DIFFERENT coyodex than this test "
+        f"run does.\n  this run: {coyodex.__file__}\n  the child: {child.stdout.strip()}\n"
+        "Every subprocess test in the suite is then asserting against the wrong checkout. "
+        "`conftest.py` makes PYTHONPATH absolute to prevent exactly this; check it is still there.")
