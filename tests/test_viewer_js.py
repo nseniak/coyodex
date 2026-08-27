@@ -3113,17 +3113,19 @@ def test_the_path_starts_at_the_view_and_never_at_a_level_inside_it() -> None:
     assert 'class="brand"' in html
 
 def test_the_title_bar_holds_every_utility_and_wraps_before_it_clips() -> None:
-    """Eight controls, all of them things you do to the map rather than places you go: back, forward,
-    the three zoom controls, search, help and settings. Search and the legend toggle used to sit in the
-    group row, which made that row two things at once. They are quiet icon buttons on the navy ground —
-    eight filled chips read as eight destinations.
+    """Seven controls, all of them things you do to the map rather than places you go: the three zoom
+    controls, search, help, settings and the legend toggle. Search and the legend toggle used to sit in
+    the group row, which made that row two things at once. They are quiet icon buttons on the navy
+    ground — filled chips would read as destinations.
+
+    Back and Forward are NOT here. The bar carried its own ◀ ▶ pair from before the URL named the
+    screen; the browser's own buttons do that walk now, and a second pair could only disagree with them.
 
     At a narrow column the bar wraps into two lines, identity then controls, rather than squeezing."""
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     head = html[html.index("<header>"): html.index("</header>")]
-    for control in ("navback", "navfwd", "zoomout", "zoomlevel", "zoomin", "searchbtn", "helpbtn",
-                    "setbtn", "legendbtn"):
+    for control in ("zoomout", "zoomlevel", "zoomin", "searchbtn", "helpbtn", "setbtn", "legendbtn"):
         assert f'id="{control}"' in head, control
     assert "stageheadutil" not in html and "stageheadutil" not in css
     btn = css[css.index("header button {"): css.index("}", css.index("header button {"))]
@@ -3881,22 +3883,37 @@ console.log(JSON.stringify({
     assert got["every"] == {"kind": "rules", **{f: "X_" + f for f in fields}}, got["every"]
 
 
-def test_the_browser_buttons_and_the_apps_own_are_one_history() -> None:
+def test_back_and_forward_belong_to_the_browser_alone() -> None:
     """Two Back buttons that keep separate lists can disagree, and the one that is wrong is whichever
-    the reader pressed. So the app's Back and Forward hand the step to the BROWSER, and the browser's
-    own buttons come back through `popstate` into exactly the move the app used to make inline.
+    the reader pressed. Every screen has a URL now, so the browser's own buttons already walk the map:
+    the title bar's ◀ ▶ pair, its click handlers and its ⌘←/⌘→ binding are all gone, and `popstate` is
+    the single way a step arrives.
+
+    The pair was the weaker of the two. After a reload the app has no record of your path, so its arrows
+    went grey while the browser's still worked and the trail still offered the way up. Its key binding
+    was worse than useless: `preventDefault` ran before the guard, so at the map's first screen — which
+    every reload lands on — it blocked the browser's identical shortcut and then did nothing. Measured
+    in a browser: one ⌘← on a freshly reloaded drilled screen moved nothing at all.
 
     The internal stack stays the source of truth: each browser entry only names the point it stands for.
     An entry from an earlier page load carries an index that means nothing to this load's stack, so the
     match is on the load stamp too — without it, Back after a reload would jump to an unrelated screen."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "function back() { stepHistory(-1); }" in js
-    assert "function fwd() { stepHistory(1); }" in js
-    assert ("if (URL_SYNC && urlStarted) { if (delta < 0) window.history.back();"
-            " else window.history.forward(); return; }") in js
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    for gone in ("navback", "navfwd"):
+        assert gone not in js and gone not in html and gone not in css, gone
+    assert "#nav {" not in css, "the pair's own layout rule went with it"
+    # No handler claims ⌘/⌥ + an arrow any more, so the browser's own shortcut reaches the browser.
+    assert "e.metaKey || e.altKey" not in js
+    keydown = js[js.index("document.addEventListener('keydown', (e) => {"):]
+    keydown = keydown[: keydown.index("\n});") + 4]
+    assert "back()" not in keydown and "fwd()" not in keydown
+    # …while the flow player keeps its BARE arrows, which are a different binding on a different screen.
+    assert "if (e.key === 'ArrowLeft') { e.preventDefault(); flowStepBy(-1); return; }" in keydown
+    # popstate is the one way in, and it reads the entry's stamp before trusting its index.
     assert "const target = (st && st.load === URL_LOAD && typeof st.coy === 'number') ? st.coy : null;" in js
-    # `hi` still gates the step, so the browser can never be walked out of the map by the app's buttons.
-    assert "if (target < 0 || target >= history.length) return;" in js
+    assert js.count("window.addEventListener('popstate'") == 1
 
 
 def test_the_drill_zoom_survives_the_browser_buttons() -> None:

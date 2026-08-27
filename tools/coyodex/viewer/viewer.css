@@ -36,8 +36,6 @@ header button:disabled:hover { background: transparent; color: #e0e7ff; }
   header .brand { flex: 1 0 100%; }
   header .meta { flex: 1 0 100%; }
 }
-#nav { display: inline-flex; gap: 2px; flex: 0 0 auto; }
-#nav button:disabled { color: #6366f1; opacity: .55; cursor: default; background: transparent; }
 #zoomlevel { width: auto; padding: 0 7px; font-variant-numeric: tabular-nums; }
 #zoomctl { display: inline-flex; gap: 4px; flex: 0 0 auto; align-items: center; }
 #zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }

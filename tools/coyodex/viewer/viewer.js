@@ -213,8 +213,6 @@ const groupsw = document.getElementById('groupsw');
 const pageq = document.getElementById('pageq');          // the open view's question, leading the content
 const pagehero = document.getElementById('pagehero');    // what the page you drilled into IS (syncPageHero)
 const callout = document.getElementById('callout');      // the line from the card to what it describes
-const navback = document.getElementById('navback');
-const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
 const tip = document.getElementById('tip');
 const zoomin = document.getElementById('zoomin');
@@ -4439,26 +4437,17 @@ function go(state, instant) {
   pushUrl();   // one browser entry per internal point, so the two stacks step together
   driveTransition(from, instant);
 }
-// Back and Forward hand the step to the BROWSER, so the browser's buttons and the app's own are one
-// mechanism instead of two that can drift apart. The popstate handler below makes the actual move, by
-// exactly the steps this pair used to make inline. `hi` still gates them, so a step is only delegated
-// when there IS an internal point to land on, and the browser can never be walked out of the map.
-// Without URL sync (a map opened as a plain file) they step the internal stack directly, as before.
-function stepHistory(delta) {
-  const target = hi + delta;
-  if (target < 0 || target >= history.length) return;
-  if (URL_SYNC && urlStarted) { if (delta < 0) window.history.back(); else window.history.forward(); return; }
-  const from = history[hi];
-  captureViewState();
-  hi = target;
-  driveTransition(from);
-}
-function back() { stepHistory(-1); }
-function fwd() { stepHistory(1); }
-// The browser's Back / Forward. The entry names the internal point it stands for, so the move is the
-// same one `stepHistory` makes: remember the screen being left, step the index, and let driveTransition
-// decide the zoom from those two screens alone. That is why the drill animations survive the change —
-// the zoom is a function of the leaving screen and the arriving screen, never of the stack.
+// Back and Forward are the BROWSER's, and only the browser's. The title bar carried its own ◀ ▶ pair
+// and bound ⌘← / ⌘→ to them, both from before the URL named the screen. Every screen has a URL now, so
+// the browser's own buttons and its own ⌘← / ⌘→ step through the map, and a second pair could only
+// disagree with them: after a reload the app has no record of your path, so its arrows went grey while
+// the browser's still worked. Taking the key was worse than useless — it blocked the browser's binding,
+// then did nothing at all at the first screen, which every reload lands on.
+//
+// This is what the whole popstate handler below is for: the entry names the internal point it stands
+// for, so the move is remember the screen being left, step the index, and let driveTransition decide
+// the zoom from those two screens alone. That is why the drill animations survive the change — the
+// zoom is a function of the leaving screen and the arriving screen, never of the stack.
 window.addEventListener('popstate', (ev) => {
   if (!URL_SYNC) return;
   urlLast = location.hash;   // claim this hash, so the hashchange that follows the step is not a second arrival
@@ -6870,8 +6859,6 @@ function renderChrome(s) {
       else b.removeAttribute('title');
     });
   }
-  navback.disabled = hi <= 0;
-  navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting from the VIEW down to this page; each ancestor crumb zooms out
   // to it. The bar is always there, because its first segment is always the view.
   crumb.innerHTML = '';
@@ -11043,12 +11030,12 @@ function openInCodeViewer(file, line) {
 // --- startup --------------------------------------------------------------------
 stage.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; }, true);
 document.addEventListener('keydown', (e) => {
-  // While typing in a field, arrows (bare or with ⌘/⌥) are the native text-cursor moves — ⌘←/→ line
-  // start/end, ⌥←/→ by word — so we never hijack them for history/flow navigation.
+  // While typing in a field, a bare arrow is the native text-cursor move, so we never hijack it.
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') || (e.target && e.target.isContentEditable);
-  // ⌘/⌥ + ←/→ navigate history (preventDefault so ⌘+arrows don't trigger the browser's back/forward)
-  if (!typing && (e.metaKey || e.altKey) && e.key === 'ArrowLeft') { e.preventDefault(); back(); return; }
-  if (!typing && (e.metaKey || e.altKey) && e.key === 'ArrowRight') { e.preventDefault(); fwd(); return; }
+  // ⌘/⌥ + ←/→ are NOT handled here. They were, and they drove the title bar's own arrow pair after a
+  // preventDefault that blocked the browser's identical binding. Every screen has a URL now, so the
+  // browser's own ⌘←/⌘→ do exactly the same walk, and they keep working at the map's first screen —
+  // where the app's version swallowed the key and then did nothing, on every reload.
   // Bare ←/→ walk the use-case flow step by step (only on a flow view, and not while typing in a field).
   if (flowPlay && !typing && !e.metaKey && !e.altKey && !e.ctrlKey) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); flowStepBy(-1); return; }
@@ -12030,8 +12017,6 @@ for (const [gid, label, question] of VIEW_GROUPS) {
   b.addEventListener('click', () => goGroup(gid));
   groupsw.appendChild(b);
 }
-navback.addEventListener('click', back);
-navfwd.addEventListener('click', fwd);
 zoomin.addEventListener('click', () => { if (mainPz) { mainPz.zoomIn(); updateZoomLevel(); } });
 zoomout.addEventListener('click', () => { if (mainPz) { mainPz.zoomOut(); updateZoomLevel(); } });
 // FIT TO SCREEN, and it has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and

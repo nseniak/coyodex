@@ -26,10 +26,12 @@
        what you are actually looking at; a document with two top-level headings has no title. -->
   <span class="brand"><span class="brand-home" aria-hidden="true">&#8962;</span>coyodex viewer</span>
   <span class="meta" id="meta"></span>
-  <span id="nav">
-    <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
-    <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
-  </span>
+  <!-- The title bar carried its own ◀ ▶ pair, from before the URL named the screen. Back and Forward
+       are the BROWSER's job now: every screen has a URL, so the browser's own buttons and its ⌘← / ⌘→
+       step through the map. Two controls for one thing, and the pair here was the weaker one — it went
+       grey after a reload, when the app has no memory of your path, while the browser's still worked
+       and the trail still offered the way up. Same call as the `</>` toggle that used to sit beside
+       the source rail. -->
   <span id="zoomctl">
     <button id="zoomout" title="Zoom out">−</button>
     <button id="zoomlevel" title="Fit to screen">100%</button>
