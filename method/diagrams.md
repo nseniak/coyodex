@@ -38,10 +38,10 @@ show/hide toggle. The element-keyed deltas are the data.
 
 ## Realization tiers
 
-- **Tier A — diagram-as-code (Mermaid / D2), generated from the model.** One diagram per
-  level + a Happy Path sequence diagram, with `click`→source and diff via styled
-  regeneration. Cheap, in-repo, version-controlled; "drill-down" is hyperlinked per-level
-  diagrams rather than true zoom.
+- **Tier A — diagram-as-code (Mermaid / D2), generated from the model.** SUPERSEDED by Tier B and
+  kept only as the reference frame the example below uses: no build emits Tier A files, and
+  nothing in the tooling writes one — the served viewer is the diagram. (It described one diagram
+  per level with `click`→source, hyperlink drill instead of true zoom.)
 - **Tier B — a live-served interactive viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
   A generic frontend served by `coyodex serve`; it fetches its data (built straight from
   `project-map.json`) from the server and renders the C4 altitudes —

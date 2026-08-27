@@ -1124,13 +1124,19 @@ synthesis → parallel trace.**
     turn.** One message keeps the batch atomic: the slices are dispatched from one decision, so a
     late edit cannot reach half of them. The same rule applies to every fan-out below, not just
     harvest. **What it does NOT buy is speed.** Dispatch latency is the model EMITTING the prompt
-    text, at roughly 230-320 bytes/s, so it scales with prompt BYTES and not with agent count. The
-    lever is shorter dispatch prompts — put the invariant block in a file the agents read, as the
-    skeptic fan-out already does — not turn count.
+    text, at roughly 230-320 bytes/s, so it scales with prompt BYTES and not with agent count.
+    **So dispatch every contract by POINTER, never by paste — in every fan-out below (harvest,
+    trace, rules, skeptics, gap-fill).** Fill each agent's contract into a scratch FILE (the
+    `coyodex contract` verb, then the slot edits in place), and make the agent's prompt three
+    lines: its agent id, the file's absolute path, and "Read it COMPLETELY and follow it — it is
+    your entire brief." A pasted trace contract is ~13 KB times the fan-out, an hour of dispatch
+    typing on a large build, where a pointer is three lines; a pasted copy can also drift mid-batch
+    while the file cannot. A build has already run its whole harvest on pointer briefs, and the L3
+    scorecard reads a pointer brief correctly (assertion 31 scores the FILE it names).
   - **Pre-size the slices from the pre-index so no slice becomes the critical path.** The whole
     phase ends when the SLOWEST agent does, so one oversized slice stalls the barrier for everybody.
     The pre-index already counts files/symbols per area — aim for roughly EQUAL estimated work per
-    slice, and specifically split the entry-points+security harvest **by router / surface** on a
+    slice, and specifically split the entry-points harvest **by router / surface** on a
     large route surface (per-kind coverage statements merge cleanly; the coverage sweep catches seam
     misses, so splitting costs no completeness).
   - **Resilience: write a DRAFT fragment early, finalize at the end.** An agent that dies mid-run
@@ -1193,7 +1199,7 @@ synthesis → parallel trace.**
     block that is optional per slice is a block that will be missing from one.
   - **Dispatch the known-longest slice FIRST, in every fan-out.** Launch order is the one lever you
     have over when the barrier closes: a straggler dispatched last holds it for its whole runtime.
-    T5 and the security slice are the reliably heaviest in Phase 1; in Phase 3 it is whichever use
+    T5 and the entry-points slice are the reliably heaviest in Phase 1; in Phase 3 it is whichever use
     case owns the most sub-flows and the widest "where to look" list. Send those first, the small
     ones last. (L3 assertion 16 watches this.)
 
@@ -1208,7 +1214,11 @@ synthesis → parallel trace.**
     a deliberate second wave.
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
     whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
-    **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). This holds even when
+    **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). **The owner's brief
+    is the filled harvest contract PLUS the T5 addendum** — `coyodex contract harvest-t5 >> <the
+    owner's brief>`; the addendum reaches the owner ALONE, and the shared contract carries only the
+    sentence forbidding everyone else, so 13 agents no longer read the spec of a job they must not
+    do. This holds even when
     the rest of the harvest is sliced **by directory or by subsystem** for a large repo: the
     directory/subsystem-sliced agents return their **components / entry-points only** (Phase 1 returns
     nodes; edges are Phase 3) and must **not** absorb (or split up) the T5 slice, and no slice may
@@ -1407,71 +1417,37 @@ synthesis → parallel trace.**
   sub-flow between them).
   **The copyable contract is
   [method/templates/trace-contract.md](method/templates/trace-contract.md)** — hand every trace agent
-  that file's contents, changing only the «angle-bracket» slots. **Get it with the verb:**
+  a POINTER to its filled copy (the pointer-dispatch rule in Phase 1), changing only the
+  «angle-bracket» slots. **Get it with the verb:**
   `coyodex contract trace > <scratch>/trace-contract.md`, then fill them in
   place; a `Read` followed by a `Write` is one keystroke from a rewrite, and the verb prints only
   the agent's half, so the lead-facing header cannot travel with it. This was the largest fan-out
   with no contract of its own, and the rules fan-out shows what that costs: composed from memory, it
   told eleven agents to author a field they must never author, which lint treats as blocking.
-  Trace-prompt discipline — what the contract carries, here so you can see what you hand over:
-  - **Prescribe likely sub-flows in the prompts.** The lead can usually see from the use-case list
+  Trace-prompt discipline — the LEAD's half only. The agent's half (entity steps, the sub-flow
+  shape, sibling sub-flow references, the entity-TYPE rule for `reads`, return-direction steps, the
+  three overclaim shapes, the catalog-row rules) lives in the contract itself — read it there, and
+  never restate it in a prompt: a restated copy is the one that drifts. What the contract cannot
+  know is per-slice, and that is yours:
+  - **Prescribe likely sub-flows in the briefs.** The lead can usually see from the use-case list
     which machinery is shared ("UC10 and UC13 walk the same tool-call path — EXTRACT it as a
     sub-flow") — say so explicitly; the duplication detector is the safety net, not the plan. **Do
     NOT blanket-ban sub-flows** ("no subflows" in every trace prompt) — that contradicts this rule
     and forgoes the cross-flow consistency sub-flows buy. Ban them for a genuinely independent flow,
     never as a global default; where machinery repeats across ≥2 flows, prescribe the `SFn`.
-  - **Name `En` as a valid step endpoint in the prompts, with a worked example step** — e.g. `6a. C5
-    → E2 : upserts the Membership document @ repo.py:155` — and require each flow's 1–2 central
-    entity touches. Prompts that channel ALL entity mentions into the edges array ship a domain
-    model with zero flow traceability, and every gate stays green. The callee's operative read/write
-    line is one hop from the call site the agent already read for the calling step's `where`.
   - **Assign each trace agent an `SFn` id range** (SF1–9, SF10–19, …), exactly like the per-agent
     component id ranges, so parallel extractions never collide.
-  - **Show the sub-flow SHAPE in the prompt** — `{"id": "SFn", "name": "<display text>", "steps":
-    [...]}`. A flow's display text is `title` but a sub-flow's is **`name`** — agents write
-    `subflows[].title` by analogy and burn a lint round each (the loader now accepts `title` as an
-    alias, but the prompt should still show the canonical shape).
-  - **A step MAY reference a sibling agent's sub-flow** (the id ranges make it unambiguous): pass
-    `--ids build-fragments/` (a directory scans every fragment) so the reference resolves at
-    lint time instead of forcing the agent to duplicate the shared trace inline. The sub-flow
-    refcount nudge ("referenced once — consider inlining") is ADVISORY on the fragment channel:
-    the other reference may live in a sibling fragment, so never rewrite just to silence it.
-  - **A named queue/topic in the trace is a `messaging` row** — when a step or edge goes through a
-    named channel (`JOB_QUEUE`, a per-org pub/sub channel), record the catalog row (name, broker
-    dep, publishers, consumers, payload) alongside the `C→broker` edge — the edges on their own
-    leave the catalog empty.
-  - **A `C→E` `reads` edge — or entity step — requires the entity TYPE at the site** — a function
-    operating on a string/field extracted from an entity is not reading the entity (the
-    false-reads class the grounding pass keeps refuting).
-  - When the lead has assembled a legend or an earlier map, pass `--ids «legend»` to each agent's
-    `lint-fragment` self-check, so a plausible-but-invented element id dies in the agent's own turn.
-    **Pass the legend as a FILE PATH** (`--ids path/to/legend`), never inline as `--ids "$(cat …)"`
-    — a whole-map legend overflows the shell arg limit. The legend should list the full id universe
+  - **Fill «LEGEND» with a FILE PATH** (`--ids path/to/legend`), never inline contents — a
+    whole-map legend overflows the shell arg limit. The legend should list the full id universe
     **including `UC`/`SF`/`HP` ids** (or just pass the assembled `project-map.json`), so a trace
-    fragment's flow `uc` values resolve; `lint-fragment` now tolerates a legend that omits a whole
+    fragment's flow `uc` values resolve; `lint-fragment` tolerates a legend that omits a whole
     namespace (it can't adjudicate one it doesn't cover), so a reduced element-only legend no longer
     false-flags `uc` — but a complete legend still catches an invented one.
-  - A **return-direction step** usually has no invoking line of its own: set `no_call_site: true`
-    (or anchor the callee's `return` statement when that aids drilling) — either is fine; silence is not.
-  - **Name the three overclaim shapes the skeptics keep refuting** — they are predictable enough to
-    prevent in the prompt instead of paying for later, and between them they account for most
-    refutations: (1) **transitive attribution** — a component calling a first-party wrapper credited
-    with the external call the *wrapper's owner* makes; (2) **ownership overclaim** — a controller
-    that calls `.save()` credited as the system of record when the real upsert lives in the
-    repository/model component; (3) **constructs ≠ persists** — a storage/client factory recorded as
-    writing to the stores it only *builds clients for*. In all three the rule is the same:
-    **attribute the edge to the component whose own code contains the operative line**, and if the
-    line you found is a call into another component, the edge belongs to that one.
-  - **Fill the `messaging` catalog from the SAME line that proves the edge.** The catalog is the
-    weakest-quality area measured — wrong brokers and duplicated rows. A catalog row is a claim like
-    any other: its `source` is the line that DECLARES the channel name, its `broker` is the dep that
-    line connects to (not the one the component happens to use elsewhere), and a channel already in
-    the catalog is never added twice under a second spelling. **NAME THE OWNER in the slice brief.**
-    A rule that stays in this doc and never reaches the dispatched contract has no effect: several
-    agents each told to record the same channel row will each comply, in their own spelling, and
-    `assemble` then hard-fails on the conflict. A fragment that lints CLEAN on its own proves
-    nothing here — a cross-fragment conflict is invisible per fragment by construction. One fragment
-    owns each catalog row; the others reference it.
+  - **NAME THE OWNER of every `messaging` catalog row in the slice briefs.** Several agents each
+    told to record the same channel row will each comply, in their own spelling, and `assemble`
+    then hard-fails on the conflict; a fragment that lints clean on its own proves nothing here,
+    because a cross-fragment conflict is invisible per fragment by construction. One fragment owns
+    each catalog row; the others reference it.
 
 ### After the trace — EVERY build (serial included)
 
@@ -1660,19 +1636,18 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   you each group's size, so the batches fall out of the data instead of being guessed. **Batch by
   theme/risk, don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group
   the claims into themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage),
-  one fresh-context skeptic per batch — hand each one
+  one fresh-context skeptic per batch — hand each one a POINTER to its filled copy of
   [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
-  contract, rather than composing one from this section. **Copy it with a command, not by reading
+  contract (the pointer-dispatch rule in Phase 1), rather than composing one from this section. **Copy it with a command, not by reading
   and retyping** — `coyodex contract skeptic >
   <scratch>/skeptic-contract.md`, then fill the «angle-bracket» slots. The instruction on its own
   does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and a
   verb is not. The verb also prints only the agent's half: a build once filled this template with
   one text replacement and sent the WHOLE file, so all ten skeptics read the lead's instructions as
-  their own and four were told to open a claims file that does not exist. For the riskiest claims run **N skeptics + majority vote — with N ODD, and N ≥ 3.**
-  **Where the cut falls: the WHOLE `security` theme, every batch of it.** "the riskiest claims
-  (auth, scoping, encryption)" and "the `security` theme" were both written here and they are not
-  the same instruction, so a build had to guess: one triple-voted 80 of the security theme's 123
-  claims and single-voted the other 43, and 8 of its 10 applied refutations then came from
+  their own and four were told to open a claims file that does not exist. **The WHOLE `security` theme — every batch of it — gets N skeptics + a majority
+  vote, with N ODD and N ≥ 3.** The scope is the theme, never a hand-picked "riskiest" subset: a
+  build left to cut its own subset triple-voted 80 of the security theme's 123 claims and
+  single-voted the other 43, and 8 of its 10 applied refutations then came from
   single-vote batches. Before spending the budget, weigh what the vote actually bought on that run:
   across 160 redundant rows the three skeptics disagreed on the verdict ZERO times and on the
   evidence anchor once. Unanimity is a real result — it is the only evidence that the
@@ -1697,8 +1672,15 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   a false one corrupts it silently and no gate can tell the difference. The majority vote is a
   filter, not a verdict: on a live build three of one batch's adverse findings were FALSE, the
   highest-risk claim among them, and all three were caught by the lead's own initiative rather than
-  by any step written here. This is that step: open the file, confirm the refutation, THEN
-  reconcile. Rejecting a refutation is a normal outcome — say so in `grounding.note`.
+  by any step written here. This is that step, and it runs in FRESH CONTEXT too: dispatch ONE
+  **closer** agent with only the refuted claims — each with its skeptic's `evidence` and `note` —
+  and the repo; never the build reasoning, and never the confirming rows. It opens each
+  refutation's file and returns **uphold / reject** per refutation with the line it read. WHY not
+  the lead's own read by default: the lead re-reading the code is the build-context blind spot the
+  fresh-context rule exists to break, reintroduced at the very step that decides what the map ends
+  up saying (the same reason a lead tie-break is refused below). The lead applies the upheld ones
+  through the destination table below and rejects the rest. Rejecting a refutation is a normal
+  outcome — say so in `grounding.note`.
 - **Cap each batch at ~40 claims** and split an oversized theme into two skeptics rather than one
   long-running one — an oversized batch becomes the phase's critical path, and more, smaller
   skeptics also mean fresher context per claim, so this trades nothing away. **When the worklist
@@ -1907,7 +1889,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   yourself, what you find outranks the majority — a 1-of-3 minority refutation is correct to apply
   when the dissenter turns out to be right. Say so in `grounding.note` (`report` will flag it as a
   CONFIRMED claim you overrode). This is not a licence to overrule a vote you merely dislike: the
-  re-read wins because it is evidence, so it only wins when you actually did it. Two
+  re-read wins because it is evidence, so it only wins when you actually did it. The closer agent's
+  uphold/reject IS this re-read for refutations; overruling the closer takes a read of your own,
+  recorded the same way. Two
   **behavioral-consistency items** ride the same fresh-context pass (judgment calls no mechanical
   gate can make): (1) for each Happy Path step, does its **title contradict its use case's name or
   outcome**? (the "signs in; the organization exists" vs "create an organization" class — a title
@@ -1916,8 +1900,23 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   — the mechanical duplication detector only catches *identical* runs, so depth-inconsistent
   retellings are found here; fix by extracting a sub-flow or aligning the depths. Re-validate →
   re-audit → render after fixes.
-  - **Ordering — ONE sequence, and `grounding write` is second-to-last.** The sequence below is the
-    single one; where an older note disagrees, this wins.
+  - **Ordering — ONE sequence, and `coyodex ship` RUNS it.** The list below is the reference for
+    what happens; the way to execute steps 2–12 is the verb, which stops at the first failing step
+    and names every step that did not run:
+
+    ```
+    .venv/bin/coyodex ship <repo>                       # PREPARE: steps 2-5, then stop — read the
+                                                        #   report it ends on, write the note
+    .venv/bin/coyodex ship <repo> --note-file <path> \
+        [--partial] [--access-baseline <old-map>]       # FINISH: through step 12
+    ```
+
+    It derives every path from `<repo>/.coyodex/` (map, fragments, reconcile.json, the pinned
+    `verify/worklist.json`, `verify/verdicts-*.json`) and refuses, naming the missing input, rather
+    than running a shorter sequence — so a skipped step can never read as a clean one. Steps 0, 1
+    and 13 stay yours: the collection-time verdicts lint, the refutation reconcile, and the commit.
+    Run the steps by hand only when ship refuses and the refusal is genuinely wrong for this build.
+    Where an older note disagrees with the list below, the list wins.
 
     ```
     0. coyodex grounding lint --verdicts <v> … --agent-transcripts <dir>   # at COLLECTION, not here
@@ -2020,7 +2019,8 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
 **Harvest-prompt template (Phase 1).** The copyable contract is
 [method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every harvest
-agent that file's contents, changing only the file list and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
+agent a POINTER to its filled copy (the pointer-dispatch rule above), changing only the file list
+and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
 contract harvest > <scratch>/harvest-contract.md`, then fill the «angle-bracket» slots in place.
 The verb prints the agent's half and appends the writing rules, so you never handle the template
 and the lead-facing header at its top cannot reach an agent. A harvest agent authors every

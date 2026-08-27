@@ -396,6 +396,11 @@ coyodex-eval cost <prev-transcript> --map <archive>/project-map.json
 
 Wall time, tokens, and both PER ROW of map produced, plus the straggler waste in each fan-out.
 
+**Append this build's line to the Cost log in `backlog.md`** (decision of 2026-08-27: the backlog
+is the durable home for spend — reports are git-ignored and evaporate). One row: date, project,
+rows, active minutes, $ total, $ per 100 rows, and the per-role split. The log is what makes any
+future "did this method change pay?" answerable without re-running `cost` on an old transcript.
+
 **Compare per row, never per build.** Absolute minutes and dollars track how big the map got: over
 four consecutive mcpolis builds the map grew 1,195 → 1,564 rows while the method changed under it,
 so the build that was *cheapest per unit of work* read as the slowest and most expensive one. Cost
@@ -840,6 +845,14 @@ narrowed self-checks the report went on to under-count
   method change that would have caught it, and stop there.
 - **A single build proves nothing about a trend.** Where a number moved against the previous build,
   say it moved; do not say the method improved. Two data points are two data points.
+- **A proposal lands as a TOOL CHANGE first, prose last.** For each proposal, answer in this order:
+  can a tool refuse the behaviour, do the step itself, or lint it? Else, can a check count it? Only
+  when neither is possible does the fix become a method sentence — and a prose-only proposal SAYS
+  SO ("no tool can carry this, because ...") and names the retro that should re-read it. WHY the
+  order is fixed: `method.md` records at least four times that a rule "stated as prose was read as
+  advice and skipped", while every rule that moved into a tool stopped recurring; each prose fix
+  also grows the file every build re-reads. A proposal written as prose when a verb could carry it
+  is the expensive kind of cheap.
 - **Propose, do not apply.** End by asking which proposals the user wants implemented — and then
   **write the answer into `findings.json` as each row's `decision`.** That is the one input the
   carry-forward needs and the one the retro cannot compute: without it every row stays `proposed`,

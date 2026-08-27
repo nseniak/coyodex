@@ -52,7 +52,7 @@ lead; nothing above this line goes into an agent prompt.
 > cannot fill one, return its header with `(none found)` and say why; never silently omit a
 > section.** Your output is **ONE JSON fragment** — a partial map model per
 > [model.md](«COYODEX_HOME»/method/model.md): an object holding only the top-level arrays your slice owns
-> («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`, `security`,
+> («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`,
 > `config`»), each entry using that array's exact field names. **WRITE the fragment to
 > `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
 > one-line inventory (row count per array)** — never inline the fragment in your reply: a large
@@ -61,7 +61,7 @@ lead; nothing above this line goes into an agent prompt.
 > **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
 > rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
 > `deps[].where_configured`, `edges[].where`, `entry_points[].source`, `evidence[].file`,
-> `run_commands[].source`, `security[].source`, `non_entity_types[].source`,
+> `run_commands[].source`, `non_entity_types[].source`,
 > **`rules[].sites[].where`** (the OPERATIVE line — its `:line` is REQUIRED, never a bare file),
 > **and the group `source`
 > fields** (`subsystems[].source` / `subdomains[].source` / `capabilities[].source` /
@@ -92,7 +92,11 @@ lead; nothing above this line goes into an agent prompt.
 > deployment-unit names are minted by a DIFFERENT slice running beside you, so a plausible guess
 > like `["backend"]` passes your own lint and hard-fails the lead's `validate`; `subsystem`;
 > `subdomain`; `bucket`; `block`; an `id` key on `entry_points` (`assemble` mints `EP` ids from
-> content); and a `security` array unless your slice was told it owns one.
+> content); and a `security` array, ever — an auth surface is a BUSINESS RULE (`access: true`),
+> written after the trace by the rules fan-out, and the Security & auth table is derived from those
+> rules. `security[]` is legacy storage on old maps; `lint-fragment` warns on any fragment that
+> authors it. Note the auth-relevant facts you see (the guard, its file:line) in your REPLY so the
+> lead can seed the rules fan-out; do not author rows for them.
 > **Scratch files: put your AGENT_ID in the name.** Every agent in this fan-out shares one
 > scratchpad directory. A helper script called `build.py` or `notes.py` WILL be overwritten by a
 > sibling mid-run — it has happened, and one agent's script then wrote another agent's output file.
@@ -123,16 +127,8 @@ lead; nothing above this line goes into an agent prompt.
 > **Anchor the operative statement** — the call / write / enforce line itself — **never the enclosing
 > `def`/class header** (the most common anchor-drift the adversarial pass finds).
 > Your AGENT_ID is your fragment's **filename stem only** — never a field inside the JSON.
-> **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
-> also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
-> `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
-> [domain-cards.md](«COYODEX_HOME»/method/domain-cards.md)), with **a `relations` item wherever two entities
-> relate** — the entities + their `E↔E` relations are the whole point of the slice. Each entity is a
-> **real named type** (class / dataclass / enum) whose `source` anchors its **definition** — do NOT
-> synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`) so
-> relations carry the field name. For a **field-less** relation a store realizes by keying (no FK on
-> the row — e.g. a per-parent store keyed by `parent_id`), set the relation's **`keyed_by`** so the
-> arrow shows the key (`«key» parent_id`) instead of a bare line — see [domain-cards.md](«COYODEX_HOME»/method/domain-cards.md).
-> Mark plumbing types you deliberately did NOT model in `non_entity_types` (name + why). A directory- or subsystem-sliced agent that is **not** the T5
-> owner returns its components / entry-points only and leaves `entities` to the owner.
+> **Entities are the T5 owner's alone.** Exactly one agent in this fan-out owns T5; its brief says
+> so and continues in an appended addendum. If yours does not, return your components /
+> entry-points only and leave `entities` (and every `E↔E` relation) to the owner — do not author
+> them, however clearly the domain layer shows in your files.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)

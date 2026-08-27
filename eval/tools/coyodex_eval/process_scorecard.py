@@ -286,7 +286,7 @@ _COYODEX_SUBCOMMANDS = frozenset({
     # `scope` and `archive` are deliberately NOT here: neither appears behind an alias anywhere in
     # either corpus, so they would add match surface for two generic words and recover nothing.
     "grounding", "finalize", "record",
-    "contract",
+    "contract", "ship",
 })
 
 

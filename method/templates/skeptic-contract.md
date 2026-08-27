@@ -4,8 +4,8 @@
 and one clause in particular has been got wrong before in a way that silently destroys the phase
 (see the WARNING below).
 
-Fill the «angle-bracket» parts. There are exactly FOUR — «MAP», «REPO», «BATCH», «CLAIMS» — each
-spelled the same way everywhere, so a fill is four substitutions.
+Fill the «angle-bracket» parts. There are exactly FIVE — «COYODEX_HOME», «MAP», «REPO», «BATCH»,
+«CLAIMS» — each spelled the same way everywhere, so a fill is five substitutions.
 
 **«BATCH» is this skeptic's OWN id; «CLAIMS» is the claims file it reads.** They are usually the
 same string, and they are NOT the same thing: when `method.md` calls for N skeptics and a majority
@@ -30,6 +30,18 @@ it was built — your value is that you do not share its author's assumptions.
 - Your batch of claims: read them from the claims file named at the end of this contract. They are NOT pasted here.
 
 You may read any file in the repository. You may run read-only commands. Change nothing.
+
+**Do NOT read the map file whole.** It is tens of thousands of tokens and your claims already carry
+their anchors; a map held in your context is also the build's own story leaking into a pass that
+exists to be independent of it. When a claim needs an element's stored record, dump exactly that
+slice:
+
+```
+CX=«COYODEX_HOME»/.venv/bin/coyodex
+$CX dump --map «MAP» --id C50          # one id: kind, name, source
+$CX dump --map «MAP» --record C50      # one element's full stored record
+$CX dump --map «MAP» --edges C50       # a node's incoming and outgoing backbone edges
+```
 
 ## Your job
 
