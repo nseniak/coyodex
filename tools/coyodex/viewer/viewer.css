@@ -414,6 +414,14 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
                                  cursor: pointer; white-space: nowrap; }
 .usecases-wrap .tab-index-chip:hover { background: #e2e8f0; }
 .usecases-wrap .tab-index-chip.active { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
+/* The count a chip states, when its section has one. Set apart from the title by its own pill, not
+   by a separator, so a row of chips reads as name-then-number down the whole strip. Tabular figures
+   keep the pills the same width per digit count, so the row does not jitter as the active chip
+   changes weight. */
+.usecases-wrap .tab-index-n { margin-left: 6px; padding: 0 5px; border-radius: 6px;
+                              background: #fff; color: #64748b; font-weight: 700; font-size: 11px;
+                              font-variant-numeric: tabular-nums; }
+.usecases-wrap .tab-index-chip.active .tab-index-n { color: #4338ca; }
 /* A jumped-to card clears the pinned bar instead of hiding under it. */
 .usecases-wrap .uc-group { scroll-margin-top: calc(var(--tab-index-h) + 8px); }
 /* The System section header is NOT sticky. It was, back when nine collections were stacked on one
@@ -1688,7 +1696,11 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 /* The page that carries the diagram earns a wider measure than a card list's 1100px: the stage is
    1370px, and clipping it into its own scrollbar on a window that has the room hides the third
    column. Narrower windows still scroll the wrap alone. */
-.usecases-wrap:has(> .story-wrap), .usecases-wrap:has(> .journey-board) { max-width: 1440px; }
+/* A DESCENDANT board, not a child: the actor page hangs it straight off the wrap, while the feature
+   page draws it inside its "What you can do" section. Both are the same board and both earn the
+   same measure — matched on the child only, a feature's rail lost 360px and clipped its last
+   station into a scrollbar on a window with the room for it. */
+.usecases-wrap:has(> .story-wrap), .usecases-wrap:has(.journey-board) { max-width: 1440px; }
 /* ONE features column + the cast: every feature sits in the story column, the walk in walk order
    and unbroken, off-walk ones in a block after it — never a demoted third column. */
 .story-stage { position: relative; display: grid; width: max-content;
@@ -1719,12 +1731,11 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-name { font-weight: 650; font-size: 13.5px; color: #111827; }
 .story-desc { margin: 2px 0 0; color: #5a6072; font-size: 11.5px; line-height: 1.35; }
 .story-pills { display: flex; gap: 5px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
+/* A count under the sentence, on either column: a LABEL, never a door. It carries no cursor and no
+   hover, because a card has exactly one door and that door is its name. */
 .story-pill { font: inherit; font-size: 9.5px; letter-spacing: .05em; padding: 1.5px 7px;
               border-radius: 99px; background: #f1f2f7; color: #5a6072; font-weight: 600;
               border: 0; }
-/* The use-case pill is a DOOR (the feature's details page); hover says so. */
-.story-ucpill { cursor: pointer; }
-.story-ucpill:hover { background: #4f46e5; color: #fff; }
 .story-who { display: flex; gap: 8px; align-items: center; font-weight: 650; font-size: 13.5px;
              flex-wrap: wrap; }
 /* `#diagram svg` sizes every diagram to its pane (100%); the glyph is an icon, so it needs the
@@ -1738,18 +1749,23 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .story-elabel.story-lab-on { display: block; }
 .story-elabel-live { cursor: pointer; }
 .story-elabel-live:hover { text-decoration: underline; box-shadow: 0 3px 10px rgba(79,70,229,.5); }
-/* The rules pill is a door too: the feature page's "What it decides" section. */
-.story-rulespill { cursor: pointer; }
-.story-rulespill:hover { background: #4f46e5; color: #fff; }
 
 /* ── the actor page's JOURNEY LINE ─────────────────────────────────────────────────────────────────
    One box per feature (tinted by featureTint — the one hue that feature gets anywhere), each box
    cut by a dashed line into two LANES: above it this actor's happy-path steps, on the rail, in the
    order the happy path reaches them; below it every other use case the same actor drives in that
    feature. A gutter on the left names the two lanes once. The features this actor's happy path
-   never enters follow, in story-column order, drawn as normal boxes with an EMPTY upper lane. */
+   never enters follow, in story-column order, drawn as normal boxes with an EMPTY upper lane.
+
+   THE FEATURE PAGE draws the same board from the same cells, zoned by DRIVER instead of by feature
+   — the mirror question, so the mirror picture. Every rule below is shared; nothing here knows
+   which of the two pages it is drawing, which is the point. */
 .journey-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
                  overflow-x: auto; padding: 22px 18px 16px 0; margin: 14px 0 6px; }
+/* Inside a section the section IS the card, so the board drops its own frame rather than drawing a
+   card inside a card — the one shape this viewer removes everywhere it appears. It keeps the
+   sideways scroll, which is the only thing the element is really for there. */
+.uc-group > .journey-board { border: 0; border-radius: 0; padding: 6px 0 0; margin: 0; }
 /* ONE grid for the whole board: row 1 the feature name, row 2 the happy-path lane, row 3 the lane
    for everything else this actor can do. Column 1 is the gutter that names the two lanes; every
    feature takes one column after it. Sharing the rows is the point — the dashed cut between the
@@ -1820,7 +1836,10 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
    on the dot, so where it starts depends on how many digits it has: measured, one digit starts 4.9px
    from the dot's left edge and two start 1.5px. Three or more are wider than the dot, so the number
    leads and the title starts with it at 0. */
+/* A station with NO number (the feature rail) has nothing to line up with, so its title hangs from
+   the dot's own left edge and the dot's bottom margin has to open the gap the number used to fill. */
 .journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; }
+.journey-station:not([class*="journey-d"]) .journey-dot { margin-bottom: 7px; }
 .journey-d1 .journey-t { padding-left: 4.9px; }
 .journey-d2 .journey-t { padding-left: 1.5px; }
 /* …and the off-path list under them takes the same indent, on top of the box's own 16px, so the
@@ -1856,7 +1875,8 @@ svg.story-wires marker path { fill: #c3c8d9; stroke: none; opacity: 1; }
 .journey-inclink { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
                    color: #4f46e5; }
 .journey-inclink:hover { text-decoration: underline; }
-/* The cast card's NAME is a door (the actor's page); the card body around it stays the pin. */
+/* A story card's NAME is a door (that element's own page — the actor's, the feature's); the card
+   body around it stays the pin. */
 .story-namelink { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
                   color: #111827; }
 .story-namelink:hover { color: #4f46e5; text-decoration: underline; }

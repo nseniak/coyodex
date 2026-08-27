@@ -614,7 +614,7 @@ def test_a_map_with_no_features_keeps_the_flat_use_case_list() -> None:
 
 def test_features_owns_the_actor_page_and_the_actors_view_is_gone() -> None:
     """The Actors tab is retired: the story diagram's cast column shows every actor with more
-    context (the kind pills keep the human/software split the card grid drew, the use-case pill
+    context (the kind pills keep the human/software split the card grid drew, the use-case count
     keeps the count), so the tab was the same answer twice. What remains is each actor's own page —
     the journey line — reached from a cast card, hanging UNDER FEATURES: the trail reads
     Features › <actor>, the same overview → member shape a feature's page has."""
@@ -839,7 +839,10 @@ def test_a_use_case_named_by_two_roles_is_listed_under_both() -> None:
     # One undeclared name still sends the whole use case to Other: a half-known pair has no per-role home.
     assert "known ? names.map((nm, i) =>" in body and "[[OTHER, 'Other', null]]" in body
     # The carrier is the actor page's side stop now: the drill still says whose page it left from.
-    assert "go({ kind: 'usecase', uc: b.getAttribute('data-uc'), act: actorName })" in js
+    # The shared rail binder passes it, and ONLY the actor page supplies one — a feature page's side
+    # stop passes no actor, because with none the crumb already runs through the use case's feature.
+    assert "if (opts.act) to.act = opts.act;" in js
+    assert "bindJourney(root, { act: actorName });" in js
 
 
 def test_the_group_by_switch_and_the_slot_it_lived_in_are_both_gone() -> None:
@@ -2359,10 +2362,111 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     # The use cases are the FIRST section, emitted by the one list renderer, not by a second copy.
     assert "const title = page ? 'What you can do'" in js
     assert "secs.concat(extra.secs)" in js, "the pinned index is built from the sections themselves"
-    # Only the CODE folds. It is the lowest-priority thing on the page and its count is in the
-    # heading; every other section is open, because a count you must click to see cannot be scanned.
+    # Only the CODE folds. It is the lowest-priority thing on the page and its count is on its chip;
+    # every other section is open, because a count you must click to see cannot be scanned.
     region = js[js.index("// \u2500\u2500 the feature page"): js.index("function bindFeaturePage(root) {")]
     assert region.count("<details") == 1 and "feat-fold" in region
+
+
+def test_the_section_chips_carry_the_counts_and_the_headings_do_not() -> None:
+    """The chip bar is the page's contents AND its summary: "15 rules, 7 entities" answered before any
+    scrolling, from the one list the sections register themselves in. Each count is stated ONCE \u2014 a
+    heading repeating it read as a second fact on a page where every section has a number. The count
+    stays optional per section, so the tabs indexing untallied things are untouched."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    sec = js[js.index("function featSection(secs, key, title, n, body) {"):
+             js.index("\nfunction ", js.index("function featSection(secs, key, title, n, body) {") + 10)]
+    assert "secs.push({ id, title, count: n });" in sec
+    assert "uc-actor-wants" not in sec, "the heading states no count"
+    idx = js[js.index("function tabIndexHtml(secs) {"):
+             js.index("\nfunction ", js.index("function tabIndexHtml(secs) {") + 10)]
+    assert "sec.count ?" in idx and "tab-index-n" in idx, "the count rides the chip, when there is one"
+    # The use-case section is emitted by the list renderer, so it drops its own heading count only on
+    # a feature's PAGE \u2014 the "not assigned to a feature" list is not that page and keeps it.
+    assert "(page ? '' : `<span class=\"uc-actor-wants\">${count}</span>`)" in js
+    assert "function featCount(" not in js, "the heading's count helper went with the heading's count"
+    assert ".tab-index-n" in (VIEWER_DIR / "viewer.css").read_text()
+
+
+def test_a_feature_page_draws_the_walk_as_a_rail_not_a_grid() -> None:
+    """The map knows the ORDER of what a feature does \u2014 "Building a map" owns steps 2 to 7 of the walk
+    \u2014 and the card grid threw it away, drawing eight cards in model order that said nothing about
+    which came first. The rail is the actor page's board with the two keys swapped: stations in walk
+    order, side stops under the dashed cut, zoned by DRIVER instead of by feature."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fj = js[js.index("function featureJourney(capId) {"):
+            js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
+    assert "HP_ACTORS_OF_STEP[st.id]" in fj, "the same drawn driver the actor rail files a step under"
+    assert "run.stations.push({ st, n });" in fj
+    # The off-walk use cases hang under the FIRST zone \u2014 they belong to the feature, not to a
+    # position in it, so a second run must not repeat them.
+    assert "zones[0].sides = sides" in js
+    rail = js[js.index("function featureRailHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featureRailHtml(capId) {") + 10)]
+    assert "if (!zones.length) return '';" in rail, "no walk here keeps the grid, which has sentences"
+    assert "journeyZoneHtml(z, {" in rail, "the same cells the actor rail is built from"
+    assert "data-act=" in rail and "data-cap=" not in rail, "a zone is named by its driver here"
+    assert "tint: featureTint(capId)" in rail, "one feature, so one colour for every zone"
+    # The caller keeps the grid as the fallback, in the SAME section, so the page shape never changes.
+    assert "(body || elementCardGridHtml(ids, per))" in js
+
+
+def test_only_the_actor_rail_numbers_its_stations() -> None:
+    """The digit under a dot is that step's place in the WHOLE walk. On an actor's page it is the
+    point — their steps are scattered across a 25-step walk and the number is the only thing saying
+    how far apart two stations are. On a FEATURE's page it answers a question about the Happy Path,
+    which is another view and one click away through the station, so the rail drops it and reads as
+    the order it already is. With no number the title has nothing to line up with, so the digit-count
+    class is not written either and the dot alone carries the indent."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    zone = js[js.index("function journeyZoneHtml(z, opts) {"):
+              js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
+    assert "const nums = o.numbers !== false;" in zone, "numbered is the default; the rail opts out"
+    assert "nums ? ' journey-d' + String(s.n).length : ''" in zone
+    assert "(nums ? `<span class=\"journey-n\">${s.n}</span>` : '')" in zone
+    assert "const sideIndent = (nums && (z.stations || []).length)" in zone
+    rail = js[js.index("function featureRailHtml(capId) {"):
+              js.index("\nfunction ", js.index("function featureRailHtml(capId) {") + 10)]
+    assert "numbers: false," in rail
+    act = js[js.index("function renderActorPage(actorName) {"):
+             js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
+    assert "numbers" not in act, "the actor rail takes the numbered default"
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert '.journey-station:not([class*="journey-d"]) .journey-dot' in css
+
+
+def test_a_feature_rail_breaks_a_zone_on_a_new_driver_or_a_gap_in_the_walk() -> None:
+    """Two boxes, not one, when the walk leaves and comes back. On this project's own map "Getting set
+    up" is entered at step 1 and again at step 15, and "Reviewing a finished build" at 21 and 25 \u2014 one
+    box holding both draws them as neighbours, and the rail is the one thing on the page that claims
+    an order. The actor rail breaks on the same two conditions with the keys swapped."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fj = js[js.index("function featureJourney(capId) {"):
+            js.index("\nfunction ", js.index("function featureJourney(capId) {") + 10)]
+    assert "run.act !== act || n !== prev + 1" in fj
+    assert "prev = n;" in fj
+
+
+def test_one_board_and_one_binder_serve_both_rails() -> None:
+    """The actor page and the feature page draw the same picture of the same walk, so the cells, the
+    grid and the clicks exist once. Which id a zone's name carries is what says which page it is \u2014
+    the same branch the story cards' name handler makes \u2014 rather than a flag passed down."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = js[js.index("function bindJourney(root, o) {"):
+              js.index("\nfunction ", js.index("function bindJourney(root, o) {") + 10)]
+    assert "if (cap) go({ kind: 'capability', cap });" in bind
+    assert "go({ kind: 'actor', act: b.getAttribute('data-act') })" in bind
+    assert "function bindActorPage(root, actorName) {" in js and "bindJourney(root, { act: actorName });" in js
+    feat = js[js.index("function bindFeaturePage(root) {"):
+              js.index("\nfunction ", js.index("function bindFeaturePage(root) {") + 10)]
+    assert "bindJourney(root, {});" in feat, "the feature page wires its rail with the same binder"
+    # ONE zone renderer, and the tint is the only thing the two pages disagree on.
+    zone = js[js.index("function journeyZoneHtml(z, opts) {"):
+              js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
+    assert "o.tint || (z.fid ? featureTint(z.fid) : '')" in zone
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".usecases-wrap:has(.journey-board)" in css, "a nested board earns the same measure"
+    assert ".uc-group > .journey-board" in css, "inside a section the section is the card"
 
 
 def test_a_long_list_on_the_feature_page_is_grouped_not_dumped() -> None:
@@ -3305,18 +3409,37 @@ def test_a_walk_less_map_still_draws_the_diagram_two_columns_wide() -> None:
     assert "story-stage-2col" not in css and "story-stage-2col" not in js
 
 
-def test_the_use_case_pill_is_a_door_that_does_not_steal_the_pin() -> None:
-    """The card's own click PINS; the pill is the one control leaving this screen — the feature's
-    details page, or the actor's — so it must not fire the pin too."""
+def test_a_card_name_is_the_door_that_does_not_steal_the_pin() -> None:
+    """The card's own click PINS; its NAME is the one control leaving this screen — the feature's
+    details page, or the actor's — so the name must not fire the pin too. ONE handler serves both
+    columns, branching on which id the name carries."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    pill = bind[bind.index(".story-ucpill"):]
-    assert "ev.stopPropagation();" in pill
-    assert "if (cap) go({ kind: 'capability', cap });" in pill
-    assert "go({ kind: 'actor', act: b.getAttribute('data-actor') });" in pill
+    name = bind[bind.index(".story-namelink"):]
+    assert "ev.stopPropagation();" in name
+    assert "if (cap) go({ kind: 'capability', cap });" in name
+    assert "go({ kind: 'actor', act: b.getAttribute('data-actor') });" in name
+    for fn, attr in (("storyFeatureCardHtml", "data-cap"), ("storyActorCardHtml", "data-actor")):
+        card = _story_fn(js, fn)
+        assert 'class="story-name story-namelink"' in card, f"{fn}: the name is the door"
+        assert 'title="Open the details page of' in card, f"{fn}: the name says where it goes"
+        link = card[card.index("story-namelink"):]
+        assert attr in link[:200], f"{fn}: the name carries the id its branch reads"
+
+
+def test_no_count_under_a_story_card_is_a_door() -> None:
+    """A card carries exactly ONE door and it is the name. The counts under the sentence — use
+    cases on both columns, rules on the feature — are labels: three targets on one small card made
+    a count read as a place to go rather than a fact about the element."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    for cls in ("story-ucpill", "story-rulespill"):
+        assert cls not in js and cls not in css, f"{cls}: the door class is gone, not shadowed"
     for fn in ("storyFeatureCardHtml", "storyActorCardHtml"):
-        assert 'title="Open the details page of' in _story_fn(js, fn), \
-            f"{fn}: the pill says where it goes"
+        pills = _story_fn(js, fn).split("story-pills")[1]
+        assert "<button" not in pills, f"{fn}: no count is a button"
+        assert 'class="story-pill"' in pills, f"{fn}: the count still draws as a pill"
+    assert ".story-pill:hover" not in css, "a label offers no hover affordance"
 
 
 def test_a_stake_label_is_a_door_to_the_happy_path_named_by_title_never_by_number() -> None:
@@ -3332,8 +3455,8 @@ def test_a_stake_label_is_a_door_to_the_happy_path_named_by_title_never_by_numbe
 
 def test_a_pin_stays_on_the_page_and_never_opens_the_drawer() -> None:
     """The drawer only ever repeated the card the reader had just clicked; the one thing it added,
-    the door to an actor's page, is the actor card's use-case pill now. A pin lights the wires and
-    labels and touches nothing else."""
+    the door to an actor's page, is the card's NAME now. A pin lights the wires and labels and
+    touches nothing else."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
     code = "\n".join(l for l in bind.splitlines() if not l.lstrip().startswith("//"))
@@ -3401,10 +3524,10 @@ def test_the_wires_measure_cards_not_their_own_paths_and_ignore_transforms() -> 
     assert "#diagram .story-glyph" in css
 
 
-def test_enter_on_the_focused_pill_does_not_also_pin_the_card() -> None:
-    """The keydown listener sits on the card, so Enter on the focused use-case pill bubbles to it;
-    the browser then fires the button's own click. Without the target check the pin, the panel
-    write and the tree sync all ride along before the navigation."""
+def test_enter_on_the_focused_name_does_not_also_pin_the_card() -> None:
+    """The keydown listener sits on the card, so Enter on the focused NAME bubbles to it; the
+    browser then fires the button's own click. Without the target check the pin, the panel write
+    and the tree sync all ride along before the navigation."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
     assert "if (ev.key === 'Enter' && ev.target === card) pick(ev);" in bind
@@ -3420,18 +3543,15 @@ def test_hover_never_takes_the_picture_away_from_a_pin() -> None:
 
 def test_a_feature_card_counts_its_joined_rules_and_hides_a_zero() -> None:
     """The rule join is a floor, not a total: "0 rules" would read as "decides nothing" when it can
-    only mean "nothing joined", so zero draws no pill. The pill is a DOOR: the feature page,
-    arrived scrolled to its "What it decides" section — the section-scroll twin of pendingFlash,
-    consumed at the same point so the page's remembered offset cannot undo it."""
+    only mean "nothing joined", so zero draws no pill. Both counts are LABELS — a plain span with
+    no handler behind it — so the card has exactly one door and it is the name."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = _story_fn(js, "storyFeatureCardHtml")
     assert "const nr = (f.rules || []).length;" in card
-    assert 'class="story-pill story-rulespill"' in card and "nr ? " in card
+    assert "nr ? " in card and "rule${nr === 1 ? '' : 's'}</span>" in card
+    assert "story-rulespill" not in js
+    assert "story-rulespill" not in (VIEWER_DIR / "viewer.css").read_text()
+    assert "<button" not in card.split("story-pills")[1], "no count pill is a button"
     bind = _story_fn(js, "bindStoryDiagram")
-    pill = bind[bind.index(".story-rulespill"):]
-    assert "ev.stopPropagation();" in pill
-    assert "pendingSection = 'featsec-rules';" in pill
-    assert "go({ kind: 'capability', cap: b.getAttribute('data-cap') });" in pill
-    flash = js[js.index("function applyPendingFlash() {"): js.index("\n}", js.index("function applyPendingFlash() {"))]
-    assert "if (pendingSection) {" in flash and "scrollIntoView" in flash
-    assert "'featsec-' + key" in js, "the section ids the one-shot targets still exist"
+    assert "featsec-rules" not in bind, "no count opens a section of the feature page"
+    assert "'featsec-' + key" in js, "the feature page's section ids are untouched"

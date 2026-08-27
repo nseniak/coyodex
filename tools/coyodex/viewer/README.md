@@ -41,6 +41,34 @@ make start                       # opens the landing page in a browser
 .venv/bin/coyodex serve ~/code/myrepo   # add + serve a folder right away
 ```
 
+### Working on the viewer
+
+```bash
+make dev-start                   # serves this repo's own map, with live reload
+```
+
+An edit reaches the screen with nothing pressed. Two halves, and both are needed:
+
+- **`--dev` gives the map page a live reload.** It polls `/p/<slug>/api/dev-reload` once a second
+  for a stamp (the newest mtime across `viewer.html` / `viewer.js` / `viewer.css` **and** this
+  tool's Python) and reloads when it moves. `viewer.js` / `viewer.css` / `viewer.html` are read from
+  disk per request and sent `no-store`, so an edit to any of them is live at once. Off without the
+  flag, and then the endpoint is a 404 like any unknown name: a person reading a map must not get a
+  page that reloads under them, nor carry a poll they did not ask for.
+- **`tools/devserve.py` restarts the server on a Python edit.** The view bundle is built
+  in-process, so the running server cannot pick one up (re-importing a live module graph mid-request
+  is how a server starts answering from two versions of itself — see the stale-process guard in
+  `serve.py`). It watches only `*.py` under `tools/coyodex/`: restarting for a frontend edit buys
+  nothing and costs something, since a restart landing while the page reloads kills the port
+  mid-load.
+
+The two halves are joined by one field. `api/dev-reload` also answers `stale` — whether this
+process's Python is older than the files on disk, so a restart is owed to it — and the page never
+reloads from a stale process. Without that, a Python edit reloads the page from the doomed process
+and lands on a dead port: a blank page, and nothing left polling to fix it.
+
+`PORT` works the same as for `make start`: `make dev-start PORT=8792`.
+
 For each map the server provides: the generic shell + `/static/` assets; the map's data at
 `/p/<slug>/api/view`; and a live file browser + syntax-highlighted code viewer, both reading files
 from git **at the map's commit** (`git ls-tree` / `git show`), so what you see always matches the map
@@ -145,8 +173,10 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   third column this replaces read as a ranking. A `before` anchor is the one placement that keeps
   such a feature among the walk, since the end of a column is not before anything. At rest the arrows are bare; hovering or pinning a
   card lights its arrows and shows each one's **stake label** (the authored `stakes[]` entry, or the
-  pair's first use-case name), which links to that edge's first Happy-Path step. Each card's
-  use-case pill is its door one level down. A cast card's actor NAME is the door to that **actor's
+  pair's first use-case name), which links to that edge's first Happy-Path step. Each card's NAME is
+  its door one level down, and the only door it has — the counts under the sentence (use cases on
+  both columns, rules on a feature) are labels. A spine card's feature NAME is the door to that
+  **feature's own page**. A cast card's actor NAME is the door to that **actor's
   own page** — the journey line: the actor's happy-path steps as stations on one rail, zoned by
   feature in the order the actor first enters each (zones tinted per feature), with the actor's
   other use cases as side stops under their zone; the features they never enter on the walk follow
@@ -156,10 +186,28 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   There is no Actors tab: the cast column is the actors' home. A map with no walk draws the same
   two columns in map order; only a map with no capabilities
   falls back to the flat card grid, which otherwise survives solely in diff mode for its "changed"
-  badges. Search and "show in context" land here with the card pinned. Level 2 is that feature's use
-  cases (the catalog rows, headed by the feature's own purpose); clicking a row drills to level 3, that
-  use case's flow — the same flow a Happy Path step drills into, so a use case has one home. A map that
-  records no capabilities skips level 1 and keeps the flat catalog it always had.
+  badges. Search and "show in context" land here with the card pinned. Level 2 is that feature's own
+  page, and level 3 a use case's flow — the same flow a Happy Path step drills into, so a use case has
+  one home. A map that records no capabilities skips level 1 and keeps the flat catalog it always had.
+
+  A **feature's page** leads with what it is, then a **chip bar** naming every section on it and how
+  many things each holds — the page's contents and its summary in one line, so "15 rules, 7 entities"
+  is answered before any scrolling. Each count is stated once, on its chip; click to jump, and the
+  chip of the section you are in lights as you scroll.
+
+  Its first section is the **feature rail** — the actor page's journey line with the two keys swapped.
+  The actor's rail zones by feature; a feature's rail zones by **driver**: the walk's steps that
+  belong to this feature, in walk order, as stations, with everything else the feature can do as side
+  stops under the dashed cut. The stations are **unnumbered** here — a digit under a dot is that
+  step's place in the whole walk, which is the Happy Path's own subject and one click away through
+  the station, while the rail already reads as the order it is. The **actor** rail keeps its numbers:
+  that page scatters one actor's steps across the whole walk, and the number is the only thing saying
+  how far apart two of their stations are. A zone is a run of consecutive steps under one driver, so a
+  feature the walk **enters twice** draws two boxes (on this repo's own map, "Getting set up" at steps
+  1 and 15) rather than one box claiming they are adjacent. The zone's name opens that actor's page,
+  a station opens the Happy Path at that step, a side stop opens that use case's flow. One board, one
+  binder and one stylesheet serve both pages. A feature the walk never enters keeps the **card grid**,
+  where each card's sentence is the only thing left to read.
 - **Rules** *(when the map states any business rule)* — the decisions this product makes, on the same
   cards: one card per **decision area**, with what that area covers and how many rules sit in it.
   Clicking a card opens that area's rules; clicking a rule opens its own page. It was every area

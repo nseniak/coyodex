@@ -6990,15 +6990,16 @@ for (const e of (GRAPH.entry_points || [])) if (e.id) EP_BY_ID[e.id] = e;
 // One section of the page, in the shell the text tabs share. Registers itself in `secs` so the pinned
 // chip index at the top lists it — the index IS the at-a-glance layer, and it cannot fall out of step
 // with the sections because it is built from them.
-function featSection(secs, key, title, count, body) {
+// `n` is how many things the section holds, and it is stated ONCE — on the chip, where the reader
+// meets it before scrolling. The heading used to repeat it beside the title, which read as two
+// different facts on a page where every section has a number.
+function featSection(secs, key, title, n, body) {
   const id = 'featsec-' + key;
-  secs.push({ id, title });
+  secs.push({ id, title, count: n });
   return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}`
-    + (count ? `<span class="uc-actor-wants">${esc(count)}</span>` : '')
     + `</h3>${body}</section>`;
 }
 function featEmpty(text) { return `<p class="feat-empty">${esc(text)}</p>`; }
-function featCount(n, noun, plural) { return `${n} ${n === 1 ? noun : plural}`; }
 
 // Element names as chips, GROUPED BY THE GROUP THEY LIVE IN — a component by its subsystem, an entity
 // by its subdomain, both of which ride the same `parent` pointer. Thirty-one loose chips is a wall and
@@ -7146,24 +7147,20 @@ function featureSectionsHtml(capId) {
   const f = FEAT_BY_ID[capId];
   if (!f) return { secs: [], html: '' };
   const secs = [];
-  let html = featSection(secs, 'eps', 'How you reach it',
-    f.entryPoints.length ? featCount(f.entryPoints.length, 'way in', 'ways in') : '',
+  let html = featSection(secs, 'eps', 'How you reach it', f.entryPoints.length,
     featEntryPointsHtml(f.entryPoints));
-  html += featSection(secs, 'rules', 'What it decides',
-    f.rules.length ? featCount(f.rules.length, 'rule', 'rules') : '',
+  html += featSection(secs, 'rules', 'What it decides', f.rules.length,
     featRulesHtml(f.rules));
   // The DATA MODEL is main implementation information, which the reader wants without drilling — so the
   // entities are full cards, each carrying where it is stored, not a row of bare names.
-  html += featSection(secs, 'ents', 'What it knows',
-    f.entities.length ? featCount(f.entities.length, 'entity', 'entities') : '',
+  html += featSection(secs, 'ents', 'What it knows', f.entities.length,
     f.entities.length ? elementCardListHtml(f.entities)
                       : featEmpty('No entity this map records is touched by its use cases.'));
   // The CODE is the lowest-priority thing on this page: the reader wants the story first, the main
   // implementation facts second, and the parts list a distant third. So it is the one section that
   // arrives folded — its heading still states how many components there are, which is the fact worth
   // scanning, and the names are one click away for the reader who actually wants them.
-  html += featSection(secs, 'comps', 'What it runs on',
-    f.components.length ? featCount(f.components.length, 'component', 'components') : '',
+  html += featSection(secs, 'comps', 'What it runs on', f.components.length,
     f.components.length
       ? '<details class="feat-fold"><summary>Show the parts</summary>'
         + featChipGroupsHtml(f.components) + '</details>'
@@ -7174,6 +7171,9 @@ function featureSectionsHtml(capId) {
 // Wire the page's names. Elements go through `selectFromTree`, the one place that answers "which view
 // shows this id"; a role opens its own use-case list, which is not an element and has no node.
 function bindFeaturePage(root) {
+  // The rail's own clicks, from the one binder both pages share. No actor is passed: a side stop's
+  // crumb then runs through the use case's feature, which on this page is the page you are on.
+  bindJourney(root, {});
   root.querySelectorAll('.featref[data-id]').forEach((b) => {
     const open = () => selectFromTree(b.getAttribute('data-id'));
     b.addEventListener('click', open);
@@ -7261,10 +7261,18 @@ function renderUseCases(sel) {
       // it again. The hero above carries the name, the label and the purpose, so the heading here names
       // what the section IS, and carries its own count like every other section of the page.
       const title = page ? 'What you can do' : (g.cap ? g.cap.name : 'Not assigned to a feature');
-      secs.push({ id: secId, title });
+      secs.push({ id: secId, title, count: ids.length });
+      // The RAIL when the walk enters this feature, which is what the map knows and the grid threw
+      // away: the steps in walk order, zoned by who drives each run. The grid stays as the answer
+      // for a feature the walk never reaches, where a rail would be a bare list of names and the
+      // cards' sentences are the only thing left to read.
+      const body = page ? featureRailHtml(page) : '';
+      // On a feature's PAGE the chip above states the count, so the heading does not; the
+      // "not assigned to a feature" list is not that page and keeps its own.
       return `<section class="uc-group" id="${secId}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
-        + `<h3 class="uc-actor">${esc(title)}<span class="uc-actor-wants">${count}</span></h3>`
-        + elementCardGridHtml(ids, per) + '</section>';
+        + `<h3 class="uc-actor">${esc(title)}`
+        + (page ? '' : `<span class="uc-actor-wants">${count}</span>`) + '</h3>'
+        + (body || elementCardGridHtml(ids, per)) + '</section>';
     }
     // An actor's section, or one section per actor on the flat fallback. Several INTERCHANGEABLE actors
     // agree on their kind or the header shows none, and "wants" is only shown for a lone role, because
@@ -7292,6 +7300,9 @@ function renderUseCases(sel) {
   // this feature — follows it. The pinned index is built from every section, so it and the page cannot
   // disagree about what is on screen.
   const extra = page ? featureSectionsHtml(page) : null;
+  // On a FEATURE's page the chip bar carries each section's count, so the strip is the page's
+  // contents and its summary in one line — "what is in here, and how much of it" answered before
+  // any scrolling. The sections' own headings then drop the count they were stating twice.
   const index = tabIndexHtml(extra ? secs.concat(extra.secs) : secs);
   diagram.innerHTML = `<div class="usecases-wrap">${head}${index}`
     + (sections || '<p class="empty">No use cases recorded.</p>')
@@ -7415,7 +7426,7 @@ function productLeadHtml() {
 // ── The ACTOR PAGE: one actor's journey line ─────────────────────────────────────────────────────
 // The Actors view (a card grid split into Humans / Software services) is gone: the story diagram's
 // cast column shows every actor with more context — the kind pills keep the human/software split,
-// the use-case pill keeps the count — so the tab was the same answer twice. What remains is each
+// the use-case count keeps the count — so the tab was the same answer twice. What remains is each
 // actor's own page, reached from a cast card, drawn as a JOURNEY LINE: the actor's happy-path steps
 // as stations on one rail, zoned by feature in the order this actor first enters each, with every
 // other thing they can do as a side stop under its zone. Every use case of the actor appears exactly
@@ -7606,17 +7617,31 @@ function journeyZoneHtml(z, opts) {
     : (z.stations || []).length || (z.sides || []).length
       ? '<span class="journey-zkind">not in any feature</span>' : '');
   // The station carries its number's DIGIT COUNT, because the title lines its left edge up with the
-  // number and a number centred on the dot starts further left the more digits it has.
+  // number and a number centred on the dot starts further left the more digits it has. With the
+  // numbers off there is nothing to line up with, so the title hangs from the dot's own centre and
+  // the digit class is not written at all.
+  //
+  // `numbers: false` is the FEATURE rail. There the rail is the order — one feature's stretch of the
+  // walk, read left to right — and the walk position each digit carried is a fact about the whole
+  // walk, which is the Happy Path view's own subject and one click away through the station. On the
+  // ACTOR rail they stay: that page scatters an actor's steps across a 25-step walk, and the number
+  // is the only thing saying how far apart two of their stations really are.
+  const nums = o.numbers !== false;
   const stations = (z.stations || []).map((s) =>
-    `<button type="button" class="journey-station journey-d${String(s.n).length}" `
+    `<button type="button" class="journey-station${nums ? ' journey-d' + String(s.n).length : ''}" `
     + `data-step="${esc(s.st.id)}" `
     + `title="Open the Happy Path: ${esc(s.st.title || 'this step')}">`
-    + `<span class="journey-dot"></span><span class="journey-n">${s.n}</span>`
+    + `<span class="journey-dot"></span>`
+    + (nums ? `<span class="journey-n">${s.n}</span>` : '')
     + `<span class="journey-t">${esc(stationTitle(s.st.title, o.actor))}</span></button>`).join('');
   const sides = (z.sides || []).map((uc) =>
     `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
     + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>${esc(uc.name)}</button>`).join('');
-  const tint = z.fid ? `;background:${featureTint(z.fid)}` : '';
+  // The zone's own feature decides its colour on the actor rail. The FEATURE rail passes one tint
+  // for every zone instead: that whole board is one feature, and a colour changing from zone to zone
+  // would claim a difference the zones do not have.
+  const tintOf = o.tint || (z.fid ? featureTint(z.fid) : '');
+  const tint = tintOf ? `;background:${tintOf}` : '';
   // The rail overhangs half the gap between boxes, so it bridges them into one line, and its two
   // ENDS (`first` / `last`) stick out further still: a line that stopped at the box edge read as a
   // property of that box rather than as one path running through all of them. The right-hand tip is
@@ -7627,7 +7652,7 @@ function journeyZoneHtml(z, opts) {
   // The off-path list lines its circles up with the station titles above it, so the box has ONE text
   // column. The titles hang off their number, whose left edge depends on its digit count, so the
   // list takes the indent of this box's FIRST station — the one the reader's eye starts from.
-  const sideIndent = (z.stations || []).length
+  const sideIndent = (nums && (z.stations || []).length)
     ? ' journey-d' + String(z.stations[0].n).length : '';
   // Every cell of a box carries `gapBefore`, because the box is four separate grid items in one
   // column and a margin on one of them would move that cell alone.
@@ -7692,18 +7717,125 @@ function renderActorPage(actorName) {
   diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}</div>`;
   bindActorPage(diagram, actorName);
 }
-function bindActorPage(root, actorName) {
+// ONE binder for both rails. The actor page and the feature page draw the SAME board out of the same
+// cells, so the clicks are wired once: a station opens the walk, a side stop opens that use case,
+// and a zone's name opens whatever that zone is named after. Which of `cap`/`act` the name carries
+// is what says which page this is — the actor's rail zones by feature, the feature's by driver —
+// so the branch reads the attribute rather than being told, the same shape the story cards' name
+// handler uses.
+//
+// `o.act` is the ACTOR page's drill context: a use case has two homes, and passing the actor is what
+// makes the crumb run through this page. The feature rail passes NOTHING, because with no actor the
+// crumb already runs through the use case's own feature — which on that page is the page you are on.
+function bindJourney(root, o) {
+  const opts = o || {};
   root.querySelectorAll('.journey-station').forEach((b) => b.addEventListener('click', () =>
     // The station is a door to the WALK: the Happy Path view, arriving with this step selected —
     // the same one-shot `sel` restore the story diagram's edge labels use.
     go({ kind: 'hp', sel: 'hpstep:' + b.getAttribute('data-step') })));
-  root.querySelectorAll('.journey-side').forEach((b) => b.addEventListener('click', () =>
-    // Carry the actor into the drill, so the crumb reads Features › <actor> › <use case>.
-    go({ kind: 'usecase', uc: b.getAttribute('data-uc'), act: actorName })));
-  root.querySelectorAll('.journey-zname').forEach((b) => b.addEventListener('click', () =>
-    go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
+  root.querySelectorAll('.journey-side').forEach((b) => b.addEventListener('click', () => {
+    const to = { kind: 'usecase', uc: b.getAttribute('data-uc') };
+    if (opts.act) to.act = opts.act;
+    go(to);
+  }));
+  root.querySelectorAll('.journey-zname').forEach((b) => b.addEventListener('click', () => {
+    const cap = b.getAttribute('data-cap');
+    if (cap) go({ kind: 'capability', cap });
+    else go({ kind: 'actor', act: b.getAttribute('data-act') });
+  }));
   root.querySelectorAll('.journey-inclink').forEach((b) => b.addEventListener('click', () =>
     go({ kind: 'actor', act: b.getAttribute('data-act') })));
+}
+function bindActorPage(root, actorName) {
+  bindJourney(root, { act: actorName });
+}
+
+// ── The FEATURE PAGE's rail: the same board, turned ninety degrees ───────────────────────────────
+// The actor page answers "what does this actor do" with one rail zoned by FEATURE. A feature's page
+// asks the mirror question — "what happens in this feature" — so it draws the mirror board: the same
+// stations, the same dashed cut, the same gutter, zoned by the DRIVER instead.
+//
+// It replaces a card grid that threw away an order the map already knows. "Building a map" owns
+// steps 2 to 7 of the walk, in that order; the grid drew eight cards in model order and said nothing
+// about which came first. Measured on this project's own map: 570px of cards for 8 use cases,
+// against a rail that fits the same eight in one band.
+//
+// A zone is a RUN of consecutive steps under ONE driver, exactly the rule actorJourney uses with the
+// two keys swapped — because both failure modes are real here too. On this map 2 of the 7 features
+// are entered by the walk TWICE ("Getting set up" at steps 1 and 15, "Reviewing a finished build" at
+// 21 and 25), and filing both runs under one box would draw a rail that claims they are adjacent.
+function featureJourney(capId) {
+  const f = FEAT_BY_ID[capId] || {};
+  const own = new Set(f.useCases || []);
+  const zones = [];   // [{act, stations:[{st,n}], sides:[ucNode]}], in WALK order
+  let run = null, prev = 0;
+  (GRAPH.happy_path || []).forEach((st, i) => {
+    if (!own.has(st.uc)) return;
+    const n = i + 1;
+    // The step's DRAWN driver — the leftmost of its interchangeable actors, the same choice
+    // actorStations makes, so a step lands under the same actor on both pages.
+    const drivers = HP_ACTORS_OF_STEP[st.id] || [];
+    const act = drivers.length ? drivers[0].name : '';
+    // A new zone on a change of driver OR on a GAP in the walk. The gap matters as much as the
+    // driver: "Getting set up" is entered at step 1 and again at step 15, and one box holding both
+    // draws them as neighbours — the rail is the one thing on this page that claims an order, so it
+    // must not claim that one. The actor rail breaks on the same two conditions with the keys
+    // swapped, and it was a real bug there before it was a rule.
+    if (!run || run.act !== act || n !== prev + 1) {
+      run = { act, stations: [], sides: [] };
+      zones.push(run);
+    }
+    run.stations.push({ st, n });
+    prev = n;
+  });
+  // Everything the feature can do that the walk never reaches. They hang under the FIRST zone: they
+  // belong to the feature, not to a position in it, so repeating them under a second run would say
+  // the same thing twice. With no run at all they open a lane of their own.
+  const onWalk = new Set(zones.flatMap((z) => z.stations.map((s) => s.st.uc)));
+  const sides = (f.useCases || []).filter((id) => !onWalk.has(id))
+    .map((id) => GRAPH.nodes[id]).filter(Boolean);
+  return { zones, sides };
+}
+// One feature's board. Returns '' when the walk never enters this feature — the caller then keeps
+// the card grid, which is the better answer there: a rail with no stations is a bare list of names,
+// and the grid's cards carry each use case's sentence.
+function featureRailHtml(capId) {
+  const { zones, sides } = featureJourney(capId);
+  if (!zones.length) return '';
+  if (sides.length) zones[0].sides = sides;
+  const offLane = sides.length > 0;
+  let col = 1;
+  const boxes = zones.map((z, i) => journeyZoneHtml(z, {
+    col: ++col, offLane, actor: z.act, first: i === 0, last: i === zones.length - 1,
+    // No step NUMBERS here. The rail already reads left to right, and the digit each station carried
+    // was its position in the WHOLE walk — a fact about the Happy Path, not about this feature, and
+    // one click away through the station itself.
+    numbers: false,
+    // The zone is named by its DRIVER, and the name is a door to that actor's page — the mirror of
+    // the actor rail, where the zone is named by its feature and opens the feature's page. The
+    // feature's own name is NOT drawn: the breadcrumb is this page's title, and a box repeating it
+    // once per run would name the page two or three times.
+    label: z.act
+      ? `<button type="button" class="journey-zname" data-act="${esc(z.act)}" `
+        + `title="Open the details page of ${esc(z.act)}">${storyGlyphSvg(roleKindOfName(z.act))}`
+        + `<span>${esc(z.act)}</span></button>`
+      : '<span class="journey-zkind">no actor recorded</span>',
+    // Every zone takes the FEATURE's tint, not one of its own: this whole board is one feature, and
+    // a colour that changed per zone would claim a difference the zones do not have.
+    tint: featureTint(capId),
+  })).join('');
+  const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
+    + '<div class="journey-gutter journey-gutter-on">Happy path</div>'
+    + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
+  return '<div class="journey-board"><div class="journey-rail'
+    + `${offLane ? ' journey-has-off' : ''}">${gutter}${boxes}</div></div>`;
+}
+// An actor's kind from their NAME, for the glyph a zone label carries. The rail speaks names (that
+// is what the walk records), while the kind lives on the role — ROLE_BY_NAME is the one table that
+// crosses the two, and an actor the map never declared has no kind and draws the person glyph.
+function roleKindOfName(name) {
+  const r = ROLE_BY_NAME[String(name || '').trim().toLowerCase()];
+  return r ? r.kind : '';
 }
 
 // ── The STORY DIAGRAM: the Features view's choosing layer ────────────────────────────────────────
@@ -7716,9 +7848,10 @@ function bindActorPage(root, actorName) {
 //
 // At rest the arrows are thin, grey and unlabelled: the diagram is for choosing, and fourteen
 // labelled arrows at once are a wall. Hover previews one card's arrows (bold + labelled, the rest
-// faded) while nothing is pinned; click PINS that picture and stays on this page. Each card's
-// use-case pill is its door one level down (the feature's page, the actor's page). A label with a
-// happy-path step is a door to that step; one without says so and stays put.
+// faded) while nothing is pinned; click PINS that picture and stays on this page. Each card's NAME
+// is its door one level down (the feature's page, the actor's page), and the only door it has —
+// the counts under the sentence are labels. A label with a happy-path step is a door to that step;
+// one without says so and stays put.
 function storyGlyphSvg(kind) {
   // The same identity the sequence diagrams give an actor — person vs service shape, in the actor
   // tints (ELEMENT_TINT) — hand-drawn small, since the Mermaid glyphs only exist as SVG mutations.
@@ -7782,10 +7915,14 @@ function storyFeatureCardHtml(id) {
   // where those rules are listed. Zero draws nothing — on the join's floor, "0 rules" would read
   // as "decides nothing" when it can only mean "nothing joined".
   const nr = (f.rules || []).length;
-  const rules = nr ? `<button type="button" class="story-pill story-rulespill" data-cap="${esc(id)}" `
-    + `title="Open what ${esc(name)} decides">${nr} rule${nr === 1 ? '' : 's'}</button>` : '';
-  // The use-case pill is a DOOR to the feature's own details page — the card's click is the pin, so
-  // the pill is the one control that leaves this screen, and it says where it goes.
+  const rules = nr ? `<span class="story-pill">${nr} rule${nr === 1 ? '' : 's'}</span>` : '';
+  // The NAME is the card's one DOOR to the feature's own details page — the same treatment the cast
+  // card gives the actor's name, so a name that opens a page looks the same in both columns. The
+  // card body around it stays the pin.
+  //
+  // The counts BELOW are labels, not controls. They used to be doors themselves (the use-case count
+  // to the page, the rule count to its "What it decides" section), which put three targets on one
+  // small card and made the count read as a place to go rather than a fact about the feature.
   //
   // TWO bands of pill, the same split the cast card makes. Beside the NAME goes the pill that changes
   // how the name itself reads: who the feature is for. The LAST line is counts only, so the two
@@ -7793,24 +7930,24 @@ function storyFeatureCardHtml(id) {
   return `<article class="story-card story-feature" `
     + `data-sfeat="${esc(id)}" tabindex="0">`
     + `<span class="story-who">${storyFeatureGlyphSvg()}`
-    + `<span class="story-name">${esc(name)}</span>${aud}</span>`
+    + `<button type="button" class="story-name story-namelink" data-cap="${esc(id)}" `
+    + `title="Open the details page of ${esc(name)}">${esc(name)}</button>${aud}</span>`
     + (f.purpose ? `<p class="story-desc">${mdInline(f.purpose)}</p>` : '')
-    + `<div class="story-pills"><button type="button" class="story-pill story-ucpill" `
-    + `data-cap="${esc(id)}" title="Open the details page of ${esc(name)}">`
-    + `${n} use case${n === 1 ? '' : 's'}</button>${rules}</div>`
+    + `<div class="story-pills">`
+    + `<span class="story-pill">${n} use case${n === 1 ? '' : 's'}</span>${rules}</div>`
     + '</article>';
 }
 function storyActorCardHtml(rid) {
   const r = ROLE_BY_ID[rid] || {};
   const wants = wantsSentence(r.wants || '');
   // TWO targets that must not fight: the NAME is the drill to the actor's own page (underlined on
-  // hover, so it reads as the door it is), the card BODY is the pin. The use-case pill keeps its
-  // own door to the same page — the mirror of the feature card's pill. The count comes from
+  // hover, so it reads as the door it is), the card BODY is the pin. The count comes from
   // actorGroups, the same reader the journey page counts with, so the two agree.
   const g = actorGroups().find((x) => x.actor === r.name);
   const n = g ? g.ucs.length : 0;
-  // The use-case pill sits where the feature card's does — the LAST band, under the sentence — so the
-  // one control that leaves the screen is in the same place on both columns. The nature pills stay
+  // The use-case count sits where the feature card's does — the LAST band, under the sentence — so
+  // the two columns' bottom lines are the same kind of line. It is a LABEL on both, like every
+  // count on this page: a card carries one door, and that door is its name. The nature pills stay
   // beside the name: they say what this actor IS, which is part of reading the name, not a fact
   // collected under it.
   return `<article class="story-card story-actor" data-sactor="${esc(rid)}" tabindex="0">`
@@ -7819,10 +7956,8 @@ function storyActorCardHtml(rid) {
     + `title="Open the details page of ${esc(r.name || rid)}">${esc(r.name || rid)}</button>`
     + cardPillsHtml(actorSidePills(r.kind, r.audience)) + '</span>'
     + (wants ? `<p class="story-desc">${mdInline(wants)}</p>` : '')
-    + `<div class="story-pills"><button type="button" class="story-pill story-ucpill" `
-    + `data-actor="${esc(r.name || '')}" `
-    + `title="Open the details page of ${esc(r.name || rid)}">${n} use case${n === 1 ? '' : 's'}</button>`
-    + '</div></article>';
+    + `<div class="story-pills">`
+    + `<span class="story-pill">${n} use case${n === 1 ? '' : 's'}</span></div></article>`;
 }
 // Does the story diagram draw on this map? ONE answer, read by the renderer, by renderOverview
 // (which hides the duplicate card grid when it does), and by the search / "show in context"
@@ -7942,8 +8077,7 @@ function bindStoryDiagram(root) {
   const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(restore, 180); };
   // A pin stays ON THIS PAGE: it lights the card's wires and labels and nothing else. It used to
   // also fill the selection drawer, and the drawer only ever repeated the card the reader had just
-  // clicked — the one thing it added, the door to an actor's own page, is the actor card's
-  // use-case pill now.
+  // clicked — the one thing it added, the door to an actor's own page, is the card's NAME now.
   const unpin = () => {
     if (!selected) return;
     selected = null;
@@ -7963,8 +8097,8 @@ function bindStoryDiagram(root) {
       card.addEventListener('mouseleave', scheduleHide);
       const pick = (ev) => { ev.stopPropagation(); pin(key, id, card); };
       card.addEventListener('click', pick);
-      // Enter on the CARD pins; Enter on the focused use-case pill is the pill's own door, and the
-      // browser fires the button's click for it — the pin must not ride along first.
+      // Enter on the CARD pins; Enter on the focused NAME is the name's own door, and the browser
+      // fires the button's click for it — the pin must not ride along first.
       card.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter' && ev.target === card) pick(ev);
       });
@@ -7978,28 +8112,20 @@ function bindStoryDiagram(root) {
   }
   // Empty background clears the pin — bound on the WRAP, not the stage: the stage is only as wide
   // as its columns, and since the third column left, the whitespace right of the cast sits outside
-  // it, where a click cleared nothing. Card and pill clicks stopPropagation, so they never reach
+  // it, where a click cleared nothing. Card and name clicks stopPropagation, so they never reach
   // here from either element.
   (stage.closest('.story-wrap') || stage).addEventListener('click', unpin);
-  root.querySelectorAll('.story-ucpill').forEach((b) => b.addEventListener('click', (ev) => {
-    ev.stopPropagation();               // the pill's door is not the card's pin
+  // A card's NAME is its drill (that element's own page); the card body around it stays the pin. A
+  // button, so Enter fires its click and the card's Enter-pins handler (gated on ev.target ===
+  // card) never sees it — the two targets cannot fire together. ONE handler for both columns,
+  // branching on which id the name carries. It is also the ONLY door on either card: the counts
+  // under the sentence used to be doors too, which put three targets on one small card and made a
+  // count read as a place to go rather than a fact about the element.
+  root.querySelectorAll('.story-namelink').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
     const cap = b.getAttribute('data-cap');
     if (cap) go({ kind: 'capability', cap });
     else go({ kind: 'actor', act: b.getAttribute('data-actor') });
-  }));
-  // The actor NAME is the card's drill (its own page); the card body around it stays the pin. A
-  // button, so Enter fires its click and the card's Enter-pins handler (gated on ev.target ===
-  // card) never sees it — the two targets cannot fire together.
-  root.querySelectorAll('.story-namelink').forEach((b) => b.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    go({ kind: 'actor', act: b.getAttribute('data-actor') });
-  }));
-  // The rules pill opens the same feature page, arrived at its "What it decides" section — the
-  // section-scroll twin of pendingFlash, consumed after the page's own scroll restore.
-  root.querySelectorAll('.story-rulespill').forEach((b) => b.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    pendingSection = 'featsec-rules';
-    go({ kind: 'capability', cap: b.getAttribute('data-cap') });
   }));
   // The one-shot arrival pin: a search hit or a "show in context" click on a feature or an actor
   // lands here with the card pinned and framed — the diagram half of what flashCard does for a
@@ -8079,11 +8205,17 @@ function bindProductLead() {
 // scroll. Built for the System tab, where a dozen unlabelled tables were unnavigable; the same problem
 // arrives the moment any of these lists has more categories than fit on a screen.
 //
-// `secs` = [{id, title}], in render order. Fewer than two sections index nothing, so no bar is drawn.
+// `secs` = [{id, title, count?}], in render order. Fewer than two sections index nothing, so no bar
+// is drawn. A section that states a `count` carries it ON its chip, which turns the bar into the
+// page's summary as well as its contents — a reader learns "15 rules, 7 entities" without scrolling
+// to find out. The count is optional per section, so the tabs that index untallied things (the
+// System tab's tables) are unchanged.
 function tabIndexHtml(secs) {
   if (!secs || secs.length < 2) return '';
   return `<nav class="tab-index" aria-label="Sections">${secs.map((sec) =>
-    `<button type="button" class="tab-index-chip" data-target="${esc(sec.id)}">${esc(sec.title)}</button>`
+    `<button type="button" class="tab-index-chip" data-target="${esc(sec.id)}">${esc(sec.title)}`
+    + (sec.count ? `<span class="tab-index-n">${esc(String(sec.count))}</span>` : '')
+    + '</button>'
   ).join('')}</nav>`;
 }
 // Wire an index rendered by `tabIndexHtml`: click-to-jump + scroll-spy. `wrap` is the SCROLL container
@@ -9467,8 +9599,10 @@ function selectTargetFor(id) {
 // A card the next render must scroll to and flash — the card-list half of "show in context", where a
 // diagram would instead select and centre a box. Consumed once, by the render that draws the card.
 let pendingFlash = null;
-// A section id the next text-page render must arrive scrolled to (the rules pill's door to a
-// feature page's "What it decides"). Consumed with pendingFlash, after the scroll restore.
+// A section id the next text-page render must arrive scrolled to. Consumed with pendingFlash,
+// after the scroll restore. NO caller sets it today — the rule count that used to (the Features
+// page's door to a feature page's "What it decides") is a plain label now. Kept because the
+// feature page's sections still carry the ids, so any future door lands with one assignment.
 let pendingSection = null;
 // The story diagram's twin of pendingFlash: {key: 'sfeat'|'sactor', id} to pin on the next Features
 // render. `storyPinApply` is installed by bindStoryDiagram each render, for the already-on-page case.
