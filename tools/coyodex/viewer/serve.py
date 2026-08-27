@@ -189,6 +189,62 @@ def warn_if_code_changed() -> bool:
     return True
 
 
+# ── live reload, DEV ONLY (--dev) ────────────────────────────────────────────────────────────────
+# Off by default and never reachable without the flag: a user reading a map must not have their page
+# reloaded under them, and must not carry a poll they did not ask for.
+#
+# With --dev the shell gets one small script that polls `api/dev-reload` for a STAMP — the newest
+# mtime across the frontend assets AND this tool's Python — and reloads the page when it moves. The
+# Python half is in the stamp on purpose: the view bundle is built in-process, so an edit there is
+# only visible after a restart, and the reload is what puts the restarted server's answer on screen.
+# A poll that fails is the server going down for that restart, so it retries rather than reloading
+# into a dead port. The FIRST stamp is only recorded, never acted on, or every page load would
+# reload itself once.
+#
+# The answer also says whether THIS process is STALE — its Python is older than the files on disk,
+# so a restart is owed. A stale process must not be reloaded into: it is about to be killed, and a
+# page that reloads from it loads its assets from a port that dies mid-request, which leaves a blank
+# page that nothing will fix. The page therefore waits for a fresh process to answer before acting
+# on the change. Measured, not reasoned about: an edit to a Python source did exactly that.
+def dev_stamp() -> int:
+    """Newest mtime across the served frontend files and this tool's Python — one number per edit."""
+    newest = _sources_stamp()
+    for name in ("viewer.html", *_STATIC_FILES):
+        try:
+            newest = max(newest, (_FRONTEND_DIR / name).stat().st_mtime_ns)
+        except OSError:
+            continue
+    return newest
+
+
+_DEV_RELOAD_SCRIPT = """<script>
+(function () {
+  var seen = null, EVERY = 1000;
+  function again() { setTimeout(poll, EVERY); }
+  function poll() {
+    fetch('api/dev-reload', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.stamp) return again();
+        if (seen === null) seen = d.stamp;          // first answer: remember, never act
+        else if (d.stamp !== seen && !d.stale) return location.reload();
+        again();                                     // stale: a restart is owed, wait for it
+      })
+      .catch(again);                                 // mid-restart: keep asking, do not reload
+  }
+  poll();
+})();
+</script>"""
+
+
+def with_dev_reload(html: str) -> str:
+    """Put the live-reload script into the shell, immediately before `</body>`. Appended when the
+    shell has no `</body>`, so a hand-edited shell still reloads instead of silently not."""
+    if "</body>" in html:
+        return html.replace("</body>", _DEV_RELOAD_SCRIPT + "</body>", 1)
+    return html + _DEV_RELOAD_SCRIPT
+
+
 def ensure_fresh(proj: Project) -> None:
     """Drop a project's cached artifacts when its map file changed on disk (mtime_ns mismatch), and
     re-read the header fields (commit/title/goal — an Accept bumps the pin, and ``tree`` reads git AT
@@ -567,6 +623,7 @@ def _recents_payload(store: RecentsStore, projects: dict[str, Project]) -> list[
 class Handler(BaseHTTPRequestHandler):
     store: RecentsStore = RecentsStore.__new__(RecentsStore)  # replaced in serve()
     projects: dict[str, Project] = {}
+    dev: bool = False  # --dev only: inject live reload + answer api/dev-reload (see dev_stamp)
     server_version = "coyodex-serve"
 
     def log_message(self, format: str, *args: object) -> None:  # quieter than the default access log
@@ -667,11 +724,24 @@ class Handler(BaseHTTPRequestHandler):
             return self._project_api(proj, rest[1:], query)
         if not rest:
             # The generic shell — identical for every project; it fetches this map's data from
-            # api/view at boot.
-            return self._send_file(_FRONTEND_DIR / "viewer.html", "text/html; charset=utf-8")
+            # api/view at boot. Under --dev it carries the live-reload script as well.
+            ctype = "text/html; charset=utf-8"
+            if not self.dev:
+                return self._send_file(_FRONTEND_DIR / "viewer.html", ctype)
+            try:
+                html = (_FRONTEND_DIR / "viewer.html").read_text(encoding="utf-8")
+            except OSError:
+                return self._send(404, "text/plain; charset=utf-8", b"file not found")
+            return self._send(200, ctype, with_dev_reload(html).encode("utf-8"))
         return self._send(404, "text/plain; charset=utf-8", b"not found")
 
     def _project_api(self, proj: Project, rest: list[str], query: dict[str, list[str]]) -> None:
+        if rest == ["dev-reload"]:
+            # Without --dev this is not an endpoint at all — a 404, the same answer any other
+            # unknown name gets, so a normal server offers no trace of the dev surface.
+            if not self.dev:
+                return self._send(404, "text/plain; charset=utf-8", b"unknown api")
+            return self._json({"stamp": dev_stamp(), "stale": warn_if_code_changed()})
         if rest == ["health"]:
             return self._json({"ok": True, "project": proj.slug, "commit": proj.commit})
         if rest == ["view"]:
@@ -786,9 +856,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool = False,
-          store: RecentsStore | None = None) -> int:
+          store: RecentsStore | None = None, dev: bool = False) -> int:
     """Serve the recents (plus any folders passed on the command line, added + validated) until
-    interrupted. No disk scan — the served set is exactly the recents list."""
+    interrupted. No disk scan — the served set is exactly the recents list.
+
+    ``dev`` is for someone working ON the viewer: it adds live reload (see dev_stamp). It defaults
+    off, so a person reading a map never gets a page that reloads under them."""
     store = store or RecentsStore()
     for folder in add_folders:
         if _has_coyodex(folder):  # a .coyodex/ dir is enough; an unbuilt map just shows as "No valid map yet"
@@ -797,11 +870,16 @@ def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool
             print(f"coyodex serve: skipping {folder} — no .coyodex/ folder", file=sys.stderr)
     Handler.store = store
     Handler.projects = build_projects(store.list())
+    Handler.dev = dev
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}/"
     names = ", ".join(sorted(Handler.projects)) or "(none yet — add a folder from the landing page)"
     print(f"coyodex serve: {len(Handler.projects)} project(s): {names}")
     print(f"coyodex serve: listening on {url}  (Ctrl-C to stop)")
+    if dev:
+        print("coyodex serve: --dev — a map page reloads itself when the viewer's files change. "
+              "An edit to this tool's PYTHON still needs the process restarted; the reload then "
+              "puts the restarted server's answer on screen.")
     if open_browser:
         webbrowser.open(url)
     try:
@@ -813,7 +891,7 @@ def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool
     return 0
 
 
-_USAGE = """usage: coyodex serve [FOLDER ...] [--port N] [--open]
+_USAGE = """usage: coyodex serve [FOLDER ...] [--port N] [--open] [--dev]
 
 Serve coyodex maps over a local HTTP server so the viewer's file browser + code viewer light up
 (files read from git at each map's commit). The server does NOT scan the disk: it serves the folders
@@ -823,6 +901,7 @@ add a project by browsing to its folder, or to open / remove a recent one.
   FOLDER      a project folder (with .coyodex/project-map.json) to add + serve now (repeatable)
   --port N    port to listen on (default 8765)
   --open      open the landing page in a browser on start
+  --dev       for working ON the viewer: a map page reloads itself when the viewer's files change
   -h/--help   show this help"""
 
 
@@ -831,7 +910,7 @@ def main(argv: list[str] | None = None) -> int:
     if "-h" in args or "--help" in args:
         print(_USAGE)
         return 0
-    port, open_browser, folders = _DEFAULT_PORT, False, []
+    port, open_browser, dev, folders = _DEFAULT_PORT, False, False, []
     i = 0
     while i < len(args):
         a = args[i]
@@ -843,13 +922,15 @@ def main(argv: list[str] | None = None) -> int:
             port = int(args[i])
         elif a == "--open":
             open_browser = True
+        elif a == "--dev":
+            dev = True
         elif a.startswith("-"):
             print(f"coyodex serve: unknown option '{a}'\n\n{_USAGE}", file=sys.stderr)
             return 2
         else:
             folders.append(Path(a))
         i += 1
-    return serve(folders, port=port, open_browser=open_browser)
+    return serve(folders, port=port, open_browser=open_browser, dev=dev)
 
 
 # --- landing page (recents cards + a folder browser to add a project) ---------------------------

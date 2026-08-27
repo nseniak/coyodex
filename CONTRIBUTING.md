@@ -129,6 +129,12 @@ make dev                # venv + editable install + pytest/pyright
 > **overrides** that setting, so `pytest tests` silently skips every test under `eval/tests`
 > and still reports green. Plain `.venv/bin/pytest` runs all of them.
 
+Working on the **viewer** (the browser page a map is read in), use `make dev-start` instead of
+`make start`. It serves this repo's own map with live reload, so an edit to `viewer.js` / `.css` /
+`.html` — or to the server's Python, which restarts it — reaches the page with nothing pressed. Off
+in `make start` on purpose: a person reading a map must not get a page that reloads under them. See
+`tools/coyodex/viewer/README.md` → **Working on the viewer** for how the two halves fit together.
+
 ## How to test a change
 
 There is no single command that covers everything, because the layers answer different

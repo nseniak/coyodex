@@ -26,12 +26,14 @@ from coyodex.viewer.recents import RecentsStore, register_project
 from coyodex.viewer.serve import (
     Handler,
     Project,
+    _FRONTEND_DIR,
     _has_coyodex,
     _loopback_host,
     _safe_rel,
     _strip_dirty,
     _valid_commit,
     build_projects,
+    dev_stamp,
     git_blob_size,
     git_ls_files,
     git_show,
@@ -40,6 +42,7 @@ from coyodex.viewer.serve import (
     project_symbols,
     project_tree,
     project_view,
+    with_dev_reload,
 )
 
 _FIXTURE_MAP = Path(__file__).parent / "fixtures" / "mcpolis-project-map.json"
@@ -408,6 +411,78 @@ def test_http_static_and_view_routes() -> None:
         finally:
             httpd.shutdown()
             httpd.server_close()
+
+
+def test_live_reload_is_off_unless_dev_is_asked_for() -> None:
+    # A person reading a map must not get a page that reloads under them, nor a poll they did not
+    # ask for: with no --dev the shell carries no script and the endpoint is not an endpoint.
+    with tempfile.TemporaryDirectory() as td:
+        folder = make_project_dir(Path(td), "alpha")
+        projects = build_projects([str(folder)])
+        slug = next(iter(projects))
+        Handler.store = RecentsStore()
+        Handler.projects = projects
+        Handler.dev = False
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            port = httpd.server_address[1]
+            code, ctype, body = _http_get(port, f"/p/{slug}/")
+            assert code == 200 and "text/html" in ctype
+            assert b"api/dev-reload" not in body
+            assert _http_get(port, f"/p/{slug}/api/dev-reload")[0] == 404
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+
+def test_dev_serves_the_shell_with_live_reload_and_a_stamp() -> None:
+    # With --dev the shell carries the poll and the endpoint answers a stamp. The stamp is the
+    # newest mtime across the frontend files AND the tool's Python, so an edit to either moves it
+    # — the Python half is what makes a restart show up on screen.
+    with tempfile.TemporaryDirectory() as td:
+        folder = make_project_dir(Path(td), "alpha")
+        projects = build_projects([str(folder)])
+        slug = next(iter(projects))
+        Handler.store = RecentsStore()
+        Handler.projects = projects
+        Handler.dev = True
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            port = httpd.server_address[1]
+            code, ctype, body = _http_get(port, f"/p/{slug}/")
+            assert code == 200 and "text/html" in ctype
+            assert b"api/dev-reload" in body and b"location.reload()" in body
+            assert body.index(b"api/dev-reload") > body.index(b"<body")  # inside the document
+            # A stale process is about to be killed; reloading from it loads assets from a port
+            # that dies mid-request and leaves a blank page nothing will fix.
+            assert b"!d.stale" in body, "the page never reloads from a process owed a restart"
+            code, ctype, body = _http_get(port, f"/p/{slug}/api/dev-reload")
+            assert code == 200 and "application/json" in ctype
+            answer = json.loads(body)
+            stamp = answer["stamp"]
+            assert isinstance(stamp, int) and stamp > 0
+            assert isinstance(answer["stale"], bool), "the answer says whether a restart is owed"
+            for name in ("viewer.js", "viewer.css", "viewer.html"):
+                assert stamp >= (_FRONTEND_DIR / name).stat().st_mtime_ns, \
+                    f"{name} is inside the stamp"
+            assert stamp >= (_FRONTEND_DIR / "serve.py").stat().st_mtime_ns, \
+                "the tool's Python is inside the stamp"
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            Handler.dev = False
+
+
+def test_the_live_reload_script_goes_inside_the_document() -> None:
+    # Before </body>, so the page it watches has already parsed. A shell without </body> still gets
+    # it appended: a hand-edited shell that silently stops reloading is the worse failure.
+    assert with_dev_reload("<html><body>hi</body></html>").endswith("</body></html>")
+    assert "location.reload()" in with_dev_reload("<html><body>hi</body></html>")
+    assert with_dev_reload("<p>no body tag</p>").startswith("<p>no body tag</p>")
+    assert "location.reload()" in with_dev_reload("<p>no body tag</p>")
+    assert dev_stamp() > 0
 
 
 # --- runner ---------------------------------------------------------------------

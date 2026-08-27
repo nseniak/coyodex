@@ -18,7 +18,7 @@ SKILLS_DIRS := $(HOME)/.claude/skills $(HOME)/.agents/skills
 
 .PHONY: install install-eval install-retro install-dev \
         uninstall uninstall-eval uninstall-retro uninstall-dev \
-        deps dev venv clean start
+        deps dev venv clean start dev-start
 
 # Port for the local map server (the file browser + code viewer backend).
 PORT ?= 8765
@@ -117,6 +117,16 @@ uninstall-eval:
 # recent one. No disk scan; choices are remembered in ~/.coyodex/serve-recents.json. Ctrl-C to stop.
 start: deps
 	$(VENV)/bin/coyodex serve --port $(PORT) --open
+
+# Same server, for someone working ON the viewer: an edit reaches the screen with nothing pressed.
+# Two halves, and both are needed. `--dev` gives the map page a live reload, which covers
+# viewer.js/css/html (served from disk per request, so an edit is live at once). The supervisor
+# covers the Python, which the running process cannot pick up because the view bundle is built
+# in-process: it restarts the server on a .py edit, and the page waits for the fresh process before
+# reloading. NOT part of `start`: a person reading a map must not get a page that reloads under them.
+# This repo is served too, so its own map is one click from the landing page.
+dev-start: deps
+	$(PY) tools/devserve.py $(REPO) $(PORT)
 
 # Remove the repo-local venv (run `make install` again to rebuild it).
 clean:
