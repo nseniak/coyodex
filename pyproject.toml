@@ -24,6 +24,11 @@ preindex = [
 dev = [
     "pytest>=8",
     "pyright>=1.1",
+    # Drives real Chromium for tests/test_viewer_browser.py, the only gate that can see a viewer bug
+    # rather than a viewer SOURCE change. Optional at run time: that file skips itself when the driver
+    # or the browser binary is missing, the same bargain test_viewer_js.py makes with node. The browser
+    # itself is a separate download — `.venv/bin/python -m playwright install chromium`.
+    "playwright>=1.40",
 ]
 
 [project.scripts]

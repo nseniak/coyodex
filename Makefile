@@ -18,7 +18,7 @@ SKILLS_DIRS := $(HOME)/.claude/skills $(HOME)/.agents/skills
 
 .PHONY: install install-eval install-retro install-dev \
         uninstall uninstall-eval uninstall-retro uninstall-dev \
-        deps dev venv clean start dev-start
+        deps dev venv clean start dev-start gates
 
 # Port for the local map server (the file browser + code viewer backend).
 PORT ?= 8765
@@ -40,9 +40,22 @@ deps: venv
 	$(PY) -m pip install -e '$(REPO)[preindex]'
 
 # Contributor setup: same as `deps` plus the test/type-check tooling (pytest, pyright) in the venv.
-# Run the gates with: .venv/bin/pytest tests   and   .venv/bin/pyright coyodex
 dev: venv
 	$(PY) -m pip install -e '$(REPO)[preindex,dev]'
+
+# The gates: the FULL test run and the type checker, in that order, on the whole suite.
+#
+# `tests` is named here with no path on purpose. A path narrows collection silently — `pytest
+# tests/test_viewer_js.py` reports a clean run while skipping every other tier — so the one-word
+# command is the only one that means "the gates passed". Type errors are reported after the tests
+# rather than short-circuiting, so one run tells you everything that is wrong.
+gates:
+	@$(PY) -m pytest tests -q; t=$$?; \
+	echo ""; \
+	$(PY) -m pyright tools/coyodex; p=$$?; \
+	echo ""; \
+	if [ $$t -ne 0 ] || [ $$p -ne 0 ]; then echo "GATES FAILED (pytest=$$t pyright=$$p)"; exit 1; fi; \
+	echo "GATES PASSED"
 
 # Install the coyodex skill globally for all agents (macOS/Linux). Also builds the venv and
 # installs the CLI (via `deps`) so a one-time `make install` covers everything.

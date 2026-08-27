@@ -13,6 +13,10 @@ internal/docs/*
 .firecrawl/
 __pycache__/
 .playwright-mcp/
+# Screenshots dropped at the repo root while driving a browser. `.playwright-mcp/` above catches the
+# ones the tool files itself, but a named screenshot lands here, and a broad `git add -A` swept one
+# into a commit. Root only (a leading slash), so tracked art like assets/viewer.png is untouched.
+/*.png
 tools/coyodex/viewer/build/
 map-backups/
 .venv/

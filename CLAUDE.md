@@ -68,6 +68,10 @@ design principles these come from)
   optional on every screen. The **source rail**, a strip on the right edge,
   opens it; the × in its header closes it.
 - **product overview** — the product description, leading the Features page.
+- **shareable link** — a viewer address that names one screen, not just the map:
+  which tab, how far you drilled, and what is selected. Copy it and someone else
+  opens the same screen; reload and you keep your place. The browser's own Back
+  and Forward walk it, and the viewer has no Back button of its own.
 - **objective** — the labelled sentence at the top of a feature's page or an
   actor's page, saying what that feature or that actor is for.
 - **timeline** — the picture on a feature's page and on an actor's page: one
