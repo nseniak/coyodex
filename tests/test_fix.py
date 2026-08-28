@@ -316,6 +316,9 @@ def make_model_touching_every_theme():
                             "component": "C1", "cadence": "daily", "cadence_source": "a.py:8"}]
     doc["messaging"] = [{"name": "jobs", "kind": "queue", "publishers": ["C1"],
                          "consumers": ["C2"], "payload": "a job", "source": "a.py:10"}]
+    doc["interfaces"] = [{"id": "I1", "name": "Web search", "side": "theirs", "facing": "user",
+                          "party": "the open web", "source": "a.py:11",
+                          "carries": [{"direction": "in", "what": "pages from the open web"}]}]
     return load_model(json.dumps(doc))
 
 

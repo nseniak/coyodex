@@ -67,6 +67,17 @@ class FeatureFacts:
     areas: list[str] = field(default_factory=list)           # the data areas its walks reach — a
                                                              # projection of `FeatureIndex.areas`,
                                                              # not a second derivation
+    reached_through: list[str] = field(default_factory=list)  # In — the surfaces this feature is
+                                                             # entered by, via its use cases' ways in
+    reaches_out: list[str] = field(default_factory=list)      # In — the surfaces it calls OUT to.
+                                                             # ONLY from a walk step drawn AT the
+                                                             # dep: the component-shared inference
+                                                             # ("this feature uses code that
+                                                             # somewhere calls the payment
+                                                             # processor") would wire nearly every
+                                                             # feature to nearly every service —
+                                                             # there are 24/41/32/102 such edges on
+                                                             # the four live maps
 
 
 @dataclass(frozen=True)
@@ -121,6 +132,38 @@ class Story:
 
 
 @dataclass(frozen=True)
+class InterfaceFacts:
+    """One interface, joined to everything the map already knows reaches it.
+
+    Everything here is DERIVED. The map authors the surface, its side, who it faces and what
+    crosses; who USES it falls out of the ways in, the deps and the walks — the same rule the rest
+    of this module follows, and the reason a hand-assigned "these features use this surface" is not
+    a field.
+
+    `flow` is derived rather than authored for the same reason: it is exactly the set of directions
+    the crossings carry, so a surface cannot claim to send while listing nothing that goes out."""
+    id: str
+    name: str
+    what: str = ""
+    side: str = ""
+    facing: str = ""
+    party: str = ""                                          # the far side, in words or as an id
+    flow: list[str] = field(default_factory=list)            # in and/or out — DERIVED from crossings
+    ways_in: list[str] = field(default_factory=list)         # EPn
+    deps: list[str] = field(default_factory=list)            # Dn naming this surface
+    components: list[str] = field(default_factory=list)      # the code behind it: each way in's
+                                                             # owning component, plus the components
+                                                             # that call each of its deps
+    use_cases: list[str] = field(default_factory=list)       # the walks that come through it
+    features: list[str] = field(default_factory=list)        # CAPn, through those use cases
+    #: True when NOTHING in the map can say which features use this surface — no way in of its own is
+    #: named by a use case, and no walk step touches its deps. The page must then read "not stated"
+    #: rather than "none": measured on Meerbot, only 8 of 344 walk steps touch an outside service at
+    #: all, so most `theirs` surfaces are legitimately unknowable until the walks say more.
+    features_unknown: bool = False
+
+
+@dataclass(frozen=True)
 class FeatureIndex:
     """The whole derivation. `rule_join_uses_extents` is the honesty flag the pages depend on.
 
@@ -141,6 +184,7 @@ class FeatureIndex:
                                         # authored `owners`, else its area's. The entity page's
                                         # "Owned by" line is the field's day-one consumer, so an
                                         # authored owner cannot sit in the map unread.
+    interfaces: list[InterfaceFacts] = field(default_factory=list)
     rule_join_uses_extents: bool = False
 
 
@@ -382,6 +426,65 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             if loc is not None:
                 comp_in_rule.update(file_owners.get(loc.path) or ())
 
+    # ── the interface join ───────────────────────────────────────────────────────────────────────
+    # Two independent paths in, and NEITHER is the component-shared inference: a feature that merely
+    # uses code which somewhere calls a service has not been shown to call it.
+    #   (1) a use case names a way in, and that way in belongs to a surface  -> reached_through
+    #   (2) a walk step is drawn AT a dep, and that dep names a surface      -> reaches_out
+    iface_deps: dict[str, list[str]] = {}
+    dep_iface: dict[str, str] = {}
+    for d in m.deps:
+        if d.interface:
+            iface_deps.setdefault(d.interface, []).append(d.id)
+            dep_iface[d.id] = d.interface
+    ep_iface = {ep: i.id for i in m.interfaces for ep in i.ways_in}
+    ep_comp = {ep.id: ep.component for ep in m.entry_points if ep.id and ep.component}
+    dep_callers: dict[str, set[str]] = {}
+    for ed in m.edges:
+        if ed.dst in dep_iface and ed.src in comp_ids:
+            dep_callers.setdefault(ed.dst, set()).add(ed.src)
+
+    iface_ucs: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    feat_in: dict[str, set[str]] = {c: set() for c in caps}
+    for u in m.use_cases:
+        for ep in (u.entry_points or ()):
+            iid = ep_iface.get(ep)
+            if iid is None:
+                continue
+            iface_ucs[iid].add(u.id)
+            if uc_cap.get(u.id):
+                feat_in[uc_cap[u.id]].add(iid)
+    feat_out: dict[str, set[str]] = {c: set() for c in caps}
+    iface_out_ucs: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    for f in m.flows:
+        cap = uc_cap.get(f.uc)
+        for st in expanded_flow_steps(m, f):
+            for side in (st.src, st.dst):
+                iid = dep_iface.get(side)
+                if iid is None:
+                    continue
+                iface_out_ucs[iid].add(f.uc)
+                if cap:
+                    feat_out[cap].add(iid)
+
+    interfaces = [
+        InterfaceFacts(
+            id=i.id, name=i.name, what=i.what, side=i.side, facing=i.facing,
+            party=i.party or i.party_ref,
+            flow=[d for d in ("in", "out") if any(c.direction == d for c in i.carries)],
+            ways_in=sorted_ids(set(i.ways_in)),
+            deps=sorted_ids(set(iface_deps.get(i.id, ()))),
+            components=sorted_ids(
+                {ep_comp[ep] for ep in i.ways_in if ep in ep_comp}
+                | {c for d in iface_deps.get(i.id, ()) for c in dep_callers.get(d, ())}),
+            use_cases=sorted_ids(iface_ucs[i.id] | iface_out_ucs[i.id]),
+            features=sorted_ids({uc_cap[u] for u in (iface_ucs[i.id] | iface_out_ucs[i.id])
+                                 if u in uc_cap}),
+            features_unknown=not (iface_ucs[i.id] or iface_out_ucs[i.id]),
+        )
+        for i in m.interfaces
+    ]
+
     audience = capability_audience(m)
     story = build_story(m)
     areas = build_areas(m, story.column)
@@ -400,6 +503,8 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             entities=sorted_ids(feat_ents[c.id]),
             components=sorted_ids(feat_comps[c.id]),
             areas=feat_areas.get(c.id, []),
+            reached_through=sorted_ids(feat_in[c.id]),
+            reaches_out=sorted_ids(feat_out[c.id]),
         )
         for c in m.capabilities
     ]
@@ -434,6 +539,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
         story=story,
         areas=areas,
         entity_owners=entity_owners(m),
+        interfaces=interfaces,
         rule_join_uses_extents=bool(extents),
     )
 
@@ -450,8 +556,15 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
              "audience": f.audience,
              "roles": f.roles, "useCases": f.use_cases, "entryPoints": f.entry_points,
              "rules": f.rules, "entities": f.entities, "components": f.components,
-             "areas": f.areas}
+             "areas": f.areas,
+             "reachedThrough": f.reached_through, "reachesOut": f.reaches_out}
             for f in ix.features],
+        "interfaces": [
+            {"id": i.id, "name": i.name, "what": i.what, "side": i.side, "facing": i.facing,
+             "party": i.party, "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
+             "components": i.components, "useCases": i.use_cases, "features": i.features,
+             "featuresUnknown": i.features_unknown}
+            for i in ix.interfaces],
         "areas": [
             {"id": a.id, "name": a.name, "purpose": a.purpose, "entities": a.entities,
              "owners": a.owners,

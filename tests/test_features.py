@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from typing import cast
+
 from coyodex.features import as_bundle, build_index
 from coyodex.model import FORMAT, load_model
 
@@ -468,8 +470,8 @@ def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
     b = build_view_bundle(model_to_graph(m, EXTENTS), None, Path("."), model=m, extents=EXTENTS)
     f = b["features"]
     assert sorted(f) == ["areas", "componentFeatures", "coverage", "entityOwners", "features",
-                         "roleFeatures", "ruleFeatures", "ruleJoinUsesExtents", "story",
-                         "unassignedUseCases"]
+                         "interfaces", "roleFeatures", "ruleFeatures", "ruleJoinUsesExtents",
+                         "story", "unassignedUseCases"]
     assert f["features"][0]["useCases"] == ["UC1"]        # camelCase, not use_cases
     assert f["coverage"]["componentsUnreached"] == ["C3"]
     json.dumps(b)                                          # the bundle is served as JSON
@@ -489,3 +491,85 @@ if __name__ == "__main__":     # pragma: no cover
     import sys
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# ── the interface join ───────────────────────────────────────────────────────────────────────────
+
+def make_interface_map() -> dict:
+    """The join's two independent paths in one map: a surface reached through a way in a use case
+    names, and a surface reached OUT to by a walk step drawn at the dependency."""
+    doc = make_map()
+    doc["deps"] = [{"id": "D1", "name": "Stripe", "kind": "service", "type": "payments",
+                    "interface": "I2"},
+                   {"id": "D2", "name": "Postgres", "kind": "datastore", "type": "SQL",
+                    "not_an_interface": "the product writes these rows and reads them back"}]
+    doc["edges"].append({"src": "C2", "verb": "calls", "dst": "D1", "why": "charges",
+                         "where": "src/b.py:30"})
+    doc["flows"][0]["steps"].append({"n": 5, "src": "C2", "dst": "D1", "phrase": "charges the card",
+                                     "where": "src/b.py:30"})
+    doc["interfaces"] = [
+        {"id": "I1", "name": "Web app", "what": "Where a person pays.", "side": "ours",
+         "facing": "user", "source": "src/a.py:1", "ways_in": ["EP1"],
+         "carries": [{"direction": "in", "what": "the card details"},
+                     {"direction": "out", "what": "the receipt", "elements": ["E1"]}]},
+        {"id": "I2", "name": "Payments", "what": "Where the money moves.", "side": "theirs",
+         "facing": "user", "party": "the card network",
+         "carries": [{"direction": "out", "what": "a charge"}]},
+        {"id": "I3", "name": "Log store", "what": "Where the logs go.", "side": "theirs",
+         "facing": "operator", "source": "", "party": "the log vendor",
+         "carries": [{"direction": "out", "what": "one record per request"}]}]
+    return doc
+
+
+def test_a_surface_carries_the_walks_and_features_that_come_through_it():
+    ix = build_index(load_model(json.dumps(make_interface_map())))
+    by_id = {i.id: i for i in ix.interfaces}
+    assert by_id["I1"].use_cases == ["UC1"] and by_id["I1"].features == ["CAP1"]
+    assert by_id["I1"].components == ["C1"]        # the way in's owning component
+    assert by_id["I2"].components == ["C2"]        # the component that calls the dependency
+    assert by_id["I2"].deps == ["D1"]
+
+
+def test_a_surface_flow_is_derived_from_what_crosses_it():
+    # Never authored: a surface cannot claim to send while listing nothing that goes out.
+    ix = build_index(load_model(json.dumps(make_interface_map())))
+    by_id = {i.id: i for i in ix.interfaces}
+    assert by_id["I1"].flow == ["in", "out"]
+    assert by_id["I2"].flow == ["out"]
+
+
+def test_a_surface_nothing_reaches_says_UNKNOWN_not_none():
+    # Measured on Meerbot: 8 of 344 walk steps touch an outside service at all, so most `theirs`
+    # surfaces are legitimately unknowable. "none" would read as a defect that is not there.
+    ix = build_index(load_model(json.dumps(make_interface_map())))
+    by_id = {i.id: i for i in ix.interfaces}
+    assert by_id["I3"].features_unknown is True and by_id["I3"].features == []
+    assert by_id["I1"].features_unknown is False
+
+
+def test_a_feature_names_the_surfaces_it_enters_by_and_the_ones_it_calls_out_to():
+    ix = build_index(load_model(json.dumps(make_interface_map())))
+    f = ix.features[0]
+    assert f.reached_through == ["I1"]
+    assert f.reaches_out == ["I2"]
+
+
+def test_a_feature_is_NOT_wired_to_a_service_through_a_shared_component():
+    # The banned inference. C2 calls Stripe (there is a C->D edge), but this feature's walk no
+    # longer steps at the dependency — so the map cannot say this feature charges a card, and must
+    # not pretend it can. Otherwise one shared helper wires nearly every feature to every service:
+    # there are 24/41/32/102 such edges on the four live maps.
+    doc = make_interface_map()
+    doc["flows"][0]["steps"] = doc["flows"][0]["steps"][:-1]
+    ix = build_index(load_model(json.dumps(doc)))
+    assert ix.features[0].reaches_out == []
+    assert {i.id: i.features for i in ix.interfaces}["I2"] == []
+
+
+def test_the_bundle_ships_the_surfaces_and_the_feature_links():
+    b = as_bundle(build_index(load_model(json.dumps(make_interface_map()))))
+    ifaces = cast(list[dict[str, object]], b["interfaces"])
+    feats = cast(list[dict[str, object]], b["features"])
+    assert [i["id"] for i in ifaces] == ["I1", "I2", "I3"]
+    assert feats[0]["reachedThrough"] == ["I1"]
+    assert feats[0]["reachesOut"] == ["I2"]
