@@ -308,7 +308,7 @@ class Dep:
     #: single slot forced one of those two surfaces to show no code behind it.
     interfaces: list[str] = field(default_factory=list)
     #: Why this dep is no interface at all. REQUIRED when the dep is in `DEP_KINDS_SYSTEM` and
-    #: `interface` is empty — without it there is no way to tell "deliberately not one" from "the
+    #: `interfaces` is empty — without it there is no way to tell "deliberately not one" from "the
     #: agent never looked", which is exactly the trap a search service sets (a search over the
     #: product's own records is not an interface; a search over the open web is, and the call site
     #: looks identical). Frameworks and libraries are exempt: they become the product.

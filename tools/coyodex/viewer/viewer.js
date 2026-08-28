@@ -571,7 +571,7 @@ const CARD_DESC_FIELD = {
   capability: ['Purpose'], usecase: ['Trigger → Outcome'], human: ['Wants'], service: ['Wants'],
   component: ['Purpose'], subsystem: ['Purpose'], subdomain: ['Purpose'], block: ['Purpose'],
   entity: ['Meaning'], dep: ['Used for', 'Type'], process: ['Runs on'], rule: ['Decision'],
-  system: ['Overview'],
+  system: ['Overview'], interface: ['What it is'],
 };
 
 // The reader's sentence for what an actor is AFTER, built from the map's `wants`. ONE function, because
@@ -3245,6 +3245,9 @@ const LEGEND_SECTIONS = [
     ['system', 'rect', 'the system'],
     ['human', 'man', 'a person'],
     ['svc', 'hex', 'a service actor'],
+    // The DOOR: a flow map draws it, the legend is open on that map by default, and it was the one
+    // shape on screen the legend did not name.
+    ['interface', 'rect', 'a door in or out of the product'],
   ]],
   [['container'], [
     ['subsystem', 'rect', 'subsystem'],
@@ -10483,6 +10486,16 @@ function selectTargetFor(id) {
   if (!n) return null;
   const parentKind = (k) => { const p = n.parent; return p && GRAPH.nodes[p] ? GRAPH.nodes[p].kind === k : false; };
   switch (n.kind) {
+    // An INTERFACE is drawn on a flow map (the door a story comes in by) and is a search hit, so it
+    // has two ways in and both used to fall to the `default` below and open DEPENDENCIES — a
+    // confident wrong answer about an element whose own tab already exists, one row up under
+    // Product. Its home is that tab, and its page is the drill out of that list.
+    // Returns the LIST, not the surface's own page — the same convention every other kind follows
+    // (a component returns its subsystem, not itself). "Show in context" lands on the list with the
+    // card rung; DRILLING IN to the page is the card's own click, which calls `go` directly. Naming
+    // the page here instead doubled the name in the trail: `Interfaces › Map commands › Map commands`.
+    case 'interface':
+      return { state: { kind: 'interfaces' }, selectId: id };
     // A feature is not DRAWN as a box anywhere — it groups behaviour — so there is nothing to select.
     // Its home is its own card's list, one level inside the Features tab. Without this case it fell to
     // the `default` below and opened Dependencies, which is a confident wrong answer to a search hit

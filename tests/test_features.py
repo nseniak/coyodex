@@ -577,7 +577,8 @@ def test_the_bundle_ships_the_surfaces_and_the_feature_links():
 
 def test_a_door_step_says_which_features_come_through_a_surface():
     """The strongest statement the map can make, and the only one that works on the way IN. Which
-    direction it means comes from the surface's own `side`, never from the step."""
+    direction it means comes from the STEP — see the sibling test for the two cases that prove
+    `side` cannot decide it."""
     doc = make_interface_map()
     doc["flows"][0]["steps"] = ([{"n": 1, "src": "R1", "dst": "I1", "phrase": "opens it",
                                  "no_call_site": True},

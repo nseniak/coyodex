@@ -545,15 +545,20 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
         # over the band the day doors are authored, which would read as 33 new defects and is none.
         n = sum(1 for st in steps
                 if not (grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst)))
+        # The viewer numbers EVERY authored step, so a message saying "2 steps" about a flow the
+        # reader sees five of is a message about a different flow. Say both numbers when they differ.
+        doored = f"{n} of {len(steps)} steps (doors do not count)"
+        shown_hi = f"{n} steps" if n == len(steps) else doored
+        shown_lo = f"{n} step(s)" if n == len(steps) else doored
         if n > FLOW_STEPS_HI:
             family.append((fid, "the step-count band", (
-                f"{fid} ({name}): {n} steps — over the ≤{FLOW_STEPS_HI} band. Split a fused goal, "
+                f"{fid} ({name}): {shown_hi} — over the ≤{FLOW_STEPS_HI} band. Split a fused goal, "
                 "compress step altitude, extract shared machinery into a sub-flow, or record "
                 f"'{fid}: <why>' under a 'Balance exceptions' extras heading — which exempts "
                 f"{fid} from the WHOLE granularity family, this band AND the fused-goal name smell")))
         elif n < FLOW_STEPS_LO:  # includes n == 0: an empty flow/sub-flow is a silent no-op everywhere
             family.append((fid, "the step-count band", (
-                f"{fid} ({name}): only {n} step(s) — under the ≥{FLOW_STEPS_LO} band; is the flow "
+                f"{fid} ({name}): only {shown_lo} — under the ≥{FLOW_STEPS_LO} band; is the flow "
                 f"traced to its outcome? If it genuinely ends there, record '{fid}: <why>' under a "
                 "'Balance exceptions' extras heading — which exempts "
                 f"{fid} from the WHOLE granularity family, this band AND the fused-goal name smell")))
@@ -1887,7 +1892,7 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     warnings: list[str] = []
     # The DEP-side checks run even when the map records no interface at all: a dangling
-    # `Dep.interface`, or a dep claiming both a surface and a reason, is wrong whatever else the map
+    # `Dep.interfaces`, or a dep claiming both a surface and a reason, is wrong whatever else the map
     # holds — and `assemble --reconcile` can apply dep assignments while the interfaces fragment is
     # absent. Only the demand that every external dep be DECIDED waits for the map to record its edge.
     iface_ids_all = {i.id for i in m.interfaces}

@@ -1146,7 +1146,8 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
     # "a person, through the dashboard, into the code". Without a node the step would draw a bare id.
     for iface in m.interfaces:
         flow = [x for x in ("in", "out") if any(c.direction == x for c in iface.carries)]
-        fields = {"Name": iface.name, "Side": iface.side, "Facing": iface.facing,
+        fields = {"Name": iface.name, "What it is": iface.what,
+                  "Side": iface.side, "Facing": iface.facing,
                   "What crosses": ", ".join(flow) or "",
                   **({"Far side": iface.party} if iface.party else {})}
         nodes[iface.id] = _node(iface, "interface", iface.name, iface.source, fields, None)

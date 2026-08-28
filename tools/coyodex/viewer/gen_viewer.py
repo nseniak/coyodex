@@ -2875,7 +2875,8 @@ def _flow_map_arrow_label(ns: list[int]) -> str:
 
     EVERY number is listed, never a truncated head: the whole promise of the label is that the two
     renderings can be read against each other, and `1, 2, 3, 4 +3` breaks it for steps 5-7 — they would
-    appear nowhere on the map. The flow step band (3-15) bounds the worst case at a short list."""
+    appear nowhere on the map. The flow step band (3-15) bounds the worst case at a short list — doors are exempt from that
+    band, so a door-heavy flow can run a little longer than 15."""
     return ", ".join(str(n) for n in ns)
 
 

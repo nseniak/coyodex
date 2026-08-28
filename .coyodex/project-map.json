@@ -8519,8 +8519,7 @@
      "n": 1,
      "src": "R1",
      "dst": "I1",
-     "phrase": "types the serve command",
-     "no_call_site": true
+     "phrase": "types the serve command"
     },
     {
      "n": 2,

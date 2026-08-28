@@ -35,6 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from coyodex import grammar
 from coyodex.anchors import parse_anchor
 from coyodex.impact_git import Extents
 from coyodex.areas import DataArea, build_areas, sorted_ids
@@ -475,10 +476,14 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                 # from `side` was tried and is wrong on two real cases: coyodex's map files are OUR
                 # surface and the story goes OUT through them, and Slack is SOMEONE ELSE'S surface
                 # and Meerbot's stories come IN through it. A surface is commonly both.
-                #   a step FROM a component TO a surface -> the product is reaching out
-                #   anything else touching a surface     -> the story is coming in through it
+                #   a step INTO a surface, from anything inside the product -> reaching OUT
+                #   anything else touching a surface                        -> coming IN through it
+                # "Inside the product" is any element id, not just a component: a record written out
+                # (`En → In`), a subsystem-grain step, and a relay from one surface to another are all
+                # the product pushing outward. A step whose source is a ROLE NAME is a person or an
+                # outside system arriving, which is the other direction.
                 if side in iface_ids:
-                    reaching_out = (st.dst == side and st.src in comp_ids)
+                    reaching_out = (st.dst == side and grammar.is_step_id(st.src))
                     if reaching_out:
                         iface_out_ucs[side].add(f.uc)
                         if cap:

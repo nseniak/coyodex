@@ -4244,10 +4244,13 @@ def test_a_door_is_a_legal_step_endpoint_and_does_not_count_toward_the_band():
     would have put 33 of the 150 flows across the four live maps over the band the day doors were
     authored — 33 findings that are not defects."""
     m = make_interface_model()
-    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="types the command",
-                                 no_call_site=True),
-                        FlowStep(n=2, src="I1", dst="C1", phrase="runs it")]
-    assert not [p for p in problems_of(m) if "endpoint" in p or "I1" in p]
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="types the command"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="runs it", where="src/v.py:3")]
+    assert not problems_of(m), "a door is a legal endpoint on both arms of the step"
+    # …and the code-facing arm is held to the same call-site rule as any other element-to-element
+    # step: a door does not buy a step out of being anchored.
+    m.flows[0].steps[1].where = ""
+    assert any("call-site anchor" in p and "step 2" in p for p in problems_of(m))
     # 16 authored steps, one of them a door → 15 counted, which is inside the band.
     m.flows[0].steps = ([FlowStep(n=1, src="R1", dst="I1", phrase="in", no_call_site=True)]
                         + [FlowStep(n=i, src="C1", dst="C1", phrase="works") for i in range(2, 17)])
