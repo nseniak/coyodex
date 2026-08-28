@@ -1887,7 +1887,9 @@ def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
     inside a clipped parent and cannot be scrolled."""
     html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
     order = re.findall(r'data-view="(\w+)"', html)
-    assert order[:3] == ["usecases", "hp", "rules"], order
+    # Interfaces sits between the walk and the decisions: what the product does, then one run of
+    # it, then where it meets the outside, then what it decides.
+    assert order[:4] == ["usecases", "hp", "interfaces", "rules"], order
     assert "actors" not in order, "the Actors tab is retired; the cast column is the actors' home"
     for fn in ("renderRules", "renderRule"):
         assert '<div class="usecases-wrap">' in _js_function(fn), fn

@@ -3153,6 +3153,7 @@ class ViewBundle(TypedDict):
     deploymentEnvironments: list[str]
     hasDeployment: bool
     hasBusinessRules: bool         # the map states at least one business rule (T7) — gates the tab
+    hasInterfaces: bool            # the map records at least one interface (T2b) — gates the tab
     flowsMm: dict[str, str]
     flowsMap: dict[str, str]      # the same flows as leaf-only maps — the use-case view's second rendering
     flowsNarr: dict[str, list[dict[str, Any]]]
@@ -3273,6 +3274,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
         deploymentEnvironments=deployment_environments(graph) if deployment else [],
         hasDeployment=deployment,
         hasBusinessRules=bool((graph.get("rules_view") or {}).get("rules")),
+        hasInterfaces=bool(model is not None and model.interfaces),
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so
         # they come from graph["flows"] directly (empty when the map has no T6 section).
         flowsMm=flow_mermaids(graph),

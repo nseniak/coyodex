@@ -644,6 +644,16 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 /* What the map does NOT hold. Quiet, but never blank: an empty box and "nothing recorded" are
    different facts, and only one of them is honest. */
 .feat-empty { margin: 0; font-size: 13px; color: #9ca3af; }
+/* Interfaces — the two-shore list and one surface's page. The heading is the CUT of a grouped card
+   list (Our surfaces / Their surfaces), the same kind of cut Actors makes between people and
+   software: a section, never a level you can be on. */
+.card-group-head { margin: 20px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
+                   text-transform: uppercase; color: #6b7280; }
+.card-group-head:first-of-type { margin-top: 8px; }
+.if-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.if-table td { padding: 7px 10px 7px 0; border-bottom: 1px solid #eceef2; vertical-align: top; }
+.if-table tr:last-child td { border-bottom: 0; }
+.if-dir { width: 3.5em; color: #6b7280; font-variant: small-caps; letter-spacing: .03em; }
 /* A chip list, optionally under the name of the group its members live in — a component under its
    subsystem, an entity under its subdomain. Thirty-one loose chips is a wall; the same thirty-one
    under six subsystem names say which parts of the machine the feature lives in. */

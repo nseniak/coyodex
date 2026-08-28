@@ -67,6 +67,7 @@ let DATA_VIEW;       // the store-centric Data-view payload (GRAPH.data_view)
 let MERMAID_CHANNELS; // per-broker async flowchart source, keyed by broker dep id
 let HAS_TESTS;       // gates the Tests tab (a test-completeness table or honesty note present)
 let HAS_RULES;       // gates the Business rules tab (the map states at least one T7 rule)
+let HAS_INTERFACES;  // gates the Interfaces tab (the map records at least one T2b surface)
 let RULES_VIEW;      // the T7 payload (GRAPH.rules_view) — blocks, rules, and the two inversions.
                      // EVERYTHING derived (a site's components, a rule's steps/entities/sweep state)
                      // is computed server-side by the one Python implementation; re-deriving any of
@@ -137,6 +138,7 @@ function applyBundle(b) {
   HAS_TESTS = (Array.isArray(GRAPH.tests) && GRAPH.tests.length > 0) || !!(GRAPH.tests_note || '').trim();
   RULES_VIEW = GRAPH.rules_view || {};
   HAS_RULES = !!b.hasBusinessRules;
+  HAS_INTERFACES = !!b.hasInterfaces;
 }
 
 function bootError(msg) {
@@ -3213,6 +3215,7 @@ const VIEW_Q = {
   glossary: 'What do this project’s words mean?',
   tests: 'What is covered by tests, and what is not?',
   rules: 'What does this product DECIDE, and where is each decision enforced?',
+  interfaces: 'Where does this product meet the outside world?',
 };
 // ONE legend for the whole map, not a guess per view. The per-view lists this replaced were hardcoded
 // and therefore wrong wherever a view's content is data-dependent: the Dependencies view draws bare
@@ -4233,7 +4236,7 @@ const tabLast = {};
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
 const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
-                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'id'];
+                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'iface', 'id'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
@@ -4247,6 +4250,7 @@ function stateKey(s) {
     + (s.bkid ? ':' + s.bkid : '')  // bucketfold drills are keyed by their BKF id
     + (s.gid ? ':' + s.gid : '')   // …and a deployment container card by its group id
     + (s.epk ? ':' + s.epk : '')   // …and one entry-point KIND inside the Entry points collection
+    + (s.iface ? ':' + s.iface : '')  // …and one SURFACE inside the Interfaces list
     + (s.sys ? ':' + s.sys : '')   // one System collection, the drill out of its cards
     + (s.id ? ':' + s.id : '');    // …and one element's own details page
 }
@@ -6452,7 +6456,7 @@ function elementHomeView(id) {
 }
 function topView(kind, id) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'element') return id ? elementHomeView(id) : 'container';
-  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules') return kind;
+  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules' || kind === 'interfaces') return kind;
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
@@ -6462,6 +6466,7 @@ function topView(kind, id) {  // which top-level button a state lives under (con
   if (kind === 'actor') return 'usecases';
   if (kind === 'usecases' || kind === 'capability' || kind === 'usecase') return 'usecases';
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
+  if (kind === 'interfaces' || kind === 'interface') return 'interfaces';  // one surface's page is the drill out of the Interfaces list
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup' || kind === 'depedge') return 'deployment';  // a process/container card, and one arrow's page, live under the Deployment tab
   if (kind === 'hp') return 'hp';
   if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
@@ -6523,6 +6528,11 @@ function stateTitle(s) {
     if (!s.blk) return 'Rules';
     const g = ruleBlockGroups().find((x) => x.id === s.blk);
     return g ? g.name : 'Rules';
+  }
+  if (s.kind === 'interfaces') {    // the list, or the one surface drilled into
+    if (!s.iface) return 'Interfaces';
+    const i = ifaceById(s.iface);
+    return i ? i.name : 'Interfaces';
   }
   if (s.kind === 'rule') return ruleCrumbTitle(s.br);
   if (s.kind === 'glossary') return 'Glossary';
@@ -6597,6 +6607,13 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     const t = selectTargetFor(s.id);
     const base = t ? ancestors(t.state) : [];
     return base.concat([{ kind: 'element', id: s.id }]);
+  }
+  // The Interfaces list, and one surface's page under it — the same overview → member shape the
+  // Rules tab has. Without this branch the trail's first item falls through to Subsystems, and the
+  // whole chrome (group tab, view tab, view question) lights the wrong view while the page renders.
+  if (s.kind === 'interfaces') {
+    return s.iface ? [{ kind: 'interfaces' }, { kind: 'interfaces', iface: s.iface }]
+                   : [{ kind: 'interfaces' }];
   }
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   // One feature's use cases, under the Features view…
@@ -7075,13 +7092,18 @@ function featChipGroupsHtml(ids) {
 // "How you reach it", by the KIND of way in — the same canonical kind the System tab groups by, so
 // `http` and `http-route` land in one group on both screens. A map that records no ways in on its use
 // cases (measured: one live map names 0 of 664) must SAY it is not recorded, never show a blank.
-function featEntryPointsHtml(ids) {
+function featEntryPointsHtml(ids, throughIds) {
+  // Grouped by SURFACE when the map records one for each way in — a product word ("Customer
+  // dashboard") beats a code word ("http-route"), and it is the same cut the Interfaces tab makes.
+  // Falls back to the canonical kind on every map that records no interfaces.
+  const ifaceOf = {};
+  for (const i of ifaceList()) for (const ep of (i.waysIn || [])) ifaceOf[ep] = i.name;
   const byKind = {};
   const order = [];
   for (const id of ids) {
     const e = EP_BY_ID[id];
     if (!e) continue;
-    const k = ((e.canonical_kind || e.kind || 'other').trim()) || 'other';
+    const k = ifaceOf[id] || ((e.canonical_kind || e.kind || 'other').trim()) || 'other';
     if (!byKind[k]) { byKind[k] = []; order.push(k); }
     byKind[k].push(e);
   }
@@ -7203,7 +7225,19 @@ function featureSectionsHtml(capId) {
   if (!f) return { secs: [], html: '' };
   const secs = [];
   let html = featSection(secs, 'eps', 'How you reach it', f.entryPoints.length,
-    featEntryPointsHtml(f.entryPoints));
+    featEntryPointsHtml(f.entryPoints, f.reachedThrough));
+  // WHAT IT REACHES OUT TO — the other half of a feature's outside edge, and the half no screen
+  // carried before. It is EMPTY on most features until the walks step at the services themselves
+  // (measured on one live map: 8 of 344 steps do), so the section states that rather than vanishing.
+  if (HAS_INTERFACES) {
+    html += featSection(secs, 'out', 'What it reaches out to', (f.reachesOut || []).length,
+      (f.reachesOut || []).length
+        ? '<div class="feat-eps"><div class="feat-ep-list">' + f.reachesOut.map((id) => {
+            const i = ifaceById(id);
+            return i ? `<button type="button" class="featep" data-iface="${esc(id)}">${esc(i.name)}</button>` : '';
+          }).join('') + '</div></div>'
+        : featEmpty('Not stated: no step of this feature\u2019s walks is drawn at an outside service.'));
+  }
   html += featSection(secs, 'rules', 'What it decides', f.rules.length,
     featRulesHtml(f.rules));
   // The DATA MODEL is main implementation information, which the reader wants without drilling — so the
@@ -7234,9 +7268,13 @@ function bindFeaturePage(root) {
     b.addEventListener('click', open);
     b.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(); });
   });
-  root.querySelectorAll('.featep').forEach((b) =>
-    b.addEventListener('click', () => selectEntryPoint(
-      b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0)));
+  root.querySelectorAll('.featep').forEach((b) => b.addEventListener('click', () => {
+    // Two kinds of chip share the class: a way in (opens the component at that entry point) and a
+    // surface this feature reaches out to (opens that surface's page).
+    const iface = b.getAttribute('data-iface');
+    if (iface) { go({ kind: 'interfaces', iface }); return; }
+    selectEntryPoint(b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0);
+  }));
 }
 
 // The Features tab's LIST level: the use cases of exactly one card from the overview. `sel` says
@@ -9728,6 +9766,91 @@ function ruleStepChip(l) {
 }
 // Level 1 — the decision areas, each listing its rules. A row carries only what it takes to CHOOSE:
 // the decision, its state chips, and where it lives; the anchors are one click away.
+// ── Interfaces — the product's outside edge ──────────────────────────────────────────────────────
+// TWO grouped card lists, cut by whose SURFACE it is. The cut is not a level (the same cut Actors
+// makes between People and Software), so it is a grouped list, not a drill. Every card is a door to
+// that surface's own page.
+//
+// Why this is not the System or Dependencies view again: those draw EVERY dependency, in code words,
+// with no direction. This draws only the touchpoints, in product words, with which way the data
+// flows, who each one serves, and the features behind it.
+const IFACE_ARROW = { in: '←', out: '→', both: '↔' };
+function ifaceList() { return FEATURES.interfaces || []; }
+function ifaceById(id) { return ifaceList().find((i) => i.id === id) || null; }
+function ifaceFlowWord(i) {
+  const f = i.flow || [];
+  return f.length === 2 ? 'both' : f[0] || '';
+}
+function ifaceCardHtml(i) {
+  const arrow = IFACE_ARROW[ifaceFlowWord(i)] || '';
+  const ways = (i.waysIn || []).length;
+  const bits = [];
+  if (ways) bits.push(`${ways} way${ways === 1 ? '' : 's'} in`);
+  if (i.facing) bits.push(i.facing === 'operator' ? 'operator-facing' : 'user-facing');
+  return plainCardHtml({
+    key: i.id, name: i.name, desc: i.what,
+    pill: arrow ? `<span class="ecard-pill" title="which way data crosses">${arrow}</span>` : '',
+    count: bits.join(' · '),
+  });
+}
+function renderInterfaces(s) {
+  if (s && s.iface) { renderInterface(s); return; }
+  const all = ifaceList();
+  const ours = all.filter((i) => i.side === 'ours');
+  const theirs = all.filter((i) => i.side === 'theirs');
+  const section = (title, rows, empty) =>
+    `<h3 class="card-group-head">${esc(title)}</h3>`
+    + (rows.length ? cardGridHtml(rows.map(ifaceCardHtml).join(''))
+                   : `<p class="empty">${esc(empty)}</p>`);
+  diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Interfaces')
+    + section('Our surfaces', ours, 'This map records no surface of the product’s own.')
+    + section('Their surfaces', theirs, 'This map records no outside service the product exchanges data with.')
+    + '</div>';
+  bindPlainCards(diagram, (id) => go({ kind: 'interfaces', iface: id }));
+}
+// ONE surface's page. The fan reads left to right like every other page here: who is on the far
+// side, the surface itself, what comes through it.
+function renderInterface(s) {
+  const i = ifaceById(s.iface);
+  if (!i) {
+    diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">This interface is not in the map.</p></div>';
+    return;
+  }
+  const pills = [
+    `<span class="uc-caplabel">${esc(i.side === 'ours' ? 'our surface' : 'their surface')}</span>`,
+    i.facing ? `<span class="uc-caplabel">${esc(i.facing)}-facing</span>` : '',
+    ifaceFlowWord(i) ? `<span class="uc-caplabel">${esc(ifaceFlowWord(i))} ${esc(IFACE_ARROW[ifaceFlowWord(i)] || '')}</span>` : '',
+  ].join('');
+  const far = i.party ? mdRefs(i.party, GRAPH.nodes) : '';
+  // What crosses, in then out. An EMPTY record list is the honest answer for a log line, a fetched
+  // page or a source file, so the row still renders — only the sentence is required.
+  const rows = (i.crossings || []).map((c) =>
+    `<tr><td class="if-dir">${esc(c.direction === 'in' ? 'in' : 'out')}</td>`
+    + `<td>${esc(c.what)}</td>`
+    + `<td>${(c.elements || []).length ? mdRefs(c.elements.join(' '), GRAPH.nodes) : '<span class="feat-empty">nothing stored</span>'}</td></tr>`).join('');
+  const feats = i.featuresUnknown
+    ? '<p class="feat-empty">Not stated. No walk in this map comes through this surface, so nothing here can say which features use it.</p>'
+    : (i.features || []).length ? elementCardListHtml(i.features)
+                                : '<p class="feat-empty">No feature reaches this surface.</p>';
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + pageHeroHtml({ name: i.name, pills, desc: i.what ? mdInline(i.what) : '',
+                     noDesc: 'No description recorded for this surface.',
+                     metaLbl: far ? 'far side' : '', meta: far })
+    + (rows ? `<h3 class="card-group-head">What crosses</h3><table class="if-table">${rows}</table>`
+            : '<h3 class="card-group-head">What crosses</h3><p class="feat-empty">The map records nothing crossing this surface.</p>')
+    + '<h3 class="card-group-head">Features through it</h3>' + feats
+    + ((i.components || []).length
+        ? '<h3 class="card-group-head">The code behind it</h3>' + elementCardListHtml(i.components) : '')
+    + ((i.deps || []).length
+        ? '<h3 class="card-group-head">What it is built on</h3>' + elementCardListHtml(i.deps) : '')
+    + '</div>';
+  bindElementCards(diagram);
+  // The record chips inside "what crosses" are `sys-ref` buttons, the same shape the System tab's
+  // prose refs use — so a record named in a crossing opens where that record lives.
+  diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) => {
+    btn.addEventListener('click', () => selectFromTree(btn.getAttribute('data-id')));
+  });
+}
 function renderRules(s) {
   const groups = ruleBlockGroups();
   // Level 1 — one CARD per decision area, the same component the Features and System tabs use. It was
@@ -9983,6 +10106,10 @@ async function renderView(sArg, transient, seq) {
   if (s.kind === 'data') { renderData(s); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
   if (s.kind === 'tests') { renderTests(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
+  // The Interfaces tab is the two-shore card list (HTML) — the same shape as Rules.
+  if (s.kind === 'interfaces') {
+    renderInterfaces(s); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+  }
   // The Business rules tab is the block rail + rule panes (HTML) — the same shape as Data.
   if (s.kind === 'rules') {
     renderRules(s);   // the area cards, or one area's rules when `s.blk` names it
@@ -12436,6 +12563,7 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'data' && !HAS_DATA) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'tests' && !HAS_TESTS) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'rules' && !HAS_RULES) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'interfaces' && !HAS_INTERFACES) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => goTab(b.dataset.view));
 });
 // Build the GROUP row, now that the per-map gating above has decided which views this map has at all.

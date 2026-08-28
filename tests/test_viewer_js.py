@@ -2353,7 +2353,7 @@ def test_the_system_tab_is_cards_over_one_builder() -> None:
     # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
     assert "const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
     assert "return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;" in js
-    assert "'gid', 'sys', 'epk', 'id'];" in js                 # …and its keys survive a right-pane navigation
+    assert "'gid', 'sys', 'epk', 'iface', 'id'];" in js                 # …and its keys survive a right-pane navigation
 
 
 def test_the_only_pinned_lines_are_the_ones_that_still_say_something() -> None:
@@ -2401,7 +2401,7 @@ def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
     assert "kinds.push({ key: k, count: byKind[k].length" in js
     assert "if (found.kinds && !epk) {" in js
     assert "bindPlainCards(diagram, (key) => go({ kind: 'sysSection', sys: sysId, epk: key }));" in js
-    assert "'gid', 'sys', 'epk', 'id'];" in js
+    assert "'gid', 'sys', 'epk', 'iface', 'id'];" in js
 
 
 def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> None:
@@ -2507,8 +2507,8 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     secs = js[js.index("function featureSectionsHtml(capId) {"):
               js.index("\nfunction ", js.index("function featureSectionsHtml(capId) {") + 10)]
     order = re.findall(r"featSection\(secs, '(\w+)', '([^']+)'", secs)
-    assert [t for _, t in order] == ["How you reach it", "What it decides", "What it knows",
-                                     "What it runs on"], order
+    assert [t for _, t in order] == ["How you reach it", "What it reaches out to", "What it decides",
+                                     "What it knows", "What it runs on"], order
     # The use cases are emitted by the one list renderer, not by a second copy. On a feature's PAGE
     # they are the BOARD, drawn bare above the chip bar; the title below is the fallback for a list
     # that has no board (the "not assigned to a feature" one).
@@ -2796,8 +2796,8 @@ def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
              js.index("\nfunction ", js.index("function unreachedHtml() {") + 10)]
     assert "featRuleNotes()" in cov and "coverageLineHtml()" in cov
     # A map whose use cases name no way in (measured: 0 of 664 on one live map) must SAY so.
-    eps = js[js.index("function featEntryPointsHtml(ids) {"):
-             js.index("\nfunction ", js.index("function featEntryPointsHtml(ids) {") + 10)]
+    eps = js[js.index("function featEntryPointsHtml(ids, throughIds) {"):
+             js.index("\nfunction ", js.index("function featEntryPointsHtml(ids, throughIds) {") + 10)]
     assert "Not recorded:" in eps, "an empty ways-in section must name the silence, not go blank"
 
 

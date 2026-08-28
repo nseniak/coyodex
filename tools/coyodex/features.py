@@ -161,6 +161,9 @@ class InterfaceFacts:
     #: rather than "none": measured on Meerbot, only 8 of 344 walk steps touch an outside service at
     #: all, so most `theirs` surfaces are legitimately unknowable until the walks say more.
     features_unknown: bool = False
+    #: What crosses, verbatim from the map: (direction, sentence, record ids). Carried rather than
+    #: recomputed because the sentence is the whole point of the row — a direction alone says nothing.
+    crossings: list[tuple[str, str, list[str]]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -481,6 +484,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             features=sorted_ids({uc_cap[u] for u in (iface_ucs[i.id] | iface_out_ucs[i.id])
                                  if u in uc_cap}),
             features_unknown=not (iface_ucs[i.id] or iface_out_ucs[i.id]),
+            crossings=[(c.direction, c.what, list(c.elements)) for c in i.carries],
         )
         for i in m.interfaces
     ]
@@ -563,7 +567,8 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
             {"id": i.id, "name": i.name, "what": i.what, "side": i.side, "facing": i.facing,
              "party": i.party, "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
              "components": i.components, "useCases": i.use_cases, "features": i.features,
-             "featuresUnknown": i.features_unknown}
+             "featuresUnknown": i.features_unknown,
+             "crossings": [{"direction": d, "what": w, "elements": e} for d, w, e in i.crossings]}
             for i in ix.interfaces],
         "areas": [
             {"id": a.id, "name": a.name, "purpose": a.purpose, "entities": a.entities,

@@ -923,6 +923,413 @@
         "C79"
       ],
       "subsystem": "S6"
+    },
+    {
+      "ids": [
+        "I1"
+      ],
+      "ways_in": [
+        {
+          "id": "EP25",
+          "source": "tools/coyodex/anchor_drift.py:378"
+        },
+        {
+          "id": "EP26",
+          "source": "tools/coyodex/assemble.py:812"
+        },
+        {
+          "id": "EP27",
+          "source": "tools/coyodex/audit_model.py:1307"
+        },
+        {
+          "id": "EP28",
+          "source": "tools/coyodex/balance.py:231"
+        },
+        {
+          "id": "EP29",
+          "source": "tools/coyodex/cli.py:115"
+        },
+        {
+          "id": "EP30",
+          "source": "tools/coyodex/contract.py:109"
+        },
+        {
+          "id": "EP31",
+          "source": "tools/coyodex/dump.py:246"
+        },
+        {
+          "id": "EP32",
+          "source": "tools/coyodex/finalize.py:778"
+        },
+        {
+          "id": "EP33",
+          "source": "tools/coyodex/fix.py:1128"
+        },
+        {
+          "id": "EP34",
+          "source": "tools/coyodex/fix.py:1416"
+        },
+        {
+          "id": "EP35",
+          "source": "tools/coyodex/fix.py:149"
+        },
+        {
+          "id": "EP36",
+          "source": "tools/coyodex/fix.py:399"
+        },
+        {
+          "id": "EP37",
+          "source": "tools/coyodex/fix.py:508"
+        },
+        {
+          "id": "EP38",
+          "source": "tools/coyodex/fix.py:739"
+        },
+        {
+          "id": "EP39",
+          "source": "tools/coyodex/fix.py:976"
+        },
+        {
+          "id": "EP40",
+          "source": "tools/coyodex/grounding.py:1003"
+        },
+        {
+          "id": "EP41",
+          "source": "tools/coyodex/grounding.py:1049"
+        },
+        {
+          "id": "EP42",
+          "source": "tools/coyodex/grounding.py:1073"
+        },
+        {
+          "id": "EP43",
+          "source": "tools/coyodex/grounding.py:924"
+        },
+        {
+          "id": "EP44",
+          "source": "tools/coyodex/grounding.py:974"
+        },
+        {
+          "id": "EP46",
+          "source": "tools/coyodex/lint_fragment.py:353"
+        },
+        {
+          "id": "EP47",
+          "source": "tools/coyodex/mapdiff.py:198"
+        },
+        {
+          "id": "EP48",
+          "source": "tools/coyodex/preindex.py:518"
+        },
+        {
+          "id": "EP49",
+          "source": "tools/coyodex/preindex.py:557"
+        },
+        {
+          "id": "EP51",
+          "source": "tools/coyodex/provenance.py:308"
+        },
+        {
+          "id": "EP52",
+          "source": "tools/coyodex/reconcile_build.py:329"
+        },
+        {
+          "id": "EP53",
+          "source": "tools/coyodex/record.py:194"
+        },
+        {
+          "id": "EP54",
+          "source": "tools/coyodex/scope.py:167"
+        },
+        {
+          "id": "EP55",
+          "source": "tools/coyodex/validate_model.py:4663"
+        },
+        {
+          "id": "EP57",
+          "source": "tools/coyodex/viewer/render.py:53"
+        },
+        {
+          "id": "EP80",
+          "source": "tools/coyodex/viewer/serve.py:852"
+        },
+        {
+          "id": "EP98",
+          "source": "tools/map_backup.py:452"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "I2"
+      ],
+      "ways_in": [
+        {
+          "id": "EP3",
+          "source": "eval/tools/coyodex_eval/archive.py:159"
+        },
+        {
+          "id": "EP4",
+          "source": "eval/tools/coyodex_eval/cli.py:56"
+        },
+        {
+          "id": "EP5",
+          "source": "eval/tools/coyodex_eval/compare.py:606"
+        },
+        {
+          "id": "EP6",
+          "source": "eval/tools/coyodex_eval/cost.py:674"
+        },
+        {
+          "id": "EP7",
+          "source": "eval/tools/coyodex_eval/mutate.py:244"
+        },
+        {
+          "id": "EP8",
+          "source": "eval/tools/coyodex_eval/mutate.py:249"
+        },
+        {
+          "id": "EP9",
+          "source": "eval/tools/coyodex_eval/process_scorecard.py:3130"
+        },
+        {
+          "id": "EP10",
+          "source": "eval/tools/coyodex_eval/process_scorecard.py:3134"
+        },
+        {
+          "id": "EP11",
+          "source": "eval/tools/coyodex_eval/profile.py:443"
+        },
+        {
+          "id": "EP12",
+          "source": "eval/tools/coyodex_eval/retro_precheck.py:249"
+        },
+        {
+          "id": "EP13",
+          "source": "eval/tools/coyodex_eval/run.py:192"
+        },
+        {
+          "id": "EP14",
+          "source": "eval/tools/coyodex_eval/run.py:279"
+        },
+        {
+          "id": "EP15",
+          "source": "eval/tools/coyodex_eval/run.py:338"
+        },
+        {
+          "id": "EP16",
+          "source": "eval/tools/coyodex_eval/run.py:353"
+        },
+        {
+          "id": "EP17",
+          "source": "eval/tools/coyodex_eval/run.py:418"
+        },
+        {
+          "id": "EP18",
+          "source": "eval/tools/coyodex_eval/run.py:463"
+        },
+        {
+          "id": "EP19",
+          "source": "eval/tools/coyodex_eval/transcript.py:1067"
+        },
+        {
+          "id": "EP45",
+          "source": "tools/coyodex/json_schema.py:432"
+        },
+        {
+          "id": "EP50",
+          "source": "tools/coyodex/provenance.py:293"
+        },
+        {
+          "id": "EP56",
+          "source": "tools/coyodex/viewer/gen_viewer.py:3366"
+        },
+        {
+          "id": "EP99",
+          "source": "tools/map_backup.py:478"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "I3"
+      ],
+      "ways_in": [
+        {
+          "id": "EP60",
+          "source": "tools/coyodex/viewer/serve.py:583"
+        },
+        {
+          "id": "EP61",
+          "source": "tools/coyodex/viewer/serve.py:586"
+        },
+        {
+          "id": "EP62",
+          "source": "tools/coyodex/viewer/serve.py:614"
+        },
+        {
+          "id": "EP63",
+          "source": "tools/coyodex/viewer/serve.py:621"
+        },
+        {
+          "id": "EP64",
+          "source": "tools/coyodex/viewer/serve.py:643"
+        },
+        {
+          "id": "EP65",
+          "source": "tools/coyodex/viewer/serve.py:650"
+        },
+        {
+          "id": "EP66",
+          "source": "tools/coyodex/viewer/serve.py:660"
+        },
+        {
+          "id": "EP67",
+          "source": "tools/coyodex/viewer/serve.py:671"
+        },
+        {
+          "id": "EP68",
+          "source": "tools/coyodex/viewer/serve.py:675"
+        },
+        {
+          "id": "EP69",
+          "source": "tools/coyodex/viewer/serve.py:677"
+        },
+        {
+          "id": "EP70",
+          "source": "tools/coyodex/viewer/serve.py:686"
+        },
+        {
+          "id": "EP71",
+          "source": "tools/coyodex/viewer/serve.py:691"
+        },
+        {
+          "id": "EP72",
+          "source": "tools/coyodex/viewer/serve.py:695"
+        },
+        {
+          "id": "EP73",
+          "source": "tools/coyodex/viewer/serve.py:721"
+        },
+        {
+          "id": "EP74",
+          "source": "tools/coyodex/viewer/serve.py:732"
+        },
+        {
+          "id": "EP75",
+          "source": "tools/coyodex/viewer/serve.py:735"
+        },
+        {
+          "id": "EP81",
+          "source": "tools/coyodex/viewer/viewer.html:120"
+        },
+        {
+          "id": "EP82",
+          "source": "tools/coyodex/viewer/viewer.html:121"
+        },
+        {
+          "id": "EP83",
+          "source": "tools/coyodex/viewer/viewer.html:127"
+        },
+        {
+          "id": "EP84",
+          "source": "tools/coyodex/viewer/viewer.html:130"
+        },
+        {
+          "id": "EP85",
+          "source": "tools/coyodex/viewer/viewer.html:131"
+        },
+        {
+          "id": "EP86",
+          "source": "tools/coyodex/viewer/viewer.html:136"
+        },
+        {
+          "id": "EP87",
+          "source": "tools/coyodex/viewer/viewer.html:137"
+        },
+        {
+          "id": "EP88",
+          "source": "tools/coyodex/viewer/viewer.html:138"
+        },
+        {
+          "id": "EP89",
+          "source": "tools/coyodex/viewer/viewer.html:140"
+        },
+        {
+          "id": "EP90",
+          "source": "tools/coyodex/viewer/viewer.html:141"
+        },
+        {
+          "id": "EP91",
+          "source": "tools/coyodex/viewer/viewer.html:145"
+        },
+        {
+          "id": "EP95",
+          "source": "tools/coyodex/viewer/viewer.js:11694"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "I4"
+      ],
+      "ways_in": [
+        {
+          "id": "EP20",
+          "source": "method/dispatch.md:151"
+        },
+        {
+          "id": "EP21",
+          "source": "method/dispatch.md:154"
+        },
+        {
+          "id": "EP22",
+          "source": "method/dispatch.md:156"
+        },
+        {
+          "id": "EP23",
+          "source": "method/dispatch.md:171"
+        },
+        {
+          "id": "EP24",
+          "source": "method/dispatch.md:83"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "I5"
+      ],
+      "ways_in": [
+        {
+          "id": "EP1",
+          "source": "eval/retro/SKILL.md:28"
+        },
+        {
+          "id": "EP2",
+          "source": "eval/SKILL.md:28"
+        }
+      ]
+    },
+    {
+      "ids": [
+        "D12",
+        "D13",
+        "D14"
+      ],
+      "interface": "I4"
+    },
+    {
+      "ids": [
+        "D15"
+      ],
+      "interface": "I10"
+    },
+    {
+      "ids": [
+        "D16"
+      ],
+      "interface": "I11"
     }
   ],
   "keep_edges": [
