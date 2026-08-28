@@ -1843,6 +1843,46 @@ def _check_actors(m: ProjectModel) -> list[str]:
     return [f"Use cases with no actor (roles are defined, so each names ≥1 role id): {', '.join(missing)}"]
 
 
+def _check_actor_doors(m: ProjectModel) -> list[str]:
+    """Blocking: a use case whose OWN flow is driven by two of its actors — two front doors on one
+    number line.
+
+    Several actors on one use case means *interchangeable* initiators of one goal, and
+    interchangeable means ONE opening: whichever of them ran it, the flow starts at the same step, so
+    only one of them ever appears as a step `src`. Two actors each opening the flow is a different
+    animal — the owner clicks a screen at step 1, the assistant calls a tool at step 13 — and one
+    flow cannot hold two runs honestly: the numbering claims step 13 follows step 12 when it starts a
+    second run, the map view lays the second actor out mid-diagram because layout follows step order,
+    and the second run gets truncated rather than repeat the shared middle (measured: the second
+    actor received nothing back in 4 of the 6 two-door use cases that produced this check). Reads the
+    flow's OWN steps, never `expanded_flow_steps`: a sub-flow is shared machinery whose step numbers
+    belong to the sub-flow, so a door found inside one would be reported against a foreign number."""
+    if not m.roles:
+        return []
+    flow_by_uc = {f.uc: f for f in m.flows}
+    name = {r.id: r.name for r in m.roles}
+    problems: list[str] = []
+    for u in m.use_cases:
+        if len(u.actors) < 2 or (f := flow_by_uc.get(u.id)) is None:
+            continue
+        doors: dict[str, FlowStep] = {}
+        for st in f.steps:
+            if grammar.is_role_id(st.src) and st.src in u.actors:
+                doors.setdefault(st.src, st)
+        if len(doors) < 2:
+            continue
+        shown = "; ".join(f"{a} ({name.get(a, a)}) at step {st.n} → {st.dst}"
+                          for a, st in doors.items())
+        problems.append(
+            f"{u.id} ({u.name}) has {len(doors)} openings — {shown}. Its actors do not enter the "
+            "same way, so this is more than one use case (one actor goal = one trigger, one "
+            "outcome). Split it into one use case per front door, name the door in each name, give "
+            "each its own `entry_points`, and factor the shared middle into a sub-flow both "
+            "reference. Several actors on ONE use case is only for interchangeable initiators, who "
+            "share the same opening step.")
+    return problems
+
+
 def _check_actor_kinds(m: ProjectModel) -> list[str]:
     """Advisory: a use case that pairs a HUMAN actor with a SERVICE actor. An actor is who the use case
     is FOR (has the goal); a service listed alongside a human is almost always the internal machinery
@@ -1863,8 +1903,10 @@ def _check_actor_kinds(m: ProjectModel) -> list[str]:
             out.append(f"{u.id} ({u.name}) mixes a human actor [{h}] with a service actor [{s}] — an "
                        "actor is who the use case is FOR; a service beside a human is usually the "
                        "internal delivery mechanism (gateway/shard/dispatcher/worker). Model it as a "
-                       "flow component and keep the one human actor (or, if truly a distinct external "
-                       "initiator, leave it).")
+                       "flow component and keep the one human actor. If it is truly a distinct "
+                       "external initiator, it has its own front door — then this is TWO use cases, "
+                       "one per door, sharing the middle through a sub-flow (see _check_actor_doors, "
+                       "which blocks once both doors reach the flow).")
     return out
 
 
@@ -4633,6 +4675,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_completeness_warnings(m))
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))
+    problems.extend(_check_actor_doors(m))
     warnings.extend(_check_actor_kinds(m))
     warnings.extend(confidence_warnings(m))
     problems.extend(_check_dep_kinds(m))

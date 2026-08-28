@@ -808,6 +808,45 @@ def test_empty_actors_blocks_when_roles_defined():
     assert any("no actor" in p and "UC1" in p for p in problems_of(m))
 
 
+def make_two_door_model() -> ProjectModel:
+    """One use case, two actors, and a flow each of them OPENS — the shape the door check blocks."""
+    m = make_valid_model()
+    m.roles.append(Role(id="R2", name="Assistant", kind="service", wants="the same list",
+                        drives="UC1"))
+    m.use_cases[0].actors = ["R1", "R2"]
+    m.flows[0].steps = [
+        FlowStep(n=1, src="R1", dst="C1", phrase="opens the screen"),
+        FlowStep(n=2, src="C1", dst="E1", phrase="reads the order", where="src/v.py:5"),
+        FlowStep(n=3, src="R2", dst="C1", phrase="calls the tool"),
+    ]
+    return m
+
+
+def test_two_actors_opening_one_flow_block():
+    # Two front doors on one number line: step 3 does not follow step 2, it starts a second run.
+    # The message must name BOTH openings, so the split is actionable without reading the flow.
+    problems = problems_of(make_two_door_model())
+    hit = [p for p in problems if "openings" in p and "UC1" in p]
+    assert hit, problems
+    assert "R1 (Andy) at step 1" in hit[0] and "R2 (Assistant) at step 3" in hit[0]
+
+
+def test_interchangeable_actors_sharing_one_opening_are_clean():
+    # The legitimate multi-actor case: either role may run it, and the flow has ONE opening — only
+    # one of them ever appears as a step src. Nothing to split, so the check stays silent.
+    m = make_two_door_model()
+    m.flows[0].steps = m.flows[0].steps[:2]
+    assert not any("openings" in p for p in problems_of(m))
+
+
+def test_a_second_actor_that_only_RECEIVES_is_not_a_second_door():
+    # Receiving the outcome is how a flow CLOSES, not how it opens. A door is a step the actor
+    # drives, so an actor appearing only as a `dst` must never be read as a second opening.
+    m = make_two_door_model()
+    m.flows[0].steps[2] = FlowStep(n=3, src="C1", dst="R2", phrase="hands the list back")
+    assert not any("openings" in p for p in problems_of(m))
+
+
 def test_empty_actors_allowed_when_no_roles():
     # A roles-less map legitimately has no actors and no role-id references — the guard does not fire.
     m = make_valid_model()
