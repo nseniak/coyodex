@@ -27,6 +27,36 @@ the code's names.
 - **owner with no evidence** — the map says an area exists for a feature, but no
   journey of that feature ever touches the area's records. A defect. Distinct
   from *ungrounded*, which is only ever about a missing code link.
+- **interface** — one place where the product meets something that is not the
+  product. It sends data or events that the product itself does not consume, or
+  it receives data or events the product itself did not generate. Excluded: data
+  the product writes only to read back (its own database, cache, queue); code and
+  build artifacts that become the product; the pipeline that builds and tests it.
+  An outside reader *the map records* beats the read-back exclusion. Two things
+  are deliberately NOT criteria: who runs the machine, and whether the far side
+  does something "business". The word also means a code declaration in a
+  TypeScript or Java project, so a map of one shows both meanings.
+- **surface** — the everyday word for one interface. **our surface** = we define
+  its shape (our command line, our web pages). **their surface** = someone else
+  does (a payment processor, a sign-in provider). The test: if the far side
+  vanished tomorrow, would this thing's shape change?
+- **way in** — one address, command or tool an interface is made of. A surface
+  groups many; coyodex's own command line is 32 ways in.
+- **far side** — who or what is on the other side of a surface.
+- **pipe** — something on the path to a far side that is not itself a surface: a
+  reverse proxy, a log shipper, the library that calls a service. Name the far
+  side, never the pipe.
+- **what crosses** — the list on a surface saying, in each direction, what goes
+  through it in one sentence, and which stored records. Naming no record is a
+  normal answer: a log line, a fetched web page and a source file all cross
+  without being stored.
+- **user-facing / operator-facing** — who a surface serves. Written by hand, not
+  worked out: the actor field that looks like it answers this asks a different
+  question, and marks a bought payment service *internal* while its interface is
+  user-facing.
+- **door** — the way one actor starts one use case. Narrower than a surface: a
+  door is one crossing in one story. Two actors reaching the same goal through
+  different doors are two use cases, and a gate blocks the map otherwise.
 - **change impact** — the report saying what a code change does to the map.
 - **accept** — folding a change-impact report into the baseline.
 - **Coyote Effect** — the situation coyodex exists for: your agent wrote a lot
@@ -86,6 +116,13 @@ design principles these come from)
 - **lane** — one of the timeline's two bands. The happy path is the upper lane,
   everything else is the lower one.
 - **gutter** — the strip on the left of the timeline that names the two lanes.
+- **Interfaces** (a view) — the tab under Product, after Happy Path. It answers
+  "where does this product meet the outside world?" with two sections, Our
+  surfaces and Their surfaces. Each card opens that surface's own page.
+- **what it reaches out to** — the block on a feature's page listing the
+  surfaces that feature calls out to. It reads *not stated* on most features,
+  because a feature is linked to a service only when a step of its own walk is
+  drawn at that service.
 
 **How coyodex is delivered**
 
