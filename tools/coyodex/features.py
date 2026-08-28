@@ -435,7 +435,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     #   (1) a use case names a way in, and that way in belongs to a surface  -> reached_through
     #   (2) a walk step is drawn AT a dep, and that dep names a surface      -> reaches_out
     iface_deps: dict[str, list[str]] = {}
-    dep_iface: dict[str, str] = {}
+    dep_iface: dict[str, list[str]] = {}
     for d in m.deps:
         for iid in d.interfaces:
             iface_deps.setdefault(iid, []).append(d.id)
