@@ -573,3 +573,19 @@ def test_the_bundle_ships_the_surfaces_and_the_feature_links():
     assert [i["id"] for i in ifaces] == ["I1", "I2", "I3"]
     assert feats[0]["reachedThrough"] == ["I1"]
     assert feats[0]["reachesOut"] == ["I2"]
+
+
+def test_a_door_step_says_which_features_come_through_a_surface():
+    """The strongest statement the map can make, and the only one that works on the way IN. Which
+    direction it means comes from the surface's own `side`, never from the step."""
+    doc = make_interface_map()
+    doc["flows"][0]["steps"] = ([{"n": 1, "src": "R1", "dst": "I1", "phrase": "opens it",
+                                 "no_call_site": True},
+                                {"n": 2, "src": "I1", "dst": "C1", "phrase": "asks"},
+                                {"n": 3, "src": "C2", "dst": "I3", "phrase": "ships a log line"}])
+    ix = build_index(load_model(json.dumps(doc)))
+    by_id = {i.id: i for i in ix.interfaces}
+    assert by_id["I1"].use_cases == ["UC1"] and by_id["I1"].features == ["CAP1"]
+    assert by_id["I3"].use_cases == ["UC1"], "a step at a `theirs` surface reaches it too"
+    assert ix.features[0].reached_through == ["I1"]      # ours → how the story is entered
+    assert ix.features[0].reaches_out == ["I3"]          # theirs → what it reaches out to

@@ -912,17 +912,18 @@ SOURCE: [filetree.py](tools/coyodex/viewer/filetree.py:48)
 8. C4 → Map reader : prints one line per skills folder, naming the clone the installed skill now points at @ [Makefile](Makefile:59)
 
 **UC2 — Start the local map server**
-1. Map reader → C4 : runs the start command, which serves the maps on the chosen port and opens the page @ [Makefile](Makefile:119)
-2. C4 → C43 : ⟨runs SF1 — Run a coyodex subcommand⟩
-3. C43 → C43 : reads the port and the open-a-browser choice off the command line @ [serve.py](tools/coyodex/viewer/serve.py:838)
-4. C43 → C43 : reads the remembered project folders from the small file in the reader's home folder @ [recents.py](tools/coyodex/viewer/recents.py:34) · no disk scan — the served set is exactly this list
-5. C43 → E1 : loads each remembered project's map for its title, its goal and the commit it is pinned to @ [serve.py](tools/coyodex/viewer/serve.py:123)
-6. C43 → C43 : binds the server to the loopback address on that port, so only this machine can reach it @ [serve.py](tools/coyodex/viewer/serve.py:800)
-7. C43 → D11 : opens the landing page in the reader's default browser @ [serve.py](tools/coyodex/viewer/serve.py:806) · only when the start command asked for it
-8. C43 → D11 : sends the landing page, one self-contained document that pulls in no outside file @ [serve.py](tools/coyodex/viewer/serve.py:583)
-9. C43 → Map reader : answers the page's request with one card per remembered project: its title, its pin, and whether its code can be read @ [serve.py](tools/coyodex/viewer/serve.py:620)
-10. C43 → C43 : writes the folder the reader adds back to that file, merging with what is on disk so a parallel writer is never lost @ [recents.py](tools/coyodex/viewer/recents.py:44)
-11. C43 → C43 : keeps answering requests until Ctrl-C, then says it stopped and closes the socket @ [serve.py](tools/coyodex/viewer/serve.py:808)
+1. Map reader → I1 : types the serve command
+2. I1 → C4 : runs the start command, which serves the maps on the chosen port and opens the page @ [Makefile](Makefile:119)
+3. C4 → C43 : ⟨runs SF1 — Run a coyodex subcommand⟩
+4. C43 → C43 : reads the port and the open-a-browser choice off the command line @ [serve.py](tools/coyodex/viewer/serve.py:838)
+5. C43 → C43 : reads the remembered project folders from the small file in the reader's home folder @ [recents.py](tools/coyodex/viewer/recents.py:34) · no disk scan — the served set is exactly this list
+6. C43 → E1 : loads each remembered project's map for its title, its goal and the commit it is pinned to @ [serve.py](tools/coyodex/viewer/serve.py:123)
+7. C43 → C43 : binds the server to the loopback address on that port, so only this machine can reach it @ [serve.py](tools/coyodex/viewer/serve.py:800)
+8. C43 → D11 : opens the landing page in the reader's default browser @ [serve.py](tools/coyodex/viewer/serve.py:806) · only when the start command asked for it
+9. C43 → D11 : sends the landing page, one self-contained document that pulls in no outside file @ [serve.py](tools/coyodex/viewer/serve.py:583)
+10. C43 → Map reader : answers the page's request with one card per remembered project: its title, its pin, and whether its code can be read @ [serve.py](tools/coyodex/viewer/serve.py:620)
+11. C43 → C43 : writes the folder the reader adds back to that file, merging with what is on disk so a parallel writer is never lost @ [recents.py](tools/coyodex/viewer/recents.py:44)
+12. C43 → C43 : keeps answering requests until Ctrl-C, then says it stopped and closes the socket @ [serve.py](tools/coyodex/viewer/serve.py:808)
 
 **UC21 — Open a project's map in a browser**
 1. Map reader → C43 : clicks a project card, which opens that project's own map address @ [serve.py](tools/coyodex/viewer/serve.py:978)
@@ -1781,7 +1782,7 @@ Who may reach the map server, which files it will open, and which version of eac
 - [tools/coyodex/viewer/serve.py:577](tools/coyodex/viewer/serve.py:577) — Map server (C43) · Every read request whose claimed site is not loopback is refused.
 - [tools/coyodex/viewer/serve.py:599](tools/coyodex/viewer/serve.py:599) — Map server (C43) · The same site check refuses a write request.
 - [tools/coyodex/viewer/serve.py:601](tools/coyodex/viewer/serve.py:601) — Map server (C43) · A write request without the private marker header is refused.
-- enforced at: Start the local map server (UC2) step 6
+- enforced at: Start the local map server (UC2) step 7
 
 **BR161 — Only folders you opened** — The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder.  *(access)*  *(verified)*
 - [tools/coyodex/viewer/serve.py:799](tools/coyodex/viewer/serve.py:799) — Map server (C43) · The served set is built from the remembered list alone, with no disk search.

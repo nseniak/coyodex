@@ -619,6 +619,8 @@ SUBSYSTEM_STYLE = f"fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b,{_CONTAINER_BORDER
 ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
 SUBDOMAIN_STYLE = f"fill:#f5d0fe,stroke:#86198f,color:#581c87,{_CONTAINER_BORDER}"  # fuchsia-200 — subdomain (SD), deep container
 DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
+INTERFACE_STYLE = "fill:#fffbeb,stroke:#b45309,color:#78350f"  # amber-50    — interface (I), the door a
+                                                               # story crosses the product's edge at
 # An actor box, wherever one is drawn as a flowchart node (the Context view's stick figures and
 # hexagons, a use-case map's driving actor) — one constant per kind so the views can never drift apart.
 # The human/service distinction is the METHOD's, not decoration: a `service` actor is an autonomous
@@ -684,6 +686,7 @@ def _fill_stroke(style: str) -> dict[str, str]:
 # would read like a component). Derived from the box styles above — one source for every view.
 ELEMENT_TINT = {
     "component": _fill_stroke(COMPONENT_STYLE),
+    "interface": _fill_stroke(INTERFACE_STYLE),
     "dep": _fill_stroke(DEP_STYLE),
     "entity": _fill_stroke(ENTITY_STYLE),
     "subsystem": _fill_stroke(SUBSYSTEM_STYLE),
@@ -2856,9 +2859,13 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
 # included. Same scenario, same element set, same step numbers: two renderings of one source, so they
 # can never disagree.
 FLOW_MAP_SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]'), "entity": ('("', '")'),
-                  "subsystem": ('["', '"]'), "subdomain": ('("', '")')}
+                  "subsystem": ('["', '"]'), "subdomain": ('("', '")'),
+                  # A DOOR is drawn as a stadium — the one shape nothing else on this map uses, so
+                  # the place a story crosses the product's edge is never read as a component.
+                  "interface": ('(["', '"])')}
 FLOW_MAP_STYLE = {"component": COMPONENT_STYLE, "dep": DEP_STYLE, "entity": ENTITY_STYLE,
                   "subsystem": SUBSYSTEM_STYLE, "subdomain": SUBDOMAIN_STYLE,
+                  "interface": INTERFACE_STYLE,
                   "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE}
 
 
@@ -2951,7 +2958,8 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     lines = ["flowchart LR", *decls]
     for (a, b), ns in pairs.items():
         lines.append(f"  {a} -->|{_edge_label(_flow_map_arrow_label(ns))}| {b}")
-    for kind in ("component", "dep", "entity", "subsystem", "subdomain", "human", "svc"):
+    for kind in ("component", "dep", "entity", "subsystem", "subdomain", "interface",
+                 "human", "svc"):
         if kind in kinds:
             lines.append(f"  classDef {kind} {FLOW_MAP_STYLE[kind]};")
     return "\n".join(lines)

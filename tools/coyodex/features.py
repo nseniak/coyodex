@@ -463,10 +463,27 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                 feat_in[uc_cap[u.id]].add(iid)
     feat_out: dict[str, set[str]] = {c: set() for c in caps}
     iface_out_ucs: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    iface_ids = {i.id for i in m.interfaces}
+    iface_side = {i.id: i.side for i in m.interfaces}
     for f in m.flows:
         cap = uc_cap.get(f.uc)
         for st in expanded_flow_steps(m, f):
             for side in (st.src, st.dst):
+                # A step drawn AT the surface itself is the strongest statement the map can make, and
+                # the only one that works on the way IN as well as the way out. Which of the two a
+                # step is comes from the surface's OWN `side`: a door of ours is how the story is
+                # entered, a surface of theirs is what it reaches out to.
+                if side in iface_ids:
+                    if iface_side.get(side) == "ours":
+                        iface_ucs[side].add(f.uc)
+                        if cap:
+                            feat_in[cap].add(side)
+                    else:
+                        iface_out_ucs[side].add(f.uc)
+                        if cap:
+                            feat_out[cap].add(side)
+                    continue
+                # …and the older, weaker statement: a step drawn at a DEP the surface stands on.
                 for iid in dep_iface.get(side, ()):
                     iface_out_ucs[iid].add(f.uc)
                     if cap:

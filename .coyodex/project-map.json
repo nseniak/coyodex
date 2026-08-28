@@ -8518,6 +8518,13 @@
     {
      "n": 1,
      "src": "R1",
+     "dst": "I1",
+     "phrase": "types the serve command",
+     "no_call_site": true
+    },
+    {
+     "n": 2,
+     "src": "I1",
      "dst": "C4",
      "phrase": "runs the start command, which serves the maps on the chosen port and opens the page",
      "note": "",
@@ -8526,7 +8533,7 @@
      "subflow": null
     },
     {
-     "n": 2,
+     "n": 3,
      "src": "C4",
      "dst": "C43",
      "phrase": "",
@@ -8536,7 +8543,7 @@
      "subflow": "SF1"
     },
     {
-     "n": 3,
+     "n": 4,
      "src": "C43",
      "dst": "C43",
      "phrase": "reads the port and the open-a-browser choice off the command line",
@@ -8546,7 +8553,7 @@
      "subflow": null
     },
     {
-     "n": 4,
+     "n": 5,
      "src": "C43",
      "dst": "C43",
      "phrase": "reads the remembered project folders from the small file in the reader's home folder",
@@ -8556,7 +8563,7 @@
      "subflow": null
     },
     {
-     "n": 5,
+     "n": 6,
      "src": "C43",
      "dst": "E1",
      "phrase": "loads each remembered project's map for its title, its goal and the commit it is pinned to",
@@ -8566,7 +8573,7 @@
      "subflow": null
     },
     {
-     "n": 6,
+     "n": 7,
      "src": "C43",
      "dst": "C43",
      "phrase": "binds the server to the loopback address on that port, so only this machine can reach it",
@@ -8576,7 +8583,7 @@
      "subflow": null
     },
     {
-     "n": 7,
+     "n": 8,
      "src": "C43",
      "dst": "D11",
      "phrase": "opens the landing page in the reader's default browser",
@@ -8586,7 +8593,7 @@
      "subflow": null
     },
     {
-     "n": 8,
+     "n": 9,
      "src": "C43",
      "dst": "D11",
      "phrase": "sends the landing page, one self-contained document that pulls in no outside file",
@@ -8596,7 +8603,7 @@
      "subflow": null
     },
     {
-     "n": 9,
+     "n": 10,
      "src": "C43",
      "dst": "R1",
      "phrase": "answers the page's request with one card per remembered project: its title, its pin, and whether its code can be read",
@@ -8606,7 +8613,7 @@
      "subflow": null
     },
     {
-     "n": 10,
+     "n": 11,
      "src": "C43",
      "dst": "C43",
      "phrase": "writes the folder the reader adds back to that file, merging with what is on disk so a parallel writer is never lost",
@@ -8616,7 +8623,7 @@
      "subflow": null
     },
     {
-     "n": 11,
+     "n": 12,
      "src": "C43",
      "dst": "C43",
      "phrase": "keeps answering requests until Ctrl-C, then says it stopped and closes the socket",

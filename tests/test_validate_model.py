@@ -4236,3 +4236,22 @@ def test_a_party_ref_must_resolve():
     assert any("party_ref" in p for p in problems_of(m))
     m.interfaces[0].party_ref = "R1"
     assert not [p for p in problems_of(m) if "party_ref" in p]
+
+
+def test_a_door_is_a_legal_step_endpoint_and_does_not_count_toward_the_band():
+    """`R1 → I3 → C12` reads "a person, through the dashboard, into the code". The band exists to
+    catch a fused goal or wire-grain detail; naming the door is neither, and counting door steps
+    would have put 33 of the 150 flows across the four live maps over the band the day doors were
+    authored — 33 findings that are not defects."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="types the command",
+                                 no_call_site=True),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="runs it")]
+    assert not [p for p in problems_of(m) if "endpoint" in p or "I1" in p]
+    # 16 authored steps, one of them a door → 15 counted, which is inside the band.
+    m.flows[0].steps = ([FlowStep(n=1, src="R1", dst="I1", phrase="in", no_call_site=True)]
+                        + [FlowStep(n=i, src="C1", dst="C1", phrase="works") for i in range(2, 17)])
+    assert not [w for w in warnings_of(m) if "band" in w and "UC1" in w]
+    # …and 16 counted steps, with no door, is over it.
+    m.flows[0].steps = [FlowStep(n=i, src="C1", dst="C1", phrase="works") for i in range(1, 17)]
+    assert any("over the \u226415 band" in w and "16 steps" in w for w in warnings_of(m))

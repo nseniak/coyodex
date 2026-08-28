@@ -538,7 +538,13 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
     family: list[tuple[str, str, str]] = []
     for fid, name, steps in ([(f.uc, f.title, f.steps) for f in m.flows]
                              + [(sf.id, sf.name, sf.steps) for sf in m.subflows]):
-        n = len(steps)
+        # An INTERFACE step does not count toward the band. The band exists to catch a fused goal or
+        # wire-grain detail; naming the door a story comes in by is neither — it is the same
+        # structural exemption a sub-flow reference already gets (it counts as 1, not as its
+        # contents). Measured: counting them would put 33 of the 150 flows across the four live maps
+        # over the band the day doors are authored, which would read as 33 new defects and is none.
+        n = sum(1 for st in steps
+                if not (grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst)))
         if n > FLOW_STEPS_HI:
             family.append((fid, "the step-count band", (
                 f"{fid} ({name}): {n} steps — over the ≤{FLOW_STEPS_HI} band. Split a fused goal, "

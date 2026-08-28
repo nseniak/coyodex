@@ -442,6 +442,12 @@ Semantics, stated on the fields:
   exclusion from nobody having looked, which is exactly the trap a search service sets (over the
   product's own records it is not an interface, over the open web it is, and the two call sites are
   identical). Frameworks and libraries are exempt: they become the product.
+- **A flow STEP may end at an interface** (`I<n>` is a legal `src`/`dst`). That is how a door reaches
+  the picture: `R1 → I3 → C12` reads "a person, through the dashboard, into the code", and
+  `C12 → I7` reads "and out to the payment processor". These steps are exempt from the step-count
+  band — counting them would have put 33 of the 150 flows across the four live maps over it the day
+  doors were authored. A step at a `theirs` surface is what makes a feature's "what it reaches out
+  to" answerable; a step at a dep is the older, weaker form and still reads.
 - **`deps[].kind`** is a closed vocabulary — see the schema for the exact values; `null` means it's
   inferred from `type`. Values split into two groups: external systems the project talks to across
   a boundary (drawn at Context by name), and in-process code deps (`framework`/`library`) that fold

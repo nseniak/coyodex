@@ -581,7 +581,17 @@ def resolve_backing(
 # `views.py` builds a Flow/FlowStep per use case straight from the model's `Flow`/`FlowStep`
 # records (not from a markdown parse); `is_step_id` classifies each endpoint (an element ID vs a Role
 # display name) so the viewer knows whether a step is a backbone reference or an actor interaction.
-_STEP_ENDPOINT_ID = re.compile(r"^(?:UC\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)$")
+_STEP_ENDPOINT_ID = re.compile(r"^(?:UC\d+|SD\d+|C\d+|D\d+|E\d+|I\d+|S\d+)$")
+
+#: An INTERFACE step — the door a story comes in by, or the far side it reaches out to.
+#: `R1 → I3 → C12` reads "a person, through the dashboard, into the code". These steps are
+#: structure, not detail, so the step-count band does not count them: without that, one added
+#: step per flow puts 33 of the 150 flows across the four live maps over the band.
+_INTERFACE_ID = re.compile(r"^I\d+$")
+
+
+def is_interface_id(token: str) -> bool:
+    return bool(_INTERFACE_ID.match((token or "").strip()))
 
 
 def is_step_id(token: str) -> bool:

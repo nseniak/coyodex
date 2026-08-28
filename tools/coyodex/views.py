@@ -1142,6 +1142,14 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         node.dep_kind = dep_kind
         node.roles = sorted(grammar.dep_roles(dep_verbs.get(d.id, [])))
         nodes[d.id] = node
+    # INTERFACES reach the browser as nodes because a flow STEP may end at one: `R1 → I3 → C12` reads
+    # "a person, through the dashboard, into the code". Without a node the step would draw a bare id.
+    for iface in m.interfaces:
+        flow = [x for x in ("in", "out") if any(c.direction == x for c in iface.carries)]
+        fields = {"Name": iface.name, "Side": iface.side, "Facing": iface.facing,
+                  "What crosses": ", ".join(flow) or "",
+                  **({"Far side": iface.party} if iface.party else {})}
+        nodes[iface.id] = _node(iface, "interface", iface.name, iface.source, fields, None)
     for sd in m.subdomains:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""
         nodes[sd.id] = _node(sd, "subdomain", sd.name, sd.source,

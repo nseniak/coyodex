@@ -431,6 +431,13 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   (over the product's own records it is not an interface, over the open web it is, and the two call
   sites are identical). Record a deliberate exception as `In: <why>` or `EPn: <why>` under an
   **"Interface exceptions"** extras heading.
+  **Doors — put the surface IN the story.** A use-case flow's OPENING step names the surface the
+  actor comes in by (`R1 → I3`, then `I3 → C12`), and a step that reaches an outside service names
+  that surface rather than the dep it stands on (`C12 → I7`). Without it a reader sees the PIPE and
+  not the door: a flow that draws `web browser` as its only outside box is naming the thing this
+  method tells you never to name. Interface steps do NOT count toward the 3-15 step band — they are
+  structure, not detail, like a sub-flow reference counting as 1. An existing `Cn → Dn` step on a
+  dep that stands on a `theirs` surface MIGRATES to that surface; the dep is then derived.
   **What crosses**: one row per thing, in ONE direction, each with a plain sentence and the SINGLE
   records (`En`) that cross — never a data area. An EMPTY record list is legitimate and common: a log
   line, a fetched web page, a source file and a tool call are real crossings no stored record holds.
