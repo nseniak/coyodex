@@ -3443,7 +3443,7 @@
    "id": "EP56",
    "kind": "cli",
    "trigger": "python -m coyodex.viewer.gen_viewer <graph file> <output file>",
-   "source": "tools/coyodex/viewer/gen_viewer.py:3366",
+   "source": "tools/coyodex/viewer/gen_viewer.py:3298",
    "component": "C44",
    "activation": "external",
    "runs_in": [],
@@ -17240,7 +17240,7 @@
      "where": ""
     }
    ],
-   "source": "tools/coyodex/cli.py:115",
+   "source": "tools/coyodex/cli.py:105",
    "confidence": "verified",
    "evidence": []
   },
@@ -17289,7 +17289,7 @@
      "where": ""
     }
    ],
-   "source": "eval/tools/coyodex_eval/cli.py:56",
+   "source": "eval/tools/coyodex_eval/cli.py:47",
    "confidence": "verified",
    "evidence": []
   },
@@ -17347,7 +17347,7 @@
      "where": ""
     }
    ],
-   "source": "tools/coyodex/viewer/serve.py:852",
+   "source": "tools/coyodex/viewer/serve.py:633",
    "confidence": "verified",
    "evidence": []
   },
@@ -17380,7 +17380,7 @@
      "where": "method/dispatch.md"
     }
    ],
-   "source": "method/dispatch.md:83",
+   "source": "method/dispatch.md:62",
    "confidence": "verified",
    "evidence": []
   },
@@ -17427,7 +17427,7 @@
      "where": ""
     }
    ],
-   "source": "tools/coyodex/assemble.py:812",
+   "source": "tools/coyodex/assemble.py:963",
    "confidence": "verified",
    "evidence": []
   },

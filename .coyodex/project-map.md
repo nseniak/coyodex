@@ -383,7 +383,7 @@ why: needs the finished build's transcript, found through the stamp from HP14
 | cli | `coyodex record` writes one accepted-advisory line under a named heading. | [record.py](tools/coyodex/record.py:194) | C3 |  |
 | cli | `coyodex scope` says which files will be analysed and which commit the map will name. | [scope.py](tools/coyodex/scope.py:167) | C4 |  |
 | cli | coyodex validate | [validate_model.py](tools/coyodex/validate_model.py:4663) | C13 |  |
-| cli | python -m coyodex.viewer.gen_viewer <graph file> <output file> | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3366) | C44 |  |
+| cli | python -m coyodex.viewer.gen_viewer <graph file> <output file> | [gen_viewer.py](tools/coyodex/viewer/gen_viewer.py:3298) | C44 |  |
 | cli | coyodex render <map file> <output text file> | [render.py](tools/coyodex/viewer/render.py:53) | C45 |  |
 | poller | The server checks whether its own code changed since it started, and warns once | [serve.py](tools/coyodex/viewer/serve.py:180) | C43 | every 2s ([serve.py](tools/coyodex/viewer/serve.py:145)) |
 | poller | The server checks whether a map changed on disk, and drops what it cached | [serve.py](tools/coyodex/viewer/serve.py:210) | C43 | on every project request ([serve.py](tools/coyodex/viewer/serve.py:592)) |

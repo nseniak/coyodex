@@ -997,6 +997,19 @@ def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
         mr.consumers = [r(c) for c in mr.consumers]
         if mr.payload:
             mr.payload = r(mr.payload)
+    # An interface REFERENCES four id families, and every one of them can be merged away: a dep or a
+    # role as its far side, entry points as its ways in, entities in a crossing. `_merge_duplicate_deps`
+    # long carried the comment "edges are the only refs into a dep id", which stopped being true the
+    # moment a dep could name a surface and a surface could name a dep.
+    for iface in m.interfaces:
+        if iface.party_ref:
+            iface.party_ref = r(iface.party_ref)
+        iface.ways_in = [r(ep) for ep in iface.ways_in]
+        for cr in iface.carries:
+            cr.elements = [r(e) for e in cr.elements]
+    for d in m.deps:
+        if d.interface:
+            d.interface = r(d.interface)
     for en in m.entities:
         if en.subdomain:
             en.subdomain = r(en.subdomain)

@@ -242,6 +242,15 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     """The ids the model genuinely cross-references, gathered ONLY from typed id-bearing fields and
     explicit `[[ID]]` prose markers — never scanned out of free prose or anchor strings."""
     refs: set[str] = set()
+    for iface in m.interfaces:                       # kept in step with `model.remap_element_ids`
+        if iface.party_ref:
+            refs.add(iface.party_ref)
+        refs.update(iface.ways_in)
+        for cr in iface.carries:
+            refs.update(cr.elements)
+    for d in m.deps:
+        if d.interface:
+            refs.add(d.interface)
     for c in m.components:
         if c.subsystem:
             refs.add(c.subsystem)
@@ -1865,13 +1874,25 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     whether a given service really qualifies is the method's judgement, cross-examined by the
     skeptic worklist and by the `evidence` advisory below.
 
-    Two advisories are skipped WHOLESALE when the map joins no use case to any way in. Without that
-    guard they fire on every row of every map — measured: all 33 of Mio Coworker's interfaces, whose
+    The "reached by no use case" advisory is skipped WHOLESALE when the map joins no use case to any
+    way in. Without that guard it fires on every row of every map — measured: all 33 of Mio Coworker's interfaces, whose
     486 ways in are claimed by nothing, and every `theirs` row on all four maps, whose feature link
     is legitimately "not stated". Same shape as the unclaimed-surface rule in method.md: a map that
     skipped the authored arm entirely is not a map full of defects."""
     problems: list[str] = []
     warnings: list[str] = []
+    # The DEP-side checks run even when the map records no interface at all: a dangling
+    # `Dep.interface`, or a dep claiming both a surface and a reason, is wrong whatever else the map
+    # holds — and `assemble --reconcile` can apply dep assignments while the interfaces fragment is
+    # absent. Only the demand that every external dep be DECIDED waits for the map to record its edge.
+    iface_ids_all = {i.id for i in m.interfaces}
+    for d in m.deps:
+        if d.interface and d.interface not in iface_ids_all:
+            problems.append(f"{d.id} ({d.name}) interface '{d.interface}' is not a defined "
+                            f"interface")
+        if d.interface and d.not_an_interface:
+            problems.append(f"{d.id} ({d.name}) names an interface AND says why it is none — "
+                            f"exactly one of the two")
     if not m.interfaces:
         return problems, warnings
     recorded = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("I", "EP"))
@@ -1913,9 +1934,12 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                                 f"self-activated — a timer, loop or boot hook is work the product "
                                 f"does to itself, not a way in from outside")
             elif len(claimed_by.get(ep, [])) > 1:
-                problems.append(f"{ep} is claimed by {len(claimed_by[ep])} interfaces "
-                                f"({', '.join(sorted(claimed_by[ep]))}) — one way in belongs to "
-                                f"exactly one surface")
+                owners = sorted(set(claimed_by[ep]))
+                problems.append(
+                    f"{ep} is listed twice by {iface.id} ({iface.name}) — a way in belongs to a "
+                    f"surface once" if len(owners) == 1 else
+                    f"{ep} is claimed by {len(owners)} interfaces ({', '.join(owners)}) — one way "
+                    f"in belongs to exactly one surface")
         for ci, cr in enumerate(iface.carries):
             if cr.direction not in grammar.CROSSING_DIRECTIONS:
                 problems.append(f"{iface.id} crossing {ci}: direction='{cr.direction}' — must be "
@@ -1948,12 +1972,6 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"heading")
 
     for d in m.deps:
-        if d.interface and d.interface not in iface_ids:
-            problems.append(f"{d.id} ({d.name}) interface '{d.interface}' is not a defined "
-                            f"interface")
-        if d.interface and d.not_an_interface:
-            problems.append(f"{d.id} ({d.name}) names an interface AND says why it is none — "
-                            f"exactly one of the two")
         if (grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM
                 and not d.interface and not d.not_an_interface):
             problems.append(f"{d.id} ({d.name}) is an external system that neither names an "
@@ -4224,7 +4242,10 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_file(f"messaging[{i}] ('{mr.name}') source", mr.source)
     for d in m.deps:
         bad_file(f"{d.id} where_configured", d.where_configured)
-    for el in (*m.components, *m.deps):                     # evidence citations are file:line anchors too
+    for el in (*m.components, *m.deps, *m.interfaces):     # evidence citations are file:line anchors too
+        # Interfaces belong here for a reason of their own: `evidence` is what the `theirs`-surface
+        # advisory sends the author to write, and an unchecked citation is the anti-trap field
+        # quietly citing a file that is not there.
         for i, ev in enumerate(el.evidence):
             bad_file(f"{el.id} evidence[{i}].file", ev.file)
     for e in m.edges:

@@ -296,7 +296,12 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         if not ids:
             raise ReconcileError(f"{label}: set[{i}].ids: must name at least one element")
         sd = SetDirective(ids=ids)
-        for fld in ("subsystem", "subdomain", "capability", "bucket", "block"):
+        # EVERY scalar-string field of `_SET_FIELD_OWNER` must be listed here: this loop is a THIRD
+        # registry beside the dict and `SetDirective`, and a field missing from it parses to None, so
+        # `assigned_fields()` returns [] and the whole file is rejected with "assigns no field" — the
+        # generator meanwhile emits it happily. `interface` shipped missing, and three directives made
+        # the repo's own reconcile.json unloadable.
+        for fld in ("subsystem", "subdomain", "capability", "bucket", "block", "interface"):
             if fld in d:
                 if not isinstance(d[fld], str):
                     raise ReconcileError(f"{label}: set[{i}].{fld}: expected a string")

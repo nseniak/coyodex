@@ -7092,7 +7092,7 @@ function featChipGroupsHtml(ids) {
 // "How you reach it", by the KIND of way in — the same canonical kind the System tab groups by, so
 // `http` and `http-route` land in one group on both screens. A map that records no ways in on its use
 // cases (measured: one live map names 0 of 664) must SAY it is not recorded, never show a blank.
-function featEntryPointsHtml(ids, throughIds) {
+function featEntryPointsHtml(ids) {
   // Grouped by SURFACE when the map records one for each way in — a product word ("Customer
   // dashboard") beats a code word ("http-route"), and it is the same cut the Interfaces tab makes.
   // Falls back to the canonical kind on every map that records no interfaces.
@@ -7225,7 +7225,7 @@ function featureSectionsHtml(capId) {
   if (!f) return { secs: [], html: '' };
   const secs = [];
   let html = featSection(secs, 'eps', 'How you reach it', f.entryPoints.length,
-    featEntryPointsHtml(f.entryPoints, f.reachedThrough));
+    featEntryPointsHtml(f.entryPoints));
   // WHAT IT REACHES OUT TO — the other half of a feature's outside edge, and the half no screen
   // carried before. It is EMPTY on most features until the walks step at the services themselves
   // (measured on one live map: 8 of 344 steps do), so the section states that rather than vanishing.
@@ -9794,6 +9794,9 @@ function ifaceCardHtml(i) {
   });
 }
 function renderInterfaces(s) {
+  // A typed or shared `#v=interfaces` on a map that records none used to render an empty page under a
+  // HIDDEN tab, so nothing on screen said where you were. Send it to the landing view instead.
+  if (!HAS_INTERFACES) { go({ kind: LANDING }, true); return; }
   if (s && s.iface) { renderInterface(s); return; }
   const all = ifaceList();
   const ours = all.filter((i) => i.side === 'ours');

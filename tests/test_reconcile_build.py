@@ -18,6 +18,7 @@ from pathlib import Path
 
 from coyodex.model import (BusinessRule, Component, Dep, DeploymentRow, Entity, Group,
                            EntryPoint, Interface, ProjectModel, RuleSite, UseCase)
+from coyodex.reconcile import SetDirective
 from coyodex.reconcile_build import RuleError, coverage_report, expand, load_rules
 
 
@@ -788,3 +789,56 @@ def test_a_temp_out_path_warns_that_the_live_directives_are_stranded(tmp_path, m
     err = capsys.readouterr().err
     assert "WARNING" in err and "keep_edges" in err and "set_anchors" in err, err
     assert ".coyodex/reconcile.json" in err, err
+
+
+# ── the two interface fields, end to end ─────────────────────────────────────────────────────────
+# The generator, the loader, the validator and the applier are FOUR separate registries of field
+# names, and only the first three were kept in step: `interface` was in the dict, the directive, the
+# validator and the applier, and missing from the LOADER's scalar-parse loop. Every directive that
+# assigned only `interface` then parsed to None, `assigned_fields()` returned [], and the whole file
+# was rejected with "assigns no field" — while `coyodex reconcile` went on emitting exactly that
+# shape. These two tests walk the whole path, which is the only shape of test that could have caught it.
+
+def make_interface_map_doc() -> ProjectModel:
+    m = make_map()
+    m.interfaces = [Interface(id="I1", name="Command line", side="ours", facing="user",
+                              source="app/plugins/a.py:1")]
+    m.entry_points = [EntryPoint(id="EP1", kind="cli", trigger="run it", activation="external",
+                                 source="app/plugins/a.py:3", component="C1")]
+    return m
+
+
+def test_a_dep_interface_assignment_survives_generate_load_validate_apply():
+    from coyodex.reconcile import apply_reconcile, load_reconcile, validate_reconcile
+    m = make_interface_map_doc()
+    doc, _ = expand(m, [{"ids": ["D1"], "interface": "I1"}])
+    rec = load_reconcile(json.dumps(doc), "reconcile.json")   # the step that used to raise
+    assert not validate_reconcile(m, rec)
+    stats: dict = {}
+    apply_reconcile(m, rec, stats)
+    assert m.deps[0].interface == "I1"
+    assert stats["reconcile_set"]["interface"] == 1
+
+
+def test_a_surface_ways_in_assignment_survives_generate_load_validate_apply():
+    from coyodex.reconcile import apply_reconcile, load_reconcile, validate_reconcile
+    m = make_interface_map_doc()
+    doc, _ = expand(m, [{"ids": ["I1"], "ways_in": ["EP1"]}])
+    rec = load_reconcile(json.dumps(doc), "reconcile.json")
+    assert not validate_reconcile(m, rec)
+    stats: dict = {}
+    apply_reconcile(m, rec, stats)
+    assert m.interfaces[0].ways_in == ["EP1"]
+    assert stats["reconcile_set"]["ways_in"] == 1
+
+
+def test_every_scalar_set_field_is_parsed_by_the_loader():
+    """The registry guard for the bug above: any scalar `_SET_FIELD_OWNER` field the loader's parse
+    loop does not read is unreachable, and the failure is a rejected FILE, not a rejected field."""
+    from coyodex.reconcile import _SET_FIELD_OWNER, load_reconcile
+    scalars = [f for f, (owner, _l) in _SET_FIELD_OWNER.items()
+               if not isinstance(getattr(SetDirective(ids=["X"]), f, None), list)
+               and f not in ("entry_points", "ways_in", "runs_in", "owners")]
+    for fld in scalars:
+        rec = load_reconcile(json.dumps({"set": [{"ids": ["X1"], fld: "Y1"}]}), "t")
+        assert rec.sets[0].assigned_fields() == [fld], fld

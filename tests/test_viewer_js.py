@@ -2796,8 +2796,8 @@ def test_a_feature_page_never_claims_more_certainty_than_the_join_has() -> None:
              js.index("\nfunction ", js.index("function unreachedHtml() {") + 10)]
     assert "featRuleNotes()" in cov and "coverageLineHtml()" in cov
     # A map whose use cases name no way in (measured: 0 of 664 on one live map) must SAY so.
-    eps = js[js.index("function featEntryPointsHtml(ids, throughIds) {"):
-             js.index("\nfunction ", js.index("function featEntryPointsHtml(ids, throughIds) {") + 10)]
+    eps = js[js.index("function featEntryPointsHtml(ids) {"):
+             js.index("\nfunction ", js.index("function featEntryPointsHtml(ids) {") + 10)]
     assert "Not recorded:" in eps, "an empty ways-in section must name the silence, not go blank"
 
 
