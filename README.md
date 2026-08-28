@@ -31,8 +31,9 @@ coyodex helps you recover from this situation and oversee your agent's work movi
 
 The viewer presents its views in five groups, and each view answers one question:
 
-- **Product** — what it does for the people who use it: the **Happy Path** end to end, its
-  **Features** and the use cases inside each one, and the **Rules** it enforces.
+- **Product** — what it does for the people who use it: its **Features** and the use cases inside
+  each one, the **Happy Path** end to end, the **Interfaces** where it meets the outside world, and
+  the **Rules** it enforces.
 - **Data** — what it knows about: the **Entities** and how they relate, and the **Storage** they
   live in.
 - **Code** — what it is made of: its **Subsystems**, the **Dependencies** it pulls in from outside,
