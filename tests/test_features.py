@@ -587,5 +587,19 @@ def test_a_door_step_says_which_features_come_through_a_surface():
     by_id = {i.id: i for i in ix.interfaces}
     assert by_id["I1"].use_cases == ["UC1"] and by_id["I1"].features == ["CAP1"]
     assert by_id["I3"].use_cases == ["UC1"], "a step at a `theirs` surface reaches it too"
-    assert ix.features[0].reached_through == ["I1"]      # ours → how the story is entered
-    assert ix.features[0].reaches_out == ["I3"]          # theirs → what it reaches out to
+    assert ix.features[0].reached_through == ["I1"]      # a role and a code step INTO it
+    assert ix.features[0].reaches_out == ["I3"]          # a code step OUT to it
+
+
+def test_the_direction_comes_from_the_STEP_not_from_whose_surface_it_is():
+    """The two cases that killed the `side`-based rule. coyodex's map files are OUR surface and the
+    story goes OUT through them; Slack is SOMEONE ELSE'S and the story comes IN through it."""
+    doc = make_interface_map()
+    doc["interfaces"][0]["name"] = "Files we write"          # I1, ours — but written OUT to
+    doc["interfaces"][1]["name"] = "Slack"                   # I2, theirs — but stories arrive FROM it
+    doc["use_cases"][0]["entry_points"] = []      # only the STEPS may decide, here
+    doc["flows"][0]["steps"] = [{"n": 1, "src": "I2", "dst": "C1", "phrase": "a message arrives"},
+                                {"n": 2, "src": "C1", "dst": "I1", "phrase": "writes the file"}]
+    ix = build_index(load_model(json.dumps(doc)))
+    assert ix.features[0].reached_through == ["I2"], "their surface, entered through"
+    assert ix.features[0].reaches_out == ["I1"], "our surface, written out through"

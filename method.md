@@ -435,7 +435,12 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   actor comes in by (`R1 → I3`, then `I3 → C12`), and a step that reaches an outside service names
   that surface rather than the dep it stands on (`C12 → I7`). Without it a reader sees the PIPE and
   not the door: a flow that draws `web browser` as its only outside box is naming the thing this
-  method tells you never to name. Interface steps do NOT count toward the 3-15 step band — they are
+  method tells you never to name. **A door is not only a way IN**: the direction is read off the
+  step, never off whose surface it is — `Cn → In` is the product reaching OUT, anything else touching
+  a surface is the story coming in through it. The two together are common on one surface (a request
+  and its answer), and neither maps to `side`: the files a product writes are OUR surface written
+  OUT through, and a chat platform is SOMEONE ELSE'S surface stories arrive IN from.
+  Interface steps do NOT count toward the 3-15 step band — they are
   structure, not detail, like a sub-flow reference counting as 1. An existing `Cn → Dn` step on a
   dep that stands on a `theirs` surface MIGRATES to that surface; the dep is then derived.
   **What crosses**: one row per thing, in ONE direction, each with a plain sentence and the SINGLE
