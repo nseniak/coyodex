@@ -4170,15 +4170,30 @@ def test_an_external_system_dep_must_be_decided_one_way_or_the_other():
 
 def test_a_dep_cannot_both_name_an_interface_and_say_it_is_none():
     m = make_interface_model()
-    m.deps[0].interface = "I1"
+    m.deps[0].interfaces = ["I1"]
     assert any("AND says why it is none" in p for p in problems_of(m))
 
 
 def test_a_dep_naming_an_undefined_interface_blocks():
     m = make_interface_model()
     m.deps[0].not_an_interface = ""
-    m.deps[0].interface = "I9"
-    assert any("'I9' is not a defined interface" in p for p in problems_of(m))
+    m.deps[0].interfaces = ["I9"]
+    assert any("'I9', which is not a defined interface" in p for p in problems_of(m))
+
+
+def test_one_dep_may_sit_on_SEVERAL_surfaces():
+    # The case that forced the list: one outside system hosts our skill AND writes the transcript we
+    # read back. Both surfaces must be able to show the code behind them.
+    m = make_interface_model()
+    m.interfaces.append(Interface(id="I2", name="Its transcript", side="theirs", facing="operator",
+                                  source="", party="the same agent",
+                                  carries=[InterfaceCrossing(direction="in", what="its records")],
+                                  evidence=[EvidenceItem(file="src/v.py:2", why="reads them")]))
+    m.deps[0].not_an_interface = ""
+    m.deps[0].interfaces = ["I1", "I2"]
+    assert not [p for p in problems_of(m) if "D1" in p]
+    m.deps[0].interfaces = ["I1", "I1"]
+    assert any("same interface twice" in p for p in problems_of(m))
 
 
 def test_a_library_dep_never_has_to_be_decided():

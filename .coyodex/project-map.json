@@ -2411,8 +2411,8 @@
     }
    ],
    "extra": {},
-   "interface": "",
-   "not_an_interface": "the pipe that reads the project's source files; the surface is the code itself"
+   "not_an_interface": "the pipe that reads the project's source files; the surface is the code itself",
+   "interfaces": []
   },
   {
    "id": "D2",
@@ -2437,8 +2437,8 @@
     }
    ],
    "extra": {},
-   "interface": "",
-   "not_an_interface": "runs the product"
+   "not_an_interface": "runs the product",
+   "interfaces": []
   },
   {
    "id": "D3",
@@ -2462,7 +2462,8 @@
      "why": "the survey builds one parser per language from tree-sitter"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D4",
@@ -2486,7 +2487,8 @@
      "why": "the survey records whether the grammars were available for this run"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D5",
@@ -2510,7 +2512,8 @@
      "why": "the two test folders the runner reads by default"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D6",
@@ -2534,7 +2537,8 @@
      "why": "the two source roots the type checker is pointed at"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D7",
@@ -2558,7 +2562,8 @@
      "why": "setup installs the package editable into the private environment"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D8",
@@ -2578,7 +2583,8 @@
      "why": "the exact version and the integrity hash the browser checks"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D9",
@@ -2598,7 +2604,8 @@
      "why": "the exact version and the integrity hash the browser checks"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D10",
@@ -2622,7 +2629,8 @@
      "why": "a failed fetch degrades to uncoloured text instead of breaking the page"
     }
    ],
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D11",
@@ -2647,8 +2655,8 @@
     }
    ],
    "extra": {},
-   "interface": "",
-   "not_an_interface": "the pipe that displays the map viewer"
+   "not_an_interface": "the pipe that displays the map viewer",
+   "interfaces": []
   },
   {
    "id": "D12",
@@ -2673,8 +2681,11 @@
     }
    ],
    "extra": {},
-   "interface": "I4",
-   "not_an_interface": ""
+   "not_an_interface": "",
+   "interfaces": [
+    "I4",
+    "I9"
+   ]
   },
   {
    "id": "D13",
@@ -2699,8 +2710,10 @@
     }
    ],
    "extra": {},
-   "interface": "I4",
-   "not_an_interface": ""
+   "not_an_interface": "",
+   "interfaces": [
+    "I4"
+   ]
   },
   {
    "id": "D14",
@@ -2725,8 +2738,10 @@
     }
    ],
    "extra": {},
-   "interface": "I4",
-   "not_an_interface": ""
+   "not_an_interface": "",
+   "interfaces": [
+    "I4"
+   ]
   },
   {
    "id": "D15",
@@ -2751,8 +2766,10 @@
     }
    ],
    "extra": {},
-   "interface": "I10",
-   "not_an_interface": ""
+   "not_an_interface": "",
+   "interfaces": [
+    "I10"
+   ]
   },
   {
    "id": "D16",
@@ -2777,8 +2794,10 @@
     }
    ],
    "extra": {},
-   "interface": "I11",
-   "not_an_interface": ""
+   "not_an_interface": "",
+   "interfaces": [
+    "I11"
+   ]
   }
  ],
  "run_commands": [

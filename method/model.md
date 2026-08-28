@@ -433,8 +433,10 @@ Semantics, stated on the fields:
   and a tool call are real crossings no stored record holds), the sentence never is. The overall flow
   is DERIVED as the set of directions the crossings carry, so a surface cannot claim to send while
   listing nothing that goes out.
-  **`deps[].interface`** points a dep at the surface it belongs to, on EITHER side of it: a dep can
-  BE the surface, or sit on the FAR SIDE of one of ours. **`deps[].not_an_interface`** carries the
+  **`deps[].interfaces`** lists the surfaces a dep belongs to, on EITHER side of each: a dep can BE
+  the surface, or sit on the FAR SIDE of one of ours. A LIST, because one outside system really does
+  sit on several surfaces — a coding agent hosts our skill AND writes the transcript we read back,
+  and a single slot forced one of those two surfaces to show no code behind it. **`deps[].not_an_interface`** carries the
   reason a dep is none, and is REQUIRED on every dep in the external group (`datastore` / `messaging`
   / `service` / `platform`) that names no surface — without it there is no way to tell a deliberate
   exclusion from nobody having looked, which is exactly the trap a search service sets (over the

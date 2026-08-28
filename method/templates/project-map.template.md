@@ -190,7 +190,7 @@ why: needs the result of HP1
      writer) — optional; a settings surface is declared in no single place.
 
      Every T2 dep in the external group (datastore / messaging / service / platform) must either
-     name a surface or say why it is none. Without the reason there is no way to tell a deliberate
+     name one or more surfaces or say why it is none. Without the reason there is no way to tell a deliberate
      exclusion from nobody having looked. -->
 
 | ID | Name | Side | Facing | What it is | Far side | Source | Conf. |

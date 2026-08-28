@@ -300,10 +300,13 @@ class Dep:
     package: str = ""                # "<name> <version> (<where declared>)"
     alternative: str = ""            # the fallback used instead, and when
     evidence: list[EvidenceItem] = field(default_factory=list)
-    #: The `I<n>` this dep belongs to, on EITHER side of it. A dep can BE the interface (Sentry) or
-    #: sit on the FAR SIDE of one of ours (the coding agents that call coyodex's skill), so `side`
+    #: The `I<n>`s this dep belongs to, on EITHER side of each. A dep can BE the interface (Sentry)
+    #: or sit on the FAR SIDE of one of ours (the coding agents that call coyodex's skill), so `side`
     #: is authored on the interface and never inferred from whether deps point at it.
-    interface: str = ""
+    #: A LIST, because one outside system really does sit on several surfaces: coyodex's own map has
+    #: Claude Code hosting the agent skill AND writing the build transcript coyodex reads back. A
+    #: single slot forced one of those two surfaces to show no code behind it.
+    interfaces: list[str] = field(default_factory=list)
     #: Why this dep is no interface at all. REQUIRED when the dep is in `DEP_KINDS_SYSTEM` and
     #: `interface` is empty — without it there is no way to tell "deliberately not one" from "the
     #: agent never looked", which is exactly the trap a search service sets (a search over the
@@ -1008,8 +1011,7 @@ def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
         for cr in iface.carries:
             cr.elements = [r(e) for e in cr.elements]
     for d in m.deps:
-        if d.interface:
-            d.interface = r(d.interface)
+        d.interfaces = [r(i) for i in d.interfaces]
     for en in m.entities:
         if en.subdomain:
             en.subdomain = r(en.subdomain)

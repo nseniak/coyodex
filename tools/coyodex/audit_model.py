@@ -1129,7 +1129,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     for iface in m.interfaces:
         if iface.side != "theirs":
             continue
-        owning = [d for d in m.deps if d.interface == iface.id]
+        owning = [d for d in m.deps if iface.id in d.interfaces]
         anchor_raw = (owning[0].where_configured if owning else "") or iface.source
         crossings = "; ".join(f"{c.direction}: {c.what}" for c in iface.carries if c.what)
         far = iface.party or (dep_by_id[iface.party_ref].name

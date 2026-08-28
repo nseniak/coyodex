@@ -808,16 +808,16 @@ def make_interface_map_doc() -> ProjectModel:
     return m
 
 
-def test_a_dep_interface_assignment_survives_generate_load_validate_apply():
+def test_a_dep_interfaces_assignment_survives_generate_load_validate_apply():
     from coyodex.reconcile import apply_reconcile, load_reconcile, validate_reconcile
     m = make_interface_map_doc()
-    doc, _ = expand(m, [{"ids": ["D1"], "interface": "I1"}])
+    doc, _ = expand(m, [{"ids": ["D1"], "interfaces": ["I1"]}])
     rec = load_reconcile(json.dumps(doc), "reconcile.json")   # the step that used to raise
     assert not validate_reconcile(m, rec)
     stats: dict = {}
     apply_reconcile(m, rec, stats)
-    assert m.deps[0].interface == "I1"
-    assert stats["reconcile_set"]["interface"] == 1
+    assert m.deps[0].interfaces == ["I1"]
+    assert stats["reconcile_set"]["interfaces"] == 1
 
 
 def test_a_surface_ways_in_assignment_survives_generate_load_validate_apply():
@@ -838,7 +838,7 @@ def test_every_scalar_set_field_is_parsed_by_the_loader():
     from coyodex.reconcile import _SET_FIELD_OWNER, load_reconcile
     scalars = [f for f, (owner, _l) in _SET_FIELD_OWNER.items()
                if not isinstance(getattr(SetDirective(ids=["X"]), f, None), list)
-               and f not in ("entry_points", "ways_in", "runs_in", "owners")]
+               and f not in ("entry_points", "ways_in", "runs_in", "owners", "interfaces")]
     for fld in scalars:
         rec = load_reconcile(json.dumps({"set": [{"ids": ["X1"], fld: "Y1"}]}), "t")
         assert rec.sets[0].assigned_fields() == [fld], fld

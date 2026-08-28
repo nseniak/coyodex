@@ -212,10 +212,12 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Dep", "alternative"): {"description": "the fallback used instead of this dep, and under "
                               "what circumstance."},
     ("Dep", "extra"): {"description": _EXTRA_DESC},
-    ("Dep", "interface"): {"pattern": r"^I\d+$", "description": "the interface this dep belongs "
-                            "to, on EITHER side of it: the dep may BE the surface (an error "
-                            "tracker) or sit on its FAR SIDE (a coding agent that calls our skill). "
-                            "`side` is authored on the interface, never inferred from this."},
+    ("Dep", "interfaces"): {"items": {"type": "string", "pattern": r"^I\d+$"},
+                            "description": "the interfaces this dep belongs to, on EITHER side of "
+                            "each: the dep may BE the surface (an error tracker) or sit on its FAR "
+                            "SIDE (a coding agent that calls our skill). A list, because one outside "
+                            "system really does sit on several surfaces. `side` is authored on the "
+                            "interface, never inferred from this."},
     ("Dep", "not_an_interface"): {"description": "why this dep is no interface at all — REQUIRED on "
                             "a datastore/messaging/service/platform dep that names no interface. "
                             "Without it there is no way to tell 'deliberately not one' from 'nobody "

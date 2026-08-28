@@ -437,9 +437,13 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     iface_deps: dict[str, list[str]] = {}
     dep_iface: dict[str, str] = {}
     for d in m.deps:
-        if d.interface:
-            iface_deps.setdefault(d.interface, []).append(d.id)
-            dep_iface[d.id] = d.interface
+        for iid in d.interfaces:
+            iface_deps.setdefault(iid, []).append(d.id)
+        if d.interfaces:
+            # One dep can sit on several surfaces, but a walk STEP drawn at that dep says only "this
+            # feature reaches this outside system" — it cannot say which of its surfaces. Attribute
+            # the step to every surface the dep sits on rather than guessing one.
+            dep_iface[d.id] = list(d.interfaces)
     ep_iface = {ep: i.id for i in m.interfaces for ep in i.ways_in}
     ep_comp = {ep.id: ep.component for ep in m.entry_points if ep.id and ep.component}
     dep_callers: dict[str, set[str]] = {}
@@ -463,12 +467,10 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
         cap = uc_cap.get(f.uc)
         for st in expanded_flow_steps(m, f):
             for side in (st.src, st.dst):
-                iid = dep_iface.get(side)
-                if iid is None:
-                    continue
-                iface_out_ucs[iid].add(f.uc)
-                if cap:
-                    feat_out[cap].add(iid)
+                for iid in dep_iface.get(side, ()):
+                    iface_out_ucs[iid].add(f.uc)
+                    if cap:
+                        feat_out[cap].add(iid)
 
     interfaces = [
         InterfaceFacts(

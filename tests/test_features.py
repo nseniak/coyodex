@@ -500,7 +500,7 @@ def make_interface_map() -> dict:
     names, and a surface reached OUT to by a walk step drawn at the dependency."""
     doc = make_map()
     doc["deps"] = [{"id": "D1", "name": "Stripe", "kind": "service", "type": "payments",
-                    "interface": "I2"},
+                    "interfaces": ["I2"]},
                    {"id": "D2", "name": "Postgres", "kind": "datastore", "type": "SQL",
                     "not_an_interface": "the product writes these rows and reads them back"}]
     doc["edges"].append({"src": "C2", "verb": "calls", "dst": "D1", "why": "charges",

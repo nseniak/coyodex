@@ -76,8 +76,10 @@ _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     # as `capability`: `EPn` ids are minted by `assemble` from content, so a fragment cannot know
     # them, and interfaces are authored at synthesis, after T4 exists.
     "ways_in": (Interface, "interface"),
-    # A dep's `I<n>`, assigned at synthesis for the same reason `bucket` is, one field over.
-    "interface": (Dep, "dependency"),
+    # A dep's `I<n>`s, assigned at synthesis for the same reason `bucket` is, one field over. A LIST:
+    # one outside system can sit on several surfaces (a coding agent hosts our skill AND writes the
+    # transcript we read back).
+    "interfaces": (Dep, "dependency"),
     # `owners` is here for the SAME reason `capability` is, one field over: it names `CAPn` ids that
     # are minted at synthesis, and the entity it sits on was authored in the T5 harvest, before any
     # capability existed. A sub-domain needs no entry here — the areas are authored at synthesis
@@ -102,7 +104,7 @@ class SetDirective:
     bucket: str | None = None
     block: str | None = None
     ways_in: list[str] | None = None
-    interface: str | None = None
+    interfaces: list[str] | None = None
     #: id → the `source` anchor the author SAW on that entry point, for the witnessed form
     #: `{"id": "EP1", "source": "orders.py:9"}`. Empty when every value was written bare.
     #: `EPn` is minted by `assemble` from harvested content and is order-independent but NOT
@@ -301,7 +303,7 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         # `assigned_fields()` returns [] and the whole file is rejected with "assigns no field" — the
         # generator meanwhile emits it happily. `interface` shipped missing, and three directives made
         # the repo's own reconcile.json unloadable.
-        for fld in ("subsystem", "subdomain", "capability", "bucket", "block", "interface"):
+        for fld in ("subsystem", "subdomain", "capability", "bucket", "block"):
             if fld in d:
                 if not isinstance(d[fld], str):
                     raise ReconcileError(f"{label}: set[{i}].{fld}: expected a string")
@@ -310,6 +312,8 @@ def load_reconcile(text: str, label: str) -> Reconcile:
             sd.runs_in = _as_str_list(d["runs_in"], f"{label}: set[{i}].runs_in")
         if "owners" in d:
             sd.owners = _as_str_list(d["owners"], f"{label}: set[{i}].owners")
+        if "interfaces" in d:
+            sd.interfaces = _as_str_list(d["interfaces"], f"{label}: set[{i}].interfaces")
         for ep_field in ("entry_points", "ways_in"):
             if ep_field in d:
                 setattr(sd, ep_field,
@@ -501,11 +505,12 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                             f"authored against an older harvest and would point {eid} at a different "
                             f"front door. Re-author the entry_points assignments against this "
                             f"assemble's ids (`coyodex dump --id {ep_id}` shows what it is now)")
-                elif fld == "interface":
-                    if sd.interface not in iface_ids:
-                        problems.append(f"reconcile set[{si}] {eid}: interface names unknown "
-                                        f"interface '{sd.interface}' — an interface is an `In` in "
-                                        f"`interfaces[]`")
+                elif fld == "interfaces":
+                    bad_if = [i for i in (sd.interfaces or []) if i not in iface_ids]
+                    if bad_if:
+                        problems.append(f"reconcile set[{si}] {eid}: interfaces names unknown "
+                                        f"interface(s): {', '.join(bad_if)} — an interface is an "
+                                        f"`In` in `interfaces[]`")
                 elif fld == "owners":
                     bad_own = [o for o in (sd.owners or []) if o not in cap_ids]
                     if bad_own:
@@ -607,9 +612,9 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             if sd.ways_in is not None and isinstance(el, Interface):
                 el.ways_in = list(sd.ways_in)              # REPLACE the list → idempotent re-run
                 set_counts["ways_in"] += 1
-            if sd.interface is not None and isinstance(el, Dep):
-                el.interface = sd.interface
-                set_counts["interface"] += 1
+            if sd.interfaces is not None and isinstance(el, Dep):
+                el.interfaces = list(sd.interfaces)         # REPLACE the list → idempotent re-run
+                set_counts["interfaces"] += 1
             if sd.runs_in is not None and isinstance(el, Component):
                 el.runs_in = list(sd.runs_in)              # REPLACE the list → idempotent re-run (S9c)
                 set_counts["runs_in"] += 1

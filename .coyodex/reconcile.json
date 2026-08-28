@@ -143,7 +143,6 @@
     },
     {
       "ids": [
-        "D12",
         "D13",
         "D14"
       ],
@@ -1313,23 +1312,37 @@
     },
     {
       "ids": [
-        "D12",
         "D13",
         "D14"
       ],
-      "interface": "I4"
+      "interfaces": [
+        "I4"
+      ]
     },
     {
       "ids": [
         "D15"
       ],
-      "interface": "I10"
+      "interfaces": [
+        "I10"
+      ]
     },
     {
       "ids": [
         "D16"
       ],
-      "interface": "I11"
+      "interfaces": [
+        "I11"
+      ]
+    },
+    {
+      "ids": [
+        "D12"
+      ],
+      "interfaces": [
+        "I4",
+        "I9"
+      ]
     }
   ],
   "keep_edges": [

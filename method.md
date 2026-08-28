@@ -425,7 +425,8 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   (the router, the command table, the file writer) and is optional: a settings surface is declared in
   no single place. Every EXTERNALLY-activated entry point belongs to exactly one surface, except the
   plumbing kinds (`middleware`, the built-asset route, the catch-all); every T2 dep in the external
-  group must either name a surface or say **why it is none** — without the reason there is no way to
+  group must either name one or more surfaces (`deps[].interfaces` is a LIST — one outside
+  system can sit on several) or say **why it is none** — without the reason there is no way to
   tell a deliberate exclusion from nobody having looked, and that is the trap a search service sets
   (over the product's own records it is not an interface, over the open web it is, and the two call
   sites are identical). Record a deliberate exception as `In: <why>` or `EPn: <why>` under an

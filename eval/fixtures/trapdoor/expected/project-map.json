@@ -731,9 +731,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
-   "interface": "",
    "not_an_interface": "",
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D2",
@@ -748,9 +748,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
-   "interface": "",
    "not_an_interface": "",
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D3",
@@ -765,9 +765,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
-   "interface": "",
    "not_an_interface": "",
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D4",
@@ -782,9 +782,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
-   "interface": "",
    "not_an_interface": "",
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   },
   {
    "id": "D5",
@@ -799,9 +799,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
-   "interface": "",
    "not_an_interface": "",
-   "extra": {}
+   "extra": {},
+   "interfaces": []
   }
  ],
  "interfaces": [],

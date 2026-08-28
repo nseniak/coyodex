@@ -249,8 +249,7 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
         for cr in iface.carries:
             refs.update(cr.elements)
     for d in m.deps:
-        if d.interface:
-            refs.add(d.interface)
+        refs.update(d.interfaces)
     for c in m.components:
         if c.subsystem:
             refs.add(c.subsystem)
@@ -1887,10 +1886,13 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     # absent. Only the demand that every external dep be DECIDED waits for the map to record its edge.
     iface_ids_all = {i.id for i in m.interfaces}
     for d in m.deps:
-        if d.interface and d.interface not in iface_ids_all:
-            problems.append(f"{d.id} ({d.name}) interface '{d.interface}' is not a defined "
-                            f"interface")
-        if d.interface and d.not_an_interface:
+        for iid in d.interfaces:
+            if iid not in iface_ids_all:
+                problems.append(f"{d.id} ({d.name}) interfaces names '{iid}', which is not a "
+                                f"defined interface")
+        if len(set(d.interfaces)) != len(d.interfaces):
+            problems.append(f"{d.id} ({d.name}) names the same interface twice")
+        if d.interfaces and d.not_an_interface:
             problems.append(f"{d.id} ({d.name}) names an interface AND says why it is none — "
                             f"exactly one of the two")
     if not m.interfaces:
@@ -1903,8 +1905,8 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     iface_ids = {i.id for i in m.interfaces}
     deps_by_iface: dict[str, list[str]] = {}
     for d in m.deps:
-        if d.interface:
-            deps_by_iface.setdefault(d.interface, []).append(d.id)
+        for iid in d.interfaces:
+            deps_by_iface.setdefault(iid, []).append(d.id)
     claimed_by: dict[str, list[str]] = {}
     for iface in m.interfaces:
         for ep in iface.ways_in:
@@ -1973,7 +1975,7 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
 
     for d in m.deps:
         if (grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM
-                and not d.interface and not d.not_an_interface):
+                and not d.interfaces and not d.not_an_interface):
             problems.append(f"{d.id} ({d.name}) is an external system that neither names an "
                             f"interface nor says why it is none. Write one: without it there is no "
                             f"way to tell a deliberate exclusion from nobody having looked")

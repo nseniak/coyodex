@@ -78,7 +78,7 @@ _FIELD_OWNER: dict[str, type] = {
     "entry_points": UseCase,
     "owners": Entity,
     "ways_in": Interface,
-    "interface": Dep,
+    "interfaces": Dep,
 }
 
 
@@ -188,9 +188,9 @@ def expand(m: ProjectModel, rules: list[dict]) -> tuple[dict, list[str]]:
         "runs_in": {u.unit for u in (m.deployment or [])},
         "entry_points": {ep.id for ep in m.entry_points if ep.id},
         "ways_in": {ep.id for ep in m.entry_points if ep.id},
-        "interface": {i.id for i in m.interfaces},
+        "interfaces": {i.id for i in m.interfaces},
     }
-    label = {"runs_in": "deployment unit", "ways_in": "entry point", "interface": "interface"}
+    label = {"runs_in": "deployment unit", "ways_in": "entry point", "interfaces": "interface"}
     for i, r in enumerate(rules):
         for f, space in declared.items():
             if f not in r:

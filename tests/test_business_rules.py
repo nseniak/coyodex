@@ -1948,7 +1948,7 @@ def test_the_readme_lists_the_business_rules_tab_in_tab_order() -> None:
     assert groups == ["Product", "Data", "Code", "Operations", "Glossary"], groups
     # Each group's bullet names its views, in the order the sub-tab row draws them.
     inside = {g: body.split(f"- **{g}**")[1].split("\n- **")[0] for g in groups}
-    for group, views in (("Product", ["Happy Path", "Features", "Rules"]),
+    for group, views in (("Product", ["Features", "Happy Path", "Interfaces", "Rules"]),
                          ("Data", ["Entities", "Storage"]),
                          ("Code", ["Subsystems", "Dependencies", "Tests"]),
                          ("Operations", ["Deployment", "System"])):

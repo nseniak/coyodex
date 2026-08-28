@@ -751,10 +751,13 @@
             "$ref": "#/$defs/EvidenceItem"
           }
         },
-        "interface": {
-          "type": "string",
-          "pattern": "^I\\d+$",
-          "description": "the interface this dep belongs to, on EITHER side of it: the dep may BE the surface (an error tracker) or sit on its FAR SIDE (a coding agent that calls our skill). `side` is authored on the interface, never inferred from this."
+        "interfaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^I\\d+$"
+          },
+          "description": "the interfaces this dep belongs to, on EITHER side of each: the dep may BE the surface (an error tracker) or sit on its FAR SIDE (a coding agent that calls our skill). A list, because one outside system really does sit on several surfaces. `side` is authored on the interface, never inferred from this."
         },
         "not_an_interface": {
           "type": "string",
