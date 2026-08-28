@@ -212,6 +212,58 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Dep", "alternative"): {"description": "the fallback used instead of this dep, and under "
                               "what circumstance."},
     ("Dep", "extra"): {"description": _EXTRA_DESC},
+    ("Dep", "interface"): {"pattern": r"^I\d+$", "description": "the interface this dep belongs "
+                            "to, on EITHER side of it: the dep may BE the surface (an error "
+                            "tracker) or sit on its FAR SIDE (a coding agent that calls our skill). "
+                            "`side` is authored on the interface, never inferred from this."},
+    ("Dep", "not_an_interface"): {"description": "why this dep is no interface at all — REQUIRED on "
+                            "a datastore/messaging/service/platform dep that names no interface. "
+                            "Without it there is no way to tell 'deliberately not one' from 'nobody "
+                            "looked', which is the trap a search service sets: a search over the "
+                            "product's own records is not an interface, a search over the open web "
+                            "is, and the call site looks identical."},
+    ("Interface", "id"): {"pattern": r"^I\d+$"},
+    ("Interface", "name"): {"description": "the surface in PRODUCT words ('Customer dashboard'), "
+                            "never a code word ('http-route')."},
+    ("Interface", "what"): {"description": "one sentence: what this surface is for."},
+    ("Interface", "side"): {"enum": [*grammar.INTERFACE_SIDES], "description": "whose DESIGN the "
+                            "surface is: if the far side vanished tomorrow, would the shape of this "
+                            "thing change? Our command line keeps its shape; our call to a payment "
+                            "processor does not."},
+    ("Interface", "facing"): {"enum": [*grammar.INTERFACE_FACINGS, ""], "description": "who it "
+                            "serves. AUTHORED — `Role.audience` answers a different question (which "
+                            "side of the COMPANY an actor sits on) and marks a bought payment "
+                            "service 'internal' while its interface is user-facing."},
+    ("Interface", "party"): {"description": "the far side in words, when it has no element of its "
+                            "own ('the open web')."},
+    ("Interface", "party_ref"): {"pattern": r"^[RD]\d+$", "description": "the far side as an id — a "
+                            "role or a dep. Pattern-pinned so a typo cannot silently degrade into "
+                            "prose."},
+    ("Interface", "ways_in"): {"items": {"type": "string", "pattern": r"^EP\d+$"},
+                            "description": "the entry points this surface is made of. Assigned "
+                            "through `reconcile` (`ways_in`), never hand-written into a fragment: "
+                            "`EPn` ids are minted by `assemble` from content. Empty is legitimate — "
+                            "a `theirs` surface has none, and neither do the files a product writes "
+                            "or the settings an operator sets."},
+    ("Interface", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": "the one line that "
+                            "declares the SURFACE — the router, the command table, the file writer. "
+                            "Advisory, never required: a settings surface is declared in no single "
+                            "place."},
+    ("Interface", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""], "description":
+                            "verified = read in the code; inferred = deduced. '' = unstated."},
+    ("InterfaceCrossing", "direction"): {"enum": [*grammar.CROSSING_DIRECTIONS], "description":
+                            "in = the product receives it; out = the product sends it. An "
+                            "interface's overall flow is DERIVED as the set of directions its "
+                            "crossings carry."},
+    ("InterfaceCrossing", "what"): {"description": "one sentence, plain words: what actually "
+                            "crosses here, and why."},
+    ("InterfaceCrossing", "elements"): {"items": {"type": "string", "pattern": r"^E\d+$"},
+                            "description": "the stored records that cross — SINGLE ENTITIES, never "
+                            "a sub-domain: an area name cannot answer 'are the plan limits "
+                            "exposed?'. EMPTY IS LEGITIMATE and common: a log line, a fetched web "
+                            "page, a source file and a gateway tool call are real crossings that no "
+                            "stored record holds."},
+    ("InterfaceCrossing", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EntryPoint", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EntryPoint", "component"): {"pattern": r"^C\d+$", "description": "the owning component's id."},
     ("EntryPoint", "kind"): {"description": "what the entry point IS — a SEEDED-OPEN vocabulary "

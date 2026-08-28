@@ -249,7 +249,7 @@ const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$
 // The lookbehind keeps an id that is PART of a longer token intact: a sweep-debt key is a
 // `path:line` anchor, and `src/C1_handler.py:42` must stay a copyable path, not sprout a link in the
 // middle of it. `\b` alone does not do this — a `-` or `/` before the id IS a word boundary.
-const _MD_REF = /(?<![\w\-/.])(?:CAP|SD|SF|UC|HP|EP|BLK|BR|[CDERS])\d+\b/g;
+const _MD_REF = /(?<![\w\-/.])(?:CAP|SD|SF|UC|HP|EP|BLK|BR|[CDEIRS])\d+\b/g;
 const _MD_CODE = /<code>[\s\S]*?<\/code>/g;   // spans mdInline already produced — left verbatim
 const mdRefs = (s, refs) => {
   const swap = (text) => text.replace(_MD_REF, (id) => {
@@ -12517,7 +12517,7 @@ const IMP_TYPE_LABEL = { subsystems: 'Subsystems', components: 'Components', dep
   edges: 'Call sites (edges)', entry_points: 'Entry points',
   blocks: 'Decision areas', rules: 'Business rules', rule_sites: 'Rule enforcement sites',
   glossary: 'Glossary', security: 'Security surfaces', run_commands: 'Run commands',
-  non_entity_types: 'Other types', other: 'Other' };
+  non_entity_types: 'Other types', interfaces: 'Interfaces', other: 'Other' };
 // A flow-step synthetic id 'step:<uc>:<n>' → its parts, or null. Shared by impName / gotoImpactEid.
 function parseStepEid(id) {
   const m = id.match(/^step:([^:]+):(.+)$/);

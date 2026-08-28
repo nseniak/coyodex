@@ -680,7 +680,7 @@ def _grounding_line(map_path: Path) -> str:
 #: `EP` is included because entry-point ids are in the records vocabulary and were missing, so an
 #: advisory naming only those fell through to the id-less branch.
 _ADVISORY_IDS = re.compile(
-    r"(?<![A-Za-z0-9])((?:UC|CAP|BLK|SD|SF|EP|HP|BR|C|D|E|R|S)\d+)(?![A-Za-z0-9])")
+    r"(?<![A-Za-z0-9])((?:UC|CAP|BLK|SD|SF|EP|HP|BR|C|D|E|I|R|S)\d+)(?![A-Za-z0-9])")
 
 
 #: An advisory that REPORTS suppression rather than asking for it. These name a heading and quote

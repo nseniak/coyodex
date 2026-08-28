@@ -267,6 +267,7 @@ SAME_TYPED_COLLECTION_RETURNS: frozenset[str] = frozenset({
     "tools/coyodex/validate_model.py::check_domain_relations",
     "tools/coyodex/validate_model.py::_check_domain_cards",
     "tools/coyodex/validate_model.py::_check_extra_conventions",
+    "tools/coyodex/validate_model.py::_check_interfaces",
     "tools/coyodex/validate_analysis.py::check_hierarchy",
     # Pure builders with one call site each, consumed immediately at that site.
     "tools/coyodex/audit_model.py::_touch_sets",

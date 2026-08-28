@@ -27,7 +27,7 @@ FORMAT = "coyodex-map"
 # load), while uniqueness/resolution stay semantic (validate_model).
 # ORDER MATTERS: the alternation is first-match, so a multi-letter prefix must precede any prefix it
 # starts with — `CAP` before `C`, `EP` before `E` — else `CAP3` matches `C` and then fails on `AP3`.
-ID_SHAPE = re.compile(r"^(UC|HP|SD|SF|CAP|EP|BLK|BR|C|D|E|S|R)\d+$")
+ID_SHAPE = re.compile(r"^(UC|HP|SD|SF|CAP|EP|BLK|BR|C|D|E|I|S|R)\d+$")
 
 
 class ModelError(ValueError):
@@ -209,6 +209,58 @@ class EvidenceItem:
 
 
 @dataclass
+class InterfaceCrossing:
+    """One thing that crosses an interface, in ONE direction — the map's answer to "what actually
+    goes in and out of here".
+
+    `elements` names SINGLE ENTITIES (`En`), never a sub-domain: an area name ("Snapshots and
+    change") cannot answer "are the plan limits exposed?", and the grounding advisory is per record.
+    EMPTY IS LEGITIMATE and common — a log line, a fetched web page, a source file and a gateway tool
+    call are all real crossings that no stored record holds (2 of the 3 crossings on MCP Hero's
+    gateway carry none). A crossing with no `what` is the defect; a crossing with no records is not."""
+    direction: str                   # in | out (grammar.CROSSING_DIRECTIONS)
+    what: str = ""                   # one sentence, plain words — the crossing's reason to exist
+    elements: list[str] = field(default_factory=list)   # `En` ids; [] = nothing stored crosses
+    where: str = ""                  # optional bare path:line, when the crossing happens somewhere
+                                     # the interface's own `source` does not reach
+
+
+@dataclass
+class Interface:                     # T2b — the product's outside edge
+    """One surface through which the product exchanges data or events with something outside itself.
+
+    Two orthogonal facts, deliberately not squeezed into one word (the words "inbound"/"outbound"
+    were tried and abandoned — they meant three different things at once: who starts the contact,
+    which way data flows, and whose surface it is):
+    `side` is whose DESIGN it is; the overall flow is DERIVED from `carries`. Who STARTS the contact
+    is already recorded on every way in (`EntryPoint.activation`) and gets no field here."""
+    id: str                          # I<n>
+    name: str                        # the surface in PRODUCT words ("Customer dashboard"), never a
+                                     # code word ("http-route")
+    what: str = ""                   # one sentence: what this surface is for
+    side: str = ""                   # ours | theirs (grammar.INTERFACE_SIDES)
+    facing: str = ""                 # user | operator (grammar.INTERFACE_FACINGS) — AUTHORED
+    party: str = ""                  # the far side in words, when it has no element ("the open web")
+    party_ref: str = ""              # optional `R<n>` / `D<n>` — pattern-pinned, so a typo cannot
+                                     # silently degrade into prose the way a free-text id would
+    #: The ways in this interface is made of. Points DOWN, like `UseCase.entry_points`, and for the
+    #: same reason: `EPn` ids are minted by `assemble` from content, so a fragment cannot know them
+    #: and `reconcile` is the only path. NAMED `ways_in`, NOT `entry_points`: `_SET_FIELD_OWNER` is
+    #: keyed by FIELD NAME, so reusing the name REPLACES the use-case entry and breaks every
+    #: existing map (this repo's own reconcile.json carries 34 use-case directives over 65 EP ids).
+    #: Empty is legitimate: a `theirs` interface has none, and neither do the rows with no T4 row at
+    #: all (the files a product writes, the settings an operator sets).
+    ways_in: list[str] = field(default_factory=list)
+    carries: list[InterfaceCrossing] = field(default_factory=list)
+    #: The one line that declares the SURFACE — the router, the command table, the file writer.
+    #: Advisory, never required: `ConfigRow` carries no anchor and a Settings surface is declared in
+    #: no single place (coyodex's 11 keys live in ~9, one of them in no file at all).
+    source: str = ""
+    confidence: str = ""             # verified | inferred | "" (grammar.CONFIDENCE_VALUES)
+    evidence: list[EvidenceItem] = field(default_factory=list)
+
+
+@dataclass
 class Component:
     id: str
     name: str
@@ -248,6 +300,16 @@ class Dep:
     package: str = ""                # "<name> <version> (<where declared>)"
     alternative: str = ""            # the fallback used instead, and when
     evidence: list[EvidenceItem] = field(default_factory=list)
+    #: The `I<n>` this dep belongs to, on EITHER side of it. A dep can BE the interface (Sentry) or
+    #: sit on the FAR SIDE of one of ours (the coding agents that call coyodex's skill), so `side`
+    #: is authored on the interface and never inferred from whether deps point at it.
+    interface: str = ""
+    #: Why this dep is no interface at all. REQUIRED when the dep is in `DEP_KINDS_SYSTEM` and
+    #: `interface` is empty — without it there is no way to tell "deliberately not one" from "the
+    #: agent never looked", which is exactly the trap a search service sets (a search over the
+    #: product's own records is not an interface; a search over the open web is, and the call site
+    #: looks identical). Frameworks and libraries are exempt: they become the product.
+    not_an_interface: str = ""
     extra: dict[str, object] = field(default_factory=dict)  # any JSON values, like Component.extra
 
 
@@ -698,6 +760,7 @@ class ProjectModel:
     subsystems: list[Group] = field(default_factory=list)
     components: list[Component] = field(default_factory=list)
     deps: list[Dep] = field(default_factory=list)
+    interfaces: list[Interface] = field(default_factory=list)   # T2b — the outside edge
     run_commands: list[RunRow] = field(default_factory=list)
     entry_points: list[EntryPoint] = field(default_factory=list)
     subdomains: list[Group] = field(default_factory=list)
@@ -741,7 +804,7 @@ class ProjectModel:
 ID_ARRAYS: dict[str, str] = {
     "use_cases": "UC", "happy_path": "HP", "capabilities": "CAP", "subsystems": "S",
     "components": "C", "deps": "D", "subdomains": "SD", "entities": "E", "roles": "R",
-    "subflows": "SF", "blocks": "BLK", "rules": "BR",
+    "subflows": "SF", "blocks": "BLK", "rules": "BR", "interfaces": "I",
 }
 
 

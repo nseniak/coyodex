@@ -48,7 +48,7 @@ SEP_ID = r"(?:\s*[:(—–-]|\s+-\s)"
 #: reason (`CAP3` also starts with "C", `EP1` with "E") — without that, a recorded `CAP3: <why>` line
 #: matched the `C` branch, failed on "AP3", and silently adjudicated nothing. A token MAY carry a
 #: `/scope` suffix (`CAP4/spine`) when one id is the subject of two different checks.
-ID_KEY = r"(?:CAP|EP|UC|HP|R|C|E)\d+(?:/[a-z-]+)?"
+ID_KEY = r"(?:CAP|EP|UC|HP|R|C|E|I)\d+(?:/[a-z-]+)?"
 
 #: A repo-relative directory key, as the coverage family writes it: `mee6/plugins/: <why>`.
 DIR_KEY = r"[\w./-]+"
@@ -121,6 +121,11 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # two `En`-keyed headings would both have been called ownership and neither would have
     # said which question it answers. This one is about which FEATURE the data exists for.
     HeadingSpec("Data owner exceptions", True, OWNER_KEY),
+    # Keyed by `ID_KEY`, which carries both shapes this family adjudicates: an `In` (this surface's
+    # facing / evidence / reach is deliberately as it stands) and an `EPn` (this way in deliberately
+    # belongs to no surface). One heading, because an operator deciding "that is fine" is making the
+    # same kind of decision in both cases.
+    HeadingSpec("Interface exceptions", True, ID_KEY),
     # Keyed by a repo PATH, not an id — the thing being adjudicated is a file that used to hold an
     # access rule and no longer does. It had been pointed at "Audit exceptions", whose key
     # vocabulary is `[A-Z]+\d+`: a path can never be a key there, so twenty records written on one

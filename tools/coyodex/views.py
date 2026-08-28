@@ -169,7 +169,7 @@ def _resolve_targets(row: TestRow, elems: Mapping[str, object], nodes: Mapping[s
 #: An element id inside authored prose. `grammar.ID_TOKEN` plus `Rn`: a role is a defined element the
 #: records key on ("Rn: a role deliberately without a spine position") even though it is not a drawn
 #: diagram node, and the whole point of resolving here is that the reader sees its NAME.
-_PROSE_ID = re.compile(r"\b(?:CAP\d+|EP\d+|UC\d+|HP\d+|SD\d+|SF\d+|BLK\d+|BR\d+|R\d+|C\d+|D\d+|E\d+|S\d+)\b")
+_PROSE_ID = re.compile(r"\b(?:CAP\d+|EP\d+|UC\d+|HP\d+|SD\d+|SF\d+|BLK\d+|BR\d+|R\d+|C\d+|D\d+|E\d+|I\d+|S\d+)\b")
 
 
 def _extra_refs(body: str, elems: Mapping[str, object],

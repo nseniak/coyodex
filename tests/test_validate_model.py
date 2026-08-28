@@ -19,6 +19,8 @@ from coyodex import grammar, lint_fragment, reporting
 from coyodex import balance_lib as balance_lib_mod
 from coyodex import validate_model as validate_model_mod
 from coyodex.model import (
+    Interface,
+    InterfaceCrossing,
     ModelError,
     load_model,
     FORMAT,
@@ -4077,3 +4079,145 @@ def test_a_map_with_no_harvest_or_no_use_cases_stays_silent() -> None:
     m.happy_path = []
     m.flows = []
     assert not any("No use case names any entry point" in w for w in warnings_of(m))
+
+
+# ── interfaces (T2b) — the product's outside edge ────────────────────────────────────────────────
+
+def make_interface_model() -> ProjectModel:
+    """A map that records its outside edge: one `ours` surface made of one way in, one crossing that
+    names a record, and the one dependency decided as not-an-interface."""
+    m = make_valid_model()
+    m.entry_points = [
+        EntryPoint(id="EP1", kind="cli", trigger="run it", activation="external",
+                   source="src/v.py:1", component="C1"),
+        EntryPoint(id="EP2", kind="poller", trigger="every minute", activation="self",
+                   source="src/v.py:20", component="C1"),
+        EntryPoint(id="EP3", kind="middleware", trigger="every request", activation="external",
+                   source="src/v.py:30", component="C1"),
+    ]
+    m.deps[0].not_an_interface = "the product writes these rows and reads them back itself"
+    m.interfaces = [Interface(
+        id="I1", name="Command line", what="How a person runs the product.", side="ours",
+        facing="user", source="src/v.py:1", ways_in=["EP1"],
+        carries=[InterfaceCrossing(direction="in", what="the command and its arguments",
+                                   elements=["E1"])])]
+    return m
+
+
+def test_a_recorded_outside_edge_is_clean():
+    m = make_interface_model()
+    assert not [p for p in problems_of(m) if "I1" in p or "D1" in p]
+    assert not [w for w in warnings_of(m) if "belong to no interface" in w]
+
+
+def test_an_interface_with_no_side_blocks():
+    # `side` is the one fact nothing else in the map carries: whose DESIGN the surface is.
+    m = make_interface_model()
+    m.interfaces[0].side = ""
+    assert any("side=" in p and "I1" in p for p in problems_of(m))
+
+
+def test_a_self_activated_way_in_cannot_belong_to_an_interface():
+    # A timer is work the product does to itself. 133 of the 1050 entry points across the four live
+    # maps are this, and they are the reason `entry_points` reads as two lists wearing one name.
+    m = make_interface_model()
+    m.interfaces[0].ways_in = ["EP2"]
+    assert any("self-activated" in p for p in problems_of(m))
+
+
+def test_one_way_in_cannot_belong_to_two_interfaces():
+    m = make_interface_model()
+    m.interfaces.append(Interface(id="I2", name="Other", side="ours", facing="user",
+                                  source="src/v.py:9", ways_in=["EP1"]))
+    assert any("claimed by 2 interfaces" in p for p in problems_of(m))
+
+
+def test_a_crossing_needs_a_sentence_but_not_a_record():
+    # An EMPTY record list is the honest answer for a log line, a fetched page or a source file —
+    # real crossings that no stored record holds. An empty sentence is always a defect.
+    m = make_interface_model()
+    m.interfaces[0].carries[0].elements = []
+    assert not [p for p in problems_of(m) if "crossing" in p]
+    m.interfaces[0].carries[0].what = "  "
+    assert any("no `what`" in p for p in problems_of(m))
+
+
+def test_a_crossing_naming_an_unknown_record_blocks():
+    m = make_interface_model()
+    m.interfaces[0].carries[0].elements = ["E99"]
+    assert any("E99" in p and "not a defined entity" in p for p in problems_of(m))
+
+
+def test_an_interface_grounded_by_nothing_blocks_but_a_source_alone_is_enough():
+    # The rows with no T4 row and no dep — the files a product writes, the settings an operator sets
+    # — are grounded by their own declaring line, and that has to be sufficient.
+    m = make_interface_model()
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].carries = []
+    assert not [p for p in problems_of(m) if "grounded by nothing" in p]
+    m.interfaces[0].source = ""
+    assert any("grounded by nothing" in p for p in problems_of(m))
+
+
+def test_an_external_system_dep_must_be_decided_one_way_or_the_other():
+    # Without a written reason there is no way to tell "deliberately not one" from "nobody looked" —
+    # the trap a search service sets: over the product's own records it is not an interface, over
+    # the open web it is, and the call site looks identical.
+    m = make_interface_model()
+    m.deps[0].not_an_interface = ""
+    assert any("neither names an interface nor says why" in p for p in problems_of(m))
+
+
+def test_a_dep_cannot_both_name_an_interface_and_say_it_is_none():
+    m = make_interface_model()
+    m.deps[0].interface = "I1"
+    assert any("AND says why it is none" in p for p in problems_of(m))
+
+
+def test_a_dep_naming_an_undefined_interface_blocks():
+    m = make_interface_model()
+    m.deps[0].not_an_interface = ""
+    m.deps[0].interface = "I9"
+    assert any("'I9' is not a defined interface" in p for p in problems_of(m))
+
+
+def test_a_library_dep_never_has_to_be_decided():
+    # Libraries and frameworks BECOME the product; 27 of Meerbot's 40 deps are exempt this way.
+    m = make_interface_model()
+    m.deps[0].not_an_interface = ""
+    m.deps[0].kind = "library"
+    assert not [p for p in problems_of(m) if "neither names an interface" in p]
+
+
+def test_the_dep_decision_stays_silent_on_a_map_that_records_no_interfaces():
+    # Every existing map is that map. The rule bites only once a map starts recording its edge.
+    m = make_interface_model()
+    m.interfaces = []
+    m.deps[0].not_an_interface = ""
+    assert not [p for p in problems_of(m) if "neither names an interface" in p]
+
+
+def test_unassigned_ways_in_are_ONE_aggregated_line_and_exclude_plumbing():
+    # One line per row would print 88/94/249/486 lines against ~20 existing advisories. And the
+    # plumbing kinds can never belong to a surface, so counting them makes zero unreachable.
+    m = make_interface_model()
+    m.entry_points.append(EntryPoint(id="EP4", kind="http-route", trigger="GET /x",
+                                     activation="external", source="src/v.py:40", component="C1"))
+    hits = [w for w in warnings_of(m) if "belong to no interface" in w]
+    assert len(hits) == 1, hits
+    assert "1 way(s) in" in hits[0] and "http-route" in hits[0]   # EP3 (middleware) is not counted
+
+
+def test_a_theirs_surface_with_no_evidence_warns():
+    m = make_interface_model()
+    m.interfaces[0].side = "theirs"
+    m.interfaces[0].source = ""
+    assert any("no evidence" in w for w in warnings_of(m))
+
+
+def test_a_party_ref_must_resolve():
+    m = make_interface_model()
+    m.interfaces[0].party_ref = "R9"
+    assert any("party_ref" in p for p in problems_of(m))
+    m.interfaces[0].party_ref = "R1"
+    assert not [p for p in problems_of(m) if "party_ref" in p]

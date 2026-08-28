@@ -731,6 +731,8 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interface": "",
+   "not_an_interface": "",
    "extra": {}
   },
   {
@@ -746,6 +748,8 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interface": "",
+   "not_an_interface": "",
    "extra": {}
   },
   {
@@ -761,6 +765,8 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interface": "",
+   "not_an_interface": "",
    "extra": {}
   },
   {
@@ -776,6 +782,8 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interface": "",
+   "not_an_interface": "",
    "extra": {}
   },
   {
@@ -791,9 +799,12 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interface": "",
+   "not_an_interface": "",
    "extra": {}
   }
  ],
+ "interfaces": [],
  "run_commands": [
   {
    "action": "Run the whole stack for local development",

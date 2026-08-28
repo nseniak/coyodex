@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 
 from coyodex.audit_model import apply_anchor_corrections
 from coyodex.model import (
+    Interface,
     BusinessRule,
     Component,
     Dep,
@@ -68,6 +69,15 @@ _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     "runs_in": (Component, "component"),
     "bucket": (Dep, "dependency"),
     "block": (BusinessRule, "business rule"),
+    # `ways_in` is an INTERFACE's list of `EPn`s, and it is deliberately NOT called `entry_points`:
+    # this dict is keyed by FIELD NAME, so a second `entry_points` entry would REPLACE the use-case
+    # one rather than add to it, and every use-case assignment in every existing map would then be
+    # rejected (this repo's own reconcile.json carries 34 of them over 65 ids). Same reason to exist
+    # as `capability`: `EPn` ids are minted by `assemble` from content, so a fragment cannot know
+    # them, and interfaces are authored at synthesis, after T4 exists.
+    "ways_in": (Interface, "interface"),
+    # A dep's `I<n>`, assigned at synthesis for the same reason `bucket` is, one field over.
+    "interface": (Dep, "dependency"),
     # `owners` is here for the SAME reason `capability` is, one field over: it names `CAPn` ids that
     # are minted at synthesis, and the entity it sits on was authored in the T5 harvest, before any
     # capability existed. A sub-domain needs no entry here — the areas are authored at synthesis
@@ -91,6 +101,8 @@ class SetDirective:
     owners: list[str] | None = None
     bucket: str | None = None
     block: str | None = None
+    ways_in: list[str] | None = None
+    interface: str | None = None
     #: id → the `source` anchor the author SAW on that entry point, for the witnessed form
     #: `{"id": "EP1", "source": "orders.py:9"}`. Empty when every value was written bare.
     #: `EPn` is minted by `assemble` from harvested content and is order-independent but NOT
@@ -219,6 +231,41 @@ def _as_str_list(value: object, where: str) -> list[str]:
     return [str(v) for v in value]
 
 
+def _as_witnessed_ep_list(raw: object, label: str, witness: dict[str, str]) -> list[str]:
+    """Parse an entry-point id list in either form: a bare `"EP1"`, or the witnessed
+    `{"id": "EP1", "source": "orders.py:9"}` whose anchor `apply` re-checks against the harvest.
+
+    ONE parser for BOTH fields that carry such a list — a use case's `entry_points` and an
+    interface's `ways_in`. They are the same shape for the same reason (minted ids a fragment cannot
+    know), so they get one implementation: a second copy would be the place the witness quietly
+    stopped being required."""
+    if not isinstance(raw, list):
+        raise ReconcileError(f"{label}: expected a list")
+    out: list[str] = []
+    for j, v in enumerate(raw):
+        where = f"{label}[{j}]"
+        if isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, dict):
+            unk_ep = set(v) - {"id", "source"}
+            if unk_ep:
+                raise ReconcileError(f"{where}: unknown key(s): {', '.join(sorted(unk_ep))} "
+                                     f"(a witnessed entry point is {{\"id\", \"source\"}})")
+            eid_v, src_v = v.get("id"), v.get("source")
+            if not isinstance(eid_v, str) or not eid_v:
+                raise ReconcileError(f"{where}: 'id' is required (a non-empty string)")
+            if not isinstance(src_v, str) or not src_v:
+                raise ReconcileError(f"{where}: 'source' is required (the `path:line` you saw on "
+                                     f"{eid_v}) — omit the object and write the bare id if you "
+                                     f"have no anchor to witness with")
+            out.append(eid_v)
+            witness[eid_v] = src_v
+        else:
+            raise ReconcileError(f"{where}: expected an id string or "
+                                 f"{{\"id\": …, \"source\": …}}")
+    return out
+
+
 def load_reconcile(text: str, label: str) -> Reconcile:
     """Parse + structurally validate a reconcile file. Cross-refs (ids exist, kinds match) are the
     scoped `validate_reconcile` pass's job — this only checks the file is well-formed."""
@@ -258,33 +305,11 @@ def load_reconcile(text: str, label: str) -> Reconcile:
             sd.runs_in = _as_str_list(d["runs_in"], f"{label}: set[{i}].runs_in")
         if "owners" in d:
             sd.owners = _as_str_list(d["owners"], f"{label}: set[{i}].owners")
-        if "entry_points" in d:
-            raw_eps = d["entry_points"]
-            if not isinstance(raw_eps, list):
-                raise ReconcileError(f"{label}: set[{i}].entry_points: expected a list")
-            eps: list[str] = []
-            for j, v in enumerate(raw_eps):
-                where = f"{label}: set[{i}].entry_points[{j}]"
-                if isinstance(v, str):
-                    eps.append(v)
-                elif isinstance(v, dict):
-                    unk_ep = set(v) - {"id", "source"}
-                    if unk_ep:
-                        raise ReconcileError(f"{where}: unknown key(s): {', '.join(sorted(unk_ep))} "
-                                             f"(a witnessed entry point is {{\"id\", \"source\"}})")
-                    eid_v, src_v = v.get("id"), v.get("source")
-                    if not isinstance(eid_v, str) or not eid_v:
-                        raise ReconcileError(f"{where}: 'id' is required (a non-empty string)")
-                    if not isinstance(src_v, str) or not src_v:
-                        raise ReconcileError(f"{where}: 'source' is required (the `path:line` you "
-                                             f"saw on {eid_v}) — omit the object and write the bare "
-                                             f"id if you have no anchor to witness with")
-                    eps.append(eid_v)
-                    sd.entry_point_witness[eid_v] = src_v
-                else:
-                    raise ReconcileError(f"{where}: expected an id string or "
-                                         f"{{\"id\": …, \"source\": …}}")
-            sd.entry_points = eps
+        for ep_field in ("entry_points", "ways_in"):
+            if ep_field in d:
+                setattr(sd, ep_field,
+                        _as_witnessed_ep_list(d[ep_field], f"{label}: set[{i}].{ep_field}",
+                                              sd.entry_point_witness))
         if not sd.assigned_fields():
             raise ReconcileError(f"{label}: set[{i}]: assigns no field — give at least one of "
                                  f"{', '.join(_SET_FIELD_OWNER)}")
@@ -413,6 +438,7 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
     blk_ids = {b.id for b in m.blocks}
     ep_ids = {ep.id for ep in m.entry_points if ep.id}
     ep_sources = {ep.id: (ep.source or "").strip() for ep in m.entry_points if ep.id}
+    iface_ids = {i.id for i in m.interfaces}
     hier_parents: dict[str, str] = {}                # touched child → intended parent, for check_hierarchy
     for si, sd in enumerate(rec.sets):
         for eid in sd.ids:
@@ -446,10 +472,11 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                     if blk not in blk_ids:
                         problems.append(f"reconcile set[{si}] {eid}: block '{blk}' is not a "
                                         f"defined block (a `BLKn` in `blocks[]`)")
-                elif fld == "entry_points":
-                    bad_eps = [e for e in (sd.entry_points or []) if e not in ep_ids]
+                elif fld in ("entry_points", "ways_in"):
+                    assigned = (sd.entry_points if fld == "entry_points" else sd.ways_in) or []
+                    bad_eps = [e for e in assigned if e not in ep_ids]
                     if bad_eps:
-                        problems.append(f"reconcile set[{si}] {eid}: entry_points names unknown entry "
+                        problems.append(f"reconcile set[{si}] {eid}: {fld} names unknown entry "
                                         f"point(s): {', '.join(bad_eps)} — ids are minted by "
                                         f"`assemble` from the harvested T4 rows, so author them "
                                         f"against the ids THIS assemble produces")
@@ -463,12 +490,17 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                         if actual is None or _same_anchor(actual, seen):
                             continue
                         problems.append(
-                            f"reconcile set[{si}] {eid}: entry_points witnesses {ep_id} at "
+                            f"reconcile set[{si}] {eid}: {fld} witnesses {ep_id} at "
                             f"'{seen}', but {ep_id} is now '{actual}' — entry-point ids are minted "
                             f"from content and RENUMBER when a surface is added, so this file was "
                             f"authored against an older harvest and would point {eid} at a different "
                             f"front door. Re-author the entry_points assignments against this "
                             f"assemble's ids (`coyodex dump --id {ep_id}` shows what it is now)")
+                elif fld == "interface":
+                    if sd.interface not in iface_ids:
+                        problems.append(f"reconcile set[{si}] {eid}: interface names unknown "
+                                        f"interface '{sd.interface}' — an interface is an `In` in "
+                                        f"`interfaces[]`")
                 elif fld == "owners":
                     bad_own = [o for o in (sd.owners or []) if o not in cap_ids]
                     if bad_own:
@@ -567,6 +599,12 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             if sd.entry_points is not None and isinstance(el, UseCase):
                 el.entry_points = list(sd.entry_points)    # REPLACE the list → idempotent re-run
                 set_counts["entry_points"] += 1
+            if sd.ways_in is not None and isinstance(el, Interface):
+                el.ways_in = list(sd.ways_in)              # REPLACE the list → idempotent re-run
+                set_counts["ways_in"] += 1
+            if sd.interface is not None and isinstance(el, Dep):
+                el.interface = sd.interface
+                set_counts["interface"] += 1
             if sd.runs_in is not None and isinstance(el, Component):
                 el.runs_in = list(sd.runs_in)              # REPLACE the list → idempotent re-run (S9c)
                 set_counts["runs_in"] += 1

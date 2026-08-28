@@ -41,7 +41,8 @@ _PREFIX = re.compile(r"^[A-Z]+")
 #: defines — the id prefix table and `model.ID_ARRAYS` disagreed, and only this one was consulted.
 _KIND = {"UC": "use_case", "HP": "happy_path_step", "S": "subsystem", "C": "component",
          "D": "dep", "SD": "subdomain", "E": "entity", "R": "role", "CAP": "capability",
-         "EP": "entry_point", "SF": "sub_flow", "BLK": "block", "BR": "business_rule"}
+         "EP": "entry_point", "SF": "sub_flow", "BLK": "block", "BR": "business_rule",
+         "I": "interface"}
 _MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 

@@ -48,6 +48,7 @@ from pathlib import Path
 from coyodex.anchors import strip_anchor
 from coyodex.assemble import expand_directories, load_fragment_paths, merge_fragments
 from coyodex.model import (
+    Interface,
     BusinessRule,
     Component,
     Dep,
@@ -76,6 +77,8 @@ _FIELD_OWNER: dict[str, type] = {
     "capability": UseCase,
     "entry_points": UseCase,
     "owners": Entity,
+    "ways_in": Interface,
+    "interface": Dep,
 }
 
 
@@ -90,7 +93,7 @@ def _elements(m: ProjectModel) -> list[object]:
     NOTE for authors: a `UseCase` has no `source`, so `_source_of` returns "" for one and a
     `source_glob` rule can never match it. `capability` / `entry_points` rules are addressed by
     `ids` in practice."""
-    return [*m.components, *m.entities, *m.deps, *m.rules, *m.use_cases]
+    return [*m.components, *m.entities, *m.deps, *m.rules, *m.use_cases, *m.interfaces]
 
 
 def _source_of(el: object) -> str:
@@ -184,8 +187,10 @@ def expand(m: ProjectModel, rules: list[dict]) -> tuple[dict, list[str]]:
         "capability": {g.id for g in m.capabilities},
         "runs_in": {u.unit for u in (m.deployment or [])},
         "entry_points": {ep.id for ep in m.entry_points if ep.id},
+        "ways_in": {ep.id for ep in m.entry_points if ep.id},
+        "interface": {i.id for i in m.interfaces},
     }
-    label = {"runs_in": "deployment unit"}
+    label = {"runs_in": "deployment unit", "ways_in": "entry point", "interface": "interface"}
     for i, r in enumerate(rules):
         for f, space in declared.items():
             if f not in r:

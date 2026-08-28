@@ -492,6 +492,9 @@ _THEMES: tuple[str, ...] = (
     "ownership",      # C→E: persists/writes/reads — mis-wires the subsystem→subdomain bridge
     "persistence",    # store rows: what is persisted where
     "messaging",      # channel participant lists: the async half of the system
+    "interface",      # a `theirs` surface: whose data crosses cannot be read off the call site, so
+                      # a false row mis-draws the whole outside edge. Beside `messaging` because it
+                      # is the same kind of claim — wiring across a boundary — one altitude up.
     "lifecycle",      # state machines: rot fastest
     "cadence",        # when code runs
     "description",    # a component's own prose, checked against its code. ABOVE backbone, not
@@ -1115,6 +1118,30 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             drift_eligible=False, theme="messaging",
             why_risky=("the async catalog hangs on this row — verify the enqueue/consume call "
                        "sites actually name this channel.")))
+    # INTERFACE claims: "this service is a surface the product exchanges data through, and this is
+    # what crosses it" is exactly the claim a code read cannot settle on its own — a search service
+    # over the product's OWN records is not an interface, the same service over the open web is, and
+    # the two call sites are identical. So every `theirs` surface joins the worklist and a skeptic
+    # is sent to read WHOSE data comes back. Anchor = the dep's configuration line when the surface
+    # names one, else the surface's own `source`. Drift REPORT-ONLY: a refuted row is re-authored,
+    # not nudged.
+    dep_by_id = {d.id: d for d in m.deps}
+    for iface in m.interfaces:
+        if iface.side != "theirs":
+            continue
+        owning = [d for d in m.deps if d.interface == iface.id]
+        anchor_raw = (owning[0].where_configured if owning else "") or iface.source
+        crossings = "; ".join(f"{c.direction}: {c.what}" for c in iface.carries if c.what)
+        far = iface.party or (dep_by_id[iface.party_ref].name
+                              if iface.party_ref in dep_by_id else iface.party_ref)
+        items.append(WorkItem(
+            claim=(f"{iface.id} '{iface.name}' is an interface the product exchanges data through"
+                   + (f" with {far}" if far else "")),
+            anchor=_anchor(anchor_raw), detail=crossings or None,
+            drift_eligible=False, theme="interface",
+            why_risky=("whose data crosses is not visible at the call site — read what this service "
+                       "actually holds or returns, and refute the row if the data is the product's "
+                       "own.")))
     # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
     # a branch, and the map's lifecycle silently lies. Each recorded machine is a prime skeptic
     # target, anchored at its declaring line (else the element's own source).
