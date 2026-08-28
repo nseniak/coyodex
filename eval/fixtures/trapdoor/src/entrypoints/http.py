@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from src.api.admin_controller import AdminController
 from src.api.passthrough_controller import TicketReadController
 from src.api.record_controller import TicketWriteController
 from src.auth.gate import Principal
@@ -31,7 +32,8 @@ class Router:
         return handler(**kwargs)
 
 
-def build_router(read: TicketReadController, write: TicketWriteController) -> Router:
+def build_router(read: TicketReadController, write: TicketWriteController,
+                 admin: AdminController) -> Router:
     """Register every externally-activated route. Grep target for the front-door check."""
     router = Router()
     router.add("GET", "/tickets/{id}", read.get_ticket)
@@ -40,6 +42,9 @@ def build_router(read: TicketReadController, write: TicketWriteController) -> Ro
     router.add("POST", "/tickets/{id}/transition", write.post_transition)
     router.add("POST", "/tickets/{id}/comments", write.post_comment)
     router.add("POST", "/locks/{key}", write.post_lock)
+    # Operator-only doors. Off the happy path: no step of the ticket story passes here.
+    router.add("POST", "/admin/tickets/bulk-close", admin.post_bulk_close)
+    router.add("GET", "/admin/tickets/export", admin.get_export)
     return router
 
 

@@ -12,14 +12,16 @@ from typing import Any
 from src.auth.gate import Principal, require_write
 from src.domain.models import Comment, Ticket
 from src.lifecycle.states import TicketState
+from src.api.webhook_controller import WebhookNotifier
 from src.services.ticket_service import TicketService
 
 
 class TicketWriteController:
     """Mutating HTTP handlers. Holds no collection and issues no store call of its own."""
 
-    def __init__(self, service: TicketService) -> None:
+    def __init__(self, service: TicketService, notifier: WebhookNotifier) -> None:
         self._service = service
+        self._notifier = notifier
 
     def post_transition(self, principal: Principal, tenant: str, ticket_id: str,
                         target: str) -> dict[str, Any]:
@@ -28,6 +30,7 @@ class TicketWriteController:
             return {"status": 404, "body": {"error": "not found"}}
         require_write(principal, tenant, ticket.state)
         moved = self._service.transition(ticket, TicketState(target), principal.subject)
+        self._notifier.announce_transition(moved)   # the outbound leg of this feature
         return {"status": 200, "body": {"id": moved.id, "state": moved.state.value}}
 
     def post_comment(self, principal: Principal, tenant: str, ticket_id: str,

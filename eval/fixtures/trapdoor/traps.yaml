@@ -93,6 +93,7 @@ traps:
     layer: L2
     expect: 'No C->D emit edge originates at the factory; the emit edges originate at the plugin handlers whose code holds the enqueue line.'
     covered: true
+    note: "Still true as written, and weaker than it reads: nothing in the tree constructs or registers the eight handlers, so the component the emit edge belongs to is never called. Verified 2026-08-28. An emit from dead code is a softer test than an emit from a live path; strengthen by wiring one plugin to the consumer if this trap ever stops discriminating."
 
   - id: O4
     group: overclaims
@@ -236,9 +237,9 @@ traps:
     plants: 'AuditEntry — an entity nothing in the fixture persists or writes.'
     where: 'src/domain/models.py'
     layer: L1
-    expect: 'validate emits "Entities with no owning component" and that advisory names NO recordable escape token, so a lead who decides the gap is intentional has nowhere to record it.'
+    expect: "validate emits 'Entities with no owning component' AND names a recordable escape in the same message: record '<En>: <why>' under a 'Persistence exceptions' extras heading. Recording it silences the advisory."
     covered: true
-    note: 'Three separate live leads independently invented a `Persistence exceptions` heading. That heading now EXISTS but is read by a different rule (the persistence-coverage one, which filters Cn ids) and does not silence this advisory. The L1 escape-token audit is what pins the gap.'
+    note: "CORRECTED 2026-08-28: this row claimed the advisory named NO escape, which stopped being true when the escape was wired for En ids. Three live leads had invented the heading while it silenced nothing; validate_model.py now names it in the message itself, and the 2026-08-28 fixture build recorded one and the warning went quiet. The L1 escape-token audit still pins that every advisory names an escape."
 
   - id: P2
     group: domain
