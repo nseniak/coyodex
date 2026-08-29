@@ -648,3 +648,66 @@ def test_the_pin_check_is_silent_without_repo(tmp_path: Path) -> None:
     _repo, header = make_repo_with_header(tmp_path, "abc1234", "src/b.py")
     m = load_fragment(header.read_text(encoding="utf-8"), header.name)
     assert [p for p in lint_fragment.lint_fragment_problems(m, None) if "header pin" in p] == []
+
+
+# --- `--finalize`: the rename the method asks for, done by the check -----------------------------
+#
+# The method has agents write `<id>.draft.json` and rename to `<id>.json` only when complete,
+# because `assemble` skips a `.draft.json`. The rename was a separate hand step, so it could
+# happen after a lint that had failed — nothing connected the two.
+
+def make_clean_draft(tmp: Path, name: str) -> Path:
+    """A draft fragment that passes the lint, so `--finalize` has something to land."""
+    return make_fragment_file(tmp, name, {"title": "T", "goal": "g"})
+
+
+def make_dirty_draft(tmp: Path, name: str) -> Path:
+    """A draft the lint refuses: a component row missing the name every component must carry."""
+    return make_fragment_file(tmp, name, {"components": [{"id": "C1"}]})
+
+
+def test_a_clean_draft_becomes_a_fragment_by_passing(tmp_path: Path) -> None:
+    draft = make_clean_draft(tmp_path, "h1.draft.json")
+    assert lint_fragment.main(["--finalize", str(draft)]) == 0
+    assert not draft.exists()
+    assert (tmp_path / "h1.json").exists()
+
+
+def test_a_failing_lint_renames_nothing(tmp_path: Path) -> None:
+    draft = make_dirty_draft(tmp_path, "h1.draft.json")
+    assert lint_fragment.main(["--finalize", str(draft)]) == 1
+    assert draft.exists()
+    assert not (tmp_path / "h1.json").exists()
+
+
+def test_one_bad_draft_lands_none_of_the_batch(tmp_path: Path) -> None:
+    """A partial rename lands some of a fan-out's slices and leaves the rest as drafts assemble
+    skips — a map missing a slice with every gate still green."""
+    good = make_clean_draft(tmp_path, "h1.draft.json")
+    bad = make_dirty_draft(tmp_path, "h2.draft.json")
+    assert lint_fragment.main(["--finalize", str(good), str(bad)]) == 1
+    assert good.exists() and bad.exists()
+    assert not (tmp_path / "h1.json").exists()
+
+
+def test_a_fragment_that_is_not_a_draft_is_refused(tmp_path: Path) -> None:
+    final = make_clean_draft(tmp_path, "h1.json")
+    assert lint_fragment.main(["--finalize", str(final)]) == 2
+    assert final.exists()
+
+
+def test_finalize_never_renames_over_an_existing_fragment(tmp_path: Path) -> None:
+    """Renaming over it would drop another agent's fragment."""
+    draft = make_clean_draft(tmp_path, "h1.draft.json")
+    existing = make_clean_draft(tmp_path, "h1.json")
+    before = existing.read_text(encoding="utf-8")
+    assert lint_fragment.main(["--finalize", str(draft)]) == 2
+    assert draft.exists()
+    assert existing.read_text(encoding="utf-8") == before
+
+
+def test_without_finalize_the_draft_is_left_alone(tmp_path: Path) -> None:
+    draft = make_clean_draft(tmp_path, "h1.draft.json")
+    assert lint_fragment.main([str(draft)]) == 0
+    assert draft.exists()
+    assert not (tmp_path / "h1.json").exists()

@@ -7,6 +7,7 @@ Run either way (needs an editable install: `make deps`):
 """
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 from pathlib import Path
@@ -1171,7 +1172,10 @@ def test_row_never_invents_a_field_the_row_does_not_carry(capsys):
         d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
         assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-porpoise", "x"]) == 2
         err = capsys.readouterr().err
-        assert "has no field(s) porpoise" in err and "Present:" in err
+        # One check, one message. `row` used to run the same test twice — an early pass printing
+        # "Present:" and a later one printing "Present fields:" — and the batch refactor kept the
+        # second, so the refusal is one line instead of two identical ones.
+        assert "has no field(s) porpoise" in err and "Present fields:" in err
 
 
 def test_row_is_a_no_op_when_the_text_already_says_that(capsys):
@@ -1621,3 +1625,155 @@ def test_neither_id_nor_edge_is_a_usage_error(tmp_path: Path) -> None:
     from coyodex.fix import main
     d = _edge_fragment(tmp_path)
     assert main(["row", "--fragments", str(d), "--set-why", "x"]) == 2
+
+
+# --- `fix rows`: the batch form ------------------------------------------------------------------
+#
+# One build made 37 single `fix row` calls and 8 identical hand edits beside them — twelve
+# consecutive turns rewriting one file, eight of them the same one-word verb change on eight arrows
+# into one box. Each call re-read every fragment and re-ran the assembly check, and each cost a turn.
+
+def make_edge(src: str, verb: str, dst: str, *, why: str = "w", where: str = "a.py:1") -> dict:
+    return {"src": src, "verb": verb, "dst": dst, "why": why, "where": where}
+
+
+def make_component(cid: str, name: str) -> dict:
+    return {"id": cid, "name": name, "purpose": f"{name} does a thing", "source": "a.py:1"}
+
+
+def make_edits_file(td: str, edits: list) -> Path:
+    p = Path(td) / "edits.json"
+    p.write_text(json.dumps(edits), encoding="utf-8")
+    return p
+
+
+def make_edge_dir(td: str) -> Path:
+    return make_frag_dir(td, e1={
+        "components": [make_component("C1", "one"), make_component("C2", "two"),
+                       make_component("C3", "three")],
+        "edges": [make_edge("C1", "emits", "C2"), make_edge("C1", "emits", "C3")]})
+
+
+def read_edges(d: Path) -> list[tuple]:
+    doc = json.loads((d / "e1.json").read_text(encoding="utf-8"))
+    return [(e["src"], e["verb"], e["dst"]) for e in doc["edges"]]
+
+
+def test_one_call_changes_the_verb_on_every_arrow_in_the_batch() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, [{"edge": "C1:emits:C2", "set": {"verb": "queues"}},
+                                     {"edge": "C1:emits:C3", "set": {"verb": "queues"}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 0
+        assert read_edges(d) == [("C1", "queues", "C2"), ("C1", "queues", "C3")]
+
+
+def test_a_batch_reports_every_fault_at_once_and_writes_nothing(capsys) -> None:
+    """A batch of twenty that reports its faults one run at a time is the loop this verb ends."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        before = read_edges(d)
+        edits = make_edits_file(td, [{"id": "NOPE1", "set": {"purpose": "x"}},
+                                     {"edge": "C1:nope:C2", "set": {"why": "y"}},
+                                     {"edge": "C1:emits:C3", "set": {"why": "  "}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        err = capsys.readouterr().err
+        assert "3 problem(s)" in err and "nothing was written" in err
+        assert read_edges(d) == before
+
+
+def test_moving_an_edge_onto_a_triple_that_exists_is_refused(capsys) -> None:
+    """That is a merge, not a rewrite — `assemble` would hold the same relation twice."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, [{"edge": "C1:emits:C3", "set": {"dst": "C2"}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        assert "collides with an edge that already exists" in capsys.readouterr().err
+        assert read_edges(d) == [("C1", "emits", "C2"), ("C1", "emits", "C3")]
+
+
+def test_two_edits_that_would_become_the_same_edge_are_refused(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, [{"edge": "C1:emits:C2", "set": {"verb": "queues"}},
+                                     {"edge": "C1:emits:C3", "set": {"verb": "queues",
+                                                                     "dst": "C2"}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        assert "one batch cannot make two edges the same edge" in capsys.readouterr().err
+
+
+def test_two_edits_addressing_one_row_are_refused(capsys) -> None:
+    """Two edits to one row in one batch is an order that is not written down."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, [{"edge": "C1:emits:C2", "set": {"why": "first"}},
+                                     {"edge": "C1:emits:C2", "set": {"why": "second"}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        assert "same row as" in capsys.readouterr().err
+
+
+def test_the_batch_keeps_every_guard_row_has(capsys) -> None:
+    """`row` grew four guards over four builds. A second batch path starting fresh would have none."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, [{"edge": "C1:emits:C2", "set": {"where": "b.py:9"}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        assert "not writable here" in capsys.readouterr().err
+
+
+def test_a_batch_whose_edits_are_all_no_ops_writes_nothing(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        stamp = (d / "e1.json").stat().st_mtime_ns
+        edits = make_edits_file(td, [{"edge": "C1:emits:C2", "set": {"why": "w"}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 0
+        assert "already says that" in capsys.readouterr().out
+        assert (d / "e1.json").stat().st_mtime_ns == stamp
+
+
+def test_edits_may_come_from_stdin(monkeypatch) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        monkeypatch.setattr(
+            "sys.stdin", io.StringIO(json.dumps([{"edge": "C1:emits:C2",
+                                                  "set": {"verb": "queues"}}])))
+        assert fix.main(["rows", "--fragments", str(d), "--edits", "-"]) == 0
+        assert ("C1", "queues", "C2") in read_edges(d)
+
+
+def test_an_edits_list_that_is_not_a_list_is_refused(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, {"edge": "C1:emits:C2"})       # type: ignore[arg-type]
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        assert "non-empty JSON LIST" in capsys.readouterr().err
+
+
+def test_an_unknown_key_in_an_edit_is_refused_with_the_real_keys(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, [{"edge": "C1:emits:C2", "sets": {"why": "x"}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        assert "unknown key(s) sets" in capsys.readouterr().err
+
+
+def test_a_structured_value_in_set_is_sent_to_set_json(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        d = make_edge_dir(td)
+        edits = make_edits_file(td, [{"id": "C1", "set": {"purpose": ["a", "b"]}}])
+        assert fix.main(["rows", "--fragments", str(d), "--edits", str(edits)]) == 2
+        assert "goes in 'set_json'" in capsys.readouterr().err
+
+
+def test_row_and_rows_reach_the_same_writer() -> None:
+    """`row` is the one-element case, so a guard added for either is a guard for both."""
+    with tempfile.TemporaryDirectory() as td:
+        one = make_edge_dir(td)
+        assert fix.main(["row", "--fragments", str(one), "--edge", "C1:emits:C2",
+                         "--set-verb", "queues"]) == 0
+        assert ("C1", "queues", "C2") in read_edges(one)
+    with tempfile.TemporaryDirectory() as td:
+        many = make_edge_dir(td)
+        edits = make_edits_file(td, [{"edge": "C1:emits:C2", "set": {"verb": "queues"}}])
+        assert fix.main(["rows", "--fragments", str(many), "--edits", str(edits)]) == 0
+        assert ("C1", "queues", "C2") in read_edges(many)

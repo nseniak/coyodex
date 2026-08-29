@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+"""`coyodex timings` — what each fan-out slice ACTUALLY took, so the next build orders from it.
+
+**Why this exists.** The method tells the lead to dispatch the known-longest slice first, because
+launch order is the only lever it has over when a barrier closes. Then it hands the lead folklore to
+decide "longest" with: *T5 and the entry-points slice are the reliably heaviest*. That was true of
+the builds somebody watched. Nothing wrote down the rest, so every build after them guessed again
+from the same sentence.
+
+A measured build got the order wrong three times in six fan-outs, and the straggler it dispatched
+last held its barrier for its whole runtime — up to 7.7 minutes of pure delay, not work.
+
+**What it does.** Two verbs and one file. At each barrier the lead records what the batch took;
+at the next build's dispatch it asks for the order. That is the whole loop:
+
+    coyodex timings record --phase harvest --slice "T5 model"     --minutes 12.4 \\
+                           --slice "entry points" --minutes 9.1 \\
+                           --slice "deps"         --minutes 3.2
+    coyodex timings order  --phase harvest
+
+`--slice` and `--minutes` REPEAT and pair by position — one process, one write, the same shape
+`coyodex record --line` already has. A count mismatch is refused rather than paired off silently.
+
+**It is a SECOND-build lever and says so.** On a project with no record, `order` prints one line
+saying it has none and exits 0. A first build must not stall waiting for a measurement that cannot
+exist yet, and an empty file must never read as "these slices take no time".
+
+**What it deliberately does not do.** It does not time anything itself — the lead reads the elapsed
+minutes off the barrier it just waited at, and no coyodex process is running while the helpers are.
+It does not average across builds: the most RECENT recording for a slice wins, because slices are
+re-cut between builds and an old shape is not evidence about a new one. And it never reorders a
+dispatch on its own; it prints, the lead dispatches.
+
+The file is `<repo>/.coyodex/fanout-timings.json`. It is build telemetry, not map content, so it
+lives beside the map and never inside it — nothing in the map's schema, its views or its gates reads
+it, and a wrong number here can make a build slower but can never make a map wrong.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+#: The fan-out phases a build actually has. A typo'd phase would record fine and then be found by
+#: nothing at `order` time, so an unknown one is refused with the list — the same choice
+#: `coyodex record` makes for extras headings.
+PHASES: tuple[str, ...] = (
+    "harvest",
+    "trace",
+    "rules",
+    "t7",
+    "test-completeness",
+    "skeptic",
+    "gapfill",
+)
+
+#: Where the record lives, relative to the analyzed repo's root.
+RECORD_PATH = ".coyodex/fanout-timings.json"
+
+#: Bumped only if the on-disk shape changes. A file from a newer version is refused, not guessed at.
+VERSION = 1
+
+
+@dataclass(frozen=True)
+class Run:
+    """One slice of one fan-out, and the wall minutes it held the barrier for."""
+    phase: str
+    slice: str
+    minutes: float
+    items: int | None
+    commit: str | None
+
+    def as_json(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"phase": self.phase, "slice": self.slice, "minutes": self.minutes}
+        if self.items is not None:
+            out["items"] = self.items
+        if self.commit is not None:
+            out["commit"] = self.commit
+        return out
+
+
+def record_path(repo: str) -> Path:
+    return Path(repo) / RECORD_PATH
+
+
+def load_runs(path: Path) -> list[Run]:
+    """Read the record. A missing file is an empty record, not an error — the first build has none.
+
+    A malformed or future-version file is an ERROR: silently starting over would throw away the
+    measurements the next dispatch was going to be ordered by, and nothing would say so."""
+    if not path.exists():
+        return []
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{path} is not readable JSON ({exc}). Fix or delete it; "
+                         f"it will not be silently replaced.") from exc
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: expected a JSON object, found {type(raw).__name__}.")
+    version = raw.get("version")
+    if version != VERSION:
+        raise ValueError(f"{path}: version {version!r}, this coyodex writes version {VERSION}.")
+    rows = raw.get("runs")
+    if not isinstance(rows, list):
+        raise ValueError(f"{path}: 'runs' must be a list.")
+    runs: list[Run] = []
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"{path}: runs[{i}] is not an object.")
+        try:
+            phase, name, minutes = row["phase"], row["slice"], row["minutes"]
+        except KeyError as exc:
+            raise ValueError(f"{path}: runs[{i}] is missing {exc}.") from exc
+        if not isinstance(phase, str) or not isinstance(name, str):
+            raise ValueError(f"{path}: runs[{i}] has a non-string 'phase' or 'slice'.")
+        if not isinstance(minutes, (int, float)) or isinstance(minutes, bool):
+            raise ValueError(f"{path}: runs[{i}]['minutes'] is not a number.")
+        items = row.get("items")
+        if items is not None and (not isinstance(items, int) or isinstance(items, bool)):
+            raise ValueError(f"{path}: runs[{i}]['items'] is not an integer.")
+        commit = row.get("commit")
+        if commit is not None and not isinstance(commit, str):
+            raise ValueError(f"{path}: runs[{i}]['commit'] is not a string.")
+        runs.append(Run(phase, name, float(minutes), items, commit))
+    return runs
+
+
+def write_runs(path: Path, runs: list[Run]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = {"version": VERSION, "runs": [r.as_json() for r in runs]}
+    path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+
+
+def latest_by_slice(runs: list[Run], phase: str) -> list[Run]:
+    """The most recent recording per slice name, longest-first.
+
+    Most recent, not averaged: slices are re-cut between builds, so an old shape's minutes are not
+    evidence about a new shape's. Ties keep the order they were recorded in, so the print is stable
+    across two runs of the same command."""
+    latest: dict[str, Run] = {}
+    for run in runs:
+        if run.phase == phase:
+            latest[run.slice] = run
+    return sorted(latest.values(), key=lambda r: -r.minutes)
+
+
+def _pair_slices(slices: list[str], minutes: list[str]) -> list[tuple[str, float]]:
+    """Pair the repeated `--slice`/`--minutes` by position, refusing anything ambiguous."""
+    if len(slices) != len(minutes):
+        raise ValueError(f"--slice was given {len(slices)} time(s) and --minutes {len(minutes)}; "
+                         f"they pair by position, so the counts must match.")
+    pairs: list[tuple[str, float]] = []
+    seen: set[str] = set()
+    for name, raw in zip(slices, minutes):
+        name = name.strip()
+        if not name:
+            raise ValueError("a --slice name is empty.")
+        if name in seen:
+            raise ValueError(f"--slice {name!r} was given twice in one call; "
+                             "record each slice once.")
+        seen.add(name)
+        try:
+            value = float(raw)
+        except ValueError as exc:
+            raise ValueError(f"--minutes {raw!r} for slice {name!r} is not a number.") from exc
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError(f"--minutes {raw!r} for slice {name!r} must be a positive number "
+                             "of wall minutes.")
+        pairs.append((name, value))
+    return pairs
+
+
+def _check_phase(phase: str) -> str:
+    if phase not in PHASES:
+        raise ValueError(f"unknown phase {phase!r}. The fan-out phases are: "
+                         + ", ".join(PHASES) + ".")
+    return phase
+
+
+def cmd_record(args: argparse.Namespace) -> int:
+    phase = _check_phase(args.phase)
+    pairs = _pair_slices(args.slice or [], args.minutes or [])
+    if not pairs:
+        raise ValueError("nothing to record: pass at least one --slice with its --minutes.")
+    items = args.items or []
+    if items and len(items) != len(pairs):
+        raise ValueError(f"--items was given {len(items)} time(s) for {len(pairs)} slice(s); "
+                         "give one per slice or none at all.")
+    path = record_path(args.repo)
+    runs = load_runs(path)
+    for i, (name, value) in enumerate(pairs):
+        runs.append(Run(phase, name, value, items[i] if items else None, args.commit))
+    write_runs(path, runs)
+    print(f"recorded {len(pairs)} slice(s) for phase '{phase}' -> {path}")
+    for name, value in sorted(pairs, key=lambda p: -p[1]):
+        print(f"  {value:6.1f} min  {name}")
+    return 0
+
+
+def cmd_order(args: argparse.Namespace) -> int:
+    phase = _check_phase(args.phase)
+    ranked = latest_by_slice(load_runs(record_path(args.repo)), phase)
+    asked = [s.strip() for s in (args.slice or []) if s.strip()]
+    known = {r.slice for r in ranked}
+    unrecorded = [s for s in asked if s not in known]
+    if args.json:
+        print(json.dumps({"phase": phase,
+                          "order": [r.as_json() for r in ranked
+                                    if not asked or r.slice in asked],
+                          "unrecorded": unrecorded}, indent=2))
+        return 0
+    shown = [r for r in ranked if not asked or r.slice in asked]
+    if not shown:
+        print(f"no timings recorded for phase '{phase}' yet — order by the pre-index this build, "
+              f"and record what the barrier takes so the next one does not have to guess.")
+    else:
+        print(f"phase '{phase}' — longest first, from the last build that recorded each slice:")
+        for r in shown:
+            extra = f"  ({r.items} items)" if r.items is not None else ""
+            print(f"  {r.minutes:6.1f} min  {r.slice}{extra}")
+    if unrecorded:
+        print("\nno record for these — place them by the pre-index, not by this list:")
+        for name in unrecorded:
+            print(f"          ?  {name}")
+    return 0
+
+
+def cmd_show(args: argparse.Namespace) -> int:
+    runs = load_runs(record_path(args.repo))
+    if args.json:
+        print(json.dumps({"version": VERSION, "runs": [r.as_json() for r in runs]}, indent=2))
+        return 0
+    if not runs:
+        print(f"no fan-out timings recorded in {record_path(args.repo)}.")
+        return 0
+    for phase in PHASES:
+        ranked = latest_by_slice(runs, phase)
+        if not ranked:
+            continue
+        print(f"{phase}:")
+        for r in ranked:
+            extra = f"  ({r.items} items)" if r.items is not None else ""
+            print(f"  {r.minutes:6.1f} min  {r.slice}{extra}")
+    return 0
+
+
+USAGE = """\
+usage: coyodex timings <record | order | show> [args...]
+
+What each fan-out slice ACTUALLY took, so the next build's dispatch is ordered by measurement
+rather than by the method's folklore about which slice is heaviest.
+
+  record --phase <phase> --slice "<name>" --minutes <m> [--items <n>] ...
+      Append what one fan-out's slices took. `--slice` and `--minutes` REPEAT and pair by
+      position — one process, one write. A count mismatch is refused, not paired off.
+      Read the minutes off the barrier you just waited at; nothing here times anything.
+
+  order --phase <phase> [--slice "<name>" ...] [--json]
+      Print that phase's slices longest-first, from the last build that recorded each. With
+      --slice names given, the ones with no record are listed separately rather than assumed
+      short. A project with no record prints one line saying so and exits 0.
+
+  show [--json]
+      Every phase that has a record.
+
+  --phases    the phase names this accepts
+  --repo <root>   the analyzed repo (default: .); the file is <root>/.coyodex/fanout-timings.json
+
+This is build telemetry, never map content: nothing in the map, its views or its gates reads it.
+"""
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="coyodex timings", add_help=False)
+    sub = parser.add_subparsers(dest="verb")
+
+    def common(p: argparse.ArgumentParser) -> None:
+        p.add_argument("--repo", default=".")
+
+    rec = sub.add_parser("record", add_help=False)
+    common(rec)
+    rec.add_argument("--phase", required=True)
+    rec.add_argument("--slice", action="append")
+    rec.add_argument("--minutes", action="append")
+    rec.add_argument("--items", action="append", type=int)
+    rec.add_argument("--commit")
+    rec.set_defaults(func=cmd_record)
+
+    order = sub.add_parser("order", add_help=False)
+    common(order)
+    order.add_argument("--phase", required=True)
+    order.add_argument("--slice", action="append")
+    order.add_argument("--json", action="store_true")
+    order.set_defaults(func=cmd_order)
+
+    show = sub.add_parser("show", add_help=False)
+    common(show)
+    show.add_argument("--json", action="store_true")
+    show.set_defaults(func=cmd_show)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args or args[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
+    if args[0] == "--phases":
+        for phase in PHASES:
+            print(phase)
+        return 0
+    if args[0] not in ("record", "order", "show"):
+        print(f"coyodex timings: unknown verb '{args[0]}'\n", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        return 2
+    parsed = build_parser().parse_args(args)
+    try:
+        return int(parsed.func(parsed))
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

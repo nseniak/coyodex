@@ -892,6 +892,28 @@ is wrong rather than absent.
     refuses it. Use a bash array: `VD=(); VD+=(--verdicts "$f")`. This holds for every repeatable
     flag, `--keep` and `--verdicts` included.
 
+**Emit every independent tool call in ONE message.** Two calls are independent when neither one's
+ARGUMENTS come from the other's result: reading three files, running `validate` and `audit`, four
+`fix row` edits to four different ids, a `grep` and a `sed -n` over the same tree. Batch those. Only
+a call whose arguments you cannot write until you have seen the previous result earns a turn of its
+own.
+
+The bill is counted in TURNS, not in calls: every turn re-sends the whole conversation, so two
+independent reads in two messages cost twice the context of the same two reads in one. Measured on a
+small build, **99% of its tool turns carried exactly one call**, across 526 turns. Batching what was
+already independent is worth about **a fifth of the lead's own spend**, on a small map and on a
+large one alike, and it changes nothing about what gets read — the same calls, in fewer envelopes.
+(The fan-out rule below, *"one batch" means one MESSAGE*, is this same rule applied to agent
+dispatch; it is stated there as well because a batch of agents must also be atomic, not merely
+cheap.)
+
+**The two ways a batch goes wrong.** **One: a batch that is not actually independent** — a `fix row`
+whose `--id` you were going to read out of the `audit` output in the same message. That is not a
+batch, it is a guess. **Two: batching a WRITE with a READ of what it writes** — `assemble` beside
+`validate`, `fix row` beside `dump`. The read then races the write and which state it sees is not
+yours to control. Reads batch with reads; writes to DIFFERENT targets batch with each other; a read
+of what a write just changed waits for the next message.
+
 **Reach for the verb before the heredoc.** Every row below replaces a `python3 - <<'PY'` block, and
 each verb exists because a hand script got the same job wrong once. Measured: 12 of one build's 28
 hand-written scripts had a verb already, and the scorecard assertion watching this fell 1.00 → 0.57.
@@ -913,6 +935,8 @@ from memory:
 | **a batch of recorded lines** | `coyodex record --lines-from <file\|->` — one process, one write, every line shape-checked before any of them lands |
 | **which headings may carry a comma list of ids** | `coyodex record --headings` — five of them key on free text and silence NOTHING when merged; the merged form is right only for the other six |
 | a rewrite of a rule's / entity's / **a walk step's** own TEXT | `coyodex fix row --fragments .coyodex/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly. It reaches ANY row with an id, `happy_path` steps included: `--set-why`, `--set-confidence`, `--set-risk` all work |
+| **TWO OR MORE row rewrites** | `coyodex fix rows --fragments .coyodex/build-fragments --edits <file\|->` — a JSON list of `{"id"\|"edge", "set", "set_json"}`. One process, one write, all-or-nothing, every fault reported at once. One build spent twelve consecutive turns on 37 single `fix row` calls plus 8 identical hand edits |
+| **an arrow's VERB** | `coyodex fix rows` with `{"edge": "C12:emits:C30", "set": {"verb": "queues"}}` — writing `verb` MOVES the edge, because an edge's identity is its triple, so a move onto a triple that already exists is refused as the merge it is |
 | a corrected anchor | `coyodex fix apply-drift --to-reconcile` |
 | a duplicate edge or relation resolved | `coyodex fix dedup-edge` / `dedup-relation --to-reconcile` |
 | a before/after comparison of two maps | `coyodex diff <old> <new>` |
@@ -1184,13 +1208,33 @@ synthesis → parallel trace.**
     harvest. **What it does NOT buy is speed.** Dispatch latency is the model EMITTING the prompt
     text, at roughly 230-320 bytes/s, so it scales with prompt BYTES and not with agent count.
     **So dispatch every contract by POINTER, never by paste — in every fan-out below (harvest,
-    trace, rules, skeptics, gap-fill).** Fill each agent's contract into a scratch FILE (the
-    `coyodex contract` verb, then the slot edits in place), and make the agent's prompt three
-    lines: its agent id, the file's absolute path, and "Read it COMPLETELY and follow it — it is
-    your entire brief." A pasted trace contract is ~13 KB times the fan-out, an hour of dispatch
-    typing on a large build, where a pointer is three lines; a pasted copy can also drift mid-batch
-    while the file cannot. A build has already run its whole harvest on pointer briefs, and the L3
-    scorecard reads a pointer brief correctly (assertion 31 scores the FILE it names).
+    trace, rules, skeptics, gap-fill).** A pasted trace contract is ~13 KB times the fan-out, an
+    hour of dispatch typing on a large build, where a pointer is three lines; a pasted copy can also
+    drift mid-batch while the file cannot. A build has already run its whole harvest on pointer
+    briefs, and the L3 scorecard reads a pointer brief correctly (assertion 31 scores the FILE it
+    names).
+
+    **Both halves are a command, so neither is typed.** Do not compose a brief and do not edit slots
+    by hand:
+
+    ```
+    coyodex contract <phase> --slots > <scratch>/slots.json    # every slot, empty; fill the VALUES
+    coyodex contract <phase> --fill <scratch>/slots.json \
+                             --out <ABSOLUTE scratch path>/<agent-id>.md --brief <agent-id>
+    ```
+
+    `--fill` REFUSES a slot with no value, a blank value, a value still carrying «guillemets», and a
+    key that is no slot of that contract — and it reports every fault in ONE run, so learning three
+    missing slots costs one run and not three. It writes nothing when it refuses. An unfilled slot
+    is the failure that made this a verb: `«REPO»` reaches the agent as literal text, no gate can
+    see it, and the fragment that comes back is well-formed and about the wrong thing.
+
+    `--brief` prints the three lines you SEND — the agent id, the absolute path, one fixed
+    sentence. **That printed text is the whole brief.** It is capped at 400 bytes and cannot exceed
+    it by construction; the cap has a number because one build typed **159,993 bytes** of brief
+    across six fan-outs, at roughly 275 bytes a second — 9.7 minutes spent typing. `--brief`
+    refuses a relative `--out` path rather than resolving it: an agent does not share your working
+    directory, and a resolved path is the wrong-directory mistake made silently inside a prompt.
   - **Pre-size the slices from the pre-index so no slice becomes the critical path.** The whole
     phase ends when the SLOWEST agent does, so one oversized slice stalls the barrier for everybody.
     The pre-index already counts files/symbols per area — aim for roughly EQUAL estimated work per
@@ -1204,7 +1248,16 @@ synthesis → parallel trace.**
     assemble). Write it as `<id>.draft.json`, NOT `<your-path>.draft.json` — the fragment path
     already ends in `.json`, and a doubled suffix reads as a draft FOREVER: `assemble` skips any
     path ending `.draft.json`, so a fragment left with that name never assembles at all. The RENAME
-    is what makes the work land. The lead probes stalled agents early (a couple of minutes of no
+    is what makes the work land.
+
+    **The rename is the lint's exit, not a separate step: `coyodex lint-fragment --finalize
+    <id>.draft.json`.** It renames to `<id>.json` only on a CLEAN lint, refuses a target that
+    already exists, and lands all of a batch or none of it. Done by hand the loop was write → lint →
+    fix → lint → rename, with nothing connecting the last two, so a rename could follow a lint that
+    had failed. A half-landed batch is the quiet failure: a map missing one slice, with every gate
+    green.
+
+    The lead probes stalled agents early (a couple of minutes of no
     progress, not a late `ls` sweep) and resumes a dead agent via SendMessage with its draft as the
     continuation point, or relaunches.
   - **Reconcile your slice expectations with E BEFORE launching.** Hand each agent its slice's E
@@ -1270,6 +1323,24 @@ synthesis → parallel trace.**
     Agents over the cap are REJECTED and have to be re-sent, and a bumped slice then closes the
     barrier long after its siblings — a tail that is delay, not work. Merge to fit the cap, or plan
     a deliberate second wave.
+
+    **Order by MEASURED minutes when there are any: `coyodex timings order --phase <phase>`.** The
+    paragraph above asks you to guess which slice is longest, and a guess is what it stays until
+    somebody writes the answer down. At each barrier, record what the batch actually took —
+    `coyodex timings record --phase <phase> --slice "<name>" --minutes <m>` — and the NEXT build
+    orders from that instead of from T5-and-entry-points folklore. `order` prints longest-first and
+    says plainly when it has no record yet, so a first build is not blocked waiting for one. This is
+    worth **up to 7.7 minutes** on a large repo, and it is worth nothing on the first build of a
+    project: it is a second-build lever, which is why the recording half is not optional.
+
+  - **Never fan out to ONE agent.** A fan-out of one has every cost of a helper and none of the
+    parallelism: the lead writes a brief, waits at a barrier, and reads a fragment, to get work it
+    could have finished in the turns it spent waiting. On the large build the test-completeness
+    table went out as a single agent and held the barrier for **7.4 minutes**. When a phase comes
+    down to one slice, the lead does it. When it comes down to two small ones, that is the signal to
+    MERGE them and still do it in the lead — not to send one agent. The rule is about the count at
+    DISPATCH, not about the phase: a phase whose slices merge down to one has stopped being a
+    fan-out, and calling it one does not make it parallel.
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
     whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
     **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). **The owner's brief

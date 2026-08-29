@@ -48,6 +48,10 @@ Commands:
              file `finalize` requires before the map is committed. It used to be produced only by
              a script in the coyodex clone that the shipped CLI does not install, so a build could
              be told to produce an artifact no command could make.
+  timings    What each fan-out slice ACTUALLY took (`record`), and that phase's slices
+             longest-first for the next build's dispatch (`order`). Build telemetry beside
+             the map, never inside it — the method's "dispatch the longest slice first" was
+             folklore until something wrote the minutes down.
   record     Append (or --replace) one `<id>: <why>` line under a recorded-exception extras
              heading — the one writer for an advisory an operator judged acceptable, so a
              record is never a hand-rolled string append into the wrong heading.
@@ -180,6 +184,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "record":
         from coyodex import record  # stdlib-only; the one writer for a recorded exception
         return record.main(rest)
+    if cmd == "timings":
+        from coyodex import timings  # stdlib-only; build telemetry beside the map, never in it
+        return timings.main(rest)
     if cmd == "provenance":
         from coyodex import provenance  # stdlib-only; the file finalize requires before a commit
         return provenance.main(rest)

@@ -85,10 +85,19 @@ Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`, and
 leaf-only map, and it was missing from this list, so a whole build never opened it): agents return
 structured rows and `coyodex assemble` writes the model + views.
 
-**`method.md` is ~2,000 lines and cannot be read in one tool call.** A `cat` and a `sed -n
+**`method.md` is ~2,500 lines and cannot be read in one tool call.** A `cat` and a `sed -n
 '1,400p'` both overflow the tool-result cap and spill into a persisted-output file that nobody then
 opens; one build burned a turn finding that out. Read it in windows — `Read` with `offset`/`limit`,
-about 300 lines at a time, no gaps — and do that FIRST rather than after two failed attempts.
+**650 lines at a time**, no gaps — and do that FIRST rather than after two failed attempts.
+
+**650, and why that number and not 300.** The cap is 25,000 tokens per tool result, and this file
+runs about 2.88 bytes to the token, so the window that matters is BYTES, not lines. Measured on the
+densest 900-line stretch of this file: 27,738 tokens — over. The densest 650-line stretch is 20,583
+tokens, a 21% margin that survives the file growing. 300 lines costs **nine** reads where 650 costs
+**four**, and the five extra turns bought nothing: the earlier number was set after a 400-line `sed`
+failed, and 400 was never the ceiling — it was just the first thing tried. Re-measure the number if
+`method.md` grows past ~2,700 lines; do not raise it on a guess, because the failure mode is a
+silent spill to a file nobody opens.
 
 **When you archive, remember the archived map at the GATE.** `coyodex finalize --access-baseline
 <archived-map.json>` adds one advisory leg: files that held ACCESS enforcement in that map and are

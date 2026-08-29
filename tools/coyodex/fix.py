@@ -1405,6 +1405,245 @@ def _surviving_ids(paths: list[Path]) -> tuple[frozenset[str], str]:
     return frozenset(ids), ""
 
 
+@dataclass(frozen=True)
+class _Edit:
+    """One row rewrite, addressed either by id or by edge triple.
+
+    `row` builds one of these and `rows` builds many; everything after the parse is shared, so a
+    guard added for one is a guard for both. That mattered: `fix row` grew four guards over four
+    builds, and a second hand-rolled batch path would have started again with none of them."""
+    row_id: str | None
+    edge: tuple[str, str, str] | None
+    sets: dict[str, str]
+    json_sets: dict[str, object]
+
+    @property
+    def label(self) -> str:
+        return self.row_id or ":".join(self.edge or ())
+
+    @property
+    def edits(self) -> dict[str, object]:
+        return {**self.sets, **self.json_sets}
+
+
+def _edit_faults(edit: _Edit) -> list[str]:
+    """Everything wrong with one edit that can be seen without opening a fragment."""
+    faults: list[str] = []
+    if bool(edit.row_id) == bool(edit.edge):
+        faults.append(f"{edit.label or '(no address)'}: give exactly one of an id or an edge "
+                      f"triple — they address different things")
+    if not edit.edits:
+        faults.append(f"{edit.label}: no field to write; give at least one set value")
+    blank = sorted(f for f, v in edit.sets.items() if not v.strip())
+    if blank:
+        # Emptying a statement, a risk or a meaning is deletion wearing an edit's clothes, and every
+        # other writer here refuses it (`security-row` refuses an empty surface for the same reason).
+        faults.append(f"{edit.label}: refusing to blank {', '.join(blank)} — an empty value "
+                      f"deletes the text rather than correcting it")
+    for field_name in edit.edits:
+        if field_name in _NEVER_WRITABLE:
+            faults.append(f"{edit.label}: `{field_name}` is not writable here — "
+                          f"{_NEVER_WRITABLE[field_name]}")
+    return faults
+
+
+def _resolve(edit: _Edit, docs: dict[Path, object]) -> tuple[list[tuple[Path, str, int]], list[str]]:
+    """The single fragment row this edit addresses — or a refusal on 0 or >1, never a guess."""
+    owners: list[tuple[Path, str, int]] = []
+    for path, doc in docs.items():
+        owners += [(path, key, idx) for key, idx in (
+            _rows_with_id(doc, edit.row_id) if edit.row_id
+            else _edges_with_triple(doc, *(edit.edge or ("", "", ""))))]
+    if len(owners) == 1:
+        return owners, []
+    if not owners:
+        if edit.edge:
+            return [], [f"{edit.label}: no fragment declares this edge. The triple must match "
+                        f"EXACTLY — `coyodex dump --edges` prints the spelling the fragments use, "
+                        f"and an edge the map shows may have been merged from a triple spelled "
+                        f"differently in its authoring fragment."]
+        return [], [f"{edit.label}: no fragment declares a row with this id. Entry-point ids are "
+                    f"MINTED at assemble and exist in no fragment, so they cannot be addressed "
+                    f"here; correct the entry point by its trigger/source in the harvest fragment "
+                    f"that declares it."]
+    detail = ", ".join(f"{p.name}: {k}[{i}]" for p, k, i in owners)
+    return [], [f"{edit.label}: declared by {len(owners)} fragment rows — refusing rather than "
+                f"guessing which ({detail})"]
+
+
+def _new_triple(edit: _Edit, target: dict) -> tuple[str, str, str] | None:
+    """The triple this edit MOVES an edge to, or None when it is not an edge move.
+
+    An edge's identity is its triple, so writing `verb` (or `src`/`dst`) re-addresses the row. The
+    eight identical `emits` → `queues` edits one build made by hand are exactly this shape, which is
+    why it is worth a guard rather than a note."""
+    if edit.edge is None:
+        return None
+    moved = {f: edit.edits[f] for f in ("src", "verb", "dst") if f in edit.edits}
+    if not moved:
+        return None
+    after = {**{f: target.get(f) for f in ("src", "verb", "dst")}, **moved}
+    return (str(after["src"]), str(after["verb"]), str(after["dst"]))
+
+
+def _apply_edits(where: Path, edits: list[_Edit]) -> int:
+    """Resolve, check and write EVERY edit, or write none of them.
+
+    All-or-nothing and one assembly check for the whole batch, not one per edit. Two reasons, and
+    the second is correctness, not speed: a half-applied batch leaves fragments in a state nobody
+    chose, and two edits can interact — one splitting a merged row the other collapses — so
+    checking them one at a time can pass twice and still be wrong together."""
+    if not where.exists():
+        print(f"ERROR: {where} not found", file=sys.stderr)
+        return 2
+    paths, skipped = _fragment_paths(where)
+    if skipped:
+        print(f"note: not a build fragment, skipped: {', '.join(skipped)}")
+    if not paths:
+        print(f"ERROR: no build fragment .json under {where}"
+              + (f" (skipped {', '.join(skipped)} — did you mean "
+                 f"{where / 'build-fragments'}?)" if skipped else ""), file=sys.stderr)
+        return 2
+
+    docs: dict[Path, object] = {}
+    for path in paths:
+        try:
+            docs[path] = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: cannot read {path}: {exc}", file=sys.stderr)
+            return 2
+
+    # EVERY fault first, then one refusal. A batch of twenty that reports its faults one run at a
+    # time is the loop this verb exists to end.
+    faults: list[str] = []
+    resolved: list[tuple[_Edit, Path, str, int]] = []
+    seen: dict[tuple[Path, str, int], str] = {}
+    for edit in edits:
+        faults += _edit_faults(edit)
+        owners, trouble = _resolve(edit, docs)
+        faults += trouble
+        if not owners:
+            continue
+        path, array_key, index = owners[0]
+        key = (path, array_key, index)
+        if key in seen:
+            faults.append(f"{edit.label}: addresses the same row as {seen[key]} — two edits to one "
+                          f"row in one batch is an order that is not written down; combine them")
+            continue
+        seen[key] = edit.label
+        target = docs[path][array_key][index]           # type: ignore[index]
+        missing = sorted(f for f in edit.edits if f not in target)
+        if missing:
+            faults.append(f"{edit.label}: has no field(s) {', '.join(missing)} — a new key here is "
+                          f"a schema change, not a correction. Present fields: "
+                          f"{', '.join(sorted(target))}")
+            continue
+        resolved.append((edit, path, array_key, index))
+
+    # An edge move must not land on a triple that already exists: `assemble` would then hold the
+    # same relation twice, which `validate` reports as a duplicate-edge conflict a build later.
+    moves: dict[tuple[str, str, str], str] = {}
+    for edit, path, array_key, index in resolved:
+        target = docs[path][array_key][index]           # type: ignore[index]
+        triple = _new_triple(edit, target)
+        if triple is None:
+            continue
+        if any(_edges_with_triple(doc, *triple) for doc in docs.values()):
+            faults.append(f"{edit.label}: moving it to {':'.join(triple)} collides with an edge "
+                          f"that already exists — that is a merge, not a rewrite; drop one of them "
+                          f"with `coyodex fix drop-edge` instead")
+        elif triple in moves:
+            faults.append(f"{edit.label}: moves to {':'.join(triple)}, where {moves[triple]} is "
+                          f"also going — one batch cannot make two edges the same edge")
+        else:
+            moves[triple] = edit.label
+
+    if faults:
+        print(f"ERROR: {len(faults)} problem(s) — nothing was written:", file=sys.stderr)
+        for fault in faults:
+            print(f"       {fault}", file=sys.stderr)
+        return 2
+
+    before_ids, complaint = _surviving_ids(paths)
+    if complaint:
+        print(f"ERROR: the fragments do not assemble as they stand, so the effect of an edit cannot "
+              f"be checked: {complaint}", file=sys.stderr)
+        return 2
+
+    changed: list[tuple[_Edit, Path, str, int, dict[str, object]]] = []
+    for edit, path, array_key, index in resolved:
+        target = docs[path][array_key][index]           # type: ignore[index]
+        if all(target[f] == v for f, v in edit.edits.items()):
+            print(f"row: {edit.label} already says that — nothing to write.")
+            continue
+        before = {f: target[f] for f in edit.edits}
+        for field_name, value in edit.edits.items():
+            target[field_name] = value
+        changed.append((edit, path, array_key, index, before))
+    if not changed:
+        return 0
+
+    # Match each file's OWN escaping. An agent-authored fragment is usually ASCII-escaped, and
+    # dumping it with `ensure_ascii=False` rewrites every `\uXXXX` in the file — so a one-field edit
+    # arrives as eight unrelated changed lines and buries the actual change in review.
+    touched = {path for _, path, _, _, _ in changed}
+    text_of = {path: json.dumps(docs[path], indent=2, ensure_ascii=_file_is_ascii(path)) + "\n"
+               for path in touched}
+
+    # Write to temp siblings, re-assemble from THAT set, and only keep them if no id moved. The
+    # candidates go in a temp DIRECTORY, never beside the fragments: a leftover check file in
+    # `build-fragments/` breaks every later assemble with a duplicate-id conflict, the
+    # `.draft.json` skip does not cover that name, and two concurrent runs would race on one name.
+    with tempfile.TemporaryDirectory() as td:
+        swap: dict[Path, Path] = {}
+        for path in touched:
+            tmp = Path(td) / path.name
+            tmp.write_text(text_of[path], encoding="utf-8")
+            swap[path] = tmp
+        after_ids, complaint = _surviving_ids([swap.get(p, p) for p in paths])
+    if complaint:
+        print(f"ERROR: that edit makes the fragments fail to assemble — nothing was written: "
+              f"{complaint}", file=sys.stderr)
+        return 2
+    if after_ids != before_ids:
+        appeared, vanished = sorted(after_ids - before_ids), sorted(before_ids - after_ids)
+        print("ERROR: that edit changes which rows survive assembly — nothing was written.",
+              file=sys.stderr)
+        if vanished:
+            print(f"       id(s) that would DISAPPEAR: {', '.join(vanished)} — the edited text now "
+                  f"matches another row, so assemble would merge them and every reference to the "
+                  f"retired id would be re-pointed.", file=sys.stderr)
+        if appeared:
+            print(f"       id(s) that would APPEAR: {', '.join(appeared)} — the edited text no "
+                  f"longer matches the row it was merged with, so assemble would split them.",
+                  file=sys.stderr)
+        print("       Rewrite the text so the merge identity is unchanged, or make the split/merge "
+              "deliberate by editing every fragment row involved.", file=sys.stderr)
+        return 2
+
+    for path in touched:
+        path.write_text(text_of[path], encoding="utf-8")
+    fields = 0
+    for edit, path, array_key, index, before in changed:
+        for field_name, value in edit.edits.items():
+            print(f"  {edit.label}.{field_name}: {before[field_name]!r} → {value!r}")
+            fields += 1
+    print(f"row: rewrote {fields} field(s) across {len(changed)} row(s) in "
+          f"{len(touched)} fragment(s): {', '.join(sorted(p.name for p in touched))}.")
+    print(f"     Re-assemble to see it in the map. If a row carries L2 CLAIMS (a rule statement, a "
+          f"site, an entity store, a cadence), its claim TEXT has changed, so the skeptics' "
+          f"verdicts for it no longer match: re-run `coyodex grounding write` AFTER the final "
+          f"assemble, or `finalize` will refuse on a stale `live_claims_digest`.")
+    return 0
+
+
+def _parse_triple(raw: str) -> tuple[str, str, str] | None:
+    parts = raw.split(":")
+    if len(parts) != 3 or not all(p.strip() for p in parts):
+        return None
+    return tuple(p.strip() for p in parts)     # type: ignore[return-value]
+
+
 def row(argv: list[str]) -> int:
     """Rewrite one field of one row, in the fragment that authored it."""
     if subverb_help.wants_help(argv):
@@ -1450,154 +1689,93 @@ def row(argv: list[str]) -> int:
         return usage_error(_USAGE, "row", "--fragments and one of --id / --edge are required")
     if row_id and edge_triple:
         return usage_error(_USAGE, "row", "--id and --edge address different things; give one")
-    edge_src = edge_verb = edge_dst = ""
+    edge: tuple[str, str, str] | None = None
     if edge_triple:
-        parts = edge_triple.split(":")
-        if len(parts) != 3 or not all(p.strip() for p in parts):
+        edge = _parse_triple(edge_triple)
+        if edge is None:
             return usage_error(_USAGE, "row", f"--edge takes SRC:VERB:DST, got '{edge_triple}'")
-        edge_src, edge_verb, edge_dst = (p.strip() for p in parts)
-    label = row_id or str(edge_triple)
     if not sets and not json_sets:
         return usage_error(_USAGE, "row",
                            "give at least one --set-<field> <text> or --set-json-<field> <json>")
-    blank = sorted(f for f, v in sets.items() if not v.strip())
-    if blank:
-        # Emptying a statement, a risk or a meaning is deletion wearing an edit's clothes, and every
-        # other writer here refuses it (`security-row` refuses an empty surface for the same reason).
-        return usage_error(_USAGE, "row", f"refusing to blank {', '.join(blank)} — an empty value "
-                                          f"deletes the text rather than correcting it")
-    for field_name in (*sets, *json_sets):
-        if field_name in _NEVER_WRITABLE:
-            print(f"ERROR: `{field_name}` is not writable here — {_NEVER_WRITABLE[field_name]}.",
-                  file=sys.stderr)
-            return 2
+    return _apply_edits(Path(fragments), [_Edit(row_id, edge, sets, json_sets)])
 
-    where = Path(fragments)
-    if not where.exists():
-        print(f"ERROR: {where} not found", file=sys.stderr)
-        return 2
-    paths, skipped = _fragment_paths(where)
-    if skipped:
-        print(f"note: not a build fragment, skipped: {', '.join(skipped)}")
-    if not paths:
-        print(f"ERROR: no build fragment .json under {where}"
-              + (f" (skipped {', '.join(skipped)} — did you mean "
-                 f"{where / 'build-fragments'}?)" if skipped else ""), file=sys.stderr)
-        return 2
 
-    # Resolve the owner. 0 or >1 is REFUSED with the candidates printed — the same multiplicity rule
-    # every other writer here enforces, and for the same reason.
-    owners: list[tuple[Path, str, int]] = []
-    docs: dict[Path, object] = {}
-    for p in paths:
-        try:
-            docs[p] = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            print(f"ERROR: cannot read {p}: {exc}", file=sys.stderr)
-            return 2
-        owners += [(p, key, idx) for key, idx in (
-            _rows_with_id(docs[p], row_id) if row_id
-            else _edges_with_triple(docs[p], edge_src, edge_verb, edge_dst))]
-    if len(owners) != 1:
-        if not owners:
-            if edge_triple:
-                print(f"ERROR: no fragment under {where} declares an edge {edge_triple}.\n"
-                      f"       The triple must match EXACTLY — `coyodex dump --edges` prints the "
-                      f"spelling the fragments use, and an edge the map shows may have been merged "
-                      f"from a triple spelled differently in its authoring fragment.",
-                      file=sys.stderr)
+def rows(argv: list[str]) -> int:
+    """Apply MANY row rewrites in one process, one write, all-or-nothing.
+
+    One build made 37 single `fix row` calls and 8 identical hand edits beside them — twelve
+    consecutive turns rewriting one file, eight of them the same one-word change to eight arrows
+    pointing at the same box. Every one of those calls re-read every fragment and re-ran the
+    assembly check, and each cost a turn."""
+    if subverb_help.wants_help(argv):
+        return subverb_help.handle(_USAGE, "rows", argv) or 0
+    fragments = source = None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--fragments", "--edits"):
+            if i + 1 >= len(argv):
+                return usage_error(_USAGE, "rows", f"{a} needs a value")
+            val = argv[i + 1]
+            if val.startswith("--"):
+                return usage_error(_USAGE, "rows", f"{a} was given '{val}', which is another flag")
+            if a == "--fragments":
+                fragments = val
             else:
-                print(f"ERROR: no fragment under {where} declares a row with id '{row_id}'.\n"
-                      f"       Entry-point ids are MINTED at assemble and exist in no fragment, so "
-                      f"they cannot be addressed here; correct the entry point by its "
-                      f"trigger/source in the harvest fragment that declares it.", file=sys.stderr)
-        else:
-            print(f"ERROR: '{label}' is declared by {len(owners)} fragment rows — refusing rather "
-                  f"than guessing which:", file=sys.stderr)
-            for p, key, idx in owners:
-                print(f"         {p.name}: {key}[{idx}]", file=sys.stderr)
-        return 2
-    path, array_key, index = owners[0]
-    target = docs[path][array_key][index]           # type: ignore[index]
-    unknown = [f for f in sets if f not in target]
-    if unknown:
-        print(f"ERROR: {path.name}: {array_key}[{index}] ('{label}') has no field(s) "
-              f"{', '.join(sorted(unknown))}. Present: {', '.join(sorted(target))}.\n"
-              f"       A field the row does not carry is a typo or a field the SCHEMA owns "
-              f"elsewhere; this command never invents one.", file=sys.stderr)
-        return 2
+                source = val
+            i += 2
+            continue
+        return usage_error(_USAGE, "rows", f"unknown argument '{a}'")
+    if not fragments or not source:
+        return usage_error(_USAGE, "rows", "--fragments and --edits are required")
+    try:
+        raw = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
+    except OSError as exc:
+        return usage_error(_USAGE, "rows", f"--edits {source}: {exc}")
+    try:
+        spec = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return usage_error(_USAGE, "rows", f"--edits {source} is not valid JSON: {exc}")
+    if not isinstance(spec, list) or not spec:
+        return usage_error(_USAGE, "rows", "--edits takes a non-empty JSON LIST of edits")
 
-    before_ids, complaint = _surviving_ids(paths)
-    if complaint:
-        print(f"ERROR: the fragments do not assemble as they stand, so the effect of an edit cannot "
-              f"be checked: {complaint}", file=sys.stderr)
-        return 2
-
-    # Text and structured edits share every guard below — the assembly check, the surviving-id
-    # check, the escaping. Only the value's TYPE differs, so they merge here rather than forking.
-    edits: dict[str, object] = {**sets, **json_sets}
-    missing = sorted(f for f in edits if f not in target)
-    if missing:
-        print(f"ERROR: {label} has no field(s) {', '.join(missing)} — a new key here is a schema "
-              f"change, not a correction. Present fields: {', '.join(sorted(target))}",
-              file=sys.stderr)
-        return 2
-    original = {f: target[f] for f in edits}
-    if all(target[f] == v for f, v in edits.items()):
-        print(f"row: {label} already says that — nothing written.")
-        return 0
-    for f, v in edits.items():
-        target[f] = v
-    # Match the file's OWN escaping. An agent-authored fragment is usually ASCII-escaped, and dumping
-    # it with `ensure_ascii=False` rewrote every `\uXXXX` in the file — so a one-field edit arrived as
-    # eight unrelated changed lines and buried the actual change in review.
-    was_ascii = docs[path] is not None and _file_is_ascii(path)
-    text = json.dumps(docs[path], indent=2, ensure_ascii=was_ascii) + "\n"
-
-    # Write to a temp sibling, re-assemble from THAT set, and only keep it if no id moved.
-    # The candidate goes in a temp DIRECTORY, never beside the fragments: a leftover
-    # `*.fixrow-check.json` in `build-fragments/` breaks every later assemble with a duplicate-id
-    # conflict, the `.draft.json` skip does not cover that name, and two concurrent runs on one
-    # fragment would race on a single filename.
-    with tempfile.TemporaryDirectory() as td:
-        tmp = Path(td) / path.name
-        tmp.write_text(text, encoding="utf-8")
-        after_ids, complaint = _surviving_ids([tmp if p == path else p for p in paths])
-    if complaint:
-        print(f"ERROR: that edit makes the fragments fail to assemble — nothing was written: "
-              f"{complaint}", file=sys.stderr)
-        return 2
-    if after_ids != before_ids:
-        appeared, vanished = sorted(after_ids - before_ids), sorted(before_ids - after_ids)
-        print(f"ERROR: that edit changes which rows survive assembly — nothing was written.",
-              file=sys.stderr)
-        if vanished:
-            print(f"       id(s) that would DISAPPEAR: {', '.join(vanished)} — the edited text now "
-                  f"matches another row, so assemble would merge them and every reference to the "
-                  f"retired id would be re-pointed.", file=sys.stderr)
-        if appeared:
-            print(f"       id(s) that would APPEAR: {', '.join(appeared)} — the edited text no "
-                  f"longer matches the row it was merged with, so assemble would split them.",
-                  file=sys.stderr)
-        print(f"       Rewrite the text so the merge identity is unchanged, or make the split/merge "
-              f"deliberate by editing every fragment row involved.", file=sys.stderr)
-        return 2
-
-    path.write_text(text, encoding="utf-8")
-    for f, v in edits.items():
-        print(f"  {label}.{f}: {original[f]!r} → {v!r}")
-    print(f"row: rewrote {len(edits)} field(s) on {path.name}: {array_key}[{index}].")
-    print(f"     Re-assemble to see it in the map. If the row carries L2 CLAIMS (a rule statement, a "
-          f"site, an entity store, a cadence), their claim TEXT has changed, so the skeptics' "
-          f"verdicts for them no longer match: re-run `coyodex grounding write` AFTER the final "
-          f"assemble, or `finalize` will refuse on a stale `live_claims_digest`.")
-    return 0
+    edits: list[_Edit] = []
+    for n, item in enumerate(spec):
+        if not isinstance(item, dict):
+            return usage_error(_USAGE, "rows", f"edit {n} is not an object")
+        unknown = sorted(set(item) - {"id", "edge", "set", "set_json"})
+        if unknown:
+            return usage_error(_USAGE, "rows", f"edit {n} has unknown key(s) "
+                                               f"{', '.join(unknown)}; use id / edge / set / "
+                                               f"set_json")
+        edge = None
+        if "edge" in item:
+            if not isinstance(item["edge"], str) or _parse_triple(item["edge"]) is None:
+                return usage_error(_USAGE, "rows", f"edit {n}: 'edge' takes \"SRC:VERB:DST\", got "
+                                                   f"{item['edge']!r}")
+            edge = _parse_triple(item["edge"])
+        row_id = item.get("id")
+        if row_id is not None and not isinstance(row_id, str):
+            return usage_error(_USAGE, "rows", f"edit {n}: 'id' must be a string")
+        sets = item.get("set") or {}
+        json_sets = item.get("set_json") or {}
+        if not isinstance(sets, dict) or not isinstance(json_sets, dict):
+            return usage_error(_USAGE, "rows", f"edit {n}: 'set' / 'set_json' must be objects")
+        bad = sorted(f for f, v in sets.items() if not isinstance(v, str))
+        if bad:
+            return usage_error(_USAGE, "rows", f"edit {n}: 'set' values must be strings "
+                                               f"({', '.join(bad)} is not) — a structured value "
+                                               f"goes in 'set_json'")
+        edits.append(_Edit(row_id, edge,
+                           {f.replace("-", "_"): v for f, v in sets.items()},
+                           {f.replace("-", "_"): v for f, v in json_sets.items()}))
+    return _apply_edits(Path(fragments), edits)
 
 
 # ── dispatch ─────────────────────────────────────────────────────────────────────────────────────
 
 _VERBS = {"apply-drift": apply_drift, "drop-edge": drop_edge, "dedup-relation": dedup_relation,
-          "dedup-edge": dedup_edge, "security-row": security_row,
+          "dedup-edge": dedup_edge, "security-row": security_row, "rows": rows,
           "dedup-security": dedup_security, "row": row}
 
 _USAGE = """usage: coyodex fix <verb> [args...]
@@ -1624,6 +1802,22 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       `why` by hand two turns after using this verb correctly. Every guard above still applies.
       `--id` also reaches a happy-path STEP (`--id HP11 --set-why …`); it is not components and
       rules only.
+
+  rows --fragments <dir|file> --edits <edits.json|->
+      The SAME edit, many rows, one process, one write, all-or-nothing. `--edits` takes a JSON list:
+        [ {"edge": "C12:emits:C30", "set": {"verb": "queues"}},
+          {"id": "R7", "set": {"statement": "..."}},
+          {"id": "E3", "set_json": {"states": {...}}} ]
+      Every guard `row` applies, applied to each edit — and the faults are reported ALL AT ONCE, so
+      a batch of twenty costs one run rather than twenty. One build spent twelve consecutive turns
+      on 37 single `row` calls plus 8 identical hand edits, eight of them the same one-word verb
+      change on eight arrows into one box.
+      The assembly check runs ONCE over the whole edited set, which is not only cheaper: two edits
+      can interact — one splitting a merged row the other collapses — so checking them one at a
+      time can pass twice and still be wrong together.
+      Writing `verb` (or `src`/`dst`) on an edge MOVES it, because an edge's identity is its triple.
+      A move onto a triple that already exists is refused: that is a merge, not a rewrite, and
+      `drop-edge` is the verb for it.
 
   apply-drift --map <map> --verdicts <raw.json>... [--tolerance N] [--to-reconcile <file>]
       Write the grounding skeptics' corrected anchor into each drifted element: an edge `where`, a

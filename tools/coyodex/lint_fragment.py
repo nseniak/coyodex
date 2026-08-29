@@ -6,6 +6,14 @@ guessing, serially. This moves the fix into the agent's own context (where it ha
 in parallel: schema, anchor format, `extra`-key conventions, and — with `--repo` — that every anchor's
 file actually exists (so a wrong repo-root prefix or a stale line is caught at the source, not by the
 lead's `validate`). Reports every finding it can in one pass. Stdlib-only (the cli.py firewall).
+
+**`--finalize` fuses the write to the check.** The method has agents write `<id>.draft.json` and
+RENAME to `<id>.json` only when complete, because `assemble` skips a `.draft.json` and a half-written
+fragment must never assemble. But the rename was a separate step done by hand, so the loop was
+write → lint → fix → lint → rename, and the rename could happen after a lint that had failed —
+nothing connected the two. With `--finalize` the rename IS the lint's exit: a draft becomes a
+fragment only by passing, and it is all-or-nothing across the batch, because a half-landed fan-out
+is a map missing one slice with every gate green.
 """
 from __future__ import annotations
 
@@ -363,16 +371,23 @@ def main(argv: list[str] | None = None) -> int:
               "them after assembly.\n"
               "--expect N: the component budget this slice was dispatched with. Advisory: warns when\n"
               "  the fragment lands outside 0.5x-1.5x N, so the overshoot is visible to the agent that\n"
-              "  caused it rather than only in the lead's granularity advisory after assembly.")
+              "  caused it rather than only in the lead's granularity advisory after assembly.\n"
+              "--finalize: on a CLEAN lint, rename each <id>.draft.json to <id>.json — the rename\n"
+              "  the method asks for, done by the check instead of by hand, so a draft can only\n"
+              "  become a fragment by passing. All fragments must be drafts, no target may already\n"
+              "  exist, and a failing lint renames nothing.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     repo_root: Path | None = None
     known_ids: set[str] | None = None
     expect: int | None = None
+    finalize = False
     frags: list[Path] = []
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a == "--repo":
+        if a == "--finalize":
+            finalize = True
+        elif a == "--repo":
             i += 1
             if i >= len(argv):
                 print("ERROR: --repo needs a directory", file=sys.stderr)
@@ -539,7 +554,50 @@ def main(argv: list[str] | None = None) -> int:
     elif not clean:
         print("LINT FAILED: fix the rows above before returning this fragment. "
               "(`warning:` lines are advisory heuristics — they do not fail the lint.)", file=sys.stderr)
+    if finalize:
+        code = _finalize(frags, code)
     return code
+
+
+DRAFT_SUFFIX = ".draft.json"
+
+
+def _finalize(frags: list[Path], code: int) -> int:
+    """Rename each `<id>.draft.json` to `<id>.json`, but only on a clean lint and only all at once.
+
+    All-or-nothing on purpose. A partial rename lands some of a fan-out's slices and leaves the rest
+    as drafts `assemble` skips, which is a map missing a slice with every gate still green — the
+    quietest failure this whole file exists to prevent."""
+    not_drafts = [p for p in frags if not p.name.endswith(DRAFT_SUFFIX)]
+    if not_drafts:
+        print(f"FINALIZE REFUSED: not a draft: {', '.join(p.name for p in not_drafts)}. "
+              f"--finalize renames <id>{DRAFT_SUFFIX} to <id>.json; a fragment already named "
+              f".json has nothing to rename.", file=sys.stderr)
+        return max(code, 2)
+    if code != 0:
+        print("FINALIZE SKIPPED: the lint did not pass, so nothing was renamed. Fix the rows "
+              "above and re-run — the draft is still on disk.", file=sys.stderr)
+        return code
+    targets = [(p, p.with_name(p.name[: -len(DRAFT_SUFFIX)] + ".json")) for p in frags]
+    clash = [t for _, t in targets if t.exists()]
+    if clash:
+        print(f"FINALIZE REFUSED: already exists: {', '.join(t.name for t in clash)}. "
+              f"Renaming over it would drop another agent's fragment; nothing was renamed.",
+              file=sys.stderr)
+        return 2
+    for src, dst in targets:
+        try:
+            src.rename(dst)
+        except OSError as e:
+            # A rename that fails mid-batch leaves the earlier ones landed. Say exactly which,
+            # rather than reporting a clean number that is not true of the disk.
+            print(f"FINALIZE FAILED on {src.name}: {e}. Renamed already: "
+                  f"{', '.join(d.name for s, d in targets if d.exists() and s != src)}",
+                  file=sys.stderr)
+            return 2
+    print(f"FINALIZED {len(targets)} fragment(s): "
+          f"{', '.join(d.name for _, d in targets)}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":

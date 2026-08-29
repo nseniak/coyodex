@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import io
 import contextlib
+import json
 from pathlib import Path
+
+import pytest
 
 from coyodex import contract
 
@@ -124,3 +127,158 @@ def test_the_verb_prints_the_contract_to_stdout() -> None:
     with contextlib.redirect_stdout(out):
         assert contract.main(["skeptic"]) == 0
     assert out.getvalue().lstrip().startswith("You are a fresh-context skeptic")
+
+
+# --- `--slots` / `--fill` / `--brief`: the filled contract and the pointer that names it ---------
+#
+# A slot left unfilled reaches an agent as the literal `«REPO»`, and no gate sees it: the fragment
+# that comes back is well-formed and simply about the wrong thing. A hand-composed brief grows —
+# one build typed 159,993 bytes of brief across six fan-outs. Both jobs move into the verb here.
+
+def make_slot_values(name: str, value: str = "filled") -> dict[str, str]:
+    """Every slot of one contract, each filled with the same placeholder."""
+    return {k: value for k in contract.slots(name)}
+
+
+def test_the_skeleton_lists_only_slots_the_agent_actually_receives() -> None:
+    """The lead's half above the divider talks ABOUT «angle-bracket» slots. A skeleton listing
+    those would ask the lead to fill words that reach nobody."""
+    keys = contract.slots("rules")
+    assert "angle-bracket" not in keys
+    assert set(keys) == {"REPO", "PROJECT", "COYODEX_HOME", "MAP", "BLOCK", "AGENT_ID"}
+
+
+def test_the_skeleton_is_json_with_every_slot_empty() -> None:
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert contract.main(["rules", "--slots"]) == 0
+    assert json.loads(out.getvalue()) == {k: "" for k in contract.slots("rules")}
+
+
+def test_a_clean_fill_leaves_no_slot_behind() -> None:
+    text = contract.fill("rules", make_slot_values("rules"))
+    assert "«" not in text and "»" not in text
+
+
+def test_every_shipped_contract_can_be_filled_from_its_own_skeleton() -> None:
+    """The skeleton and the filler must agree for all six, or a phase ships a verb that refuses
+    the very keys it just printed."""
+    for name in contract.CONTRACTS:
+        assert "«" not in contract.fill(name, make_slot_values(name))
+
+
+def test_a_missing_slot_is_refused_and_named() -> None:
+    with pytest.raises(ValueError, match="no value given for"):
+        contract.fill("rules", {"REPO": "/repo"})
+
+
+def test_a_blank_value_is_refused_because_no_gate_can_see_one() -> None:
+    values = make_slot_values("rules")
+    values["REPO"] = "   "
+    with pytest.raises(ValueError, match="blank"):
+        contract.fill("rules", values)
+
+
+def test_a_value_that_is_still_a_slot_name_is_refused() -> None:
+    values = make_slot_values("rules")
+    values["MAP"] = "«MAP»"
+    with pytest.raises(ValueError, match="guillemets"):
+        contract.fill("rules", values)
+
+
+def test_a_key_that_is_no_slot_of_this_contract_is_refused_with_the_real_list() -> None:
+    values = make_slot_values("rules")
+    values["NOPE"] = "x"
+    with pytest.raises(ValueError, match="no such slot"):
+        contract.fill("rules", values)
+
+
+def test_every_fault_is_reported_in_one_run() -> None:
+    """Learning three missing slots must cost one run, not three — the brief→re-read loop this
+    verb exists to end."""
+    with pytest.raises(ValueError) as exc:
+        contract.fill("rules", {"REPO": "  ", "NOPE": "x"})
+    message = str(exc.value)
+    assert "no such slot" in message and "no value given for" in message and "blank" in message
+
+
+def test_the_brief_is_the_id_the_path_and_one_fixed_sentence() -> None:
+    text = contract.brief("h1", Path("/abs/scratch/h1.md"))
+    assert text.splitlines() == ["h1", "/abs/scratch/h1.md", contract.BRIEF_SENTENCE]
+    assert len(text.encode("utf-8")) <= contract.BRIEF_MAX_BYTES
+
+
+def test_a_relative_brief_path_is_refused_rather_than_resolved() -> None:
+    """Resolving it would build a plausible absolute path out of the lead's cwd — the
+    wrong-directory mistake, made silently, inside an agent's prompt."""
+    with pytest.raises(ValueError, match="not absolute"):
+        contract.brief("h1", Path("h1.md"))
+
+
+def test_an_agent_id_with_a_space_is_refused() -> None:
+    with pytest.raises(ValueError, match="one word"):
+        contract.brief("h 1", Path("/abs/h1.md"))
+
+
+def test_a_brief_over_the_pointer_cap_is_refused() -> None:
+    with pytest.raises(ValueError, match="pointer cap"):
+        contract.brief("h1", Path("/" + "d" * contract.BRIEF_MAX_BYTES + "/h1.md"))
+
+
+def test_fill_writes_the_file_and_brief_prints_the_pointer(tmp_path: Path) -> None:
+    slots = tmp_path / "slots.json"
+    slots.write_text(json.dumps(make_slot_values("rules")), encoding="utf-8")
+    out = tmp_path / "r3.md"
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+        assert contract.main(["rules", "--fill", str(slots), "--out", str(out),
+                              "--brief", "r3"]) == 0
+    assert "«" not in out.read_text(encoding="utf-8")
+    assert stdout.getvalue().splitlines() == ["r3", str(out), contract.BRIEF_SENTENCE]
+
+
+def test_a_refused_fill_writes_no_file(tmp_path: Path) -> None:
+    slots = tmp_path / "slots.json"
+    slots.write_text(json.dumps({"REPO": "/repo"}), encoding="utf-8")
+    out = tmp_path / "r3.md"
+    with contextlib.redirect_stderr(io.StringIO()):
+        assert contract.main(["rules", "--fill", str(slots), "--out", str(out)]) == 2
+    assert not out.exists()
+
+
+def test_a_refused_brief_leaves_no_contract_nothing_points_at(tmp_path: Path) -> None:
+    """The brief is composed before the write on purpose: a filled contract with no sendable
+    pointer is a file the fan-out will never open."""
+    slots = tmp_path / "slots.json"
+    slots.write_text(json.dumps(make_slot_values("rules")), encoding="utf-8")
+    with contextlib.redirect_stderr(io.StringIO()):
+        assert contract.main(["rules", "--fill", str(slots), "--out", "relative.md",
+                              "--brief", "r3"]) == 2
+    assert not Path("relative.md").exists()
+
+
+def test_fill_refuses_to_print_the_contract_to_stdout(tmp_path: Path) -> None:
+    """A filled contract on stdout is one pipe away from being pasted, which is the 13 KB brief
+    the pointer exists to replace."""
+    slots = tmp_path / "slots.json"
+    slots.write_text(json.dumps(make_slot_values("rules")), encoding="utf-8")
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        assert contract.main(["rules", "--fill", str(slots)]) == 2
+    assert "needs --out" in err.getvalue()
+
+
+def test_slots_does_not_combine_with_fill(tmp_path: Path) -> None:
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        assert contract.main(["rules", "--slots", "--fill", "x.json", "--out", "y.md"]) == 2
+    assert "does not combine" in err.getvalue()
+
+
+def test_an_unreadable_slots_file_is_refused_by_name(tmp_path: Path) -> None:
+    bad = tmp_path / "slots.json"
+    bad.write_text("{not json", encoding="utf-8")
+    err = io.StringIO()
+    with contextlib.redirect_stderr(err):
+        assert contract.main(["rules", "--fill", str(bad), "--out", str(tmp_path / "o.md")]) == 2
+    assert "not readable JSON" in err.getvalue()

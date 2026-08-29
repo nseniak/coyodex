@@ -448,7 +448,7 @@ _COYODEX_SUBCOMMANDS = frozenset({
     "ledger", "lint-fragment",
     "mutate", "preindex",
     "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
-    "run", "score", "scope", "serve", "ship", "transcript", "validate",
+    "run", "score", "scope", "serve", "ship", "timings", "transcript", "validate",
 })
 
 #: Sub-verbs worth reporting separately: `grounding write` and `grounding report` are different
@@ -467,7 +467,7 @@ _COYODEX_SUBCOMMANDS = frozenset({
 _COYODEX_SUBVERBS = frozenset({
     # fix
     "apply-drift", "drop-edge", "dedup-relation", "dedup-edge", "security-row", "dedup-security",
-    "row",
+    "row", "rows",
     # grounding
     "write", "report", "lint",
     # provenance

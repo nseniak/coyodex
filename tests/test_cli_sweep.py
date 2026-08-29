@@ -136,6 +136,10 @@ RECIPES: dict[str, tuple] = {
     # ship's PREPARE phase (no --note-file): anchor-drift → apply-drift → assemble → report.
     # The finish phase stamps provenance and reads the session env, so prepare is the honest sweep.
     "ship":          (lambda t, m: ["ship", str(_ship_repo(t, m))], OK),
+    # Takes no map: build telemetry beside the map. `order` on a repo with no record is the
+    # shape a FIRST build sees, and it must exit 0 — a first build cannot be blocked waiting
+    # for a measurement that does not exist yet.
+    "timings":       (lambda t, m: ["timings", "order", "--repo", str(t), "--phase", "harvest"], OK),
 }
 
 
@@ -167,6 +171,9 @@ FIX_RECIPES: dict[str, Recipe] = {
                                     "C1", "calls", "C2", "--to-reconcile", str(t / "e.json")],
     "security-row":   lambda t, m: ["fix", "security-row", "--map", str(m)],
     "row":            lambda t, m: ["fix", "row", "--map", str(m)],
+    # `rows` takes its batch from --edits, never from --map. An empty list is the honest sweep: it
+    # exercises the parse and the refusal without needing a fragment set shaped for an edit.
+    "rows":           lambda t, m: ["fix", "rows", "--map", str(m)],
 }
 
 
