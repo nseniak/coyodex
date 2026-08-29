@@ -66,7 +66,7 @@ def _check_reference_shapes(m: ProjectModel) -> list[str]:
         for t in tr.targets:
             if _ID_LIKE.match(t) and not ID_SHAPE.match(t):
                 problems.append(f"tests[{i}] target '{t}': unknown id prefix — a target must be a "
-                                "defined element id (UC/HP/CAP/S/SD/SF/C/D/E/R/EP + digits)")
+                                "defined element id (UC/HP/CAP/S/SD/SF/C/D/E/I/R/EP/BLK/BR + digits)")
     return problems
 
 

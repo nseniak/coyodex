@@ -3562,7 +3562,7 @@ function idOf(el) {
   if (cls) return cls.slice(3);
   const dataId = el.getAttribute('data-id');
   if (dataId && GRAPH.nodes[dataId]) return dataId;
-  const m = (el.id || '').match(/(?:^|-)((?:UC|HP|SD|C|D|E|S)\d+)(?:-|$)/);  // SD before S: a subdomain id is not a subsystem
+  const m = (el.id || '').match(/(?:^|-)((?:UC|HP|SD|C|D|E|I|S)\d+)(?:-|$)/);  // SD before S: a subdomain id is not a subsystem
   return m ? m[1] : null;
 }
 // Walk an id's parent chain up to its top-level subdomain (or null) — the domain mirror of a top
@@ -9392,7 +9392,7 @@ function dvRenderChannels(pane) {  // lazily render each broker flowchart in a s
     ph.innerHTML = svg;
     // Best-effort: bind a mermaid component node (id like `flowchart-C116-3`) to navigate to it.
     ph.querySelectorAll('g.node').forEach((g) => {
-      const m = /-((?:C|D|E|S|SD|UC)\d+)-\d+$/.exec(g.id || '');
+      const m = /-((?:C|D|E|I|S|SD|UC)\d+)-\d+$/.exec(g.id || '');
       if (m && GRAPH.nodes[m[1]]) { g.style.cursor = 'pointer'; g.addEventListener('click', () => selectFromTree(m[1])); }
     });
   });

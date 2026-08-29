@@ -1272,3 +1272,103 @@ def test_the_absence_of_an_outside_edge_is_reported_not_silent():
     # …and a product that genuinely has no outside edge is not nagged forever.
     m.deps, m.entry_points = [], []
     assert not _check_interfaces(m)[1]
+
+
+#: Id-prefix registries that DELIBERATELY list only some of the vocabulary, and why. A site not here
+#: must carry every prefix in `ID_ARRAYS`. Adding a new element type then fails this test at every
+#: table that forgot it — which is the list an adversarial review had to hand over by hand when
+#: `interfaces` was added, one prefix at a time, and two sites still slipped through afterwards.
+PARTIAL_ID_REGISTRIES: dict[tuple[str, frozenset[str]], str] = {
+    ("coyodex/grammar.py", frozenset({"BLK", "BR", "CAP", "HP", "R", "SF"})):
+        "_STEP_ENDPOINT_ID: a flow STEP endpoint is a backbone element or a surface — never a "
+        "capability, a happy-path step, a sub-flow or a role (a role is classified by is_role_id, "
+        "separately, and teaching this one `R` would blank the actor-attribution check)",
+    ("coyodex/records.py", frozenset({"BLK", "BR", "D", "S", "SD", "SF"})):
+        "ID_KEY: the adjudication vocabulary — only the families that HAVE a recordable advisory",
+    ("coyodex/impact_ripple.py", frozenset({"R"})):
+        "_ID_RE: change-impact targets. A ROLE carries no anchor of its own (only a relation's "
+        "grant line does), so it is never a ripple target",
+    # idOf and the broker-diagram binder both parse ids out of DRAWN mermaid node ids. A capability,
+    # a rule, a role and a sub-flow are drawn as no such box; the binder additionally draws no
+    # happy-path step, which is why the two gaps differ by `HP`.
+    ("coyodex/viewer/viewer.js", frozenset({"BLK", "BR", "CAP", "R", "SF"})): "idOf",
+    ("coyodex/viewer/viewer.js", frozenset({"BLK", "BR", "CAP", "HP", "R", "SF"})): "broker binder",
+}
+
+
+def _id_registry_sites() -> dict[str, set[str]]:
+    """Every literal in tools/ that enumerates id prefixes — a regex alternation or a prefix table.
+
+    Discovered, not listed: a registry nobody remembered to add to a hand-written list is exactly the
+    failure this guards, so the test must find the sites itself."""
+    from coyodex.model import ID_ARRAYS
+    known = set(ID_ARRAYS.values())
+    out: dict[str, set[str]] = {}
+    for path in sorted([*(TOOLS.rglob("*.py")), *(TOOLS.rglob("*.js"))]):
+        rel = path.relative_to(TOOLS.parent).as_posix()
+        for n, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+            if line.lstrip().startswith(("#", "//", "*")):
+                continue                                  # a comment ABOUT a registry is not one
+            if "\\d+" not in line:
+                continue   # a REGISTRY writes `\\d+` after the prefix; prose that lists them does not
+            found = set(re.findall(r"\b(CAP|BLK|BR|SD|SF|EP|UC|HP|C|D|E|I|R|S)\b", line))
+            inside = set(re.findall(r"\[([A-Z]+)\]", line))          # a char class: [CDEIRS]
+            found |= {c for grp in inside for c in grp}
+            if len(found & known) >= 6:
+                out[f"{rel}:{n}"] = found & known
+    return out
+
+
+def test_every_id_prefix_registry_carries_the_whole_vocabulary():
+    """A new element type is registered in ~16 hand-written tables, and one missed is SILENT: a
+    prose ref dropped on merge, a dump that answers "unknown", an edit that ripples nowhere.
+
+    Each site either carries every `ID_ARRAYS` prefix or says in `PARTIAL_ID_REGISTRIES` why it does
+    not. This is the list that had to be assembled by hand when `interfaces` landed."""
+    from coyodex.model import ID_ARRAYS
+    known = set(ID_ARRAYS.values())
+    gaps = []
+    for site, found in _id_registry_sites().items():
+        if found == known:
+            continue
+        if (site.rsplit(":", 1)[0], frozenset(known - found)) in PARTIAL_ID_REGISTRIES:
+            continue
+        gaps.append(f"{site} carries {len(found)}/{len(known)}, missing {sorted(known - found)}")
+    assert not gaps, (
+        "id-prefix registr(y/ies) missing part of the vocabulary — add the prefix, or record the "
+        "site in PARTIAL_ID_REGISTRIES with the reason it is partial:\n  " + "\n  ".join(gaps))
+
+
+def test_every_populated_map_section_reaches_the_rendered_view():
+    """The committed `project-map.md` is the half of the map a person reads IN THE REPO. A section
+    can exist in the model, be checked by `validate`, draw its own tab in the viewer, and be missing
+    from that file — `interfaces` shipped exactly like that, and the file carried 23 sections and no
+    outside edge at all until someone opened it.
+
+    Runtime, not a grep: it renders the repo's own map and looks for each list's first row in the
+    output. A `m.interfaces` mentioned only in a comment would satisfy a grep and fail this."""
+    import dataclasses
+
+    from coyodex.model import ProjectModel, load_model_path
+    from coyodex.views import model_to_markdown
+
+    m = load_model_path(REPO_ROOT / ".coyodex" / "project-map.json")
+    md = model_to_markdown(m)
+    #: The fields a row can be FOUND BY in the rendered table, most identifying first. An entry
+    #: point renders no id (the T4 table is Kind | Trigger | Code entity | …), so it is found by its
+    #: trigger — which is the point: this asks whether the ROWS reach the page, not their ids.
+    keys = ("id", "name", "term", "key", "unit", "signal", "action", "surface", "uc", "heading",
+            "statement", "title", "trigger", "source")
+    gaps = []
+    for f in dataclasses.fields(ProjectModel):
+        if not str(f.type).startswith("list["):
+            continue
+        rows = getattr(m, f.name)
+        if not rows:
+            continue                      # an empty list renders nothing, correctly
+        found = [v for k in keys if isinstance(v := getattr(rows[0], k, None), str) and len(v) > 2]
+        if found and not any(v in md for v in found):
+            gaps.append(f"{f.name} ({len(rows)} row(s)) — nothing of its first row is on the page")
+    assert not gaps, (
+        "map section(s) the renderer never puts in project-map.md — the committed half of the map "
+        "is missing them:\n  " + "\n  ".join(gaps))
