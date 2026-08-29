@@ -19,6 +19,10 @@ Commands:
   judge    Aggregate orchestrated judge verdicts (grounding + rubric) into judge.json.
   protocol Print the current judge-protocol fingerprint; --against guards the baseline cache.
   bless    Promote a run to the baseline (map + rendered view + profile + judge).
+  arrows   Which relations a rebuild LOST, and whether the code still makes each one. Matches
+           by SOURCE FILE (ids and wording never agree across two builds) and re-reads each lost
+           arrow's recorded call site. The check that catches a map dropping true relations while
+           validate, audit and the shrink bands all stay green. Exit 1 on any lost truth.
   compare  Compare a candidate MapProfile against a baseline; apply the relative regression gates.
   process  L3 PROCESS scorecard over a build TRANSCRIPT (did the agent behave as the method says?)
            — `--diff a.json b.json` compares two scorecards. A scorecard, never a gate.
@@ -79,6 +83,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "bless":
         from coyodex_eval import run
         return run.bless_cli(rest)
+    if cmd == "arrows":
+        from coyodex_eval import arrows  # stdlib-only; reads two maps and the tree, no model
+        return arrows.main(rest)
     if cmd == "compare":
         from coyodex_eval import compare
         return compare.main(rest)

@@ -134,6 +134,9 @@ RECIPES: dict[str, tuple] = {
                                   "--out", str(t / "m.json"), "--key", str(t / "k.json")], OK),
     "run":            (lambda t: ["run", "--project", "trapdoor", "--map", str(MAP),
                                   "--repo", str(FIXTURE)], OK),
+    # A map against ITSELF: nothing can be lost, so the sweep exercises the whole path (load,
+    # source check, match, report) on a pair that is guaranteed to exit 0.
+    "arrows":         (lambda t: ["arrows", str(MAP), str(MAP), "--repo", str(FIXTURE)], OK),
 }
 
 
