@@ -985,11 +985,20 @@ persists/writes/reads each entity) → **re-balance the grouping against the tra
 grouping was cut edge-blind — run `coyodex balance`, fix or justify each finding; Phase 3.5 in
 parallel mode) → **measure test completeness against the finished inventory**
 (the last structural step — it reads the assembled nodes + flows: use cases, T4 entry points, T5
-entities, critical-path branches) → **group T2 + T4 into T2b interfaces** — the LEAD's job, at
-synthesis, because it is the first moment both its inputs exist: the outside-edge rows are written
-here, `ways_in` and `deps[].interfaces` travel through `reconcile` (their `EPn`/`In` ids are minted
-at assembly, exactly like a use case's `entry_points`), and every external-group dep is decided one
-way or the other. **No fan-out worker authors this** — a harvest agent sees one slice and cannot
+entities, critical-path branches) → **group T2 + T4 into T2b interfaces, then RETROFIT the flows** —
+the LEAD's job, and deliberately LAST, not "at synthesis": it needs T2 and T4 for its inputs, and it
+needs the TRACED FLOWS for its consumer, because a `Cn → Dn` step can only *migrate* to a surface if
+it already exists. The outside-edge rows are written here, `ways_in` and `deps[].interfaces` travel
+through `reconcile` (their `EPn`/`In` ids are minted at assembly, exactly like a use case's
+`entry_points`), and every external-group dep is decided one way or the other.
+**Then go back through every flow and do BOTH halves of the doors rule** — this is the step, and
+skipping it is the failure the gates below now catch: (1) open each flow at its door, `Rn → In` then
+`In → Cn`, for every use case whose ways in belong to a surface; (2) migrate each `Cn → Dn` step
+whose dep stands on a surface to `Cn → In`. A build that authors the surfaces and stops leaves a map
+that can SAY what its outside edge is while no story ever goes through a door — measured on the
+first real build to author the section: 12 surfaces, 517 steps, zero doors, 5 migrations owed.
+**Schedule a section by its CONSUMERS as well as its inputs.** T2b was placed by its inputs alone,
+and its consumer — the flows — was written before it and never revisited. **No fan-out worker authors this** — a harvest agent sees one slice and cannot
 group a surface, and the first build after T2b shipped proved it: the dependency agent correctly
 refused, wrote a note saying the field was the lead's, and the lead never came back because no step
 in this order sent it. Nodes (T4/T5/T2)

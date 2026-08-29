@@ -307,6 +307,46 @@ why: needs the finished build's transcript, found through the stamp from HP14
 
 ---
 
+## T2b — Interfaces (the product's outside edge)
+
+| ID | Name | Side | Facing | Crosses | What it is | Far side | Ways in | Deps | Source | Conf. |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **I1** | Map commands | ours | user | in, out | How a person builds a map, checks it, serves it and accepts a change into it. |  | 32 |  | [cli.py](tools/coyodex/cli.py:105) | verified |
+| **I2** | Developer commands | ours | operator | in, out | How a coyodex developer scores a map's quality and reviews a finished build. |  | 21 |  | [cli.py](eval/tools/coyodex_eval/cli.py:47) | verified |
+| **I3** | Map viewer | ours | user | in, out | The browser page where a reader looks at a map and the code behind any box. |  | 28 |  | [serve.py](tools/coyodex/viewer/serve.py:633) | verified |
+| **I4** | Agent skill | ours | user | in, out | How a coding agent is asked, in plain words, to build or update a map. | the coding agent hosting the skill | 5 | D12, D13, D14 | [dispatch.md](method/dispatch.md:62) | verified |
+| **I5** | Developer skills | ours | operator | in | How a coyodex developer asks an agent to score a map or review a build. |  | 2 |  | [SKILL.md](eval/SKILL.md:28) | verified |
+| **I6** | Map files in your repo | ours | user | out | The map coyodex writes next to the code, which a person opens and git shows. |  |  |  | [assemble.py](tools/coyodex/assemble.py:963) | verified |
+| **I7** | Settings | ours | user | in | The values the person running coyodex sets: which clone, which port, what to leave out. |  |  |  |  | verified |
+| **I8** | The project's source files | theirs | user | in | The code being mapped. coyodex did not write it, and reading it is the whole job. | the project under analysis |  |  |  | verified |
+| **I9** | The coding agent's build transcript | theirs | operator | in | The records an agent wrote while building a map, read back to review the run. | the coding agent that built the map |  | D12 |  | verified |
+| **I10** | GitHub | theirs | user | out | Where a reader continues, when they follow a code link out of the viewer. |  |  | D15 |  | verified |
+| **I11** | The person's code editor | theirs | user | out | The editor coyodex opens on the reader's own machine, at the line they clicked. |  |  | D16 |  | verified |
+
+---
+
+## T2b — What crosses each interface
+
+| Interface | Direction | What crosses | Records | Where |
+|---|---|---|---|---|
+| I1 | in | the command, and the project folder to work on |  |  |
+| I1 | out | the map itself, and the reports about it | E1 |  |
+| I2 | in | which project to score, and which two maps to compare |  |  |
+| I2 | out | the quality verdict and the build reports |  |  |
+| I3 | in | which view, which box and which file the reader asks for |  |  |
+| I3 | out | every view of the map, and the source behind any box | E1 |  |
+| I4 | in | a plain-words request to build, update or accept a map |  |  |
+| I4 | out | the skill files the agent reads before it starts |  | [dispatch.md](method/dispatch.md) |
+| I5 | in | a request to score one map, or to review one finished build |  |  |
+| I6 | out | the whole map, and the report on what a code change did to it | E1 |  |
+| I7 | in | which clone to read the method from, which port to serve on, and which files to skip |  | [ignorefile.py](tools/coyodex/ignorefile.py) |
+| I8 | in | every analysable file at the map's commit, and what changed since the baseline |  | [scope.py](tools/coyodex/scope.py) |
+| I9 | in | one record per turn of the conversation that built the map |  | [provenance.py](tools/coyodex/provenance.py) |
+| I10 | out | a link to one file at the map's commit, opened on the code-hosting site |  |  |
+| I11 | out | a request to open one file at one line in the reader's own editor |  |  |
+
+---
+
 ## T3 — How to run / build / test
 
 | Action | Command | Source |

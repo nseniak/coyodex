@@ -25,7 +25,7 @@ import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
-from coyodex import audit_model, balance_lib, validate_model
+from coyodex import audit_model, balance_lib, grammar, validate_model
 from coyodex.model import ModelError, ProjectModel, load_model
 
 from coyodex_eval.legacy_map import load_model_tolerating_legacy
@@ -97,6 +97,14 @@ class MapProfile:
     #                                            None when the map has no entry points or no flows
     off_spine_ucs: int | None = None           # use cases with no HP position; None when HP empty
     unclaimed_self_entry_points: int | None = None  # SELF-activated EPs (crons, workers, consumers,
+    #: The product's OUTSIDE EDGE (T2b). Optional so profiles written before it exists still load.
+    #: The eval is the instrument every method change is validated with, and it could not see this
+    #: section at all: a build that authored twelve surfaces and one that authored none scored
+    #: identically. `interface_doors` is the retrofit half — surfaces authored and never put into a
+    #: story is the failure mode that shipped, so the count that catches it is the one worth keeping.
+    interfaces: int | None = None
+    interface_doors: int | None = None        # flow steps whose endpoint is an `In`
+    interfaces_undecided_deps: int | None = None   # external deps naming neither a surface nor a why
     #                                            startup hooks) no use case reaches. These used to be
     #                                            exempt automatically, which could hide a whole
     #                                            background capability; they are now a decision, and
@@ -381,6 +389,13 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         hp_steps=len(m.happy_path),
         flows=len(m.flows),
         security_surfaces=len(surfaces),
+        interfaces=len(m.interfaces),
+        interface_doors=sum(1 for f in m.flows for st in f.steps
+                            if grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst)),
+        interfaces_undecided_deps=sum(
+            1 for d in m.deps
+            if grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM
+            and not d.interfaces and not d.not_an_interface),
         validate_ok=not problems,
         validate_problems=len(problems),
         validate_warnings=len(warnings),

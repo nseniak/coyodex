@@ -2016,6 +2016,44 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                         f"'EPn: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading for "
                         f"any that deliberately belong to none")
 
+    # ── the RETROFIT gates ───────────────────────────────────────────────────────────────────────
+    # T2b is authored AFTER the trace, because `ways_in` needs minted `EPn`s and a `Cn → Dn` step can
+    # only MIGRATE if it already exists. That ordering has a price: every flow was written before any
+    # surface existed, so the doors have to be added back afterwards — and a build that authors the
+    # surfaces and stops leaves a map that can say what its outside edge is while no story ever goes
+    # through a door. Measured on the first real build to author the section: 12 surfaces, 517 flow
+    # steps, ZERO doors, and 5 steps still pointing at a dep that stands on a surface.
+    iface_by_ep = {ep: i.id for i in m.interfaces for ep in i.ways_in}
+    dep_on_surface = {d.id: d.interfaces[0] for d in m.deps if d.interfaces}
+    owed_openings: list[str] = []
+    owed_migrations: list[str] = []
+    uc_by_id = {u.id: u for u in m.use_cases}
+    for f in m.flows:
+        touched = {st.src for st in f.steps} | {st.dst for st in f.steps}
+        uc = uc_by_id.get(f.uc)
+        want = {iface_by_ep[e] for e in (uc.entry_points if uc else []) if e in iface_by_ep}
+        if want and not (want & touched) and f.uc not in recorded:
+            owed_openings.append(f.uc)
+        for st in f.steps:
+            for side in (st.src, st.dst):
+                if side in dep_on_surface and f.uc not in recorded:
+                    owed_migrations.append(f"{f.uc} step {st.n} → {side}")
+    if owed_openings:
+        warnings.append(
+            f"{len(owed_openings)} flow(s) name a way in that belongs to a surface, but no step of "
+            f"theirs touches that surface — the story never goes through its door "
+            f"({', '.join(owed_openings[:6])}{', …' if len(owed_openings) > 6 else ''}). Open each "
+            f"flow at its door (`Rn → In`, then `In → Cn`), or record the use-case id under an "
+            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
+    if owed_migrations:
+        warnings.append(
+            f"{len(owed_migrations)} flow step(s) point at a dependency that stands on a surface — "
+            f"name the SURFACE instead, and let the dependency be derived "
+            f"({', '.join(owed_migrations[:6])}{', …' if len(owed_migrations) > 6 else ''}). A step "
+            f"at the dep names the pipe; a step at the surface names the far side. Record the "
+            f"use-case id under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading if a step really "
+            f"means the dependency itself")
+
     if any(u.entry_points for u in m.use_cases):
         reached = {ep for u in m.use_cases for ep in u.entry_points}
         for iface in m.interfaces:

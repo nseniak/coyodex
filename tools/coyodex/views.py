@@ -429,6 +429,33 @@ def model_to_markdown(m: ProjectModel) -> str:
             row += [_extra_str(d.extra.get(k, "")) for k in extra]
             rows.append(row)
         section("T2 — External dependencies", _table(headers, rows))
+    # T2b — the product's OUTSIDE EDGE. The committed markdown is the half of the map a person reads
+    # in the repo, and it carried 23 sections and no interfaces at all: the section existed in the
+    # model, was checked by `validate`, drew its own tab in the viewer, and was invisible in the file
+    # the map is actually committed as.
+    if m.interfaces:
+        ways_by_iface = {i.id: len(i.ways_in) for i in m.interfaces}
+        deps_by_iface: dict[str, list[str]] = {}
+        for d in m.deps:
+            for iid in d.interfaces:
+                deps_by_iface.setdefault(iid, []).append(d.id)
+        rows = []
+        for i in m.interfaces:
+            flow = ", ".join(x for x in ("in", "out")
+                             if any(c.direction == x for c in i.carries))
+            far = i.party or i.party_ref
+            rows.append([f"**{i.id}**", i.name, i.side, i.facing, flow, i.what, far,
+                         str(ways_by_iface.get(i.id) or ""),
+                         ", ".join(deps_by_iface.get(i.id, [])),
+                         _anchor_link(i.source), i.confidence])
+        section("T2b — Interfaces (the product's outside edge)",
+                _table(["ID", "Name", "Side", "Facing", "Crosses", "What it is", "Far side",
+                        "Ways in", "Deps", "Source", "Conf."], rows))
+        cross = [[i.id, c.direction, c.what, ", ".join(c.elements), _anchor_link(c.where)]
+                 for i in m.interfaces for c in i.carries]
+        if cross:
+            section("T2b — What crosses each interface",
+                    _table(["Interface", "Direction", "What crosses", "Records", "Where"], cross))
     if m.run_commands:
         section("T3 — How to run / build / test",
                 _table(["Action", "Command", "Source"],

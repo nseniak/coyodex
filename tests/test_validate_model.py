@@ -4258,3 +4258,29 @@ def test_a_door_is_a_legal_step_endpoint_and_does_not_count_toward_the_band():
     # …and 16 counted steps, with no door, is over it.
     m.flows[0].steps = [FlowStep(n=i, src="C1", dst="C1", phrase="works") for i in range(1, 17)]
     assert any("over the \u226415 band" in w and "16 steps" in w for w in warnings_of(m))
+
+
+def test_a_map_that_authors_surfaces_and_never_retrofits_its_flows_says_so():
+    """T2b is authored AFTER the trace, so every flow was written before any surface existed and the
+    doors have to be added back. A build that authors the surfaces and stops leaves a map that can
+    SAY what its outside edge is while no story goes through a door — measured on the first real
+    build to author the section: 12 surfaces, 517 steps, ZERO doors, 5 migrations owed."""
+    m = make_interface_model()
+    m.use_cases[0].entry_points = ["EP1"]                    # …and EP1 belongs to I1
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="C1", phrase="asks")]   # straight in, no door
+    assert any("never goes through its door" in w or "no step of theirs touches" in w
+               for w in warnings_of(m))
+    # …and opening at the door clears it.
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3")]
+    assert not [w for w in warnings_of(m) if "touches that surface" in w]
+
+
+def test_a_step_still_pointing_at_a_dependency_that_stands_on_a_surface_is_flagged():
+    """The other half of the retrofit. A step at the dep names the PIPE; the surface is the far side."""
+    m = make_interface_model()
+    m.deps[0].not_an_interface = ""
+    m.deps[0].interfaces = ["I1"]
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="C1", dst="D1", phrase="calls out", where="src/v.py:4")]
+    assert any("stands on a surface" in w for w in warnings_of(m))
