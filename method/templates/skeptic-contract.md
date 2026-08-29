@@ -64,9 +64,18 @@ For each claim, decide whether the CODE supports it, and return one row per clai
   refused at the END of the build. A self-check that prints `str(row["grounded"])` cannot catch it,
   because that renders `'true'` either way.
 - `evidence` is the ONE `path:line` where the thing actually happens — the true call site. If the
-  claim is true but the map's stored anchor points somewhere else, still say `true` and give the
-  line YOU found: a drifted anchor does not refute a true relationship, and the drift check exists
-  to reconcile exactly that difference.
+  claim is true but the map's stored anchor points at the wrong LINE OF A FILE THAT EXISTS, still say
+  `true` and give the line YOU found: a drifted anchor does not refute a true relationship, and the
+  drift check exists to reconcile exactly that difference.
+- **An anchor whose FILE is not in the repo is `false`, not drift.** This is the one exception to the
+  rule above, and it needs saying because the two look alike from inside it. A wrong line inside a
+  real file is a pointer that slipped. A path that does not exist is the map citing evidence that was
+  never there, and no drift check reconciles it — `apply-drift` corrects a line, never a filename. Do
+  NOT go looking for a same-named file and confirm the claim against that: a planted batch of 24 such
+  anchors was confirmed by **eight of eight** skeptics, every one of them helpfully stripping a
+  `_nonexistent` suffix and citing this very rule for doing so. Say `false`, and put the missing path
+  in the `note`. If the relationship is real at some other file, that belongs in the note too — but
+  the verdict on an anchor pointing nowhere is `false`.
 - **Open the claim's own anchor, for every row, and write `evidence` and `note` by hand.** Do not
   generate them. Rows emitted from one directory-wide grep are fabricated confirmations, and they
   end up in a shipped grounding record. A `note` that says you read something is a statement of fact
