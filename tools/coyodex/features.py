@@ -40,7 +40,12 @@ from coyodex.anchors import parse_anchor
 from coyodex.impact_git import Extents
 from coyodex.areas import DataArea, build_areas, sorted_ids
 from coyodex.model import ProjectModel, entity_owners, expanded_flow_steps
-from coyodex.validate_model import anchored_flow_steps, capability_audience, rule_steps
+from coyodex.validate_model import (
+    anchored_flow_steps,
+    capability_audience,
+    interface_actors,
+    rule_steps,
+)
 
 
 @dataclass(frozen=True)
@@ -148,7 +153,15 @@ class InterfaceFacts:
     what: str = ""
     side: str = ""
     facing: str = ""
-    party: str = ""                                          # the far side, in words or as an id
+    party: str = ""                                          # the far side, in words
+    kind: str = ""                                           # SHAPE — the canonical spelling, so the
+                                                             # viewer's icon lookup and the eval read
+                                                             # one surface as one
+    #: WHO is on the far side. DERIVED, never authored — an authored value beside a derived one is
+    #: the failure mode this shape was built to remove. Empty is a REAL ANSWER, not a gap: a crash
+    #: reporter has nobody on the far side, and only the two kinds that mean a person goes there
+    #: derive anyone on a `theirs` surface.
+    actors: list[str] = field(default_factory=list)          # Rn
     flow: list[str] = field(default_factory=list)            # in and/or out — DERIVED from crossings
     ways_in: list[str] = field(default_factory=list)         # EPn
     deps: list[str] = field(default_factory=list)            # Dn naming this surface
@@ -499,10 +512,13 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                     if cap:
                         feat_out[cap].add(iid)
 
+    iface_actors = interface_actors(m)
     interfaces = [
         InterfaceFacts(
             id=i.id, name=i.name, what=i.what, side=i.side, facing=i.facing,
             party=i.party,
+            kind=grammar.canonical_interface_kind(i.kind),
+            actors=iface_actors.get(i.id, []),
             flow=[d for d in ("in", "out") if any(c.direction == d for c in i.carries)],
             ways_in=sorted_ids(set(i.ways_in)),
             deps=sorted_ids(set(iface_deps.get(i.id, ()))),
@@ -594,7 +610,8 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
             for f in ix.features],
         "interfaces": [
             {"id": i.id, "name": i.name, "what": i.what, "side": i.side, "facing": i.facing,
-             "party": i.party, "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
+             "party": i.party, "kind": i.kind, "actors": i.actors,
+             "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
              "components": i.components, "useCases": i.use_cases, "features": i.features,
              "featuresUnknown": i.features_unknown,
              "crossings": [{"direction": d, "what": w, "elements": e} for d, w, e in i.crossings]}

@@ -4297,6 +4297,22 @@ def test_every_kind_advisory_is_actually_silenced_by_the_recorded_line():
         assert not [w for w in warnings_of(m) if needle in w], (value, needle)
 
 
+def test_the_authored_kind_and_the_derived_actor_both_reach_the_rendered_T2b_table():
+    """A SECTION reaching the rendered file is already guarded; a COLUMN is not. `kind` and `actors`
+    are the only two facts on this row that no other section of the committed map carries, so a
+    column that silently never renders takes both of them with it."""
+    m = make_interface_model()
+    m.use_cases[0].entry_points = ["EP1"]
+    md = model_to_markdown(m)
+    table = md[md.index("## T2b — Interfaces"):]
+    table = table[:table.index("\n## ")]
+    header = table.splitlines()[2]
+    assert "| Kind |" in header and "| Actors |" in header, header
+    row = next(l for l in table.splitlines() if "**I1**" in l)
+    assert "command-line" in row, row          # the authored SHAPE
+    assert "R1" in row, row                    # the DERIVED actor
+
+
 def test_a_seed_kind_says_nothing_at_all():
     m = make_interface_model()
     m.interfaces[0].kind = "screen"

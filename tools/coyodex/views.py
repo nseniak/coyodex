@@ -42,6 +42,7 @@ from coyodex.validate_model import (
     component_file_owners,
     capability_audience,
     element_capabilities,
+    interface_actors,
     rule_components,
     rule_entities,
     rule_steps,
@@ -439,18 +440,24 @@ def model_to_markdown(m: ProjectModel) -> str:
         for d in m.deps:
             for iid in d.interfaces:
                 deps_by_iface.setdefault(iid, []).append(d.id)
+        # `Kind` is the SHAPE the map authored; `Actors` is DERIVED and appears nowhere else in the
+        # committed file. Both are columns rather than a second section: the row is the surface, and
+        # a reader answering "which of my products has a mobile app?" reads down one column.
+        actors_by_iface = interface_actors(m)
         rows = []
         for i in m.interfaces:
             flow = ", ".join(x for x in ("in", "out")
                              if any(c.direction == x for c in i.carries))
             far = i.party
-            rows.append([f"**{i.id}**", i.name, i.side, i.facing, flow, i.what, far,
+            rows.append([f"**{i.id}**", i.name, i.side, grammar.canonical_interface_kind(i.kind),
+                         i.facing, flow, i.what, far,
+                         ", ".join(actors_by_iface.get(i.id, [])),
                          str(ways_by_iface.get(i.id) or ""),
                          ", ".join(deps_by_iface.get(i.id, [])),
                          _anchor_link(i.source), i.confidence])
         section("T2b — Interfaces (the product's outside edge)",
-                _table(["ID", "Name", "Side", "Facing", "Crosses", "What it is", "Far side",
-                        "Ways in", "Deps", "Source", "Conf."], rows))
+                _table(["ID", "Name", "Side", "Kind", "Facing", "Crosses", "What it is", "Far side",
+                        "Actors", "Ways in", "Deps", "Source", "Conf."], rows))
         cross = [[i.id, c.direction, c.what, ", ".join(c.elements), _anchor_link(c.where)]
                  for i in m.interfaces for c in i.carries]
         if cross:
@@ -1173,8 +1180,11 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
     # "a person, through the dashboard, into the code". Without a node the step would draw a bare id.
     for iface in m.interfaces:
         flow = [x for x in ("in", "out") if any(c.direction == x for c in iface.carries)]
+        kind = grammar.canonical_interface_kind(iface.kind)
         fields = {"Name": iface.name, "What it is": iface.what,
-                  "Side": iface.side, "Facing": iface.facing,
+                  "Side": iface.side,
+                  **({"Kind": kind} if kind else {}),
+                  "Facing": iface.facing,
                   "What crosses": ", ".join(flow) or "",
                   **({"Far side": iface.party} if iface.party else {})}
         nodes[iface.id] = _node(iface, "interface", iface.name, iface.source, fields, None)

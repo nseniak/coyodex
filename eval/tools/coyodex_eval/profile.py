@@ -105,6 +105,15 @@ class MapProfile:
     interfaces: int | None = None
     interface_doors: int | None = None        # flow steps whose endpoint is an `In`
     interfaces_undecided_deps: int | None = None   # external deps naming neither a surface nor a why
+    #: The two counts that make an UNAUTHORED shape visible to the instrument. Without a rebuild to
+    #: validate the method text on, these plus `eval/rubric.md` are the only things that will report
+    #: on it — on somebody else's build, months from now.
+    interfaces_without_kind: int | None = None
+    #: Counted over `theirs` surfaces ONLY, where nothing derives: an `ours` surface with ways in
+    #: derives its actors from the walks, so counting it would report a full map as an empty one.
+    #: A `theirs` surface with no actor is often CORRECT (a crash reporter has nobody on the far
+    #: side) — this is a trend line across builds, never a defect count.
+    interfaces_without_actors: int | None = None
     #                                            startup hooks) no use case reaches. These used to be
     #                                            exempt automatically, which could hide a whole
     #                                            background capability; they are now a decision, and
@@ -297,6 +306,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     """The MapProfile computed from a model — every signal through the model-side checks
     (`validate_model`, `audit_model`). The Phase-2 golden-equivalence run proved these score a map
     exactly as the (now retired) markdown pipeline scored its v1 equivalent."""
+    iface_actors = validate_model.interface_actors(m)
     problems, warnings = validate_model.validate_model(m)  # no model_path: view-freshness is a
     # repo-hygiene signal, not map quality — it must not shift an eval profile
     findings = audit_model.audit_model(m)
@@ -404,6 +414,11 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
             1 for d in m.deps
             if grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM
             and not d.interfaces and not d.not_an_interface),
+        interfaces_without_kind=sum(
+            1 for i in m.interfaces if not grammar.canonical_interface_kind(i.kind)),
+        interfaces_without_actors=sum(
+            1 for i in m.interfaces
+            if i.side == "theirs" and not iface_actors.get(i.id)),
         validate_ok=not problems,
         validate_problems=len(problems),
         validate_warnings=len(warnings),
