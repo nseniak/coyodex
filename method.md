@@ -1821,8 +1821,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   instruction and the bundle becomes the evidence, which is the fabricated-confirmation failure the
   contract forbids by name. The saving and the safety are the same instruction, pulling opposite
   ways. **What the same numbers DO point at:** cost tracks a skeptic's response count almost
-  linearly — 19 responses cost $2.45 where 51 cost $4.00 on the same work. Smaller batches, not
-  richer briefs.
+  linearly. That looked like a lever and **it is not one**: splitting the same 67 claims from two
+  batches into four cost **1.69x MORE** ($6.29 to $10.62), at identical recall. Response count
+  DOUBLED rather than halving, because each extra skeptic re-pays a fixed start — its system
+  prompt, its tool schemas, its contract — and then re-reads the same shared files its sibling is
+  reading. The response count follows how hard the CLAIMS are, not how many of them there are: two
+  skeptics given 16 and 17 claims from one batch spent 27 and 83 responses on them. Cost tracking
+  response count was a correlation, and the cause runs the other way.
 - **Cap each batch at ~40 claims** and split an oversized theme into two skeptics rather than one
   long-running one — an oversized batch becomes the phase's critical path, and more, smaller
   skeptics also mean fresher context per claim, so this trades nothing away. **When the worklist
