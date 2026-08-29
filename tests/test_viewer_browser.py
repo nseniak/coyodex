@@ -545,3 +545,61 @@ def test_the_walk_counts_the_features_it_touches_out_of_all_there_are() -> None:
         touched, total = (int(x) for x in re.findall(r"(\d+) of (\d+)", label)[0])
         assert touched < total, label
         assert not page.js_errors, page.js_errors
+
+
+# ── the surface's SHAPE, and who is on the far side ─────────────────────────────────────────────
+# The committed fixture records no interface at all, which is the empty case the tab is hidden on.
+# Both screens below need one, so they mutate the map — the shapes the fixture cannot hold.
+
+def _with_interface(kind: str) -> Any:
+    """A `theirs` surface of `kind`, standing on the dependency UC1's walk already steps at (`D4`).
+
+    That step is what the derivation reads on a `theirs` surface — and reads ONLY when the kind
+    means a person goes there, which is the whole point of gating it."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [{
+            "id": "I1", "name": "Google sign-in", "what": "Where a person proves who they are.",
+            "side": "theirs", "facing": "user", "kind": kind,
+            "carries": [{"direction": "out", "what": "a sign-in request", "elements": []}],
+        }]
+        for d in m["deps"]:
+            if d["id"] == "D4":
+                d["interfaces"] = ["I1"]
+    return mutate
+
+
+def test_a_surface_card_says_what_shape_it_is() -> None:
+    """"Show me every API this product exposes" was a question a reader answered off the surface's
+    NAME, and no tool could answer at all."""
+    with _served_map(_with_interface("hosted-screen")) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        pills = page.evaluate(
+            "() => [...document.querySelectorAll('.ecard .ecard-pill')].map(e => e.textContent)")
+        assert "their screen" in pills, pills
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_surface_a_person_goes_to_draws_the_person_and_one_we_merely_call_draws_nobody() -> None:
+    """The same surface, the same walk, the same dependency — only the KIND differs, and it decides
+    whether anyone is on the far side. Ungated, the join puts human roles behind a server.
+
+    And the empty answer is a SENTENCE, not a blank: "nobody goes there" is the correct answer for a
+    crash reporter, and a page that just stopped would read as unfinished."""
+    with _served_map(_with_interface("hosted-screen")) as url, \
+            _page(url + "#v=interfaces&iface=I1") as page:
+        _settle(page)
+        names = page.evaluate(
+            "() => [...document.querySelectorAll('.ecard[data-key] .ecard-name')]"
+            ".map(e => e.textContent)")
+        assert "Org creator" in names, names
+        assert not page.js_errors, page.js_errors
+    with _served_map(_with_interface("api")) as url, \
+            _page(url + "#v=interfaces&iface=I1") as page:
+        _settle(page)
+        names = page.evaluate(
+            "() => [...document.querySelectorAll('.ecard[data-key] .ecard-name')]"
+            ".map(e => e.textContent)")
+        assert names == [], names
+        text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
+        assert "no person goes there" in text, text
+        assert not page.js_errors, page.js_errors

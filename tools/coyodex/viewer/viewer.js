@@ -9778,11 +9778,43 @@ function ruleStepChip(l) {
 // with no direction. This draws only the touchpoints, in product words, with which way the data
 // flows, who each one serves, and the features behind it.
 const IFACE_ARROW = { in: '←', out: '→', both: '↔' };
+// What SHAPE a surface is, in the reader's words. The map authors an eleven-word seeded-open
+// vocabulary; this is the only place the code words become English, and a MINTED kind falls through
+// to itself rather than disappearing — a product with a shape the seeds cannot name still says so.
+// `family` is the four box outlines the picture draws: a reader cannot learn eleven shapes, so the
+// shape says the family and the word says the kind.
+const IFACE_KIND = {
+  'screen':        { word: 'screen',        family: 'screens' },
+  'mobile-app':    { word: 'mobile app',    family: 'screens' },
+  'desktop-app':   { word: 'desktop app',   family: 'screens' },
+  'hosted-screen': { word: 'their screen',  family: 'screens' },
+  'command-line':  { word: 'command line',  family: 'programs' },
+  'api':           { word: 'API',           family: 'programs' },
+  'agent-tools':   { word: 'agent tools',   family: 'programs' },
+  'file':          { word: 'files',         family: 'data' },
+  'content':       { word: 'content',       family: 'data' },
+  'settings':      { word: 'settings',      family: 'data' },
+  'handoff':       { word: 'handoff',       family: 'handoffs' },
+};
+function ifaceKindWord(k) { return (IFACE_KIND[k] && IFACE_KIND[k].word) || k || ''; }
+function ifaceKindFamily(k) { return (IFACE_KIND[k] && IFACE_KIND[k].family) || 'other'; }
 function ifaceList() { return FEATURES.interfaces || []; }
 function ifaceById(id) { return ifaceList().find((i) => i.id === id) || null; }
 function ifaceFlowWord(i) {
   const f = i.flow || [];
   return f.length === 2 ? 'both' : f[0] || '';
+}
+// A ROLE as a card. Roles do NOT ride in `GRAPH.nodes` — they have their own `GRAPH.roles` array —
+// so `elementCardListHtml` renders nothing for an `Rn` and this is the one card builder that can
+// draw one. Same three parts as every other card: the name, a pill saying what it is, one sentence.
+// The card is a door to that actor's own page, which is where the type pill would have gone anyway.
+function ifaceActorCardHtml(rid) {
+  const r = ROLE_BY_ID[rid] || {};
+  return plainCardHtml({
+    key: rid, name: r.name || rid,
+    desc: wantsSentence(r.wants || ''),
+    pill: cardPillsHtml(actorSidePills(r.kind, r.audience)),
+  });
 }
 function ifaceCardHtml(i) {
   const arrow = IFACE_ARROW[ifaceFlowWord(i)] || '';
@@ -9790,9 +9822,14 @@ function ifaceCardHtml(i) {
   const bits = [];
   if (ways) bits.push(`${ways} way${ways === 1 ? '' : 's'} in`);
   if (i.facing) bits.push(i.facing === 'operator' ? 'operator-facing' : 'user-facing');
+  // The SHAPE leads the pill row: "show me every API this product exposes" is a question a reader
+  // answered off the surface's NAME until now, and off nothing a machine could read.
+  const kind = i.kind
+    ? `<span class="ecard-pill" title="what shape this surface is">${esc(ifaceKindWord(i.kind))}</span>`
+    : '';
   return plainCardHtml({
     key: i.id, name: i.name, desc: i.what,
-    pill: arrow ? `<span class="ecard-pill" title="which way data crosses">${arrow}</span>` : '',
+    pill: kind + (arrow ? `<span class="ecard-pill" title="which way data crosses">${arrow}</span>` : ''),
     count: bits.join(' · '),
   });
 }
@@ -9824,6 +9861,7 @@ function renderInterface(s) {
   }
   const pills = [
     `<span class="uc-caplabel">${esc(i.side === 'ours' ? 'our surface' : 'their surface')}</span>`,
+    i.kind ? `<span class="uc-caplabel">${esc(ifaceKindWord(i.kind))}</span>` : '',
     i.facing ? `<span class="uc-caplabel">${esc(i.facing)}-facing</span>` : '',
     ifaceFlowWord(i) ? `<span class="uc-caplabel">${esc(ifaceFlowWord(i))} ${esc(IFACE_ARROW[ifaceFlowWord(i)] || '')}</span>` : '',
   ].join('');
@@ -9834,6 +9872,29 @@ function renderInterface(s) {
     `<tr><td class="if-dir">${esc(c.direction === 'in' ? 'in' : 'out')}</td>`
     + `<td>${esc(c.what)}</td>`
     + `<td>${(c.elements || []).length ? mdRefs(c.elements.join(' '), GRAPH.nodes) : '<span class="feat-empty">nothing stored</span>'}</td></tr>`).join('');
+  // WHO is on the far side, as cards rather than one free-text line. Both halves are DERIVED, and
+  // both used to be one authored id in one slot: the dependencies come from each dep's own
+  // `interfaces` list, and the actors from the walks, gated on the kind.
+  //
+  // NO ACTOR IS A REAL ANSWER, not a gap. Only the two kinds that MEAN a person goes to the far side
+  // — a screen someone else owns, and a link we hand over — derive anyone on a `theirs` surface, so
+  // a crash reporter correctly draws nobody and the page says why instead of looking unfinished.
+  const actorIds = i.actors || [];
+  const depIds = i.deps || [];
+  const goesThere = i.kind === 'hosted-screen' || i.kind === 'handoff';
+  const noActors = i.side === 'ours'
+    ? 'No walk in this map reaches this surface, so nothing here can say who comes to it.'
+    : goesThere
+      ? 'No walk in this map shows anyone going there. That is a gap in the stories, not a missing '
+        + 'field — this shape of surface is one a person goes to.'
+      : 'Nobody. The product itself reaches this surface; no person goes there.';
+  const farSide =
+    (actorIds.length ? `<div class="ecard-list">${actorIds.map(ifaceActorCardHtml).join('')}</div>`
+                     : `<p class="feat-empty">${esc(noActors)}</p>`)
+    // The dependency is the PIPE, never the far side — the rule the whole section is built on. It
+    // gets its own heading rather than sitting in the same list as the people.
+    + (depIds.length
+        ? '<h3 class="card-group-head">Reached through</h3>' + elementCardListHtml(depIds) : '');
   const feats = i.featuresUnknown
     ? '<p class="feat-empty">Not stated. No walk in this map comes through this surface, so nothing here can say which features use it.</p>'
     : (i.features || []).length ? elementCardListHtml(i.features)
@@ -9842,15 +9903,16 @@ function renderInterface(s) {
     + pageHeroHtml({ name: i.name, pills, desc: i.what ? mdInline(i.what) : '',
                      noDesc: 'No description recorded for this surface.',
                      metaLbl: far ? 'far side' : '', meta: far })
+    + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
     + (rows ? `<h3 class="card-group-head">What crosses</h3><table class="if-table">${rows}</table>`
             : '<h3 class="card-group-head">What crosses</h3><p class="feat-empty">The map records nothing crossing this surface.</p>')
     + '<h3 class="card-group-head">Features through it</h3>' + feats
     + ((i.components || []).length
         ? '<h3 class="card-group-head">The code behind it</h3>' + elementCardListHtml(i.components) : '')
-    + ((i.deps || []).length
-        ? '<h3 class="card-group-head">What it is built on</h3>' + elementCardListHtml(i.deps) : '')
     + '</div>';
   bindElementCards(diagram);
+  // The actor cards are the only `data-key` cards on this page, and their door is the actor's page.
+  bindPlainCards(diagram, (rid) => go({ kind: 'actor', act: roleName(rid) }));
   // The record chips inside "what crosses" are `sys-ref` buttons, the same shape the System tab's
   // prose refs use — so a record named in a crossing opens where that record lives.
   diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) => {

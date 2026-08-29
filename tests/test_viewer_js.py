@@ -2940,8 +2940,11 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     assert "staff-owned" not in code.lower(), "the page's second form for a machine is back"
     assert "OWNED" not in "".join(l for l in code.splitlines() if "ecard-pill" in l), \
         "no pill prints an -OWNED word"
-    assert js.count("actorSidePills(") == 3, \
-        "the helper itself, cardFacts, and the story actor card — nothing else"
+    assert js.count("actorSidePills(") == 4, \
+        ("the helper itself, cardFacts, the story actor card and the interface page's far-side card "
+         "— nothing else. A ROLE is not in `GRAPH.nodes`, so `elementCardHtml` cannot draw one and "
+         "the far-side card is the fourth renderer that must ask this helper rather than decide for "
+         "itself which pill an actor wears")
     head = js[js.index("function actorPageHeroHtml(actorName) {"):
               js.index("\n}", js.index("function actorPageHeroHtml(actorName) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
