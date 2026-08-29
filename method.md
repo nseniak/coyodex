@@ -1811,16 +1811,18 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   up saying (the same reason a lead tie-break is refused below). The lead applies the upheld ones
   through the destination table below and rejects the rest. Rejecting a refutation is a normal
   outcome — say so in `grounding.note`.
-- **Hand each skeptic its evidence bundle: `coyodex context --map <map> --repo <repo> --claims
-  <batch> --out <bundle.md>`.** Per claim it gathers the map record of every element the claim
-  names and the 20 code lines either side of the claim's own anchor. A skeptic spends its run
-  fetching exactly that, and every file it opens joins a context every later turn re-reads:
-  measured across eight skeptic agents, **52-62% of each one's bill was re-reading its own
-  accumulated context**, against 12-18% for everything it wrote. Name the bundle in the skeptic's
-  brief beside its claims file. Two things the bundle does NOT change: it is a starting point and
-  says so, so a skeptic still opens whatever a claim actually turns on; and an anchor whose FILE is
-  absent is shouted in it rather than quietly skipped, because that is a `false` verdict and a
-  bundle that hid it would undo the rule that says so.
+- **Do NOT pre-gather a skeptic's evidence. It was tried, measured, and it cost more.** The
+  reasoning was good: 52-62% of a skeptic's bill is re-reading its own accumulated context, so hand
+  it what it was going to fetch. `coyodex context` builds exactly that bundle. On a controlled A/B
+  over the same planted batches — two skeptics with the bundle, two without — the bundle arm read
+  **1.47x more context** and cost **1.34x more**, at **identical recall** (both arms 20/20).
+  The reason is not a bug in the bundle, and it cannot be tuned away: a bundle a skeptic is told to
+  treat as a starting point gets read IN ADDITION to the repo, not instead of it. Remove that
+  instruction and the bundle becomes the evidence, which is the fabricated-confirmation failure the
+  contract forbids by name. The saving and the safety are the same instruction, pulling opposite
+  ways. **What the same numbers DO point at:** cost tracks a skeptic's response count almost
+  linearly — 19 responses cost $2.45 where 51 cost $4.00 on the same work. Smaller batches, not
+  richer briefs.
 - **Cap each batch at ~40 claims** and split an oversized theme into two skeptics rather than one
   long-running one — an oversized batch becomes the phase's critical path, and more, smaller
   skeptics also mean fresher context per claim, so this trades nothing away. **When the worklist
