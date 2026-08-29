@@ -338,7 +338,7 @@ anyone write it at all". A section with no step sending anyone to author it come
 empty section is the one state most checks are silent about, because they need a row to check.
 
 ```
-interfaces · interface_doors · interfaces_undecided_deps
+interfaces · interface_doors · interfaces_undecided_deps · interfaces_without_kind
 ```
 
 Read them together:
@@ -352,6 +352,12 @@ Read them together:
   in every other count, which is what makes it worth its own line here.
 - **`interfaces_undecided_deps` above 0** — an external dependency naming neither a surface nor a
   reason. That is a decision nobody made, not a decision to exclude.
+- **`interfaces_without_kind` equal to `interfaces`** — the rows were written and their SHAPE was
+  not, so no step sent anyone to the field even though the row it sits on was authored. This one is
+  worth reading closely: the field shipped WITHOUT a rebuild to prove the method text on, so the
+  first build to author a kind is the first evidence that the instruction reads correctly. A count
+  BETWEEN 0 and the total is the more interesting reading — some rows got one and some did not,
+  which is a lead who stopped rather than a lead nobody sent.
 
 **Then generalise the question**, because interfaces is only the instance that was caught: for each
 section the method documents, did this build write it? A section documented but never SEQUENCED is a

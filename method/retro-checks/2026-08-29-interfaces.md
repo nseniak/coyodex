@@ -1,6 +1,6 @@
 # The product's outside edge is authored, and every story goes through a door
 
-Change: a map records `interfaces` (T2b) — one row per surface through which the product exchanges
+Change (2026-08-29, extended the same day by `interfaces[].kind`): a map records `interfaces` (T2b) — one row per surface through which the product exchanges
 data or events with the outside world — every external-group dep either names a surface or says why
 it is none, and every flow opens at its door (`Rn → In`, then `In → Cn`) with each `Cn → Dn` step on
 a surface-standing dep migrated to `Cn → In` · method.md, method/model.md,
@@ -50,3 +50,33 @@ The root mistake under both: **a section was scheduled by its INPUTS and never b
    and `interfaces_undecided_deps`, so a build that authors twelve surfaces and one that authors none
    no longer score identically.
    regression sign: a profile in which those three read `None` on a map that has interfaces.
+
+4. expect: every surface carries a `kind`, and the build mints **at most one** new one.
+   *(Added 2026-08-29 with `interfaces[].kind`. This check is doing REAL WORK, not ceremony: that
+   change shipped with NO REBUILD — it was validated by hand on the two maps it could reach, so the
+   METHOD TEXT is unverified and this is the only thing that will report on it. It fires on somebody
+   else's build, months from now.)*
+
+   Read it in three parts:
+
+   - **Every row has one.** `interfaces_without_kind` is 0. Equal to `interfaces` means no step sent
+     anyone to the field at all; a number in between means a lead started and stopped.
+   - **At most one mint.** `validate` prints ONE aggregated line naming every non-seed kind. The
+     eleven seeds cover all 23 surfaces on the two mapped products and every surface on the two
+     unmapped ones, so two or more mints on one repo is the vocabulary failing to fit, or an author
+     not reading it. There is deliberately no seed for CI, hardware, telephony or a browser
+     extension — a mint for one of those is CORRECT, and it is what this check is listening for.
+   - **The kinds are SHAPES.** Read the eleven values by eye. `payment`, `analytics`, `identity`,
+     `observability`, `search`, `storage` are the regression: `kind` has been used for the axis
+     `deps[].bucket` already holds, which is exactly the mistake that cut three seeds from this
+     field's own first draft. `validate` nudges on those six words by name; a SEVENTH purpose word
+     it does not know is what the eye is for.
+
+   regression sign: `interfaces_without_kind` equal to `interfaces`; two or more minted kinds; one
+   seed spelled two ways in one map (`cli` beside `command-line`); a purpose word as a kind; or an
+   entry-point kind as a kind (`http-route`, `mcp-tool`) — that names the MECHANISM, one level down.
+
+   And the mirror check, which needs no count: **`actors` never appears as an authored field.** It is
+   derived, and a fragment that writes one is a build inventing a field the schema does not have —
+   `assemble` refuses it, so the sign is an assembly failure naming `interfaces[].actors`, not a bad
+   map.

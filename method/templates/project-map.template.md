@@ -186,6 +186,25 @@ why: needs the result of HP1
      `Side` = whose DESIGN it is: if the far side vanished tomorrow, would its shape change?
      `Facing` = who it serves, user or operator. `Ways in` are `EPn` ids, assigned through
      `reconcile` (`ways_in`), never hand-written here: those ids are minted at assembly.
+
+     `Kind` = what SHAPE the surface is, one word, authored with the row. Seeded-open, eleven seeds:
+       ours   — screen · mobile-app · desktop-app · command-line · file · settings
+       theirs — hosted-screen · content · handoff
+       either — api · agent-tools
+     SHAPE, NEVER PURPOSE: a payment processor and a crash reporter are both `api`, and the
+     dependency's `Bucket` already says which is which. A kind answering "what is it FOR" means the
+     row is mis-modelled. The side grouping is guidance, not a rule. Prefer a seed; mint only when
+     none fits, and reuse the exact spelling on rebuild. The tiebreak for a surface that is both a
+     place people act and a service we call: the kind names where the PEOPLE are, but only when the
+     product's own flow takes them there — a sign-in redirect is `hosted-screen`, a code link we
+     hand over is `handoff`, a crash reporter an operator opens on their own is `api`.
+
+     There is no `Actors` column and no `actors` field: WHO is on the far side is DERIVED from the
+     walks, gated on the kind. Never write it by hand.
+
+     `Far side` is free text, for a far side that is neither a role nor a dependency ("anyone on the
+     web"). The dependencies standing on a surface are derived from each dep's own list — do not
+     name a `Dn` here.
      `Source` is the ONE line declaring the whole surface (the router, the command table, the file
      writer) — optional; a settings surface is declared in no single place.
 
@@ -193,9 +212,9 @@ why: needs the result of HP1
      name one or more surfaces or say why it is none. Without the reason there is no way to tell a deliberate
      exclusion from nobody having looked. -->
 
-| ID | Name | Side | Facing | What it is | Far side | Source | Conf. |
-|---|---|---|---|---|---|---|---|
-| **I1** | <surface, in product words> | ours | user | <one sentence> | <who, or a `Dn`/`Rn`> | [file](path:1) | verified |
+| ID | Name | Side | Kind | Facing | What it is | Far side | Source | Conf. |
+|---|---|---|---|---|---|---|---|---|
+| **I1** | <surface, in product words> | ours | screen | user | <one sentence> | <who, in words> | [file](path:1) | verified |
 
 ### What crosses I1
 

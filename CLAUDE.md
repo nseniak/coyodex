@@ -36,6 +36,14 @@ the code's names.
   are deliberately NOT criteria: who runs the machine, and whether the far side
   does something "business". The word also means a code declaration in a
   TypeScript or Java project, so a map of one shows both meanings.
+- **shape** (of a surface) — what kind of thing a surface IS, in one word: a
+  screen, a command line, an API, files, a handoff. There are eleven of these
+  words. Shape is not PURPOSE: a payment service and a crash reporter are both
+  an API, and what tells them apart is the dependency's own purpose word.
+- **who is on the far side** — the people the map can show standing at a surface.
+  Never written by hand: it is worked out from the walks. A surface with nobody
+  on it is a normal answer, because the product itself is what reaches most of
+  the outside services.
 - **surface** — the everyday word for one interface. **our surface** = we define
   its shape (our command line, our web pages). **their surface** = someone else
   does (a payment processor, a sign-in provider). The test: if the far side

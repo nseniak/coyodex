@@ -67,6 +67,17 @@ be scored **down**, not guessed.
    a staff console behind the same addresses are two surfaces, and collapsing them hides who a
    surface is for. And the name is in product words: "Customer dashboard", never "http-route".
 
+   An interface's **`kind` is SHAPE, and a kind that answers "what it is FOR" is mis-modelled** —
+   that axis is the dependency's `bucket`, one table over, in a richer vocabulary. Score down a map
+   whose kinds read `payment`, `analytics`, `identity`, `observability`, `search` or `storage`: a
+   payment processor and a crash reporter are both `api`, and the map has spent its shape field
+   restating a purpose it already records. Two more things to check, because neither is a spelling
+   mistake. A kind that is really an entry-point kind (`http-route`, `mcp-tool`) is a LEVEL error:
+   that names the mechanism, and this names the surface. And a `kind` minted where a seed fits, or
+   one seed spelled two ways across a map, splits one shape into two for every reader and every
+   later build. Several `theirs` rows sharing `api` is CORRECT, not lazy — on that side almost every
+   surface is the same shape.
+
 5. **Happy-Path coherence** — does the ordered spine read as a real end-to-end walk, with each step's
    `why:` precondition satisfied by an earlier step?
 

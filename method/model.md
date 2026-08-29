@@ -424,8 +424,26 @@ Semantics, stated on the fields:
   **`side`** is whose DESIGN the surface is (`ours`/`theirs`): if the far side vanished tomorrow,
   would its shape change? **`facing`** is who it serves (`user`/`operator`) and is AUTHORED —
   `roles[].audience` answers a different question and marks a bought service `internal` while its
-  interface is user-facing. **`party`** names the far side in words; **`party_ref`** is the same far
-  side as an `Rn`/`Dn`, pattern-pinned. **`ways_in`** lists the `EPn`s the surface is made of and
+  interface is user-facing. **`party`** names the far side in words, for a far side that is
+  neither a role nor a dependency ("anyone on the web", "the project under analysis"); the
+  dependencies standing on the surface are DERIVED from each dep's own `interfaces` list, and WHO is
+  on the far side is DERIVED from the walks — neither is authored here.
+  **`kind`** is what SHAPE the surface is, seeded-open over
+  `grammar.INTERFACE_KIND_SEEDS`: `screen`, `mobile-app`, `desktop-app`, `command-line`, `file`,
+  `settings`, `hosted-screen`, `content`, `handoff`, `api`, `agent-tools`. **SHAPE, never PURPOSE** —
+  a payment processor and a crash reporter are both `api`, and `deps[].bucket` already says which is
+  which in a richer vocabulary; a kind answering "what is it FOR" means the row is mis-modelled.
+  AUTHORED, not derived, and the measurement is why: deriving it from the ways in gives one clean
+  answer on 4 of coyodex's 11 surfaces and 1 of mcpolis's 12, and NOTHING on any `theirs` surface,
+  which has no ways in by definition. It is also a LEVEL above `entry_points[].kind`, never a
+  duplicate of it: a way in's kind names the MECHANISM (an HTTP address, a tool, a command), this
+  names the SURFACE (a web UI, a CLI, an API), and `ui-route` + `http-route` together ARE a web UI.
+  **`actors` is not a field.** Who is on the far side is derived, gated on the `kind`: an `ours`
+  surface takes the roles driving the use cases behind its ways in; a `theirs` surface takes the
+  roles whose stories reach it ONLY when the kind is `hosted-screen` or `handoff` (the two that MEAN
+  a person goes there); every other surface derives nobody, and nobody is the correct answer. An
+  authored value beside a derived one is the failure mode this shape exists to remove.
+  **`ways_in`** lists the `EPn`s the surface is made of and
   travels through `reconcile` (field `ways_in`) exactly like a use case's `entry_points`, for the
   same reason: those ids are minted at assembly. **`carries`** is one row per thing that crosses, in
   ONE direction, each with a plain sentence and the SINGLE records (`En`) that cross — never a data
