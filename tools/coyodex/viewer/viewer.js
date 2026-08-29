@@ -9833,6 +9833,225 @@ function ifaceCardHtml(i) {
     count: bits.join(' · '),
   });
 }
+// ── the PICTURE ──────────────────────────────────────────────────────────────────────────────────
+// Five columns, read left to right: who is on our side, our surfaces, the product, their surfaces,
+// who is on theirs. The card list below it was a LIST; this says the same thing as a shape, and the
+// two shapes a reader needs are the ones a list cannot draw — that the product sits between two
+// shores, and that a surface a person reaches has a person drawn on it.
+//
+// The CUT is by `side`, and the ARROWS carry direction: a their-surface is not always an exit — a
+// chat platform is someone else's surface that stories arrive IN from. One arrow per direction the
+// surface's `carries` records, so a request-and-answer surface draws two. Measured: 4 of coyodex's
+// 11 surfaces and 7 of mcpolis's 12 carry both.
+//
+// WIDTH is where this breaks, and the shape is built round it: five columns of cards would be
+// ~1900px and would not fit 1440. So the product is a narrow SPINE and the two outer columns hold
+// CHIPS, not cards.
+const IFACE_ROW_GAP = 10;
+// A dependency is a CHIP on the surface's outer edge, never a card and never a wire's far end. A
+// dependency is HOW a surface is reached, not the surface — the rule the whole section is built on,
+// and the one `party_ref` blurred by holding a dep and a role in one slot.
+function ifaceFarChipsHtml(i) {
+  const bits = [];
+  if (i.party) bits.push(`<span class="ifd-chip ifd-chip-party">${esc(i.party)}</span>`);
+  for (const d of (i.deps || [])) {
+    const n = GRAPH.nodes[d];
+    bits.push(`<span class="ifd-chip ifd-chip-dep" data-id="${esc(d)}" `
+      + `title="${esc((n && n.name) || d)} — the pipe this surface is reached through, not the far `
+      + `side">${esc((n && n.name) || d)}</span>`);
+  }
+  return bits.join('');
+}
+function ifaceActorChipsHtml(i) {
+  return (i.actors || []).map((rid) => {
+    const r = ROLE_BY_ID[rid] || {};
+    return `<span class="ifd-chip ifd-chip-actor" data-act="${esc(r.name || rid)}" `
+      + `title="Open ${esc(r.name || rid)}">${esc(r.name || rid)}</span>`;
+  }).join('');
+}
+// ONE box. The FAMILY is the outline (four to learn), the KIND is the word inside it (eleven to
+// recognise). A surface with no kind takes the default outline and no word, and the picture still
+// draws — never invent a shape the map did not author.
+function ifaceBoxHtml(i) {
+  const fam = i.kind ? ifaceKindFamily(i.kind) : 'none';
+  const ways = (i.waysIn || []).length;
+  return `<article class="ifd-box ifd-fam-${esc(fam)}" data-iface="${esc(i.id)}" tabindex="0" `
+    + `title="Open ${esc(i.name)}">`
+    + `<span class="ifd-name">${esc(i.name)}</span>`
+    + '<span class="ifd-pills">'
+    + (i.kind ? `<span class="ifd-kind">${esc(ifaceKindWord(i.kind))}</span>` : '')
+    + (ways ? `<span class="ifd-ways">${ways} way${ways === 1 ? '' : 's'} in</span>` : '')
+    + '</span></article>';
+}
+// One SIDE of the picture: the surfaces, each on its own row, with its outer column beside it. The
+// outer cell is EMPTY when the map derives nobody — never a placeholder, never an invented actor.
+function ifaceSideHtml(rows, side) {
+  return rows.map((i) => {
+    const outer = side === 'ours' ? ifaceActorChipsHtml(i) : ifaceFarChipsHtml(i);
+    const cell = `<div class="ifd-outer" data-for="${esc(i.id)}">${outer}</div>`;
+    return `<div class="ifd-row">`
+      + (side === 'ours' ? cell + ifaceBoxHtml(i) : ifaceBoxHtml(i) + cell)
+      + '</div>';
+  }).join('');
+}
+function ifaceDiagramHtml(ours, theirs) {
+  const head = (t) => `<p class="ifd-colhead">${esc(t)}</p>`;
+  return '<div class="ifd-wrap"><div class="ifd-stage" id="ifdstage">'
+    + '<svg class="ifd-wires" aria-hidden="true"><defs>'
+    // The same fixed-size head the story diagram draws, and for the same reason: a marker scales
+    // with its line's stroke width by default, so the head would grow and shift every time a wire
+    // went from grey to lit.
+    + '<marker id="ifd-arr" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="9" markerHeight="9" '
+    + 'markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
+    + '<path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
+    + '<div class="ifd-half ifd-half-ours">' + head('Our surfaces')
+    + (ours.length ? ifaceSideHtml(ours, 'ours')
+                   : '<p class="ifd-none">This map records no surface of the product’s own.</p>')
+    + '</div>'
+    + '<div class="ifd-half ifd-spine"><p class="ifd-colhead">The product</p>'
+    + `<div class="ifd-product" id="ifdproduct">${esc(GRAPH.title || 'the product')}</div></div>`
+    + '<div class="ifd-half ifd-half-theirs">' + head('Their surfaces')
+    + (theirs.length ? ifaceSideHtml(theirs, 'theirs')
+                     : '<p class="ifd-none">This map records no outside service the product '
+                       + 'exchanges data with.</p>')
+    + '</div>'
+    + '</div></div>';
+}
+// The curve, and only the curve — the one piece of wire geometry the two diagrams on this viewer
+// genuinely share. It leaves and arrives HORIZONTALLY, because that is the direction the arrow head
+// is oriented in; the handle scales with the vertical drop so the turn happens over the whole span
+// instead of kinking right where the head sits.
+function wireCurveD(sx, sy, tx, ty) {
+  // The handle follows the DIRECTION OF TRAVEL. A fixed `+dx` on the start assumes every wire runs
+  // left to right, and half of this picture does not: a their-surface's inbound wire runs right to
+  // left, and the wrong-signed handle drew it as an S that overshot both of its own ends.
+  const dir = tx >= sx ? 1 : -1;
+  const span = Math.abs(tx - sx);
+  // …and capped by the SPAN as well as by the drop, so a short hop across a gutter is a short curve
+  // rather than a loop that swings out past both boxes.
+  const dx = Math.min(Math.max(Math.abs(ty - sy) * 0.55, 22), Math.max(span * 0.45, 8));
+  return `M ${sx} ${sy} C ${sx + dir * dx} ${sy}, ${tx - dir * dx} ${ty}, ${tx} ${ty}`;
+}
+function bindIfaceDiagram(root) {
+  const stage = root.querySelector('#ifdstage');
+  if (!stage) return;
+  const svg = stage.querySelector('svg.ifd-wires');
+  const prod = stage.querySelector('#ifdproduct');
+  if (!svg || !prod) return;
+  // OFFSET geometry, not getBoundingClientRect: a render can arrive mid drill-animation, whose
+  // ancestor transform skews client rects box by box while the animation runs. Offsets read the
+  // settled layout regardless. Every box's offsetParent is the stage (the nearest positioned
+  // ancestor), so the numbers are already in stage space.
+  const edge = (el, which) => [
+    which === 'left' ? el.offsetLeft : el.offsetLeft + el.offsetWidth,
+    el.offsetTop + el.offsetHeight / 2];
+  const paths = [], labels = [];
+  const wire = (from, to, iid, cls) => {
+    const [sx, sy] = from, [tx, ty] = to;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', wireCurveD(sx, sy, tx, ty));
+    path.setAttribute('marker-end', 'url(#ifd-arr)');
+    path.setAttribute('class', cls || '');
+    path.dataset.iface = iid;
+    svg.appendChild(path); paths.push(path);
+    return [(sx + tx) / 2, (sy + ty) / 2];
+  };
+  // `nudge` separates the two crossings of ONE surface. Both wires join the same two edges, so their
+  // midpoints are identical and the two labels landed exactly on top of each other — on a
+  // request-and-answer surface, which is 4 of coyodex's 11 and 7 of mcpolis's 12, the common case.
+  const label = (at, text, iid, title, nudge) => {
+    if (!text) return;
+    const lab = document.createElement('div');
+    lab.className = 'ifd-elabel';
+    lab.dataset.iface = iid;
+    lab.textContent = text;
+    if (title) lab.title = title;
+    lab.style.left = at[0] + 'px';
+    lab.style.top = (at[1] - 9 + (nudge || 0)) + 'px';
+    // Not a door, but not empty background either: a click on it must not clear the pin.
+    lab.addEventListener('click', (ev) => ev.stopPropagation());
+    stage.appendChild(lab); labels.push(lab);
+  };
+  // The sentence a crossing carries, cut to fit the gap. Elided rather than dropped: a wire that
+  // says only "in" says nothing the arrow head did not already say.
+  const elide = (t) => {
+    const s2 = String(t || '').trim();
+    return s2.length > 46 ? s2.slice(0, 44).replace(/[\s,;:.]+$/, '') + '…' : s2;
+  };
+  for (const i of ifaceList()) {
+    const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(i.id)}"]`);
+    if (!box) continue;
+    const ours = i.side === 'ours';
+    const boxInner = edge(box, ours ? 'right' : 'left');
+    const prodSide = edge(prod, ours ? 'left' : 'right');
+    for (const dir of ['in', 'out']) {
+      const cr = (i.crossings || []).find((c) => c.direction === dir);
+      if (!cr) continue;
+      // `in` points AT the product, `out` points away from it — the same rule on both shores, so a
+      // reader never has to remember which side they are looking at.
+      const at = dir === 'in' ? wire(boxInner, prodSide, i.id, 'ifd-w-in')
+                              : wire(prodSide, boxInner, i.id, 'ifd-w-out');
+      label(at, elide(cr.what), i.id, cr.what, dir === 'in' ? -13 : 13);
+    }
+    // …and the wire to the OUTER column: the people on our side, the far side on theirs. It carries
+    // NO label — the chip beside it is already the shortest true label this wire could wear, and
+    // drawing one word twice twenty pixels apart is noise rather than information.
+    const outer = stage.querySelector(`.ifd-outer[data-for="${CSS.escape(i.id)}"]`);
+    if (outer && outer.children.length) {
+      const boxOuter = edge(box, ours ? 'left' : 'right');
+      const outerEdge = edge(outer, ours ? 'right' : 'left');
+      if (ours) wire(outerEdge, boxOuter, i.id, 'ifd-w-outer');
+      else wire(boxOuter, outerEdge, i.id, 'ifd-w-outer');
+    }
+  }
+  // Hover previews WHILE NOTHING IS PINNED; click PINS. The same gesture the Features page has, and
+  // the same rule: a pin is the reader's explicit choice, so a stray pass of the pointer over
+  // another box must not take the picture away from it.
+  let hideTimer = null, pinned = null;
+  const show = (iid) => {
+    clearTimeout(hideTimer);
+    for (const p of paths) {
+      p.classList.toggle('ifd-hot', p.dataset.iface === iid);
+      p.classList.toggle('ifd-cold', p.dataset.iface !== iid);
+    }
+    for (const l of labels) l.classList.toggle('ifd-lab-on', l.dataset.iface === iid);
+  };
+  const clear = () => {
+    for (const p of paths) p.classList.remove('ifd-hot', 'ifd-cold');
+    for (const l of labels) l.classList.remove('ifd-lab-on');
+  };
+  const restore = () => { if (pinned) show(pinned); else clear(); };
+  stage.querySelectorAll('.ifd-box').forEach((box) => {
+    const iid = box.dataset.iface;
+    box.addEventListener('mouseenter', () => { if (!pinned) show(iid); });
+    box.addEventListener('mouseleave', () => {
+      clearTimeout(hideTimer); hideTimer = setTimeout(restore, 180);
+    });
+    const pick = (ev) => {
+      ev.stopPropagation();
+      stage.querySelectorAll('.ifd-box.ifd-picked').forEach((b) => b.classList.remove('ifd-picked'));
+      if (pinned === iid) { pinned = null; clear(); return; }
+      pinned = iid; box.classList.add('ifd-picked'); show(iid);
+    };
+    box.addEventListener('click', pick);
+    // Enter OPENS the surface's page — the keyboard has no hover to preview with, so the key that
+    // reaches a box should reach what the box is about. The pin stays a pointer gesture.
+    box.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); go({ kind: 'interfaces', iface: iid }); }
+    });
+    box.addEventListener('dblclick', () => go({ kind: 'interfaces', iface: iid }));
+  });
+  stage.querySelectorAll('.ifd-chip-actor').forEach((c) => {
+    c.addEventListener('click', (ev) => {
+      ev.stopPropagation(); go({ kind: 'actor', act: c.dataset.act });
+    });
+  });
+  stage.querySelectorAll('.ifd-chip-dep[data-id]').forEach((c) => {
+    c.addEventListener('click', (ev) => {
+      ev.stopPropagation(); selectFromTree(c.getAttribute('data-id'));
+    });
+  });
+}
 function renderInterfaces(s) {
   // A typed or shared `#v=interfaces` on a map that records none used to render an empty page under a
   // HIDDEN tab, so nothing on screen said where you were. Send it to the landing view instead.
@@ -9845,11 +10064,16 @@ function renderInterfaces(s) {
     `<h3 class="card-group-head">${esc(title)}</h3>`
     + (rows.length ? cardGridHtml(rows.map(ifaceCardHtml).join(''))
                    : `<p class="empty">${esc(empty)}</p>`);
+  // THE CARD LIST STAYS REACHABLE. A picture is not a replacement for a list you can read down, and
+  // the Features page keeps both for the same reason: the picture answers "what shape is this
+  // product's edge", the list answers "what does each one of them do".
   diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Interfaces')
+    + ifaceDiagramHtml(ours, theirs)
     + section('Our surfaces', ours, 'This map records no surface of the product’s own.')
     + section('Their surfaces', theirs, 'This map records no outside service the product exchanges data with.')
     + '</div>';
   bindPlainCards(diagram, (id) => go({ kind: 'interfaces', iface: id }));
+  bindIfaceDiagram(diagram);
 }
 // ONE surface's page. The fan reads left to right like every other page here: who is on the far
 // side, the surface itself, what comes through it.

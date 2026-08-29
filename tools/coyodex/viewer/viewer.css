@@ -2198,3 +2198,94 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                   color: #111827; }
 .story-namelink:hover { color: #4f46e5; text-decoration: underline; }
 .story-namelink:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; border-radius: 3px; }
+
+/* ── Interfaces, drawn ────────────────────────────────────────────────────────────────────────────
+   Five columns: who is on our side, our surfaces, the product, their surfaces, who is on theirs.
+   WIDTH is the constraint the whole shape is built round. Five columns of CARDS would be about
+   1900px and would not fit 1440, so the product is a narrow spine and the two outer columns hold
+   chips: 300 + 300 + 116 + 300 + 190 plus gutters comes to about 1230, which leaves the picture
+   inside the reading column at 1440 and still whole at 1280. */
+.ifd-wrap { margin: 0 0 26px; overflow-x: auto; }
+/* The two gutters carry the wires that cross the product, and one of them carries a crossing's
+   sentence on hover — so they are the widest gaps on the page, not the narrowest. At 24px the label
+   was wider than the wire it sat on. */
+.ifd-stage { position: relative; display: grid; align-items: start; gap: 0 56px;
+             grid-template-columns: minmax(0, 1fr) 116px minmax(0, 1fr); min-width: 920px; }
+svg.ifd-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* At rest EVERY wire is grey and unlabelled: the picture is for choosing, not for reading. Hover or
+   pin makes one surface's wires the picture and fades the rest hard. */
+svg.ifd-wires path { fill: none; stroke: #c3c8d9; stroke-width: 1.4; opacity: .75;
+                     transition: stroke .15s, opacity .15s, stroke-width .15s; }
+svg.ifd-wires path.ifd-hot { stroke: #4f46e5; stroke-width: 2.2; opacity: 1; }
+svg.ifd-wires path.ifd-cold { opacity: .12; }
+/* The wire to the outer column is quieter than the two that cross the product: it says who stands
+   beside a surface, not what goes through it. */
+svg.ifd-wires path.ifd-w-outer { stroke-dasharray: 3 3; }
+/* `context-stroke`: one marker, shared by every path, taking the colour of the line it sits on — so
+   a lit wire cannot end in a grey point. */
+svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
+.ifd-colhead { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+               color: #6b7280; margin: 0 0 8px; }
+.ifd-half { display: flex; flex-direction: column; gap: 0; }
+.ifd-half-theirs .ifd-colhead { text-align: right; }
+.ifd-spine .ifd-colhead { text-align: center; }
+/* ONE ROW per surface, so the outer chips sit level with the box they hang off and the short wire
+   between them is a straight line rather than a swoop across the column. */
+/* 160px of chips against the surface's own ~230: the outer column holds CHIPS, not cards, and it is
+   what buys the surface enough width for its name to sit on one line. */
+.ifd-row { display: grid; align-items: center; gap: 0 22px; margin-bottom: 10px;
+           grid-template-columns: 160px minmax(0, 1fr); }
+.ifd-half-theirs .ifd-row { grid-template-columns: minmax(0, 1fr) 160px; }
+.ifd-outer { display: flex; flex-wrap: wrap; gap: 5px; align-content: center; min-height: 26px; }
+.ifd-half-ours .ifd-outer { justify-content: flex-end; }
+.ifd-chip { font-size: 11px; line-height: 1.3; padding: 3px 8px; border-radius: 99px;
+            border: 1px solid #dcdff0; color: #384056; background: #fff; }
+.ifd-chip-actor { cursor: pointer; border-color: #c9cef0; }
+.ifd-chip-actor:hover { border-color: #6366f1; color: #312e81; }
+/* A dependency is the PIPE, never the far side — quieter than the party it stands in front of, and
+   never shaped like the boxes, so it can never be read as a surface of its own. */
+.ifd-chip-dep { cursor: pointer; background: #f4f5fa; color: #5b6377; border-style: dashed; }
+.ifd-chip-dep:hover { border-color: #6366f1; color: #312e81; }
+.ifd-chip-party { background: #f4f5fa; color: #5b6377; }
+/* THE BOX. Four outlines for the four families, one word inside for the kind: a reader cannot learn
+   eleven shapes, so the shape says the family and the word says which of them this is. A surface
+   with NO kind takes `ifd-fam-none` — the plain outline — and the picture still draws. */
+.ifd-box { position: relative; background: #fff; border: 1.5px solid #dcdff0; border-radius: 10px;
+           padding: 8px 11px; cursor: pointer; z-index: 2;
+           transition: border-color .15s, box-shadow .15s; }
+.ifd-box:hover, .ifd-box.ifd-picked { border-color: #6366f1;
+                                      box-shadow: 0 2px 10px rgba(79,70,229,.20); }
+.ifd-box:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+.ifd-name { display: block; font-size: 12.5px; font-weight: 600; color: #111827; }
+.ifd-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.ifd-kind, .ifd-ways { font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase;
+                       color: #4b5262; }
+.ifd-kind { color: #312e81; }
+/* SCREENS are square-shouldered and solid: a thing with a face. PROGRAMS are round: a thing you
+   call. DATA is a document — square, with a fold cut from its corner. HANDOFFS are dashed: the
+   product stops here and something else carries on. */
+.ifd-fam-screens { border-radius: 4px; border-color: #b9c0ee; }
+.ifd-fam-programs { border-radius: 999px; padding-left: 16px; padding-right: 16px; }
+.ifd-fam-data { border-radius: 4px;
+                clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%); }
+.ifd-fam-handoffs { border-style: dashed; }
+/* The PRODUCT is a spine, not a card: one narrow column the full height of the taller shore, so
+   every wire lands on the same thing and the reader sees two shores round one middle. */
+/* `align-self: stretch` against the stage's `align-items: start`: the spine is the ONE item that
+   must be as tall as the taller shore, so every wire lands on the same thing. Left to start it was
+   a 120px block at the top and the picture read as three unrelated stacks. */
+.ifd-spine { display: flex; flex-direction: column; align-self: stretch; }
+.ifd-product { flex: 1; display: flex; align-items: center; justify-content: center;
+               text-align: center; font-size: 12.5px; font-weight: 600; color: #1e1b4b;
+               background: #eef0fd; border: 1.5px solid #b9c0ee; border-radius: 10px;
+               padding: 10px 6px; overflow-wrap: anywhere; min-height: 120px; }
+/* A wire's label, hidden at rest, shown for the surface the reader picked. Same component as the
+   Features page's, so the two diagrams answer a hover the same way. */
+.ifd-elabel { position: absolute; background: #eef0fd; color: #1e2235; font-size: 10.5px;
+              padding: 2px 9px; border-radius: 99px; max-width: 220px;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+              border: 1px solid rgba(40,44,90,.18);
+              transform: translate(-50%,-50%); display: none; z-index: 5;
+              box-shadow: 0 2px 8px rgba(30,34,53,.20); cursor: default; }
+.ifd-elabel.ifd-lab-on { display: block; }
+.ifd-none { font-size: 12px; color: #6b7280; margin: 0; padding: 8px 0; }

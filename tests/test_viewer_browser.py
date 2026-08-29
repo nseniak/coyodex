@@ -603,3 +603,117 @@ def test_a_surface_a_person_goes_to_draws_the_person_and_one_we_merely_call_draw
         text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
         assert "no person goes there" in text, text
         assert not page.js_errors, page.js_errors
+
+
+def _two_sided_interfaces() -> Any:
+    """Two surfaces, one on each shore, one of them carrying BOTH directions.
+
+    Both-direction is the common case, not a corner: 4 of coyodex's 11 surfaces and 7 of mcpolis's
+    12 carry two crossings, and two wires joining the same pair of edges have the same midpoint."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "what the person asks for", "elements": []},
+                         {"direction": "out", "what": "the page they get back", "elements": []}]},
+            {"id": "I2", "name": "Crash reporting", "what": "Where a crash is reported.",
+             "side": "theirs", "facing": "operator", "kind": "api",
+             "party": "the error tracking service",
+             "carries": [{"direction": "out", "what": "a crash report", "elements": []}]},
+        ]
+        for d in m["deps"]:
+            if d["id"] == "D4":
+                d["interfaces"] = ["I2"]
+    return mutate
+
+
+def test_the_interfaces_picture_draws_one_wire_per_direction_each_surface_carries() -> None:
+    """The COUNT is the shape's honesty: a surface that answers as well as asks draws two wires, and
+    a their-surface is not always an exit — the cut is by side, the arrows carry direction."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        wires = page.evaluate("""() => {
+            const p = [...document.querySelectorAll('#ifdstage path[data-iface]')];
+            const out = {};
+            for (const x of p) {
+                const cls = x.getAttribute('class') || '';
+                (out[x.dataset.iface] = out[x.dataset.iface] || []).push(cls.trim());
+            }
+            return out;
+        }""")
+        assert sorted(wires["I1"]) == ["ifd-w-in", "ifd-w-out"], wires
+        # …and the their-surface's outer wire runs to its far side, which is a CHIP, not a card.
+        assert sorted(wires["I2"]) == ["ifd-w-out", "ifd-w-outer"], wires
+        assert not page.js_errors, page.js_errors
+
+
+def test_hovering_a_surface_lights_its_own_wires_and_separates_its_two_labels() -> None:
+    """At rest every wire is grey and unlabelled. Hover makes ONE surface the picture — and its two
+    crossings join the same pair of edges, so without a nudge the two labels land exactly on top of
+    each other and the reader sees one sentence where the map holds two."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.hover('.ifd-box[data-iface="I1"]')
+        page.wait_for_timeout(250)
+        shown = page.evaluate("""() => {
+            const on = [...document.querySelectorAll('.ifd-elabel.ifd-lab-on')];
+            return {
+                hot: [...document.querySelectorAll('#ifdstage path.ifd-hot')]
+                        .map(p => p.dataset.iface),
+                cold: [...document.querySelectorAll('#ifdstage path.ifd-cold')]
+                        .map(p => p.dataset.iface),
+                labels: on.map(l => ({ text: l.textContent, top: l.offsetTop })),
+            };
+        }""")
+        assert set(shown["hot"]) == {"I1"}, shown
+        assert set(shown["cold"]) == {"I2"}, shown
+        assert len(shown["labels"]) == 2, shown
+        tops = sorted(l["top"] for l in shown["labels"])
+        assert tops[1] - tops[0] >= 18, shown          # two sentences, two lines
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_picture_fits_without_pushing_the_page_sideways() -> None:
+    """Five columns against the Features page's three. Five columns of CARDS would be about 1900px
+    and would not fit 1440, which is why the product is a narrow spine and the two outer columns
+    hold chips. MEASURED, never eyeballed."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        for width in (1440, 1280):
+            page.set_viewport_size({"width": width, "height": 900})
+            _settle(page)
+            m = page.evaluate("""() => {
+                const st = document.getElementById('ifdstage');
+                const wrap = st.parentElement;
+                return { doc: document.documentElement.scrollWidth, win: window.innerWidth,
+                         overflows: wrap.scrollWidth > wrap.clientWidth };
+            }""")
+            assert m["doc"] <= m["win"], (width, m)
+            assert not m["overflows"], (width, m)
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_surface_with_no_kind_still_draws_a_box() -> None:
+    """Degrading: no `kind` recorded means the default outline and no word. The picture still
+    draws — it is never allowed to invent a shape the map did not author."""
+    def mutate(m: dict) -> None:
+        _two_sided_interfaces()(m)
+        m["interfaces"][0]["kind"] = ""
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        cls = page.evaluate(
+            "() => document.querySelector('.ifd-box[data-iface=\\\"I1\\\"]').className")
+        assert "ifd-fam-none" in cls, cls
+        assert page.evaluate(
+            "() => !document.querySelector('.ifd-box[data-iface=\\\"I1\\\"] .ifd-kind')")
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_card_list_stays_reachable_under_the_picture() -> None:
+    """A picture is not a replacement for a list you can read down, and the Features page keeps
+    both. The picture answers "what shape is this product's edge"; the list answers "what does each
+    one of them do"."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        n = page.evaluate("() => document.querySelectorAll('.ecard[data-key]').length")
+        assert n == 2, n
+        assert not page.js_errors, page.js_errors
