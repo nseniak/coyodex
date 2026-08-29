@@ -2659,3 +2659,54 @@ def test_an_assertion_that_went_na_is_not_reported_as_thin():
     before = _card("before", [(36, "exit code not read through a pipe", 14, 14)])
     after = _card("after", [(36, "exit code not read through a pipe", 0, 0)])
     assert P.diff(before, after)[0].thin == ""
+
+
+# --- a pipe on a CONTINUATION line is still a pipe ---------------------------------
+# `read_agent_lint_calls` cut each invocation at the first newline, so a command that wrapped with a
+# trailing backslash and put its `| tail -5` on the next line scored CLEAN. Six rules-agent commands
+# on the 2026-08-29 mcpolis build had that shape: assertion 40 reported 66 narrowed invocations of
+# 101 where the true figure was 71 — wrong in its own favour, in the one instrument a retrospective
+# leans on hardest for this defect.
+
+def _lint_calls_from(command: str, tmp: Path) -> tuple[tuple[str, str], ...]:
+    import json as _json
+    sub = tmp / "subagents"
+    sub.mkdir(parents=True, exist_ok=True)
+    (sub / "agent-a1.meta.json").write_text(_json.dumps({"description": "A1"}), encoding="utf-8")
+    (sub / "agent-a1.jsonl").write_text(_json.dumps(
+        {"message": {"content": [{"type": "tool_use", "name": "Bash",
+                                  "input": {"command": command}}]}}) + "\n", encoding="utf-8")
+    return P.read_agent_lint_calls(tmp)
+
+
+def test_a_pipe_on_a_backslash_continuation_line_is_seen():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        calls = _lint_calls_from(
+            "coyodex lint-fragment --repo . \\\n  --ids ids.json f.json | tail -5", Path(td))
+    assert len(calls) == 1, calls
+    ctx = P.ScoreContext(agent_lint_calls=calls)
+    a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
+    assert (a.observed, a.of) == (0, 1), a
+
+
+def test_a_continued_command_with_no_pipe_still_scores_clean():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        calls = _lint_calls_from(
+            "coyodex lint-fragment --repo . \\\n  --ids ids.json f.json", Path(td))
+    ctx = P.ScoreContext(agent_lint_calls=calls)
+    a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_a_second_command_after_a_newline_is_still_a_separate_command():
+    """The newline split must survive: `lint-fragment f.json` then `cat x | head` on the next line
+    is one clean invocation, not a narrowed one."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        calls = _lint_calls_from("coyodex lint-fragment --repo . f.json\ncat notes.md | head -5",
+                                 Path(td))
+    ctx = P.ScoreContext(agent_lint_calls=calls)
+    a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
+    assert (a.observed, a.of) == (1, 1), a

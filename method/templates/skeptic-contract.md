@@ -155,3 +155,24 @@ skeptic's verdicts file. Call yours `build_verdicts_«BATCH».py` and use absolu
 happen and you are left believing you made it. Write `echo "===="`. Measured on one build: 61
 truncated command lines across 18 of 71 agents — in the phase whose entire job is reading the
 anchor line for yourself.
+
+**Read the output whole — do not pipe it through `head` or `tail`.** The verdict leads
+the output and the PROBLEM LIST is the middle; a narrow window shows you `LINT FAILED — 6
+problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
+invocations were narrowed on one, 71 of 101 on the next.
+
+**Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+`map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
+its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
+more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
+copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.
+
+**A guard's truth lives at its CALLERS.** When the claim is an `access: true` rule site — a check
+that refuses something — reading the guard line alone cannot settle it. Open every call site of the
+function the guard sits in and read what is passed. A guard that looks exact can be switched off by
+its only caller: on one measured map the claim said a constructor "refuses the development sign-in
+in cloud mode", the line read `if mode == "cloud" and not allow_in_cloud:`, and the one production
+caller passed `allow_in_cloud=settings.mode == "cloud"` — so in cloud mode it reads `if True and not
+True` and can never fire. Two of three voters read the guard and its comment and confirmed it; the
+one who opened the caller refuted it and was outvoted. Say in your `note` which call sites you
+opened, and cite one of them in `evidence` when the caller is what decides.

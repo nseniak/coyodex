@@ -395,3 +395,49 @@ def test_a_short_command_carries_no_marker(capsys):
         assert transcript.main([str(p), "--full"]) == 0
         out = capsys.readouterr().out
         assert "more line(s)" not in out
+
+
+# --- the OPERATOR, and only the operator ------------------------------------------------------
+# USER-role records used to reach the reader carrying tool RESULTS and nothing the human said:
+# `text_parts` was dropped on that branch and `format_turns` filtered to ASSISTANT. Measured on one
+# 642-turn build, 358 USER turns parsed and 0 carried text, so a retro asking "who noticed the
+# missing section" had no mode of this reader that could answer.
+#
+# The other half is that a Claude Code transcript files skill bodies, `<system-reminder>` blocks and
+# IDE notices under the same role as the human. Rendering those as `(operator)` is a worse answer
+# than none.
+
+def _one_user_turn(tmp: Path, text: str) -> str:
+    import json as _json
+    from coyodex_eval.transcript import format_turns, read_turns
+    p = tmp / "t.jsonl"
+    p.write_text("\n".join([
+        _json.dumps({"type": "user", "message": {"role": "user",
+                                                 "content": [{"type": "text", "text": text}]}}),
+        _json.dumps({"type": "assistant", "message": {"id": "m1", "role": "assistant",
+                                                      "content": [{"type": "text", "text": "ok"}]}}),
+    ]) + "\n", encoding="utf-8")
+    return format_turns(read_turns(p), full=True)
+
+
+def test_an_operator_turn_is_rendered_in_full():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        out = _one_user_turn(Path(td), "Because I never wrote it. That is a gap in the map.")
+    assert "(operator)" in out, out
+    assert "That is a gap in the map." in out, out
+
+
+def test_a_skill_body_is_not_the_operator():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        out = _one_user_turn(Path(td),
+                             "Base directory for this skill: /Users/x/.claude/skills/coyodex-retro")
+    assert "(operator)" not in out, out
+
+
+def test_a_system_reminder_is_not_the_operator():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        out = _one_user_turn(Path(td), "<system-reminder>\nsome injected note\n</system-reminder>")
+    assert "(operator)" not in out, out

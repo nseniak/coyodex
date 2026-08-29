@@ -84,3 +84,9 @@ already cost a re-run.
 >
 > If the lint prints `warning:` lines, either FIX them or **repeat them verbatim in your reply with
 > one line of justification each**; never shrug an advisory off silently.
+
+> **Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+> `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
+> its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
+> more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
+> copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.

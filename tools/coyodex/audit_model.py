@@ -504,6 +504,11 @@ _THEMES: tuple[str, ...] = (
                       # that produced this tier shipped a false claim about a security guard in
                       # exactly this field, beside its own rule saying the opposite.
     "backbone",       # every other edge
+    "behaviour",      # OPT-IN (`audit --with-behavioural`). Flow titles and step phrases: the walk
+                      # a reader follows. Off by default because it roughly doubles the worklist —
+                      # 559 claims on the map this was written for — and every other caller of
+                      # `l2_worklist_model` (the record's digest, supersession, `profile`'s
+                      # `l2_claims`) is pinned to the default surface.
 )
 
 _ENTRY_POINTS_SHOWN = 6  # cap the member entry points listed in a component's claim detail
@@ -972,10 +977,20 @@ def _edge_detail(src: str, dst: str, described: dict[str, str]) -> str | None:
     return "; ".join(parts) if parts else None
 
 
-def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
+def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[WorkItem]:
     """The ranked grounding worklist over the whole backbone — same tiers as the markdown audit
     (security surfaces + enforce/encrypt edges → C→D → C→E → the rest), same explicit-fold-only
-    skip for framework/library deps, deduplicated by claim string."""
+    skip for framework/library deps, deduplicated by claim string.
+
+    `behavioural=True` adds the half no claim has ever covered. Measured on the 2026-08-29 mcpolis
+    map: **0 of 702** worklist claims named a use case, a flow, a flow step or a sub-flow, because
+    `m.flows` is read here only by L1 checks. The map carried 42 flow titles and 517 step phrases —
+    the walk a reader actually follows — and no skeptic could be sent at any of them.
+
+    OFF by default, and the default is what every other caller gets: the grounding record's digest,
+    its supersession arithmetic and `profile`'s `l2_claims` are all pinned to this surface, and
+    doubling it silently would move numbers three commands compare across builds. A build opts in
+    with `audit --with-behavioural` and pays for it knowingly."""
     described = _endpoint_detail(m)
     folded = {d.id for d in m.deps
               if (d.kind or "").strip().lower() in grammar.DEP_KINDS_FOLDED}
@@ -1122,15 +1137,25 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     # what crosses it" is exactly the claim a code read cannot settle on its own — a search service
     # over the product's OWN records is not an interface, the same service over the open web is, and
     # the two call sites are identical. So every `theirs` surface joins the worklist and a skeptic
-    # is sent to read WHOSE data comes back. Anchor = the dep's configuration line when the surface
-    # names one, else the surface's own `source`. Drift REPORT-ONLY: a refuted row is re-authored,
+    # is sent to read WHOSE data comes back. Drift REPORT-ONLY: a refuted row is re-authored,
     # not nudged.
+    #
+    # ANCHOR ORDER, and it used to be wrong: the dep's `where_configured` came first, so a skeptic
+    # was sent to the line that CONFIGURES the dependency rather than the line the surface itself
+    # cites as its evidence. On the 2026-08-29 mcpolis build `validate` had just blocked six
+    # `theirs` surfaces until the author supplied evidence, the author read the call sites and
+    # rejected one line by name as too weak, and `audit` then anchored that very claim two lines
+    # from the rejected one — 4 of the 6 claims went out anchored at a line the surface does not
+    # name. The surface's own evidence is the author's answer to "where is this true"; read it
+    # first, and fall back to the dep's configuration line only when there is none.
     dep_by_id = {d.id: d for d in m.deps}
     for iface in m.interfaces:
         if iface.side != "theirs":
             continue
         owning = [d for d in m.deps if iface.id in d.interfaces]
-        anchor_raw = (owning[0].where_configured if owning else "") or iface.source
+        cited = next((e.file for e in iface.evidence if getattr(e, "file", "")), "")
+        anchor_raw = (cited or iface.source
+                      or (owning[0].where_configured if owning else ""))
         crossings = "; ".join(f"{c.direction}: {c.what}" for c in iface.carries if c.what)
         far = iface.party or (dep_by_id[iface.party_ref].name
                               if iface.party_ref in dep_by_id else iface.party_ref)
@@ -1142,6 +1167,26 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             why_risky=("whose data crosses is not visible at the call site — read what this service "
                        "actually holds or returns, and refute the row if the data is the product's "
                        "own.")))
+    if behavioural:
+        # A flow title and a step phrase are CLAIMS about the code: "the caller opens the sign-in
+        # page" is true or false at the step's own `where`. Anchored there; steps with no call site
+        # carry the flow's use-case id instead and are still worth reading, because a phrase that
+        # describes a call that does not happen is the defect this tier exists to catch.
+        for f in m.flows:
+            for st in f.steps:
+                if not (st.phrase or "").strip():
+                    continue
+                items.append(WorkItem(
+                    claim=f"{f.uc} step {st.n}: {st.src} → {st.dst} — {st.phrase}",
+                    # REPORT-ONLY, like `interface`: a phrase that misdescribes what happens is
+                    # re-authored, not nudged onto another line. `apply-drift` places a correction
+                    # by re-deriving an edge-shaped or claim-shaped row, and a step phrase is
+                    # neither — a writable theme with no writer is how `cadence` and `lifecycle`
+                    # each spent months having their confirmed drifts re-typed by hand.
+                    anchor=_anchor(st.where or ""), drift_eligible=False,
+                    theme="behaviour",
+                    why_risky=("the walk a reader follows — a step phrase is read as what the code "
+                               "does, and nothing else checks it against the line it names.")))
     # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
     # a branch, and the map's lifecycle silently lies. Each recorded machine is a prime skeptic
     # target, anchored at its declaring line (else the element's own source).
@@ -1374,7 +1419,11 @@ def write_prose_batches(m: ProjectModel, out_dir: Path, cap: int) -> list[tuple[
     for stale in out_dir.glob("prose-*.json"):
         stale.unlink()
     written: list[tuple[str, int]] = []
-    for n, chunk in enumerate(prose.batch_fields(prose.iter_prose_fields(m), cap), 1):
+    # NARROW surface for the fan-out: every batch here is dispatched to a reading agent, and
+    # the wide walk took one real map from 13 batches to 41. The deterministic gate in
+    # `validate` reads the wide surface, because counting sentences costs nothing.
+    for n, chunk in enumerate(prose.batch_fields(prose.iter_prose_fields(m, wide=False),
+                                                 cap), 1):
         name = f"prose-{n}.json"
         payload = {
             "schema": PROSE_BATCH_SCHEMA,
@@ -1416,7 +1465,7 @@ def _run(argv: list[str] | None = None) -> int:
     # Reject unknown options rather than ignoring them. `--jsonn` used to produce the human report and
     # exit 0: a build asking for JSON silently got prose, with no signal that its flag was a typo.
     # Every sibling command already refuses; these two were the exceptions.
-    _known = ("--verbose", "--json", "--batches", "--cap")
+    _known = ("--verbose", "--json", "--batches", "--cap", "--with-behavioural")
     unknown = [a for a in argv if a.startswith("-") and a not in _known
                and not any(a.startswith(k + "=") for k in _known)]
     if unknown:
@@ -1448,7 +1497,21 @@ def _run(argv: list[str] | None = None) -> int:
         print(f"AUDIT SKIPPED: {e} — run `coyodex validate` first.", file=sys.stderr)
         return 1
     findings = audit_model(m)
-    worklist = l2_worklist_model(m)
+    behavioural = "--with-behavioural" in argv
+    worklist = l2_worklist_model(m, behavioural=behavioural)
+    if behavioural:
+        # SAY THE LIMIT. `grounding write`, `refutations` and `by-element` all compute the LIVE
+        # surface with a bare `l2_worklist_model(live)` — the DEFAULT surface — so a record built
+        # against a behavioural worklist reports every behaviour claim as `superseded` (489 of them
+        # on the map this was written for) and `live_claims_digest` describes a different surface
+        # from the one that was pinned. The tier is still worth running: the batches it writes are
+        # readable by skeptics, and the verdicts are real. What is not yet safe is folding them into
+        # the grounding RECORD, and a build that is not told that will fold them.
+        print("NOTE: `--with-behavioural` widens the worklist and NOT the grounding record. "
+              "`grounding write` measures against the default surface, so behaviour claims come "
+              "back as `superseded` and the digest describes a different surface. Batch and "
+              "challenge them, read the verdicts, and keep the record on the default worklist "
+              "until the record path follows this flag.", file=sys.stderr)
     if batches_out is not None:
         out_dir = Path(batches_out)
         # `build-fragments/` is where `assemble` globs. A batch file dropped there is not a fragment

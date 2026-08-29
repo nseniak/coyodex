@@ -1636,7 +1636,15 @@ def read_agent_lint_calls(session: Path) -> tuple[tuple[str, str], ...]:
                     continue
                 cmd = str((block.get("input") or {}).get("command", ""))
                 for m in re.finditer(r"lint-fragment", cmd):
-                    seg = re.split(r"\n|;|&&", cmd[m.start():])[0]
+                    # JOIN backslash continuations first. A shell command that puts its pipe on
+                    # the next line — a trailing backslash then `--ids X | tail -5` — split at
+                    # the newline and scored CLEAN, because the `|` sat in a segment this never
+                    # looked at. Six rules-agent commands on the 2026-08-29 mcpolis build had
+                    # exactly that shape, so the assertion reported 66 narrowed invocations where
+                    # the true figure was 71: wrong in its own favour, in the one instrument a
+                    # retrospective leans on hardest for this defect.
+                    joined = re.sub(r"\\\n[ \t]*", " ", cmd[m.start():])
+                    seg = re.split(r"\n|;|&&", joined)[0]
                     # An INVOCATION, not a mention. One agent ran
                     # `grep -rln "lint-fragment" . --include="*.py" | head` while looking for the
                     # source, and counting that as a narrowed self-check inflated the tally by one

@@ -104,7 +104,65 @@ def _verdict_bucket(rows: list[dict]) -> str:
         return "unverifiable"
     # A tie with no explicit `unverifiable` vote is not settled by the code either — say so rather
     # than silently crediting one side, which is the whole failure this record exists to prevent.
+    #
+    # It stays `unverifiable` rather than a bucket of its own, and a 2026-08-29 retro finding that
+    # said otherwise was withdrawn after being checked: over the SAME 32 verdict files the record
+    # and `grounding report` agree exactly (8 refuted, 0 tied, 0 unverifiable). The finding compared
+    # a report over 38 files with a record built from 32. What is true is smaller and is the reason
+    # this comment exists: `format_report` prints `tied` where the record says `unverifiable`, so
+    # the two vocabularies differ for one claim shape. Splitting them would hide an unresolved tie
+    # from every reader who checks `claims_unverifiable`, which is worse than the mismatch.
     return "unverifiable"
+
+
+_REDUNDANT_IN_NOTE = re.compile(r"(\d[\d,]*)\s+redundant\s+rows?", re.I)
+_COVERAGE_IN_NOTE = re.compile(r"(\d[\d,]*)\s+of\s+(?:those\s+|the\s+)?(\d[\d,]*)\s+"
+                               r"(?:carry|have)\s+no\s+verdict", re.I)
+
+
+def _note_contradictions(note: str, rows: list[dict], record: dict[str, object],
+                         live_claims: "list[str] | None") -> list[str]:
+    """Numbers the note states that its OWN record contradicts.
+
+    `--note` is free prose in a permanent record and in the commit message, and nothing checked it.
+    Two shapes recur and both shipped on the 2026-08-29 mcpolis map:
+
+    * **the redundant-row count.** "483 verdict rows over 161 redundant rows" — 161 is the CLAIM
+      count; 483 - 161 = 322 rows were redundant. The identical error ("136 redundant rows" for 272)
+      was found by the previous retrospective, marked fixed, and recurred, because the fix printed
+      the number in `NOTE FACTS` without refusing a note that disagrees with it.
+    * **the shipped-map coverage pair.** The note said "16 of those 696 carry no verdict" while its
+      own record said 22 of 702 — it had been written against an earlier pass and re-pasted.
+
+    Only these two shapes, and only when the note states them: a general prose checker is not
+    possible and a guessy one would refuse honest notes. Both fixes are one word."""
+    problems: list[str] = []
+    claimed_rows = [r for r in rows if r.get("claim")]
+    redundant = max(0, len(claimed_rows) - len({str(r.get("claim")) for r in claimed_rows}))
+    # ANY occurrence may match, and one that does clears the note. A good note cites other builds'
+    # figures for comparison — the real one said "over 160, 40 and 100 redundant rows" about three
+    # earlier passes — and refusing those would refuse the most honest notes written.
+    stated_redundant = [int(m.group(1).replace(",", "")) for m in _REDUNDANT_IN_NOTE.finditer(note or "")]
+    if stated_redundant and redundant not in stated_redundant:
+        quoted = ", ".join(f"'{n} redundant rows'" for n in stated_redundant)
+        problems.append(
+            f"the note states {quoted} and this pass has {redundant} — none of them. A three-voted "
+            f"theme produces one row per voter, so the redundant count is rows minus DISTINCT "
+            f"claims ({len(claimed_rows)} - {len(claimed_rows) - redundant}). Quote the "
+            f"`NOTE FACTS` line rather than the claim count; other builds' figures are fine "
+            f"alongside this pass's.")
+    live_done = record.get("claims_live_challenged")
+    if live_claims is not None and isinstance(live_done, int):
+        live_total = len(set(live_claims))
+        pairs = [(int(m.group(1).replace(",", "")), int(m.group(2).replace(",", "")), m.group(0))
+                 for m in _COVERAGE_IN_NOTE.finditer(note or "")]
+        if pairs and (live_total - live_done, live_total) not in [(a, b) for a, b, _ in pairs]:
+            quoted = ", ".join(f"'{t}'" for _a, _b, t in pairs)
+            problems.append(
+                f"the note states {quoted} and this record says {live_total - live_done} of "
+                f"{live_total} — none of them. The note was written against an earlier pass; "
+                f"requote it from this run.")
+    return problems
 
 
 def live_claims_digest(claims: "Iterable[str]") -> str:
@@ -897,12 +955,70 @@ def _read_claim_coverage(rows: list[dict]) -> tuple[int, int]:
 _AGENT_TRANSCRIPT_GLOBS = ("*.jsonl", "*.output")
 
 
+def _records(path: Path) -> list[dict[str, object]]:
+    """The agent-transcript RECORDS in one file — dicts only.
+
+    A JSONL line is not guaranteed to decode to an object. `<session>/tasks/` mixes the per-agent
+    transcripts with the stdout of every BACKGROUND BASH call the lead made, under the same
+    `.output` suffix, and that stdout is whatever the command printed: a pretty-printed JSON file
+    whose lines decode to `{`-fragments, or a bare number that decodes to an `int`. Callers used to
+    go straight to `rec.get(...)`, so one such line aborted the whole pass with
+    `AttributeError: 'int' object has no attribute 'get'` — measured on a real build, where it
+    killed the fabricated-evidence check for all 1,085 verdict rows and the build shipped a
+    `grounding.note` saying the check could not run at all.
+    """
+    out: list[dict[str, object]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(rec, dict):
+            out.append(rec)
+    return out
+
+
+def _is_agent_transcript(path: Path) -> bool:
+    """Does this file look like ONE agent's turn log, rather than some command's stdout?
+
+    Every line of an agent transcript is a JSON OBJECT. Background-Bash output under the same
+    `.output` suffix is whatever the command printed, and on the measured build that included bare
+    scalars — which is what crashed the pass — and pretty-printed JSON, whose lines mostly do not
+    parse at all. So the test is: at least one object, and no line that parses to something else.
+
+    An EMPTY-looking transcript still counts, because "this agent opened nothing" and "there are no
+    agent transcripts here" are different answers and only the second should raise the
+    wrong-directory error.
+
+    Dropping the stdout captures matters beyond the crash: every path token they print would land in
+    the LOOSE `_mentioned_files` set, which decides whether a cited file counts as "named
+    somewhere". A claims batch printed by a background command would vouch for rows no agent read.
+    """
+    objects = 0
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(rec, dict):
+            objects += 1
+        else:
+            return False
+    return objects > 0
+
+
 def _agent_transcript_files(agent_dir: Path) -> list[Path]:
-    """Every per-agent transcript under `agent_dir`, whichever suffix the harness used."""
+    """Every per-agent transcript under `agent_dir`, whichever suffix the harness used.
+
+    Files that parse but are not agent transcripts are dropped — see `_is_agent_transcript`."""
     seen: dict[Path, None] = {}
     for pattern in _AGENT_TRANSCRIPT_GLOBS:
         for f in sorted(agent_dir.glob(pattern)):
-            seen.setdefault(f.resolve(), None)
+            resolved = f.resolve()
+            if resolved in seen:
+                continue
+            if _is_agent_transcript(resolved):
+                seen.setdefault(resolved, None)
     return sorted(seen)
 
 
@@ -949,12 +1065,9 @@ def _opened_files(files: list[Path]) -> set[str]:
     such rather than silently folded into "no findings"."""
     out: set[str] = set()
     for f in files:
-        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
-            try:
-                rec = json.loads(line)
-            except ValueError:
-                continue
-            for c in ((rec.get("message") or {}).get("content") or []):
+        for rec in _records(f):
+            msg = rec.get("message")
+            for c in ((msg if isinstance(msg, dict) else {}).get("content") or []):
                 if not isinstance(c, dict) or c.get("type") != "tool_use":
                     continue
                 inp = c.get("input") or {}
@@ -986,11 +1099,7 @@ def _mentioned_files(files: list[Path]) -> set[str]:
     indented."""
     out: set[str] = set()
     for f in files:
-        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
-            try:
-                rec = json.loads(line)
-            except ValueError:
-                continue
+        for rec in _records(f):
             text = (json.dumps(rec, ensure_ascii=False)
                     .replace("\\n", "\n").replace("\\t", "\t"))
             for m in re.finditer(r"[\w./-]+\.[A-Za-z0-9]+", text):
@@ -1227,7 +1336,19 @@ def main(argv: list[str] | None = None) -> int:
         # disproved, which is the one shape here that makes the map wrong rather than unclear.
         return 1 if surviving else 0
 
-    if not worklist_path or not verdicts:
+    if verb == "by-element" and not worklist_path and verdicts:
+        # `--worklist` OPTIONAL here, and only here. `finalize`'s advisory prints a count and then
+        # names this command as where the list lives — but `finalize` reaches the count through
+        # `grounding refutations`, which walks the LIVE map on purpose ("a captured worklist may be
+        # several reconciles out of date"), while this verb required the PINNED file. On the
+        # 2026-08-29 mcpolis map the two answered 1 and 7 about the same map, because six elements
+        # had been reworded after the pin: measured against the pinned text their votes no longer
+        # pair, measured against the live text they do. Neither number is wrong and the remedy could
+        # not reproduce the finding it was offered for. With no `--worklist`, this now asks
+        # `finalize`'s question; with one, it asks "what did the SKEPTICS see", which is the other
+        # honest question and is why the flag stays.
+        pass
+    elif not worklist_path or not verdicts:
         print(f"ERROR: --worklist and at least one --verdicts are required\n\n{USAGE}",
               file=sys.stderr)
         return 2
@@ -1272,8 +1393,8 @@ def main(argv: list[str] | None = None) -> int:
         note = existing
         print(f"note: reusing the {len(existing)}-character note already in {out_path}.",
               file=sys.stderr)
-    claims = _worklist_claims(Path(worklist_path))
-    if not claims:
+    claims = _worklist_claims(Path(worklist_path)) if worklist_path else []
+    if not claims and worklist_path:
         print(f"ERROR: {worklist_path} holds no worklist claims — pass `coyodex audit <map> --json`",
               file=sys.stderr)
         return 2
@@ -1301,7 +1422,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if verb == "by-element":
         assert live_model is not None   # guarded above: --map is required for this verb
-        checks, unresolved = element_checks(live_model, claims, rows)
+        # With no `--worklist` the surface is the LIVE map's, which `--map` guarantees is populated.
+        surface = claims if worklist_path else (live_claims or [])
+        checks, unresolved = element_checks(live_model, surface, rows)
         print(format_element_checks(checks, unresolved, as_json=as_json,
                                     only_kind=only_kind))
         return 0
@@ -1309,6 +1432,17 @@ def main(argv: list[str] | None = None) -> int:
         print(format_report(claims, rows, as_json=as_json, live_claims=live_claims))
         return 0
     record, errors = build_record(claims, rows, note, live_claims=live_claims, partial=partial)
+    # WARN, never refuse. These read free prose with two regexes, and prose has more shapes than a
+    # regex: a note that cites only EARLIER builds' figures ("the three before produced 160, 40 and
+    # 100 redundant rows") states a number this pass does not have and is completely honest, and a
+    # note whose count is theme-scoped rather than pass-wide is honest too. Refusing those would
+    # block the most careful notes written — and `--keep-note` exists precisely so a 1,900-character
+    # note never has to go back through a shell, which a refusal at this step would force.
+    #
+    # The signal is worth having: on the map this came from, both checks fired on real defects the
+    # shipped note carried. So it prints, loudly, beside the NOTE FACTS that give the right numbers.
+    for line in _note_contradictions(note, rows, record, live_claims):
+        print(f"WARNING: {line}", file=sys.stderr)
     if errors:
         for e in errors:
             print(f"ERROR: {e}", file=sys.stderr)

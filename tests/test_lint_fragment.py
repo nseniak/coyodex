@@ -711,3 +711,91 @@ def test_without_finalize_the_draft_is_left_alone(tmp_path: Path) -> None:
     assert lint_fragment.main([str(draft)]) == 0
     assert draft.exists()
     assert not (tmp_path / "h1.json").exists()
+
+
+# --- the interfaces array, which this linter could not see at all -----------------------------
+# `lint_fragment.py` held ZERO references to "interface", so the one section the method makes the
+# LEAD hand-author was the one its own self-check was blind to. On the 2026-08-29 mcpolis build it
+# printed `LINT OK — 0 problems` on the interfaces fragment; `validate` raised seven interface
+# findings on that same content four turns later, and the lint printed the identical verdict again
+# after the missing field was added.
+
+def _iface_fragment(**over) -> dict:
+    row = {"id": "I1", "name": "Their service", "what": "What crosses.", "side": "theirs",
+           "facing": "user", "party_ref": "D1", "ways_in": ["EP1"],
+           "evidence": [{"file": "src/a.py:3", "why": "forms the outgoing call"}]}
+    row.update(over)
+    return {"format": "coyodex-map", "interfaces": [row]}
+
+
+def _lint_iface(**over) -> list[str]:
+    from coyodex.lint_fragment import lint_fragment_problems
+    return lint_fragment_problems(load_fragment(json.dumps(_iface_fragment(**over)), "f.json"), None)
+
+
+def test_a_well_formed_interface_row_lints_clean():
+    assert not _lint_iface()
+
+
+def test_a_bad_side_is_a_lint_problem():
+    hits = _lint_iface(side="BOGUS")
+    assert any("`side` is 'BOGUS'" in h for h in hits), hits
+
+
+def test_a_bad_facing_is_a_lint_problem():
+    hits = _lint_iface(facing="robot")
+    assert any("`facing` is 'robot'" in h for h in hits), hits
+
+
+def test_a_theirs_surface_with_no_evidence_and_no_source_is_a_lint_problem():
+    """`validate` blocks on this. Catching it in the fragment costs one turn, not a phase."""
+    hits = _lint_iface(evidence=[], source="")
+    assert any("carries no evidence and no `source`" in h for h in hits), hits
+    # A `source` alone answers it, and so does evidence alone.
+    assert not _lint_iface(evidence=[], source="src/a.py:1")
+    assert not _lint_iface(source="")
+
+
+def test_an_ours_surface_needs_no_evidence():
+    assert not _lint_iface(side="ours", evidence=[], source="")
+
+
+def test_a_way_in_that_is_not_an_id_is_a_lint_problem():
+    hits = _lint_iface(ways_in=["src/routes.py"])
+    assert any("`ways_in` holds 'src/routes.py'" in h for h in hits), hits
+
+
+def test_a_party_ref_that_is_not_an_id_is_a_lint_problem():
+    hits = _lint_iface(party_ref="their service")
+    assert any("`party_ref` is 'their service'" in h for h in hits), hits
+
+
+# --- `confidence: verified` is a statement about votes that have not been cast -----------------
+# Nothing in the toolchain writes `confidence`; every value in every shipped map was typed by the
+# agent that wrote the row. On the 2026-08-29 mcpolis map all 301 element-level values said
+# `verified` and `inferred` appeared only on `tests` rows — a constant that reads as an assurance.
+
+def _warn(fragment: dict) -> list[str]:
+    from coyodex.lint_fragment import lint_fragment_warnings
+    return lint_fragment_warnings(load_fragment(json.dumps(fragment), "f.json"))
+
+
+def test_an_authored_verified_confidence_is_an_advisory():
+    hits = _warn({"format": "coyodex-map", "components": [
+        {"id": "C1", "name": "A box", "confidence": "verified"}]})
+    assert any("author `confidence: verified`" in h for h in hits), hits
+    assert any("C1" in h for h in hits), hits
+
+
+def test_inferred_is_the_honest_label_and_raises_nothing():
+    assert not [h for h in _warn({"format": "coyodex-map", "components": [
+        {"id": "C1", "name": "A box", "confidence": "inferred"}]})
+        if "confidence" in h]
+
+
+def test_the_advisory_counts_every_element_kind_that_carries_the_field():
+    hits = _warn({"format": "coyodex-map",
+                  "components": [{"id": "C1", "name": "A", "confidence": "verified"}],
+                  "deps": [{"id": "D1", "name": "Mongo", "kind": "datastore",
+                            "confidence": "verified"}]})
+    assert any("2 row(s) author" in h for h in hits), hits

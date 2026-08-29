@@ -320,6 +320,14 @@ def make_model_touching_every_theme():
     doc["interfaces"] = [{"id": "I1", "name": "Web search", "side": "theirs", "facing": "user",
                           "party": "the open web", "source": "a.py:11",
                           "carries": [{"direction": "in", "what": "pages from the open web"}]}]
+    # A flow with a phrased step, so the OPT-IN `behaviour` tier is touched too. The fixture's whole
+    # job is to carry one claim of EVERY theme, and a tier it misses becomes a silent exemption.
+    doc["use_cases"] = [{"id": "UC1", "name": "Do the thing", "actors": ["R1"],
+                         "trigger_outcome": "asks -> gets", "capability": "CAP1"}]
+    doc["capabilities"] = [{"id": "CAP1", "name": "Doing", "purpose": "The thing gets done."}]
+    doc["roles"] = [{"id": "R1", "name": "A person", "wants": "the thing"}]
+    doc["flows"] = [{"uc": "UC1", "title": "Do the thing", "steps": [
+        {"n": 1, "src": "R1", "dst": "C1", "phrase": "asks for the thing", "where": "a.py:1"}]}]
     return load_model(json.dumps(doc))
 
 
@@ -338,7 +346,11 @@ def test_the_writable_theme_partition_covers_every_theme_the_audit_emits():
     # there is not evidence of drift. `lifecycle` sat in a hand-written exception list for months
     # while being drift-ELIGIBLE, so every confirmed lifecycle drift was re-typed by hand; the same
     # thing had already happened to `cadence`. Twice is a pattern, so the test now derives the split.
-    ineligible = {w.theme for w in audit_model.l2_worklist_model(make_model_touching_every_theme())
+    # `behavioural=True` so the OPT-IN tier is in the partition too. It is off by default (it
+    # roughly doubles the worklist), and a theme the audit can emit but this test never sees is
+    # exactly the silent "not applicable" this test exists to prevent.
+    ineligible = {w.theme for w in audit_model.l2_worklist_model(
+                      make_model_touching_every_theme(), behavioural=True)
                   if not w.drift_eligible}
     assert unwritable <= ineligible, (
         f"theme(s) whose claims ARE drift-eligible but have no writer: {sorted(unwritable - ineligible)}")
@@ -1777,3 +1789,41 @@ def test_row_and_rows_reach_the_same_writer() -> None:
         edits = make_edits_file(td, [{"edge": "C1:emits:C2", "set": {"verb": "queues"}}])
         assert fix.main(["rows", "--fragments", str(many), "--edits", str(edits)]) == 0
         assert ("C1", "queues", "C2") in read_edges(many)
+
+
+# --- a field a GATE asked the build to add ----------------------------------------------------
+# `audit` ends a finding with "state its prerequisite" and `validate` with "give it a `why`" —
+# asking for a field the row does not have — and the verb that exists to apply a finding refused it:
+# `HP22: has no field(s) why — a new key here is a schema change, not a correction`. On the
+# 2026-08-29 mcpolis build that sent eleven Happy-Path `why` lines through a python heredoc.
+
+def _rows_edit(d, edits: list[dict]) -> int:
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = fix.main(["rows", "--fragments", str(d), "--edits", "-"])
+    return rc
+
+
+def test_a_gate_requested_field_may_be_added(monkeypatch, capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, hp={"happy_path": [{"id": "HP1", "title": "Sign in", "uc": "UC1"}]})
+        monkeypatch.setattr("sys.stdin", io.StringIO(
+            json.dumps([{"id": "HP1", "set": {"why": "the caller has no session yet"}}])))
+        rc = fix.main(["rows", "--fragments", str(d), "--edits", "-"])
+        body = json.loads((d / "hp.json").read_text(encoding="utf-8"))
+    assert rc == 0, capsys.readouterr()
+    assert body["happy_path"][0]["why"] == "the caller has no session yet", body
+
+
+def test_a_field_nobody_asked_for_is_still_refused(monkeypatch, capsys):
+    """The general rule is unchanged: a key that is not on a row is usually a typo."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, hp={"happy_path": [{"id": "HP1", "title": "Sign in", "uc": "UC1"}]})
+        monkeypatch.setattr("sys.stdin", io.StringIO(
+            json.dumps([{"id": "HP1", "set": {"porpoise": "x"}}])))
+        rc = fix.main(["rows", "--fragments", str(d), "--edits", "-"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "has no field(s) porpoise" in err, err
+    assert "may be ADDED" in err, "the refusal should name the fields that CAN be added"

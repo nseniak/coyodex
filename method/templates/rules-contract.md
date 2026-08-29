@@ -73,7 +73,7 @@ is verified, because the reader is back to reading the flows.
       "statement": "<ONE decision, product language, naming no component>",
       "access": true,
       "risk": "<what is AT STAKE if this decision is wrong or absent>",
-      "confidence": "verified",
+      "confidence": "inferred",
       "sites": [ { "where": "backend/services/policy.py:311",
                    "why": "<what this line does FOR the rule>" } ] } ] }
 ```
@@ -88,7 +88,9 @@ Those seven keys are the whole authored surface. Notes on each:
 - **`risk`** is **REQUIRED on an `access` rule** and the lint FAILS without it. It is the one thing a
   statement, a site and a `why` between them cannot say: not what the line does, but what its LIMIT
   costs.
-- **`confidence`** is `verified` (you read it in the code) or `inferred` (you deduced it).
+- **`confidence`** is **`inferred`** from a fragment, always. `verified` is a statement about
+  VOTES — cast a phase later by the grounding skeptics, who have not run yet — so an authoring
+  agent cannot know it, and `lint-fragment` warns on one. The grounding pass raises a row.
 - **`sites[].where`** is the **OPERATIVE line** — the `if` / `raise` / `require_*` / decorator call
   that ENFORCES the decision. **Never a docstring, a comment, a `def` header, an import or a blank
   line** (`validate` flags each of those), and never a whole file without a `:line`.
@@ -153,3 +155,14 @@ repair after their authors were gone. Anchor the enforce line itself, or set `no
 Return only: the fragment path, your block id «BLOCK», the rule count, each rule's `name` on one
 line, and anything you looked for and could NOT find a decision behind (that absence is itself worth
 knowing). **Never inline the fragment in your reply.**
+
+**Read the output whole — do not pipe it through `head` or `tail`.** The verdict leads
+the output and the PROBLEM LIST is the middle; a narrow window shows you `LINT FAILED — 6
+problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
+invocations were narrowed on one, 71 of 101 on the next.
+
+**Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+`map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
+its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
+more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
+copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.

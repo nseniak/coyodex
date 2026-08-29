@@ -527,6 +527,12 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
         "the finding IS the record's shape; the fix is to write the reason once with every id on it",
     "'{}' has a line that tries to be a record and adjudicates NOTHING":
         "a line that records nothing cannot be answered by recording another one; fix the key list",
+    # The map's own vocabulary, not a fact about the code: two boxes under one name are
+    # indistinguishable on every diagram and in every sentence about them, and the remedy is a
+    # rename. There is no state of the world in which "deliberately identical" helps a reader, so
+    # there is nothing to record.
+    "component name '{}' is used by {} components":
+        "the finding IS the name; rename one box to the purpose that distinguishes it",
     # Row-local well-formedness: the fix is mechanical and local, there is no judgement to record.
     "{}: `no_call_site` is set but a `where` is present":
         "contradictory row; drop one field",
@@ -636,6 +642,17 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     "Role(s) with no `audience`: {}": "answer it — there is no third state for a role to be in",
     # Deliberately un-escapable: the whole point is that a suppressed count stays visible.
     "{} {}: {} → {} claims entity use the backbone doesn't": "author the edge; the safety net derives it",
+    # The same shape one level down: this line IS the disclosure of an already-recorded exception,
+    # so recording another to silence it would re-create the hole it exists to close. Before it
+    # existed, 32 excused ways in produced no output at all and a clean run could not be told from
+    # a run with 32 doors belonging to nothing.
+    "{} externally-activated way(s) in are suppressed by a recorded":
+        "the finding IS the disclosure of a record; silencing it restores the silence it fixes",
+    # Same family: this line discloses an excuse the CODE grants (name matches a system dep), not
+    # one an operator recorded. Letting it be silenced would restore the silence that shipped a map
+    # saying the product's dashboard has no production host.
+    "{} deployment unit(s) host no component and are excused because the":
+        "the finding IS the disclosure of a built-in excuse; check the unit's build file instead",
 }
 
 
@@ -1372,3 +1389,42 @@ def test_every_populated_map_section_reaches_the_rendered_view():
     assert not gaps, (
         "map section(s) the renderer never puts in project-map.md — the committed half of the map "
         "is missing them:\n  " + "\n  ".join(gaps))
+
+
+# --- rules every fan-out agent needs, in every contract that dispatches one -------------------
+# Both of these lived in exactly one contract while applying to all five, and both were measured
+# failing on the 2026-08-29 mcpolis build: 71 of 101 sub-agent lint runs were narrowed by a pipe
+# (the rule was in `gapfill-contract.md` alone), and one trace agent opened the previous archived
+# map nine times (the rule was in `method/dispatch.md`, which only the LEAD reads).
+
+_AGENT_CONTRACTS = ("harvest-contract.md", "trace-contract.md", "rules-contract.md",
+                    "skeptic-contract.md", "gapfill-contract.md")
+
+
+def _contract_agent_half(name: str) -> str:
+    from coyodex.contract import agent_half
+    from pathlib import Path as _P
+    root = _P(__file__).resolve().parent.parent
+    return agent_half((root / "method" / "templates" / name).read_text(encoding="utf-8"))
+
+
+def test_every_agent_contract_forbids_narrowing_its_own_lint_output():
+    missing = [n for n in _AGENT_CONTRACTS
+               if "do not pipe it through" not in _contract_agent_half(n).lower()]
+    assert not missing, (
+        f"the anti-narrowing rule is missing from {missing}. It sat in gapfill-contract.md alone "
+        f"across two builds; the second scored 71 of 101 sub-agent lint runs narrowed.")
+
+
+def test_every_agent_contract_forbids_opening_a_previous_map():
+    missing = [n for n in _AGENT_CONTRACTS
+               if "do not open a previous map" not in _contract_agent_half(n).lower()]
+    assert not missing, (
+        f"the independence rule is missing from {missing}. It lives in method/dispatch.md, which "
+        f"only the lead reads, and a trace agent opened `.coyodex/dev-rebuilds/` nine times.")
+
+
+def test_the_skeptic_contract_sends_a_reader_to_a_guards_callers():
+    """Reading the guard line alone confirmed a guard its only caller switches off, 2 votes to 1."""
+    half = _contract_agent_half("skeptic-contract.md").lower()
+    assert "call site" in half and "caller" in half, half[-600:]

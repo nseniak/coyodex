@@ -563,6 +563,7 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
     # describes. A 0-match keep WARNS and never fails, like `drop_edges` — the anchor may have been
     # corrected since, and a reconcile file must not rot when a fragment is fixed.
     kept_total = 0
+    dropped_anchors: list[tuple[str, str, list[str]]] = []
     for ke in rec.keep_edges:
         idxs = [i for i, e in enumerate(m.edges)
                 if e.src == ke.src and e.verb == ke.verb and e.dst == ke.dst]
@@ -576,10 +577,33 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
                          f"occurrences is anchored at '{ke.where}' — kept them all")
             continue
         drop = {i for i in idxs if i != survivors[0]}
+        # NAME the anchors this discards. A `keep_edges` directive chooses ONE call site for a
+        # triple and silently deletes the others, and a deleted anchor is a line some fragment's
+        # author read and wrote down. On the 2026-08-29 mcpolis build fragment `t6.json` authored
+        # `C82 calls C80` at `users_admin.py:178` and the directive named `roles.py:132`; the
+        # anchor left the map with no trace, and it was the only one of 38 discarded `why`
+        # sentences whose FILE:LINE disappeared entirely. A note costs nothing and is the only
+        # place a reader can see what the choice cost.
+        lost = sorted({(m.edges[i].where or "") for i in drop} - {ke.where or ""})
+        if lost:
+            dropped_anchors.append((f"{ke.src} {ke.verb} {ke.dst}", ke.where or "", lost))
         m.edges = [e for i, e in enumerate(m.edges) if i not in drop]
         kept_total += len(drop)
     if kept_total:
         stats["duplicate_edges_resolved"] = kept_total
+    if dropped_anchors:
+        # ONE line, not one per directive. A `keep_edges` directive exists precisely because the
+        # occurrences sit at DIFFERENT anchors, so a per-directive note fires on 19 of 19 and is
+        # structurally 100% — noise, in the channel this project reserves for the unusual. The
+        # summary keeps the fact visible and names the anchors, which is what a reader needs when a
+        # `file:line` some fragment's author read leaves the map for good.
+        total = sum(len(lost) for _t, _kept, lost in dropped_anchors)
+        detail = "; ".join(f"{triple} kept {kept} over {', '.join(a for a in lost if a)}"
+                           for triple, kept, lost in dropped_anchors[:5])
+        more = "" if len(dropped_anchors) <= 5 else f" (+{len(dropped_anchors) - 5} more)"
+        notes.append(f"keep_edges: {total} authored anchor(s) left the map, across "
+                     f"{len(dropped_anchors)} directive(s) — {detail}{more}. If one of those is the "
+                     f"real call site, the directive names the wrong line")
     # Anchor corrections, through the SAME writer `fix apply-drift` uses — one matching rule, so the
     # durable record and the in-place edit cannot disagree about which element a claim names. A
     # claim that no longer matches anything NOTES and never fails, like the two directives above: a

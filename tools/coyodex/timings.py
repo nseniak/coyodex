@@ -181,11 +181,82 @@ def _check_phase(phase: str) -> str:
     return phase
 
 
+@dataclass(frozen=True)
+class ParsedLines:
+    """`--lines-from` parsed. NAMED rather than a 3-tuple: two of the three slots are `list[str]`
+    and both are empty on an empty file, so a swapped return would look exactly like correct
+    behaviour and no test could tell (`tests/test_cli_contract.py` refuses the positional shape)."""
+
+    slices: list[str]
+    minutes: list[str]
+    items: list[int | None]
+
+
+def _pairs_from_lines(text: str) -> ParsedLines:
+    """`<slice name>  <minutes>  [items]` per line, blanks and `#` comments skipped.
+
+    Why this exists: the flags already repeat and pair by position, and three real builds still
+    wrote a shell loop instead — `for s in "h11 t5-domain 15.6" ...; do set -- $s; timings record
+    --slice "$2" --minutes "$3"; done`. The Bash tool runs zsh, where an unquoted `$s` does NOT
+    word-split, so every call in every loop received empty arguments and exited 2. With
+    `>/dev/null 2>&1` on the call and an unconditional success line after the loop, all 35 attempts
+    across three fan-outs failed silently and `.coyodex/fanout-timings.json` was never created —
+    so the next build's `timings order` had nothing to read, which is the whole point of the file.
+
+    A file (or `-`) is the shape that has no loop in it."""
+    slices: list[str] = []
+    minutes: list[str] = []
+    items: list[int | None] = []
+    for n, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.rsplit(None, 2) if len(line.split()) > 2 else line.rsplit(None, 1)
+        if len(parts) < 2:
+            raise ValueError(f"line {n} is not `<slice> <minutes> [items]`: {raw!r}")
+        if len(parts) == 3:
+            name, mins, count = parts
+            try:
+                items.append(int(count))
+            except ValueError:
+                # Two fields after all — the name simply had no spaces and the third token is not a
+                # count. Re-read the line as `<slice> <minutes>`.
+                name, mins = line.rsplit(None, 1)
+                items.append(None)
+        else:
+            name, mins = parts
+            items.append(None)
+        slices.append(name.strip())
+        minutes.append(mins.strip())
+    return ParsedLines(slices=slices, minutes=minutes, items=items)
+
+
 def cmd_record(args: argparse.Namespace) -> int:
     phase = _check_phase(args.phase)
-    pairs = _pair_slices(args.slice or [], args.minutes or [])
+    slice_args = list(args.slice or [])
+    minute_args = list(args.minutes or [])
+    item_args: list[int | None] = list(args.items or [])
+    if getattr(args, "lines_from", None):
+        src = (sys.stdin.read() if args.lines_from == "-"
+               else Path(args.lines_from).read_text(encoding="utf-8"))
+        parsed = _pairs_from_lines(src)
+        slice_args += parsed.slices
+        minute_args += parsed.minutes
+        # ALL or NONE. Filling the gaps with 0 wrote a fabricated item count into durable telemetry
+        # the next build's `timings order` reads, and the `recorded N slice(s)` confirmation does
+        # not show items, so nothing said it had happened. `--items` already pairs by position and
+        # refuses a count mismatch; this is the same rule one file up.
+        have = [v for v in parsed.items if v is not None]
+        if have and len(have) != len(parsed.items):
+            raise ValueError(
+                f"{len(have)} of {len(parsed.items)} line(s) carry an item count — give one on "
+                f"every line or on none. Filling the rest with 0 would write a number nobody typed "
+                f"into telemetry the next build orders by.")
+        item_args += have
+    pairs = _pair_slices(slice_args, minute_args)
     if not pairs:
         raise ValueError("nothing to record: pass at least one --slice with its --minutes.")
+    args = argparse.Namespace(**{**vars(args), "items": item_args or None})
     items = args.items or []
     if items and len(items) != len(pairs):
         raise ValueError(f"--items was given {len(items)} time(s) for {len(pairs)} slice(s); "
@@ -255,8 +326,13 @@ What each fan-out slice ACTUALLY took, so the next build's dispatch is ordered b
 rather than by the method's folklore about which slice is heaviest.
 
   record --phase <phase> --slice "<name>" --minutes <m> [--items <n>] ...
+  record --phase <phase> --lines-from <file|->
       Append what one fan-out's slices took. `--slice` and `--minutes` REPEAT and pair by
       position — one process, one write. A count mismatch is refused, not paired off.
+      `--lines-from` reads `<slice> <minutes> [items]` per line instead, which is the shape
+      with no shell loop in it: three real builds wrote `for s in ...; do set -- $s; ...; done`,
+      and zsh does not word-split an unquoted `$s`, so all 35 calls got empty arguments, exited
+      2 into `/dev/null`, and no timings file was ever written.
       Read the minutes off the barrier you just waited at; nothing here times anything.
 
   order --phase <phase> [--slice "<name>" ...] [--json]
@@ -287,6 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     rec.add_argument("--slice", action="append")
     rec.add_argument("--minutes", action="append")
     rec.add_argument("--items", action="append", type=int)
+    rec.add_argument("--lines-from")
     rec.add_argument("--commit")
     rec.set_defaults(func=cmd_record)
 

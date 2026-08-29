@@ -201,3 +201,59 @@ def test_an_unknown_verb_is_refused_with_the_usage(capsys) -> None:
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# --- one process, one write, and no shell loop ------------------------------------------------
+# The flags already repeat and pair by position, and three real builds still wrote
+# `for s in "h11 t5-domain 15.6" ...; do set -- $s; timings record --slice "$2" --minutes "$3"; done`.
+# The Bash tool runs zsh, where an unquoted `$s` does NOT word-split, so every call received empty
+# arguments and exited 2. With `>/dev/null 2>&1` on the call and an unconditional success line after
+# the loop, all 35 attempts across three fan-outs failed silently and the timings file was never
+# created — so the next build's `timings order` had nothing to order by.
+
+def _record_lines(tmp: Path, text: str, phase: str = "harvest") -> int:
+    from coyodex.timings import main
+    src = tmp / "t.txt"
+    src.write_text(text, encoding="utf-8")
+    return main(["record", "--repo", str(tmp), "--phase", phase, "--lines-from", str(src)])
+
+
+def test_lines_from_records_a_whole_fan_out_in_one_call():
+    import tempfile
+    from coyodex.timings import latest_by_slice, load_runs, record_path
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        assert _record_lines(tmp, "h11 t5-domain-model 15.6\nh12 deps 11.9\nh4 auth 5.5\n") == 0
+        ranked = latest_by_slice(load_runs(record_path(str(tmp))), "harvest")
+    assert [r.slice for r in ranked] == ["h11 t5-domain-model", "h12 deps", "h4 auth"], ranked
+    assert ranked[0].minutes == 15.6
+
+
+def test_lines_from_skips_blanks_and_comments():
+    import tempfile
+    from coyodex.timings import latest_by_slice, load_runs, record_path
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        _record_lines(tmp, "# what the barrier took\n\nh1 domain 9.0\n\n")
+        ranked = latest_by_slice(load_runs(record_path(str(tmp))), "harvest")
+    assert [r.slice for r in ranked] == ["h1 domain"], ranked
+
+
+def test_lines_from_carries_an_item_count_when_one_is_given():
+    import tempfile
+    from coyodex.timings import latest_by_slice, load_runs, record_path
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        _record_lines(tmp, "h1 domain 9.0 12\n")
+        ranked = latest_by_slice(load_runs(record_path(str(tmp))), "harvest")
+    assert ranked[0].items == 12, ranked
+
+
+def test_a_line_that_is_not_a_pair_is_refused_and_nothing_is_written():
+    import tempfile
+    from coyodex.timings import record_path
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        rc = _record_lines(tmp, "h1 domain 9.0\njustaname\n")
+        assert rc != 0, "a malformed line must be refused"
+        assert not Path(record_path(str(tmp))).exists(), "a bad line in the batch writes nothing"

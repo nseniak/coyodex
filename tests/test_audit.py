@@ -2225,3 +2225,87 @@ def test_a_theme_under_the_cap_is_one_batch_and_order_is_kept() -> None:
     items = list(range(31))
     assert _even_chunks(items, 40) == [items]
     assert [x for c in _even_chunks(list(range(42)), 40) for x in c] == list(range(42))
+
+
+# --- an interface claim is anchored where the SURFACE says, not where its dep is configured ---
+# `validate` blocks a `theirs` surface until it carries evidence, so the author reads the call
+# sites and answers. `audit` then sent the skeptic somewhere else: the owning dep's
+# `where_configured` came first in the anchor order. On the 2026-08-29 mcpolis build the author had
+# rejected one candidate line by name as too weak and the claim went out anchored two lines from
+# it; 4 of 6 interface claims carried an anchor the surface does not name.
+
+def _interface_model(*, evidence_file: str | None, source: str = "",
+                     dep_configured: str = "src/settings.py:9"):
+    from coyodex.model import Dep, EvidenceItem, Interface, ProjectModel
+    m = ProjectModel(title="D", goal="g")
+    m.deps = [Dep(id="D1", name="Their service", kind="service",
+                  where_configured=dep_configured, interfaces=["I7"])]
+    m.interfaces = [Interface(
+        id="I7", name="Their service", what="What crosses.", side="theirs", facing="user",
+        party_ref="D1", source=source,
+        evidence=([EvidenceItem(file=evidence_file, why="forms the outgoing call")]
+                  if evidence_file else []))]
+    return m
+
+
+def _interface_claims(m):
+    from coyodex.audit_model import l2_worklist_model
+    return [i for i in l2_worklist_model(m) if i.theme == "interface"]
+
+
+def test_an_interface_claim_is_anchored_on_the_surfaces_own_evidence():
+    items = _interface_claims(_interface_model(evidence_file="src/router.py:414"))
+    assert len(items) == 1, items
+    assert items[0].anchor.startswith("src/router.py:414"), items[0].anchor
+
+
+def test_the_dep_configuration_line_is_the_fallback_not_the_first_choice():
+    """With no evidence and no source, the dep's line is better than nothing."""
+    items = _interface_claims(_interface_model(evidence_file=None))
+    assert len(items) == 1, items
+    assert items[0].anchor.startswith("src/settings.py:9"), items[0].anchor
+
+
+def test_the_surfaces_own_source_still_beats_the_dep_line():
+    items = _interface_claims(_interface_model(evidence_file=None, source="src/iface.py:3"))
+    assert items[0].anchor.startswith("src/iface.py:3"), items[0].anchor
+
+
+# --- the behavioural half, which no claim has ever covered -------------------------------------
+# Measured on the 2026-08-29 mcpolis map: 0 of 702 worklist claims named a use case, a flow, a flow
+# step or a sub-flow, because `m.flows` is read in `audit_model` only by L1 checks. That map carried
+# 42 flow titles and 517 step phrases and no skeptic could be sent at any of them.
+
+def _flow_model():
+    from coyodex.model import Flow, FlowStep, ProjectModel
+    m = ProjectModel(title="D", goal="g")
+    m.flows = [Flow(uc="UC1", title="Sign in", steps=[
+        FlowStep(n=1, src="R1", dst="C1", phrase="opens the sign-in page", where="src/ui.py:12"),
+        FlowStep(n=2, src="C1", dst="C2", phrase="", where="src/a.py:3")])]
+    return m
+
+
+def test_the_behavioural_tier_is_off_by_default():
+    """Every other caller of `l2_worklist_model` is pinned to the default surface — the grounding
+    record's digest, its supersession arithmetic, and `profile`'s `l2_claims`."""
+    from coyodex.audit_model import l2_worklist_model
+    assert not [w for w in l2_worklist_model(_flow_model()) if w.theme == "behaviour"]
+
+
+def test_with_behavioural_mints_a_claim_per_phrased_step():
+    from coyodex.audit_model import l2_worklist_model
+    items = [w for w in l2_worklist_model(_flow_model(), behavioural=True)
+             if w.theme == "behaviour"]
+    assert len(items) == 1, items          # the empty phrase is not a claim
+    assert "opens the sign-in page" in items[0].claim, items[0].claim
+    assert items[0].anchor.startswith("src/ui.py:12"), items[0].anchor
+
+
+def test_a_behaviour_claim_is_report_only():
+    """Like `interface`: a phrase that misdescribes what happens is re-authored, not nudged onto
+    another line. A writable theme with no writer is how `cadence` and `lifecycle` each spent months
+    having their confirmed drifts re-typed by hand."""
+    from coyodex.audit_model import l2_worklist_model
+    items = [w for w in l2_worklist_model(_flow_model(), behavioural=True)
+             if w.theme == "behaviour"]
+    assert all(not w.drift_eligible for w in items), items

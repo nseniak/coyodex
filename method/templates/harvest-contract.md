@@ -46,7 +46,10 @@ lead; nothing above this line goes into an agent prompt.
 > slice** (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
 > out far under, you are folding subsystem-shaped dirs into single components — make those
 > subsystems and recurse into their units; far over, you are splitting module-sized units.
-> For every row give `file:line` evidence and a confidence tag (**verified** = read in code /
+> For every row give `file:line` evidence and a confidence tag. Write **`inferred`** — `verified`
+> is a statement about VOTES, cast a phase after you by readers who have not run yet, and the
+> grounding pass is what raises a row to it. `lint-fragment` warns on an authored `verified`.
+> (Historically: **verified** = read in code /
 > **inferred** = guessed). Use only the schema IDs and edge verbs; reference nodes, never
 > invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
 > cannot fill one, return its header with `(none found)` and say why; never silently omit a
@@ -132,3 +135,14 @@ lead; nothing above this line goes into an agent prompt.
 > entry-points only and leave `entities` (and every `E↔E` relation) to the owner — do not author
 > them, however clearly the domain layer shows in your files.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
+
+> **Read the output whole — do not pipe it through `head` or `tail`.** The verdict leads
+> the output and the PROBLEM LIST is the middle; a narrow window shows you `LINT FAILED — 6
+> problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
+> invocations were narrowed on one, 71 of 101 on the next.
+>
+> **Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+> `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
+> its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
+> more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
+> copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.

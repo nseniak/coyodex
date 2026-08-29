@@ -194,3 +194,83 @@ if __name__ == "__main__":
             _fn()
             print(f"ok  {_name}")
     print("ship tests passed (capsys ones under pytest)")
+
+
+# --- one verdict list, two commands with opposite contracts -----------------------------------
+# `grounding write` refuses a verdict whose claim is not in the pinned worklist; `finalize` needs
+# every verdict there is. `ship` spliced ONE `--verdicts` tuple into both. On the 2026-08-29
+# mcpolis build it stopped at step 6 with "9 verdict claim(s) are not in the pinned worklist", the
+# lead abandoned the verb and hand-ran steps 5-12, and the map still shipped finalize's "the
+# record's delta counts contradict the verdict files" as a carried-no-escape advisory — because the
+# two commands had been measured against different sets.
+
+def _ship_dirs(tmp: Path, pinned_claims: list[str], files: dict[str, list[str]]) -> Path:
+    import json as _json
+    out = tmp / ".coyodex"
+    (out / "verify").mkdir(parents=True)
+    (out / "build-fragments").mkdir(parents=True)
+    (out / "verify" / "worklist.json").write_text(
+        _json.dumps({"worklist": [{"claim": c} for c in pinned_claims]}), encoding="utf-8")
+    for name, claims in files.items():
+        (out / "verify" / f"verdicts-{name}.json").write_text(
+            _json.dumps({"grounding": [{"claim": c, "grounded": True} for c in claims]}),
+            encoding="utf-8")
+    return out
+
+
+def _plan_argvs(out: Path, tmp: Path):
+    from coyodex.ship import ShipInputs, build_plan
+    s = ShipInputs(map_path=out / "project-map.json", repo=tmp, out=out,
+                   header=out / "build-fragments" / "header.json",
+                   md=out / "project-map.md", gate_block=out / "verify" / "gate-block.md",
+                   reconcile=out / "reconcile.json", worklist=out / "verify" / "worklist.json",
+                   verdicts=tuple(sorted((out / "verify").glob("verdicts-*.json"))),
+                   note_file=tmp / "note.txt", fragments=(), partial=False, keep_note=False,
+                   access_baseline=None)
+    return {step.title: step.argv for step in build_plan(s)}
+
+
+def test_grounding_write_gets_only_the_pinned_verdicts_and_finalize_gets_them_all():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        (tmp / "note.txt").write_text("a note", encoding="utf-8")
+        out = _ship_dirs(tmp, ["c1", "c2"],
+                         {"pinned": ["c1", "c2"], "recheck": ["c9-minted-after-the-pin"]})
+        argvs = _plan_argvs(out, tmp)
+    write = next(a for t, a in argvs.items() if t.startswith("grounding write"))
+    final = next(a for t, a in argvs.items() if t.startswith("finalize"))
+    assert "verdicts-recheck.json" not in " ".join(write), write
+    assert "verdicts-pinned.json" in " ".join(write), write
+    assert "verdicts-recheck.json" in " ".join(final), final
+    assert "verdicts-pinned.json" in " ".join(final), final
+
+
+def test_a_file_that_STRADDLES_the_pin_is_dropped_too():
+    """The case the whole fix exists for, and the one a first version got wrong.
+
+    On the real build the nine off-pin claims sat in three `verdicts-recheck*.json` files that each
+    ALSO carried three pinned ones. Keeping straddlers left `grounding write` refusing the set with
+    the identical "9 verdict claim(s) are not in the pinned worklist" — the failure the docstring
+    quotes. The set the build needed by hand was the files with no post-pin claim at all."""
+    import tempfile
+    from coyodex.ship import ShipInputs, post_pin_verdicts
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        (tmp / "note.txt").write_text("a note", encoding="utf-8")
+        out = _ship_dirs(tmp, ["c1"], {"pinned": ["c1"], "mixed": ["c1", "c-new"]})
+        argvs = _plan_argvs(out, tmp)
+        s = ShipInputs(map_path=out / "project-map.json", repo=tmp, out=out,
+                       header=out / "build-fragments" / "header.json", md=out / "project-map.md",
+                       gate_block=out / "verify" / "gate-block.md",
+                       reconcile=out / "reconcile.json", worklist=out / "verify" / "worklist.json",
+                       verdicts=tuple(sorted((out / "verify").glob("verdicts-*.json"))),
+                       note_file=tmp / "note.txt", fragments=(), partial=False, keep_note=False,
+                       access_baseline=None)
+        dropped = [p.name for p in post_pin_verdicts(s)]
+    write = " ".join(next(a for t, a in argvs.items() if t.startswith("grounding write")))
+    final = " ".join(next(a for t, a in argvs.items() if t.startswith("finalize")))
+    assert "verdicts-mixed.json" not in write, write
+    assert "verdicts-pinned.json" in write, write
+    assert "verdicts-mixed.json" in final, "finalize still needs every verdict"
+    assert dropped == ["verdicts-mixed.json"], dropped

@@ -243,3 +243,59 @@ def test_the_read_prompt_forbids_repeating_what_is_already_counted() -> None:
     assert "Do NOT report sentence length" in text
     for counted in ("em dash", "code name", "opening"):
         assert counted in text
+
+
+# --- the six arrays this walk was blind to ----------------------------------------------------
+# Both consumers read `iter_prose_fields` — the reading fan-out and the deterministic long-sentence
+# gate — so a field it does not yield is a field NOTHING checks. On the 2026-08-29 mcpolis map it
+# yielded 477 non-empty fields and skipped 1,171: every flow step phrase and note, every entry
+# point trigger, every entity meaning, every flow title, and the whole interfaces section. Widening
+# it took that map's long-sentence count from 1 to 25.
+
+def _walked(m) -> dict[str, str]:
+    from coyodex.prose import iter_prose_fields
+    return {where: text for where, text in iter_prose_fields(m)}
+
+
+def test_a_flow_step_phrase_and_note_are_reader_facing():
+    from coyodex.model import Flow, FlowStep, ProjectModel
+    m = ProjectModel(title="D", goal="g")
+    m.flows = [Flow(uc="UC1", title="Sign in", steps=[
+        FlowStep(n=1, src="R1", dst="C1", phrase="opens the sign-in page", note="a note")])]
+    walked = _walked(m)
+    assert "opens the sign-in page" in walked.values(), walked
+    assert "a note" in walked.values(), walked
+    assert "Sign in" in walked.values(), walked
+
+
+def test_an_entry_point_trigger_and_an_entity_meaning_are_reader_facing():
+    from coyodex.model import Entity, EntryPoint, ProjectModel
+    m = ProjectModel(title="D", goal="g")
+    m.entry_points = [EntryPoint(id="EP1", kind="http-route", trigger="a person opens the page")]
+    m.entities = [Entity(id="E1", name="Token", meaning="what a headless agent signs in with")]
+    vals = list(_walked(m).values())
+    assert "a person opens the page" in vals, vals
+    assert "what a headless agent signs in with" in vals, vals
+
+
+def test_an_interface_what_and_its_crossings_are_reader_facing():
+    from coyodex.model import Interface, InterfaceCrossing, ProjectModel
+    m = ProjectModel(title="D", goal="g")
+    m.interfaces = [Interface(id="I1", name="The gateway", what="The one address clients use.",
+                              side="ours", facing="user",
+                              carries=[InterfaceCrossing(direction="in", what="a tool call")])]
+    vals = list(_walked(m).values())
+    assert "The one address clients use." in vals, vals
+    assert "a tool call" in vals, vals
+
+
+def test_the_long_sentence_gate_now_sees_a_step_phrase():
+    """The gate reads the same walk, so widening the walk widens the gate. That is the point."""
+    from coyodex.model import Flow, FlowStep, ProjectModel
+    from coyodex.validate_model import validate_model
+    long_phrase = ("writes the answer back to the caller " + "and then " * 8 + "stops")
+    m = ProjectModel(title="D", goal="g")
+    m.flows = [Flow(uc="UC1", title="Sign in", steps=[
+        FlowStep(n=1, src="R1", dst="C1", phrase=long_phrase)])]
+    warnings = validate_model(m)[1]
+    assert any("long sentence" in w for w in warnings), warnings

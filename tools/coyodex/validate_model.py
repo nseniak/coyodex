@@ -194,6 +194,7 @@ def _check_ids(m: ProjectModel) -> list[str]:
     if duplicates:
         problems.append(f"Duplicate element definitions: {', '.join(duplicates)}")
 
+
     # Pointer fields must be well-shaped ids (the `S12a` class — invisible to the reference scan
     # because a suffixed token is not an ID token at all).
     pointers: list[tuple[str, str, str | None]] = (
@@ -329,6 +330,36 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
             if grammar.ID_TOKEN.fullmatch(tok):
                 refs.add(tok)
     return refs
+
+
+def _duplicate_component_names(m: ProjectModel) -> list[str]:
+    """Two components under one NAME.
+
+    `_check_ids` covers the id side; nothing covered this one. A map's components are the boxes a
+    reader navigates by, and two boxes under one name are indistinguishable on every diagram and in
+    every sentence about them. On the 2026-08-29 mcpolis build C11 and C102 were both "Service
+    tokens" — a backend store and a screen shape — `validate` reported 0 problems, and the retro
+    metric that should have surfaced it ("component names surviving a rebuild") was computed on a
+    set, so the collision deduplicated itself away before anyone could see it.
+
+    Matched case- and space-insensitively, because two boxes a reader cannot tell apart are two
+    boxes a reader cannot tell apart.
+
+    ADVISORY and UNESCAPABLE (registered in `KNOWN_NO_ESCAPE`): the remedy is always a rename, and
+    no state of the world makes two identically named boxes useful."""
+    by_name: dict[str, list[str]] = {}
+    for c in m.components:
+        if c.name and c.name.strip():
+            by_name.setdefault(c.name.strip().casefold(), []).append(c.id)
+    out: list[str] = []
+    for _key, ids in sorted(by_name.items()):
+        if len(ids) > 1:
+            name = next(c.name for c in m.components if c.id == ids[0]).strip()
+            out.append(
+                f"component name '{name}' is used by {len(ids)} components: {', '.join(sorted(ids))}"
+                f" — a reader meets a box by its name, so two boxes under one name cannot be told "
+                f"apart on any diagram. Rename one to the purpose that distinguishes it")
+    return out
 
 
 def _check_references(m: ProjectModel) -> list[str]:
@@ -2006,7 +2037,21 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"interface nor says why it is none. Write one: without it there is no "
                             f"way to tell a deliberate exclusion from nobody having looked")
 
-    unassigned = [ep for ep in _external_ways_in(m)
+    external = _external_ways_in(m)
+    excused = [ep for ep in external if ep.id not in claimed_by and ep.id in recorded]
+    if excused:
+        # DISCLOSE, never erase. Every sibling escape in this file says what it forgave in the same
+        # breath as forgiving it — `Unclaimed surfaces` prints "counted as CLAIMED because of it".
+        # This one said nothing at all: on the 2026-08-29 mcpolis build 32 of 219 externally
+        # activated ways in were recorded under this heading and neither `validate` nor `finalize`
+        # mentioned them again, so a reader of a clean run could not tell 32 excused doors from 0.
+        warnings.append(
+            f"{len(excused)} externally-activated way(s) in are suppressed by a recorded "
+            f"'{INTERFACE_EXCEPTIONS_HEADING}' line and belong to no interface because of it: "
+            f"{_shown([ep.id for ep in excused], 10, unit='way(s) in')}. A recorded gap is still a "
+            f"gap — re-read one by validating a copy with that line removed")
+
+    unassigned = [ep for ep in external
                   if ep.id not in claimed_by and ep.id not in recorded]
     if unassigned:
         kinds = sorted({ep.kind for ep in unassigned})
@@ -3794,6 +3839,26 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
                         f"dependency), or an un-traced `runs_in` (tag the component/entry point that runs "
                         f"there)? Record the literal `runs-in/quality` under a 'Balance exceptions' extras heading "
                         f"if each is deliberately code-less.")
+    # DISCLOSE the excuse. A unit whose name matches a system dep is dropped from `orphan_units`
+    # above, because a `mongo` or `redis` box hosts no first-party code by nature. `nginx` matches
+    # that rule and is NOT that case: on the 2026-08-29 mcpolis map the nginx unit hosted 0
+    # components while `docker/Dockerfile.nginx` builds and serves the dashboard, and the map said so
+    # twice in prose. Read structurally, that map states the product's dashboard has no production
+    # host — and `validate` said nothing, because the name matched.
+    #
+    # The excuse itself stays: the tool cannot tell a proxy that serves built assets from one that
+    # only forwards. What it can do is stop the excuse being SILENT, which is the same rule the
+    # `Unclaimed surfaces` and `Access baseline exceptions` escapes already follow.
+    excused_units = sorted({d.unit for d in m.deployment
+                            if d.unit and d.unit not in hosted
+                            and any(grammar.unit_name_matches_dep(d.unit, dn) for dn in dep_names)})
+    if excused_units:
+        warnings.append(
+            f"{len(excused_units)} deployment unit(s) host no component and are excused because the "
+            f"name matches a system dependency: {', '.join(excused_units)}. That is right for a "
+            f"datastore and wrong for a unit that serves first-party code — a proxy that builds and "
+            f"serves the dashboard hosts it. Check each one against its own build file, and tag the "
+            f"components that really run there")
     # Formula-fill smell: every component crammed into ONE unit with NO real spread, while a REAL
     # (non-infra) process unit sits empty and no entry point is placed. Two guards keep a legitimately
     # grounded map quiet: (a) an empty INFRA unit (mongo/redis) is EXPECTED — it hosts no code by
@@ -4903,6 +4968,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(flow_warnings)
     warnings.extend(subflow_refcount_warnings(m))
     warnings.extend(_granularity_warnings(m))
+    warnings.extend(_duplicate_component_names(m))
     warnings.extend(_duplication_warnings(m))
     warnings.extend(_completeness_warnings(m))
     problems.extend(_check_roles(m))

@@ -69,6 +69,23 @@ _NO_CALL_SITE = "(no call site)"
 _WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", "cadence",
                              "rule", "lifecycle"})
 
+
+#: Optional fields a GATE explicitly tells a build to add, so `fix rows` may create them.
+#:
+#: The general refusal is right: a key that is not on a row is usually a typo or a schema change,
+#: and silently minting it turns a correction into an invention. But `audit` and `validate` both
+#: end findings with "state its prerequisite" / "give it a `why`" — asking for a field the row does
+#: not have — and then the verb that exists to apply a finding refused it. On the 2026-08-29 mcpolis
+#: build that sent eleven Happy-Path `why` lines through a `python3` heredoc, and forced a second
+#: hand-script to attach `component` to an entry point `validate` said was owned by nobody.
+#:
+#: Narrow on purpose, twice over. Every member is a field some gate's own message asks for by name,
+#: AND a field this verb can REACH: `component`, `cadence` and `cadence_source` live solely on
+#: `EntryPoint`, whose ids are minted at assemble and exist in no fragment — `fix row --id EP12`
+#: refuses by construction — so listing them promised a fix the verb cannot perform. The
+#: entry-point half of the original complaint is still open and needs a different verb.
+_GATE_REQUESTED_FIELDS: frozenset[str] = frozenset({"why", "risk", "purpose", "meaning"})
+
 #: Writable themes whose claim is NOT edge-shaped, so `apply_anchor_corrections` can place it by
 #: recomputing the claim rather than by parsing `<Id> <verb> <Id>`. Everything writable and not in
 #: here is an edge-themed claim `_EDGE_CLAIM` failed to parse — a real, differently-worded problem.
@@ -1533,10 +1550,13 @@ def _apply_edits(where: Path, edits: list[_Edit]) -> int:
         seen[key] = edit.label
         target = docs[path][array_key][index]           # type: ignore[index]
         missing = sorted(f for f in edit.edits if f not in target)
-        if missing:
-            faults.append(f"{edit.label}: has no field(s) {', '.join(missing)} — a new key here is "
+        blocked = [f for f in missing if f not in _GATE_REQUESTED_FIELDS]
+        if blocked:
+            faults.append(f"{edit.label}: has no field(s) {', '.join(blocked)} — a new key here is "
                           f"a schema change, not a correction. Present fields: "
-                          f"{', '.join(sorted(target))}")
+                          f"{', '.join(sorted(target))}"
+                          + (f". ({', '.join(sorted(_GATE_REQUESTED_FIELDS))} may be ADDED, because "
+                             f"a gate asks a build to add them.)" if _GATE_REQUESTED_FIELDS else ""))
             continue
         resolved.append((edit, path, array_key, index))
 
@@ -1573,10 +1593,13 @@ def _apply_edits(where: Path, edits: list[_Edit]) -> int:
     changed: list[tuple[_Edit, Path, str, int, dict[str, object]]] = []
     for edit, path, array_key, index in resolved:
         target = docs[path][array_key][index]           # type: ignore[index]
-        if all(target[f] == v for f, v in edit.edits.items()):
+        # `.get`, not `[…]`: a gate-requested field is ABSENT until this edit adds it, and the
+        # before/after record has to be able to say so. Indexing raised `KeyError` on the first
+        # field this verb was allowed to create.
+        if all(target.get(f) == v for f, v in edit.edits.items()):
             print(f"row: {edit.label} already says that — nothing to write.")
             continue
-        before = {f: target[f] for f in edit.edits}
+        before = {f: target.get(f) for f in edit.edits}
         for field_name, value in edit.edits.items():
             target[field_name] = value
         changed.append((edit, path, array_key, index, before))

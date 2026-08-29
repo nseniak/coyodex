@@ -204,3 +204,14 @@ lead; nothing above this line goes into an agent prompt.
 > `echo ====` aborts the command line THERE, so every read after it on that line silently does not
 > happen and you are left believing you made it. Write `echo "===="`. Measured on one build: 61
 > truncated command lines across 18 of 71 agents.
+
+> **Read the output whole — do not pipe it through `head` or `tail`.** The verdict leads
+> the output and the PROBLEM LIST is the middle; a narrow window shows you `LINT FAILED — 6
+> problem(s)` and two of the six, and you fix two. Measured across two builds: 0 of 101 sub-agent
+> invocations were narrowed on one, 71 of 101 on the next.
+>
+> **Do not open a previous map.** Not one under `.coyodex/dev-rebuilds/`, not a
+> `map-backups/` copy, not one `git show` can produce. This build is deliberately independent of
+> its predecessor: a map that reads the one it replaces may still be right, but nobody can tell any
+> more, and an eval comparing two maps of one repo reads the agreement as convergence when it is
+> copying. If you need an element's record, it is in THIS map — `coyodex dump` reads it.

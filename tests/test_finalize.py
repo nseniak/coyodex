@@ -926,7 +926,11 @@ def test_a_deliberate_drop_recorded_by_PATH_actually_silences_the_advisory():
     unchanged on the next run.
 
     A static "the escape is wired" check cannot see that. This runs it: record the path, and the
-    file must drop out of the list."""
+    file must drop out of the FINDING.
+
+    Out of the finding, and NOT out of the report — see
+    `test_an_excused_file_is_disclosed_not_erased`. The record answers the question "is this
+    deliberate?"; it does not make the file covered."""
     import tempfile
     from coyodex.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
     after = {**_NO_AUTH, "extras": [{"heading": ACCESS_BASELINE_EXCEPTIONS_HEADING,
@@ -935,7 +939,33 @@ def test_a_deliberate_drop_recorded_by_PATH_actually_silences_the_advisory():
     with tempfile.TemporaryDirectory() as td:
         report = _finalize_with_baseline(Path(td), _AUTH, after)
     leg = next(l for l in report.legs if l.name == "access baseline")
-    assert not leg.advisory, f"the recorded path must drop out: {leg.advisory}"
+    assert len(leg.advisory) == 1, leg.advisory
+    assert "check each one before shipping" not in leg.advisory[0], (
+        "the FINDING must be gone — this is the disclosure, not the original advisory")
+
+
+def test_an_excused_file_is_disclosed_not_erased():
+    """The escape must not make the gate assert the opposite of what is true.
+
+    Subtracting the excused paths and then, finding nothing left, printing "every one of the N
+    file(s) ... is still named by an access rule" is what this leg used to do. On the 2026-08-29
+    mcpolis build nine files were excused, that sentence was emitted, and it went into the commit
+    message. Every sibling escape in this toolchain discloses in the same breath as it forgives:
+    `Unclaimed surfaces` prints "counted as CLAIMED because of it"."""
+    import tempfile
+    from coyodex.finalize import ACCESS_BASELINE_EXCEPTIONS_HEADING
+    after = {**_NO_AUTH, "extras": [{"heading": ACCESS_BASELINE_EXCEPTIONS_HEADING,
+                                     "body": "a/auth_google.py: the check moved into the gateway "
+                                             "and is claimed by BR7 there."}]}
+    with tempfile.TemporaryDirectory() as td:
+        report = _finalize_with_baseline(Path(td), _AUTH, after)
+    leg = next(l for l in report.legs if l.name == "access baseline")
+    text = " ".join(leg.advisory) + (leg.note or "")
+    assert "every one of" not in text, f"the excused file is being erased, not disclosed: {text}"
+    assert "a/auth_google.py" in text, text
+    assert "recorded as deliberate" in text, text
+    assert "A recorded gap is still a gap" in text, text
+    assert not leg.blocking, "still advisory"
 
 
 def test_the_advisory_names_the_heading_that_can_actually_carry_a_path():

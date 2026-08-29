@@ -238,6 +238,14 @@ class MapProfile:
     #: almost none of it by the same name. Nothing in the toolchain measured that until this field.
     #: `None`, never `[]`, on a profile that predates it — an empty list would read as "no overlap".
     component_names: list[str] | None = None
+    #: How many component rows are IN EXCESS of the distinct names — 1 for a single colliding
+    #: pair, not 2. (`components - len(set(names))`, so it is directly comparable to the two
+    #: numbers beside it.) `component_names` is a SET, so a collision
+    #: deduplicates itself away: the 2026-08-29 mcpolis map recorded `components: 107` beside 106
+    #: names and nothing read the gap, while the retro metric built on that set ("component names
+    #: surviving a rebuild") reported 8 % on a list that had quietly hidden the pair it should have
+    #: surfaced. `validate` now advises on it; this is the number `compare` can watch.
+    duplicate_component_names: int = 0
     #: Where each component points, as a bare path with the line dropped. Wording-independent, so it
     #: separates "the two builds cut the code differently" from "the two builds named it differently".
     component_sources: list[str] | None = None
@@ -442,6 +450,9 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         entity_names=[e.name for e in m.entities],
         commit=m.commit or None,
         component_names=sorted({c.name.strip() for c in m.components if c.name.strip()}),
+        duplicate_component_names=(
+            len([c for c in m.components if c.name and c.name.strip()])
+            - len({c.name.strip().casefold() for c in m.components if c.name and c.name.strip()})),
         component_sources=sorted({(c.source or "").rsplit(":", 1)[0]
                                   for c in m.components if (c.source or "").strip()}),
         test_files=sorted({(inner.file or "").rsplit(":", 1)[0]

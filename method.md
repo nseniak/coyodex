@@ -1237,6 +1237,9 @@ synthesis → parallel trace.**
     coyodex contract <phase> --slots > <scratch>/slots.json    # every slot, empty; fill the VALUES
     coyodex contract <phase> --fill <scratch>/slots.json \
                              --out <ABSOLUTE scratch path>/<agent-id>.md --brief <agent-id>
+    # Re-running for the SAME agent id is REFUSED: a filled contract is that agent's whole
+    # brief, so overwriting one rewrites the instructions of something that may still be
+    # reading it. Add --force only when you know nothing is.
     ```
 
     `--fill` REFUSES a slot with no value, a blank value, a value still carrying «guillemets», and a
@@ -1637,7 +1640,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
                  "statement": "<ONE decision, product language, naming no component>",
                  "access": false,
                  "risk": "<what is AT STAKE if this decision is wrong or absent>",
-                 "confidence": "verified",
+                 "confidence": "inferred",
                  "sites": [ { "where": "path/to/file.py:88",
                               "why": "<what this line does FOR the rule>",
                               "no_call_site": false } ] } ] }
@@ -1775,7 +1778,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   `theme`** — every worklist item carries one from a closed, most-dangerous-first set (`security`,
   `rule`, `dep-usage`, `ownership`, `persistence`, `messaging`, `interface`, `lifecycle`, `cadence`,
   `description`,
-  `backbone`)
+  `backbone`, `behaviour`)
+  — and `behaviour` is the one nothing emits by default: flow titles and step phrases, the walk a
+  reader follows, added only by `audit --with-behavioural`. It is off because it roughly doubles
+  the worklist, and on the map it was written for it was the difference between 0 and 559 claims
+  about the behavioural half. Turn it on when the budget is there, and say in `grounding.note`
+  that you did
   and **`security` holds every `access: true` rule site** as well as the `enforces`/`encrypts`
   edges, so the batch that sorts first really is the access-control batch — send the multi-skeptic
   majority vote there. (A rule site that is NOT an access rule carries `rule`.) `theme_counts` gives
@@ -2101,6 +2109,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
    10. coyodex lint-fragment … header.json                  # the one hand-authored fragment
    11. coyodex validate --check-sources → coyodex audit → coyodex render
    12. coyodex finalize … --verdicts <v> … --emit-gate-block <file>   # ONE run, both flags
+   12b. if this build ran an EXPERIMENT the backlog asked for, write its answer somewhere durable
+        BEFORE the commit — `COYODEX_HOME/eval/retro/backlog.md`, or the map's own extras. A
+        scratchpad is not a destination: on the 2026-08-29 mcpolis build the `owner: the next build`
+        experiment ran, answered its question with real numbers, and the 53-line write-up was left
+        in `/private/tmp/…/scratchpad/`, one sweep from gone, while the backlog row still read
+        unanswered. That question had been parked three times before somebody finally ran it
    13. commit the map, the .md, the pre-index and provenance
     ```
 

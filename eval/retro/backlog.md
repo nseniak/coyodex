@@ -416,9 +416,50 @@ folder. These are the parked ones, with who can answer them.
 |---|---|---|---|
 | 1 | Do the 44 access rules of the 2026-08-17 mcpolis map SAY what the previous map's 50 said? The deterministic half is answered — the two maps share 25 % of their enforcement lines, 17 files lost their coverage and 16 gained it, so it is neither a clean merge nor a clean loss. What no deterministic check can settle is whether the surviving statements cover the same decisions. | `/coyodex-eval` (judges) | 2026-08-17 |
 | 2 | Which of the 17 files that lost access coverage hold enforcement the map should still be claiming? Two were verified by hand as real — a sign-in signature check and a credential encryption call — and one old anchor was a config constant rather than enforcement. The remaining fourteen are unread. | a human, or a targeted skeptic pass | 2026-08-17 |
-| 3 | What actually causes the access enforcement-line churn? Item 15 above eliminated the diagnosis it was built on. **The experiment: re-run ONE block's rule worker with a `coyodex dump --members`-derived candidate list instead of the hand-curated one, and compare which files earn sites.** One extra agent on the next build. | the next build | 2026-08-19 |
+| 3 | ~~What actually causes the access enforcement-line churn?~~ **ANSWERED 2026-08-29 — see below** | the next build | 2026-08-19 |
 | 4 | Do the 47 access rules of the 2026-08-18 map say what the previous map's 44 said? Same shape as question 1, for the newer pair: 50 shared enforcement lines of a 181-line union, 17 files lost, 11 gained. | `/coyodex-eval` (judges) | 2026-08-19 |
 | 5 | Is one refuted-claim-in-the-map a pattern? `grounding report`'s `REFUTED BUT NOT SUPERSEDED` section found two on the 2026-08-18 map, both from a reconcile that corrected one copy of a row and left another. Nobody has looked at an older map with the same command. | anyone, one command per archived map | 2026-08-19 |
+
+
+### Answered 2026-08-29 — question 3, the enforcement-line churn
+
+The mcpolis build of 2026-08-29 ran the experiment as specified: one block's rule worker re-run with
+a `coyodex dump --members`-derived candidate list beside the hand-curated control.
+
+| arm | rules | sites | files earning sites |
+|---|---|---|---|
+| `r1` hand-curated | 8 | 22 | 4 |
+| `r1x` map-derived | 8 | 19 | 4 |
+
+**14 shared exact `file:line` anchors**; three of the four files identical (only `service_token_verifier.py`
+in the hand arm, only `tool_router.py` in the map arm).
+
+**The candidate list is NOT the cause.** Given the same block and the same code the two arms
+converged, which also means the hand-curation step is not buying much — a `dump --members`-derived
+list is a viable replacement for it.
+
+**The cause is anchor PLACEMENT.** The map handed `r1x` 143 candidate anchors across 35 files, and
+it reported that they "pointed at the right functions, but most of them sat on the call site or the
+return, not the enforcing line" — it moved 14 of its 18 anchors onto the actual `if`. Verified
+concretely: the map stores `policy_engine.py:317`, which is `if constraint.mode == "forbid":`, while
+the only `re.IGNORECASE` is at `:318`. So every build's rule worker re-derives the operative line by
+reading the file rather than by trusting the stored anchor, and two builds reading one function land
+a line or two apart and are both defensible.
+
+**Corroboration, with the caveat that killed half of it.** On the same pair `compare` gives 37 of a
+60-file union shared (62 %) against 54 of a 244-line union (22 %) — file-stable, line-unstable. But
+only **12 of 68** baseline-only anchors on shared files have a candidate within ±1 line, and 35 of
+190 non-shared anchors sit on files the other map never names, so the churn is mostly NOT the
+one-line wobble. **The r1/r1x arms are the evidence; the compare figures add less than they look
+like they do.**
+
+**What follows, for the coyodex developer to decide.** Store the enforcing line rather than the call
+site when a flow step's `where` is the caller's line, or compare two maps' access rules by FILE plus
+enclosing function rather than by exact line. One block on one repo: a data point, not a settled
+result.
+
+The write-up came out of a build scratchpad that would have been swept. `method.md`'s closing list
+now carries step 12b — write an experiment's answer somewhere durable before the commit.
 
 ## Candidate L3 assertions
 
@@ -453,6 +494,20 @@ never per build — absolute dollars track how big the map got.
 | date | project | rows | active min | $ total | $ / 100 rows | per-role split ($ lead / harvest / trace / verify / other) |
 |---|---|---|---|---|---|---|
 | — | (four mcpolis builds pre-log measured $189–$207, 61–71 min active, 1,195→1,564 rows; per-role split not recorded) | | | | | |
+| 2026-08-26 | mcpolis | 1,288 | 88.9 | 382.42 | 29.69 | 74.26 / 21.50 / 6.06 / 71.98 / 208.61 |
+| 2026-08-29 | mcpolis | 1,292 | 156.9 | 493.45 | 38.19 | 82.88 / 83.63 / 87.84 / 162.67 / 76.42 |
+
+**The role buckets are not comparable across those two rows** and the totals are. Harvest ran 4
+agents then 12, trace 1 then 13, "other" 48 then 14 — the same work moved between buckets as the
+fan-out was cut differently. Only `$ total`, `$ / 100 rows` and `active min` compare. Cost per row
+rose 29 % and seconds per row 76 %, on a build that ran a whole second phase (the interfaces
+section) the first did not.
+
+**One open question this log raises**: the verify role went $0.0635 to $0.1499 per verdict row on
+FEWER rows (1,134 → 1,085). Three candidates and nothing separates them — `dump` round-trips
+replacing one map read with many, the skeptic count doubling (19 → 38), and fixed base context per
+agent turn rising 52,195 → 64,503 (+23.6 %). Settling it needs a build that holds the skeptic count
+fixed.
 
 ## Sources
 

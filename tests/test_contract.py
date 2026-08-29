@@ -282,3 +282,56 @@ def test_an_unreadable_slots_file_is_refused_by_name(tmp_path: Path) -> None:
     with contextlib.redirect_stderr(err):
         assert contract.main(["rules", "--fill", str(bad), "--out", str(tmp_path / "o.md")]) == 2
     assert "not readable JSON" in err.getvalue()
+
+
+# --- a filled contract is an agent's whole brief ----------------------------------------------
+# Under pointer dispatch the agent reads its brief from the file whenever it gets round to it, so
+# overwriting one rewrites the instructions of something that may still be running. On the
+# 2026-08-29 mcpolis build turn 125 hand-wrote `briefs/t1.md` for an agent launched at turn 127, and
+# turn 160's generator looped `--out …/briefs/{aid}.md` with `aid="t1"` and rewrote it mid-flight —
+# exit 0, no warning. The lead saw only the downstream fragment-name collision, 19 turns later.
+
+def _fill_to(tmp: Path, out: Path, extra: list[str] | None = None) -> tuple[int, str]:
+    import contextlib, io, json as _json
+    from coyodex.contract import main, slots
+    values = {k: "x" for k in slots("skeptic")}
+    src = tmp / "slots.json"
+    src.write_text(_json.dumps(values), encoding="utf-8")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = main(["skeptic", "--fill", str(src), "--out", str(out), *(extra or [])])
+    return rc, buf.getvalue()
+
+
+def test_filling_over_an_existing_brief_is_refused():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        out = tmp / "brief.md"
+        out.write_text("AN AGENT IS READING THIS", encoding="utf-8")
+        rc, msg = _fill_to(tmp, out)
+        body = out.read_text(encoding="utf-8")
+    assert rc == 2, msg
+    assert "already exists" in msg, msg
+    assert body == "AN AGENT IS READING THIS", body
+
+
+def test_force_overwrites_when_the_lead_knows_nothing_is_reading_it():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        out = tmp / "brief.md"
+        out.write_text("stale", encoding="utf-8")
+        rc, msg = _fill_to(tmp, out, ["--force"])
+        body = out.read_text(encoding="utf-8")
+    assert rc == 0, msg
+    assert body != "stale", body
+
+
+def test_a_fresh_path_still_writes():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        out = tmp / "nested" / "brief.md"
+        rc, msg = _fill_to(tmp, out)
+    assert rc == 0, msg

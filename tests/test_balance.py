@@ -569,3 +569,38 @@ def test_map_is_accepted_as_a_named_flag_too():
             "subsystems": [{"id": "S1", "name": "One", "purpose": "p"}],
         }), encoding="utf-8")
         assert _main(["--map", str(p)]) == _main([str(p)])
+
+
+# --- two boxes under one name --------------------------------------------------------------
+# A reader meets a component by its NAME. `validate`'s duplicate check covered ids only, so the
+# 2026-08-29 mcpolis map shipped C11 and C102 both called "Service tokens" (a backend store and a
+# screen shape) with `validate` reporting 0 problems. The retro metric that should have caught it
+# — component names surviving a rebuild — is computed on a set, so the collision deduplicated
+# itself away before anyone could see it.
+
+def test_two_components_sharing_a_name_are_reported():
+    m = make_model(0)
+    m.components = [make_component("C11", name="Service tokens"),
+                    make_component("C102", name="Service tokens")]
+    problems, warnings = validate_model(m)[:2]
+    assert not problems, problems          # ids are unique; this is not a schema error
+    hit = [w for w in warnings if "Service tokens" in w and "used by" in w]
+    assert hit, warnings
+    assert "C11" in hit[0] and "C102" in hit[0], hit
+
+
+def test_a_name_that_differs_only_in_case_or_spacing_still_collides():
+    """Two boxes a reader cannot tell apart are two boxes a reader cannot tell apart."""
+    m = make_model(0)
+    m.components = [make_component("C1", name="Service tokens"),
+                    make_component("C2", name=" service TOKENS ")]
+    warnings = validate_model(m)[1]
+    assert any("used by 2 components" in w for w in warnings), warnings
+
+
+def test_distinct_component_names_raise_nothing():
+    m = make_model(0)
+    m.components = [make_component("C1", name="Service token store"),
+                    make_component("C2", name="Service token screen")]
+    warnings = validate_model(m)[1]
+    assert not [w for w in warnings if "used by" in w], warnings

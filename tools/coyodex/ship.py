@@ -23,6 +23,7 @@ no check and writes nothing of its own.
 """
 from __future__ import annotations
 
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,6 +130,75 @@ def _verdict_flags(s: ShipInputs) -> list[str]:
     return flags
 
 
+def _pinned_verdict_flags(s: ShipInputs) -> list[str]:
+    """The verdicts `grounding write` will accept: the ones cast on the PINNED worklist.
+
+    `grounding write` refuses a verdict whose claim is not in the pinned worklist, on purpose — a
+    record built from votes on claims the skeptics were never given would misstate what was
+    challenged. `finalize` needs the opposite: every verdict there is, including the post-pin
+    re-challenges, or its refutation leg cannot see them.
+
+    Feeding ONE list to both is what broke on the 2026-08-29 mcpolis build. `ship` stopped at step 6
+    with `9 verdict claim(s) are not in the pinned worklist`, the lead abandoned the verb and
+    hand-ran steps 5-12 with a shell loop that filtered the post-pin files out for `grounding write`
+    and back in for `finalize` — and the map still shipped `finalize`'s "the record's delta counts
+    contradict the verdict files" as a `carried (no escape)` advisory, because the two commands had
+    been measured against different sets.
+
+    The rule is EVERY claim pinned, not ANY. A first version kept a file that straddles — some rows
+    pinned, some not — reasoning that dropping it would hide votes the record is entitled to. That
+    version does not fix the case its own paragraph above describes: on the real build the nine
+    off-pin claims lived in the three `verdicts-recheck*.json` files, each carrying 3 pinned claims
+    and 9 post-pin ones. Straddlers, kept, and `grounding write` refused the set with the identical
+    "9 verdict claim(s) are not in the pinned worklist". The set the build needed by hand was the 32
+    files with no post-pin claim at all.
+
+    What a dropped straddler costs is a RE-VOTE, in the normal case: a post-pin batch re-challenges
+    claims the pinned pass already voted on, so those verdicts exist elsewhere. Where it would cost
+    a claim's only vote, the record simply reports that claim as unchallenged — which is true, and
+    is what `claims_live_challenged` is for. The alternative is not a better record; it is
+    `grounding write` refusing and no record at all.
+
+    Dropped files are NAMED by the caller, because a lost sole vote must be visible."""
+    pinned = set(_worklist_claims(s.worklist))
+    if not pinned:
+        return _verdict_flags(s)
+    flags: list[str] = []
+    for v in s.verdicts:
+        claims = _verdict_claims(v)
+        if claims and not (claims <= pinned):
+            continue                # holds a post-pin claim: `grounding write` would refuse the set
+        flags += ["--verdicts", str(v)]
+    return flags
+
+
+def post_pin_verdicts(s: ShipInputs) -> list[Path]:
+    """The verdict files `grounding write` cannot be given — named so a lost vote is visible."""
+    pinned = set(_worklist_claims(s.worklist))
+    if not pinned:
+        return []
+    return [v for v in s.verdicts
+            if (claims := _verdict_claims(v)) and not (claims <= pinned)]
+
+
+def _worklist_claims(path: Path) -> set[str]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    rows = payload.get("worklist") if isinstance(payload, dict) else payload
+    return {str(r.get("claim")) for r in (rows or []) if isinstance(r, dict) and r.get("claim")}
+
+
+def _verdict_claims(path: Path) -> set[str]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    rows = payload.get("grounding") if isinstance(payload, dict) else payload
+    return {str(r.get("claim")) for r in (rows or []) if isinstance(r, dict) and r.get("claim")}
+
+
 def build_plan(s: ShipInputs) -> list[Step]:
     """The method's closing list, steps 2-12, cut at the note. Step numbers cite method.md."""
     prepare = [
@@ -146,7 +216,7 @@ def build_plan(s: ShipInputs) -> list[Step]:
     if s.note_file is None:
         return prepare
     write_argv: list[str] = ["grounding", "write", "--worklist", str(s.worklist),
-                             *_verdict_flags(s), "--map", str(s.map_path),
+                             *_pinned_verdict_flags(s), "--map", str(s.map_path),
                              "--note-file", str(s.note_file),
                              "--out", str(s.header.parent / "grounding.json")]
     if s.partial:
@@ -294,6 +364,18 @@ def main(argv: list[str] | None = None) -> int:
         print("ship: note — no reconcile.json found; assemble runs WITHOUT --reconcile. If the "
               "build authored one elsewhere, stop and pass --reconcile: an assemble without it "
               "silently reverts every assignment.")
+    # NAME the verdict files `grounding write` will not be given. Dropping them is what lets the
+    # step run at all (see `_pinned_verdict_flags`), and in the normal case it costs only re-votes
+    # — but where a dropped file holds a claim's ONLY vote, the record will report that claim as
+    # unchallenged. A silent drop would make that indistinguishable from nobody having voted.
+    dropped = post_pin_verdicts(inputs)
+    if dropped:
+        print(f"ship: note — {len(dropped)} verdict file(s) hold claims outside the pinned "
+              f"worklist, so `grounding write` is given the other "
+              f"{len(inputs.verdicts) - len(dropped)}: "
+              f"{', '.join(p.name for p in dropped)}. `finalize` still reads all "
+              f"{len(inputs.verdicts)}. Those votes count toward the LIVE map, never toward "
+              f"`claims_challenged`, which is pinned to the worklist the skeptics were given.")
     rc = run_plan(build_plan(inputs), default_runner)
     if rc != 0:
         return rc

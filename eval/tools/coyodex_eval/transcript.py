@@ -385,10 +385,20 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
             mid = message.get("id")
 
             if kind == USER:
+                # `text_parts` was dropped here, so a USER turn reached the reader carrying tool
+                # RESULTS and nothing the operator said. Combined with the ASSISTANT filter in
+                # `format_turns`, that made the operator structurally unreadable: measured on one
+                # 642-turn build, 358 USER turns parsed and 0 carried text. A retrospective asked
+                # "who noticed the missing section" and no mode of this reader could answer, while
+                # its own ground rules forbid the raw-JSONL fallback.
+                #
+                # A tool_result block is not the operator talking, and `_message_texts` already
+                # keeps those out of `texts` — so this carries the human's words only.
                 pending.append(_Group(key=f"@{lineno}", role=USER, line=lineno,
                                       is_sidechain=sidechain, timestamp=timestamp, usage="",
                                       results=results, thinking_chars=think_chars,
-                                      thinking_signature_bytes=think_sig))
+                                      thinking_signature_bytes=think_sig,
+                                      text_parts=texts))
                 continue
 
             key = mid if isinstance(mid, str) and mid else f"@{lineno}"
@@ -939,6 +949,23 @@ def summarise_call(call: ToolCall, width: int = 100) -> str:
 COMMAND_LINES = 40
 
 
+#: Text a USER-role record carries that the OPERATOR did not type. A Claude Code transcript files
+#: skill bodies, `<system-reminder>` blocks, slash-command expansions and IDE notices under the same
+#: role as the human's own messages. Labelling those `(operator)` is the failure mode the whole
+#: change is exposed to: the question it exists to answer is "who noticed this", and machine text
+#: rendered as a person is a worse answer than no answer. Measured on one real session: of 22
+#: text-carrying USER turns, 20 were human, 1 a skill body and 1 an `<ide_opened_file>` notice.
+_HARNESS_TEXT = (
+    "<system-reminder", "<command-name>", "<command-message>", "<local-command-",
+    "<ide_", "Base directory for this skill:", "Caveat: The messages below were generated",
+)
+
+
+def _is_harness_text(text: str) -> bool:
+    head = text.lstrip()[:400]
+    return any(marker in head for marker in _HARNESS_TEXT)
+
+
 def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str, str] | None = None,
                  width: int = 100, result_chars: int = 600, result_lines: int = 20) -> str:
     """Render turns as readable text.
@@ -953,6 +980,17 @@ def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str
     unlimited = result_chars < 0
     for turn in turns:
         if turn.role != ASSISTANT:
+            # A USER turn with words is the OPERATOR, and it is the one thing this reader could
+            # never show. It appears only in `--full` (the index is one line per tool call) and
+            # only when it carries text, so a bare tool-result turn stays invisible as before.
+            if full and turn.text.strip() and not _is_harness_text(turn.text):
+                said = turn.text.splitlines()
+                kept = said if unlimited else said[:result_lines]
+                lines.append(f"[{turn.index:>4}] (operator) " + "\n        . ".join(kept))
+                if len(said) > len(kept):
+                    lines.append(f"        . … {len(said) - len(kept)} more line(s) "
+                                 f"(--full-output for all of it)")
+                lines.append("")
             continue
         # A turn with no tool call is invisible in the INDEX by design — the index is one line per
         # call. In `full` it must not be, because a whole class of method rule produces exactly that
@@ -1154,6 +1192,14 @@ def main(argv: list[str] | None = None) -> int:
         unresolved = unresolved_aliases(ranged)
         print("\n(`--help` runs are not counted, and heredoc bodies are not scanned — both make "
               "the table\n claim work that did not happen.)")
+        # The OTHER direction, and the one that made a retrospective publish something false. This
+        # scans TYPED SHELL TEXT: a subcommand another verb runs in-process is invisible, so
+        # `coyodex ship` shows as one row while it runs eleven steps. One report said "`grounding
+        # report` ran 0 times in the whole build" off this table, about a build that ran it at turn
+        # 460 inside `ship`.
+        print("(this reads TYPED shell text: a subcommand another verb runs internally is invisible"
+              "\n here — `coyodex ship` is one row and runs eleven steps — so a zero in this table"
+              "\n means 'never typed', never 'never ran'.)")
         if unresolved:
             print(f"({unresolved} invocation(s) went through an alias with no `VAR=…/coyodex` "
                   f"assignment in the\n same command, and are counted as `coyodex`.)")

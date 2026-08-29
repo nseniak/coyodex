@@ -809,3 +809,39 @@ def test_can_coexist_is_symmetric_and_open_on_an_untagged_side():
     assert not G._can_coexist(envs, "a", "b") and not G._can_coexist(envs, "b", "a")
     assert G._can_coexist(envs, "a", "c") and G._can_coexist(envs, "c", "a")
     assert G._can_coexist(envs, "a", "a")
+
+
+# --- an excused empty unit must still be visible ---------------------------------------------
+# A unit whose name matches a system dep is dropped from the orphan check, because a `mongo` box
+# hosts no first-party code by nature. `nginx` matches the same rule and is not the same case: on
+# the 2026-08-29 mcpolis map the nginx unit hosted 0 components while `docker/Dockerfile.nginx`
+# builds and serves the dashboard. Read structurally that map says the dashboard has no production
+# host, and `validate` said nothing, because the name matched.
+
+def _model_with_units(units: list[str], deps: list[tuple[str, str]],
+                      hosted_in: str | None) -> "ProjectModel":
+    from coyodex.model import Component, Dep, DeploymentRow, ProjectModel
+    m = ProjectModel(title="D", goal="g")
+    m.deployment = [DeploymentRow(unit=u, runs_on="a box") for u in units]
+    m.deps = [Dep(id=f"D{i+1}", name=n, kind=k) for i, (n, k) in enumerate(deps)]
+    m.components = [Component(id="C1", name="App", runs_in=[hosted_in] if hosted_in else [])]
+    return m
+
+
+def test_an_empty_unit_excused_by_a_matching_system_dep_is_still_disclosed():
+    from coyodex.validate_model import validate_model
+    m = _model_with_units(["backend", "nginx"], [("nginx", "platform")], hosted_in="backend")
+    problems, warnings = validate_model(m)[:2]
+    assert not problems, problems
+    hit = [w for w in warnings if "excused because the name matches a system dependency" in w]
+    assert hit, warnings
+    assert "nginx" in hit[0], hit
+    # Still not an orphan — the excuse itself is unchanged, only its silence.
+    assert not [w for w in warnings if "match no known system dependency" in w], warnings
+
+
+def test_a_unit_that_hosts_something_is_not_disclosed():
+    from coyodex.validate_model import validate_model
+    m = _model_with_units(["nginx"], [("nginx", "platform")], hosted_in="nginx")
+    warnings = validate_model(m)[1]
+    assert not [w for w in warnings if "excused because the name" in w], warnings

@@ -195,12 +195,16 @@ def brief(agent_id: str, path: Path) -> str:
 
 
 _USAGE = ("usage: coyodex contract <" + " | ".join(CONTRACTS) + "> [--slots]\n"
-          "       coyodex contract <name> --fill <slots.json|-> --out <file> [--brief <agent-id>]\n\n"
+          "       coyodex contract <name> --fill <slots.json|-> --out <file> [--brief <agent-id>]\n"
+          "                                                                   [--force]\n\n"
           "Print exactly the text one fan-out agent should receive: the contract's agent half,\n"
           "with the writing rules appended for the phases whose agents author map prose\n"
           "(" + ", ".join(sorted(AUTHORING)) + ").\n\n"
           "  --slots   print a ready-to-fill JSON skeleton — every slot of THIS contract as a\n"
           "            key with an empty value, so no slot name is ever typed by hand.\n"
+          "  --force   overwrite an existing --out. Without it an existing file is REFUSED: under\n"
+          "            pointer dispatch a filled contract is an agent's whole brief, so rewriting\n"
+          "            one rewrites the instructions of an agent that may still be running.\n"
           "  --fill    fill those slots and write the result to --out. REFUSES on a slot with no\n"
           "            value, a blank value, a value still carrying «guillemets», or a key that is\n"
           "            no slot of this contract — and reports every fault at once, so learning\n"
@@ -240,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     want_slots = False
+    force = False
     fill_from: str | None = None
     out_path: str | None = None
     brief_id: str | None = None
@@ -248,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
         a = args[i]
         if a == "--slots":
             want_slots = True
+        elif a == "--force":
+            force = True
         elif a in ("--fill", "--out", "--brief"):
             i += 1
             if i >= len(args):
@@ -288,6 +295,19 @@ def main(argv: list[str] | None = None) -> int:
         if fill_from is not None and out_path is not None:
             text = fill(name, _read_values(fill_from))
             target = Path(out_path)
+            # REFUSE an existing file. Under pointer dispatch a filled contract IS an agent's whole
+            # brief, and the agent reads it whenever it gets round to it — so overwriting one is
+            # rewriting the instructions of something that may still be running. On the 2026-08-29
+            # mcpolis build turn 125 hand-wrote `briefs/t1.md` for an agent launched at turn 127,
+            # and turn 160's generator looped `--out …/briefs/{aid}.md` with `aid="t1"` and rewrote
+            # it mid-flight. Exit 0, no warning. The lead saw only the downstream fragment-name
+            # collision, 19 turns later.
+            if target.exists() and not force:
+                print(f"ERROR: {target} already exists. A filled contract is an agent's whole brief "
+                      f"under pointer dispatch, so overwriting one rewrites the instructions of an "
+                      f"agent that may still be running. Pick another path, or pass --force if you "
+                      f"know nothing is reading it.", file=sys.stderr)
+                return 2
             pointer = ""
             if brief_id is not None:
                 # Composed BEFORE the write, so a brief that cannot be sent does not leave a

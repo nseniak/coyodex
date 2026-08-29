@@ -184,6 +184,7 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
     # rules exist, and a re-synthesis that renumbers blocks must not silently re-point every rule.
     # The method says "never in the fragment"; without this the rule is prose, and a fragment
     # carrying `block` lints clean and assembles with the value intact.
+    problems += _interface_shape_problems(m)
     in_fragment = [r.id for r in m.rules if r.block]
     if in_fragment:
         problems.append(
@@ -196,6 +197,50 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
         problems += check_anchor_existence_model(m, roots)
         problems += check_entity_sources_model(m, roots)
         problems += _check_pin_matches_the_tree(m, repo_root)
+    return problems
+
+
+def _interface_shape_problems(m: ProjectModel) -> list[str]:
+    """Row-local shape rules for the `interfaces` array.
+
+    This file held ZERO references to "interface" until now, so the section the method makes the
+    LEAD hand-author was the one section its own self-check could not see. On the 2026-08-29 mcpolis
+    build `lint-fragment` printed `LINT OK — 0 problems` on the interfaces fragment and `validate`
+    raised seven interface findings on the same content four turns later — and it printed the same
+    `LINT OK` again after the evidence was added, so the verdict was identical with and without the
+    field `validate` blocks on.
+
+    Only the row-local half lives here, the same division every other array follows: a bad `side`,
+    a bad `facing`, a `theirs` surface with no evidence, and a `ways_in` / `party_ref` that is not
+    an id-shaped token. Cross-array resolution (does `EP99` exist, is it externally activated, does
+    every way in belong to exactly one surface) needs the assembled map and stays in `validate`."""
+    problems: list[str] = []
+    for iface in m.interfaces:
+        if iface.side and iface.side not in grammar.INTERFACE_SIDES:
+            problems.append(
+                f"{iface.id}: `side` is '{iface.side}' — it must be one of "
+                f"{', '.join(grammar.INTERFACE_SIDES)} (ours = a surface the product offers, "
+                f"theirs = one it reaches out to)")
+        if iface.facing and iface.facing not in grammar.INTERFACE_FACINGS:
+            problems.append(
+                f"{iface.id}: `facing` is '{iface.facing}' — it must be one of "
+                f"{', '.join(grammar.INTERFACE_FACINGS)}")
+        for ep in iface.ways_in:
+            if not _ID_LIKE.match(str(ep)):
+                problems.append(
+                    f"{iface.id}: `ways_in` holds '{ep}', which is not an id — a way in is an entry "
+                    f"point id (`EP12`), never a path or a name")
+        if iface.party_ref and not _ID_LIKE.match(str(iface.party_ref)):
+            problems.append(
+                f"{iface.id}: `party_ref` is '{iface.party_ref}', which is not an id — name the dep "
+                f"row (`D4`), or use `party` for a free-text party")
+        if iface.side == "theirs" and not (
+                [e for e in iface.evidence if getattr(e, "file", "")] or iface.source):
+            problems.append(
+                f"{iface.id}: a `theirs` surface carries no evidence and no `source` — whose data "
+                f"crosses cannot be read off a call site, so the one line you read is the whole "
+                f"claim. `validate` blocks on this; answering it here costs one turn instead of a "
+                f"phase")
     return problems
 
 
@@ -287,6 +332,39 @@ def _authored_runs_in_warnings(m: ProjectModel) -> list[str]:
             f"synthesis fragment, this is yours to keep."]
 
 
+def _authored_confidence_warnings(m: ProjectModel) -> list[str]:
+    """Advisory: a fragment authoring `confidence: verified`.
+
+    Nothing in the toolchain WRITES `confidence`; every value in every shipped map was typed by the
+    agent that wrote the row. So the field says what its author believed, and reads as what the
+    grounding pass proved. On the 2026-08-29 mcpolis map that gap was total: all 301 element-level
+    values said `verified` — components, rules, deps, subsystems, subdomains, interfaces, every one
+    — while `inferred` appeared 64 times and never once outside the `tests` array. A constant
+    carries no information, and this one is a constant that reads as an assurance.
+
+    An authoring agent cannot know the answer: `verified` is a statement about VOTES, which are cast
+    a phase later by readers who have not run yet. `inferred` is the honest label at authoring time,
+    and `finalize`'s own advisory already asks a build to "say `inferred` where nobody looked" —
+    this is where a build can act on that before the map is assembled.
+
+    ADVISORY, and the same shape as the authored-`runs_in` nudge above: a lead-authored fragment can
+    legitimately carry a `verified` the lead has grounds for, and a single-fragment linter cannot
+    tell the two apart."""
+    kinds = (("component", m.components), ("rule", m.rules), ("dep", m.deps),
+             ("subsystem", m.subsystems), ("subdomain", m.subdomains),
+             ("interface", m.interfaces))
+    rows = [(kind, el.id) for kind, group in kinds for el in group
+            if str(getattr(el, "confidence", "") or "").strip() == "verified"]
+    if not rows:
+        return []
+    listed = shown([r[1] for r in rows], 8, unit="row(s)")
+    return [f"{len(rows)} row(s) author `confidence: verified`: {listed} — `verified` is a "
+            f"statement about VOTES, and the skeptics have not run yet. Write `inferred`, which is "
+            f"what the fragment actually knows; the grounding pass is what can raise it. Measured "
+            f"on one shipped map: 301 of 301 element-level values said `verified`, so the field "
+            f"was a constant that reads as an assurance."]
+
+
 def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     """Advisory (non-blocking) findings for one fragment — the domain-relation *warnings* (the
     field-less-association nudge, the by-name-FK hint) and the use-case *granularity* signals
@@ -301,6 +379,7 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     _problems, warnings = check_domain_relations(m.entities)
     warnings += _legacy_security_warnings(m)
     warnings += _authored_runs_in_warnings(m)
+    warnings += _authored_confidence_warnings(m)
     # The roleless-C→D-verb nudge rides THIS non-blocking channel (never `lint_fragment_problems`,
     # which would promote it to a blocking problem — trap T7), so an authoring agent SEES it and
     # decides, without a legitimately-generic `uses` failing the lint. The entry-point-kind nudges

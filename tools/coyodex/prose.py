@@ -231,7 +231,7 @@ def summarize(findings: Iterable[Finding], examples: int = EXAMPLES_PER_KIND) ->
     return lines
 
 
-def iter_prose_fields(model: ProjectModel) -> Iterator[tuple[str, str]]:
+def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tuple[str, str]]:
     """Every reader-facing prose field in a map, as (where, text).
 
     Reader-facing means: a person reads this sentence in the viewer. Titles, ids, anchors, code
@@ -254,6 +254,40 @@ def iter_prose_fields(model: ProjectModel) -> Iterator[tuple[str, str]]:
         yield f"{step.id} why", step.why or ""
     for row in model.glossary:
         yield f"glossary '{row.term}'", row.meaning
+    if not wide:
+        # The BATCH surface stays narrow. Both consumers read this one function, and they do not
+        # cost the same: the deterministic long-sentence gate is free, while every batch is
+        # dispatched to a reading agent. Widening both took one real map from 13 prose batches to
+        # 41 — a 3.2x fan-out cost increase, on by default, for a tier that was never budgeted.
+        # `behaviour` was made opt-in for exactly that reason; this is the same decision.
+        return
+    # THE SIX ARRAYS THIS WALK WAS BLIND TO. Both consumers read this one function — the reading
+    # fan-out and the deterministic long-sentence gate — so a field it does not yield is a field
+    # NOTHING checks. On the 2026-08-29 mcpolis map that was 1,171 fields against the 477 it did
+    # yield, and running the deterministic counters over the missing ones found 28 findings the gate
+    # had never seen, 21 of them over-long sentences.
+    #
+    # Every one is a sentence a person reads in the viewer, which is the test this docstring states:
+    # a step phrase IS the walk a reader follows, an entry point's trigger IS how the reader learns
+    # what starts it, and an entity's meaning IS the record explained.
+    for ep in model.entry_points:
+        yield f"{ep.id} trigger", ep.trigger
+    for entity in model.entities:
+        yield f"{entity.id} meaning", entity.meaning
+    for flow in model.flows:
+        yield f"{flow.uc} flow title", flow.title
+        for step in flow.steps:
+            yield f"{flow.uc} step {step.n} phrase", step.phrase
+            yield f"{flow.uc} step {step.n} note", step.note
+    for sf in model.subflows:
+        yield f"{sf.id} name", sf.name
+        for step in sf.steps:
+            yield f"{sf.id} step {step.n} phrase", step.phrase
+            yield f"{sf.id} step {step.n} note", step.note
+    for iface in model.interfaces:
+        yield f"{iface.id} what", iface.what
+        for crossing in iface.carries:
+            yield f"{iface.id} carries ({crossing.direction})", crossing.what
 
 
 # ── the half a counter cannot judge ───────────────────────────────────────────────────────────────

@@ -886,3 +886,130 @@ def test_the_empty_dir_message_does_not_invent_a_sibling_that_is_not_there():
         rc, out = _lint_with(empty, tmp)
         assert rc != 0, out
         assert "Did you mean" not in out, out
+
+
+# --- the tasks/ directory mixes agent transcripts with background-Bash stdout ---------------
+# On the 2026-08-29 mcpolis build the lead pointed `--agent-transcripts` at `<session>/tasks/`,
+# the one path a dispatch result names. That directory held 80 agent transcripts (`a*.output`)
+# AND 18 background-Bash stdout captures under the same suffix. One captured line was a bare
+# number, `json.loads` returned an `int`, and `_opened_files` called `.get` on it: the whole pass
+# aborted with `AttributeError`. The lead read that as "the tool cannot run on this harness",
+# dropped the flag, and the map shipped a `grounding.note` saying so. Run correctly the check
+# covers 1,085 of 1,085 rows and flags 40.
+
+def test_a_bare_scalar_line_in_the_transcript_dir_does_not_abort_the_pass():
+    """The crash. A background-Bash capture whose stdout is a number sits beside the agents."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        d = _agent_dir(tmp, "session/tasks", "a1.output",
+                       json.dumps({"message": {"content": [{"type": "tool_use", "name": "Read",
+                                                            "input": {"file_path": "a.py"}}]}}) + "\n")
+        (d / "b0df5wg4g.output").write_text("42\n[1, 2]\n\"a string\"\nnull\n", encoding="utf-8")
+        rc, out = _lint_with(d, tmp)
+        assert rc == 0, out
+        assert "AttributeError" not in out, out
+        assert "covered 1 of 1 row(s)" in out, out
+
+
+def test_background_bash_stdout_does_not_vouch_for_a_file_no_agent_opened():
+    """The quieter half. A batch file printed by a background command names hundreds of anchors;
+    letting it into the LOOSE set makes a fabricated row look merely 'weak' instead of flagged."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        # The agent opened NOTHING. Only the background capture names `a.py`.
+        d = _agent_dir(tmp, "session/tasks", "a1.output",
+                       json.dumps({"message": {"content": [{"type": "tool_use", "name": "Bash",
+                                                            "input": {"command": "echo hi"}}]}}) + "\n")
+        # A real background capture, and it must be one whose lines DO parse — otherwise
+        # `_mentioned_files` ignored them already and the test proves nothing about the new
+        # discriminator. One bare scalar among the objects is what a real capture holds and what
+        # makes this file not an agent transcript.
+        (d / "b1.output").write_text(
+            json.dumps({"claims": [{"anchor": "a.py:1"}]}) + "\n42\n", encoding="utf-8")
+        rc, out = _lint_with(d, tmp)
+        assert rc != 0, out
+        assert "a.py" in out, out
+
+
+# --- a note whose own record contradicts it ---------------------------------------------------
+# `--note` is free prose in a permanent record and in the commit message, and nothing checked it.
+# The 2026-08-29 mcpolis map shipped both shapes: "483 verdict rows over 161 redundant rows" (161
+# is the CLAIM count; 322 rows were redundant) and "16 of those 696 carry no verdict" where its own
+# record said 22 of 702. The redundant-row error had been found by the PREVIOUS retro, marked fixed,
+# and recurred — because the fix printed the number without refusing a note that disagrees.
+
+def _write_with_note(note: str, rows: list[dict], claims: list[str],
+                     live: list[str] | None = None):
+    from coyodex.grounding import _note_contradictions, build_record
+    record, _errors = build_record(claims, rows, note, live_claims=live)
+    return _note_contradictions(note, rows, record, live)
+
+
+def _triple(claim: str) -> list[dict]:
+    return [{"claim": claim, "grounded": True, "evidence": "a.py:1", "skeptic": s}
+            for s in ("a", "b", "c")]
+
+
+def test_a_wrong_redundant_row_count_is_reported():
+    rows = _triple("c1") + _triple("c2")            # 6 rows, 2 claims -> 4 redundant
+    problems = _write_with_note("6 verdict rows over 2 redundant rows.", rows, ["c1", "c2"])
+    assert problems and "4" in problems[0], problems
+
+
+def test_the_right_redundant_row_count_passes():
+    rows = _triple("c1") + _triple("c2")
+    assert not _write_with_note("6 verdict rows, 4 redundant rows.", rows, ["c1", "c2"])
+
+
+def test_another_builds_figure_beside_this_pass_is_fine():
+    """A good note cites earlier builds for comparison; flagging those flags the honest notes."""
+    rows = _triple("c1") + _triple("c2")
+    note = "4 redundant rows this build, against 100 redundant rows on the one before."
+    assert not _write_with_note(note, rows, ["c1", "c2"])
+
+
+def test_these_checks_WARN_and_never_refuse():
+    """Prose has more shapes than a regex. A note citing only earlier builds' figures, or a
+    theme-scoped count, is honest and states a number this pass does not have — and `--keep-note`
+    exists so a 1,900-character note never goes back through a shell, which a refusal would force.
+    So the contradiction is printed beside the right numbers, and the write still happens."""
+    import contextlib, io
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        v = tmp / "v.json"
+        v.write_text(json.dumps({"grounding": [
+            {"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": s}
+            for s in ("a", "b", "c")]}), encoding="utf-8")
+        w = tmp / "w.json"
+        w.write_text(json.dumps({"worklist": [{"claim": "c1"}]}), encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            rc = main(["write", "--worklist", str(w), "--verdicts", str(v),
+                       "--note", "the build before produced 100 redundant rows",
+                       "--out", str(tmp / "g.json")])
+        out = buf.getvalue()
+        wrote = (tmp / "g.json").exists()
+    assert rc == 0, out
+    assert wrote, "an honest note must still be written"
+    assert "WARNING" in out and "redundant" in out, out
+
+
+def test_a_stale_shipped_map_coverage_pair_is_reported():
+    rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "a"}]
+    problems = _write_with_note("2 of those 9 carry no verdict.", rows, ["c1"],
+                                live=["c1", "c2", "c3"])
+    assert problems, problems
+    assert "2 of 3" in problems[-1], problems
+
+
+def test_the_right_coverage_pair_passes():
+    rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "a"}]
+    assert not _write_with_note("2 of those 3 carry no verdict.", rows, ["c1"],
+                                live=["c1", "c2", "c3"])
+
+
+def test_a_note_that_states_neither_number_is_not_second_guessed():
+    rows = _triple("c1")
+    assert not _write_with_note("The pass was complete and the security theme was three-voted.",
+                                rows, ["c1"])

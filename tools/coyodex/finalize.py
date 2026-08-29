@@ -391,7 +391,9 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
                  f"({', '.join(f'{n} {k}' for k, n in sorted(kinds.items()))}). Nothing writes "
                  f"`confidence`, so the label and the votes come from different processes and this "
                  f"is the only place they meet. Run `coyodex grounding by-element --map <this map> "
-                 f"--worklist <pinned.json> --verdicts <…>` for the list, then either challenge the "
+                 f"--verdicts <…>` for the list — no `--worklist`, so it reads the LIVE map and "
+                 f"reproduces this count; adding the pinned worklist answers a different question "
+                 f"(what the skeptics saw) and gives a different number. Then either challenge the "
                  f"elements or say `inferred` where nobody looked."]
                 if stated else [])
     return Leg("grounding refutations", RAN if code in (0, 1) else FAILED,
@@ -486,23 +488,47 @@ def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
         return Leg("access baseline", FAILED,
                    note=f"--access-baseline {baseline} could not be read ({exc}), so nothing says "
                         f"whether an auth claim was dropped")
-    lost = lost_files(base, m)
-    # The ESCAPE, actually wired: a path recorded as deliberate drops out of the list. Without this
-    # read the advisory asked for a record, the operator wrote one, and the next run said exactly
-    # the same thing — the shape this project calls a promise the tool cannot keep.
+    all_lost = lost_files(base, m)
+    # The ESCAPE, actually wired: a path recorded as deliberate drops out of the FINDING. Without
+    # this read the advisory asked for a record, the operator wrote one, and the next run said
+    # exactly the same thing — the shape this project calls a promise the tool cannot keep.
+    #
+    # An excused file drops out of the finding and NOT out of the count. A recorded gap is still a
+    # gap, and every sibling escape in this toolchain says so in the same breath as it forgives —
+    # `Unclaimed surfaces` prints "counted as CLAIMED because of it". This leg used to subtract the
+    # excused paths and then, finding nothing left, assert "every one of the N file(s) … is still
+    # named by an access rule". On the 2026-08-29 mcpolis build nine files were excused, that
+    # sentence was emitted, and it went into the commit message: the escape did not disclose the
+    # gap, it erased it.
     excused = records.recorded_keys(m, ACCESS_BASELINE_EXCEPTIONS_HEADING)
-    lost = [f for f in lost if f not in excused]
+    lost = [f for f in all_lost if f not in excused]
+    excused_here = [f for f in all_lost if f in excused]
+    excused_note = (
+        f"; {len(excused_here)} of {len(base)} more are named by no access rule and are recorded as "
+        f"deliberate under '{ACCESS_BASELINE_EXCEPTIONS_HEADING}'" if excused_here else "")
     if not lost:
-        return Leg("access baseline", RAN,
-                   note=f"every one of the {len(base)} file(s) that held access enforcement in "
-                        f"{baseline.name} is still named by an access rule")
+        covered = len(base) - len(excused_here)
+        if not excused_here:
+            return Leg("access baseline", RAN,
+                       note=f"every one of {len(base)} file(s) that held access enforcement in "
+                            f"{baseline.name} is still named by an access rule")
+        return Leg("access baseline", RAN, advisory=[
+            f"DISCLOSURE, not a request: {covered} of {len(base)} file(s) that held ACCESS "
+            f"enforcement in {baseline.name} are still named by an access rule, and the other "
+            f"{len(excused_here)} are NOT — they are already recorded as deliberate under "
+            f"'{ACCESS_BASELINE_EXCEPTIONS_HEADING}': {shown(excused_here, 8, unit='file(s)')}. "
+            f"There is nothing to record here and recording more would raise this number; the line "
+            f"stays so a reader can see what the escape forgave. It clears when the rules cover "
+            f"those files again, or when the records are deleted. A recorded gap is still a gap — "
+            f"re-read one by validating a copy with its line removed."])
     listed = shown(lost, 8, unit="file(s)")
     return Leg("access baseline", RAN, advisory=[
         f"{len(lost)} of {len(base)} file(s) that held ACCESS enforcement in {baseline.name} are "
         f"named by NO access rule in this map: {listed}. The code may be unchanged — check each one "
         f"before shipping. A statement count can hold steady while a claim disappears, so this is "
         f"not visible in `auth-surfaces-no-drop`. Record '<path>: <why>' under an "
-        f"'{ACCESS_BASELINE_EXCEPTIONS_HEADING}' extras heading for each one that is deliberate."])
+        f"'{ACCESS_BASELINE_EXCEPTIONS_HEADING}' extras heading for each one that is "
+        f"deliberate{excused_note}."])
 
 
 def build_report(map_path: Path, repo: Path, verdicts: list[Path],
