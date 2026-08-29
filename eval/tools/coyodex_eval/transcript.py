@@ -118,12 +118,28 @@ class Usage:
     output_tokens: int = 0
     cache_read_input_tokens: int = 0
     cache_creation_input_tokens: int = 0
+    #: The reasoning share of `output_tokens`, NOT a separate charge — it is billed at the output
+    #: rate and is already inside that number. Kept because the two halves answer different
+    #: questions and the totals hide it: on one measured pair, two models wrote the SAME verdicts
+    #: (70,435 vs 69,883 written tokens) while one reasoned 3.8x longer (61,849 vs 235,099). Read
+    #: as one output figure, the cheaper model simply looks more expensive per agent and the
+    #: reason is invisible. Zero when the harness does not report the detail.
+    thinking_tokens: int = 0
 
     @property
     def context(self) -> int:
         """Total prompt the model read this turn — cached + written + fresh."""
         return (self.input_tokens + self.cache_read_input_tokens
                 + self.cache_creation_input_tokens)
+
+    @property
+    def written_tokens(self) -> int:
+        """Output that is not reasoning: the verdicts, the prose, the tool commands.
+
+        Clamped at zero rather than trusted: `thinking_tokens` comes from a different field than
+        `output_tokens`, and a harness that reported one without the other would otherwise make
+        this negative and the SPEND block wrong in a direction nobody checks."""
+        return max(0, self.output_tokens - self.thinking_tokens)
 
     def __bool__(self) -> bool:
         return bool(self.input_tokens or self.output_tokens
@@ -139,9 +155,15 @@ def _usage_of(message: Mapping[str, object]) -> Usage:
         value = raw.get(key)
         return value if isinstance(value, int) else 0
 
+    detail = raw.get("output_tokens_details")
+    thinking = 0
+    if isinstance(detail, dict):
+        value = detail.get("thinking_tokens")
+        thinking = value if isinstance(value, int) else 0
     return Usage(input_tokens=n("input_tokens"), output_tokens=n("output_tokens"),
                  cache_read_input_tokens=n("cache_read_input_tokens"),
-                 cache_creation_input_tokens=n("cache_creation_input_tokens"))
+                 cache_creation_input_tokens=n("cache_creation_input_tokens"),
+                 thinking_tokens=thinking)
 
 
 def _merge_usage(a: Usage, b: Usage) -> Usage:
@@ -155,7 +177,8 @@ def _merge_usage(a: Usage, b: Usage) -> Usage:
                  cache_read_input_tokens=max(a.cache_read_input_tokens,
                                              b.cache_read_input_tokens),
                  cache_creation_input_tokens=max(a.cache_creation_input_tokens,
-                                                 b.cache_creation_input_tokens))
+                                                 b.cache_creation_input_tokens),
+                 thinking_tokens=max(a.thinking_tokens, b.thinking_tokens))
 
 
 @dataclass(frozen=True)

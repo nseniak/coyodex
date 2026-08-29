@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 
 from coyodex_eval import cost
@@ -27,7 +28,7 @@ def write_jsonl(path: Path, records: list[dict[str, object]]) -> Path:
 
 
 def make_assistant_records(message_id: str, calls: list[tuple[str, str, str]],
-                           usage: dict[str, int], stamp_of: dict[str, str],
+                           usage: Mapping[str, object], stamp_of: dict[str, str],
                            model: str = "claude-opus-5") -> list[dict[str, object]]:
     """One API response written the way the harness writes it: one record per content block, each
     stamped when THAT block ran, every record repeating the same usage."""
@@ -438,3 +439,167 @@ def test_an_agent_that_was_never_resumed_is_unchanged():
     ))
     assert agent.blocked_seconds == 0.0
     assert agent.duration == agent.span == 6 * 60
+
+
+# --- the thinking / written split, and the bill by charge type -----------------------------------
+#
+# Both numbers were computable from the first version of this file and neither was printed. On a
+# measured pair of skeptic arms, two models produced the SAME written output (15,348 vs 18,429
+# tokens) while one reasoned 4.7x longer — read as one `output` figure, the cheaper model just
+# looks more expensive per agent and the reason is invisible. And on the mcpolis build, 67% of
+# $240.77 was re-reading accumulated context while output was 13%, so the lever everyone reaches
+# for first (a cheaper output rate) moves the smallest term.
+
+def make_usage(output: int = 1000, thinking: int | None = None,
+               cache_read: int = 100_000, cache_write: int = 2_000) -> dict[str, object]:
+    u: dict[str, object] = {"input_tokens": 3, "output_tokens": output,
+                            "cache_read_input_tokens": cache_read,
+                            "cache_creation_input_tokens": cache_write}
+    if thinking is not None:
+        u["output_tokens_details"] = {"thinking_tokens": thinking}
+    return u
+
+
+def make_thinking_session(tmp: Path, thinking: int | None = 400) -> Path:
+    records = make_assistant_records(
+        "m1", [("c1", "Bash", "rg foo")], make_usage(thinking=thinking),
+        {"c1": "2026-08-02T10:00:00.000Z"})
+    records.append(make_result_record("c1", "2026-08-02T10:00:10.000Z"))
+    return write_jsonl(tmp / "session.jsonl", records)
+
+
+def test_thinking_is_read_from_the_output_details() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        turns = [t for t in read_turns(make_thinking_session(Path(td))) if t.usage]
+        assert turns[0].usage.thinking_tokens == 400
+        assert turns[0].usage.written_tokens == 600
+
+
+def test_a_harness_that_reports_no_detail_leaves_thinking_at_zero() -> None:
+    """Every older transcript is in this shape, and it must read as 'not reported', never as an
+    error and never as a guess."""
+    with tempfile.TemporaryDirectory() as td:
+        turns = [t for t in read_turns(make_thinking_session(Path(td), thinking=None)) if t.usage]
+        assert turns[0].usage.thinking_tokens == 0
+        assert turns[0].usage.written_tokens == turns[0].usage.output_tokens
+
+
+def test_written_never_goes_negative() -> None:
+    """`thinking_tokens` comes from a different field than `output_tokens`. A harness reporting
+    one without the other would otherwise make the SPEND block wrong in a direction nobody looks."""
+    assert Usage(output_tokens=10, thinking_tokens=99).written_tokens == 0
+
+
+def test_thinking_is_merged_by_max_like_every_other_count() -> None:
+    """The records of one response repeat its usage; summing them double-counts."""
+    with tempfile.TemporaryDirectory() as td:
+        records = make_assistant_records(
+            "m1", [("c1", "Bash", "a"), ("c2", "Bash", "b")], make_usage(thinking=400),
+            {"c1": "2026-08-02T10:00:00.000Z", "c2": "2026-08-02T10:01:00.000Z"})
+        records.append(make_result_record("c2", "2026-08-02T10:01:10.000Z"))
+        turns = [t for t in read_turns(write_jsonl(Path(td) / "s.jsonl", records)) if t.usage]
+        assert len(turns) == 1
+        assert turns[0].usage.thinking_tokens == 400, "summing the records would give 800"
+
+
+def test_the_charge_split_adds_up_to_the_total() -> None:
+    """One writer for the arithmetic, so the split and the total cannot drift apart."""
+    u = Usage(input_tokens=1_000, output_tokens=2_000,
+              cache_read_input_tokens=3_000_000, cache_creation_input_tokens=40_000)
+    charges = cost.charges_of(u, "claude-opus-5", "5m")
+    assert charges is not None
+    assert abs(charges.total - (cost.cost_of(u, "claude-opus-5", "5m") or 0.0)) < 1e-12
+
+
+def test_each_charge_is_priced_at_its_own_multiplier() -> None:
+    u = Usage(output_tokens=1_000_000, cache_read_input_tokens=1_000_000,
+              cache_creation_input_tokens=1_000_000)
+    c = cost.charges_of(u, "claude-opus-5", "5m")
+    assert c is not None
+    assert c.output == 25.0                      # output rate
+    assert c.cache_read == 5.0 * 0.1             # input rate x 0.1
+    assert c.cache_write == 5.0 * 1.25           # input rate x 1.25 at a 5m TTL
+
+
+def test_an_unpriced_model_has_no_charges() -> None:
+    assert cost.charges_of(Usage(output_tokens=99), "some-other-model", "5m") is None
+
+
+def test_the_report_shows_written_and_thinking_apart(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        assert cost.main([str(make_thinking_session(Path(td)))]) == 0
+        out = capsys.readouterr().out
+        assert "written" in out and "thinking" in out
+        assert "600" in out and "400" in out
+        assert "SHARE of output" in out, "the two must not read as separate charges"
+
+
+def test_the_spend_block_names_where_the_money_went(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        assert cost.main([str(make_thinking_session(Path(td)))]) == 0
+        out = capsys.readouterr().out
+        assert "SPEND" in out
+        assert "re-reading its own context" in out
+
+
+def make_sidechain_agent_file(tmp: Path) -> Path:
+    """One sub-agent's OWN transcript: every record marked `isSidechain`."""
+    records = make_assistant_records(
+        "m1", [("c1", "Bash", "rg foo")], make_usage(thinking=400),
+        {"c1": "2026-08-02T10:00:00.000Z"})
+    records.append(make_result_record("c1", "2026-08-02T10:00:10.000Z"))
+    for r in records:
+        r["isSidechain"] = True
+    return write_jsonl(tmp / "agent-x.jsonl", records)
+
+
+def test_a_subagent_transcript_is_refused_with_the_flag_that_reads_it(capsys) -> None:
+    """The default filter drops every record of such a file. Refusing with a bare 'no turns' is
+    what sent one reader off to hand-roll the arithmetic, and the hand roll summed the
+    per-content-block records and overstated the bill by 1.7x."""
+    with tempfile.TemporaryDirectory() as td:
+        assert cost.main([str(make_sidechain_agent_file(Path(td)))]) == 2
+        err = capsys.readouterr().err
+        assert "--include-sidechains" in err
+        assert "SUB-AGENT" in err
+
+
+def test_the_flag_reads_that_transcript(capsys) -> None:
+    with tempfile.TemporaryDirectory() as td:
+        path = make_sidechain_agent_file(Path(td))
+        assert cost.main([str(path), "--include-sidechains"]) == 0
+        assert "TOKENS" in capsys.readouterr().out
+
+
+def test_a_plain_session_is_not_told_about_the_flag(capsys) -> None:
+    """Never pass it for a build session: there the sidechains ARE the sub-agents, already read
+    from <session>/subagents/, so it would count them twice. The hint must not invite that."""
+    with tempfile.TemporaryDirectory() as td:
+        empty = write_jsonl(Path(td) / "s.jsonl", [{"type": "assistant", "message": {"id": "m"}}])
+        assert cost.main([str(empty)]) == 2
+        assert "--include-sidechains" not in capsys.readouterr().err
+
+
+def test_the_fanout_table_reports_what_each_batch_cost(capsys) -> None:
+    """`waste` answers which barrier was slow, never which fan-out was dear. On a real build the
+    two disagree: batch #6 held the barrier 5.3 minutes and billed nothing, while batch #10 cost
+    $50.04 — the most expensive in the build — with almost the same waste."""
+    with tempfile.TemporaryDirectory() as td:
+        session = make_session(Path(td))
+        make_agent(cost.subagent_dir(session), "a1", "T1 trace checkout", 4.0)
+        assert cost.main([str(session)]) == 0
+        out = capsys.readouterr().out
+        header = [ln for ln in out.splitlines() if ln.strip().startswith("#")][0]
+        assert "$" in header and "think" in header
+        report = cost.build_report(session)
+        assert report.batches and report.batches[0]["cost"] > 0
+
+
+def test_a_batch_whose_agents_have_no_billed_turns_costs_nothing() -> None:
+    """It must read as zero, not as an error: a relaunched agent leaves a timed shell with no
+    usage, and 19 of one build's 61 sub-agents were exactly that."""
+    with tempfile.TemporaryDirectory() as td:
+        batch = cost.Batch(index=0, start=0.0, end=60.0,
+                           agents=(cost.Actor(name="dead", role="trace", turns=()),))
+        assert batch.cost("5m") == 0.0
+        assert batch.thinking_share() == 0.0

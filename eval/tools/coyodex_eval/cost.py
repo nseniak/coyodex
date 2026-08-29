@@ -173,7 +173,8 @@ class Actor:
             out = Usage(out.input_tokens + u.input_tokens,
                         out.output_tokens + u.output_tokens,
                         out.cache_read_input_tokens + u.cache_read_input_tokens,
-                        out.cache_creation_input_tokens + u.cache_creation_input_tokens)
+                        out.cache_creation_input_tokens + u.cache_creation_input_tokens,
+                        out.thinking_tokens + u.thinking_tokens)
         return out
 
     @property
@@ -185,16 +186,47 @@ class Actor:
         return first[0].usage.context if first else 0
 
 
-def cost_of(usage: Usage, model: str, cache_ttl: str) -> float | None:
+@dataclass(frozen=True)
+class Charges:
+    """One turn's bill, split by what was actually charged for.
+
+    The split existed inside `cost_of` from the first line it was written and was added up and
+    thrown away. It is the answer to the only question a cost report is asked twice: where does
+    the money go. Measured on eight skeptic agents, output was 12-18% of the bill and re-reading
+    their own accumulated context was 52-62% — so the lever everyone reaches for first (a cheaper
+    model's output rate) moves the smallest term."""
+    output: float = 0.0
+    cache_read: float = 0.0
+    cache_write: float = 0.0
+    input: float = 0.0
+
+    @property
+    def total(self) -> float:
+        return self.output + self.cache_read + self.cache_write + self.input
+
+    def __add__(self, other: "Charges") -> "Charges":
+        return Charges(self.output + other.output, self.cache_read + other.cache_read,
+                       self.cache_write + other.cache_write, self.input + other.input)
+
+
+def charges_of(usage: Usage, model: str, cache_ttl: str) -> Charges | None:
+    """What one turn cost, per charge type. `None` when the model has no list price."""
     rates = MODEL_RATES.get(model)
     if rates is None:
         return None
     price_in, price_out = rates
     write = CACHE_WRITE_MULTIPLIER[cache_ttl]
-    return (usage.input_tokens * price_in
-            + usage.cache_read_input_tokens * price_in * CACHE_READ_MULTIPLIER
-            + usage.cache_creation_input_tokens * price_in * write
-            + usage.output_tokens * price_out) / 1e6
+    return Charges(output=usage.output_tokens * price_out / 1e6,
+                   cache_read=usage.cache_read_input_tokens * price_in
+                   * CACHE_READ_MULTIPLIER / 1e6,
+                   cache_write=usage.cache_creation_input_tokens * price_in * write / 1e6,
+                   input=usage.input_tokens * price_in / 1e6)
+
+
+def cost_of(usage: Usage, model: str, cache_ttl: str) -> float | None:
+    """The turn's total. One writer for the arithmetic, so the split and the total cannot drift."""
+    charges = charges_of(usage, model, cache_ttl)
+    return None if charges is None else charges.total
 
 
 def actor_cost(actor: Actor, cache_ttl: str) -> tuple[float, set[str]]:
@@ -209,6 +241,17 @@ def actor_cost(actor: Actor, cache_ttl: str) -> tuple[float, set[str]]:
         else:
             total += c
     return total, unpriced
+
+
+def actor_charges(actor: Actor, cache_ttl: str) -> Charges:
+    """The same sum as `actor_cost`, kept split. An unpriced model contributes nothing here, the
+    way it contributes nothing to the total — it is reported by name instead."""
+    out = Charges()
+    for turn in actor.requests:
+        c = charges_of(turn.usage, turn.model, cache_ttl)
+        if c is not None:
+            out = out + c
+    return out
 
 
 # --- reading a run ---------------------------------------------------------------------
@@ -245,8 +288,8 @@ def read_agents(session: Path) -> list[Actor]:
     return agents
 
 
-def read_run(session: Path, *, from_turn: int = 0,
-             to_turn: int | None = None) -> tuple[Actor, list[Actor]]:
+def read_run(session: Path, *, from_turn: int = 0, to_turn: int | None = None,
+             include_sidechains: bool = False) -> tuple[Actor, list[Actor]]:
     """The lead and its sub-agents, bounded to the build.
 
     A session is not a build: it can archive the previous map first, and it usually keeps
@@ -255,7 +298,8 @@ def read_run(session: Path, *, from_turn: int = 0,
     session — the idle exclusion recovers most of that, but only explicit bounds drop the
     post-build conversation, which is real work and real tokens that simply are not the build."""
     upper = to_turn if to_turn is not None else 10 ** 9
-    lead_turns = tuple(t for t in read_turns(session) if from_turn <= t.index <= upper)
+    lead_turns = tuple(t for t in read_turns(session, include_sidechains=include_sidechains)
+                       if from_turn <= t.index <= upper)
     return Actor(name="lead", role="lead", turns=lead_turns), read_agents(session)
 
 
@@ -299,6 +343,20 @@ class Batch:
     @property
     def waste(self) -> float:
         return max(0.0, self.wall - self.mean)
+
+    def cost(self, cache_ttl: str) -> float:
+        """What this fan-out billed. The table above it reported only TIME, so a batch could be
+        the most expensive in the build and read as unremarkable — `waste` answers "which barrier
+        was slow", never "which fan-out was dear"."""
+        return sum(actor_charges(a, cache_ttl).total for a in self.agents)
+
+    def thinking_share(self) -> float:
+        """Reasoning as a fraction of this batch's output. Beside `waste` it separates two
+        different stragglers: a batch slow because one slice was oversized, and a batch slow
+        because its agents reasoned their way through it."""
+        out = sum(a.totals().output_tokens for a in self.agents)
+        think = sum(a.totals().thinking_tokens for a in self.agents)
+        return think / out if out else 0.0
 
 
 def batches(agents: Sequence[Actor], gap: float = 120.0) -> list[Batch]:
@@ -436,6 +494,8 @@ class Report:
     context_per_turn: dict[str, int]
     tool_seconds: float
     spawn_prompt_tokens: int
+    #: The bill by charge type — what the money bought, not who spent it.
+    charges: dict[str, float] = field(default_factory=dict)
     map: dict[str, int] = field(default_factory=dict)
     per_row: dict[str, float] = field(default_factory=dict)
 
@@ -482,12 +542,27 @@ def _spawn_tokens(lead: Actor) -> int:
 
 def build_report(session: Path, *, map_path: Path | None = None, from_turn: int = 0,
                  to_turn: int | None = None, idle_threshold: float = 180.0,
-                 cache_ttl: str = "5m") -> Report:
-    lead, agents = read_run(session, from_turn=from_turn, to_turn=to_turn)
+                 cache_ttl: str = "5m", include_sidechains: bool = False) -> Report:
+    lead, agents = read_run(session, from_turn=from_turn, to_turn=to_turn,
+                            include_sidechains=include_sidechains)
     everyone: list[Actor] = [lead, *agents]
     stamps = [s for actor in everyone for s in actor.stamps]
     if not stamps:
-        raise ValueError(f"no timestamped turns in {session}")
+        # A file whose every record is `isSidechain` is a SUB-AGENT's own transcript, and the
+        # default filter drops all of it. Refusing with a bare "no turns" sent one reader off to
+        # hand-roll the arithmetic, and the hand roll summed the per-content-block records — which
+        # repeat one response's cache figures — and overstated the bill by 1.7x. So the refusal
+        # names the flag rather than leaving it to be found.
+        # Only when the default filter dropped EVERYTHING and the sidechain filter would not.
+        # Testing "would sidechains yield turns" alone is not enough: a plain session whose turns
+        # simply carry no timestamp also passes that, and would be told to use a flag that cannot
+        # help it — and, on a real build, would double-count the sub-agents.
+        hint = ""
+        if (not include_sidechains and not read_turns(session)
+                and read_turns(session, include_sidechains=True)):
+            hint = ("\n       Every record in it is a sidechain, so this is one SUB-AGENT's own "
+                    "transcript.\n       Re-run with --include-sidechains to profile it.")
+        raise ValueError(f"no timestamped turns in {session}{hint}")
     wall = max(stamps) - min(stamps)
     idle = sum(b - a for a, b in idle_gaps(lead, agents, idle_threshold))
     busy = sum(e - s for s, e in _union((a.start, a.end) for a in agents
@@ -495,6 +570,7 @@ def build_report(session: Path, *, map_path: Path | None = None, from_turn: int 
 
     usage = Usage()
     cost = 0.0
+    charges = Charges()
     unpriced: set[str] = set()
     models: Counter[str] = Counter()
     by_role: dict[str, dict[str, float]] = {}
@@ -506,15 +582,18 @@ def build_report(session: Path, *, map_path: Path | None = None, from_turn: int 
         usage = Usage(usage.input_tokens + totals.input_tokens,
                       usage.output_tokens + totals.output_tokens,
                       usage.cache_read_input_tokens + totals.cache_read_input_tokens,
-                      usage.cache_creation_input_tokens + totals.cache_creation_input_tokens)
+                      usage.cache_creation_input_tokens + totals.cache_creation_input_tokens,
+                      usage.thinking_tokens + totals.thinking_tokens)
         for turn in actor.requests:
             models[turn.model or "(unknown)"] += 1
+        charges = charges + actor_charges(actor, cache_ttl)
         bucket = by_role.setdefault(actor.role, {"agents": 0.0, "requests": 0.0, "output": 0.0,
-                                                 "cache_read": 0.0, "cache_write": 0.0,
-                                                 "cost": 0.0, "seconds": 0.0})
+                                                 "thinking": 0.0, "cache_read": 0.0,
+                                                 "cache_write": 0.0, "cost": 0.0, "seconds": 0.0})
         bucket["agents"] += 1
         bucket["requests"] += len(actor.requests)
         bucket["output"] += totals.output_tokens
+        bucket["thinking"] += totals.thinking_tokens
         bucket["cache_read"] += totals.cache_read_input_tokens
         bucket["cache_write"] += totals.cache_creation_input_tokens
         bucket["cost"] += actor_total
@@ -532,13 +611,16 @@ def build_report(session: Path, *, map_path: Path | None = None, from_turn: int 
         requests=requests,
         usage=asdict(usage),
         cost=cost,
+        charges={"output": charges.output, "cache_read": charges.cache_read,
+                 "cache_write": charges.cache_write, "input": charges.input},
         unpriced_models=sorted(unpriced),
         models=dict(models),
         by_role=by_role,
         batches=[{"index": float(b.index), "start": b.start - min(stamps), "wall": b.wall,
                   "agents": float(len(b.agents)), "slowest": b.durations[0] if b.agents else 0.0,
                   "median": statistics.median(b.durations) if b.agents else 0.0,
-                  "mean": b.mean, "waste": b.waste} for b in batches(agents)],
+                  "mean": b.mean, "waste": b.waste, "cost": b.cost(cache_ttl),
+                  "thinking_share": b.thinking_share()} for b in batches(agents)],
         base_context_median=int(statistics.median(bases)) if bases else 0,
         context_per_turn={
             "lead": (lead.totals().cache_read_input_tokens // len(lead.requests)
@@ -582,30 +664,42 @@ def format_report(report: Report) -> str:
     lines.append("")
     lines.append("FAN-OUT")
     lines.append(f"  {'#':>2} {'start':>7} {'wall':>7} {'n':>3} {'slowest':>8} {'median':>7}"
-                 f" {'mean':>7} {'waste':>7}")
+                 f" {'mean':>7} {'waste':>7} {'$':>7} {'think':>6}")
     for b in report.batches:
+        share = b.get("thinking_share", 0.0)
         lines.append(f"  {int(b['index']):>2} {_m(b['start']):>7} {_m(b['wall']):>7}"
                      f" {int(b['agents']):>3} {_m(b['slowest']):>8} {_m(b['median']):>7}"
-                     f" {_m(b['mean']):>7} {_m(b['waste']):>7}")
+                     f" {_m(b['mean']):>7} {_m(b['waste']):>7} {b.get('cost', 0.0):>7.2f}"
+                     f" {(f'{100 * share:.0f}%' if share else '-'):>6}")
     waste = sum(b["waste"] for b in report.batches)
     lines.append(f"  straggler waste {_m(waste)}"
                  f" ({100 * waste / max(active, 1):.0f}% of active time)")
 
     lines.append("")
     lines.append("TOKENS")
-    lines.append(f"  {'role':<10} {'n':>3} {'calls':>6} {'output':>11} {'cache read':>13}"
-                 f" {'cache write':>12} {'$':>8}")
+    lines.append(f"  {'role':<10} {'n':>3} {'calls':>6} {'written':>10} {'thinking':>10}"
+                 f" {'cache read':>13} {'cache write':>12} {'$':>8}")
     for role in ROLE_ORDER:
         b = report.by_role.get(role)
         if not b:
             continue
+        think = int(b.get("thinking", 0))
         lines.append(f"  {role:<10} {int(b['agents']):>3} {int(b['requests']):>6}"
-                     f" {int(b['output']):>11,} {int(b['cache_read']):>13,}"
+                     f" {int(b['output']) - think:>10,} {think:>10,}"
+                     f" {int(b['cache_read']):>13,}"
                      f" {int(b['cache_write']):>12,} {b['cost']:>8.2f}")
     u = report.usage
-    lines.append(f"  {'TOTAL':<10} {'':>3} {report.requests:>6} {u['output_tokens']:>11,}"
+    think_total = u.get("thinking_tokens", 0)
+    lines.append(f"  {'TOTAL':<10} {'':>3} {report.requests:>6}"
+                 f" {u['output_tokens'] - think_total:>10,} {think_total:>10,}"
                  f" {u['cache_read_input_tokens']:>13,}"
                  f" {u['cache_creation_input_tokens']:>12,} {report.cost:>8.2f}")
+    # `thinking` is part of `written`'s charge, not beside it: both bill at the output rate. The
+    # columns separate them because a model that reasons 3.8x longer for the SAME written answer
+    # is the whole finding, and one `output` column hides it.
+    if think_total:
+        lines.append(f"  thinking is a SHARE of output, billed at the output rate —"
+                     f" {100 * think_total / max(u['output_tokens'], 1):.0f}% of it here")
     if report.unpriced_models:
         lines.append(f"  ! no list price for {', '.join(report.unpriced_models)} —"
                      f" their tokens are counted, their cost is NOT in the total")
@@ -614,6 +708,21 @@ def format_report(report: Report) -> str:
                                               sorted(report.models.items(), key=lambda kv: (-kv[1], kv[0]))))
 
     lines.append("")
+    spend = report.charges
+    if spend and report.cost > 0:
+        lines.append("SPEND")
+        rows = (("re-reading its own context", spend.get("cache_read", 0.0)),
+                ("cache writes", spend.get("cache_write", 0.0)),
+                ("output", spend.get("output", 0.0)),
+                ("fresh input", spend.get("input", 0.0)))
+        for label, amount in rows:
+            if amount <= 0:
+                continue
+            lines.append(f"  {label:<30} {amount:>8.2f} {100 * amount / report.cost:>4.0f}%")
+        lines.append("  what the money bought, not who spent it. A cheaper model moves the OUTPUT"
+                     " row only.")
+        lines.append("")
+
     lines.append("STRUCTURE")
     lines.append(f"  fixed base context per agent turn   {report.base_context_median:>12,}")
     lines.append(f"  avg cache read per turn — lead      {report.context_per_turn['lead']:>12,}")
@@ -646,7 +755,7 @@ def format_report(report: Report) -> str:
 
 USAGE = """usage: coyodex-eval cost <transcript.jsonl> [--map project-map.json] [--json]
                              [--from-turn N] [--to-turn N] [--idle-gap SECONDS]
-                             [--cache-ttl 5m|1h]
+                             [--cache-ttl 5m|1h] [--include-sidechains]
 
 What a build SPENT: wall time, tokens, and both per row of map produced. Reads the session
 transcript AND the sub-agent transcripts beside it (`<session>/subagents/`), which are ~80% of
@@ -663,6 +772,11 @@ the spend — a reader that opens only the session file measures the lead and mi
   --idle-gap S   a lead silence longer than S seconds with NO agent running is operator wait and
                  is excluded from `active` (default 180).
   --cache-ttl    cache-write price multiplier: 1.25x at 5m (default), 2x at 1h.
+  --include-sidechains
+                 read a file whose records are all `isSidechain` — ONE sub-agent's own
+                 transcript, which the default filter drops entirely. Never pass it for a
+                 build session: there the sidechains are the sub-agents, and they are already
+                 read from <session>/subagents/, so it would count them twice.
   --json         the whole report as JSON, for tracking builds over time.
 
 Not a gate: it emits no verdict. Read it beside `coyodex-eval compare` — a change that halves
@@ -713,7 +827,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         report = build_report(session, map_path=map_path, from_turn=from_turn, to_turn=to_turn,
-                              idle_threshold=idle_gap, cache_ttl=cache_ttl)
+                              idle_threshold=idle_gap, cache_ttl=cache_ttl,
+                              include_sidechains="--include-sidechains" in args)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
