@@ -331,6 +331,33 @@ place that churn is visible. Report the number and name the lost files; they are
 **Read `compare`'s verdict as information, not judgement.** A DRIFT on a rebuild is expected — two
 LLM builds of one repo never match.
 
+### Step 1c — Did a whole SECTION go unwritten, and did anything say so?
+
+Three of `score`'s counts answer a question the others cannot: not "is this section good" but "did
+anyone write it at all". A section with no step sending anyone to author it comes back EMPTY, and an
+empty section is the one state most checks are silent about, because they need a row to check.
+
+```
+interfaces · interface_doors · interfaces_undecided_deps
+```
+
+Read them together:
+
+- **`interfaces` 0 on a repo with external systems** — nobody was sent. This has happened: a build
+  produced 13 external dependencies, 249 ways in and zero interfaces, and `validate` said nothing.
+  The dependency worker refused correctly (it sees one slice and cannot group a surface), left a note
+  that the field was the lead's, and no step in the build order ever sent the lead back.
+- **`interfaces` high and `interface_doors` 0** — the rows were authored and never put into a story.
+  The map can SAY what its outside edge is while no walk goes through a door. This reads as success
+  in every other count, which is what makes it worth its own line here.
+- **`interfaces_undecided_deps` above 0** — an external dependency naming neither a surface nor a
+  reason. That is a decision nobody made, not a decision to exclude.
+
+**Then generalise the question**, because interfaces is only the instance that was caught: for each
+section the method documents, did this build write it? A section documented but never SEQUENCED is a
+section no build writes, and the failure is silent by construction. `method.md`'s build order is the
+list to read it against.
+
 ### Step 1b — The map's own contradictions
 
 Step 1 runs the gates. It does not read the MAP, and the gates cannot see a map that is internally

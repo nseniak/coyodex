@@ -83,6 +83,29 @@ For each claim, decide whether the CODE supports it, and return one row per clai
 - `skeptic` is your batch id. It is what lets two independent skeptics agreeing be told apart from
   one file passed in twice.
 
+### One claim kind needs a different reading: an INTERFACE
+
+A claim reading *"I3 'Web search' is an interface the product exchanges data through with the open
+web"* cannot be settled at the call site, and that is the whole reason it is in your batch. A search
+over the product's OWN records and a search over the open web are **the same three lines of code**.
+So is a store the product reads back and a store only a person ever opens.
+
+For these rows, the anchor is where to START, not where to finish:
+
+- **Read what the far side actually holds or returns.** What is indexed, what is stored, what comes
+  back. Follow the write path if you must. `grounded: true` means data crosses to or from something
+  that is not this product; if everything on the far side is the product's own output being read
+  back, the row is `false`.
+- **Check it is the far side and not the PIPE.** A reverse proxy, a log shipper, a queue the product
+  both fills and drains, and the client library that calls a service are all things on the path. The
+  interface is what is at the END of the path. A row naming a pipe is `false`, and the note should
+  say what the real far side is.
+- **A `send` claim needs no reader in this repo.** Logs, crash reports and usage events leave and
+  are read somewhere you cannot see. Absence of a read is not a refutation here; the product never
+  reading them back is what makes it a surface.
+- `unverifiable` is the honest verdict when the far side is a hosted service whose contents you
+  cannot see from the code. Say so in the note. Do not guess in either direction.
+
 ## WARNING — do not default to refuted
 
 **Never instruct yourself, and never be instructed, to "default to refuted on doubt".** That clause
