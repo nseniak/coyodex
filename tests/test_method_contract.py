@@ -1239,3 +1239,36 @@ def test_the_build_method_names_every_capability_shipped_for_it():
     for p in contracts:
         assert "anchor drift" in p.read_text(encoding="utf-8"), (
             f"{p.name} tells an agent to lint and never says the verdict now carries a drift count")
+
+
+def test_every_map_section_the_validator_checks_is_in_the_BUILD_ORDER():
+    """A section documented but never SEQUENCED is a section no build authors.
+
+    T2b (interfaces) shipped with its element definition, its checks, its screens and its model
+    reference — and with no step in `method.md`'s build order saying who writes it or when. The first
+    real build after it landed produced ZERO interfaces on a map with 13 external systems and 249
+    ways in: the dependency worker correctly refused (it sees one slice and cannot group a surface),
+    wrote a note that the field was the lead's, and no step ever sent the lead back. Documenting WHAT
+    a thing is, without saying WHEN it is authored, is the gap this pins."""
+    prose = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
+    order = prose[prose.index("**Build order (internal)"):]
+    order = order[:order.index("**Pre-index (structural input).**")]
+    for table in ("T1", "T2", "T2b", "T3", "T4", "T5", "T6"):
+        assert table in order, f"{table} is documented but never sequenced in the build order"
+
+
+def test_the_absence_of_an_outside_edge_is_reported_not_silent():
+    """The other half of the same bug. Every interface check is gated on `m.interfaces` being
+    non-empty — correct, since they need one to check — which made a WHOLLY ABSENT section the one
+    state nothing said a word about. A half-authored section was flagged; a missing one was silent."""
+    from coyodex.model import Dep, EntryPoint, ProjectModel
+    from coyodex.validate_model import _check_interfaces
+    m = ProjectModel(title="T", goal="G")
+    m.deps = [Dep(id="D1", name="Stripe", kind="service", type="payments")]
+    m.entry_points = [EntryPoint(id="EP1", kind="http-route", activation="external",
+                                 source="a.py:1")]
+    _problems, warnings = _check_interfaces(m)
+    assert any("No interfaces recorded" in w for w in warnings)
+    # …and a product that genuinely has no outside edge is not nagged forever.
+    m.deps, m.entry_points = [], []
+    assert not _check_interfaces(m)[1]

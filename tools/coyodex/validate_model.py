@@ -1907,6 +1907,21 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             problems.append(f"{d.id} ({d.name}) names an interface AND says why it is none — "
                             f"exactly one of the two")
     if not m.interfaces:
+        # ADOPTION, not silence. Everything below needs an authored interface to check, so it stays
+        # gated — but "this map records no outside edge at all" is itself a finding, and making it
+        # silent is how a whole section went missing on a live build with 13 external systems and
+        # 249 ways in: the lead noted T2b as its own job, never returned, and nothing said a word.
+        external = [d for d in m.deps
+                    if grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM]
+        ways = _external_ways_in(m)
+        if (external or ways) and "interfaces" not in _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING,
+                                                                    ("I", "EP")):
+            warnings.append(
+                f"No interfaces recorded, but this map has {len(external)} external-system "
+                f"dependenc(y/ies) and {len(ways)} way(s) in — the product's outside edge (T2b) was "
+                f"never authored. Group the ways in into named surfaces and decide each external "
+                f"dep, or record 'interfaces' under an "
+                f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if this product genuinely has none")
         return problems, warnings
     recorded = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("I", "EP"))
     ent_ids = {e.id for e in m.entities}

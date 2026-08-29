@@ -985,7 +985,14 @@ persists/writes/reads each entity) → **re-balance the grouping against the tra
 grouping was cut edge-blind — run `coyodex balance`, fix or justify each finding; Phase 3.5 in
 parallel mode) → **measure test completeness against the finished inventory**
 (the last structural step — it reads the assembled nodes + flows: use cases, T4 entry points, T5
-entities, critical-path branches). Nodes (T4/T5/T2)
+entities, critical-path branches) → **group T2 + T4 into T2b interfaces** — the LEAD's job, at
+synthesis, because it is the first moment both its inputs exist: the outside-edge rows are written
+here, `ways_in` and `deps[].interfaces` travel through `reconcile` (their `EPn`/`In` ids are minted
+at assembly, exactly like a use case's `entry_points`), and every external-group dep is decided one
+way or the other. **No fan-out worker authors this** — a harvest agent sees one slice and cannot
+group a surface, and the first build after T2b shipped proved it: the dependency agent correctly
+refused, wrote a note saying the field was the lead's, and the lead never came back because no step
+in this order sent it. Nodes (T4/T5/T2)
 before the edges/flows that connect them. **Present** top-down (T1–T3 first). The "Depends on"
 columns and relationship rows harden last (they need tracing) — keep them inferred until
 traced. Drilling can correct an inferred upper row; upper tables get more accurate as the
