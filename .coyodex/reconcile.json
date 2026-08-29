@@ -1312,6 +1312,52 @@
     },
     {
       "ids": [
+        "I1",
+        "I2"
+      ],
+      "interface_kind": "command-line"
+    },
+    {
+      "ids": [
+        "I3"
+      ],
+      "interface_kind": "screen"
+    },
+    {
+      "ids": [
+        "I4",
+        "I5"
+      ],
+      "interface_kind": "agent-tools"
+    },
+    {
+      "ids": [
+        "I6"
+      ],
+      "interface_kind": "file"
+    },
+    {
+      "ids": [
+        "I7"
+      ],
+      "interface_kind": "settings"
+    },
+    {
+      "ids": [
+        "I8",
+        "I9"
+      ],
+      "interface_kind": "content"
+    },
+    {
+      "ids": [
+        "I10",
+        "I11"
+      ],
+      "interface_kind": "handoff"
+    },
+    {
+      "ids": [
         "D13",
         "D14"
       ],

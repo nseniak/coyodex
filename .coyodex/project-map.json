@@ -17214,6 +17214,7 @@
    "side": "ours",
    "facing": "user",
    "party": "",
+   "kind": "command-line",
    "ways_in": [
     "EP25",
     "EP26",
@@ -17275,6 +17276,7 @@
    "side": "ours",
    "facing": "operator",
    "party": "",
+   "kind": "command-line",
    "ways_in": [
     "EP3",
     "EP4",
@@ -17323,6 +17325,7 @@
    "side": "ours",
    "facing": "user",
    "party": "",
+   "kind": "screen",
    "ways_in": [
     "EP60",
     "EP61",
@@ -17380,6 +17383,7 @@
    "side": "ours",
    "facing": "user",
    "party": "the coding agent hosting the skill",
+   "kind": "agent-tools",
    "ways_in": [
     "EP20",
     "EP21",
@@ -17412,6 +17416,7 @@
    "side": "ours",
    "facing": "operator",
    "party": "",
+   "kind": "agent-tools",
    "ways_in": [
     "EP1",
     "EP2"
@@ -17435,6 +17440,7 @@
    "side": "ours",
    "facing": "user",
    "party": "",
+   "kind": "file",
    "ways_in": [],
    "carries": [
     {
@@ -17457,6 +17463,7 @@
    "side": "ours",
    "facing": "user",
    "party": "",
+   "kind": "settings",
    "ways_in": [],
    "carries": [
     {
@@ -17477,6 +17484,7 @@
    "side": "theirs",
    "facing": "user",
    "party": "the project under analysis",
+   "kind": "content",
    "ways_in": [],
    "carries": [
     {
@@ -17502,6 +17510,7 @@
    "side": "theirs",
    "facing": "operator",
    "party": "the coding agent that built the map",
+   "kind": "content",
    "ways_in": [],
    "carries": [
     {
@@ -17527,6 +17536,7 @@
    "side": "theirs",
    "facing": "user",
    "party": "",
+   "kind": "handoff",
    "ways_in": [],
    "carries": [
     {
@@ -17552,6 +17562,7 @@
    "side": "theirs",
    "facing": "user",
    "party": "",
+   "kind": "handoff",
    "ways_in": [],
    "carries": [
     {
