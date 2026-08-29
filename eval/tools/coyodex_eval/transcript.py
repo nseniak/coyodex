@@ -471,7 +471,7 @@ _COYODEX_SUBCOMMANDS = frozenset({
     "ledger", "lint-fragment",
     "mutate", "preindex",
     "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
-    "run", "score", "scope", "serve", "ship", "timings", "transcript", "validate",
+    "context", "run", "score", "scope", "serve", "ship", "timings", "transcript", "validate",
 })
 
 #: Sub-verbs worth reporting separately: `grounding write` and `grounding report` are different

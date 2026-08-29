@@ -1811,6 +1811,16 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   up saying (the same reason a lead tie-break is refused below). The lead applies the upheld ones
   through the destination table below and rejects the rest. Rejecting a refutation is a normal
   outcome — say so in `grounding.note`.
+- **Hand each skeptic its evidence bundle: `coyodex context --map <map> --repo <repo> --claims
+  <batch> --out <bundle.md>`.** Per claim it gathers the map record of every element the claim
+  names and the 20 code lines either side of the claim's own anchor. A skeptic spends its run
+  fetching exactly that, and every file it opens joins a context every later turn re-reads:
+  measured across eight skeptic agents, **52-62% of each one's bill was re-reading its own
+  accumulated context**, against 12-18% for everything it wrote. Name the bundle in the skeptic's
+  brief beside its claims file. Two things the bundle does NOT change: it is a starting point and
+  says so, so a skeptic still opens whatever a claim actually turns on; and an anchor whose FILE is
+  absent is shouted in it rather than quietly skipped, because that is a `false` verdict and a
+  bundle that hid it would undo the rule that says so.
 - **Cap each batch at ~40 claims** and split an oversized theme into two skeptics rather than one
   long-running one — an oversized batch becomes the phase's critical path, and more, smaller
   skeptics also mean fresher context per claim, so this trades nothing away. **When the worklist

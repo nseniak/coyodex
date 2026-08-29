@@ -140,7 +140,20 @@ RECIPES: dict[str, tuple] = {
     # shape a FIRST build sees, and it must exit 0 — a first build cannot be blocked waiting
     # for a measurement that does not exist yet.
     "timings":       (lambda t, m: ["timings", "order", "--repo", str(t), "--phase", "harvest"], OK),
+    # Reads a claims batch, the map and the tree; writes only the bundle. The fixture's own
+    # worklist is the honest input, since that is the shape a skeptic is actually handed.
+    "context":       (lambda t, m: ["context", "--map", str(m), "--repo", str(FIXTURE),
+                                    "--claims", str(_claims(t, m)), "--out", str(t / "b.md")], OK),
 }
+
+
+def _claims(tmp: Path, map_path: Path) -> Path:
+    """A one-claim batch shaped like `coyodex audit --batches` writes them."""
+    p = tmp / "claims.json"
+    p.write_text(json.dumps({"schema": "coyodex-claims/v1", "theme": "backbone",
+                             "claims": [{"claim": "C1 calls C2", "anchor": "src/a.py:10"}]}),
+                 encoding="utf-8")
+    return p
 
 
 def _ship_repo(tmp: Path, map_path: Path) -> Path:

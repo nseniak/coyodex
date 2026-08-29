@@ -48,6 +48,10 @@ Commands:
              file `finalize` requires before the map is committed. It used to be produced only by
              a script in the coyodex clone that the shipped CLI does not install, so a build could
              be told to produce an artifact no command could make.
+  context    One claims batch with its evidence beside it: per claim, the map record of
+             every element it names and the code around its anchor. A skeptic spends its
+             run fetching exactly this, and 52-62% of its bill is re-reading what it
+             fetched.
   timings    What each fan-out slice ACTUALLY took (`record`), and that phase's slices
              longest-first for the next build's dispatch (`order`). Build telemetry beside
              the map, never inside it — the method's "dispatch the longest slice first" was
@@ -187,6 +191,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "timings":
         from coyodex import timings  # stdlib-only; build telemetry beside the map, never in it
         return timings.main(rest)
+    if cmd == "context":
+        from coyodex import context  # stdlib-only; reads the map and the tree, calls no model
+        return context.main(rest)
     if cmd == "provenance":
         from coyodex import provenance  # stdlib-only; the file finalize requires before a commit
         return provenance.main(rest)

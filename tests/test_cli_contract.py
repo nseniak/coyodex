@@ -31,7 +31,7 @@ COMMAND_MODULE: dict[str, str] = {
     "balance": "balance", "finalize": "finalize",
     "grounding": "grounding", "record": "record", "scope": "scope",
     "provenance": "provenance", "contract": "contract", "ship": "ship",
-    "timings": "timings",
+    "timings": "timings", "context": "context",
 }
 
 
