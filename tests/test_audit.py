@@ -2242,7 +2242,7 @@ def _interface_model(*, evidence_file: str | None, source: str = "",
                   where_configured=dep_configured, interfaces=["I7"])]
     m.interfaces = [Interface(
         id="I7", name="Their service", what="What crosses.", side="theirs", facing="user",
-        party_ref="D1", source=source,
+        source=source,
         evidence=([EvidenceItem(file=evidence_file, why="forms the outgoing call")]
                   if evidence_file else []))]
     return m
@@ -2269,6 +2269,13 @@ def test_the_dep_configuration_line_is_the_fallback_not_the_first_choice():
 def test_the_surfaces_own_source_still_beats_the_dep_line():
     items = _interface_claims(_interface_model(evidence_file=None, source="src/iface.py:3"))
     assert items[0].anchor.startswith("src/iface.py:3"), items[0].anchor
+
+
+def test_the_far_side_of_a_claim_is_the_dependency_standing_on_the_surface():
+    """`party_ref` named the far side a SECOND time, and the dep already points up at the surface.
+    The claim now reads the dependency's own name, so the two can no longer disagree."""
+    items = _interface_claims(_interface_model(evidence_file="src/router.py:414"))
+    assert "with Their service" in items[0].claim, items[0].claim
 
 
 # --- the behavioural half, which no claim has ever covered -------------------------------------

@@ -241,8 +241,14 @@ class Interface:                     # T2b — the product's outside edge
     side: str = ""                   # ours | theirs (grammar.INTERFACE_SIDES)
     facing: str = ""                 # user | operator (grammar.INTERFACE_FACINGS) — AUTHORED
     party: str = ""                  # the far side in words, when it has no element ("the open web")
-    party_ref: str = ""              # optional `R<n>` / `D<n>` — pattern-pinned, so a typo cannot
-                                     # silently degrade into prose the way a free-text id would
+    #: What SHAPE this surface is — `grammar.INTERFACE_KIND_SEEDS`, seeded-open. SHAPE, NEVER
+    #: PURPOSE: a payment processor and a crash reporter are both `api`, and which is which is
+    #: already authored on the dependency's `bucket`. A kind that answers "what is it FOR" means this
+    #: field has been mis-modelled. It exists so the viewer can DRAW the surface, which is why the
+    #: vocabulary is the size of an icon set. NOT derivable from the ways in: measured, one clean
+    #: answer on 4 of coyodex's 11 surfaces and 1 of mcpolis's 12, and nothing at all on a `theirs`
+    #: surface, which has no ways in by definition.
+    kind: str = ""
     #: The ways in this interface is made of. Points DOWN, like `UseCase.entry_points`, and for the
     #: same reason: `EPn` ids are minted by `assemble` from content, so a fragment cannot know them
     #: and `reconcile` is the only path. NAMED `ways_in`, NOT `entry_points`: `_SET_FIELD_OWNER` is
@@ -1000,13 +1006,12 @@ def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
         mr.consumers = [r(c) for c in mr.consumers]
         if mr.payload:
             mr.payload = r(mr.payload)
-    # An interface REFERENCES four id families, and every one of them can be merged away: a dep or a
-    # role as its far side, entry points as its ways in, entities in a crossing. `_merge_duplicate_deps`
-    # long carried the comment "edges are the only refs into a dep id", which stopped being true the
-    # moment a dep could name a surface and a surface could name a dep.
+    # An interface REFERENCES two id families, and both can be merged away: entry points as its ways
+    # in, entities in a crossing. (`party_ref` held a third and was removed: its dependency half was
+    # already stated from the dep's own `interfaces` list, and its actor half is now DERIVED.)
+    # `_merge_duplicate_deps` long carried the comment "edges are the only refs into a dep id", which
+    # stopped being true the moment a dep could name a surface and a surface could name a dep.
     for iface in m.interfaces:
-        if iface.party_ref:
-            iface.party_ref = r(iface.party_ref)
         iface.ways_in = [r(ep) for ep in iface.ways_in]
         for cr in iface.carries:
             cr.elements = [r(e) for e in cr.elements]
@@ -1123,6 +1128,18 @@ def _check_json_value(value: object, path: str) -> object:
 #: the schema for a field that no longer exists.
 _RENAMED_FIELDS: dict[str, str] = {"claims_grounded": "claims_challenged",
                                    "label": "happy_path"}
+#: Fields that were REMOVED outright, with the reason and what to do instead. Separate from
+#: `_RENAMED_FIELDS` because there is no new name to point at, and a bare "unknown field" on a map
+#: authored last week is a worse answer than a sentence saying why the field went.
+_REMOVED_FIELDS: dict[str, str] = {
+    "party_ref": ("It held either an `Rn` or a `Dn` in one slot, and BOTH of its jobs are covered "
+                  "elsewhere. The dependency half was already stated twice — the dep points UP at "
+                  "the surface through its own `interfaces` list, which is the direction every "
+                  "other membership in this model runs — so an interface's dependencies are now "
+                  "DERIVED. The actor half is now DERIVED too, from the walks, gated on the "
+                  "surface's `kind`. Delete the field; keep `party` for a far side that is neither "
+                  "a role nor a dependency ('anyone on the web', 'the project under analysis')."),
+}
 _RENAME_NOTES: dict[str, str] = {
     "label": ("It was a THREE-value word (core | supporting | platform) carrying two questions at "
               "once, and two of its values had no definition anywhere. Split them: `happy_path` "
@@ -1147,8 +1164,10 @@ def _build(data: object, cls: type, path: str):
     for key in data:
         if key not in known:
             hint = _RENAMED_FIELDS.get(key)
+            gone = _REMOVED_FIELDS.get(key)
             raise ModelError(f"{path}.{key}: unknown field"
-                             + (f" — renamed to `{hint}`. {_RENAME_NOTES[key]}" if hint else ""))
+                             + (f" — renamed to `{hint}`. {_RENAME_NOTES[key]}" if hint else "")
+                             + (f" — REMOVED. {gone}" if gone else ""))
     for f in fields(cls):
         if f.name in data:
             kwargs[f.name] = _check(data[f.name], hints[f.name], f"{path}.{f.name}")

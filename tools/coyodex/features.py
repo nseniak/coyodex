@@ -502,7 +502,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     interfaces = [
         InterfaceFacts(
             id=i.id, name=i.name, what=i.what, side=i.side, facing=i.facing,
-            party=i.party or i.party_ref,
+            party=i.party,
             flow=[d for d in ("in", "out") if any(c.direction == d for c in i.carries)],
             ways_in=sorted_ids(set(i.ways_in)),
             deps=sorted_ids(set(iface_deps.get(i.id, ()))),

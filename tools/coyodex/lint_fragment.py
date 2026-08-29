@@ -211,10 +211,12 @@ def _interface_shape_problems(m: ProjectModel) -> list[str]:
     field `validate` blocks on.
 
     Only the row-local half lives here, the same division every other array follows: a bad `side`,
-    a bad `facing`, a `theirs` surface with no evidence, and a `ways_in` / `party_ref` that is not
-    an id-shaped token. Cross-array resolution (does `EP99` exist, is it externally activated, does
-    every way in belong to exactly one surface) needs the assembled map and stays in `validate`."""
+    a bad `facing`, a `theirs` surface with no evidence, a `ways_in` that is not an id-shaped token,
+    and a `kind` that is neither a seed nor a deliberate mint. Cross-array resolution (does `EP99`
+    exist, is it externally activated, does every way in belong to exactly one surface) needs the
+    assembled map and stays in `validate`."""
     problems: list[str] = []
+    minted: list[str] = []
     for iface in m.interfaces:
         if iface.side and iface.side not in grammar.INTERFACE_SIDES:
             problems.append(
@@ -230,10 +232,6 @@ def _interface_shape_problems(m: ProjectModel) -> list[str]:
                 problems.append(
                     f"{iface.id}: `ways_in` holds '{ep}', which is not an id — a way in is an entry "
                     f"point id (`EP12`), never a path or a name")
-        if iface.party_ref and not _ID_LIKE.match(str(iface.party_ref)):
-            problems.append(
-                f"{iface.id}: `party_ref` is '{iface.party_ref}', which is not an id — name the dep "
-                f"row (`D4`), or use `party` for a free-text party")
         if iface.side == "theirs" and not (
                 [e for e in iface.evidence if getattr(e, "file", "")] or iface.source):
             problems.append(
@@ -241,6 +239,25 @@ def _interface_shape_problems(m: ProjectModel) -> list[str]:
                 f"crosses cannot be read off a call site, so the one line you read is the whole "
                 f"claim. `validate` blocks on this; answering it here costs one turn instead of a "
                 f"phase")
+        canon = grammar.canonical_interface_kind(iface.kind)
+        if canon and canon.lower() in grammar.INTERFACE_KIND_PURPOSE_WORDS:
+            problems.append(
+                f"{iface.id}: `kind` is '{iface.kind}', which says what the surface is FOR, not "
+                f"what SHAPE it is — that axis is the dependency's `bucket`. A payment processor "
+                f"and a crash reporter are both `api`")
+        elif canon and canon not in grammar.INTERFACE_KIND_SEEDS:
+            minted.append(f"{iface.id}: '{canon}'")
+        elif canon and canon != (iface.kind or "").strip():
+            problems.append(
+                f"{iface.id}: `kind` is '{iface.kind}' — the canonical spelling is '{canon}'. One "
+                f"spelling per shape, or two builds of one repo split the same surface")
+    if minted:
+        # ONE aggregated line, never one per row: a minted kind is LEGAL (the vocabulary is
+        # seeded-open) and the author is the one who adjudicates whether it is a synonym.
+        problems.append(
+            f"{len(minted)} interface kind(s) are not seeds: {'; '.join(minted)}. Minting is "
+            f"allowed — check first that none is a spelling of a seed "
+            f"({', '.join(grammar.INTERFACE_KIND_SEEDS)}), and reuse the exact spelling on rebuild")
     return problems
 
 

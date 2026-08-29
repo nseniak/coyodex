@@ -238,9 +238,13 @@ FIELD_META: dict[tuple[str, str], dict] = {
                             "service 'internal' while its interface is user-facing."},
     ("Interface", "party"): {"description": "the far side in words, when it has no element of its "
                             "own ('the open web')."},
-    ("Interface", "party_ref"): {"pattern": r"^[RD]\d+$", "description": "the far side as an id — a "
-                            "role or a dep. Pattern-pinned so a typo cannot silently degrade into "
-                            "prose."},
+    ("Interface", "kind"): {"description": "what SHAPE this surface is, seeded-open: "
+                            + "/".join(grammar.INTERFACE_KIND_SEEDS)
+                            + ". SHAPE, never PURPOSE — a payment processor and a crash reporter "
+                            "are both `api`, and `Dep.bucket` already says which is which in a "
+                            "richer vocabulary. A kind that answers 'what is it for' is "
+                            "mis-modelled. Prefer a seed; mint only when none fits, and reuse the "
+                            "exact spelling on rebuild."},
     ("Interface", "ways_in"): {"items": {"type": "string", "pattern": r"^EP\d+$"},
                             "description": "the entry points this surface is made of. Assigned "
                             "through `reconcile` (`ways_in`), never hand-written into a fragment: "

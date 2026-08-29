@@ -79,6 +79,7 @@ _FIELD_OWNER: dict[str, type] = {
     "owners": Entity,
     "ways_in": Interface,
     "interfaces": Dep,
+    "interface_kind": Interface,
 }
 
 

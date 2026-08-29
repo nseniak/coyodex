@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
+from coyodex import grammar
 from coyodex.audit_model import apply_anchor_corrections
 from coyodex.model import (
     Interface,
@@ -76,6 +77,13 @@ _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     # as `capability`: `EPn` ids are minted by `assemble` from content, so a fragment cannot know
     # them, and interfaces are authored at synthesis, after T4 exists.
     "ways_in": (Interface, "interface"),
+    # KEYED `interface_kind`, NOT `kind`. This dict is keyed by FIELD NAME, and `kind` is the
+    # most-reused field name in the model (`Dep.kind`, `EntryPoint.kind`, `Role.kind`), so claiming
+    # it for `Interface` is exactly the landmine the `ways_in` comment above was written about. The
+    # DIRECTIVE key is `interface_kind`; the attribute it sets on the element is `kind`.
+    # Same reason to exist as `bucket`, one field over: seeded-open free text, assigned at synthesis
+    # over ~every element of its kind — and it is what lets a hand-authored SHAPE survive a rebuild.
+    "interface_kind": (Interface, "interface"),
     # A dep's `I<n>`s, assigned at synthesis for the same reason `bucket` is, one field over. A LIST:
     # one outside system can sit on several surfaces (a coding agent hosts our skill AND writes the
     # transcript we read back).
@@ -105,6 +113,7 @@ class SetDirective:
     block: str | None = None
     ways_in: list[str] | None = None
     interfaces: list[str] | None = None
+    interface_kind: str | None = None      # sets `Interface.kind` — see `_SET_FIELD_OWNER`
     #: id → the `source` anchor the author SAW on that entry point, for the witnessed form
     #: `{"id": "EP1", "source": "orders.py:9"}`. Empty when every value was written bare.
     #: `EPn` is minted by `assemble` from harvested content and is order-independent but NOT
@@ -303,7 +312,7 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         # `assigned_fields()` returns [] and the whole file is rejected with "assigns no field" — the
         # generator meanwhile emits it happily. `interface` shipped missing, and three directives made
         # the repo's own reconcile.json unloadable.
-        for fld in ("subsystem", "subdomain", "capability", "bucket", "block"):
+        for fld in ("subsystem", "subdomain", "capability", "bucket", "block", "interface_kind"):
             if fld in d:
                 if not isinstance(d[fld], str):
                     raise ReconcileError(f"{label}: set[{i}].{fld}: expected a string")
@@ -522,6 +531,16 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                         problems.append(f"reconcile set[{si}] {eid}: owners is empty — name the "
                                         f"feature(s) the record exists for, or drop the directive "
                                         f"to leave the decision unmade")
+                elif fld == "interface_kind":
+                    # Seeded-open, so an unknown value is NEVER an error here — `validate` nudges on
+                    # a minted kind in one aggregated line and the author adjudicates. What IS wrong
+                    # is an EMPTY directive: it would blank a kind the map already carries while
+                    # reading as an assignment.
+                    if not (sd.interface_kind or "").strip():
+                        problems.append(f"reconcile set[{si}] {eid}: interface_kind is empty — name "
+                                        f"the SHAPE of the surface "
+                                        f"({', '.join(grammar.INTERFACE_KIND_SEEDS)}), or drop the "
+                                        f"directive to leave the decision unmade")
                 elif fld == "runs_in":
                     bad = [u for u in (sd.runs_in or []) if u not in units]
                     if bad:
@@ -648,6 +667,9 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             if sd.bucket is not None and isinstance(el, Dep):
                 el.bucket = sd.bucket
                 set_counts["bucket"] += 1
+            if sd.interface_kind is not None and isinstance(el, Interface):
+                el.kind = sd.interface_kind    # the DIRECTIVE is `interface_kind`; the FIELD is `kind`
+                set_counts["interface_kind"] += 1
             if sd.block is not None and isinstance(el, BusinessRule):
                 el.block = sd.block
                 set_counts["block"] += 1

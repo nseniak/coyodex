@@ -722,7 +722,7 @@ def test_without_finalize_the_draft_is_left_alone(tmp_path: Path) -> None:
 
 def _iface_fragment(**over) -> dict:
     row = {"id": "I1", "name": "Their service", "what": "What crosses.", "side": "theirs",
-           "facing": "user", "party_ref": "D1", "ways_in": ["EP1"],
+           "facing": "user", "kind": "api", "ways_in": ["EP1"],
            "evidence": [{"file": "src/a.py:3", "why": "forms the outgoing call"}]}
     row.update(over)
     return {"format": "coyodex-map", "interfaces": [row]}
@@ -765,9 +765,32 @@ def test_a_way_in_that_is_not_an_id_is_a_lint_problem():
     assert any("`ways_in` holds 'src/routes.py'" in h for h in hits), hits
 
 
-def test_a_party_ref_that_is_not_an_id_is_a_lint_problem():
-    hits = _lint_iface(party_ref="their service")
-    assert any("`party_ref` is 'their service'" in h for h in hits), hits
+def test_a_purpose_shaped_kind_is_a_lint_problem():
+    """`kind` is SHAPE; `Dep.bucket` is PURPOSE. Told in the fragment, before assembly."""
+    hits = _lint_iface(kind="observability")
+    assert any("says what the surface is FOR" in h for h in hits), hits
+    assert any("`bucket`" in h for h in hits), hits
+
+
+def test_a_minted_kind_draws_ONE_aggregated_lint_line():
+    frag = {"format": "coyodex-map", "interfaces": [
+        {"id": "I1", "name": "A", "side": "ours", "kind": "browser-extension"},
+        {"id": "I2", "name": "B", "side": "ours", "kind": "telephony"}]}
+    from coyodex.lint_fragment import lint_fragment_problems
+    hits = lint_fragment_problems(load_fragment(json.dumps(frag), "f.json"), None)
+    agg = [h for h in hits if "are not seeds" in h]
+    assert len(agg) == 1, hits
+    assert "browser-extension" in agg[0] and "telephony" in agg[0], agg[0]
+
+
+def test_a_drifted_kind_spelling_is_a_lint_problem():
+    hits = _lint_iface(kind="cli")
+    assert any("the canonical spelling is 'command-line'" in h for h in hits), hits
+    assert not [h for h in hits if "are not seeds" in h]
+
+
+def test_a_seed_kind_lints_clean():
+    assert not _lint_iface(kind="hosted-screen")
 
 
 # --- `confidence: verified` is a statement about votes that have not been cast -----------------

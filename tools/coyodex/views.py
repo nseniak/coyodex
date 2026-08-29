@@ -443,7 +443,7 @@ def model_to_markdown(m: ProjectModel) -> str:
         for i in m.interfaces:
             flow = ", ".join(x for x in ("in", "out")
                              if any(c.direction == x for c in i.carries))
-            far = i.party or i.party_ref
+            far = i.party
             rows.append([f"**{i.id}**", i.name, i.side, i.facing, flow, i.what, far,
                          str(ways_by_iface.get(i.id) or ""),
                          ", ".join(deps_by_iface.get(i.id, [])),

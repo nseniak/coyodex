@@ -59,12 +59,14 @@ from coyodex.model import (
     to_canonical_json,
 )
 from coyodex.validate_model import (
+    INTERFACE_EXCEPTIONS_HEADING,
     _anchor_pairs,
     _inventory,
     _inheritance_runs_in_warnings,
     check_anchor_existence_model,
     check_domain_coverage_model,
     check_domain_relations,
+    interface_actors,
     validate_model,
 )
 from coyodex.views import model_to_markdown
@@ -4098,7 +4100,7 @@ def make_interface_model() -> ProjectModel:
     m.deps[0].not_an_interface = "the product writes these rows and reads them back itself"
     m.interfaces = [Interface(
         id="I1", name="Command line", what="How a person runs the product.", side="ours",
-        facing="user", source="src/v.py:1", ways_in=["EP1"],
+        facing="user", kind="command-line", source="src/v.py:1", ways_in=["EP1"],
         carries=[InterfaceCrossing(direction="in", what="the command and its arguments",
                                    elements=["E1"])])]
     return m
@@ -4230,12 +4232,141 @@ def test_a_theirs_surface_with_no_evidence_warns():
     assert any("no evidence" in w for w in warnings_of(m))
 
 
-def test_a_party_ref_must_resolve():
+# ── `kind` — what SHAPE a surface is. Seeded-open, so NOTHING here blocks. ──────────────────────
+
+def test_a_surface_with_no_kind_warns_and_never_blocks():
     m = make_interface_model()
-    m.interfaces[0].party_ref = "R9"
-    assert any("party_ref" in p for p in problems_of(m))
-    m.interfaces[0].party_ref = "R1"
-    assert not [p for p in problems_of(m) if "party_ref" in p]
+    m.interfaces[0].kind = ""
+    assert any("has no `kind`" in w and "I1" in w for w in warnings_of(m))
+    assert not [p for p in problems_of(m) if "kind" in p]
+
+
+def test_the_no_kind_advisory_can_be_recorded_away():
+    m = make_interface_model()
+    m.interfaces[0].kind = ""
+    m.extras = [ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
+                             body="I1: the shape of this one is genuinely undecided")]
+    assert not [w for w in warnings_of(m) if "has no `kind`" in w]
+
+
+def test_a_purpose_shaped_kind_is_nudged_toward_the_dependency_bucket():
+    """The one rule this field can break: `kind` is SHAPE, `Dep.bucket` is PURPOSE. A payment
+    processor and a crash reporter are both `api`."""
+    m = make_interface_model()
+    m.interfaces[0].kind = "observability"
+    hits = [w for w in warnings_of(m) if "I1" in w and "`bucket`" in w]
+    assert hits, warnings_of(m)
+    assert "FOR, not" in hits[0], hits[0]
+
+
+def test_a_minted_kind_draws_ONE_aggregated_line_naming_every_kind():
+    """Never one line per row: minting is legal, and the only useful thing to say is the list."""
+    m = make_interface_model()
+    m.interfaces[0].kind = "browser-extension"
+    m.interfaces.append(Interface(id="I2", name="CI", what="Our pipeline.", side="ours",
+                                  facing="operator", kind="browser-extension",
+                                  source="src/v.py:1"))
+    m.interfaces.append(Interface(id="I3", name="Phone line", what="A call.", side="ours",
+                                  facing="user", kind="telephony", source="src/v.py:1"))
+    hits = [w for w in warnings_of(m) if "are not seeds" in w]
+    assert len(hits) == 1, hits
+    assert "browser-extension" in hits[0] and "telephony" in hits[0], hits[0]
+    assert "I1" in hits[0] and "I2" in hits[0] and "I3" in hits[0], hits[0]
+    assert "2 interface kind(s)" in hits[0], hits[0]        # two KINDS over three surfaces
+
+
+def test_a_drifted_spelling_of_a_seed_is_nudged_to_the_canonical_one():
+    m = make_interface_model()
+    m.interfaces[0].kind = "cli"
+    hits = [w for w in warnings_of(m) if "canonical spelling" in w]
+    assert hits, warnings_of(m)
+    assert "'command-line'" in hits[0], hits[0]
+    assert not [w for w in warnings_of(m) if "are not seeds" in w]
+
+
+def test_every_kind_advisory_is_actually_silenced_by_the_recorded_line():
+    """The message TEXT naming an escape is one test; the escape WORKING is this one. Three of these
+    messages shipped naming a heading the branch never read."""
+    rec = [ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING, body="I1: deliberate")]
+    for value, needle in (("", "has no `kind`"), ("observability", "`bucket`"),
+                          ("browser-extension", "are not seeds"), ("cli", "canonical spelling")):
+        m = make_interface_model()
+        m.interfaces[0].kind = value
+        assert [w for w in warnings_of(m) if needle in w], (value, needle)
+        m.extras = rec
+        assert not [w for w in warnings_of(m) if needle in w], (value, needle)
+
+
+def test_a_seed_kind_says_nothing_at_all():
+    m = make_interface_model()
+    m.interfaces[0].kind = "screen"
+    assert not [w for w in warnings_of(m) if "kind" in w and "I1" in w]
+
+
+# ── `actors` — DERIVED, never authored ─────────────────────────────────────────────────────────
+
+def test_an_ours_surface_derives_its_actors_from_the_use_cases_behind_its_ways_in():
+    """The NARROW join, and only it. A story that merely PASSES THROUGH our own surface does not put
+    its actor on the far side of it — R2 walks through the command line without being the person at
+    the prompt, and the broad join would put them there."""
+    m = make_interface_model()
+    m.use_cases[0].entry_points = ["EP1"]
+    m.roles.append(Role(id="R2", name="Upkeep job", kind="software", wants="tidy", drives="UC2"))
+    m.use_cases.append(UseCase(id="UC2", name="Tidy up", actors=["R2"]))
+    m.flows = [Flow(uc="UC2", title="Tidy up", steps=[
+        FlowStep(n=1, src="C1", dst="I1", phrase="writes the report", where="src/v.py:9")])]
+    assert interface_actors(m)["I1"] == ["R1"]
+
+
+def test_a_theirs_surface_the_product_merely_calls_derives_NO_actor():
+    """"Whose story reaches it" is not "who goes there". A member's story reaches an upstream
+    server, but the PRODUCT calls it — so an `api` surface draws nobody, and none is correct."""
+    m = make_interface_model()
+    m.interfaces[0].side = "theirs"
+    m.interfaces[0].kind = "api"
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].source = ""
+    m.flows = [Flow(uc="UC1", title="View order", steps=[
+        FlowStep(n=1, src="R1", dst="C1", phrase="asks", where="src/v.py:1"),
+        FlowStep(n=2, src="C1", dst="I1", phrase="calls out", where="src/v.py:2")])]
+    assert interface_actors(m)["I1"] == []
+
+
+def test_a_handoff_surface_derives_the_roles_whose_stories_reach_it():
+    """The two kinds that MEAN a person goes there are the gate — and they are exactly the case an
+    authored field existed for: coyodex's GitHub and code editor name no actor and have no ways in."""
+    m = make_interface_model()
+    m.interfaces[0].side = "theirs"
+    m.interfaces[0].kind = "handoff"
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].source = ""
+    m.flows = [Flow(uc="UC1", title="View order", steps=[
+        FlowStep(n=1, src="R1", dst="C1", phrase="asks", where="src/v.py:1"),
+        FlowStep(n=2, src="C1", dst="I1", phrase="hands over the link", where="src/v.py:2")])]
+    assert interface_actors(m)["I1"] == ["R1"]
+
+
+def test_a_person_goes_there_surface_that_no_walk_reaches_is_a_finding_about_the_walks():
+    m = make_interface_model()
+    m.interfaces[0].side = "theirs"
+    m.interfaces[0].kind = "hosted-screen"
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].source = ""
+    hits = [w for w in warnings_of(m) if "no walk in this map shows anyone going" in w]
+    assert hits, warnings_of(m)
+    assert "I1" in hits[0], hits[0]
+
+
+def test_that_finding_is_silent_once_a_walk_opens_the_door():
+    m = make_interface_model()
+    m.interfaces[0].side = "theirs"
+    m.interfaces[0].kind = "hosted-screen"
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].source = ""
+    m.flows = [Flow(uc="UC1", title="View order", steps=[
+        FlowStep(n=1, src="R1", dst="I1", phrase="signs in there", where="src/v.py:1"),
+        FlowStep(n=2, src="I1", dst="C1", phrase="comes back", where="src/v.py:2")])]
+    assert not [w for w in warnings_of(m) if "no walk in this map shows anyone going" in w]
 
 
 def test_a_door_is_a_legal_step_endpoint_and_does_not_count_toward_the_band():

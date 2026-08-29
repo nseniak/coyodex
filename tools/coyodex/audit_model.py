@@ -1148,7 +1148,6 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
     # from the rejected one — 4 of the 6 claims went out anchored at a line the surface does not
     # name. The surface's own evidence is the author's answer to "where is this true"; read it
     # first, and fall back to the dep's configuration line only when there is none.
-    dep_by_id = {d.id: d for d in m.deps}
     for iface in m.interfaces:
         if iface.side != "theirs":
             continue
@@ -1157,8 +1156,10 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
         anchor_raw = (cited or iface.source
                       or (owning[0].where_configured if owning else ""))
         crossings = "; ".join(f"{c.direction}: {c.what}" for c in iface.carries if c.what)
-        far = iface.party or (dep_by_id[iface.party_ref].name
-                              if iface.party_ref in dep_by_id else iface.party_ref)
+        # The far side in words, then the dependencies that stand on this surface — the direction
+        # every other membership in this model runs. `party_ref` held the dep half a second time and
+        # was removed for it: the two agreed only by luck, and nothing made them keep agreeing.
+        far = iface.party or ", ".join(d.name for d in owning)
         items.append(WorkItem(
             claim=(f"{iface.id} '{iface.name}' is an interface the product exchanges data through"
                    + (f" with {far}" if far else "")),

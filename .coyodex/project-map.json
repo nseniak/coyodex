@@ -17214,7 +17214,6 @@
    "side": "ours",
    "facing": "user",
    "party": "",
-   "party_ref": "",
    "ways_in": [
     "EP25",
     "EP26",
@@ -17276,7 +17275,6 @@
    "side": "ours",
    "facing": "operator",
    "party": "",
-   "party_ref": "",
    "ways_in": [
     "EP3",
     "EP4",
@@ -17325,7 +17323,6 @@
    "side": "ours",
    "facing": "user",
    "party": "",
-   "party_ref": "",
    "ways_in": [
     "EP60",
     "EP61",
@@ -17383,7 +17380,6 @@
    "side": "ours",
    "facing": "user",
    "party": "the coding agent hosting the skill",
-   "party_ref": "D12",
    "ways_in": [
     "EP20",
     "EP21",
@@ -17416,7 +17412,6 @@
    "side": "ours",
    "facing": "operator",
    "party": "",
-   "party_ref": "",
    "ways_in": [
     "EP1",
     "EP2"
@@ -17440,7 +17435,6 @@
    "side": "ours",
    "facing": "user",
    "party": "",
-   "party_ref": "",
    "ways_in": [],
    "carries": [
     {
@@ -17463,7 +17457,6 @@
    "side": "ours",
    "facing": "user",
    "party": "",
-   "party_ref": "",
    "ways_in": [],
    "carries": [
     {
@@ -17484,7 +17477,6 @@
    "side": "theirs",
    "facing": "user",
    "party": "the project under analysis",
-   "party_ref": "",
    "ways_in": [],
    "carries": [
     {
@@ -17510,7 +17502,6 @@
    "side": "theirs",
    "facing": "operator",
    "party": "the coding agent that built the map",
-   "party_ref": "D12",
    "ways_in": [],
    "carries": [
     {
@@ -17536,7 +17527,6 @@
    "side": "theirs",
    "facing": "user",
    "party": "",
-   "party_ref": "",
    "ways_in": [],
    "carries": [
     {
@@ -17562,7 +17552,6 @@
    "side": "theirs",
    "facing": "user",
    "party": "",
-   "party_ref": "",
    "ways_in": [],
    "carries": [
     {

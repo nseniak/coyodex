@@ -244,8 +244,6 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     explicit `[[ID]]` prose markers — never scanned out of free prose or anchor strings."""
     refs: set[str] = set()
     for iface in m.interfaces:                       # kept in step with `model.remap_element_ids`
-        if iface.party_ref:
-            refs.add(iface.party_ref)
         refs.update(iface.ways_in)
         for cr in iface.carries:
             refs.update(cr.elements)
@@ -780,6 +778,60 @@ def capability_audience(m: ProjectModel) -> dict[str, list[str]]:
                 (machine if (role.kind or "").strip().lower().startswith("s") else human).add(tag)
         votes = human or machine
         out[cap] = [a for a in grammar.ROLE_AUDIENCE if a in votes]
+    return out
+
+
+def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
+    """Per interface, WHO is on the far side of it. DERIVED, never authored — so the two can never
+    contradict, which is the same rule `capability_audience` one function up was built on.
+
+    An authored field was designed and then dropped: it was mostly unfilled (0 of coyodex's 11
+    surfaces, 4 of mcpolis's 12), and where a build DID author it the derivation was better — the
+    mcpolis dashboard names one role while its walks show three.
+
+    Which join to use is decided by the `kind`, because *"whose story reaches it" is not "who goes
+    there"*. A member's story reaches an upstream MCP server, but the PRODUCT calls it; a reader
+    follows a code link to a hosting site themselves. So:
+
+        ours surface   -> the roles driving the use cases behind its ways in
+        theirs surface -> ONLY when the kind MEANS a person goes there (`hosted-screen`, `handoff`),
+                          the roles whose stories reach it
+        otherwise      -> none, AND NONE IS THE CORRECT ANSWER
+
+    Both joins were measured on the two mapped products, and the broad one is plainly wrong on a
+    `theirs` surface the product itself calls: it puts three human roles on the far side of "mounted
+    MCP servers", whose far side is a server. Gating it on `kind` is what separates the two cases,
+    and it is the reason this field waited for that one.
+
+    Only roles that are DEFINED vote; a use case naming an undefined actor is a different defect,
+    already reported by its own check."""
+    role_ids = {r.id for r in m.roles}
+    ways_by_iface = {i.id: set(i.ways_in) for i in m.interfaces}
+    iface_ids = {i.id for i in m.interfaces}
+    dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
+    narrow: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    for u in m.use_cases:
+        eps = set(u.entry_points or ())
+        for iid, ways in ways_by_iface.items():
+            if eps & ways:
+                narrow[iid].add(u.id)
+    broad: dict[str, set[str]] = {iid: set(ucs) for iid, ucs in narrow.items()}
+    for f in m.flows:
+        for st in expanded_flow_steps(m, f):
+            for side in (st.src, st.dst):
+                if side in iface_ids:
+                    broad[side].add(f.uc)
+                for iid in dep_iface.get(side, ()):
+                    broad[iid].add(f.uc)
+    uc_actors = {u.id: [a for a in (u.actors or ()) if a in role_ids] for u in m.use_cases}
+    out: dict[str, list[str]] = {}
+    for i in m.interfaces:
+        kind = grammar.canonical_interface_kind(i.kind)
+        if i.side == "theirs":
+            ucs = broad[i.id] if kind in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO else set()
+        else:
+            ucs = narrow[i.id]
+        out[i.id] = sorted_ids({a for u in ucs for a in uc_actors.get(u, ())})
     return out
 
 
@@ -1957,9 +2009,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     recorded = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("I", "EP"))
     ent_ids = {e.id for e in m.entities}
     ep_by_id = {ep.id: ep for ep in m.entry_points if ep.id}
-    role_ids = {r.id for r in m.roles}
-    dep_ids = {d.id for d in m.deps}
     iface_ids = {i.id for i in m.interfaces}
+    actors_by_iface = interface_actors(m)
+    minted_kinds: dict[str, list[str]] = {}
     deps_by_iface: dict[str, list[str]] = {}
     for d in m.deps:
         for iid in d.interfaces:
@@ -1980,10 +2032,6 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         if iface.confidence and iface.confidence not in grammar.CONFIDENCE_VALUES:
             problems.append(f"{iface.id} ({iface.name}) confidence='{iface.confidence}' — must be "
                             f"one of {'/'.join(grammar.CONFIDENCE_VALUES)}")
-        if iface.party_ref and iface.party_ref not in (role_ids | dep_ids):
-            problems.append(f"{iface.id} ({iface.name}) party_ref '{iface.party_ref}' is not a "
-                            f"defined role or dependency — the far side as an id, or leave it empty "
-                            f"and say who it is in `party`")
         for ep in iface.ways_in:
             if ep not in ep_by_id:
                 problems.append(f"{iface.id} ({iface.name}) ways_in names unknown entry point "
@@ -2022,6 +2070,38 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"serves a user or an operator, or record "
                             f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' "
                             f"extras heading")
+        # ── `kind`: SHAPE, never purpose. Seeded-open, so NOTHING here blocks. ──────────────────
+        canon = grammar.canonical_interface_kind(iface.kind)
+        escaped = iface.id in recorded
+        if not canon and not escaped:
+            warnings.append(f"{iface.id} ({iface.name}) has no `kind` — say what SHAPE this surface "
+                            f"is ({', '.join(grammar.INTERFACE_KIND_SEEDS)}), so the picture can "
+                            f"draw it. Or record '{iface.id}: <why>' under an "
+                            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
+        elif canon.lower() in grammar.INTERFACE_KIND_PURPOSE_WORDS and not escaped:
+            warnings.append(f"{iface.id} ({iface.name}) kind='{iface.kind}' says what the surface "
+                            f"is FOR, not what SHAPE it is — that axis is the dependency's "
+                            f"`bucket`, which already holds it in a richer vocabulary. A payment "
+                            f"processor and a crash reporter are both `api`. Record "
+                            f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
+                            f"heading if this really is the surface's shape")
+        elif canon and canon not in grammar.INTERFACE_KIND_SEEDS and not escaped:
+            minted_kinds.setdefault(canon, []).append(iface.id)
+        elif canon and canon != (iface.kind or "").strip() and not escaped:
+            warnings.append(f"{iface.id} ({iface.name}) kind='{iface.kind}' — the canonical "
+                            f"spelling is '{canon}'. One spelling per shape, or two builds of one "
+                            f"repo split the same surface. Record '{iface.id}: <why>' under an "
+                            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading to keep this spelling")
+        # A surface whose kind MEANS a person goes there, and no walk shows anyone going. This is a
+        # finding about the WALKS, not about a field somebody forgot: `actors` is derived, so the
+        # only way to answer it is to write the story that opens at that door.
+        if (canon in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO and not actors_by_iface.get(iface.id)
+                and iface.id not in recorded):
+            warnings.append(f"{iface.id} ({iface.name}) is a '{canon}' surface — the kind means a "
+                            f"person goes there — but no walk in this map shows anyone going. "
+                            f"`actors` is DERIVED, so this is a gap in the stories, not a field to "
+                            f"fill: open a use case at this door, or record '{iface.id}: <why>' "
+                            f"under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
         if iface.side == "theirs" and not iface.evidence and iface.id not in recorded:
             warnings.append(f"{iface.id} ({iface.name}) is a `theirs` surface with no evidence — "
                             f"whose data crosses is not visible at the call site (a search over the "
@@ -2029,6 +2109,19 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"is, and the two look identical in the code). Cite one, or record "
                             f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
                             f"heading")
+
+    if minted_kinds:
+        # ONE AGGREGATED LINE, never one per row. Minting is LEGAL — the vocabulary is seeded-open
+        # and deliberately names no CI, hardware, telephony or browser-extension shape — so the only
+        # thing worth saying is the list, once, for the author to adjudicate against the seeds.
+        shown = "; ".join(f"'{k}' ({', '.join(sorted(v))})" for k, v in sorted(minted_kinds.items()))
+        warnings.append(
+            f"{len(minted_kinds)} interface kind(s) are not seeds: {shown}. Minting is allowed — "
+            f"check that none is a spelling of a seed "
+            f"({', '.join(grammar.INTERFACE_KIND_SEEDS)}), and reuse the exact spelling on rebuild, "
+            f"or the eval reads one surface as two. Record 'In: <why>' under an "
+            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading for each surface whose minted kind is "
+            f"deliberate")
 
     for d in m.deps:
         if (grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM

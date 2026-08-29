@@ -264,6 +264,106 @@ INTERFACE_FACINGS = ("user", "operator")  # who it serves. AUTHORED, never deriv
 CROSSING_DIRECTIONS = ("in", "out")       # per crossing; an interface's overall flow is DERIVED as
                                           # the set of directions its crossings carry.
 
+# ── Interface KIND — what SHAPE a surface is, seeded-open (mirror of the entry-point kind axis) ───
+# `kind` is SHAPE. `Dep.bucket` is PURPOSE. A payment processor and a crash reporter are both `api`
+# in shape, and what tells them apart is already authored one table over, in a richer vocabulary. A
+# kind that answers "what is it FOR" is the sign this field has been mis-modelled — `validate` nudges
+# on the purpose-shaped spellings below rather than blocking, because the author adjudicates.
+#
+# The vocabulary is the size of an ICON SET, not of a product taxonomy: the field exists so the
+# viewer can DRAW a surface. A 20-seed draft was cut to 11 in two passes. The second cut removed
+# `store`, `compute` and `message` after an adversarial review measured all 7 of mcpolis's `theirs`
+# surfaces mapping 1:1 from `Dep.bucket` to the kind — those three were `bucket` under another name,
+# and `grammar` already seeds "Observability", "Infrastructure & runtime", "Messaging & delivery".
+# On the `theirs` side almost every surface IS the same shape (an HTTPS call to a vendor) and what
+# differs is purpose, so a shape vocabulary should say little there: the log store, the analytics
+# service and the crash reporter all take `api`.
+#
+# DRIFT is the other reason to keep it small: a seeded-open vocabulary is what the eval compares
+# across builds, and with 20 seeds two builds of one repo argue `api` vs `api-call` vs `webhook-in`
+# forever.
+#
+# This is a LEVEL above `ENTRY_POINT_KINDS`, never a duplicate of it: a way in's kind names the
+# MECHANISM (an HTTP address, a tool, a command); this names the SURFACE (a web UI, a CLI, an API).
+# `ui-route` + `http-route` together ARE a web UI, and nothing else in the model says so. Deriving
+# this from the ways in was measured and fails: one clean answer on 4 of coyodex's 11 surfaces and 1
+# of mcpolis's 12, and NOTHING at all on any `theirs` surface, which has no ways in by definition.
+INTERFACE_KIND_SEEDS_OURS = (
+    "screen",         # a browser window: our web UI, a marketing site — anything served to a browser
+    "mobile-app",     # a phone: an app a person installs on a phone
+    "desktop-app",    # a window with a title bar: an app a person installs on a machine
+    "command-line",   # a prompt: commands typed in a terminal
+    "file",           # a document: files we write that something else opens
+    "settings",       # a gear: the values a person or an operator sets
+)
+INTERFACE_KIND_SEEDS_THEIRS = (
+    "hosted-screen",  # a window someone else owns: a sign-in, a vendor console, a chat platform
+    "content",        # a page: data we read that we did not write — the open web, a repo, a transcript
+    "handoff",        # an arrow out: we hand the PERSON to another program — a link, their editor
+)
+INTERFACE_KIND_SEEDS_EITHER = (
+    "api",            # a plug: one program calling another over a network, either direction,
+                      # webhooks included
+    "agent-tools",    # a wrench: tools an AI assistant calls, ours or theirs
+)
+# The side grouping is GUIDANCE for the author and for the viewer's legend — `validate` must NOT
+# enforce it. A product can host a screen someone else designed, and can publish an API someone
+# else's spec defines.
+INTERFACE_KIND_SEEDS = (
+    INTERFACE_KIND_SEEDS_OURS + INTERFACE_KIND_SEEDS_THEIRS + INTERFACE_KIND_SEEDS_EITHER
+)
+
+# The two kinds that MEAN a person goes to the far side themselves. This is what gates the derived
+# `actors` on a `theirs` surface: "whose story reaches it" is not "who goes there" — a member's story
+# reaches an upstream MCP server, but the PRODUCT calls it, and putting three human roles on the far
+# side of a server is what an ungated join actually produced. Every other `theirs` kind derives NO
+# actor, and none is the correct answer.
+INTERFACE_KINDS_A_PERSON_GOES_TO = ("hosted-screen", "handoff")
+
+# The tiebreak, for the surfaces that are BOTH a place people act and a service we call:
+# **the kind names where the PEOPLE are — but only when the product's own flow takes them there.**
+# Slack for a product that lives in it, a sign-in redirect and a hosted checkout are `hosted-screen`;
+# a code link we hand over is `handoff`; a crash reporter an operator opens on their own is `api`.
+
+# Exact-string fold (matched on the trimmed, lowercased kind): observed drift spellings -> the seed.
+# Only UNAMBIGUOUS synonyms fold — the same rule `ENTRY_POINT_KIND_ALIASES` records. A draft broke it
+# three times and four entries were removed for it: `website` -> `screen` sat beside `web` ->
+# `content`, sending two spellings of one word to opposite seeds; `sdk` cannot tell an SDK we publish
+# from one we consume; `skill` -> `file` was wrong outright. Those spellings stay MINTED and draw the
+# aggregated synonym nudge, where the author adjudicates.
+# The last group folds the three CUT seeds: they were purpose words, and their shape is `api`.
+INTERFACE_KIND_ALIASES = {
+    "web-ui": "screen", "webui": "screen", "ui": "screen", "marketing-site": "screen",
+    "cli": "command-line",
+    "installed-app": "desktop-app",
+    "agent-skill": "file", "file-output": "file",
+    "data-source": "content",
+    "chat-app": "hosted-screen", "hosted-ui": "hosted-screen",
+    "link-handoff": "handoff",
+    "rest-api": "api", "webhook": "api", "api-call": "api",
+    "store": "api", "data-sink": "api", "logs": "api", "compute": "api",
+    "message": "api", "message-out": "api", "email": "api",
+}
+
+_INTERFACE_KIND_CANON = {k: k for k in INTERFACE_KIND_SEEDS} | INTERFACE_KIND_ALIASES
+
+# PURPOSE-shaped spellings: a kind that answers "what is it FOR". Not folded and never blocked — the
+# nudge points at `Dep.bucket`, which already holds this axis in a richer vocabulary (13 buckets on
+# one live map). Kept separate from the alias table on purpose: an alias silently reroutes, and none
+# of these has one right destination.
+INTERFACE_KIND_PURPOSE_WORDS = (
+    "payment", "analytics", "identity", "observability", "search", "storage",
+)
+
+
+def canonical_interface_kind(kind: str) -> str:
+    """Fold an interface kind to its canonical seed spelling when it matches a seed (case drift) or a
+    known alias (`cli` -> `command-line`); a minted (non-seed) kind is returned trimmed, exactly as
+    authored. The single normalizer every reader routes through — the Interfaces view's grouping, the
+    viewer's icon lookup, the eval profile — so no two consumers can split the same kind."""
+    s = (kind or "").strip()
+    return _INTERFACE_KIND_CANON.get(s.lower(), s)
+
 # A CAPABILITY's HAPPY_PATH expectation — a closed vocabulary, authored on the capability (never on a
 # subsystem or a subdomain, which `validate` blocks). "expected" = the walk must reach at least one
 # of its use cases; "excluded" = the walk correctly skips all of them, and one record says why. Both
