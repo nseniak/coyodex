@@ -20,11 +20,29 @@ the rule.** Measured on the two live maps the day it shipped: 57 stories ended a
 surface (coyodex 30, mcpolis 27), and neither map's `interface_doors` count could see it, because
 that count rises on the openings alone.
 
-**ENDPOINTS ONLY, and the blind spot is stated rather than hidden.** A strict rule — every crossing
-to a person through a door — costs 126 steps across the two maps and was rejected on readability.
-Endpoints costs 57. What that leaves uncovered: **a MID-FLOW crossing to a DIFFERENT surface is
-checked by nothing.** The closing advisory says so in its own text, so a reader of a firing run
-cannot mistake the check for complete coverage.
+**"ENDPOINTS ONLY" SHIPPED, AND WAS WITHDRAWN THE SAME DAY. Do not bring it back.** The first
+version doored only a story's arrival and its final hand-off, on the argument that a strict rule
+costs 126 steps and endpoints costs 57. **That 126 was measured on a map with NO doors**, so it
+counted the arrival and hand-off steps that endpoints-only was going to door anyway. Nitsan read the
+finished picture and asked the right question: mcpolis's invite story routes the admin through the
+dashboard at step 1 and step 14, and straight past the dashboard at steps 11 and 12, for the SAME
+person and the SAME component. One picture said the wall was there and also said it was not.
+
+Re-measured on the DOORED map, the incremental cost of going strict is:
+
+| | endpoints only | strict |
+|---|---|---|
+| steps on mcpolis | 579 | 615 (+36, +6%) |
+| NEW boxes any picture gains | — | **0** — all 36 sit in a story that already draws its door |
+| arrows across the 42 stories | 525 | **522** — fewer |
+| stories with fewer arrows / same / more | — | 9 / 27 / 6 |
+| the invite story's arrows | 14 | **12** |
+
+The readability argument that bought endpoints-only runs BACKWARDS: the direct person-to-code lines
+fold into door arrows already on the page. The only real cost is 6% more steps to scroll. **The
+general lesson is the one to keep: a cost measured before a change is not the cost of finishing it.**
+Three of the seven agents on this change flagged the same shape in their own words, one person on
+both sides of one wall, and the number in the plan out-argued all three until it was re-measured.
 
 **A proxy check was tried and rejected. Do not reintroduce it.** A draft read "the person at the end
 is not the person at the start". It is machine-checkable, it fires on 3 flows, and it is blind to the
@@ -49,17 +67,20 @@ message naming one id family and a branch reading another.
 
 ## Checks
 
-1. expect: every flow whose last step delivers to an actor goes out through a surface — `Cn → In`,
-   then `In → Rn` — and the out-door is drawn even when it is the surface the flow opened at.
-   regression sign: `validate` reports "flow(s) hand their result to an actor without going through
-   a door". Aggregated to one line, so a build cannot lose it in volume.
+1. expect: EVERY step with an actor at one end and code at the other goes through a surface — the
+   arrival, the final hand-off, and every exchange in between. `Rn → Cn` / `Cn → Rn` appears nowhere
+   in a finished flow.
+   regression sign: `validate` reports "flow step(s) ... cross between an actor and the product
+   without going through a door". Aggregated to one line, so a build cannot lose it in volume. A
+   report naming only MID-story step numbers, with the two ends clean, is the endpoints-only rule
+   creeping back.
 
-2. expect: the eval sees BOTH halves. `flows_without_a_closing_door` reads 0 beside a healthy
-   `interface_doors`.
-   regression sign: `interface_doors` high and `flows_without_a_closing_door` high together — the
-   openings were done and the closings were not. This is the reading that looks like success in every
-   other count, which is why it has its own number. `flows_without_a_closing_door` reading `None` on
-   a map with flows means the profile never computed it.
+2. expect: the eval sees it. `crossings_without_a_door` reads 0 beside a healthy `interface_doors`.
+   regression sign: `interface_doors` high and `crossings_without_a_door` high together — some doors
+   were drawn and others were not. This is the reading that looks like success in every other count,
+   which is why it has its own number, and why it counts STEPS rather than flows: a flow counter
+   scores a half-doored story as done. `crossings_without_a_door` reading `None` on a map with flows
+   means the profile never computed it.
 
 3. expect: `actors` still never appears as an authored field, and the DOOR arm is still ungated.
    regression sign: an `assemble` failure naming `interfaces[].actors` (a build inventing a field the

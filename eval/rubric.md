@@ -20,10 +20,11 @@ be scored **down**, not guessed.
    A rule stating something no product person could have decided otherwise ("if the list is empty,
    return early") is not a business rule at all, and counts against Altitude discipline.
 
-   A story that hands its result to a person and names a COMPONENT is naming the code — the same
-   fault as naming the pipe, one field over. `C43 → R1` says the person receives it from a class; the
-   surface they actually read it on is the thing the map is for. The two ENDS of a story are what is
-   scored: a mid-story exchange with a person needs no surface, by design.
+   A story that touches a person and names a COMPONENT is naming the code — the same fault as naming
+   the pipe, one field over. `C43 → R1` says the person receives it from a class; the surface they
+   actually read it on is the thing the map is for. Score EVERY crossing, not only the two ends: a
+   story that routes a person through a surface at its ends and past that same surface in the middle
+   draws one person on both sides of one wall, and that is a defect, not a shortcut.
 
    For an **interface** (T2b) the claim is that data or events really cross there, and that the far
    side is what the row says. Two failures to hunt, because neither is visible at the call site:
@@ -45,9 +46,10 @@ be scored **down**, not guessed.
    score it as a whole missing surface, not a stylistic gap. And a map with interfaces where **no
    flow step names one** authored the rows and never put them into a story: the map can say what its
    outside edge is while no walk goes through a door. Both have shipped. The second is the one that
-   reads as done. And read the doors in BOTH directions: a map whose stories all OPEN at a door and
-   all walk out past it has half a rule, and looks healthy in every count that only asks whether a
-   step names a surface at all. Also check the other direction: an external-group dependency that names neither a
+   reads as done. And read the doors in BOTH directions AND in the MIDDLE: a map whose stories all
+   OPEN at a door and walk out past it has half a rule, and one that doors both ends and leaves the
+   middle direct has most of a rule. Both look healthy in any count that only asks whether a step
+   names a surface at all. Also check the other direction: an external-group dependency that names neither a
    surface nor a reason is a decision nobody made.
 
 3. **Drill accuracy** — do the drill anchors (`file:line`, links) resolve to the code they claim to
