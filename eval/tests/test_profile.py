@@ -1053,3 +1053,65 @@ def test_old_baseline_without_auth_sites_loads_as_none() -> None:
     p = build_profile(make_counts_map())
     text = p.to_json().replace('"auth_sites"', '"retired_field"')
     assert MapProfile.from_json(text).auth_sites is None
+
+
+# --- the door counts -----------------------------------------------------------------------------
+# Both had ZERO coverage until an adversarial review said so, and a mutation dropping half the
+# actor definition passed the whole suite because of it.
+
+def _door_map(steps: str, roles: str) -> str:
+    return ("""{"format": "coyodex-map", "title": "D", "goal": "g",
+  "roles": [%s],
+  "use_cases": [{"id": "UC1", "name": "Do it", "actors": ["R1"]}],
+  "happy_path": [{"id": "HP1", "title": "Do", "uc": "UC1"}],
+  "components": [{"id": "C1", "name": "Viewer", "purpose": "shows", "entry_point": "src/v.py:1"}],
+  "interfaces": [{"id": "I1", "name": "CLI", "what": "How a person runs it.", "side": "ours",
+                  "kind": "command-line", "facing": "user", "source": "src/v.py:1",
+                  "carries": [{"direction": "in", "what": "the command"}]}],
+  "flows": [{"uc": "UC1", "title": "Do it", "steps": [%s]}]}""" % (roles, steps))
+
+
+PERSON = '{"id": "R1", "name": "Andy", "kind": "human", "audience": "user", "wants": "x"}'
+TIMER = '{"id": "R1", "name": "Upkeep job", "kind": "service", "audience": "internal", "wants": "x"}'
+OPERATOR = '{"id": "R1", "name": "Operator", "kind": "human", "audience": "internal", "wants": "x"}'
+BARE = '{"n": 1, "src": "R1", "dst": "C1", "phrase": "asks"}'
+DOORED = ('{"n": 1, "src": "R1", "dst": "I1", "phrase": "opens it"},'
+          '{"n": 2, "src": "I1", "dst": "C1", "phrase": "asks", "where": "src/v.py:3"}')
+
+
+def test_an_undoored_crossing_is_counted_and_a_doored_one_is_not():
+    assert build_profile(_door_map(BARE, PERSON)).crossings_without_a_door == 1
+    p = build_profile(_door_map(DOORED, PERSON))
+    assert p.crossings_without_a_door == 0
+    assert p.interface_doors == 2
+
+
+def test_the_products_OWN_timer_owes_no_door_but_an_internal_HUMAN_does():
+    """The eval must use the validator's OWN definition of an actor. Three copies of it existed once
+    and two disagreed; a mutation dropping the `service` half hid 46 of 140 findings on one map."""
+    assert build_profile(_door_map(BARE, TIMER)).crossings_without_a_door == 0
+    assert build_profile(_door_map(BARE, OPERATOR)).crossings_without_a_door == 1
+
+
+def test_both_door_counts_read_SUB_FLOWS_as_well_as_flows():
+    """`interface_doors` counted flows only while `crossings_without_a_door` counted both, and the
+    retro tells a reader to read the pair together. A map doored entirely inside shared machinery
+    scored 0 and 0, which that page reads as "authored and never put into a story"."""
+    doc = json.loads(_door_map(BARE, PERSON))
+    doc["flows"][0]["steps"] = [{"n": 1, "src": "C1", "dst": "C1", "phrase": "runs it",
+                                 "subflow": "SF1"}]
+    doc["subflows"] = [{"id": "SF1", "name": "Ask", "steps": [
+        {"n": 1, "src": "R1", "dst": "I1", "phrase": "opens it"},
+        {"n": 2, "src": "I1", "dst": "C1", "phrase": "asks", "where": "src/v.py:3"}]}]
+    p = build_profile(json.dumps(doc))
+    assert p.interface_doors == 2, "the doors live in the sub-flow and must still be counted"
+    assert p.crossings_without_a_door == 0
+
+
+def test_a_step_naming_an_UNDEFINED_surface_is_not_counted_as_a_door():
+    """The eval read the id SHAPE while the validator read the DEFINED ids, so a dangling `I99` was
+    doored for one instrument and undoored for the other."""
+    doc = json.loads(_door_map('{"n": 1, "src": "R1", "dst": "I99", "phrase": "opens it"}', PERSON))
+    p = build_profile(json.dumps(doc))
+    assert p.interface_doors == 0, "an undefined surface is a dangling reference, not a door"
+    assert p.crossings_without_a_door == 1
