@@ -523,8 +523,10 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   first real trial and none was covered — a literal reading would have drawn a gateway refusal on a
   dashboard screen. A use case
   with no ways in has no authored answer: pick the surface whose own sentence describes where the
-  actor stands, and if none does, the map is missing a surface — say so and add NO door. An invented
-  door is worse than a missing one, because the next reader cannot tell it was invented. Nothing OUTSIDE the step list
+  actor stands, and if none does, the map is missing a surface — add NO door, and SAY SO IN THE
+  REPORT YOU HAND BACK, naming the flow, the step and what the person is really standing at. There is
+  no field for it and you must not invent one; the report is where a missing surface gets decided. An
+  invented door is worse than a missing one, because the next reader cannot tell it was invented. Nothing OUTSIDE the step list
   changes: a door is a step, and the surface's own `carries` rows are authored separately.
   **WHAT the two new steps say, and which phrase goes where.** Every step carries a phrase and the
   doors are no exception, so renumber the whole list and write both — in the STORY'S own words, never
@@ -551,11 +553,16 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   ANNOTATES, which on an inbound crossing means it moves out to the actor step with that phrase: a note saying
   "the bin only appears for an admin" explains a gesture, and on the surface step it annotates a
   sentence that no longer mentions the bin.
-  **When the human phrase already names what is handed over, the surface phrase must add something
-  or it is the same fact twice.** Re-voicing "drops the settings file in" as "carries the settings
-  file inward" is a weaker copy. Say what the surface GUARANTEES or CHECKS about what it carries —
-  that the file is read as text, that the token is presented as a bearer, that the request is stamped
-  with the team. Measured on the retrofit: an inbound crossing whose human phrase is an act of ATTENTION
+  **A phrase that is half a GESTURE and half a PAYLOAD splits between the two steps**, and most are.
+  "clicks sign in with Google, carrying the organization's short name" is a person clicking and a
+  request travelling. The gesture goes on the actor step, the payload becomes the surface step's own
+  sentence. Do not move the whole thing and then hunt for something else to say.
+  **When the phrase is ALL payload and the split leaves the surface step nothing new**, say what the
+  surface GUARANTEES or CHECKS about what it carries — that the file is read as text, that the token
+  is presented as a bearer, that the request is stamped with the team. **If it genuinely guarantees
+  nothing, say that it passes the request on, and stop.** Do NOT invent a guarantee to satisfy this
+  paragraph: a sentence that sounds like a check and is not one makes the map untrue, and no check
+  anywhere can catch it. Measured on the retrofit: an inbound crossing whose human phrase is an act of ATTENTION
   ("opens", "picks", "confirms") separates cleanly on its own; one whose human phrase is a HANDOVER
   needs this clause, and that was 4 of 7 in one batch.
   **The rewritten step now needs a CODE ANCHOR, and often did not before.** A step touching an actor
@@ -567,6 +574,9 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   **For a web page, use the ROUTE line that mounts the page at its address** — the line that answers
   "where does this surface reach this component". Use it even when the component is a card drawn
   inside the page: the card is BEHIND the surface, and the route is where the surface reaches in.
+  **The page THIS STEP happens on, not the page the use case's entry point names.** A story that
+  arrives on the member's own page and later removes somebody from the team list is on two pages, and
+  each step takes its own. The entry point answers the arrival, the same as the `ways_in` lookup.
   **This BEATS "the step keeps the anchor it had" when the two disagree**, and they disagree often:
   the old step's anchor is usually the CLICKED WIDGET, because the old step was the person clicking.
   That line now describes the ACTOR step, which takes no anchor at all, so keeping it on the surface
@@ -581,10 +591,20 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   at, and keep the actor. A person never touches a dependency or a record with nothing in between;
   if no surface fits, the map is missing one, so say so and add no door.
   **A MID-STORY crossing takes its door like any other**, and it takes the surface the actor is
-  standing at right then. Usually that is the one the story opened at, and the door box is already
-  on the picture. When the exchange plainly happens somewhere else, name that surface instead: a
-  question asked on the dashboard and answered by mail crosses two surfaces, and the story should
-  say both.
+  standing at RIGHT THEN. That is not a judgement call — TRACK IT. Read down the steps and keep one
+  fact in your head: where is the person standing now? They start where the story opened. They stay
+  there until a step MOVES them (a redirect out to a sign-in provider, a link handed over, a mail
+  sent). Then they are at that new surface until something moves them back. Every crossing uses
+  wherever they are at that step.
+  **The `ways_in` lookup answers the story's ARRIVAL and nothing else.** Do NOT reach for it in the
+  middle of a story: the map may well author the RETURN address of a sign-in round trip as a way in
+  of your own dashboard, and following that link would say the person picked their account on your
+  screen. They did not.
+  **A trip out and back is ONE two-way door, at the surface they went to.** They leave through it,
+  and they come back through it: `C50 → I8` then `I8 → R3` going out, `R3 → I8` then `I8 → C84`
+  coming back. Our own callback address is the PIPE on that return leg, and naming a pipe is what
+  this whole rule exists to stop. Two workers split on exactly this and each could defend it from the
+  page, which is why it is now written down.
   **Name the surface the actor is really at, even when it puts a NEW box on the picture.** A
   redirect out to a sign-in provider is that provider's screen, not the address that issued the
   redirect. Measured on the doored map, the strict rule adds no new box in almost every case — but
@@ -619,7 +639,11 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   crossing, but it now has a surface at one end, so a story that migrates two pipes loses two more
   from its counted length on top of its crossings.
   An existing `Cn → Dn` step on a dep that stands on ANY surface MIGRATES to that surface, `ours` as
-  much as `theirs`; the dep is then derived. (This once read "a `theirs` surface", which the checker
+  much as `theirs`; the dep is then derived. **RE-VOICE that step's phrase when it names the vendor.**
+  It almost always does — it was written about the dep — and leaving it makes the map name the pipe
+  in words while the step names the surface in ids, which is the same defect one sentence apart.
+  "hands the message to the Workspace mail service" becomes "hands the message to the mail that goes
+  out to members". (This once read "a `theirs` surface", which the checker
   never agreed with and which is wrong on its face: the mail service standing on our own
   outgoing-email surface is exactly the step that gives that surface its story.) The BACKBONE EDGE
   LIST does not migrate with the step: an edge runs between code and a dependency, a surface is never
