@@ -520,8 +520,18 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   **At the HAND-OFF the old phrase is already the product's action, so it STAYS.** The old
   `C121 → R2` "puts the join address on the clipboard" becomes `C121 → I2` with its phrase intact,
   and the NEW `I2 → R2` is written fresh, saying what the surface puts in front of them.
-  A note and an anchor always travel with the step that KEEPS the machine action, never with the
-  actor step. An anchor already sitting on an actor step is harmless; leave it.
+  An ANCHOR always travels with the step that KEEPS the machine action, never with the actor step;
+  one already sitting on an actor step is harmless, so leave it. A NOTE travels with the PHRASE IT
+  ANNOTATES, which at an arrival means it moves out to the actor step with that phrase: a note saying
+  "the bin only appears for an admin" explains a gesture, and on the surface step it annotates a
+  sentence that no longer mentions the bin.
+  **When the human phrase already names what is handed over, the surface phrase must add something
+  or it is the same fact twice.** Re-voicing "drops the settings file in" as "carries the settings
+  file inward" is a weaker copy. Say what the surface GUARANTEES or CHECKS about what it carries —
+  that the file is read as text, that the token is presented as a bearer, that the request is stamped
+  with the team. Measured on the retrofit: an arrival whose human phrase is an act of ATTENTION
+  ("opens", "picks", "confirms") separates cleanly on its own; one whose human phrase is a HANDOVER
+  needs this clause, and that was 4 of 7 in one batch.
   **The rewritten step now needs a CODE ANCHOR, and often did not before.** A step touching an actor
   is a human action and needs none; `In → Cn` and `Cn → In` are element-to-element and `validate`
   BLOCKS without a `where` or a `no_call_site`. So the rewritten step keeps the anchor it had, and

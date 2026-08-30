@@ -154,6 +154,16 @@ found the FIRST one independently, which is what makes it the one to remember.
    any dep standing on any surface, and it was right: the mail service standing on our own outgoing
    email surface is exactly the step that gives that surface its story. The text now says ANY.
 
+Two more came out of the correction round itself, once the phrase rule was fixed and re-applied.
+**A note follows the phrase it annotates**, so at an arrival it moves out to the actor step: a note
+reading "the bin only appears for an admin" explains a gesture, and pinning it to the machine step
+left it annotating a sentence that no longer mentions the bin. And **re-voicing alone is not enough
+when the human phrase already names the payload** — "drops the settings file in" followed by "carries
+the settings file inward" is one fact said twice, the second time more weakly. An arrival whose human
+phrase is an act of ATTENTION ("opens", "picks", "confirms") separates on its own; one whose phrase is
+a HANDOVER needs the surface step to say what it GUARANTEES or CHECKS about what it carries. 4 of 7
+in one batch, and 2 of 11 in another.
+
 Two smaller ones, recorded without a rule change: a flow whose LAST step is the actor acting again
 (`Rn → Cn`) has no hand-off and takes no out-door, which the rule now states and marks as a smell
 worth reading twice; and a flow whose first step is a role who was ALREADY there ("leaves the audit
