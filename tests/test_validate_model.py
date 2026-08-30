@@ -4434,14 +4434,14 @@ def test_a_step_still_pointing_at_a_dependency_that_stands_on_a_surface_is_flagg
 
 
 def test_a_flow_that_hands_its_result_to_an_actor_without_a_door_is_flagged():
-    """The OUT half of the doors rule. The arrival was already gated; the final hand-off was not, so
-    a map could open every story at a door and still show 57 stories walking out past it (measured:
-    coyodex 30, mcpolis 27, on the two live maps the day this shipped)."""
+    """The OUT half. The arrival was already gated; the hand-off was not, so a map could open every
+    story at a door and still show 57 stories walking out past it (coyodex 30, mcpolis 27, measured
+    the day this shipped)."""
     m = make_interface_model()
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
                         FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
                         FlowStep(n=3, src="C1", dst="R1", phrase="shows the order")]
-    assert any("hand their result to an actor without going through a door" in w
+    assert any("cross between an actor and the product without going through a door" in w
                for w in warnings_of(m))
 
 
@@ -4463,23 +4463,32 @@ def test_the_out_door_is_drawn_even_when_it_is_the_surface_the_story_arrived_by(
     assert any("without going through a door" in w for w in warnings_of(m))
 
 
-def test_a_MID_flow_crossing_to_an_actor_takes_no_door_and_the_message_says_so():
-    """ENDPOINTS ONLY, measured: the strict rule costs 126 steps across the two live maps and
-    endpoints costs 57. The residual blind spot is real, so the advisory must NAME it rather than
-    let a reader believe every crossing is covered."""
+def test_a_MID_STORY_crossing_needs_its_door_like_any_other():
+    """EVERY crossing, not only the two ends. An "endpoints only" rule shipped first and was withdrawn
+    once it could be measured on a map that HAD doors: it drew one person on both sides of one wall,
+    routing the same actor through the same surface at the ends and past it in the middle. On mcpolis
+    the strict rule costs 36 steps (~6%), adds NO new box, and draws FEWER arrows (525 → 522)."""
     m = make_interface_model()
-    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
-                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+    doored = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+              FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+              FlowStep(n=3, src="C1", dst="I1", phrase="previews it", where="src/v.py:5"),
+              FlowStep(n=4, src="I1", dst="R1", phrase="shows the preview"),
+              FlowStep(n=5, src="R1", dst="I1", phrase="confirms"),
+              FlowStep(n=6, src="I1", dst="C1", phrase="passes the confirmation", where="src/v.py:6"),
+              FlowStep(n=7, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+              FlowStep(n=8, src="I1", dst="R1", phrase="shows the order")]
+    m.flows[0].steps = doored
+    assert not [w for w in warnings_of(m) if "without going through a door" in w]
+    # Both ends doored and the MIDDLE left direct: this is the shape the withdrawn rule allowed, and
+    # it must now fire. One person, one component, two contradictory routes on one picture.
+    m.flows[0].steps = [doored[0], doored[1],
                         FlowStep(n=3, src="C1", dst="R1", phrase="previews it"),
                         FlowStep(n=4, src="R1", dst="C1", phrase="confirms"),
-                        FlowStep(n=5, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
-                        FlowStep(n=6, src="I1", dst="R1", phrase="shows the order")]
-    assert not [w for w in warnings_of(m) if "without going through a door" in w]
-    # …and the blind spot is stated where a reader of a firing run will see it.
-    m.flows[0].steps[-1] = FlowStep(n=6, src="C1", dst="R1", phrase="shows the order")
+                        doored[6], FlowStep(n=5, src="I1", dst="R1", phrase="shows the order")]
     fired = [w for w in warnings_of(m) if "without going through a door" in w]
-    assert fired, "the closing gate must fire once the out-door is removed"
-    assert "MID-FLOW crossing to a different surface is never reported" in fired[0], fired[0]
+    assert fired, warnings_of(m)
+    assert "step 3" in fired[0] and "step 4" in fired[0], fired[0]
+    assert "EVERY crossing takes a door, not only the story's two ends" in fired[0], fired[0]
 
 
 def test_the_closing_gate_is_advisory_and_is_honoured_by_a_recorded_use_case():

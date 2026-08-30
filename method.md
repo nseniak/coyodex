@@ -481,14 +481,25 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   because a role called "Upkeep job" is named in one breath as an actor and in the next as a timer.
   Measured on mcpolis: 7 of its 42 flows are started by that one role, which is the whole difference
   between the 42 flows that mechanically open at a role and the 35 that owe a door.
-  **(1) The ARRIVAL.** A use-case flow's FIRST step — that step and no later one — names the surface
-  the actor comes in by: `R1 → I3`, then `I3 → C12`. An OPENING `R1 → C12` is the defect; the same
-  shape in the middle of the story is not (see ENDPOINTS ONLY below).
-  **(2) The FINAL HAND-OFF.** When the flow's LAST step delivers to an actor, it goes out through a
-  surface the same way: `C43 → I3`, then `I3 → R1` — never `C43 → R1`. **Draw the out-door even when
-  it is the SAME surface the story arrived by.** The two ENDS are what a reader reads, and a story
-  that arrives through a door and then leaves past it draws an outside edge with one side missing,
-  while that same surface's own `carries` rows record both directions.
+  **EVERY crossing, not only the two ends.** A step with an actor at one end and the product at the
+  other is a crossing, wherever it sits in the story, and `Rn → Cn` / `Cn → Rn` is never the finished
+  shape. The three places it happens:
+  **(1) The ARRIVAL.** The flow's FIRST step names the surface the actor comes in by: `R1 → I3`, then
+  `I3 → C12`.
+  **(2) The FINAL HAND-OFF.** When the flow's LAST step delivers to an actor, it goes out the same
+  way: `C43 → I3`, then `I3 → R1`. **Draw the out-door even when it is the SAME surface the story
+  arrived by**, or the picture shows an outside edge with one side missing while that surface's own
+  `carries` rows record both directions.
+  **(3) EVERY EXCHANGE IN BETWEEN.** A preview at step 4, a question answered at step 6: each one
+  goes through its door too, exactly like the two ends.
+  An "endpoints only" rule was tried first and REJECTED once it could be measured on a doored map.
+  It drew one person on both sides of one wall: mcpolis's invite story routed the admin through the
+  dashboard at its two ends and straight past the dashboard in the middle, for the SAME person and
+  the SAME component. Measured on that map, the strict rule costs 36 more steps, about 6%, and it
+  adds NO new box to any picture, because all 36 crossings sit in a story that already draws the
+  door they route through. It also draws FEWER arrows: 525 across the 42 stories become 522, since
+  the direct person-to-component lines fold into door arrows that were on the page already. **Do not
+  reintroduce an endpoints-only rule.** The readability argument for it runs backwards.
   **WHICH surface — look it up, do not guess.** The arrival surface is the one whose `ways_in` hold
   the use case's `entry_points`; that link is already authored. If those entry points sit on MORE
   than one surface, stop: two doors onto one goal is the split this method already asks for under
@@ -508,28 +519,29 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   changes: a door is a step, and the surface's own `carries` rows are authored separately.
   **WHAT the two new steps say, and which phrase goes where.** Every step carries a phrase and the
   doors are no exception, so renumber the whole list and write both — in the STORY'S own words, never
-  by copying an example off this page. **A phrase belongs to whoever ACTS in it, and the two ends are
-  not symmetric**, because the old step's voice differs at each end.
-  **At the ARRIVAL the old phrase is a HUMAN action, so it MOVES to the new actor step.** The old
+  by copying an example off this page. **A phrase belongs to whoever ACTS in it**, so which of the
+  two steps keeps the old phrase is decided by the old step's DIRECTION, never by where it sits in
+  the story. Both rules below apply to a MID-STORY crossing exactly as they do to the two ends.
+  **INBOUND (`Rn → Cn`) — the old phrase is a HUMAN action, so it MOVES to the new actor step.** The old
   `R2 → C121` "types the colleague's email and clicks Add" becomes `R2 → I2` carrying that same
   phrase, and the rewritten `I2 → C121` is given a FRESH phrase in the surface's own voice ("sends
   the new member and the role they were given"). Leaving the human phrase on the surface step is the
   mistake this paragraph exists to stop: it makes the map say *the dashboard clicks Add*, and it
   makes the two steps say one thing twice. Measured on the first real trial: 11 of 11 arrivals came
   back with a screen doing a person's action.
-  **At the HAND-OFF the old phrase is already the product's action, so it STAYS.** The old
+  **OUTBOUND (`Cn → Rn`) — the old phrase is already the product's action, so it STAYS.** The old
   `C121 → R2` "puts the join address on the clipboard" becomes `C121 → I2` with its phrase intact,
   and the NEW `I2 → R2` is written fresh, saying what the surface puts in front of them.
   An ANCHOR always travels with the step that KEEPS the machine action, never with the actor step;
   one already sitting on an actor step is harmless, so leave it. A NOTE travels with the PHRASE IT
-  ANNOTATES, which at an arrival means it moves out to the actor step with that phrase: a note saying
+  ANNOTATES, which on an inbound crossing means it moves out to the actor step with that phrase: a note saying
   "the bin only appears for an admin" explains a gesture, and on the surface step it annotates a
   sentence that no longer mentions the bin.
   **When the human phrase already names what is handed over, the surface phrase must add something
   or it is the same fact twice.** Re-voicing "drops the settings file in" as "carries the settings
   file inward" is a weaker copy. Say what the surface GUARANTEES or CHECKS about what it carries —
   that the file is read as text, that the token is presented as a bearer, that the request is stamped
-  with the team. Measured on the retrofit: an arrival whose human phrase is an act of ATTENTION
+  with the team. Measured on the retrofit: an inbound crossing whose human phrase is an act of ATTENTION
   ("opens", "picks", "confirms") separates cleanly on its own; one whose human phrase is a HANDOVER
   needs this clause, and that was 4 of 7 in one batch.
   **The rewritten step now needs a CODE ANCHOR, and often did not before.** A step touching an actor
@@ -547,17 +559,19 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   the return, the render, the write — not the route. The NEW step against the actor needs neither.
   Measured before this clause existed: of the steps this rule rewrites, 41 across the two live maps
   carried no anchor, and every one of them would have become a blocking problem.
-  **ENDPOINTS ONLY — the arrival and the final hand-off, nothing between them.** A mid-flow exchange
-  with an actor (a preview at step 4, a question answered at step 6) keeps its `Cn → Rn` / `Rn → Cn`
-  shape and takes NO door. Doubling those steps buys a complete check and costs the readable picture
-  that is the point of a flow.
-  **A flow whose LAST step is the actor acting AGAIN (`Rn → Cn`) has no hand-off and takes no
-  out-door.** That shape is allowed, and it is also a smell worth reading twice: the story stops
-  mid-conversation, so ask whether it is traced to its outcome or hands over to another use case.
+  **A MID-STORY crossing takes its door like any other**, and it takes the surface the actor is
+  standing at right then. Usually that is the one the story opened at, and the door box is already
+  on the picture. When the exchange plainly happens somewhere else, name that surface instead: a
+  question asked on the dashboard and answered by mail crosses two surfaces, and the story should
+  say both.
+  **A flow whose LAST step is the actor acting AGAIN (`Rn → Cn`) still takes a door** — an inbound
+  one, `Rn → In` then `In → Cn` — because it is a crossing like any other. It has no hand-off, and
+  that is a smell worth reading twice: the story stops mid-conversation, so ask whether it is traced
+  to its outcome or hands over to another use case.
   **Name the surface, never the thing standing on it — and a dep and an actor differ here.** A step
   reaching an outside SERVICE names the surface ANYWHERE in the flow, and the dep is then derived
-  rather than drawn: `C12 → D7` becomes `C12 → I7`. A step reaching an ACTOR names the surface at the
-  TWO ENDPOINTS only, and there the actor is KEPT: `C43 → R1` becomes `C43 → I3 → R1`. The asymmetry
+  rather than drawn: `C12 → D7` becomes `C12 → I7`. A step reaching an ACTOR names the surface
+  anywhere too, and there the actor is KEPT: `C43 → R1` becomes `C43 → I3 → R1`. The asymmetry
   is deliberate — a dep is a pipe the surface replaces, an actor is somebody the surface stands in
   front of. Without either, a reader sees the PIPE and not the door: a flow that draws `web browser`
   as its only outside box is naming the thing this method tells you never to name.
@@ -1134,8 +1148,10 @@ DERIVED from the walks and must never be written by hand.
 skipping it is the failure the gates below now catch: (1) OPEN each flow at its door, `Rn → In` then
 `In → Cn`, for every use case whose ways in belong to a surface; (2) CLOSE each flow whose last step
 delivers to an actor, `Cn → In` then `In → Rn`, and draw that out-door even when it is the same
-surface the flow opened at; (3) MIGRATE each `Cn → Dn` step whose dep stands on a surface to
-`Cn → In`. Only the two ENDPOINTS take a door; a mid-flow exchange with an actor takes none. A build
+surface the flow opened at; (3) DOOR EVERY OTHER CROSSING TOO — a preview, a question, an answer in
+the middle of the story crosses exactly like the two ends, and `Rn → Cn` / `Cn → Rn` is never the
+finished shape anywhere in a flow; (4) MIGRATE each `Cn → Dn` step whose dep stands on a surface to
+`Cn → In`. A build
 that authors the surfaces and stops leaves a map that can SAY what its outside edge is while no story
 ever goes through a door — measured on the first real build to author the section: 12 surfaces, 517
 steps, zero doors, 5 migrations owed, and every one of its 42 flows owing both an opening and, for 27

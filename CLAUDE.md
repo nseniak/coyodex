@@ -66,8 +66,8 @@ the code's names.
   story. Narrower than a surface: a surface is a place, a door is one crossing.
   A door works BOTH ways. A story arrives through one, and hands its result back
   through one, and the way out is drawn even when it is the same surface the
-  story came in by. Only the two ENDS of a story take a door: an exchange in the
-  middle does not, and nothing checks one. Two actors reaching the same goal
+  story came in by. EVERY crossing takes a door, not only the two ends: an
+  exchange in the middle of a story goes through one too. Two actors reaching the same goal
   through different doors are two use cases, and a gate blocks the map otherwise.
 - **change impact** — the report saying what a code change does to the map.
 - **accept** — folding a change-impact report into the baseline.

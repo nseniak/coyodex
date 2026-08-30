@@ -2208,15 +2208,14 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     dep_on_surface = {d.id: d.interfaces[0] for d in m.deps if d.interfaces}
     owed_openings: list[str] = []
     owed_migrations: list[str] = []
-    owed_closings: list[str] = []
+    owed_crossings: list[str] = []
     #: An actor for the doors rule is one OUTSIDE the product. A role that is a service AND internal
     #: is the product's own scheduled work — a timer, a boot hook, a signal handler in the process —
     #: and handing back to it crosses nothing. Read the two FIELDS, never the role's name: the first
     #: real trial of this rule stalled on a role called "Upkeep job", which the method text names in
     #: one breath as an actor and in the next as a timer. Measured: this exempts 7 of mcpolis's 42
-    #: flows on the ARRIVAL side (which the `want` gate already excluded by another road) and 0 of
-    #: the 57 closings across the two live maps, so it changes no count today and is here so the
-    #: check and the method text cannot drift apart.
+    #: flows on the ARRIVAL side (which the `want` gate already excluded by another road) and 1 of
+    #: its mid-story crossings, so it is here so the check and the method text cannot drift apart.
     inside_roles = {r.id for r in m.roles if r.kind == "service" and r.audience == "internal"}
     role_ids = {r.id for r in m.roles} - inside_roles
     uc_by_id = {u.id: u for u in m.use_cases}
@@ -2226,15 +2225,25 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         want = {iface_by_ep[e] for e in (uc.entry_points if uc else []) if e in iface_by_ep}
         if want and not (want & touched) and f.uc not in recorded_ucs:
             owed_openings.append(f.uc)
-        # (b) The FINAL HAND-OFF. Read off `expanded_flow_steps`, not `f.steps`: when the last step
-        # is a sub-flow reference the real hand-off is inside the sub-flow, and the reference step's
-        # own authored `dst` would answer for it. ENDPOINTS ONLY, by design — the two ends of a story
-        # are what a reader reads, and doubling every mid-flow exchange with an actor costs the
-        # readable picture. The blind spot that leaves is stated in the message, not only here.
-        steps = expanded_flow_steps(m, f)
-        if (steps and steps[-1].dst in role_ids and steps[-1].src not in iface_ids
-                and f.uc not in recorded_ucs):
-            owed_closings.append(f"{f.uc} → {steps[-1].dst}")
+        # (b) EVERY CROSSING between an actor and the product, wherever it sits in the story — not
+        # only the two ends. An "endpoints only" rule shipped first and was withdrawn once it could
+        # be measured on a map that HAD doors: it drew one person on both sides of one wall, routing
+        # the same actor through the same surface at the ends and straight past it in the middle. The
+        # readability argument that bought it runs backwards — on mcpolis the strict rule costs 36
+        # steps (about 6%), adds NO new box (all 36 sit in a story that already draws its door), and
+        # draws FEWER arrows (525 across 42 stories become 522), because the direct person-to-code
+        # lines fold into door arrows already on the page.
+        # Read off `expanded_flow_steps`, not `f.steps`: a crossing inside a sub-flow is a crossing,
+        # and the reference step's own authored endpoints would answer for it.
+        for st in expanded_flow_steps(m, f):
+            if f.uc in recorded_ucs:
+                break
+            ends = (st.src in role_ids, st.dst in role_ids)
+            if ends[0] == ends[1]:
+                continue                          # code-to-code, or actor-to-actor: not a crossing
+            if st.src in iface_ids or st.dst in iface_ids:
+                continue                          # already goes through its door
+            owed_crossings.append(f"{f.uc} step {st.n} ({st.src} → {st.dst})")
         for st in f.steps:
             for side in (st.src, st.dst):
                 if side in dep_on_surface and f.uc not in recorded_ucs:
@@ -2257,17 +2266,18 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             f"({', '.join(owed_openings[:6])}{', …' if len(owed_openings) > 6 else ''}). Open each "
             f"flow at its door (`Rn → In`, then `In → Cn`), or record the use-case id under an "
             f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
-    if owed_closings:
+    if owed_crossings:
+        ucs = len({c.split(" ", 1)[0] for c in owed_crossings})
         warnings.append(
-            f"{len(owed_closings)} flow(s) hand their result to an actor without going through a "
-            f"door — the last step reaches a person and names no surface "
-            f"({', '.join(owed_closings[:6])}{', …' if len(owed_closings) > 6 else ''}). Close each "
-            f"flow at its door (`Cn → In`, then `In → Rn`), and draw that out-door even when it is "
-            f"the SAME surface the flow opened at. NOTE the scope this check does NOT cover: only "
-            f"the arrival and the final hand-off are checked, so a MID-FLOW crossing to a different "
-            f"surface is never reported by anything. Record the use-case id under an "
-            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if a flow deliberately ends without "
-            f"handing anything back")
+            f"{len(owed_crossings)} flow step(s) across {ucs} flow(s) cross between an actor and the "
+            f"product without going through a door — the step names a person at one end and code at "
+            f"the other, and no surface between them "
+            f"({', '.join(owed_crossings[:6])}{', …' if len(owed_crossings) > 6 else ''}). Put the "
+            f"surface in: `Rn → In` then `In → Cn` coming in, `Cn → In` then `In → Rn` going out. "
+            f"EVERY crossing takes a door, not only the story's two ends, and the door is drawn even "
+            f"when it is the same surface the story opened at. Record the use-case id (or the "
+            f"SUB-FLOW id) under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading if a step really "
+            f"means the actor touches the code with no surface between them")
     if owed_migrations:
         warnings.append(
             f"{len(owed_migrations)} flow step(s) point at a dependency that stands on a surface — "
