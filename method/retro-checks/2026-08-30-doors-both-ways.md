@@ -114,3 +114,51 @@ with no thought needed.
 
 The instruction's own numbers held: 6 of the 11 seeds were used and exactly one kind was minted,
 which is check 4's "at most one mint" in `2026-08-29-interfaces.md` passing on its first real trial.
+
+## The retrofit itself, and the six things the rule never said
+
+The 42 mcpolis flows were doored by five parallel workers on 2026-08-30, each reading only the new
+rule and its own batch. It worked — `interface_doors` went from 0 to 129 and the closing gate from 27
+to 0 — and every one of the six gaps below was found by a worker, not by a check. Four of the five
+found the FIRST one independently, which is what makes it the one to remember.
+
+1. **"The step keeps the phrase it already had" gave the surface a person's voice.** An arrival's old
+   phrase is a HUMAN action, so leaving it on the rewritten `In → Cn` step made the map say *the
+   dashboard clicks Add*, and made the new step and the kept step say one thing twice. 11 of 11 in
+   one batch. The rule is now asymmetric: at the ARRIVAL the old phrase MOVES to the actor step and
+   the surface step is written fresh; at the HAND-OFF the old phrase is already the product's action
+   and STAYS. If a future draft ever re-symmetrises those two ends, this is the paragraph it broke.
+2. **The hand-off is often NOT the arrival surface, and the rule named only one reason.** "Unless the
+   last step plainly delivers somewhere else (a mail, a written file)" reads as non-interactive
+   delivery only. Three workers hit two more shapes: the last step's component lives behind ANOTHER
+   surface (set up on the dashboard, answered at the gateway), and the last step reaches a DIFFERENT
+   ACTOR from the one who opened the story (an admin sets a rule, a member's assistant is refused).
+   All three chose correctly on their own judgment, and a literal reading would have drawn a gateway
+   refusal on a dashboard screen.
+3. **The anchor for a web page had two defensible answers, and one worker used both.** The route line
+   that mounts the page, or the clicked widget's own line. Four of eight flows in one batch needed a
+   supplied anchor, so it is not a corner case. The rule now names the ROUTE line, and separately
+   says a `Cn → In` step anchors where the component DELIVERS to the surface.
+4. **The rule named an upkeep job as an actor in one breath and as a timer in the next.** mcpolis's
+   `R6 Upkeep job` starts 7 of its 42 flows from inside the process. Both readings of the text
+   applied and they disagreed. The test is now the two FIELDS, never the name: `kind: service` AND
+   `audience: internal` is the product's own work and takes no arrival door. Those 7 flows are the
+   whole difference between the 42 that mechanically open at a role and the 35 that owe a door.
+5. **A pipe was hiding in shared machinery, and no check could see it.** `owed_migrations` read
+   `m.flows` and never `m.subflows`, so mcpolis's "open a session to a mounted server" carried 3
+   steps naming a dep that stands on a surface while `validate` reported zero owed. A sub-flow is
+   ridden by several stories, so one unmigrated step there draws the pipe in every one of them. Fixed
+   in the same change, reported under the sub-flow's OWN id, and the `Interface exceptions` heading
+   gained its own key so it can adjudicate an `SFn`.
+6. **The migration rule said `theirs` and the checker never agreed.** The checker migrated a step at
+   any dep standing on any surface, and it was right: the mail service standing on our own outgoing
+   email surface is exactly the step that gives that surface its story. The text now says ANY.
+
+Two smaller ones, recorded without a rule change: a flow whose LAST step is the actor acting again
+(`Rn → Cn`) has no hand-off and takes no out-door, which the rule now states and marks as a smell
+worth reading twice; and a flow whose first step is a role who was ALREADY there ("leaves the audit
+page in live mode") gets an arrival door that is close to fiction, which a test on "does the actor
+actually cross here" would catch and a test on the shape of step 1 cannot.
+
+**What the retrofit did NOT prove**, and this must not be reported as a rebuild: that the doors step
+gets SCHEDULED at all in a real build. That failure has shipped twice, and only a full run catches it.
