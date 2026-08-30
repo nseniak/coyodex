@@ -75,7 +75,10 @@ OWNER_KEY = r"(?:SD|E)\d+"
 #: the edit goes on the sub-flow, under its own id. Its own key rather than widening `ID_KEY`, for
 #: the reason stated one comment up: a shared key lets every other family adjudicate a sub-flow it
 #: has no check for.
-IFACE_KEY = r"(?:CAP|EP|UC|HP|SF|R|C|E|I)\d+(?:/[a-z-]+)?"
+#: …plus the bare word `interfaces`, which is not an id at all. The "no interfaces authored" line
+#: names it as its escape, and with an id-shaped key alone that escape was UNREACHABLE: the author
+#: wrote the record, was told nothing, and the advisory fired forever.
+IFACE_KEY = r"(?:CAP|EP|UC|HP|SF|R|C|E|I)\d+(?:/[a-z-]+)?|interfaces"
 
 #: The lead-in of an Audit-exceptions record: the CHECK NAME, which scopes every id on the line.
 AUDIT_LEAD = r"(?:[a-z][a-z-]+)\s+"

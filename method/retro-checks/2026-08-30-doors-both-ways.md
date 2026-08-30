@@ -256,3 +256,35 @@ the same component, three steps in a row; and a sign-in detour that under the ol
 wired straight into backend code while the surface box sat unused on the same picture. The cost they
 named is real and small: one story went from 16 steps to 22, and a person who enters a screen, leaves
 and re-enters now says that screen three times.
+
+## The adversarial review, and what it broke
+
+A fresh-context reviewer was pointed at the finished change and told that "this looks good" is a
+failed review. It found **two blocking defects, eight serious ones, and three mutations that survived
+the whole 2911-test suite**. All are fixed. The three worth carrying forward:
+
+1. **TWO COPIES OF ONE IDEA, AND THEY DISAGREED.** "Who is an actor" was written out three times —
+   in `interface_actors`, in the door checks, and in the eval profile — and two of them differed. The
+   door checks exempted the product's own timer; the derivation did not. So a door closing onto that
+   timer registered as a far side and SILENCED the advisory that exists to say a surface hands
+   something over to nobody. Every gate stayed green, and the viewer published the product as
+   standing outside itself. There is now ONE `outside_actor_ids`, read by all three.
+   **The general rule: a definition written twice is a definition that will disagree with itself, and
+   the disagreement shows up as SILENCE.**
+2. **A MUTATION NOBODY THOUGHT OF.** Dropping half the timer exemption — exempting every INTERNAL
+   role rather than every internal SERVICE role — passed all 2911 tests while hiding **46 of the 140
+   findings on this repo's own map**, because internal HUMAN roles stopped owing doors. "17 of 17
+   mutations caught" only ever means "the 17 the author imagined".
+3. **A TEST THAT LOOPED OVER THE CONSTANT IT WAS TESTING.** Shrinking the machine-shaped kind
+   vocabulary shrank the test with it, so the mutation stayed green. The vocabulary is now pinned
+   literally. This is the third vacuous assertion this element has produced; the shape to look for is
+   a test whose expectations are computed from the thing under test.
+
+Three more worth naming, all now fixed: a scoped record (`UCn/doors`) silenced NOTHING while a bare
+`UCn` silenced all three retrofit gates, which is exactly the shape `_recorded_ids`' own docstring
+forbids; the "no interfaces authored" advisory named an escape the line reader could never parse, so
+an author who followed the instruction was told nothing and the line fired forever; and a sub-flow
+REFERENCE step was reported as an undoored crossing, demanding an edit its author cannot make.
+
+**What the review CLEARED**, so nobody re-audits it: the `party` deletion is complete in both repos,
+the `IFACE_KEY` widening does not over-match, and the door arm's missing kind gate is sound.

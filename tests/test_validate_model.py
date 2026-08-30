@@ -4634,15 +4634,28 @@ def test_a_SUB_FLOW_crossing_is_reported_under_its_OWN_step_number():
     m.subflows = [SubFlow(id="SF1", name="Ask the person", steps=[
         FlowStep(n=1, src="C1", dst="R1", phrase="asks them"),
         FlowStep(n=2, src="C1", dst="E1", phrase="stores it", where="src/v.py:5")])]
-    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
-                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
-                        FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
-                        FlowStep(n=4, src="I1", dst="R1", phrase="shows it")]
+    # TWO flows RIDE the sub-flow. Without riders both assertions below pass for the wrong reason —
+    # nothing to double-count and nothing to misattribute — which is how an adversarial review landed
+    # a mutation reading `expanded_flow_steps` straight through this test.
+    m.use_cases.append(UseCase(id="UC2", name="Ask again", actors=["R1"]))
+    m.happy_path.append(HappyStep(id="HP2", title="Again", uc="UC2"))
+    riders = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+              FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+              FlowStep(n=3, src="C1", dst="C1", phrase="runs the shared ask", subflow="SF1"),
+              FlowStep(n=4, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+              FlowStep(n=5, src="I1", dst="R1", phrase="shows it")]
+    m.flows[0].steps = list(riders)
+    m.flows.append(Flow(uc="UC2", title="Ask again", steps=list(riders)))
+    assert sum(1 for f in m.flows for st in f.steps if st.subflow == "SF1") == 2, "two real riders"
     fired = [w for w in warnings_of(m) if "without going through a door" in w]
     assert fired, warnings_of(m)
     assert "SF1 step 1" in fired[0], fired[0]
     assert "UC1 step 1" not in fired[0], "reported against a step number UC1 does not have"
-    assert fired[0].startswith("1 step(s)"), fired[0]   # once, not once per riding flow
+    assert "UC2 step 1" not in fired[0], "reported against a step number UC2 does not have"
+    assert fired[0].startswith("1 step(s)"), fired[0]   # ONCE, not once per riding flow
+    # …and the reference step itself is not a crossing: its `src`/`dst` are the run's entry and exit
+    # endpoints, so the door can live inside the sub-flow while the reference reads `Cn → Cn`.
+    assert "step 3" not in fired[0], fired[0]
     m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING, body="SF1: deliberate"))
     assert not [w for w in warnings_of(m) if "without going through a door" in w]
 
@@ -4668,6 +4681,15 @@ def test_a_person_at_a_machine_shaped_surface_is_nudged():
     # It must name BOTH causes: either the door is wrong, or the shape is.
     assert "WRONG DOOR" in fired[0] and "SHAPE is" in fired[0], fired[0]
     assert not [p for p in problems_of(m) if "nobody stands there" in p], "a nudge, never a gate"
+    # EVERY machine-shaped kind, named LITERALLY. A first attempt looped over the grammar constant
+    # itself, so shrinking that constant shrank the test with it and the mutation stayed green — the
+    # same vacuous shape this suite has now been bitten by twice.
+    assert set(grammar.INTERFACE_KINDS_NOBODY_STANDS_AT) == {"api", "content"}, \
+        "both shapes mean one program calling another; changing this set needs a case below"
+    for kind in ("api", "content"):
+        m.interfaces[1].kind = kind
+        hit = [w for w in warnings_of(m) if "nobody stands there" in w]
+        assert hit and f"'{kind}'" in hit[0], (kind, warnings_of(m))
 
 
 def test_the_nudge_is_silent_when_the_shape_says_a_person_belongs_there():
@@ -4706,3 +4728,115 @@ def test_the_nudge_is_honoured_by_a_recorded_interface_id():
     m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
                                  body="I1: the mail really does land in a person's inbox"))
     assert not [w for w in warnings_of(m) if "nobody stands there" in w]
+
+
+def test_ONE_definition_of_an_actor_is_shared_by_the_derivation_and_the_checks():
+    """The blocking finding of an adversarial review. Two copies of "who is an actor" existed and
+    DISAGREED: the door checks exempted the product's own timer, `interface_actors` did not. So a
+    door closing onto that timer registered as a far side and SILENCED the advisory that exists to
+    say a surface hands something over to nobody. Every gate stayed green."""
+    m = make_interface_model()
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the files it writes")]
+    fires = lambda: [w for w in warnings_of(m) if "derives nobody on the far side" in w]
+    assert fires(), "with no door at all it must fire"
+    m.roles.append(Role(id="R9", name="Upkeep job", kind="service", audience="internal",
+                        wants="the sweep to run", drives="UC1"))
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", phrase="writes", where="src/v.py:4"),
+                        FlowStep(n=2, src="I1", dst="R9", phrase="hands it to its own timer")]
+    assert not interface_actors(m)["I1"], "the product's own timer is not a far side"
+    assert fires(), "and the advisory must STILL fire — a timer is not somebody"
+
+
+def test_an_INTERNAL_HUMAN_role_still_owes_its_doors():
+    """The mutation that survived the whole suite: dropping the `service` half of the exemption. An
+    internal HUMAN role is an operator or a staff admin, who very much comes in through a door.
+    Measured on this repo's own map when the review landed it: 46 of 140 findings vanished."""
+    m = make_interface_model()
+    m.roles.append(Role(id="R7", name="Service operator", kind="human", audience="internal",
+                        wants="to run it", drives="UC1"))
+    m.flows[0].steps = [FlowStep(n=1, src="R7", dst="C1", phrase="opens the console")]
+    fired = [w for w in warnings_of(m) if "without going through a door" in w]
+    assert fired, "an internal HUMAN still crosses"
+    assert "R7" in fired[0], fired[0]
+    # …while the product's own timer, on the same shape, does not.
+    m.roles[-1].kind = "service"
+    assert not [w for w in warnings_of(m) if "without going through a door" in w]
+
+
+def test_the_nudge_says_nothing_about_a_SERVICE_role_at_a_machine_shaped_surface():
+    """The second blocking finding. The message says "a PERSON", the condition read ANY role, so a
+    partner's bot calling our `api` — the single most normal thing an `api` is for — raised a false
+    defect. Its only escape is the shared `recorded` set, which silences six other checks on that row."""
+    m = make_interface_model()
+    m.interfaces[0].kind = "api"
+    m.roles.append(Role(id="R8", name="Partner bot", kind="service", audience="user",
+                        wants="the answer", drives="UC1"))
+    m.flows[0].steps = [FlowStep(n=1, src="R8", dst="I1", phrase="calls in"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=4, src="I1", dst="R8", phrase="answers the bot")]
+    assert interface_actors(m)["I1"] == ["R8"], "the bot IS on the far side"
+    assert not [w for w in warnings_of(m) if "nobody stands there" in w], warnings_of(m)
+    # …and a HUMAN in the same position is exactly what the nudge is for.
+    m.roles[-1].kind = "human"
+    assert any("nobody stands there" in w for w in warnings_of(m))
+
+
+def test_a_SCOPED_record_excuses_ONE_retrofit_gate_and_a_bare_one_excuses_all_three():
+    """`_recorded_ids` returns the bare and the scoped form so each caller asks for the token IT
+    honours. All three gates asked only for the bare one, so the precise record was INERT and the
+    blunt one was the only thing that worked — the exact shape that docstring says a record must
+    never have."""
+    def probe(record):
+        m = make_interface_model()
+        m.use_cases[0].entry_points = ["EP1"]
+        m.deps[0].not_an_interface = ""
+        m.deps[0].interfaces = ["I1"]
+        m.flows[0].steps = [FlowStep(n=1, src="R1", dst="C1", phrase="asks"),
+                            FlowStep(n=2, src="C1", dst="D1", phrase="calls", where="src/v.py:4")]
+        if record:
+            m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING, body=record))
+        w = warnings_of(m)
+        return (any("touches that surface" in x for x in w),
+                any("without going through a door" in x for x in w),
+                any("stands on a surface" in x for x in w))
+    assert probe(None) == (True, True, True)
+    assert probe("UC1/opening: why") == (False, True, True)
+    assert probe("UC1/doors: why") == (True, False, True)
+    assert probe("UC1/migration: why") == (True, True, False)
+    assert probe("UC1: why") == (False, False, False), "a bare token excuses the whole family"
+
+
+def test_the_no_interfaces_advisory_can_actually_be_recorded_away():
+    """Its escape named the bare word `interfaces`, which has no id prefix, so the line reader
+    dropped it and the escape was UNREACHABLE. The author wrote the record, was told nothing, and the
+    advisory fired forever. Found by an adversarial review, in the same function as the bug this
+    change had already celebrated fixing."""
+    m = make_valid_model()
+    m.deps = [Dep(id="D1", name="Their service", kind="service", type="api")]
+    fires = lambda: [w for w in warnings_of(m) if "outside edge (T2b) was" in w]
+    assert fires(), "a map with an external system and no surfaces must say so"
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
+                                 body="interfaces: this product genuinely has none"))
+    assert not fires(), "…and following the instruction must silence it"
+
+
+def test_a_SUB_FLOW_REFERENCE_step_is_never_itself_a_crossing():
+    """A reference step's `src`/`dst` are the RUN'S ENTRY AND EXIT endpoints, so a shared sign-in
+    sub-flow that opens `R1 → I1` is referenced by a step authored `R1 → C1`. The door exists one
+    level down. Reporting it demanded an edit the author cannot make: those endpoints are
+    load-bearing for every unexpanded consumer, so the only way out was a record that also silenced
+    two older gates. Found by an adversarial review; not live on either map."""
+    m = make_interface_model()
+    m.subflows = [SubFlow(id="SF1", name="Sign in", steps=[
+        FlowStep(n=1, src="R1", dst="I1", phrase="opens the sign-in"),
+        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:7")])]
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="C1", phrase="signs in", subflow="SF1"),
+                        FlowStep(n=2, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=3, src="I1", dst="R1", phrase="shows it")]
+    fired = [w for w in warnings_of(m) if "without going through a door" in w]
+    assert not fired, fired          # the reference step spans a role and is NOT a crossing
+    # …and an ordinary step of that same shape, with no `subflow`, still is.
+    m.flows[0].steps[0] = FlowStep(n=1, src="R1", dst="C1", phrase="signs in")
+    assert any("without going through a door" in w for w in warnings_of(m))

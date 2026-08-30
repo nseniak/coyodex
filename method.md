@@ -456,11 +456,18 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   platform the product lives in, a sign-in redirect and a hosted checkout are `hosted-screen`; a code
   link we hand over is `handoff`; a crash reporter an operator opens on their own is `api`.
   **`actors` is DERIVED and is NOT a field — never author it.** Who is on the far side falls out of
-  the walks, gated on the kind: an `ours` surface takes the roles driving the use cases behind its
-  ways in, a `theirs` surface takes the roles whose stories reach it ONLY when the kind is
-  `hosted-screen` or `handoff`, and every other surface derives NOBODY — which is the correct answer,
-  because the product itself is what reaches it. Writing it by hand was measured and is worse: one
-  build authored a single role on a dashboard whose walks show three. **`ways_in`** are `EPn` ids and travel through `reconcile` like a use
+  the walks, from THREE sources, and the first is the strongest. **(1) The DOORS**: any role standing
+  at a step next to the surface, `Rn → In` or `In → Rn`, either side, on ANY surface and with no kind
+  gate — a written step is the map's own statement, not an inference. **(2)** An `ours` surface also
+  takes the roles driving the use cases behind its ways in. **(3)** A `theirs` surface also takes the
+  roles whose stories reach it, but ONLY when the kind is `hosted-screen` or `handoff`. A surface
+  none of the three reaches derives NOBODY, and that is usually the correct answer, because the
+  product itself is what reaches most outside services — but do not read it as permission to skip a
+  door. If a surface hands something OUT and derives nobody, the missing thing is a story, and
+  `validate` says so. Writing it by hand was measured and is worse: one build authored a single role
+  on a dashboard whose walks show three.
+  An actor here means a role OUTSIDE the product. A role that is `kind: service` AND
+  `audience: internal` is the product's own scheduled work and never stands on a far side. **`ways_in`** are `EPn` ids and travel through `reconcile` like a use
   case's, never hand-written into a fragment. `source` is the ONE line declaring the whole surface
   (the router, the command table, the file writer) and is optional: a settings surface is declared in
   no single place. Every EXTERNALLY-activated entry point belongs to exactly one surface, except the
@@ -476,8 +483,10 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   product** — a person, or a program somebody else runs (a customer's headless agent, a partner's
   bot). **The product's OWN scheduled work is not an actor for this rule**, even though the map
   draws it as one: a role that is `kind: service` AND `audience: internal` is a timer, a boot hook or
-  a signal handler inside the process, and a flow it starts has no arrival and takes NO arrival door.
-  Read those two fields; do not read the role's name. This was got wrong on the first real trial,
+  a signal handler inside the process. It is not an actor ANYWHERE in the rule: a flow it starts
+  takes no arrival door, a step handing back to it is not a hand-off, and it never stands on the far
+  side of a surface. Read those two fields; do not read the role's name. BOTH are required — an
+  internal HUMAN role is an operator or a staff admin, who very much comes in through a door. This was got wrong on the first real trial,
   because a role called "Upkeep job" is named in one breath as an actor and in the next as a timer.
   Measured on mcpolis: 7 of its 42 flows are started by that one role, which is the whole difference
   between the 42 flows that mechanically open at a role and the 35 that owe a door.
@@ -562,6 +571,10 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   the return, the render, the write — not the route. The NEW step against the actor needs neither.
   Measured before this clause existed: of the steps this rule rewrites, 41 across the two live maps
   carried no anchor, and every one of them would have become a blocking problem.
+  **An actor reaching a DEPENDENCY or a stored RECORD is a crossing too** — `R1 → D7`, `R1 → E3` —
+  and it takes the same treatment: name the surface the dep stands on, or the surface the person is
+  at, and keep the actor. A person never touches a dependency or a record with nothing in between;
+  if no surface fits, the map is missing one, so say so and add no door.
   **A MID-STORY crossing takes its door like any other**, and it takes the surface the actor is
   standing at right then. Usually that is the one the story opened at, and the door box is already
   on the picture. When the exchange plainly happens somewhere else, name that surface instead: a
@@ -591,10 +604,13 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   chat platform is SOMEONE ELSE'S surface stories arrive IN from.
   A step with a surface at EITHER end does NOT count toward the 3-15 step band — it is structure, not
   detail. (A sub-flow reference is the model's other structural exemption; that one counts as 1, a
-  door counts as 0.) So doors LOWER a flow's counted length by up to 2, because the two rewritten
-  steps stop counting as well: a flow already near the ≥3 floor can drop under it purely by being
-  doored, and the answer is that the flow was too short, never that the doors were wrong. Measured
-  when this rule shipped: zero flows on either live map fall under.
+  door counts as 0.) So doors LOWER a flow's counted length by ONE PER CROSSING — every rewritten
+  step stops counting, and a story with four crossings loses four. (This once read "by up to 2",
+  which was the arithmetic of the withdrawn endpoints-only rule and would have sent an author to pad
+  a flow that was fine.) A flow near the ≥3 floor can therefore drop under it purely by being doored,
+  and the answer is that the flow was too short, never that the doors were wrong. Measured when the
+  strict rule landed: the shortest counted length on either live map is 5, against a floor of 3, so
+  nothing falls under today.
   An existing `Cn → Dn` step on a dep that stands on ANY surface MIGRATES to that surface, `ours` as
   much as `theirs`; the dep is then derived. (This once read "a `theirs` surface", which the checker
   never agreed with and which is wrong on its face: the mail service standing on our own
@@ -1153,7 +1169,9 @@ through `reconcile` (their `EPn`/`In` ids are minted at assembly, exactly like a
 **Author `kind` with the row**, in the same pass, from the eleven seeds — it is a fact about the
 surface you have just named, not a later tidy-up, and nothing derives it. Who is on the far side is
 DERIVED from the walks and must never be written by hand.
-**Then go back through every flow and do ALL THREE halves of the doors rule** — this is the step, and
+**Then go back through every flow AND every sub-flow and do ALL FOUR halves of the doors rule** —
+shared machinery is swept under its own id, and one undoored step there is drawn in every story that
+rides it. This is the step, and
 skipping it is the failure the gates below now catch: (1) OPEN each flow at its door, `Rn → In` then
 `In → Cn`, for every use case whose ways in belong to a surface; (2) CLOSE each flow whose last step
 delivers to an actor, `Cn → In` then `In → Rn`, and draw that out-door even when it is the same

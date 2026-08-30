@@ -781,6 +781,39 @@ def capability_audience(m: ProjectModel) -> dict[str, list[str]]:
     return out
 
 
+def outside_actor_ids(m: ProjectModel) -> set[str]:
+    """The roles that are OUTSIDE the product. THE one definition of "an actor" — every caller reads
+    this, and none may re-derive it.
+
+    A role that is a service AND internal is the product's OWN scheduled work: a timer, a boot hook,
+    a signal handler in the process. It crosses nothing, so it owes no door and it never stands on
+    the far side of a surface. BOTH fields are required: an internal HUMAN role is an operator or a
+    staff admin, who very much does come in through a door.
+
+    Written after an adversarial review broke the change that introduced the idea. Two copies of it
+    existed and DISAGREED: the door checks exempted the product's own timer and `interface_actors`
+    did not, so a door closing onto that timer registered as a far side and silenced the advisory
+    that exists to say a surface hands something over to nobody. The review also landed a mutation
+    that dropped the `service` half and survived the whole suite, hiding 46 of the 140 findings on
+    this repo's own map — internal HUMAN roles stopped owing doors. Hence one function, and hence the
+    normalisation: this was the only un-normalised role-kind read in the file."""
+    return {r.id for r in m.roles
+            if not ((r.kind or "").strip().lower() == "service"
+                    and (r.audience or "").strip().lower() == "internal")}
+
+
+def person_role_ids(m: ProjectModel) -> set[str]:
+    """The roles that are PEOPLE, for the one nudge whose message says "a PERSON".
+
+    `Role.kind` is a two-value field (`human` | `service`), so anything not spelled `service` counts.
+    That deliberately errs toward NUDGING on an unlabelled role: this check exists to raise a
+    question a person then answers, and a nudge too many is recoverable where a nudge too few is the
+    silence it was added to close. A SERVICE role at a machine-shaped surface is the normal case —
+    a partner's bot calling an `api` is what an `api` is for — and firing on one was a false defect
+    whose only escape silenced six unrelated checks on the same row."""
+    return {r.id for r in m.roles if (r.kind or "").strip().lower() != "service"}
+
+
 def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
     """Per interface, WHO is on the far side of it. DERIVED, never authored — so the two can never
     contradict, which is the same rule `capability_audience` one function up was built on.
@@ -820,7 +853,7 @@ def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
 
     Only roles that are DEFINED vote; a use case naming an undefined actor is a different defect,
     already reported by its own check."""
-    role_ids = {r.id for r in m.roles}
+    role_ids = outside_actor_ids(m)
     ways_by_iface = {i.id: set(i.ways_in) for i in m.interfaces}
     iface_ids = {i.id for i in m.interfaces}
     dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
@@ -2018,8 +2051,12 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         external = [d for d in m.deps
                     if grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM]
         ways = _external_ways_in(m)
-        if (external or ways) and "interfaces" not in _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING,
-                                                                    ("I", "EP")):
+        # `records.recorded_keys` directly, NOT `_recorded_ids`: this escape's token is the bare word
+        # `interfaces`, which has no id prefix, so the prefix filter dropped it and the advisory
+        # could never be recorded away. An author following the instruction was told nothing and the
+        # line kept firing. `records.IFACE_KEY` now parses the word; the filter would still eat it.
+        if (external or ways) and "interfaces" not in records.recorded_keys(
+                m, INTERFACE_EXCEPTIONS_HEADING):
             warnings.append(
                 f"No interfaces recorded, but this map has {len(external)} external-system "
                 f"dependenc(y/ies) and {len(ways)} way(s) in — the product's outside edge (T2b) was "
@@ -2031,6 +2068,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     #: (surface id, its kind, the roles the walks put at it) for the wrong-door nudge below.
     people_at_a_machine: list[tuple[str, str, str]] = []
     role_names = {r.id: r.name for r in m.roles}
+    #: Only a PERSON triggers the nudge below. A service role at a machine-shaped surface is the
+    #: normal case, and firing on one was a false defect whose only escape silenced six other checks.
+    people = person_role_ids(m)
     ent_ids = {e.id for e in m.entities}
     ep_by_id = {ep.id: ep for ep in m.entry_points if ep.id}
     iface_ids = {i.id for i in m.interfaces}
@@ -2135,11 +2175,11 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # put mail in front of a member, which is the same row a fresh re-author of that section
         # minted a new kind for. A NUDGE, never a gate, and silent on a MINTED kind, because an
         # unknown word cannot say whether anybody stands there.
-        if (canon in grammar.INTERFACE_KINDS_NOBODY_STANDS_AT and actors_by_iface.get(iface.id)
+        at_it = [r for r in actors_by_iface.get(iface.id, ()) if r in people]
+        if (canon in grammar.INTERFACE_KINDS_NOBODY_STANDS_AT and at_it
                 and iface.id not in recorded):
             people_at_a_machine.append(
-                (iface.id, canon, ", ".join(f"{r} {role_names.get(r, '')}".strip()
-                                            for r in actors_by_iface[iface.id])))
+                (iface.id, canon, ", ".join(f"{r} {role_names.get(r, '')}".strip() for r in at_it)))
         # (a) OUR surface, something goes OUT of it, and nobody is derived on the far side. An `ours`
         # surface that sends is the product handing something over, so SOMEBODY receives it — and
         # after the doors rule the map has two ways to say who (a closing door, or a way in the
@@ -2233,26 +2273,32 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     #: name, all three advisories still fired at full count, so the escape they offered did nothing.
     #: An advisory must not merely NAME its escape, it must HONOUR it.
     recorded_ucs = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("UC", "SF"))
+
+    def _excused(key: str, scope: str) -> bool:
+        """Is this story excused from ONE retrofit gate? A `UCn/<scope>` record silences exactly that
+        gate; a bare `UCn` silences all three, and each message says which it is asking for.
+
+        The scoped form did nothing at all until an adversarial review tried it: `_recorded_ids`
+        returns both forms verbatim so each caller can ask for the token IT honours, and all three
+        gates asked only for the bare one. So the precise record was inert and the blunt one was the
+        only thing that worked, which is the exact shape `_recorded_ids`' own docstring says a record
+        must never have."""
+        return key in recorded_ucs or f"{key}/{scope}" in recorded_ucs
+
     iface_by_ep = {ep: i.id for i in m.interfaces for ep in i.ways_in}
     dep_on_surface = {d.id: d.interfaces[0] for d in m.deps if d.interfaces}
     owed_openings: list[str] = []
     owed_migrations: list[str] = []
     owed_crossings: list[str] = []
-    #: An actor for the doors rule is one OUTSIDE the product. A role that is a service AND internal
-    #: is the product's own scheduled work — a timer, a boot hook, a signal handler in the process —
-    #: and handing back to it crosses nothing. Read the two FIELDS, never the role's name: the first
-    #: real trial of this rule stalled on a role called "Upkeep job", which the method text names in
-    #: one breath as an actor and in the next as a timer. Measured: this exempts 7 of mcpolis's 42
-    #: flows on the ARRIVAL side (which the `want` gate already excluded by another road) and 1 of
-    #: its mid-story crossings, so it is here so the check and the method text cannot drift apart.
-    inside_roles = {r.id for r in m.roles if r.kind == "service" and r.audience == "internal"}
-    role_ids = {r.id for r in m.roles} - inside_roles
+    #: ONE definition of an actor, shared with `interface_actors` — see `outside_actor_ids`. Two
+    #: copies of this idea existed and disagreed, which silenced a real finding.
+    role_ids = outside_actor_ids(m)
     uc_by_id = {u.id: u for u in m.use_cases}
     for f in m.flows:
         touched = {st.src for st in f.steps} | {st.dst for st in f.steps}
         uc = uc_by_id.get(f.uc)
         want = {iface_by_ep[e] for e in (uc.entry_points if uc else []) if e in iface_by_ep}
-        if want and not (want & touched) and f.uc not in recorded_ucs:
+        if want and not (want & touched) and not _excused(f.uc, "opening"):
             owed_openings.append(f.uc)
         # (b) EVERY CROSSING between an actor and the product, wherever it sits in the story — not
         # only the two ends. An "endpoints only" rule shipped first and was withdrawn once it could
@@ -2268,13 +2314,13 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # have, and reported once per flow that rides it. Sub-flows are swept separately, under their
         # own ids, in the loop after this one.
         for st in f.steps:
-            if f.uc in recorded_ucs:
+            if _excused(f.uc, "doors"):
                 break
             if _is_undoored_crossing(st, role_ids, iface_ids):
                 owed_crossings.append(f"{f.uc} step {st.n} ({st.src} → {st.dst})")
         for st in f.steps:
             for side in (st.src, st.dst):
-                if side in dep_on_surface and f.uc not in recorded_ucs:
+                if side in dep_on_surface and not _excused(f.uc, "migration"):
                     owed_migrations.append(f"{f.uc} step {st.n} → {side}")
     # SUB-FLOWS TOO. Shared machinery is where a pipe hides best: a sub-flow is written once and
     # ridden by several stories, so ONE unmigrated step there draws the dep in every flow that runs
@@ -2285,17 +2331,18 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     for sf in m.subflows:
         for st in sf.steps:
             for side in (st.src, st.dst):
-                if side in dep_on_surface and sf.id not in recorded_ucs:
+                if side in dep_on_surface and not _excused(sf.id, "migration"):
                     owed_migrations.append(f"{sf.id} step {st.n} → {side}")
-            if sf.id not in recorded_ucs and _is_undoored_crossing(st, role_ids, iface_ids):
+            if not _excused(sf.id, "doors") and _is_undoored_crossing(st, role_ids, iface_ids):
                 owed_crossings.append(f"{sf.id} step {st.n} ({st.src} → {st.dst})")
     if owed_openings:
         warnings.append(
             f"{len(owed_openings)} flow(s) name a way in that belongs to a surface, but no step of "
             f"theirs touches that surface — the story never goes through its door "
             f"({', '.join(owed_openings[:6])}{', …' if len(owed_openings) > 6 else ''}). Open each "
-            f"flow at its door (`Rn → In`, then `In → Cn`), or record the use-case id under an "
-            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
+            f"flow at its door (`Rn → In`, then `In → Cn`), or record 'UCn/opening: <why>' under an "
+            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading — a bare 'UCn' there excuses this "
+            f"gate AND the crossing and migration gates, so prefer the scoped form")
     if owed_crossings:
         ucs = len({c.split(" ", 1)[0] for c in owed_crossings})
         warnings.append(
@@ -2305,17 +2352,19 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             f"({', '.join(owed_crossings[:6])}{', …' if len(owed_crossings) > 6 else ''}). Put the "
             f"surface in: `Rn → In` then `In → Cn` coming in, `Cn → In` then `In → Rn` going out. "
             f"EVERY crossing takes a door, not only the story's two ends, and the door is drawn even "
-            f"when it is the same surface the story opened at. Record the use-case id (or the "
+            f"when it is the same surface the story opened at. Record 'UCn/doors: <why>' (or the "
             f"SUB-FLOW id) under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading if a step really "
-            f"means the actor touches the code with no surface between them")
+            f"means the actor touches the code with no surface between them — a bare 'UCn' there "
+            f"excuses this gate AND the opening and migration gates, so prefer the scoped form")
     if owed_migrations:
         warnings.append(
             f"{len(owed_migrations)} flow step(s) point at a dependency that stands on a surface — "
             f"name the SURFACE instead, and let the dependency be derived "
             f"({', '.join(owed_migrations[:6])}{', …' if len(owed_migrations) > 6 else ''}). A step "
             f"at the dep names the pipe; a step at the surface names the far side. Record the "
-            f"use-case id (or the SUB-FLOW id) under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
-            f"heading if a step really means the dependency itself")
+            f"'UCn/migration: <why>' (or the SUB-FLOW id) under an '{INTERFACE_EXCEPTIONS_HEADING}' "
+            f"extras heading if a step really means the dependency itself — a bare 'UCn' there "
+            f"excuses all three retrofit gates, so prefer the scoped form")
 
     if any(u.entry_points for u in m.use_cases):
         reached = {ep for u in m.use_cases for ep in u.entry_points}
@@ -2333,7 +2382,15 @@ def _is_undoored_crossing(st: FlowStep, role_ids: set[str], iface_ids: set[str])
 
     Shared by the flow sweep and the sub-flow sweep so the two can never drift: a crossing hidden in
     shared machinery is the same defect as one in a story, and it is drawn in every story that rides
-    it. Actor-to-actor and code-to-code are not crossings; a step already touching an `In` is done."""
+    it. Actor-to-actor and code-to-code are not crossings; a step already touching an `In` is done.
+
+    A sub-flow REFERENCE step is never a crossing. Its `src`/`dst` are the RUN'S ENTRY AND EXIT
+    endpoints (`model.py`), so a shared "sign in" sub-flow that opens `R1 → I1` is referenced by a
+    step authored `R1 → C1` — the door exists one level down. Reporting it demanded an edit the
+    author cannot make: those endpoints are load-bearing for every unexpanded consumer. The sub-flow
+    is swept under its own id instead."""
+    if st.subflow:
+        return False
     ends = (st.src in role_ids, st.dst in role_ids)
     if ends[0] == ends[1]:
         return False

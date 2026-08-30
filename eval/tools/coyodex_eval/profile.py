@@ -26,7 +26,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from coyodex import audit_model, balance_lib, grammar, validate_model
-from coyodex.model import ModelError, ProjectModel, load_model
+from coyodex.model import FlowStep, ModelError, ProjectModel, load_model
 
 from coyodex_eval.legacy_map import load_model_tolerating_legacy
 from coyodex.preindex_lib import expected_components  # the granularity expectation E, RE-COMPUTED
@@ -308,11 +308,31 @@ def build_profile(map_text: str, repo_root: Path | None = None,
     return build_profile_from_model(load_model(map_text), repo_root=repo_root)
 
 
-def _outside_roles(m: ProjectModel) -> set[str]:
-    """Roles that are OUTSIDE the product, which is what a door is a crossing of. A role that is a
-    service AND internal is the product's own scheduled work (a timer, a boot hook, a signal
-    handler), and a step touching one crosses nothing."""
-    return {r.id for r in m.roles if not (r.kind == "service" and r.audience == "internal")}
+def _all_step_lists(m: ProjectModel) -> list[list[FlowStep]]:
+    """Flows AND sub-flows. Both counts below read this one list: `interface_doors` used to count
+    flows only while `crossings_without_a_door` counted both, and `eval/retro/method.md` tells the
+    reader to read the pair together. A map doored entirely inside shared machinery scored 0 and 0,
+    which that page reads as "authored and never put into a story"."""
+    return [f.steps for f in m.flows] + [sf.steps for sf in m.subflows]
+
+
+def _door_steps(m: ProjectModel) -> int:
+    """Steps with a DEFINED surface at either end. Reads the defined ids, not the id SHAPE: a step
+    naming an undefined `I99` is a dangling reference the validator already blocks, and counting it
+    as a door here would have the two instruments disagree about the same step."""
+    ids = {i.id for i in m.interfaces}
+    return sum(1 for steps in _all_step_lists(m) for st in steps
+               if st.src in ids or st.dst in ids)
+
+
+def _undoored_crossings(m: ProjectModel) -> int:
+    """Every crossing between an actor and the product with no surface between them. Uses the
+    validator's OWN definition of an actor and its OWN predicate, so the instrument and the check can
+    never drift: three copies of "who is an actor" existed once and two of them disagreed."""
+    roles = validate_model.outside_actor_ids(m)
+    ids = {i.id for i in m.interfaces}
+    return sum(1 for steps in _all_step_lists(m) for st in steps
+               if validate_model._is_undoored_crossing(st, roles, ids))
 
 
 def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> MapProfile:
@@ -421,14 +441,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         flows=len(m.flows),
         security_surfaces=len(surfaces),
         interfaces=len(m.interfaces),
-        interface_doors=sum(1 for f in m.flows for st in f.steps
-                            if grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst)),
-        crossings_without_a_door=sum(
-            1
-            for steps in ([f.steps for f in m.flows] + [sf.steps for sf in m.subflows])
-            for st in steps
-            if ((st.src in _outside_roles(m)) != (st.dst in _outside_roles(m)))
-            and not (grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst))),
+        interface_doors=_door_steps(m),
+        crossings_without_a_door=_undoored_crossings(m),
         interfaces_undecided_deps=sum(
             1 for d in m.deps
             if grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM
