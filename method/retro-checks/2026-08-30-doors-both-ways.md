@@ -401,6 +401,11 @@ sorted by whether an instrument exists. Read this before adding another sentence
   ("flips one server's switch"). Bad precision and bad recall together. **Do not ship that check.**
   This rule is held by the wording alone and by nothing else.
 - **A note travels with the phrase it annotates.** Checkable in principle, low value, not built.
+- **A door on a surface with NO ways in.** Advisory (d) skips those, because there is no line to
+  compare against — which means a `theirs` surface can never have its anchors checked. Found the day
+  the check shipped: two door steps at a sign-in provider are anchored on OUR OWN backend callback
+  code, describing our side rather than the place the person is standing, and the check is blind to
+  both by construction. Stated so nobody reads a silent (d) as a clean map.
 
 ### The pattern worth carrying to the next element
 
