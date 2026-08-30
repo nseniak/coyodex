@@ -541,8 +541,13 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   **OUTBOUND (`Cn → Rn`) — the old phrase is already the product's action, so it STAYS.** The old
   `C121 → R2` "puts the join address on the clipboard" becomes `C121 → I2` with its phrase intact,
   and the NEW `I2 → R2` is written fresh, saying what the surface puts in front of them.
-  An ANCHOR always travels with the step that KEEPS the machine action, never with the actor step;
-  one already sitting on an actor step is harmless, so leave it. A NOTE travels with the PHRASE IT
+  **An ANCHOR never sits on a step you create against an actor.** On an INBOUND crossing the old
+  step's anchor is usually the clicked widget, and that line describes the person, not the surface:
+  DISCARD it and give the rewritten `In → Cn` step the route line instead. On an OUTBOUND crossing
+  the old anchor is the delivery line and it stays on `Cn → In`. An anchor that was ALREADY sitting
+  on an actor step before you started is a different thing and harmless — leave that one. (Two
+  sentences here once said "leave it" and "the actor step takes no anchor at all", and a worker
+  called choosing between them a coin flip.) A NOTE travels with the PHRASE IT
   ANNOTATES, which on an inbound crossing means it moves out to the actor step with that phrase: a note saying
   "the bin only appears for an admin" explains a gesture, and on the surface step it annotates a
   sentence that no longer mentions the bin.
@@ -610,7 +615,9 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   a flow that was fine.) A flow near the ≥3 floor can therefore drop under it purely by being doored,
   and the answer is that the flow was too short, never that the doors were wrong. Measured when the
   strict rule landed: the shortest counted length on either live map is 5, against a floor of 3, so
-  nothing falls under today.
+  nothing falls under today. **A MIGRATED dependency step stops counting too** — it is not an actor
+  crossing, but it now has a surface at one end, so a story that migrates two pipes loses two more
+  from its counted length on top of its crossings.
   An existing `Cn → Dn` step on a dep that stands on ANY surface MIGRATES to that surface, `ours` as
   much as `theirs`; the dep is then derived. (This once read "a `theirs` surface", which the checker
   never agreed with and which is wrong on its face: the mail service standing on our own
