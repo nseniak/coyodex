@@ -288,3 +288,50 @@ REFERENCE step was reported as an undoored crossing, demanding an edit its autho
 
 **What the review CLEARED**, so nobody re-audits it: the `party` deletion is complete in both repos,
 the `IFACE_KEY` widening does not over-match, and the door arm's missing kind gate is sound.
+
+## The A/B: does the fixed method text actually work?
+
+The wording was rewritten eleven times over this change, each time because a worker had guessed. That
+raises the obvious question: is the text better, or just longer? It was measured rather than argued.
+
+**The experiment.** Take the mcpolis flows from BEFORE any doors existed. Give a fresh agent the
+method text and nothing else — no worklist, no pre-computed arrival surfaces, no corrections, one
+pass. Score against the map that had taken THREE correction rounds to reach. Eight stories, chosen
+because they are where the old text failed: the invite story (mid-story crossings, same-surface
+out-door), the join story (a trip out to a sign-in provider), and the four upkeep-job timers.
+The gold answer was written down before the agent started.
+
+| | round 1 | round 2 (after seven more wording fixes) |
+|---|---|---|
+| stories whose door set matches the corrected map | **7 of 8** | **7 of 8** |
+| stories whose STEP COUNT matches exactly | 6 of 8 | **7 of 8** |
+| crossings left undoored in scope | 0 | 0 |
+| timer stories wrongly given an arrival door | 0 | 0 |
+| findings the worker raised | 11 | 9 |
+
+**What that proves.** Work that took three rounds of correction now lands in one pass. The two
+hardest fixes held on first contact: the phrase-voice rule (4 of 5 workers got it wrong before) and
+the `kind`+`audience` timer test, which round 2 called decisive and needed no judgement on.
+
+**Four of round 1's findings are GONE in round 2**, and each maps to a specific fix: "where does a
+mid-story crossing happen" (replaced by tracking where the person is standing, which round 2 used
+explicitly and did not question); "you tell me to say so but not where"; and two that were artefacts
+of a truncated extract, not of the method.
+
+**The invented-guarantee clause worked, visibly.** Round 1 wrote surface phrases ending "for this
+team", "naming only this one address" — and admitted writing them to satisfy the clause rather than
+because anything checked them. Round 2, with the clause softened to allow "it passes the request on",
+wrote plain true sentences instead.
+
+**What it does NOT prove, and the number to keep.** Round 2 raised nine findings, and THREE of them
+were caused by text added in that very round. Each pass fixes real gaps and opens narrower ones:
+round 1's findings were whole missing rules, round 2's are edge cases at rule boundaries (an anchor
+when the surface is a screen and the component is a server endpoint; where a person stands AFTER a
+round trip; a flow with two endings). **The findings converge; they do not reach zero.** Anyone
+planning to "finish" this text should price that in.
+
+**The one story the text misses in both rounds**, and it is the right kind of miss: the email story
+still ends without naming who receives the mail. That fix never came from the doors rule — it came
+from advisory (a) firing and an agent then reading the code. Running the round-2 output through
+`validate` reports it. **Text plus check reach the right answer; text alone does not**, and that is
+the division of labour the change is built on.
