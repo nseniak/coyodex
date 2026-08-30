@@ -571,17 +571,20 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   where it had none you must supply one: the line where the surface reaches that component (the
   route handler, the command's own function, the screen's own handler), or `no_call_site` when the
   wiring is genuinely event-driven or config-wired.
-  **For a web page, use the ROUTE line that mounts the page at its address** — the line that answers
-  "where does this surface reach this component". Use it even when the component is a card drawn
-  inside the page: the card is BEHIND the surface, and the route is where the surface reaches in.
-  **The page THIS STEP happens on, not the page the use case's entry point names.** A story that
-  arrives on the member's own page and later removes somebody from the team list is on two pages, and
-  each step takes its own. The entry point answers the arrival, the same as the `ways_in` lookup.
+  **USE THE WAY IN'S OWN `source` LINE.** A surface is made of ways in, each one already carrying the
+  line where the outside reaches the code — a route, a mount, a tool handler, a command. Pick the way
+  in this step comes through and take its `source`. That is the whole rule, and it works on every
+  shape: a web page's way in IS its route line, a gateway's is its tool handler, a command line's is
+  its command. Take the way in THIS STEP comes through, not the use case's own entry point, when a
+  story moves between two of them.
   **This BEATS "the step keeps the anchor it had" when the two disagree**, and they disagree often:
   the old step's anchor is usually the CLICKED WIDGET, because the old step was the person clicking.
-  That line now describes the ACTOR step, which takes no anchor at all, so keeping it on the surface
-  step anchors the step to a place it does not happen. Two workers hit this on the same day and
-  resolved it opposite ways, leaving one map with two conventions for one shape. The route wins.
+  That line describes the ACTOR step, which takes no anchor at all, so keeping it on the surface step
+  anchors the step to a place it does not happen. Three workers hit this and resolved it three ways,
+  leaving one map with two conventions for one shape.
+  Found the long way round: a worker doing a gateway, where no page and no route exists, went and
+  read the surface's ways in to get its line — and that is the general rule the page-shaped wording
+  had been hiding all along.
   **Going the other way (`Cn → In`), anchor the line where the component DELIVERS to the surface** —
   the return, the render, the write — not the route. The NEW step against the actor needs neither.
   Measured before this clause existed: of the steps this rule rewrites, 41 across the two live maps

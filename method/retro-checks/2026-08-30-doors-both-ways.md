@@ -335,3 +335,33 @@ still ends without naming who receives the mail. That fix never came from the do
 from advisory (a) firing and an agent then reading the code. Running the round-2 output through
 `validate` reports it. **Text plus check reach the right answer; text alone does not**, and that is
 the division of labour the change is built on.
+
+### Round 3: six stories the text had never seen
+
+Rounds 1 and 2 used the same eight stories, so the wording had been shaped around them. Round 3 ran
+the same protocol on six it had never touched, picked for a SHAPE the anchor rules never mention: the
+gateway and the admin address are `agent-tools` surfaces with no page, no route and no click, and one
+story's actor is a headless agent — a role that is a `service` and still outside the product.
+
+**6 of 6 door sets matched the corrected map. 6 of 6 step counts matched.** Better than the tuned
+batch, whose one miss needs a check rather than a sentence. **The text generalises.**
+
+**And it raised 13 findings against round 2's 9** — the wording is harder to FOLLOW off the shape it
+was tuned on, even though it produces the right answer. Three name the bias outright: there is no
+anchor rule for middleware, the split-the-phrase paragraph assumes the actor has hands, and *"the
+anchor rule is written for web pages and nothing else"*.
+
+**The best finding shortened the rule instead of lengthening it.** A worker doing a gateway, where no
+page and no route exists, went and read the surface's WAYS IN to get its line. That is the general
+rule the page-shaped wording had been hiding: **a way in already carries the line where the outside
+reaches the code**, and a web page's way in IS its route line. Four paragraphs of page-specific
+instruction collapse into one sentence that works on every shape. Recorded because the pattern
+generalises: *when a rule needs a special case for a new shape, look for the field that already
+answers it for all of them.*
+
+**One live defect it exposed.** 15 of the 58 surface-into-component steps on the mcpolis map are
+still anchored on a clicked WIDGET rather than the way in. The anchor instruction reached one of the
+three workers who touched those files, so one map carries two conventions — the very thing the rule
+warns about, committed by the session that wrote the warning. Every one derives mechanically EXCEPT
+where a story's steps run on a different page from its own entry point, which is an open finding of
+its own; so this wants a worker, not a script.
