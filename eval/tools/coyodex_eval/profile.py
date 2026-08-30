@@ -104,6 +104,12 @@ class MapProfile:
     #: story is the failure mode that shipped, so the count that catches it is the one worth keeping.
     interfaces: int | None = None
     interface_doors: int | None = None        # flow steps whose endpoint is an `In`
+    #: The OUT half of the doors rule, and the reason it is a separate count: `interface_doors` rises
+    #: the moment a build opens its stories, and a build that opens every story and closes none looks
+    #: healthy in that one number. Measured the day the rule shipped: 57 flows across the two live
+    #: maps ended at a person with no door (coyodex 30, mcpolis 27) while both maps' `interface_doors`
+    #: read 2 and 0. ENDPOINTS ONLY, like the check — a mid-flow crossing is out of scope by design.
+    flows_without_a_closing_door: int | None = None
     interfaces_undecided_deps: int | None = None   # external deps naming neither a surface nor a why
     #: The two counts that make an UNAUTHORED shape visible to the instrument. Without a rebuild to
     #: validate the method text on, these plus `eval/rubric.md` are the only things that will report
@@ -410,6 +416,10 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         interfaces=len(m.interfaces),
         interface_doors=sum(1 for f in m.flows for st in f.steps
                             if grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst)),
+        flows_without_a_closing_door=sum(
+            1 for f in m.flows
+            if f.steps and f.steps[-1].dst in {r.id for r in m.roles}
+            and not grammar.is_interface_id(f.steps[-1].src)),
         interfaces_undecided_deps=sum(
             1 for d in m.deps
             if grammar.classify_dep(d.kind or "", d.type or "") in grammar.DEP_KINDS_SYSTEM

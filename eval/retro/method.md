@@ -338,7 +338,8 @@ anyone write it at all". A section with no step sending anyone to author it come
 empty section is the one state most checks are silent about, because they need a row to check.
 
 ```
-interfaces · interface_doors · interfaces_undecided_deps · interfaces_without_kind
+interfaces · interface_doors · flows_without_a_closing_door · interfaces_undecided_deps
+interfaces_without_kind
 ```
 
 Read them together:
@@ -350,6 +351,10 @@ Read them together:
 - **`interfaces` high and `interface_doors` 0** — the rows were authored and never put into a story.
   The map can SAY what its outside edge is while no walk goes through a door. This reads as success
   in every other count, which is what makes it worth its own line here.
+- **`flows_without_a_closing_door` above 0** — the stories open at a door and walk out past it. This
+  is the half `interface_doors` cannot see: that count rises on the openings alone, so a build that
+  did exactly half the rule scores as a build that did all of it. Measured the day the rule shipped:
+  57 across the two live maps, while both read healthy on `interface_doors`.
 - **`interfaces_undecided_deps` above 0** — an external dependency naming neither a surface nor a
   reason. That is a decision nobody made, not a decision to exclude.
 - **`interfaces_without_kind` equal to `interfaces`** — the rows were written and their SHAPE was

@@ -62,9 +62,13 @@ the code's names.
   worked out: the actor field that looks like it answers this asks a different
   question, and marks a bought payment service *internal* while its interface is
   user-facing.
-- **door** — the way one actor starts one use case. Narrower than a surface: a
-  door is one crossing in one story. Two actors reaching the same goal through
-  different doors are two use cases, and a gate blocks the map otherwise.
+- **door** — a crossing between an actor and the product, at a surface, in one
+  story. Narrower than a surface: a surface is a place, a door is one crossing.
+  A door works BOTH ways. A story arrives through one, and hands its result back
+  through one, and the way out is drawn even when it is the same surface the
+  story came in by. Only the two ENDS of a story take a door: an exchange in the
+  middle does not, and nothing checks one. Two actors reaching the same goal
+  through different doors are two use cases, and a gate blocks the map otherwise.
 - **change impact** — the report saying what a code change does to the map.
 - **accept** — folding a change-impact report into the baseline.
 - **Coyote Effect** — the situation coyodex exists for: your agent wrote a lot
