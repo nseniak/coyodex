@@ -471,32 +471,56 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   (over the product's own records it is not an interface, over the open web it is, and the two call
   sites are identical). Record a deliberate exception as `In: <why>` or `EPn: <why>` under an
   **"Interface exceptions"** extras heading.
-  **Doors — put the surface IN the story.** A story crosses between a person and the product at two
-  moments, and BOTH of them go through a door.
-  **(1) The ARRIVAL.** A use-case flow's OPENING step names the surface the actor comes in by:
-  `R1 → I3`, then `I3 → C12` — never `R1 → C12`.
-  **(2) The FINAL HAND-OFF.** When the flow's LAST step delivers to a person, it goes out through a
-  surface in the same shape: `C43 → I3`, then `I3 → R1` — never `C43 → R1`. **Draw the out-door even
-  when it is the SAME surface the story arrived by.** Skipping it there was tried and rejected: the
-  use-case picture would then show data flowing only IN, while the same surface's own `carries` rows
-  record both directions, so one screen would contradict itself.
+  **Doors — put the surface IN the story.** A story crosses between an ACTOR and the product at two
+  moments, and BOTH of them go through a door. **"Actor" means any `Rn`** — a person, or a program
+  acting as one (a headless agent, an upkeep job). A flow that starts inside the product (a timer, a
+  queue) has no arrival and takes no arrival door.
+  **(1) The ARRIVAL.** A use-case flow's FIRST step — that step and no later one — names the surface
+  the actor comes in by: `R1 → I3`, then `I3 → C12`. An OPENING `R1 → C12` is the defect; the same
+  shape in the middle of the story is not (see ENDPOINTS ONLY below).
+  **(2) The FINAL HAND-OFF.** When the flow's LAST step delivers to an actor, it goes out through a
+  surface the same way: `C43 → I3`, then `I3 → R1` — never `C43 → R1`. **Draw the out-door even when
+  it is the SAME surface the story arrived by.** The two ENDS are what a reader reads, and a story
+  that arrives through a door and then leaves past it draws an outside edge with one side missing,
+  while that same surface's own `carries` rows record both directions.
+  **WHICH surface — look it up, do not guess.** The arrival surface is the one whose `ways_in` hold
+  the use case's `entry_points`; that link is already authored. If those entry points sit on MORE
+  than one surface, stop: two doors onto one goal is the split this method already asks for under
+  *Use cases*, not a flow with two openings. The hand-off surface is the SAME one, unless the last
+  step plainly delivers somewhere else (a mail, a written file) — then it is that one. A use case
+  with no ways in has no authored answer: pick the surface whose own sentence describes where the
+  actor stands, and if none does, the map is missing a surface. Nothing OUTSIDE the step list
+  changes: a door is a step, and the surface's own `carries` rows are authored separately.
+  **WHAT the two new steps say, and which phrase goes where.** Every step carries a phrase and the
+  doors are no exception, so renumber the whole list and write both — in the STORY'S own words, never
+  by copying an example off this page. **The step that already existed keeps the phrase it already
+  had**, and only its actor end is replaced by the surface: the old `R1 → C12` becomes `I3 → C12`
+  with its phrase intact, and the old `C43 → R1` becomes `C43 → I3` with its phrase intact. The NEW
+  step is the one against the actor, and it is written fresh: the arrival step says what the actor
+  does at the surface, the hand-off step says what the surface puts in front of them.
   **ENDPOINTS ONLY — the arrival and the final hand-off, nothing between them.** A mid-flow exchange
-  with a person (a preview at step 4, a question answered at step 6) takes NO door: doubling those
-  steps buys a complete check and costs the readable picture that is the point of a flow. Known and
-  accepted: a mid-flow crossing to a DIFFERENT surface is therefore never checked, and the closing
-  advisory says so in its own words.
-  **Name the surface, never the thing standing on it** — and this holds for a PERSON exactly as it
-  holds for a service. `C12 → D7` becomes `C12 → I7`; `C43 → R1` becomes `C43 → I3 → R1`. Without it
-  a reader sees the PIPE and not the door: a flow that draws `web browser` as its only outside box is
-  naming the thing this method tells you never to name. **A door is not only a way IN**: the
-  direction is read off the step, never off whose surface it is — `Cn → In` is the product reaching
-  OUT, anything else touching a surface is the story coming in through it. The two together are
-  common on one surface (a request and its answer), and neither maps to `side`: the files a product
-  writes are OUR surface written OUT through, and a chat platform is SOMEONE ELSE'S surface stories
-  arrive IN from.
-  Interface steps do NOT count toward the 3-15 step band — they are
-  structure, not detail, like a sub-flow reference counting as 1. An existing `Cn → Dn` step on a
-  dep that stands on a `theirs` surface MIGRATES to that surface; the dep is then derived.
+  with an actor (a preview at step 4, a question answered at step 6) keeps its `Cn → Rn` / `Rn → Cn`
+  shape and takes NO door. Doubling those steps buys a complete check and costs the readable picture
+  that is the point of a flow.
+  **Name the surface, never the thing standing on it — and a dep and an actor differ here.** A step
+  reaching an outside SERVICE names the surface ANYWHERE in the flow, and the dep is then derived
+  rather than drawn: `C12 → D7` becomes `C12 → I7`. A step reaching an ACTOR names the surface at the
+  TWO ENDPOINTS only, and there the actor is KEPT: `C43 → R1` becomes `C43 → I3 → R1`. The asymmetry
+  is deliberate — a dep is a pipe the surface replaces, an actor is somebody the surface stands in
+  front of. Without either, a reader sees the PIPE and not the door: a flow that draws `web browser`
+  as its only outside box is naming the thing this method tells you never to name.
+  **A door is not only a way IN, and the direction is read off the INSIDE end** — never off whose
+  surface it is. `Cn → In` and `In → Rn` are the product reaching OUT; `Rn → In` and `In → Cn` are
+  the story coming IN. The two are commonly both present on one surface (a request and its answer),
+  and neither maps to `side`: the files a product writes are OUR surface written OUT through, and a
+  chat platform is SOMEONE ELSE'S surface stories arrive IN from.
+  A step with a surface at EITHER end does NOT count toward the 3-15 step band — it is structure, not
+  detail. (A sub-flow reference is the model's other structural exemption; that one counts as 1, a
+  door counts as 0.) So doors LOWER a flow's counted length by up to 2, because the two rewritten
+  steps stop counting as well: a flow already near the ≥3 floor can drop under it purely by being
+  doored, and the answer is that the flow was too short, never that the doors were wrong. Measured
+  when this rule shipped: zero flows on either live map fall under. An existing `Cn → Dn` step on a dep that stands on a `theirs` surface MIGRATES
+  to that surface; the dep is then derived.
   **What crosses**: one row per thing, in ONE direction, each with a plain sentence and the SINGLE
   records (`En`) that cross — never a data area. An EMPTY record list is legitimate and common: a log
   line, a fetched web page, a source file and a tool call are real crossings no stored record holds.
@@ -1051,9 +1075,9 @@ DERIVED from the walks and must never be written by hand.
 **Then go back through every flow and do ALL THREE halves of the doors rule** — this is the step, and
 skipping it is the failure the gates below now catch: (1) OPEN each flow at its door, `Rn → In` then
 `In → Cn`, for every use case whose ways in belong to a surface; (2) CLOSE each flow whose last step
-delivers to a person, `Cn → In` then `In → Rn`, and draw that out-door even when it is the same
+delivers to an actor, `Cn → In` then `In → Rn`, and draw that out-door even when it is the same
 surface the flow opened at; (3) MIGRATE each `Cn → Dn` step whose dep stands on a surface to
-`Cn → In`. Only the two ENDPOINTS take a door; a mid-flow exchange with a person takes none. A build
+`Cn → In`. Only the two ENDPOINTS take a door; a mid-flow exchange with an actor takes none. A build
 that authors the surfaces and stops leaves a map that can SAY what its outside edge is while no story
 ever goes through a door — measured on the first real build to author the section: 12 surfaces, 517
 steps, zero doors, 5 migrations owed, and every one of its 42 flows owing both an opening and, for 27
