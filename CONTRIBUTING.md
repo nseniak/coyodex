@@ -147,6 +147,26 @@ questions. What you changed decides how far up you need to go.
 | **3. A real build** | `claude -p "/coyodex from scratch"` in a repo, then `coyodex-eval process <transcript>` | Did the agent actually *do* the thing? |
 | **4. Map quality** | `/coyodex-eval` in a project with a committed map | Is the map any good — grounding, rubric, coverage? |
 
+### Working on the viewer
+
+Serve one or more maps and look at them:
+
+```
+PYTHONPATH=tools .venv/bin/python -m coyodex.cli serve . ~/somewhere/else --port 8871 --dev
+```
+
+Two things that will otherwise cost you an hour:
+
+- **The page caches its own JavaScript. Hard-reload after every edit**, or you will debug a
+  version of the file you have already changed. A viewer edit that "did nothing", or a page
+  that renders blank while its content is plainly in the DOM, is this until proven otherwise.
+- **Test against two maps with different shapes, not one.** This repo's own map is a command
+  line and files; a web product's map is screens and APIs. A screen that only looks right on
+  the richer of the two is not finished, and the sparse one is where the empty states show.
+
+The viewer's own tests need a real browser and are slower than the rest: `tests/test_viewer_browser.py`.
+`node --check tools/coyodex/viewer/viewer.js` catches a syntax error in a second, so run it first.
+
 **Tier 1 is required for every PR.** It is fast (~20s) and deterministic. It covers three
 layers:
 
