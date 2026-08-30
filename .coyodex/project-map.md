@@ -309,19 +309,19 @@ why: needs the finished build's transcript, found through the stamp from HP14
 
 ## T2b — Interfaces (the product's outside edge)
 
-| ID | Name | Side | Kind | Facing | Crosses | What it is | Far side | Actors | Ways in | Deps | Source | Conf. |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| **I1** | Map commands | ours | command-line | user | in, out | How a person builds a map, checks it, serves it and accepts a change into it. |  | R1, R2 | 32 |  | [cli.py](tools/coyodex/cli.py:105) | verified |
-| **I2** | Developer commands | ours | command-line | operator | in, out | How a coyodex developer scores a map's quality and reviews a finished build. |  | R3 | 21 |  | [cli.py](eval/tools/coyodex_eval/cli.py:47) | verified |
-| **I3** | Map viewer | ours | screen | user | in, out | The browser page where a reader looks at a map and the code behind any box. |  | R1 | 28 |  | [serve.py](tools/coyodex/viewer/serve.py:633) | verified |
-| **I4** | Agent skill | ours | agent-tools | user | in, out | How a coding agent is asked, in plain words, to build or update a map. | the coding agent hosting the skill | R1, R2 | 5 | D12, D13, D14 | [dispatch.md](method/dispatch.md:62) | verified |
-| **I5** | Developer skills | ours | agent-tools | operator | in | How a coyodex developer asks an agent to score a map or review a build. |  | R3 | 2 |  | [SKILL.md](eval/SKILL.md:28) | verified |
-| **I6** | Map files in your repo | ours | file | user | out | The map coyodex writes next to the code, which a person opens and git shows. |  |  |  |  | [assemble.py](tools/coyodex/assemble.py:963) | verified |
-| **I7** | Settings | ours | settings | user | in | The values the person running coyodex sets: which clone, which port, what to leave out. |  |  |  |  |  | verified |
-| **I8** | The project's source files | theirs | content | user | in | The code being mapped. coyodex did not write it, and reading it is the whole job. | the project under analysis |  |  |  |  | verified |
-| **I9** | The coding agent's build transcript | theirs | content | operator | in | The records an agent wrote while building a map, read back to review the run. | the coding agent that built the map |  |  | D12 |  | verified |
-| **I10** | GitHub | theirs | handoff | user | out | Where a reader continues, when they follow a code link out of the viewer. |  | R1 |  | D15 |  | verified |
-| **I11** | The person's code editor | theirs | handoff | user | out | The editor coyodex opens on the reader's own machine, at the line they clicked. |  | R1 |  | D16 |  | verified |
+| ID | Name | Side | Kind | Facing | Crosses | What it is | Actors | Ways in | Deps | Source | Conf. |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **I1** | Map commands | ours | command-line | user | in, out | How a person builds a map, checks it, serves it and accepts a change into it. | R1, R2 | 32 |  | [cli.py](tools/coyodex/cli.py:105) | verified |
+| **I2** | Developer commands | ours | command-line | operator | in, out | How a coyodex developer scores a map's quality and reviews a finished build. | R3 | 21 |  | [cli.py](eval/tools/coyodex_eval/cli.py:47) | verified |
+| **I3** | Map viewer | ours | screen | user | in, out | The browser page where a reader looks at a map and the code behind any box. | R1 | 28 |  | [serve.py](tools/coyodex/viewer/serve.py:633) | verified |
+| **I4** | Agent skill | ours | agent-tools | user | in, out | How a coding agent is asked, in plain words, to build or update a map. | R1, R2 | 5 | D12, D13, D14 | [dispatch.md](method/dispatch.md:62) | verified |
+| **I5** | Developer skills | ours | agent-tools | operator | in | How a coyodex developer asks an agent to score a map or review a build. | R3 | 2 |  | [SKILL.md](eval/SKILL.md:28) | verified |
+| **I6** | Map files in your repo | ours | file | user | out | The map coyodex writes next to the code, which a person opens and git shows. |  |  |  | [assemble.py](tools/coyodex/assemble.py:963) | verified |
+| **I7** | Settings | ours | settings | user | in | The values the person running coyodex sets: which clone, which port, what to leave out. |  |  |  |  | verified |
+| **I8** | The project's source files | theirs | content | user | in | The code being mapped. coyodex did not write it, and reading it is the whole job. |  |  |  |  | verified |
+| **I9** | The coding agent's build transcript | theirs | content | operator | in | The records an agent wrote while building a map, read back to review the run. |  |  | D12 |  | verified |
+| **I10** | GitHub | theirs | handoff | user | out | Where a reader continues, when they follow a code link out of the viewer. | R1 |  | D15 |  | verified |
+| **I11** | The person's code editor | theirs | handoff | user | out | The editor coyodex opens on the reader's own machine, at the line they clicked. | R1 |  | D16 |  | verified |
 
 ---
 

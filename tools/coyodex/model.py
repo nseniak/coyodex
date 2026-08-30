@@ -240,7 +240,6 @@ class Interface:                     # T2b — the product's outside edge
     what: str = ""                   # one sentence: what this surface is for
     side: str = ""                   # ours | theirs (grammar.INTERFACE_SIDES)
     facing: str = ""                 # user | operator (grammar.INTERFACE_FACINGS) — AUTHORED
-    party: str = ""                  # the far side in words, when it has no element ("the open web")
     #: What SHAPE this surface is — `grammar.INTERFACE_KIND_SEEDS`, seeded-open. SHAPE, NEVER
     #: PURPOSE: a payment processor and a crash reporter are both `api`, and which is which is
     #: already authored on the dependency's `bucket`. A kind that answers "what is it FOR" means this
@@ -1137,8 +1136,13 @@ _REMOVED_FIELDS: dict[str, str] = {
                   "the surface through its own `interfaces` list, which is the direction every "
                   "other membership in this model runs — so an interface's dependencies are now "
                   "DERIVED. The actor half is now DERIVED too, from the walks, gated on the "
-                  "surface's `kind`. Delete the field; keep `party` for a far side that is neither "
-                  "a role nor a dependency ('anyone on the web', 'the project under analysis')."),
+                  "surface's `kind`. Delete the field; the far side is now the roles the walks put at "
+                  "the surface, plus the dependencies standing on it."),
+    "party": ("Free text for the far side, and after the doors rule landed not one value earned "
+              "its place. Measured over the 15 values on the two live maps: 14 repeat a neighbour "
+              "— a dependency standing on the surface, or a role the walks now put at it — and the "
+              "fifteenth restates its own row's `what`. Delete the field. Anything it said that no "
+              "neighbour says belongs in `what`, which is the row's own sentence."),
 }
 _RENAME_NOTES: dict[str, str] = {
     "label": ("It was a THREE-value word (core | supporting | platform) carrying two questions at "

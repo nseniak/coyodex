@@ -4188,7 +4188,7 @@ def test_one_dep_may_sit_on_SEVERAL_surfaces():
     # read back. Both surfaces must be able to show the code behind them.
     m = make_interface_model()
     m.interfaces.append(Interface(id="I2", name="Its transcript", side="theirs", facing="operator",
-                                  source="", party="the same agent",
+                                  source="",
                                   carries=[InterfaceCrossing(direction="in", what="its records")],
                                   evidence=[EvidenceItem(file="src/v.py:2", why="reads them")]))
     m.deps[0].not_an_interface = ""

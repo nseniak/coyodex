@@ -17213,7 +17213,6 @@
    "what": "How a person builds a map, checks it, serves it and accepts a change into it.",
    "side": "ours",
    "facing": "user",
-   "party": "",
    "kind": "command-line",
    "ways_in": [
     "EP25",
@@ -17275,7 +17274,6 @@
    "what": "How a coyodex developer scores a map's quality and reviews a finished build.",
    "side": "ours",
    "facing": "operator",
-   "party": "",
    "kind": "command-line",
    "ways_in": [
     "EP3",
@@ -17324,7 +17322,6 @@
    "what": "The browser page where a reader looks at a map and the code behind any box.",
    "side": "ours",
    "facing": "user",
-   "party": "",
    "kind": "screen",
    "ways_in": [
     "EP60",
@@ -17382,7 +17379,6 @@
    "what": "How a coding agent is asked, in plain words, to build or update a map.",
    "side": "ours",
    "facing": "user",
-   "party": "the coding agent hosting the skill",
    "kind": "agent-tools",
    "ways_in": [
     "EP20",
@@ -17415,7 +17411,6 @@
    "what": "How a coyodex developer asks an agent to score a map or review a build.",
    "side": "ours",
    "facing": "operator",
-   "party": "",
    "kind": "agent-tools",
    "ways_in": [
     "EP1",
@@ -17439,7 +17434,6 @@
    "what": "The map coyodex writes next to the code, which a person opens and git shows.",
    "side": "ours",
    "facing": "user",
-   "party": "",
    "kind": "file",
    "ways_in": [],
    "carries": [
@@ -17462,7 +17456,6 @@
    "what": "The values the person running coyodex sets: which clone, which port, what to leave out.",
    "side": "ours",
    "facing": "user",
-   "party": "",
    "kind": "settings",
    "ways_in": [],
    "carries": [
@@ -17483,7 +17476,6 @@
    "what": "The code being mapped. coyodex did not write it, and reading it is the whole job.",
    "side": "theirs",
    "facing": "user",
-   "party": "the project under analysis",
    "kind": "content",
    "ways_in": [],
    "carries": [
@@ -17509,7 +17501,6 @@
    "what": "The records an agent wrote while building a map, read back to review the run.",
    "side": "theirs",
    "facing": "operator",
-   "party": "the coding agent that built the map",
    "kind": "content",
    "ways_in": [],
    "carries": [
@@ -17535,7 +17526,6 @@
    "what": "Where a reader continues, when they follow a code link out of the viewer.",
    "side": "theirs",
    "facing": "user",
-   "party": "",
    "kind": "handoff",
    "ways_in": [],
    "carries": [
@@ -17561,7 +17551,6 @@
    "what": "The editor coyodex opens on the reader's own machine, at the line they clicked.",
    "side": "theirs",
    "facing": "user",
-   "party": "",
    "kind": "handoff",
    "ways_in": [],
    "carries": [

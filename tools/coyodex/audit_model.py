@@ -1156,10 +1156,11 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
         anchor_raw = (cited or iface.source
                       or (owning[0].where_configured if owning else ""))
         crossings = "; ".join(f"{c.direction}: {c.what}" for c in iface.carries if c.what)
-        # The far side in words, then the dependencies that stand on this surface — the direction
-        # every other membership in this model runs. `party_ref` held the dep half a second time and
-        # was removed for it: the two agreed only by luck, and nothing made them keep agreeing.
-        far = iface.party or ", ".join(d.name for d in owning)
+        # The dependencies that stand on this surface — the direction every other membership in
+        # this model runs. Two free-text fields once named the far side here as well: `party_ref`
+        # held the dep half a second time (the two agreed only by luck), and `party` said in words
+        # what the deps and the doors now say as elements. Both were removed.
+        far = ", ".join(d.name for d in owning)
         items.append(WorkItem(
             claim=(f"{iface.id} '{iface.name}' is an interface the product exchanges data through"
                    + (f" with {far}" if far else "")),

@@ -9850,10 +9850,11 @@ function ifaceCardHtml(i) {
 const IFACE_ROW_GAP = 10;
 // A dependency is a CHIP on the surface's outer edge, never a card and never a wire's far end. A
 // dependency is HOW a surface is reached, not the surface — the rule the whole section is built on,
-// and the one `party_ref` blurred by holding a dep and a role in one slot.
+// and the one `party_ref` blurred by holding a dep and a role in one slot. A free-text `party` chip
+// sat here too and was removed with the field: 14 of its 15 values across the two live maps repeated
+// a chip or a card already beside it, and the fifteenth repeated its own row's sentence.
 function ifaceFarChipsHtml(i) {
   const bits = [];
-  if (i.party) bits.push(`<span class="ifd-chip ifd-chip-party">${esc(i.party)}</span>`);
   for (const d of (i.deps || [])) {
     const n = GRAPH.nodes[d];
     bits.push(`<span class="ifd-chip ifd-chip-dep" data-id="${esc(d)}" `
@@ -10089,7 +10090,6 @@ function renderInterface(s) {
     i.facing ? `<span class="uc-caplabel">${esc(i.facing)}-facing</span>` : '',
     ifaceFlowWord(i) ? `<span class="uc-caplabel">${esc(ifaceFlowWord(i))} ${esc(IFACE_ARROW[ifaceFlowWord(i)] || '')}</span>` : '',
   ].join('');
-  const far = i.party ? mdRefs(i.party, GRAPH.nodes) : '';
   // What crosses, in then out. An EMPTY record list is the honest answer for a log line, a fetched
   // page or a source file, so the row still renders — only the sentence is required.
   const rows = (i.crossings || []).map((c) =>
@@ -10125,8 +10125,7 @@ function renderInterface(s) {
                                 : '<p class="feat-empty">No feature reaches this surface.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({ name: i.name, pills, desc: i.what ? mdInline(i.what) : '',
-                     noDesc: 'No description recorded for this surface.',
-                     metaLbl: far ? 'far side' : '', meta: far })
+                     noDesc: 'No description recorded for this surface.' })
     + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
     + (rows ? `<h3 class="card-group-head">What crosses</h3><table class="if-table">${rows}</table>`
             : '<h3 class="card-group-head">What crosses</h3><p class="feat-empty">The map records nothing crossing this surface.</p>')

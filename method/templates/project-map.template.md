@@ -202,9 +202,9 @@ why: needs the result of HP1
      There is no `Actors` column and no `actors` field: WHO is on the far side is DERIVED from the
      walks, gated on the kind. Never write it by hand.
 
-     `Far side` is free text, for a far side that is neither a role nor a dependency ("anyone on the
-     web"). The dependencies standing on a surface are derived from each dep's own list — do not
-     name a `Dn` here.
+     There is no `Far side` column either. The dependencies standing on a surface are derived from
+     each dep's own list — do not name a `Dn` here. Anything you would have written in words about
+     who is out there goes in `What it is`, the row's own sentence.
      `Source` is the ONE line declaring the whole surface (the router, the command table, the file
      writer) — optional; a settings surface is declared in no single place.
 
@@ -212,9 +212,9 @@ why: needs the result of HP1
      name one or more surfaces or say why it is none. Without the reason there is no way to tell a deliberate
      exclusion from nobody having looked. -->
 
-| ID | Name | Side | Kind | Facing | What it is | Far side | Source | Conf. |
-|---|---|---|---|---|---|---|---|---|
-| **I1** | <surface, in product words> | ours | screen | user | <one sentence> | <who, in words> | [file](path:1) | verified |
+| ID | Name | Side | Kind | Facing | What it is | Source | Conf. |
+|---|---|---|---|---|---|---|---|
+| **I1** | <surface, in product words> | ours | screen | user | <one sentence> | [file](path:1) | verified |
 
 ### What crosses I1
 

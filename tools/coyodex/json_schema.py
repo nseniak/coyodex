@@ -236,8 +236,6 @@ FIELD_META: dict[tuple[str, str], dict] = {
                             "serves. AUTHORED — `Role.audience` answers a different question (which "
                             "side of the COMPANY an actor sits on) and marks a bought payment "
                             "service 'internal' while its interface is user-facing."},
-    ("Interface", "party"): {"description": "the far side in words, when it has no element of its "
-                            "own ('the open web')."},
     ("Interface", "kind"): {"description": "what SHAPE this surface is, seeded-open: "
                             + "/".join(grammar.INTERFACE_KIND_SEEDS)
                             + ". SHAPE, never PURPOSE — a payment processor and a crash reporter "

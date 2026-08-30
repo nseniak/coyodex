@@ -448,15 +448,14 @@ def model_to_markdown(m: ProjectModel) -> str:
         for i in m.interfaces:
             flow = ", ".join(x for x in ("in", "out")
                              if any(c.direction == x for c in i.carries))
-            far = i.party
             rows.append([f"**{i.id}**", i.name, i.side, grammar.canonical_interface_kind(i.kind),
-                         i.facing, flow, i.what, far,
+                         i.facing, flow, i.what,
                          ", ".join(actors_by_iface.get(i.id, [])),
                          str(ways_by_iface.get(i.id) or ""),
                          ", ".join(deps_by_iface.get(i.id, [])),
                          _anchor_link(i.source), i.confidence])
         section("T2b — Interfaces (the product's outside edge)",
-                _table(["ID", "Name", "Side", "Kind", "Facing", "Crosses", "What it is", "Far side",
+                _table(["ID", "Name", "Side", "Kind", "Facing", "Crosses", "What it is",
                         "Actors", "Ways in", "Deps", "Source", "Conf."], rows))
         cross = [[i.id, c.direction, c.what, ", ".join(c.elements), _anchor_link(c.where)]
                  for i in m.interfaces for c in i.carries]
@@ -1185,8 +1184,7 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
                   "Side": iface.side,
                   **({"Kind": kind} if kind else {}),
                   "Facing": iface.facing,
-                  "What crosses": ", ".join(flow) or "",
-                  **({"Far side": iface.party} if iface.party else {})}
+                  "What crosses": ", ".join(flow) or ""}
         nodes[iface.id] = _node(iface, "interface", iface.name, iface.source, fields, None)
     for sd in m.subdomains:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""

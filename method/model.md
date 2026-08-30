@@ -424,10 +424,11 @@ Semantics, stated on the fields:
   **`side`** is whose DESIGN the surface is (`ours`/`theirs`): if the far side vanished tomorrow,
   would its shape change? **`facing`** is who it serves (`user`/`operator`) and is AUTHORED —
   `roles[].audience` answers a different question and marks a bought service `internal` while its
-  interface is user-facing. **`party`** names the far side in words, for a far side that is
-  neither a role nor a dependency ("anyone on the web", "the project under analysis"); the
-  dependencies standing on the surface are DERIVED from each dep's own `interfaces` list, and WHO is
-  on the far side is DERIVED from the walks — neither is authored here.
+  interface is user-facing. **There is NO field for the far side in words.** The dependencies
+  standing on the surface are DERIVED from each dep's own `interfaces` list, and WHO is on the far
+  side is DERIVED from the walks — neither is authored here. A free-text `party` was tried and
+  removed: 14 of its 15 values across the two live maps repeated one of those two neighbours, and
+  the fifteenth repeated its own row's `what`. Anything genuinely unsaid goes in `what`.
   **`kind`** is what SHAPE the surface is, seeded-open over
   `grammar.INTERFACE_KIND_SEEDS`: `screen`, `mobile-app`, `desktop-app`, `command-line`, `file`,
   `settings`, `hosted-screen`, `content`, `handoff`, `api`, `agent-tools`. **SHAPE, never PURPOSE** —
@@ -438,11 +439,16 @@ Semantics, stated on the fields:
   which has no ways in by definition. It is also a LEVEL above `entry_points[].kind`, never a
   duplicate of it: a way in's kind names the MECHANISM (an HTTP address, a tool, a command), this
   names the SURFACE (a web UI, a CLI, an API), and `ui-route` + `http-route` together ARE a web UI.
-  **`actors` is not a field.** Who is on the far side is derived, gated on the `kind`: an `ours`
-  surface takes the roles driving the use cases behind its ways in; a `theirs` surface takes the
-  roles whose stories reach it ONLY when the kind is `hosted-screen` or `handoff` (the two that MEAN
-  a person goes there); every other surface derives nobody, and nobody is the correct answer. An
-  authored value beside a derived one is the failure mode this shape exists to remove.
+  **`actors` is not a field.** Who is on the far side is derived from THREE sources, and the first
+  is the strongest. **(1) The DOORS.** Any role standing at a flow step directly next to the surface
+  — `Rn → In` or `In → Rn`, either side — is at that surface. This arm takes NO `kind` gate, and
+  that is deliberate: the gate on arm (3) exists to stop a bad INFERENCE, and a written step is not
+  an inference, so gating it would throw away the map's own statement. **(2) An `ours` surface**
+  also takes the roles driving the use cases behind its ways in. **(3) A `theirs` surface** also
+  takes the roles whose stories reach it, but ONLY when the kind is `hosted-screen` or `handoff`
+  (the two that MEAN a person goes there). Anything else derives nobody, and nobody is the correct
+  answer — most surfaces are reached by the product itself, not by a person. An authored value
+  beside a derived one is the failure mode this shape exists to remove.
   **`ways_in`** lists the `EPn`s the surface is made of and
   travels through `reconcile` (field `ways_in`) exactly like a use case's `entry_points`, for the
   same reason: those ids are minted at assembly. **`carries`** is one row per thing that crosses, in

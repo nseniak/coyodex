@@ -2242,11 +2242,10 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
             border: 1px solid #dcdff0; color: #384056; background: #fff; }
 .ifd-chip-actor { cursor: pointer; border-color: #c9cef0; }
 .ifd-chip-actor:hover { border-color: #6366f1; color: #312e81; }
-/* A dependency is the PIPE, never the far side — quieter than the party it stands in front of, and
+/* A dependency is the PIPE, never the far side — quieter than the actor it stands in front of, and
    never shaped like the boxes, so it can never be read as a surface of its own. */
 .ifd-chip-dep { cursor: pointer; background: #f4f5fa; color: #5b6377; border-style: dashed; }
 .ifd-chip-dep:hover { border-color: #6366f1; color: #312e81; }
-.ifd-chip-party { background: #f4f5fa; color: #5b6377; }
 /* THE BOX. Four outlines for the four families, one word inside for the kind: a reader cannot learn
    eleven shapes, so the shape says the family and the word says which of them this is. A surface
    with NO kind takes `ifd-fam-none` — the plain outline — and the picture still draws. */

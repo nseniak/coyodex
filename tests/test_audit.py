@@ -2256,19 +2256,19 @@ def _interface_claims(m):
 def test_an_interface_claim_is_anchored_on_the_surfaces_own_evidence():
     items = _interface_claims(_interface_model(evidence_file="src/router.py:414"))
     assert len(items) == 1, items
-    assert items[0].anchor.startswith("src/router.py:414"), items[0].anchor
+    assert (items[0].anchor or "").startswith("src/router.py:414"), items[0].anchor
 
 
 def test_the_dep_configuration_line_is_the_fallback_not_the_first_choice():
     """With no evidence and no source, the dep's line is better than nothing."""
     items = _interface_claims(_interface_model(evidence_file=None))
     assert len(items) == 1, items
-    assert items[0].anchor.startswith("src/settings.py:9"), items[0].anchor
+    assert (items[0].anchor or "").startswith("src/settings.py:9"), items[0].anchor
 
 
 def test_the_surfaces_own_source_still_beats_the_dep_line():
     items = _interface_claims(_interface_model(evidence_file=None, source="src/iface.py:3"))
-    assert items[0].anchor.startswith("src/iface.py:3"), items[0].anchor
+    assert (items[0].anchor or "").startswith("src/iface.py:3"), items[0].anchor
 
 
 def test_the_far_side_of_a_claim_is_the_dependency_standing_on_the_surface():
@@ -2305,7 +2305,7 @@ def test_with_behavioural_mints_a_claim_per_phrased_step():
              if w.theme == "behaviour"]
     assert len(items) == 1, items          # the empty phrase is not a claim
     assert "opens the sign-in page" in items[0].claim, items[0].claim
-    assert items[0].anchor.startswith("src/ui.py:12"), items[0].anchor
+    assert (items[0].anchor or "").startswith("src/ui.py:12"), items[0].anchor
 
 
 def test_a_behaviour_claim_is_report_only():

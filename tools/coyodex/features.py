@@ -153,7 +153,6 @@ class InterfaceFacts:
     what: str = ""
     side: str = ""
     facing: str = ""
-    party: str = ""                                          # the far side, in words
     kind: str = ""                                           # SHAPE — the canonical spelling, so the
                                                              # viewer's icon lookup and the eval read
                                                              # one surface as one
@@ -516,7 +515,6 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     interfaces = [
         InterfaceFacts(
             id=i.id, name=i.name, what=i.what, side=i.side, facing=i.facing,
-            party=i.party,
             kind=grammar.canonical_interface_kind(i.kind),
             actors=iface_actors.get(i.id, []),
             flow=[d for d in ("in", "out") if any(c.direction == d for c in i.carries)],
@@ -610,7 +608,7 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
             for f in ix.features],
         "interfaces": [
             {"id": i.id, "name": i.name, "what": i.what, "side": i.side, "facing": i.facing,
-             "party": i.party, "kind": i.kind, "actors": i.actors,
+             "kind": i.kind, "actors": i.actors,
              "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
              "components": i.components, "useCases": i.use_cases, "features": i.features,
              "featuresUnknown": i.features_unknown,

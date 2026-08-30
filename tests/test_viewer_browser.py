@@ -618,7 +618,6 @@ def _two_sided_interfaces() -> Any:
                          {"direction": "out", "what": "the page they get back", "elements": []}]},
             {"id": "I2", "name": "Crash reporting", "what": "Where a crash is reported.",
              "side": "theirs", "facing": "operator", "kind": "api",
-             "party": "the error tracking service",
              "carries": [{"direction": "out", "what": "a crash report", "elements": []}]},
         ]
         for d in m["deps"]:

@@ -318,7 +318,7 @@ def make_model_touching_every_theme():
     doc["messaging"] = [{"name": "jobs", "kind": "queue", "publishers": ["C1"],
                          "consumers": ["C2"], "payload": "a job", "source": "a.py:10"}]
     doc["interfaces"] = [{"id": "I1", "name": "Web search", "side": "theirs", "facing": "user",
-                          "party": "the open web", "source": "a.py:11",
+                          "source": "a.py:11",
                           "carries": [{"direction": "in", "what": "pages from the open web"}]}]
     # A flow with a phrased step, so the OPT-IN `behaviour` tier is touched too. The fixture's whole
     # job is to carry one claim of EVERY theme, and a tier it misses becomes a silent exemption.

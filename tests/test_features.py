@@ -513,10 +513,10 @@ def make_interface_map() -> dict:
          "carries": [{"direction": "in", "what": "the card details"},
                      {"direction": "out", "what": "the receipt", "elements": ["E1"]}]},
         {"id": "I2", "name": "Payments", "what": "Where the money moves.", "side": "theirs",
-         "facing": "user", "party": "the card network",
+         "facing": "user",
          "carries": [{"direction": "out", "what": "a charge"}]},
         {"id": "I3", "name": "Log store", "what": "Where the logs go.", "side": "theirs",
-         "facing": "operator", "source": "", "party": "the log vendor",
+         "facing": "operator", "source": "",
          "carries": [{"direction": "out", "what": "one record per request"}]}]
     return doc
 
