@@ -789,14 +789,29 @@ def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
     surfaces, 4 of mcpolis's 12), and where a build DID author it the derivation was better — the
     mcpolis dashboard names one role while its walks show three.
 
-    Which join to use is decided by the `kind`, because *"whose story reaches it" is not "who goes
-    there"*. A member's story reaches an upstream MCP server, but the PRODUCT calls it; a reader
-    follows a code link to a hosting site themselves. So:
+    THREE arms, and the first is the strongest:
 
-        ours surface   -> the roles driving the use cases behind its ways in
-        theirs surface -> ONLY when the kind MEANS a person goes there (`hosted-screen`, `handoff`),
-                          the roles whose stories reach it
-        otherwise      -> none, AND NONE IS THE CORRECT ANSWER
+        the DOORS   -> any role standing at a flow step DIRECTLY NEXT TO the surface (`Rn → In` or
+                       `In → Rn`, either side). Applies to EVERY surface.
+        ours        -> also the roles driving the use cases behind its ways in
+        theirs      -> also the roles whose stories reach it, but ONLY when the kind MEANS a person
+                       goes there (`hosted-screen`, `handoff`)
+        otherwise   -> none, AND NONE IS THE CORRECT ANSWER
+
+    **THE DOOR ARM TAKES NO `kind` GATE, AND THAT IS DELIBERATE — do not "fix" it.** The gate on the
+    `theirs` arm exists to stop a bad INFERENCE: an ungated "whose story reaches it" join once put
+    three human roles on the far side of an upstream MCP server, whose far side is a server. A DOOR
+    is not an inference. `R3 → I7` is the map saying, in its own words, that this role stands at this
+    surface, and gating a written statement on a `kind` would discard what the map states in favour
+    of what the code guesses.
+
+    The other two arms are still needed, and both are gated for the reason above. A door only exists
+    where a flow was doored; the ways-in arm reaches every `ours` surface whether or not its stories
+    were retrofitted, and the `theirs` arm reaches a surface no step ever names.
+
+    Which join the last two use is decided by the `kind`, because *"whose story reaches it" is not
+    "who goes there"*. A member's story reaches an upstream MCP server, but the PRODUCT calls it; a
+    reader follows a code link to a hosting site themselves.
 
     Both joins were measured on the two mapped products, and the broad one is plainly wrong on a
     `theirs` surface the product itself calls: it puts three human roles on the far side of "mounted
@@ -816,12 +831,18 @@ def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
             if eps & ways:
                 narrow[iid].add(u.id)
     broad: dict[str, set[str]] = {iid: set(ucs) for iid, ucs in narrow.items()}
+    #: The DOOR arm, keyed by interface id and holding ROLE ids directly — not use-case ids like the
+    #: other two arms, because a door names the role itself and does not need the use case's actor
+    #: list to reach one.
+    doors: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
     for f in m.flows:
         for st in expanded_flow_steps(m, f):
-            for side in (st.src, st.dst):
-                if side in iface_ids:
-                    broad[side].add(f.uc)
-                for iid in dep_iface.get(side, ()):
+            for near, far in ((st.src, st.dst), (st.dst, st.src)):
+                if near in iface_ids:
+                    broad[near].add(f.uc)
+                    if far in role_ids:
+                        doors[near].add(far)
+                for iid in dep_iface.get(near, ()):
                     broad[iid].add(f.uc)
     uc_actors = {u.id: [a for a in (u.actors or ()) if a in role_ids] for u in m.use_cases}
     out: dict[str, list[str]] = {}
@@ -831,7 +852,7 @@ def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
             ucs = broad[i.id] if kind in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO else set()
         else:
             ucs = narrow[i.id]
-        out[i.id] = sorted_ids({a for u in ucs for a in uc_actors.get(u, ())})
+        out[i.id] = sorted_ids(doors[i.id] | {a for u in ucs for a in uc_actors.get(u, ())})
     return out
 
 
@@ -2102,6 +2123,22 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"`actors` is DERIVED, so this is a gap in the stories, not a field to "
                             f"fill: open a use case at this door, or record '{iface.id}: <why>' "
                             f"under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
+        # (a) OUR surface, something goes OUT of it, and nobody is derived on the far side. An `ours`
+        # surface that sends is the product handing something over, so SOMEBODY receives it — and
+        # after the doors rule the map has two ways to say who (a closing door, or a way in the
+        # receiving use case drives). Deriving nobody means neither was written. Deliberately NOT
+        # gated on `kind`, unlike the advisory above: `file`, `settings` and `api` are all shapes a
+        # product hands something over through, and none of them means a person goes anywhere.
+        if (iface.side == "ours" and any(c.direction == "out" for c in iface.carries)
+                and not actors_by_iface.get(iface.id) and iface.id not in recorded):
+            warnings.append(f"{iface.id} ({iface.name}) is OUR surface and something crosses OUT of "
+                            f"it, but the map derives nobody on the far side — so it says the "
+                            f"product hands something over and never says to whom. `actors` is "
+                            f"DERIVED, so the fix is a story, not a field: close a flow at this "
+                            f"door (`Cn → {iface.id}`, then `{iface.id} → Rn`), or give the surface "
+                            f"a way in that a use case drives. Record '{iface.id}: <why>' under an "
+                            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if nothing on the far "
+                            f"side is a role this map names")
         if iface.side == "theirs" and not iface.evidence and iface.id not in recorded:
             warnings.append(f"{iface.id} ({iface.name}) is a `theirs` surface with no evidence — "
                             f"whose data crosses is not visible at the call site (a search over the "
@@ -2161,20 +2198,37 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     # surfaces and stops leaves a map that can say what its outside edge is while no story ever goes
     # through a door. Measured on the first real build to author the section: 12 surfaces, 517 flow
     # steps, ZERO doors, and 5 steps still pointing at a dep that stands on a surface.
+    #: The three retrofit gates below all say "record the USE-CASE id", so they must read a `UCn`
+    #: token — `recorded` above holds only `I`/`EP` ids and silently dropped every one. Measured when
+    #: this was found: with all 38 of this repo's use cases recorded under the heading the messages
+    #: name, all three advisories still fired at full count, so the escape they offered did nothing.
+    #: An advisory must not merely NAME its escape, it must HONOUR it.
+    recorded_ucs = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("UC",))
     iface_by_ep = {ep: i.id for i in m.interfaces for ep in i.ways_in}
     dep_on_surface = {d.id: d.interfaces[0] for d in m.deps if d.interfaces}
     owed_openings: list[str] = []
     owed_migrations: list[str] = []
+    owed_closings: list[str] = []
+    role_ids = {r.id for r in m.roles}
     uc_by_id = {u.id: u for u in m.use_cases}
     for f in m.flows:
         touched = {st.src for st in f.steps} | {st.dst for st in f.steps}
         uc = uc_by_id.get(f.uc)
         want = {iface_by_ep[e] for e in (uc.entry_points if uc else []) if e in iface_by_ep}
-        if want and not (want & touched) and f.uc not in recorded:
+        if want and not (want & touched) and f.uc not in recorded_ucs:
             owed_openings.append(f.uc)
+        # (b) The FINAL HAND-OFF. Read off `expanded_flow_steps`, not `f.steps`: when the last step
+        # is a sub-flow reference the real hand-off is inside the sub-flow, and the reference step's
+        # own authored `dst` would answer for it. ENDPOINTS ONLY, by design — the two ends of a story
+        # are what a reader reads, and doubling every mid-flow exchange with an actor costs the
+        # readable picture. The blind spot that leaves is stated in the message, not only here.
+        steps = expanded_flow_steps(m, f)
+        if (steps and steps[-1].dst in role_ids and steps[-1].src not in iface_ids
+                and f.uc not in recorded_ucs):
+            owed_closings.append(f"{f.uc} → {steps[-1].dst}")
         for st in f.steps:
             for side in (st.src, st.dst):
-                if side in dep_on_surface and f.uc not in recorded:
+                if side in dep_on_surface and f.uc not in recorded_ucs:
                     owed_migrations.append(f"{f.uc} step {st.n} → {side}")
     if owed_openings:
         warnings.append(
@@ -2183,6 +2237,17 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             f"({', '.join(owed_openings[:6])}{', …' if len(owed_openings) > 6 else ''}). Open each "
             f"flow at its door (`Rn → In`, then `In → Cn`), or record the use-case id under an "
             f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
+    if owed_closings:
+        warnings.append(
+            f"{len(owed_closings)} flow(s) hand their result to an actor without going through a "
+            f"door — the last step reaches a person and names no surface "
+            f"({', '.join(owed_closings[:6])}{', …' if len(owed_closings) > 6 else ''}). Close each "
+            f"flow at its door (`Cn → In`, then `In → Rn`), and draw that out-door even when it is "
+            f"the SAME surface the flow opened at. NOTE the scope this check does NOT cover: only "
+            f"the arrival and the final hand-off are checked, so a MID-FLOW crossing to a different "
+            f"surface is never reported by anything. Record the use-case id under an "
+            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if a flow deliberately ends without "
+            f"handing anything back")
     if owed_migrations:
         warnings.append(
             f"{len(owed_migrations)} flow step(s) point at a dependency that stands on a surface — "

@@ -4431,3 +4431,146 @@ def test_a_step_still_pointing_at_a_dependency_that_stands_on_a_surface_is_flagg
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
                         FlowStep(n=2, src="C1", dst="D1", phrase="calls out", where="src/v.py:4")]
     assert any("stands on a surface" in w for w in warnings_of(m))
+
+
+def test_a_flow_that_hands_its_result_to_an_actor_without_a_door_is_flagged():
+    """The OUT half of the doors rule. The arrival was already gated; the final hand-off was not, so
+    a map could open every story at a door and still show 57 stories walking out past it (measured:
+    coyodex 30, mcpolis 27, on the two live maps the day this shipped)."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="R1", phrase="shows the order")]
+    assert any("hand their result to an actor without going through a door" in w
+               for w in warnings_of(m))
+
+
+def test_the_out_door_is_drawn_even_when_it_is_the_surface_the_story_arrived_by():
+    """"Skip it when it is the same surface" was the first draft and was rejected: the use-case
+    picture would show data flowing only IN while that same surface's `carries` rows record both
+    directions, so one screen would contradict itself. Closing at I1 after arriving at I1 is CLEAN."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=4, src="I1", dst="R1", phrase="shows the order")]
+    assert not [w for w in warnings_of(m) if "without going through a door" in w]
+    # The positive half, and the one that pins the rejected draft: the flow still ARRIVES at I1, and
+    # dropping only its out-door must fire. A "skip the out-door when it is the same surface" rule
+    # would make this map clean, and nothing else in the suite would notice.
+    m.flows[0].steps = m.flows[0].steps[:2] + [
+        FlowStep(n=3, src="C1", dst="R1", phrase="shows the order")]
+    assert any("without going through a door" in w for w in warnings_of(m))
+
+
+def test_a_MID_flow_crossing_to_an_actor_takes_no_door_and_the_message_says_so():
+    """ENDPOINTS ONLY, measured: the strict rule costs 126 steps across the two live maps and
+    endpoints costs 57. The residual blind spot is real, so the advisory must NAME it rather than
+    let a reader believe every crossing is covered."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="R1", phrase="previews it"),
+                        FlowStep(n=4, src="R1", dst="C1", phrase="confirms"),
+                        FlowStep(n=5, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=6, src="I1", dst="R1", phrase="shows the order")]
+    assert not [w for w in warnings_of(m) if "without going through a door" in w]
+    # …and the blind spot is stated where a reader of a firing run will see it.
+    m.flows[0].steps[-1] = FlowStep(n=6, src="C1", dst="R1", phrase="shows the order")
+    fired = [w for w in warnings_of(m) if "without going through a door" in w]
+    assert fired, "the closing gate must fire once the out-door is removed"
+    assert "MID-FLOW crossing to a different surface is never reported" in fired[0], fired[0]
+
+
+def test_the_closing_gate_is_advisory_and_is_honoured_by_a_recorded_use_case():
+    """Both halves. An advisory must not merely NAME its escape, it must HONOUR it: `recorded` reads
+    `I`/`EP` tokens, so the three retrofit gates all named a use-case id their branch then dropped.
+    With every use case recorded under the heading the message names, all three still fired."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="R1", phrase="shows the order")]
+    assert not [p for p in problems_of(m) if "door" in p], "advisory, never blocking"
+    fired = [w for w in warnings_of(m) if "without going through a door" in w]
+    assert INTERFACE_EXCEPTIONS_HEADING in fired[0], fired[0]
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
+                                 body="UC1: the command prints and exits, nobody is handed anything"))
+    assert not [w for w in warnings_of(m) if "without going through a door" in w]
+
+
+def test_the_two_older_retrofit_gates_honour_a_recorded_use_case_too():
+    """The sibling half of the bug above, found by the same sweep and fixed in the same change."""
+    m = make_interface_model()
+    m.use_cases[0].entry_points = ["EP1"]
+    m.deps[0].not_an_interface = ""
+    m.deps[0].interfaces = ["I1"]
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="C1", phrase="asks"),
+                        FlowStep(n=2, src="C1", dst="D1", phrase="calls out", where="src/v.py:4")]
+    assert any("touches that surface" in w for w in warnings_of(m))
+    assert any("stands on a surface" in w for w in warnings_of(m))
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING, body="UC1: deliberate"))
+    assert not [w for w in warnings_of(m) if "touches that surface" in w]
+    assert not [w for w in warnings_of(m) if "stands on a surface" in w]
+
+
+def test_our_surface_that_sends_and_derives_nobody_says_the_far_side_is_unnamed():
+    """Check (a). An `ours` surface that sends is the product handing something over, so somebody
+    receives it. Deriving nobody means neither a closing door nor a driven way in was ever written.
+    Fires on 2 of the 23 surfaces across the two live maps: both products' `I6`."""
+    m = make_interface_model()
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the map files it writes")]
+    fired = [w for w in warnings_of(m) if "derives nobody on the far side" in w]
+    assert fired, warnings_of(m)
+    assert "I1" in fired[0] and INTERFACE_EXCEPTIONS_HEADING in fired[0], fired[0]
+    assert not [p for p in problems_of(m) if "far side" in p], "advisory, never blocking"
+
+
+def test_check_a_is_silent_once_a_flow_closes_at_that_door():
+    """The fix the message asks for is a STORY, not a field — so writing the story must clear it."""
+    m = make_interface_model()
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the map files it writes")]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", phrase="writes them", where="src/v.py:4"),
+                        FlowStep(n=2, src="I1", dst="R1", phrase="hands the reader the files")]
+    assert not [w for w in warnings_of(m) if "derives nobody on the far side" in w]
+
+
+def test_check_a_is_honoured_by_a_recorded_interface_id():
+    m = make_interface_model()
+    m.interfaces[0].ways_in = []
+    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the map files it writes")]
+    assert any("derives nobody on the far side" in w for w in warnings_of(m))
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
+                                 body="I1: the far side is a disk, not anybody this map names"))
+    assert not [w for w in warnings_of(m) if "derives nobody on the far side" in w]
+
+
+def test_a_written_door_puts_its_role_at_the_surface_with_NO_kind_gate():
+    """The DOOR arm of `interface_actors`, and the reason it is ungated. The `theirs` arm is gated on
+    `kind` to stop a bad INFERENCE — an ungated "whose story reaches it" join once put three human
+    roles on the far side of an upstream MCP server. A written step is not an inference: `R1 → I2` is
+    the map's own statement, and gating it would discard what the map says for what the code guesses.
+    `api` is deliberately NOT one of the kinds a person goes to, and the role still derives."""
+    m = make_interface_model()
+    m.interfaces.append(Interface(
+        id="I2", name="Their console", what="Someone else's screen.", side="theirs",
+        facing="user", kind="api", source="src/v.py:9",
+        carries=[InterfaceCrossing(direction="out", what="what we push")],
+        evidence=[EvidenceItem(file="src/v.py:9", why="the call site")]))
+    assert not interface_actors(m).get("I2"), "no door yet, and none is the right answer"
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I2", phrase="pushes", where="src/v.py:9"),
+                        FlowStep(n=4, src="I2", dst="R1", phrase="the person reads it there")]
+    assert interface_actors(m)["I2"] == ["R1"], interface_actors(m)
+
+
+def test_the_door_arm_reads_a_role_on_EITHER_side_of_the_step():
+    m = make_interface_model()
+    m.roles.append(Role(id="R2", name="Bo", kind="human", wants="the file", drives="UC1"))
+    m.flows[0].steps = [FlowStep(n=1, src="R2", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=4, src="I1", dst="R1", phrase="shows it")]
+    assert interface_actors(m)["I1"] == ["R1", "R2"], interface_actors(m)
