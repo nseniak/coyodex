@@ -2074,6 +2074,7 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     ent_ids = {e.id for e in m.entities}
     ep_by_id = {ep.id: ep for ep in m.entry_points if ep.id}
     iface_ids = {i.id for i in m.interfaces}
+    ifs_by_id = {i.id: i for i in m.interfaces}
     actors_by_iface = interface_actors(m)
     minted_kinds: dict[str, list[str]] = {}
     deps_by_iface: dict[str, list[str]] = {}
@@ -2374,6 +2375,39 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                                 f"dead surface, or a use case nobody wrote down. Record "
                                 f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' "
                                 f"extras heading if the surface is deliberately unreached")
+    # (d) A door anchored somewhere its surface has no way in. The rule is "use the way in's own
+    # `source` line", and that rule is CHECKABLE only because it names a field: "use the route line"
+    # was unenforceable, because nothing in the model says what a route is. Restating a rule in terms
+    # of something the model already records is what turns prose into a check, and this one was found
+    # by a worker doing a gateway, where no page and no route exists.
+    # FILE level, not line: a way in points at the declaration and a step may legitimately sit a line
+    # or two inside the handler. Two causes again, because either can be the wrong one, and on one
+    # map the second is the live reading — a `make start` target that the surface's ways in never
+    # list is as likely a missing way in as a wrong anchor.
+    misanchored: list[str] = []
+    ep_file = {e.id: (e.source or "").rsplit(":", 1)[0] for e in m.entry_points if e.id}
+    for f in m.flows:
+        if _excused(f.uc, "doors"):
+            continue
+        for st in f.steps:
+            iface = ifs_by_id.get(st.src) if st.src in iface_ids else None
+            if iface is None or st.dst in iface_ids or not st.where or st.dst in role_ids:
+                continue
+            files = {ep_file[e] for e in iface.ways_in if ep_file.get(e)}
+            if files and st.where.rsplit(":", 1)[0] not in files:
+                misanchored.append(f"{f.uc} step {st.n} ({iface.id} → {st.dst}) at {st.where}")
+    if misanchored:
+        warnings.append(
+            f"{len(misanchored)} door step(s) are anchored on a file their surface has no way in "
+            f"from: {_shown(misanchored, 6, unit='step(s)')}. A door's anchor is the WAY IN's own "
+            f"`source` — the line where the outside reaches the code — and a way in already carries "
+            f"it on every shape: a screen's is its route, a gateway's is its tool handler, a command "
+            f"line's is its command. Two causes, and either can be the wrong one: the step may be "
+            f"anchored on the clicked WIDGET (the line that describes the person, not the surface), "
+            f"or the surface may be MISSING a way in that this step proves exists. Record "
+            f"'UCn/doors: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading when the "
+            f"anchor is deliberate")
+
     return problems, warnings
 
 

@@ -4840,3 +4840,50 @@ def test_a_SUB_FLOW_REFERENCE_step_is_never_itself_a_crossing():
     # …and an ordinary step of that same shape, with no `subflow`, still is.
     m.flows[0].steps[0] = FlowStep(n=1, src="R1", dst="C1", phrase="signs in")
     assert any("without going through a door" in w for w in warnings_of(m))
+
+
+def test_a_door_anchored_where_its_surface_has_no_way_in_is_flagged():
+    """The rule "use the way in's own `source`" is CHECKABLE only because it names a field. Its
+    predecessor, "use the route line", was unenforceable — nothing in the model says what a route is.
+    Restating a rule in terms of something the model already records is what turns prose into a check.
+    Measured when this landed: 15 flagged on the one doored map, and they were exactly the 15 found
+    by hand, with no false positive."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/button.py:9")]
+    fired = [w for w in warnings_of(m) if "has no way in" in w]
+    assert fired, warnings_of(m)
+    assert "UC1 step 2" in fired[0] and "src/button.py:9" in fired[0], fired[0]
+    # It must name BOTH causes: the clicked widget, or a way in the surface is missing.
+    assert "WIDGET" in fired[0] and "MISSING a way in" in fired[0], fired[0]
+    assert not [p for p in problems_of(m) if "has no way in" in p], "advisory, never a gate"
+    # …and the way in's own file clears it. FILE level, not line: a way in points at the declaration
+    # and a step may legitimately sit a line or two inside the handler.
+    m.flows[0].steps[1] = FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:40")
+    assert not [w for w in warnings_of(m) if "has no way in" in w]
+
+
+def test_the_anchor_check_says_nothing_about_a_surface_with_no_ways_in():
+    """A `theirs` surface has none by definition, so there is no line to compare against and a
+    finding would be pure noise on every map that records one."""
+    m = make_interface_model()
+    m.interfaces.append(Interface(
+        id="I2", name="Their console", what="Someone else's screen.", side="theirs",
+        facing="user", kind="hosted-screen", source="src/v.py:9",
+        carries=[InterfaceCrossing(direction="out", what="what we push")],
+        evidence=[EvidenceItem(file="src/v.py:9", why="the call site")]))
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I2", phrase="pushes", where="src/v.py:9"),
+                        FlowStep(n=4, src="I2", dst="C1", phrase="comes back", where="src/zz.py:1")]
+    assert not [w for w in warnings_of(m) if "has no way in" in w], warnings_of(m)
+
+
+def test_the_anchor_check_is_honoured_by_a_scoped_record():
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/button.py:9")]
+    assert any("has no way in" in w for w in warnings_of(m))
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
+                                 body="UC1/doors: the Makefile target really is where this starts"))
+    assert not [w for w in warnings_of(m) if "has no way in" in w]

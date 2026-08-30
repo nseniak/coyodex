@@ -365,3 +365,47 @@ three workers who touched those files, so one map carries two conventions — th
 warns about, committed by the session that wrote the warning. Every one derives mechanically EXCEPT
 where a story's steps run on a different page from its own entry point, which is an open finding of
 its own; so this wants a worker, not a script.
+
+## THE ENFORCEMENT AUDIT — which rules a tool can see, and which will drift unseen
+
+The class of defect this change kept producing is not a wrong rule. It is **a rule no tool can see**,
+which then drifts and looks exactly like nothing happening. So every rule in the doors text was
+sorted by whether an instrument exists. Read this before adding another sentence to `method.md`.
+
+### Enforced — a check fires when the rule is broken
+
+| the rule | what watches it |
+|---|---|
+| every crossing goes through a door | the crossing sweep |
+| the out-door is drawn even at the same surface | the same sweep |
+| the product's own timer is not an actor | `outside_actor_ids`, one definition, shared |
+| name the surface, never the pipe | the migration gate, flows AND sub-flows |
+| a story opens at its own authored door | the opening gate |
+| a door does not count toward the length band | the band's own exemption |
+| a sub-flow reference step is not a crossing | `_is_undoored_crossing` |
+| an `ours` surface that sends and reaches nobody | advisory (a) |
+| a person at a machine-shaped surface | advisory (c) |
+| **a door's anchor is the way in's own line** | **advisory (d)** |
+| plain language, one idea, no code names | the prose checks |
+
+### NOT enforced, and one of these is the most-broken rule in the change
+
+- **WHICH surface a door uses.** Advisory (c) catches one slice — a person at an `api` or `content`
+  shape. Nothing else. Repointing every door on a 42-story map onto the crash reporter raised 2
+  advisories and zero problems.
+- **The phrase voice**: the person's words must not end up on the surface step. **Four of five
+  workers broke this**, which makes it the most-broken rule here, and it has NO instrument. The
+  obvious check was built and measured and REJECTED: a gesture-word list scored 9 hits on a clean
+  map, every one a false positive ("the console opens that team's pages", "ready to paste", "asks
+  the person to pick an account" are all correct surface sentences), while missing a real defect
+  ("flips one server's switch"). Bad precision and bad recall together. **Do not ship that check.**
+  This rule is held by the wording alone and by nothing else.
+- **A note travels with the phrase it annotates.** Checkable in principle, low value, not built.
+
+### The pattern worth carrying to the next element
+
+**Restate a rule in terms of a field the model already records, and it becomes a check.** "Use the
+route line" is unenforceable, because nothing says what a route is. "Use the way in's own `source`"
+is enforceable, because a way in is a field with a source on it. The second wording is also SHORTER.
+When a rule needs a special case for a new shape, look for the field that already answers it for all
+of them — that is where both the brevity and the instrument come from.
