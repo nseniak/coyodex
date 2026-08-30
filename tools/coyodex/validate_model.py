@@ -2233,17 +2233,16 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # steps (about 6%), adds NO new box (all 36 sit in a story that already draws its door), and
         # draws FEWER arrows (525 across 42 stories become 522), because the direct person-to-code
         # lines fold into door arrows already on the page.
-        # Read off `expanded_flow_steps`, not `f.steps`: a crossing inside a sub-flow is a crossing,
-        # and the reference step's own authored endpoints would answer for it.
-        for st in expanded_flow_steps(m, f):
+        # Reads the flow's OWN steps, never `expanded_flow_steps` — the rule `_check_actor_doors`
+        # states below and for the same reason: a sub-flow's step numbers belong to the SUB-FLOW, so
+        # a crossing found inside one would be reported against a step number the named flow does not
+        # have, and reported once per flow that rides it. Sub-flows are swept separately, under their
+        # own ids, in the loop after this one.
+        for st in f.steps:
             if f.uc in recorded_ucs:
                 break
-            ends = (st.src in role_ids, st.dst in role_ids)
-            if ends[0] == ends[1]:
-                continue                          # code-to-code, or actor-to-actor: not a crossing
-            if st.src in iface_ids or st.dst in iface_ids:
-                continue                          # already goes through its door
-            owed_crossings.append(f"{f.uc} step {st.n} ({st.src} → {st.dst})")
+            if _is_undoored_crossing(st, role_ids, iface_ids):
+                owed_crossings.append(f"{f.uc} step {st.n} ({st.src} → {st.dst})")
         for st in f.steps:
             for side in (st.src, st.dst):
                 if side in dep_on_surface and f.uc not in recorded_ucs:
@@ -2259,6 +2258,8 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             for side in (st.src, st.dst):
                 if side in dep_on_surface and sf.id not in recorded_ucs:
                     owed_migrations.append(f"{sf.id} step {st.n} → {side}")
+            if sf.id not in recorded_ucs and _is_undoored_crossing(st, role_ids, iface_ids):
+                owed_crossings.append(f"{sf.id} step {st.n} ({st.src} → {st.dst})")
     if owed_openings:
         warnings.append(
             f"{len(owed_openings)} flow(s) name a way in that belongs to a surface, but no step of "
@@ -2269,9 +2270,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     if owed_crossings:
         ucs = len({c.split(" ", 1)[0] for c in owed_crossings})
         warnings.append(
-            f"{len(owed_crossings)} flow step(s) across {ucs} flow(s) cross between an actor and the "
-            f"product without going through a door — the step names a person at one end and code at "
-            f"the other, and no surface between them "
+            f"{len(owed_crossings)} step(s) across {ucs} flow(s)/sub-flow(s) cross between an "
+            f"actor and the product without going through a door — the step names a person at one "
+            f"end and code at the other, and no surface between them "
             f"({', '.join(owed_crossings[:6])}{', …' if len(owed_crossings) > 6 else ''}). Put the "
             f"surface in: `Rn → In` then `In → Cn` coming in, `Cn → In` then `In → Rn` going out. "
             f"EVERY crossing takes a door, not only the story's two ends, and the door is drawn even "
@@ -2296,6 +2297,18 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                                 f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' "
                                 f"extras heading if the surface is deliberately unreached")
     return problems, warnings
+
+
+def _is_undoored_crossing(st: FlowStep, role_ids: set[str], iface_ids: set[str]) -> bool:
+    """One step with an ACTOR at one end and the product at the other, and no surface between them.
+
+    Shared by the flow sweep and the sub-flow sweep so the two can never drift: a crossing hidden in
+    shared machinery is the same defect as one in a story, and it is drawn in every story that rides
+    it. Actor-to-actor and code-to-code are not crossings; a step already touching an `In` is done."""
+    ends = (st.src in role_ids, st.dst in role_ids)
+    if ends[0] == ends[1]:
+        return False
+    return not (st.src in iface_ids or st.dst in iface_ids)
 
 
 def _check_actor_doors(m: ProjectModel) -> list[str]:

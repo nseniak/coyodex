@@ -193,3 +193,48 @@ actually cross here" would catch and a test on the shape of step 1 cannot.
 
 **What the retrofit did NOT prove**, and this must not be reported as a rebuild: that the doors step
 gets SCHEDULED at all in a real build. That failure has shipped twice, and only a full run catches it.
+
+## What going STRICT then found, on the same 42 stories
+
+Doing the middle of every story turned up things the two ends never could. All of it came from the
+workers, none from a check.
+
+1. **A story that stopped before its own outcome.** mcpolis's UC38 says in its own words *"they are
+   emailed once, so they sign in again"*, and its last step was the product marking its own record.
+   No step ever reached a person, so the outgoing-email surface had nobody on it and check (a) said
+   so. Reading the code found the answer is TWO people, never at once: a per-person server mails the
+   member, a shared team server mails the org admins instead. The story now ends with both, and the
+   surface has its people. **The title and the outcome are still wrong for the shared branch** — on
+   that path the member whose sign-in broke is never told at all.
+2. **A surface with zero traffic got its first walk.** `I8 Google sign-in` was authored, carried a
+   `hosted-screen` shape, and no story in the map had ever named it. Doing the mid-story crossings
+   put the sign-in redirect through it in three stories. A surface no walk visits is a surface nobody
+   can check, and only the strict rule reached it.
+3. **The map is MISSING a surface, and the strict rule is what made the gap visible.** Two stories
+   send a person to a MOUNTED SERVER'S OWN sign-in page, which the product does not host. There is no
+   surface for it: `I7 Mounted MCP servers` is shaped `agent-tools` and its rows describe forwarded
+   tool calls, not a person clicking Approve. Those two crossings currently route through the
+   dashboard, which misnames the place. Recorded rather than papered over. Under the old rule the
+   same moment was two direct person-to-code lines, which said nothing at all.
+4. **"No new box" is a RESULT, not a target.** One worker picked an already-drawn surface over the
+   true one specifically to keep this change's own "adds no new box" measurement true. That is the
+   metric steering the map. The rule now says the sentence out loud: name the surface the actor is
+   really at, even when it puts a new box on the picture.
+5. **Two workers resolved the same anchor question opposite ways in one day**, leaving one map with
+   two conventions for one shape. The old step's anchor is usually the CLICKED WIDGET, because the
+   old step was the person clicking — and that line now describes the ACTOR step, which takes no
+   anchor. The route line wins, and the rule says so rather than leaving it to taste.
+6. **A crossing in shared machinery is drawn in every story that rides it.** One sub-flow step pushed
+   a notice straight at a person, and both parent stories drew it. The crossing sweep now reports a
+   sub-flow under its OWN id and step number: reading it off the expanded steps named a step number
+   the parent flow does not have, and reported it once per riding flow. Same rule the two-door actor
+   check already states, found again one function away.
+
+### What the workers said about strict, unprompted
+
+Three of three said keep it. The two cases they named are worth recording, because both are about the
+MIDDLE of a story: an admin who was drawn behind an address at step 1 and beside it at step 6, for
+the same component, three steps in a row; and a sign-in detour that under the old rule showed a person
+wired straight into backend code while the surface box sat unused on the same picture. The cost they
+named is real and small: one story went from 16 steps to 22, and a person who enters a screen, leaves
+and re-enters now says that screen three times.

@@ -553,8 +553,11 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   **For a web page, use the ROUTE line that mounts the page at its address** — the line that answers
   "where does this surface reach this component". Use it even when the component is a card drawn
   inside the page: the card is BEHIND the surface, and the route is where the surface reaches in.
-  Parallel authors picked the route line for one flow and the clicked widget's own line for the next,
-  so say it once here rather than leave one map with two conventions.
+  **This BEATS "the step keeps the anchor it had" when the two disagree**, and they disagree often:
+  the old step's anchor is usually the CLICKED WIDGET, because the old step was the person clicking.
+  That line now describes the ACTOR step, which takes no anchor at all, so keeping it on the surface
+  step anchors the step to a place it does not happen. Two workers hit this on the same day and
+  resolved it opposite ways, leaving one map with two conventions for one shape. The route wins.
   **Going the other way (`Cn → In`), anchor the line where the component DELIVERS to the surface** —
   the return, the render, the write — not the route. The NEW step against the actor needs neither.
   Measured before this clause existed: of the steps this rule rewrites, 41 across the two live maps
@@ -564,6 +567,12 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   on the picture. When the exchange plainly happens somewhere else, name that surface instead: a
   question asked on the dashboard and answered by mail crosses two surfaces, and the story should
   say both.
+  **Name the surface the actor is really at, even when it puts a NEW box on the picture.** A
+  redirect out to a sign-in provider is that provider's screen, not the address that issued the
+  redirect. Measured on the doored map, the strict rule adds no new box in almost every case — but
+  that is a RESULT, never a target, and a worker who picked the already-drawn box to protect the
+  number chose the wrong surface. If no surface in the map fits the place the person is really
+  standing, say so and add NO door: the map is missing a surface, and a wrong door hides that.
   **A flow whose LAST step is the actor acting AGAIN (`Rn → Cn`) still takes a door** — an inbound
   one, `Rn → In` then `In → Cn` — because it is a crossing like any other. It has no hand-off, and
   that is a smell worth reading twice: the story stops mid-conversation, so ask whether it is traced

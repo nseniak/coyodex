@@ -4624,3 +4624,24 @@ def test_a_SUB_FLOW_step_pointing_at_a_pipe_is_flagged_under_its_own_id():
     m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
                                  body="SF1: the step really means the dependency itself"))
     assert not [w for w in warnings_of(m) if "stands on a surface" in w]
+
+
+def test_a_SUB_FLOW_crossing_is_reported_under_its_OWN_step_number():
+    """A sub-flow's step numbers belong to the SUB-FLOW. Reading the crossing sweep off
+    `expanded_flow_steps` reported one against a step number the named flow does not have, and once
+    per flow that rides the sub-flow. Same rule `_check_actor_doors` states, same reason."""
+    m = make_interface_model()
+    m.subflows = [SubFlow(id="SF1", name="Ask the person", steps=[
+        FlowStep(n=1, src="C1", dst="R1", phrase="asks them"),
+        FlowStep(n=2, src="C1", dst="E1", phrase="stores it", where="src/v.py:5")])]
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=4, src="I1", dst="R1", phrase="shows it")]
+    fired = [w for w in warnings_of(m) if "without going through a door" in w]
+    assert fired, warnings_of(m)
+    assert "SF1 step 1" in fired[0], fired[0]
+    assert "UC1 step 1" not in fired[0], "reported against a step number UC1 does not have"
+    assert fired[0].startswith("1 step(s)"), fired[0]   # once, not once per riding flow
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING, body="SF1: deliberate"))
+    assert not [w for w in warnings_of(m) if "without going through a door" in w]
