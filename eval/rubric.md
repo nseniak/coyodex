@@ -22,7 +22,10 @@ be scored **down**, not guessed.
 
    A story that touches a person and names a COMPONENT is naming the code — the same fault as naming
    the pipe, one field over. `C43 → R1` says the person receives it from a class; the surface they
-   actually read it on is the thing the map is for. Score EVERY crossing, not only the two ends: a
+   actually read it on is the thing the map is for. And a door being PRESENT is not a door being
+   RIGHT: read where each door actually sends the person. A person standing at a surface shaped `api`
+   or `content` is either the wrong door or the wrong shape, and no automatic check can tell you
+   which. Score EVERY crossing, not only the two ends: a
    story that routes a person through a surface at its ends and past that same surface in the middle
    draws one person on both sides of one wall, and that is a defect, not a shortcut.
 

@@ -320,6 +320,20 @@ INTERFACE_KIND_SEEDS = (
 # actor, and none is the correct answer.
 INTERFACE_KINDS_A_PERSON_GOES_TO = ("hosted-screen", "handoff")
 
+# The other end of the same question, and it answers a DIFFERENT one — do not merge the two tuples.
+# Above: which `theirs` kinds let the map INFER that a person goes there. Here: which kinds say
+# NOBODY STANDS THERE AT ALL, so a walk that draws a person at one is worth a second look. Both
+# shapes are one program talking to another: `api` is a call over a network, `content` is data we
+# read that we did not write. Every other seed can legitimately have a person at it, `agent-tools`
+# included, because a headless agent is a role in its own right.
+#
+# This is a NUDGE, never a gate, and it names TWO possible causes because either can be the wrong
+# one: the door may be on the wrong surface, or the surface may be wearing the wrong shape. It exists
+# because the door checks verify a door EXISTS and can never tell a RIGHT door from a WRONG one —
+# measured by repointing every door on a 42-story map onto the crash reporter, which raised 2
+# advisories and ZERO blocking problems.
+INTERFACE_KINDS_NOBODY_STANDS_AT = ("api", "content")
+
 # The tiebreak, for the surfaces that are BOTH a place people act and a service we call:
 # **the kind names where the PEOPLE are — but only when the product's own flow takes them there.**
 # Slack for a product that lives in it, a sign-in redirect and a hosted checkout are `hosted-screen`;

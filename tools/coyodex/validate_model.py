@@ -2028,6 +2028,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                 f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if this product genuinely has none")
         return problems, warnings
     recorded = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("I", "EP"))
+    #: (surface id, its kind, the roles the walks put at it) for the wrong-door nudge below.
+    people_at_a_machine: list[tuple[str, str, str]] = []
+    role_names = {r.id: r.name for r in m.roles}
     ent_ids = {e.id for e in m.entities}
     ep_by_id = {ep.id: ep for ep in m.entry_points if ep.id}
     iface_ids = {i.id for i in m.interfaces}
@@ -2123,6 +2126,20 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"`actors` is DERIVED, so this is a gap in the stories, not a field to "
                             f"fill: open a use case at this door, or record '{iface.id}: <why>' "
                             f"under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
+        # (c) A person is drawn at a surface whose SHAPE says nobody stands there. This is the one
+        # question the door checks cannot ask: they verify a door EXISTS and can never tell a RIGHT
+        # door from a WRONG one. Measured by repointing every door on a 42-story map onto the crash
+        # reporter — a nonsense map — which raised 2 advisories and ZERO blocking problems.
+        # It names TWO causes on purpose, because either can be the wrong one, and on the only live
+        # instance today it is the SECOND: mcpolis's outgoing email is shaped `api` and really does
+        # put mail in front of a member, which is the same row a fresh re-author of that section
+        # minted a new kind for. A NUDGE, never a gate, and silent on a MINTED kind, because an
+        # unknown word cannot say whether anybody stands there.
+        if (canon in grammar.INTERFACE_KINDS_NOBODY_STANDS_AT and actors_by_iface.get(iface.id)
+                and iface.id not in recorded):
+            people_at_a_machine.append(
+                (iface.id, canon, ", ".join(f"{r} {role_names.get(r, '')}".strip()
+                                            for r in actors_by_iface[iface.id])))
         # (a) OUR surface, something goes OUT of it, and nobody is derived on the far side. An `ours`
         # surface that sends is the product handing something over, so SOMEBODY receives it — and
         # after the doors rule the map has two ways to say who (a closing door, or a way in the
@@ -2146,6 +2163,18 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"is, and the two look identical in the code). Cite one, or record "
                             f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
                             f"heading")
+
+    if people_at_a_machine:
+        shown = "; ".join(f"{i} ('{k}': {a})" for i, k, a in people_at_a_machine)
+        warnings.append(
+            f"{len(people_at_a_machine)} surface(s) have a PERSON at them and a shape that says "
+            f"nobody stands there ({'/'.join(grammar.INTERFACE_KINDS_NOBODY_STANDS_AT)} are one "
+            f"program calling another): {shown}. Exactly one of two things is wrong, and this is the "
+            f"only check that can ask which. Either a walk names the WRONG DOOR — the door checks "
+            f"verify a door exists and can never tell a right one from a wrong one — or the SHAPE is "
+            f"wrong for a surface a person really does reach. Read the walks that put them there. "
+            f"Record 'In: <why>', one line per surface, under an "
+            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading when the pairing is deliberate")
 
     if minted_kinds:
         # ONE AGGREGATED LINE, never one per row. Minting is LEGAL — the vocabulary is seeded-open

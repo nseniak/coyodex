@@ -449,6 +449,11 @@ Semantics, stated on the fields:
   (the two that MEAN a person goes there). Anything else derives nobody, and nobody is the correct
   answer — most surfaces are reached by the product itself, not by a person. An authored value
   beside a derived one is the failure mode this shape exists to remove.
+  **A person derived at an `api` or a `content` surface draws a nudge**, because those two shapes are
+  one program calling another. It is the only check that can ask whether a door is the RIGHT door:
+  every other door check verifies a door EXISTS, and cannot tell a right one from a wrong one. Two
+  causes, either of which can be the wrong one — the walk names the wrong surface, or the surface
+  wears the wrong shape.
   **`ways_in`** lists the `EPn`s the surface is made of and
   travels through `reconcile` (field `ways_in`) exactly like a use case's `entry_points`, for the
   same reason: those ids are minted at assembly. **`carries`** is one row per thing that crosses, in

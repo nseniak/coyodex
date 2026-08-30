@@ -4645,3 +4645,64 @@ def test_a_SUB_FLOW_crossing_is_reported_under_its_OWN_step_number():
     assert fired[0].startswith("1 step(s)"), fired[0]   # once, not once per riding flow
     m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING, body="SF1: deliberate"))
     assert not [w for w in warnings_of(m) if "without going through a door" in w]
+
+
+def test_a_person_at_a_machine_shaped_surface_is_nudged():
+    """The one question the door checks CANNOT ask. They verify a door EXISTS and can never tell a
+    RIGHT door from a WRONG one — measured by repointing every door on a 42-story map onto the crash
+    reporter, a nonsense map, which raised 2 advisories and ZERO blocking problems. `api` and
+    `content` are one program calling another, so a walk that puts a person at one is worth a look."""
+    m = make_interface_model()
+    m.interfaces.append(Interface(
+        id="I2", name="Their log store", what="Where our log lines go.", side="theirs",
+        facing="operator", kind="api", source="src/v.py:9",
+        carries=[InterfaceCrossing(direction="out", what="one line per request")],
+        evidence=[EvidenceItem(file="src/v.py:9", why="the call site")]))
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I2", phrase="ships a line", where="src/v.py:9"),
+                        FlowStep(n=4, src="I2", dst="R1", phrase="the person reads it there")]
+    fired = [w for w in warnings_of(m) if "nobody stands there" in w]
+    assert fired, warnings_of(m)
+    assert "I2" in fired[0] and "'api'" in fired[0], fired[0]
+    # It must name BOTH causes: either the door is wrong, or the shape is.
+    assert "WRONG DOOR" in fired[0] and "SHAPE is" in fired[0], fired[0]
+    assert not [p for p in problems_of(m) if "nobody stands there" in p], "a nudge, never a gate"
+
+
+def test_the_nudge_is_silent_when_the_shape_says_a_person_belongs_there():
+    """`hosted-screen` and `handoff` MEAN a person goes there, and `agent-tools` can hold a headless
+    agent, which is a role in its own right. None of those may fire."""
+    m = make_interface_model()
+    for kind in ("hosted-screen", "handoff", "agent-tools", "screen", "command-line"):
+        m.interfaces[0].kind = kind
+        m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                            FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                            FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                            FlowStep(n=4, src="I1", dst="R1", phrase="shows it")]
+        assert not [w for w in warnings_of(m) if "nobody stands there" in w], kind
+
+
+def test_the_nudge_says_nothing_about_a_MINTED_kind():
+    """Seeded-open: an unknown word cannot say whether anybody stands there, so guessing would put a
+    false finding on every legitimate mint. The minted-kind advisory already covers the mint itself."""
+    m = make_interface_model()
+    m.interfaces[0].kind = "kiosk"
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=4, src="I1", dst="R1", phrase="shows it")]
+    assert not [w for w in warnings_of(m) if "nobody stands there" in w], warnings_of(m)
+
+
+def test_the_nudge_is_honoured_by_a_recorded_interface_id():
+    m = make_interface_model()
+    m.interfaces[0].kind = "api"
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
+                        FlowStep(n=4, src="I1", dst="R1", phrase="shows it")]
+    assert any("nobody stands there" in w for w in warnings_of(m))
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
+                                 body="I1: the mail really does land in a person's inbox"))
+    assert not [w for w in warnings_of(m) if "nobody stands there" in w]

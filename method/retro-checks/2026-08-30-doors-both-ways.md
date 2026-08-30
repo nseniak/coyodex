@@ -230,6 +230,24 @@ workers, none from a check.
    the parent flow does not have, and reported it once per riding flow. Same rule the two-door actor
    check already states, found again one function away.
 
+## The check that asks whether a door is the RIGHT door
+
+Every other door check verifies that a door EXISTS. None can tell a right door from a wrong one, and
+that gap was measured rather than assumed: repointing EVERY door on the 42-story map onto the crash
+reporter — a nonsense map — raised 2 advisories and **zero** blocking problems.
+
+So a nudge was added: a person derived at a surface shaped `api` or `content` (one program calling
+another). It names TWO causes, because either can be the wrong one — the walk names the wrong
+surface, or the surface wears the wrong shape.
+
+expect: 0, or a line the author has adjudicated.
+regression sign: it fires on a surface nobody has looked at. On the nonsense map it names the crash
+reporter with five roles at it. On the real map it fires ONCE, on outgoing email, and there the
+answer is the SECOND cause: the mail really does land in front of a member, and `api` is the wrong
+shape for it — the same row a fresh re-author of that section minted a new kind for. That agreement
+between two independent routes is the strongest signal this change produced about the shape
+vocabulary, and it is still unresolved.
+
 ### What the workers said about strict, unprompted
 
 Three of three said keep it. The two cases they named are worth recording, because both are about the
