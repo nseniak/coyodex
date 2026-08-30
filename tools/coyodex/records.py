@@ -70,6 +70,13 @@ ANY_ID_KEY = r"[A-Z]+\d+"
 # shared one would quietly let every other family adjudicate a sub-domain it has no check for.
 OWNER_KEY = r"(?:SD|E)\d+"
 
+#: The 'Interface exceptions' vocabulary: `ID_KEY` plus `SF`. The doors family adjudicates a
+#: SUB-FLOW as well as a use case, because shared machinery can carry a step that names a pipe and
+#: the edit goes on the sub-flow, under its own id. Its own key rather than widening `ID_KEY`, for
+#: the reason stated one comment up: a shared key lets every other family adjudicate a sub-flow it
+#: has no check for.
+IFACE_KEY = r"(?:CAP|EP|UC|HP|SF|R|C|E|I)\d+(?:/[a-z-]+)?"
+
 #: The lead-in of an Audit-exceptions record: the CHECK NAME, which scopes every id on the line.
 AUDIT_LEAD = r"(?:[a-z][a-z-]+)\s+"
 
@@ -125,7 +132,7 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # facing / evidence / reach is deliberately as it stands) and an `EPn` (this way in deliberately
     # belongs to no surface). One heading, because an operator deciding "that is fine" is making the
     # same kind of decision in both cases.
-    HeadingSpec("Interface exceptions", True, ID_KEY),
+    HeadingSpec("Interface exceptions", True, IFACE_KEY),
     # Keyed by a repo PATH, not an id — the thing being adjudicated is a file that used to hold an
     # access rule and no longer does. It had been pointed at "Audit exceptions", whose key
     # vocabulary is `[A-Z]+\d+`: a path can never be a key there, so twenty records written on one

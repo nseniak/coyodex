@@ -4574,3 +4574,44 @@ def test_the_door_arm_reads_a_role_on_EITHER_side_of_the_step():
                         FlowStep(n=3, src="C1", dst="I1", phrase="answers", where="src/v.py:4"),
                         FlowStep(n=4, src="I1", dst="R1", phrase="shows it")]
     assert interface_actors(m)["I1"] == ["R1", "R2"], interface_actors(m)
+
+
+def test_handing_back_to_the_products_OWN_timer_needs_no_door():
+    """An actor for the doors rule is one OUTSIDE the product. A `service` + `internal` role is the
+    product's own scheduled work, so a story that starts or ends at one crosses nothing. Read the two
+    FIELDS, never the name: the first real trial stalled on a role called "Upkeep job", which the
+    method text names in one breath as an actor and in the next as a timer."""
+    m = make_interface_model()
+    m.roles.append(Role(id="R9", name="Upkeep job", kind="service", audience="internal",
+                        wants="the sweep to run", drives="UC1"))
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="R9", phrase="tells the sweep it is done")]
+    assert not [w for w in warnings_of(m) if "without going through a door" in w]
+    # …and a service role the CUSTOMER runs is outside the product, so it still owes its door.
+    m.roles.append(Role(id="R8", name="Their bot", kind="service", audience="user",
+                        wants="the answer", drives="UC1"))
+    m.flows[0].steps[-1] = FlowStep(n=3, src="C1", dst="R8", phrase="answers the bot")
+    assert any("without going through a door" in w for w in warnings_of(m))
+
+
+def test_a_SUB_FLOW_step_pointing_at_a_pipe_is_flagged_under_its_own_id():
+    """Shared machinery is where a pipe hides best: a sub-flow is written once and ridden by several
+    stories, so ONE unmigrated step there draws the dep in every flow that runs it. This loop read
+    `m.flows` only, and a worker doing the retrofit by hand found what no check could see — mcpolis's
+    "open a session to a mounted server" carries 3 such steps while `validate` reported zero owed."""
+    m = make_interface_model()
+    m.deps[0].not_an_interface = ""
+    m.deps[0].interfaces = ["I1"]
+    m.subflows = [SubFlow(id="SF1", name="Open a session", steps=[
+        FlowStep(n=1, src="C1", dst="D1", phrase="calls out", where="src/v.py:4"),
+        FlowStep(n=2, src="C1", dst="E1", phrase="stores it", where="src/v.py:5")])]
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3")]
+    fired = [w for w in warnings_of(m) if "stands on a surface" in w]
+    assert fired, warnings_of(m)
+    assert "SF1 step 1" in fired[0], fired[0]
+    # …and the escape honours the SUB-FLOW's own id, which is where the edit goes.
+    m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
+                                 body="SF1: the step really means the dependency itself"))
+    assert not [w for w in warnings_of(m) if "stands on a surface" in w]

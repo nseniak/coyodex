@@ -79,3 +79,38 @@ message naming one id family and a branch reading another.
    regression sign: a step-count-band advisory appearing on a flow that was clean before its doors
    were added. Measured when this shipped: zero flows on either live map fall under. If one does, the
    flow was too short — never that the doors were wrong.
+
+## The re-author of the surfaces, and what it says about the SHAPE instruction
+
+`96-interface-kind.md` shipped its shape vocabulary with NO rebuild, so the instruction telling an
+author how to pick a `kind` had never been read by anyone who was not in the design conversation.
+On 2026-08-30 a fresh agent was given the repo and the instruction and asked to write mcpolis's
+outside edge from scratch, with no sight of the answer already committed. **It wrote 16 surfaces
+where the committed map has 12**, and the differences are the finding. The 12 were kept — the
+re-author was a measurement, not a replacement — and these are the gaps it exposed:
+
+1. **`facing` has no tiebreak, and two runs answered it differently on the same code.** The rented
+   sandbox exists so a customer's server runs, and only an operator holds the account. One run wrote
+   `user`, the other `operator`, and the instruction decides neither. Every bought service has this.
+2. **Outgoing email sets two rules against each other.** "Mark the SERVICE, never the library" points
+   at the mail relay and gives `api`. "Name the far side, never the pipe" makes the relay a pipe and
+   the mailbox the far side, which gives something else. The fresh run minted a new kind, `email`,
+   and called the surface `theirs`; the committed map says `api` and `ours`. `side` is undecidable
+   from the text here too: email's shape is a public standard (`theirs`) and we write the message
+   (`ours`), and both survive the "would its shape change" test.
+3. **The split rule is one clause short.** "Split when the AUDIENCES differ" cannot separate the
+   operator's web console from the operator's tool server: one audience, two shapes. A row carries
+   one `kind`, so the rule needs "split when the SHAPE differs" beside it.
+4. **Whether configuration is a surface is never stated.** The `settings` seed exists, which is the
+   only hint. One run included the deployment settings, the other did not.
+5. **There is no size floor.** A dashboard sending each server's hostname to a free icon service fits
+   the definition exactly and is tiny. Nothing says whether a reader wants it.
+6. **A health probe and the run command are uncovered.** The exclusion list names build and test
+   pipelines only, and `command-line` is a seed.
+
+One rule was reported as working perfectly and should be kept verbatim: *"An HTTP address that only
+serves the product's own front end belongs to that front end's surface"* settled about 200 endpoints
+with no thought needed.
+
+The instruction's own numbers held: 6 of the 11 seeds were used and exactly one kind was minted,
+which is check 4's "at most one mint" in `2026-08-29-interfaces.md` passing on its first real trial.

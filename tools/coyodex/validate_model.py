@@ -2203,13 +2203,22 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     #: this was found: with all 38 of this repo's use cases recorded under the heading the messages
     #: name, all three advisories still fired at full count, so the escape they offered did nothing.
     #: An advisory must not merely NAME its escape, it must HONOUR it.
-    recorded_ucs = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("UC",))
+    recorded_ucs = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("UC", "SF"))
     iface_by_ep = {ep: i.id for i in m.interfaces for ep in i.ways_in}
     dep_on_surface = {d.id: d.interfaces[0] for d in m.deps if d.interfaces}
     owed_openings: list[str] = []
     owed_migrations: list[str] = []
     owed_closings: list[str] = []
-    role_ids = {r.id for r in m.roles}
+    #: An actor for the doors rule is one OUTSIDE the product. A role that is a service AND internal
+    #: is the product's own scheduled work — a timer, a boot hook, a signal handler in the process —
+    #: and handing back to it crosses nothing. Read the two FIELDS, never the role's name: the first
+    #: real trial of this rule stalled on a role called "Upkeep job", which the method text names in
+    #: one breath as an actor and in the next as a timer. Measured: this exempts 7 of mcpolis's 42
+    #: flows on the ARRIVAL side (which the `want` gate already excluded by another road) and 0 of
+    #: the 57 closings across the two live maps, so it changes no count today and is here so the
+    #: check and the method text cannot drift apart.
+    inside_roles = {r.id for r in m.roles if r.kind == "service" and r.audience == "internal"}
+    role_ids = {r.id for r in m.roles} - inside_roles
     uc_by_id = {u.id: u for u in m.use_cases}
     for f in m.flows:
         touched = {st.src for st in f.steps} | {st.dst for st in f.steps}
@@ -2230,6 +2239,17 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             for side in (st.src, st.dst):
                 if side in dep_on_surface and f.uc not in recorded_ucs:
                     owed_migrations.append(f"{f.uc} step {st.n} → {side}")
+    # SUB-FLOWS TOO. Shared machinery is where a pipe hides best: a sub-flow is written once and
+    # ridden by several stories, so ONE unmigrated step there draws the dep in every flow that runs
+    # it, and this loop read `m.flows` only. Found by a worker doing the retrofit by hand, not by any
+    # check — mcpolis's "open a session to a mounted server" carries 3 such steps across 2 deps, and
+    # a `validate` reporting zero migrations owed said nothing about any of them. Reported under the
+    # sub-flow's OWN id, because that is where the edit goes; the step numbers belong to the sub-flow.
+    for sf in m.subflows:
+        for st in sf.steps:
+            for side in (st.src, st.dst):
+                if side in dep_on_surface and sf.id not in recorded_ucs:
+                    owed_migrations.append(f"{sf.id} step {st.n} → {side}")
     if owed_openings:
         warnings.append(
             f"{len(owed_openings)} flow(s) name a way in that belongs to a surface, but no step of "
@@ -2254,8 +2274,8 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             f"name the SURFACE instead, and let the dependency be derived "
             f"({', '.join(owed_migrations[:6])}{', …' if len(owed_migrations) > 6 else ''}). A step "
             f"at the dep names the pipe; a step at the surface names the far side. Record the "
-            f"use-case id under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading if a step really "
-            f"means the dependency itself")
+            f"use-case id (or the SUB-FLOW id) under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
+            f"heading if a step really means the dependency itself")
 
     if any(u.entry_points for u in m.use_cases):
         reached = {ep for u in m.use_cases for ep in u.entry_points}

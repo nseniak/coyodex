@@ -1302,6 +1302,11 @@ PARTIAL_ID_REGISTRIES: dict[tuple[str, frozenset[str]], str] = {
         "separately, and teaching this one `R` would blank the actor-attribution check)",
     ("coyodex/records.py", frozenset({"BLK", "BR", "D", "S", "SD", "SF"})):
         "ID_KEY: the adjudication vocabulary — only the families that HAVE a recordable advisory",
+    ("coyodex/records.py", frozenset({"BLK", "BR", "D", "S", "SD"})):
+        "IFACE_KEY: ID_KEY plus `SF`, for the 'Interface exceptions' family alone. Shared machinery "
+        "can carry a step naming a pipe, and the edit goes on the SUB-FLOW under its own id, so that "
+        "family must be able to adjudicate one. Its own key rather than a wider ID_KEY, which would "
+        "let every other family adjudicate a sub-flow it has no check for",
     ("coyodex/impact_ripple.py", frozenset({"R"})):
         "_ID_RE: change-impact targets. A ROLE carries no anchor of its own (only a relation's "
         "grant line does), so it is never a ripple target",

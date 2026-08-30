@@ -472,9 +472,15 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   sites are identical). Record a deliberate exception as `In: <why>` or `EPn: <why>` under an
   **"Interface exceptions"** extras heading.
   **Doors — put the surface IN the story.** A story crosses between an ACTOR and the product at two
-  moments, and BOTH of them go through a door. **"Actor" means any `Rn`** — a person, or a program
-  acting as one (a headless agent, an upkeep job). A flow that starts inside the product (a timer, a
-  queue) has no arrival and takes no arrival door.
+  moments, and BOTH of them go through a door. **"Actor" means any `Rn` that is OUTSIDE the
+  product** — a person, or a program somebody else runs (a customer's headless agent, a partner's
+  bot). **The product's OWN scheduled work is not an actor for this rule**, even though the map
+  draws it as one: a role that is `kind: service` AND `audience: internal` is a timer, a boot hook or
+  a signal handler inside the process, and a flow it starts has no arrival and takes NO arrival door.
+  Read those two fields; do not read the role's name. This was got wrong on the first real trial,
+  because a role called "Upkeep job" is named in one breath as an actor and in the next as a timer.
+  Measured on mcpolis: 7 of its 42 flows are started by that one role, which is the whole difference
+  between the 42 flows that mechanically open at a role and the 35 that owe a door.
   **(1) The ARRIVAL.** A use-case flow's FIRST step — that step and no later one — names the surface
   the actor comes in by: `R1 → I3`, then `I3 → C12`. An OPENING `R1 → C12` is the defect; the same
   shape in the middle of the story is not (see ENDPOINTS ONLY below).
@@ -486,22 +492,58 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   **WHICH surface — look it up, do not guess.** The arrival surface is the one whose `ways_in` hold
   the use case's `entry_points`; that link is already authored. If those entry points sit on MORE
   than one surface, stop: two doors onto one goal is the split this method already asks for under
-  *Use cases*, not a flow with two openings. The hand-off surface is the SAME one, unless the last
-  step plainly delivers somewhere else (a mail, a written file) — then it is that one. A use case
+  *Use cases*, not a flow with two openings.
+  **The hand-off surface is the SAME one only when the story ends where it began.** It is a DIFFERENT
+  surface whenever the last step ends somewhere else, and there are three shapes of that, not one:
+  the result is delivered without a screen (a mail, a written file); the last step's component lives
+  behind another surface (the story is set up on the dashboard and answered at the gateway); or the
+  last step reaches a DIFFERENT ACTOR from the one who opened it (an admin sets a rule, and the
+  member's assistant is the one refused). In all three the hand-off surface is where THAT actor
+  stands, never where the story started. Read the last step, not the first. All three came up on the
+  first real trial and none was covered — a literal reading would have drawn a gateway refusal on a
+  dashboard screen. A use case
   with no ways in has no authored answer: pick the surface whose own sentence describes where the
-  actor stands, and if none does, the map is missing a surface. Nothing OUTSIDE the step list
+  actor stands, and if none does, the map is missing a surface — say so and add NO door. An invented
+  door is worse than a missing one, because the next reader cannot tell it was invented. Nothing OUTSIDE the step list
   changes: a door is a step, and the surface's own `carries` rows are authored separately.
   **WHAT the two new steps say, and which phrase goes where.** Every step carries a phrase and the
   doors are no exception, so renumber the whole list and write both — in the STORY'S own words, never
-  by copying an example off this page. **The step that already existed keeps the phrase it already
-  had**, and only its actor end is replaced by the surface: the old `R1 → C12` becomes `I3 → C12`
-  with its phrase intact, and the old `C43 → R1` becomes `C43 → I3` with its phrase intact. The NEW
-  step is the one against the actor, and it is written fresh: the arrival step says what the actor
-  does at the surface, the hand-off step says what the surface puts in front of them.
+  by copying an example off this page. **A phrase belongs to whoever ACTS in it, and the two ends are
+  not symmetric**, because the old step's voice differs at each end.
+  **At the ARRIVAL the old phrase is a HUMAN action, so it MOVES to the new actor step.** The old
+  `R2 → C121` "types the colleague's email and clicks Add" becomes `R2 → I2` carrying that same
+  phrase, and the rewritten `I2 → C121` is given a FRESH phrase in the surface's own voice ("sends
+  the new member and the role they were given"). Leaving the human phrase on the surface step is the
+  mistake this paragraph exists to stop: it makes the map say *the dashboard clicks Add*, and it
+  makes the two steps say one thing twice. Measured on the first real trial: 11 of 11 arrivals came
+  back with a screen doing a person's action.
+  **At the HAND-OFF the old phrase is already the product's action, so it STAYS.** The old
+  `C121 → R2` "puts the join address on the clipboard" becomes `C121 → I2` with its phrase intact,
+  and the NEW `I2 → R2` is written fresh, saying what the surface puts in front of them.
+  A note and an anchor always travel with the step that KEEPS the machine action, never with the
+  actor step. An anchor already sitting on an actor step is harmless; leave it.
+  **The rewritten step now needs a CODE ANCHOR, and often did not before.** A step touching an actor
+  is a human action and needs none; `In → Cn` and `Cn → In` are element-to-element and `validate`
+  BLOCKS without a `where` or a `no_call_site`. So the rewritten step keeps the anchor it had, and
+  where it had none you must supply one: the line where the surface reaches that component (the
+  route handler, the command's own function, the screen's own handler), or `no_call_site` when the
+  wiring is genuinely event-driven or config-wired.
+  **For a web page, use the ROUTE line that mounts the page at its address** — the line that answers
+  "where does this surface reach this component". Use it even when the component is a card drawn
+  inside the page: the card is BEHIND the surface, and the route is where the surface reaches in.
+  Parallel authors picked the route line for one flow and the clicked widget's own line for the next,
+  so say it once here rather than leave one map with two conventions.
+  **Going the other way (`Cn → In`), anchor the line where the component DELIVERS to the surface** —
+  the return, the render, the write — not the route. The NEW step against the actor needs neither.
+  Measured before this clause existed: of the steps this rule rewrites, 41 across the two live maps
+  carried no anchor, and every one of them would have become a blocking problem.
   **ENDPOINTS ONLY — the arrival and the final hand-off, nothing between them.** A mid-flow exchange
   with an actor (a preview at step 4, a question answered at step 6) keeps its `Cn → Rn` / `Rn → Cn`
   shape and takes NO door. Doubling those steps buys a complete check and costs the readable picture
   that is the point of a flow.
+  **A flow whose LAST step is the actor acting AGAIN (`Rn → Cn`) has no hand-off and takes no
+  out-door.** That shape is allowed, and it is also a smell worth reading twice: the story stops
+  mid-conversation, so ask whether it is traced to its outcome or hands over to another use case.
   **Name the surface, never the thing standing on it — and a dep and an actor differ here.** A step
   reaching an outside SERVICE names the surface ANYWHERE in the flow, and the dep is then derived
   rather than drawn: `C12 → D7` becomes `C12 → I7`. A step reaching an ACTOR names the surface at the
@@ -519,8 +561,14 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   door counts as 0.) So doors LOWER a flow's counted length by up to 2, because the two rewritten
   steps stop counting as well: a flow already near the ≥3 floor can drop under it purely by being
   doored, and the answer is that the flow was too short, never that the doors were wrong. Measured
-  when this rule shipped: zero flows on either live map fall under. An existing `Cn → Dn` step on a dep that stands on a `theirs` surface MIGRATES
-  to that surface; the dep is then derived.
+  when this rule shipped: zero flows on either live map fall under.
+  An existing `Cn → Dn` step on a dep that stands on ANY surface MIGRATES to that surface, `ours` as
+  much as `theirs`; the dep is then derived. (This once read "a `theirs` surface", which the checker
+  never agreed with and which is wrong on its face: the mail service standing on our own
+  outgoing-email surface is exactly the step that gives that surface its story.) The BACKBONE EDGE
+  LIST does not migrate with the step: an edge runs between code and a dependency, a surface is never
+  an edge endpoint, and a story naming the surface beside an edge naming the dep is the correct end
+  state, not a contradiction.
   **What crosses**: one row per thing, in ONE direction, each with a plain sentence and the SINGLE
   records (`En`) that cross — never a data area. An EMPTY record list is legitimate and common: a log
   line, a fetched web page, a source file and a tool call are real crossings no stored record holds.
