@@ -471,15 +471,29 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   (over the product's own records it is not an interface, over the open web it is, and the two call
   sites are identical). Record a deliberate exception as `In: <why>` or `EPn: <why>` under an
   **"Interface exceptions"** extras heading.
-  **Doors — put the surface IN the story.** A use-case flow's OPENING step names the surface the
-  actor comes in by (`R1 → I3`, then `I3 → C12`), and a step that reaches an outside service names
-  that surface rather than the dep it stands on (`C12 → I7`). Without it a reader sees the PIPE and
-  not the door: a flow that draws `web browser` as its only outside box is naming the thing this
-  method tells you never to name. **A door is not only a way IN**: the direction is read off the
-  step, never off whose surface it is — `Cn → In` is the product reaching OUT, anything else touching
-  a surface is the story coming in through it. The two together are common on one surface (a request
-  and its answer), and neither maps to `side`: the files a product writes are OUR surface written
-  OUT through, and a chat platform is SOMEONE ELSE'S surface stories arrive IN from.
+  **Doors — put the surface IN the story.** A story crosses between a person and the product at two
+  moments, and BOTH of them go through a door.
+  **(1) The ARRIVAL.** A use-case flow's OPENING step names the surface the actor comes in by:
+  `R1 → I3`, then `I3 → C12` — never `R1 → C12`.
+  **(2) The FINAL HAND-OFF.** When the flow's LAST step delivers to a person, it goes out through a
+  surface in the same shape: `C43 → I3`, then `I3 → R1` — never `C43 → R1`. **Draw the out-door even
+  when it is the SAME surface the story arrived by.** Skipping it there was tried and rejected: the
+  use-case picture would then show data flowing only IN, while the same surface's own `carries` rows
+  record both directions, so one screen would contradict itself.
+  **ENDPOINTS ONLY — the arrival and the final hand-off, nothing between them.** A mid-flow exchange
+  with a person (a preview at step 4, a question answered at step 6) takes NO door: doubling those
+  steps buys a complete check and costs the readable picture that is the point of a flow. Known and
+  accepted: a mid-flow crossing to a DIFFERENT surface is therefore never checked, and the closing
+  advisory says so in its own words.
+  **Name the surface, never the thing standing on it** — and this holds for a PERSON exactly as it
+  holds for a service. `C12 → D7` becomes `C12 → I7`; `C43 → R1` becomes `C43 → I3 → R1`. Without it
+  a reader sees the PIPE and not the door: a flow that draws `web browser` as its only outside box is
+  naming the thing this method tells you never to name. **A door is not only a way IN**: the
+  direction is read off the step, never off whose surface it is — `Cn → In` is the product reaching
+  OUT, anything else touching a surface is the story coming in through it. The two together are
+  common on one surface (a request and its answer), and neither maps to `side`: the files a product
+  writes are OUR surface written OUT through, and a chat platform is SOMEONE ELSE'S surface stories
+  arrive IN from.
   Interface steps do NOT count toward the 3-15 step band — they are
   structure, not detail, like a sub-flow reference counting as 1. An existing `Cn → Dn` step on a
   dep that stands on a `theirs` surface MIGRATES to that surface; the dep is then derived.
@@ -1034,12 +1048,16 @@ through `reconcile` (their `EPn`/`In` ids are minted at assembly, exactly like a
 **Author `kind` with the row**, in the same pass, from the eleven seeds — it is a fact about the
 surface you have just named, not a later tidy-up, and nothing derives it. Who is on the far side is
 DERIVED from the walks and must never be written by hand.
-**Then go back through every flow and do BOTH halves of the doors rule** — this is the step, and
-skipping it is the failure the gates below now catch: (1) open each flow at its door, `Rn → In` then
-`In → Cn`, for every use case whose ways in belong to a surface; (2) migrate each `Cn → Dn` step
-whose dep stands on a surface to `Cn → In`. A build that authors the surfaces and stops leaves a map
-that can SAY what its outside edge is while no story ever goes through a door — measured on the
-first real build to author the section: 12 surfaces, 517 steps, zero doors, 5 migrations owed.
+**Then go back through every flow and do ALL THREE halves of the doors rule** — this is the step, and
+skipping it is the failure the gates below now catch: (1) OPEN each flow at its door, `Rn → In` then
+`In → Cn`, for every use case whose ways in belong to a surface; (2) CLOSE each flow whose last step
+delivers to a person, `Cn → In` then `In → Rn`, and draw that out-door even when it is the same
+surface the flow opened at; (3) MIGRATE each `Cn → Dn` step whose dep stands on a surface to
+`Cn → In`. Only the two ENDPOINTS take a door; a mid-flow exchange with a person takes none. A build
+that authors the surfaces and stops leaves a map that can SAY what its outside edge is while no story
+ever goes through a door — measured on the first real build to author the section: 12 surfaces, 517
+steps, zero doors, 5 migrations owed, and every one of its 42 flows owing both an opening and, for 27
+of them, a closing.
 **Schedule a section by its CONSUMERS as well as its inputs.** T2b was placed by its inputs alone,
 and its consumer — the flows — was written before it and never revisited. **No fan-out worker authors this** — a harvest agent sees one slice and cannot
 group a surface, and the first build after T2b shipped proved it: the dependency agent correctly
