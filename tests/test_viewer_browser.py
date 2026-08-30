@@ -716,3 +716,59 @@ def test_the_card_list_stays_reachable_under_the_picture() -> None:
         n = page.evaluate("() => document.querySelectorAll('.ecard[data-key]').length")
         assert n == 2, n
         assert not page.js_errors, page.js_errors
+
+
+def _both_shores_carry_people_and_a_pipe() -> Any:
+    """One surface on EACH shore that has both a person standing at it and a pipe it is reached
+    through — the shape the picture used to draw only half of.
+
+    The person on the `ours` surface arrives through a DOOR (`R1 → I1`), which is the arm that fills
+    the far side on most surfaces and the reason this shape is now common: 9 chips across the two
+    live maps were derived and undrawn. The person on the `theirs` surface comes from the walk
+    reaching `D4`, gated on a kind that means a person goes there."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "what the person asks for", "elements": []}]},
+            {"id": "I2", "name": "Google sign-in", "what": "Where a person proves who they are.",
+             "side": "theirs", "facing": "user", "kind": "hosted-screen",
+             "carries": [{"direction": "out", "what": "a sign-in request", "elements": []}]},
+        ]
+        for d in m["deps"]:
+            if d["id"] == "D4":
+                d["interfaces"] = ["I2"]
+            if d["id"] == "D6":
+                d["interfaces"] = ["I1"]
+        for f in m["flows"]:
+            if f["uc"] == "UC1":
+                f["steps"].insert(0, {"n": 0, "src": "R1", "dst": "I1",
+                                      "phrase": "opens the dashboard", "note": "", "where": None,
+                                      "no_call_site": False, "subflow": None})
+    return mutate
+
+
+def test_the_picture_draws_the_people_and_the_pipe_on_both_shores() -> None:
+    """The two shores were drawing DIFFERENT HALVES of the same fact: `ours` drew the people and
+    dropped the pipes, `theirs` drew the pipes and dropped the people. Nine things the two live maps
+    state went undrawn — coyodex's Agent skill reaches three agent hosts, its GitHub and code-editor
+    handoffs each have a reader standing at them, mcpolis mails through a service and sends three
+    people to Google. Every one of them was already on the surface's own page.
+
+    The ORDER is asserted too, and it is the same on both shores: the far side is the answer, the
+    pipe is only how it is reached, so the person is never named second."""
+    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
+            _page(url + "#v=interfaces") as page:
+        _settle(page)
+        cells = page.evaluate("""() => {
+            const out = {};
+            for (const c of document.querySelectorAll('.ifd-outer')) {
+                out[c.dataset.for] = [...c.children].map(
+                    e => (e.classList.contains('ifd-chip-actor') ? 'who:' : 'pipe:') + e.textContent);
+            }
+            return out;
+        }""")
+        assert cells["I1"] == ["who:Org creator", "pipe:SMTP / Google Workspace"], cells
+        assert cells["I2"] == ["who:Org creator", "who:Team member",
+                               "pipe:Google OAuth IdP"], cells
+        assert not page.js_errors, page.js_errors

@@ -9884,11 +9884,27 @@ function ifaceBoxHtml(i) {
     + (ways ? `<span class="ifd-ways">${ways} way${ways === 1 ? '' : 's'} in</span>` : '')
     + '</span></article>';
 }
+// THE OUTER CELL, on either shore. ONE function, because the two shores were drawing DIFFERENT
+// HALVES of the same fact and neither said so: `ours` drew the people and dropped the pipes, `theirs`
+// drew the pipes and dropped the people. Nine things the map states went undrawn across the two maps
+// here — coyodex's Agent skill reaches three agent hosts, its GitHub and code-editor handoffs each
+// have a reader standing at them, mcpolis mails through a service and sends three people to Google
+// to sign in. Every one of them was already on the surface's own page.
+//
+// PEOPLE FIRST, PIPE SECOND, on BOTH shores — one order, not one per side. Spatial order cannot be
+// made to agree here: the `ours` cell is right-aligned and the `theirs` cell left-aligned, so the
+// same list runs outward-to-inward on one shore and inward-to-outward on the other. Reading order
+// can agree, so that is the one made consistent, and the rule it states is the section's own:
+// the far side is the answer, and the pipe is how it is reached. Never name the pipe first.
+function ifaceOuterHtml(i) {
+  return ifaceActorChipsHtml(i) + ifaceFarChipsHtml(i);
+}
 // One SIDE of the picture: the surfaces, each on its own row, with its outer column beside it. The
-// outer cell is EMPTY when the map derives nobody — never a placeholder, never an invented actor.
+// outer cell is EMPTY when the map derives nobody and names no pipe — never a placeholder, never an
+// invented actor.
 function ifaceSideHtml(rows, side) {
   return rows.map((i) => {
-    const outer = side === 'ours' ? ifaceActorChipsHtml(i) : ifaceFarChipsHtml(i);
+    const outer = ifaceOuterHtml(i);
     const cell = `<div class="ifd-outer" data-for="${esc(i.id)}">${outer}</div>`;
     return `<div class="ifd-row">`
       + (side === 'ours' ? cell + ifaceBoxHtml(i) : ifaceBoxHtml(i) + cell)
