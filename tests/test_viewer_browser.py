@@ -1212,3 +1212,70 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
         # halo is a box-shadow, which cannot be mistaken for a line.
         assert "79, 70, 229" not in got["borderRight"], got
         assert not page.js_errors, page.js_errors
+
+
+def test_a_surface_card_has_one_door_and_it_is_the_name() -> None:
+    """The people and the providers are FACTS about a surface, not places to go.
+
+    They were buttons — a chip opened that actor's page, a provider line opened that dependency in
+    the tree — which put three kinds of target on one small card and made a fact read as somewhere to
+    click. The same split every other card on this viewer makes: the name leaves, the body pins.
+
+    The glossary links inside the SENTENCE are exempt and deliberately not counted: they are an
+    app-wide treatment on every sentence the viewer draws, not a control this card invented."""
+    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
+            _page(url + "#v=interfaces") as page:
+        _settle(page)
+        got = page.evaluate("""() => [...document.querySelectorAll('.ifd-box')].map(b => ({
+            name: b.querySelector('.ifd-name').textContent,
+            doors: [...b.querySelectorAll('button, a, [role=button]')]
+                     .filter(e => !e.classList.contains('gloss-link'))
+                     .map(e => e.className),
+            chips: b.querySelectorAll('.ifd-chip-actor').length,
+            provs: b.querySelectorAll('.ifd-prov').length,
+        }))""")
+        assert got, got
+        for card in got:
+            assert card["doors"] == ["ifd-name"], card
+        # …and the facts are still drawn, so this is not passing by them having disappeared.
+        assert sum(c["chips"] for c in got) > 0, got
+        assert sum(c["provs"] for c in got) > 0, got
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
+    """The label used to straddle its wire's midpoint. At 320px against a 155px gutter that put 75px
+    of it over the very box the reader had just picked, hiding the name and the people.
+
+    It now starts where its wire starts and grows AWAY from the card, overhanging the middle and the
+    far column instead — both dimmed while it shows, and neither is what the reader is looking at."""
+    def mutate(m: dict) -> None:
+        # BOTH directions on BOTH shores, so the test sees two labels per surface and both growth
+        # directions. `_both_shores_carry_people_and_a_pipe` carries one crossing each, which would
+        # have let this pass while only ever placing a single label.
+        both = [{"direction": "in", "what": "what the caller asks for, at some length so the label "
+                                            "is wide enough to reach the card", "elements": []},
+                {"direction": "out", "what": "the answer it gets back, also long enough to matter "
+                                             "when it is placed", "elements": []}]
+        m["interfaces"] = [
+            {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
+             "facing": "user", "kind": "screen", "carries": list(both)},
+            {"id": "I2", "name": "Theirs", "what": "On theirs.", "side": "theirs",
+             "facing": "user", "kind": "api", "carries": list(both)},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        for iid in ("I1", "I2"):     # one on each shore: they grow in opposite directions
+            page.eval_on_selector(f'.ifd-box[data-iface="{iid}"]', "e => e.click()")
+            page.wait_for_timeout(250)
+            got = page.evaluate("""(iid) => {
+                const b = document.querySelector(`.ifd-box[data-iface="${iid}"]`);
+                const br = b.getBoundingClientRect();
+                const ls = [...document.querySelectorAll('.ifd-elabel.ifd-lab-on')];
+                return { shown: ls.length,
+                         over: ls.filter(l => { const r = l.getBoundingClientRect();
+                                   return r.left < br.right && r.right > br.left; }).length };
+            }""", iid)
+            assert got["shown"] == 2, (iid, got)
+            assert got["over"] == 0, (iid, got)
+        assert not page.js_errors, page.js_errors

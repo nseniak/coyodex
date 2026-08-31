@@ -9948,19 +9948,23 @@ function ifaceBoxHtml(i) {
   // says so rather than showing a blank pill.
   const kind = i.kind ? `<span class="ifd-kind">${esc(ifaceKindWord(i.kind))}</span>` : '';
   const staff = i.facing === 'operator' ? '<span class="ifd-staff">staff</span>' : '';
+  // ONE DOOR PER CARD, AND IT IS THE NAME. The people and the providers are FACTS about this
+  // surface, not places to go — they were buttons opening an actor's page and a dependency in the
+  // tree, which put three kinds of target on one small card and made a fact read as somewhere to
+  // click. The same split every other card on this viewer makes: the name leaves, the body pins.
   const chips = (i.actors || []).map((rid) => {
     const r = ROLE_BY_ID[rid] || {};
     const svc = (r.kind || '').trim().toLowerCase() === 'service';
-    return `<button type="button" class="ifd-chip-actor${svc ? ' ifd-chip-svc' : ''}" `
-      + `data-act="${esc(r.name || rid)}" title="Open ${esc(r.name || rid)}">`
-      + `${ifaceActorGlyphSvg(r.kind)}${esc(r.name || rid)}</button>`;
+    return `<span class="ifd-chip-actor${svc ? ' ifd-chip-svc' : ''}">`
+      + `${ifaceActorGlyphSvg(r.kind)}${esc(r.name || rid)}</span>`;
   }).join('');
   const prov = (i.deps || []).map((d) => {
     const n = GRAPH.nodes[d];
     const nm = (n && n.name) || d;
-    return `<button type="button" class="ifd-prov" data-id="${esc(d)}" `
+    // The tooltip stays: it says what a provider IS, which is the one thing the line cannot.
+    return `<span class="ifd-prov" `
       + `title="${esc(nm)} — the pipe this surface is reached through, not the far side">`
-      + `${ifaceGlyphSvg('provider', '#6b7280')}${esc(nm)}</button>`;
+      + `${ifaceGlyphSvg('provider', '#6b7280')}${esc(nm)}</span>`;
   }).join('');
   return `<article class="ifd-box" data-iface="${esc(i.id)}" tabindex="0">`
     + `<span class="ifd-head">${ifaceGlyphSvg(IFACE_GLYPH[i.kind], '#3730a3')}`
@@ -10063,14 +10067,20 @@ function bindIfaceDiagram(root) {
     svg.appendChild(path); paths.push(path);
     return [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
   };
-  const label = (at, text, iid) => {
+  // THE LABEL STARTS WHERE ITS WIRE STARTS, and grows AWAY from the card. Centred on the wire's
+  // midpoint it straddled the card: 320px of label against a 155px gutter put 75px of it over the
+  // very box the reader had just picked, hiding the name and the people. Anchored, it overhangs the
+  // middle and the far column instead — both dimmed while it shows, and neither is what the reader
+  // is looking at. `x` is the wire's own end at the card; the side says which way to grow.
+  const label = (x, y, side, text, iid) => {
     if (!text) return;
     const lab = document.createElement('div');
     lab.className = 'ifd-elabel';
     lab.dataset.iface = iid;
+    lab.dataset.anchor = String(x);
+    lab.dataset.side = side;
     lab.textContent = text;
-    lab.style.left = at[0] + 'px';
-    lab.style.top = at[1] + 'px';
+    lab.style.top = y + 'px';
     // Not a door, but not empty background either: a click on it must not clear the pin.
     lab.addEventListener('click', (ev) => ev.stopPropagation());
     stage.appendChild(lab); labels.push(lab);
@@ -10096,8 +10106,10 @@ function bindIfaceDiagram(root) {
     // `opens` is derived (see InterfaceFacts): a way in is an address something outside invokes.
     const dy = (dir) => (i.opens === dir ? -IFACE_WIRE_GAP : IFACE_WIRE_GAP);
     const draw = {
-      in: (t) => label(wire(edge(box, boxSide, dy('in')), [px, mid + dy('in')], i.id), t, i.id),
-      out: (t) => label(wire([px, mid + dy('out')], edge(box, boxSide, dy('out')), i.id), t, i.id),
+      in: (t) => { wire(edge(box, boxSide, dy('in')), [px, mid + dy('in')], i.id);
+                   label(edge(box, boxSide)[0], mid + dy('in'), i.side, t, i.id); },
+      out: (t) => { wire([px, mid + dy('out')], edge(box, boxSide, dy('out')), i.id);
+                    label(edge(box, boxSide)[0], mid + dy('out'), i.side, t, i.id); },
     };
     // A DIRECTION WITH NOTHING CROSSING DRAWS NO WIRE. Guarding on the merged sentence rather than
     // drawing both and letting the label fall away: a wire with no label is a line the reader can
@@ -10113,12 +10125,16 @@ function bindIfaceDiagram(root) {
   // MEASURED WITH THE LABEL LAID OUT. A `display: none` element has no box at all, so `offsetHeight`
   // reads 0 and every label shifts by the same amount — which is how two of them stayed on top of
   // each other through a first attempt at this. `visibility: hidden` lays it out without painting.
+  const LABEL_GAP = 4;
   for (const lab of labels) {
     const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(lab.dataset.iface)}"]`);
     if (!box) continue;
     lab.style.visibility = 'hidden'; lab.style.display = 'block';
-    const h = lab.offsetHeight;
+    const h = lab.offsetHeight, w = lab.offsetWidth;
     lab.style.display = ''; lab.style.visibility = '';
+    const anchor = parseFloat(lab.dataset.anchor);
+    lab.style.left = (lab.dataset.side === 'ours' ? anchor + LABEL_GAP
+                                                  : anchor - LABEL_GAP - w) + 'px';
     const up = parseFloat(lab.style.top) < box.offsetTop + box.offsetHeight / 2;
     lab.style.top = (parseFloat(lab.style.top) + (up ? -(h / 2 + 6) : (h / 2 + 6))) + 'px';
   }
@@ -10169,16 +10185,8 @@ function bindIfaceDiagram(root) {
       go({ kind: 'interfaces', iface: b.closest('.ifd-box').dataset.iface });
     });
   });
-  stage.querySelectorAll('.ifd-chip-actor').forEach((c) => {
-    c.addEventListener('click', (ev) => {
-      ev.stopPropagation(); go({ kind: 'actor', act: c.dataset.act });
-    });
-  });
-  stage.querySelectorAll('.ifd-prov[data-id]').forEach((c) => {
-    c.addEventListener('click', (ev) => {
-      ev.stopPropagation(); selectFromTree(c.getAttribute('data-id'));
-    });
-  });
+  // Nothing else in a card is bound. The chips and the provider lines are facts, and a click on one
+  // falls through to the card and pins it, which is what a click anywhere on the card does.
 }
 function renderInterfaces(s) {
   // A typed or shared `#v=interfaces` on a map that records none used to render an empty page under a
