@@ -1824,14 +1824,20 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* `#diagram svg` sizes every diagram to its pane (100%); the glyph is an icon, so it needs the
    same specificity to stay one. */
 #diagram .story-glyph { width: 17px; height: 17px; flex: 0 0 auto; }
-/* The stake label rides its wire's midpoint, shown only while its card's wires are the picture. */
-/* The pill takes its FEATURE's colour inline (see `wire`), so the text is dark and it carries a
-   border: a pale fill needs an edge to sit on top of the page, where the old solid indigo did not.
-   The background here is the fallback for a label with no feature behind it. */
+/* The stake label stands BESIDE the feature end of its wire, in the gutter, shown only while its
+   card's wires are the picture. The pill takes its FEATURE's colour inline (see `wire`), so the text
+   is dark and it carries a border: a pale fill needs an edge to sit on top of the page, where the
+   old solid indigo did not. The background here is the fallback for a label with no feature behind
+   it.
+   It WRAPS. The width cap is set per label (the gutter it crosses, less its padding), which is what
+   keeps it off the two cards on either side; nowrap would have run it straight under both. A wrapped
+   pill is a rounded box, not a lozenge — the 99px radius eats the corners of a three-line label.
+   `left`/`right`/`top` are all set per label, so no transform recentres it: the whole point is that
+   one EDGE is pinned to the card beside it. */
 .story-elabel { position: absolute; background: #eef0fd; color: #1e2235; font-size: 10.5px;
-                padding: 2px 9px; border-radius: 99px; white-space: nowrap;
+                padding: 3px 9px; border-radius: 9px; line-height: 1.32;
                 border: 1px solid rgba(40,44,90,.18);
-                transform: translate(-50%,-50%); display: none; z-index: 5;
+                display: none; z-index: 5;
                 box-shadow: 0 2px 8px rgba(30,34,53,.20); cursor: default; }
 .story-elabel.story-lab-on { display: block; }
 /* The label of an ownership wire whose owner no walk reaches. Not a colour of its own — the

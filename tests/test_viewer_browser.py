@@ -1243,6 +1243,62 @@ def test_a_surface_card_has_one_door_and_it_is_the_name() -> None:
         assert not page.js_errors, page.js_errors
 
 
+def test_a_story_label_stands_at_the_far_box_and_covers_nothing() -> None:
+    """A stake label used to ride its wire's MIDPOINT on one nowrap line. Two faults followed: the
+    pill was wider than the gutter it crossed, so it lay over the actor box and the feature box at
+    both ends of its own wire; and nothing but its colour said which of a card's several arrows it
+    belonged to.
+
+    It stands at the FAR end of its wire now — beside the box that is not the one you picked, which
+    is the box that identifies it — always above that end, and capped to the gutter so it wraps
+    instead of reaching any card. Every card on the page is picked in turn, so all three cases are
+    measured: an actor's labels land on the features, an area's on the features, and a feature's go
+    out both ways at once."""
+    with _served() as url, _page(url) as page:
+        _settle(page)
+        got = page.evaluate("""() => {
+            const st = document.getElementById('storystage');
+            const sb = st.getBoundingClientRect();
+            const R = (e) => { const r = e.getBoundingClientRect();
+                return { l: r.left - sb.left, t: r.top - sb.top,
+                         r: r.right - sb.left, b: r.bottom - sb.top }; };
+            const ov = (a, b) => !(a.r <= b.l || b.r <= a.l || a.b <= b.t || b.b <= a.t);
+            let shown = 0, onCard = 0, onLabel = 0, notAbove = 0, offFarBox = 0;
+            let wrapped = 0, atHead = 0, atTail = 0, offTop = 0;
+            for (const c of st.querySelectorAll('.story-card')) {
+                const key = c.dataset.sfeat ? 'sfeat' : c.dataset.sactor ? 'sactor' : 'sarea';
+                c.click();
+                const cards = [...st.querySelectorAll('.story-card')].map(R);
+                const labs = [...st.querySelectorAll('.story-elabel.story-lab-on')];
+                for (const l of labs) {
+                    const r = R(l);
+                    const head = l.dataset.labfrom === key;   // lit by the tail card -> far end is the head
+                    const ax = parseFloat(head ? l.dataset.labtx : l.dataset.labsx);
+                    const ay = parseFloat(head ? l.dataset.labty : l.dataset.labsy);
+                    shown++;
+                    if (head) atHead++; else atTail++;
+                    if (r.b - r.t > 26) wrapped++;               // more than one line of text
+                    if (r.b > ay + 0.5) notAbove++;              // never below its own end
+                    // …and pinned by the edge facing that end, within a pixel.
+                    if (Math.abs(head ? r.r - (ax - 8) : r.l - (ax + 8)) > 1) offFarBox++;
+                    if (r.t < 0) offTop++;                       // never pushed off the stage
+                    if (cards.some((k) => ov(r, k))) onCard++;
+                    if (labs.some((m) => m !== l && ov(r, R(m)))) onLabel++;
+                }
+            }
+            return { shown, onCard, onLabel, notAbove, offFarBox, wrapped, atHead, atTail, offTop };
+        }""")
+        assert got["shown"] > 20, got            # the fixture really does light labels
+        assert got["atHead"] > 0 and got["atTail"] > 0, got   # …reaching both ways
+        assert got["wrapped"] > 0, got           # …and the cap really does wrap a long one
+        assert got["onCard"] == 0, got           # nothing covers a box
+        assert got["onLabel"] == 0, got          # nothing covers another label
+        assert got["notAbove"] == 0, got         # each sits above the end it hangs off
+        assert got["offFarBox"] == 0, got        # …pinned to the box that identifies it
+        assert got["offTop"] == 0, got           # …and inside the stage
+        assert not page.js_errors, page.js_errors
+
+
 def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
     """The label used to straddle its wire's midpoint. At 320px against a 155px gutter that put 75px
     of it over the very box the reader had just picked, hiding the name and the people.

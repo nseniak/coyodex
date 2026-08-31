@@ -8770,10 +8770,26 @@ function bindStoryDiagram(root) {
   // the two arrays are filled by different code paths (a label is appended by the caller, after its
   // own handlers), so index-pairing would be one refactor away from lighting the wrong wire.
   const pathOfLabel = new Map();
+  const LAB_PAD = 8;     // clear air between a label and the card it stands beside
+  const LAB_DROP = 5;    // clear air between a label and the arrow end it hangs off
+  const LAB_STACK = 4;   // clear air between two stacked labels
   // ONE wire drawer for both hops of the page, so the actor→feature and feature→area arrows cannot
   // drift apart in shape, in hover behaviour or in how their label is placed. `keys` are the data
   // attributes the wire answers to — a wire lights when ANY of its ends is the hovered/pinned card.
-  const wire = (fromEl, toEl, keys, wireCls) => {
+  // Where a label HANGS: at the end of its wire that is NOT the card you picked, always. A label
+  // used to ride its wire's midpoint on one nowrap line — wider than the gutter it crossed, so it
+  // lay over the boxes at both ends, with nothing but its colour saying which arrow it belonged to.
+  //
+  // The far end is the one that spreads. Picking a card lights every wire it touches, and all of
+  // them meet AT that card: a label at the near end would put the whole set on one point. At the far
+  // end each one lands beside a different box — the actor it comes from, the feature it points at,
+  // the data area it reaches — and that box is what tells you which arrow you are reading.
+  //
+  // So the same wire places its label differently depending on what is lit, which is why nothing is
+  // decided here: `wire` records BOTH ends and which card sits at each, and `placeLabels` chooses.
+  // `keys` are the data attributes the wire answers to; `fromKey`/`toKey` say which of them names
+  // the card at the tail and which the card at the head.
+  const wire = (fromEl, toEl, keys, wireCls, fromKey, toKey) => {
     const [sx, sy] = side(fromEl, 'right');
     const [tx, ty] = side(toEl, 'left');
     // The curve leaves and arrives HORIZONTALLY, because that is the direction the arrow head is
@@ -8798,8 +8814,16 @@ function bindStoryDiagram(root) {
     // its band on the journey board wears. A label used to be one indigo pill whatever it labelled,
     // which made a lit card's several labels read as one voice instead of as that feature's.
     if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);
-    lab.style.left = ((sx + tx) / 2) + 'px';
-    lab.style.top = ((sy + ty) / 2 - 8) + 'px';
+    // The label is CAPPED to the gutter it crosses, so it can never reach either box — a long stake
+    // wraps to two or three lines instead of running under the cards on both sides of it. This one
+    // IS fixed here: both ends of a wire sit on the same gutter, so the cap is the same either way.
+    lab.style.maxWidth = Math.max(70, Math.abs(tx - sx) - 2 * LAB_PAD) + 'px';
+    // Both ends, and the card at each, ride the ELEMENT beside the wire identity already on it: the
+    // rule is then readable straight off the page (which is what the browser gate checks), and the
+    // placer keeps no state of its own between repaints.
+    lab.dataset.labsx = String(sx); lab.dataset.labsy = String(sy);   // the tail, in stage space
+    lab.dataset.labtx = String(tx); lab.dataset.labty = String(ty);   // the head
+    lab.dataset.labfrom = fromKey; lab.dataset.labto = toKey;
     pathOfLabel.set(lab, path);
     return lab;
   };
@@ -8809,7 +8833,7 @@ function bindStoryDiagram(root) {
     if (!a || !f) continue;
     // The actors are the LEFT column now, so the wire leaves the actor's right edge and lands on
     // the feature's left edge — which is what makes the stake label read in sentence order.
-    const lab = wire(a, f, { sactor: e.actor, sfeat: e.feature }, '');
+    const lab = wire(a, f, { sactor: e.actor, sfeat: e.feature }, '', 'sactor', 'sfeat');
     lab.textContent = e.label;
     const hp = e.step ? HP_BY_ID[e.step] : null;
     if (hp) {
@@ -8845,7 +8869,7 @@ function bindStoryDiagram(root) {
     const owners = (a.owners || []).filter((c) => FEAT_BY_ID[c]);
     const sole = owners.length === 1 ? owners[0] : null;
     if (sole && featEl[sole]) {
-      const own = wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, 'story-own');
+      const own = wire(featEl[sole], to, { sfeat: sole, sarea: a.id }, 'story-own', 'sfeat', 'sarea');
       // The owning pair draws ONE wire, so its label carries what the reference arrow it replaced
       // would have: the records the feature reaches, each a door. The `story-own` class stays on
       // the path — it marks which wire is the authored ownership, for a later use — but it says
@@ -8874,7 +8898,7 @@ function bindStoryDiagram(root) {
     for (const t of (a.touchedBy || [])) {
       const from = featEl[t.feature];
       if (!from || t.feature === sole) continue;
-      const lab = wire(from, to, { sfeat: t.feature, sarea: a.id }, 'story-ref');
+      const lab = wire(from, to, { sfeat: t.feature, sarea: a.id }, 'story-ref', 'sfeat', 'sarea');
       fillAreaTouchLabel(lab, t);
       lab.title = featureName(t.feature) + ' reaches ' + t.touches + ' time'
         + (t.touches === 1 ? '' : 's');
@@ -8898,6 +8922,59 @@ function bindStoryDiagram(root) {
       p.classList.remove('story-glow');   // a new picture starts with no wire singled out
     }
     for (const l of labels) l.classList.toggle('story-lab-on', l.dataset[key] === id);
+    placeLabels(key);
+  };
+  // WHERE EACH VISIBLE LABEL SITS, given WHICH KIND OF CARD is lit. Runs on every repaint of the
+  // picture rather than once at build time, because the answer moves: the same wire puts its label
+  // at one end when its actor is lit and at the other when its feature is. A hidden pill also
+  // measures zero, and a wrapped label's height is what decides where its top goes.
+  //
+  // The anchor is the FAR end — the end whose card is not the one you picked. Pick an actor and
+  // every label lands beside the feature its arrow points at; pick a data area and every label lands
+  // beside the feature its arrow leaves; pick a feature and its actor labels go out to the actors
+  // while its data labels go out to the areas. The box beside a label is what says which arrow it
+  // belongs to, and a label at the near end would put the whole lit set on one point instead.
+  //
+  // Horizontally the pill is pinned by the edge FACING that box, so it grows away from it and short
+  // and long labels start at the same place. Vertically it sits ABOVE the end, always: a label under
+  // a downward arrow's head read as belonging to whatever came next down the column.
+  //
+  // Then the collisions, for the case two far-end boxes sit close together: one stack per gutter,
+  // swept bottom to top, each label pushed clear of the one before. Heights are read first and tops
+  // written after, so the browser lays out once rather than once per label.
+  const placeLabels = (key) => {
+    const shown = labels.filter((l) => l.classList.contains('story-lab-on'));
+    const at = new Map();                       // label -> where this pass decided it goes
+    const groups = new Map();
+    for (const l of shown) {
+      // Lit BY the card at the tail → the far end is the head, and the other way round.
+      const atHead = l.dataset.labfrom === key;
+      const x = parseFloat(atHead ? l.dataset.labtx : l.dataset.labsx);
+      const y = parseFloat(atHead ? l.dataset.labty : l.dataset.labsy);
+      const h = l.offsetHeight;
+      at.set(l, { h, top: y - LAB_DROP - h, x, atHead });
+      const k = (atHead ? 'H' : 'T') + x;       // one stack per gutter edge
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(l);
+    }
+    for (const list of groups.values()) {       // bottom to top, each clear of the one before
+      list.sort((p, q) => (at.get(q).top + at.get(q).h) - (at.get(p).top + at.get(p).h));
+      let ceil = 1e9;
+      for (const l of list) {
+        const a = at.get(l);
+        a.top = Math.min(a.top, ceil - a.h);
+        ceil = a.top - LAB_STACK;
+      }
+    }
+    for (const l of shown) {
+      const a = at.get(l);
+      l.style.top = a.top + 'px';
+      // Against the head: right edge on the box's left side. Against the tail: left edge on its
+      // right side. The unused one is cleared — a label that has been placed both ways keeps the
+      // stale offset otherwise, and the pill stretches across the whole gutter.
+      l.style.right = a.atHead ? (stage.offsetWidth - (a.x - LAB_PAD)) + 'px' : '';
+      l.style.left = a.atHead ? '' : (a.x + LAB_PAD) + 'px';
+    }
   };
   const clearWires = () => {
     for (const p of paths) p.classList.remove('story-hot', 'story-cold', 'story-glow');

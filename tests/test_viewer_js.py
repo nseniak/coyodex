@@ -3742,14 +3742,68 @@ def test_every_wire_flows_left_to_right_through_one_drawer() -> None:
     did not when the actors sat on the right."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    assert "const wire = (fromEl, toEl, keys, wireCls) => {" in bind
+    assert "const wire = (fromEl, toEl, keys, wireCls, fromKey, toKey) => {" in bind
     assert "side(fromEl, 'right')" in bind and "side(toEl, 'left')" in bind
-    assert "wire(a, f, { sactor: e.actor, sfeat: e.feature }, '')" in bind
+    assert "wire(a, f, { sactor: e.actor, sfeat: e.feature }, '', 'sactor', 'sfeat')" in bind
     assert "{ sfeat: t.feature, sarea: a.id }" in bind
     assert "'story-ref'" in bind
     # The drawer places the label and never fills it: one hop's label is a stake sentence, the
     # other's is a list of doors, and a shared `textContent` would make the second impossible.
     assert "lab.textContent = text;" not in bind
+
+
+def test_a_story_label_stands_at_the_far_end_of_its_wire() -> None:
+    """A label used to sit at its wire's MIDPOINT, on one nowrap line: nothing tied it to a card, and
+    at full text width it lay over the two boxes its own wire joined.
+
+    It stands at the FAR end now — the end whose card is not the one you picked. Picking a card
+    lights every wire it touches and they all meet at that card, so a near-end label would put the
+    whole set on one point; at the far end each lands beside a different box, and that box is what
+    says which arrow you are reading. Which end that is therefore depends on WHAT IS LIT, so the
+    drawer only records both ends and the placer chooses."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "lab.style.left = ((sx + tx) / 2) + 'px';" not in bind
+    # Both ends and the card at each ride the ELEMENT as data — so the rule is readable straight off
+    # the page, which is what the browser gate checks.
+    assert "lab.dataset.labsx = String(sx); lab.dataset.labsy = String(sy);" in bind
+    assert "lab.dataset.labtx = String(tx); lab.dataset.labty = String(ty);" in bind
+    assert "lab.dataset.labfrom = fromKey; lab.dataset.labto = toKey;" in bind
+    # Capped to the gutter it crosses, which is what keeps it off the boxes on either side. Fixed at
+    # build time, because both ends of a wire sit on the same gutter.
+    assert "lab.style.maxWidth = Math.max(70, Math.abs(tx - sx) - 2 * LAB_PAD) + 'px';" in bind
+    # The far end: lit BY the card at the tail means the label goes to the head, and the reverse.
+    assert "const atHead = l.dataset.labfrom === key;" in bind
+    assert "const x = parseFloat(atHead ? l.dataset.labtx : l.dataset.labsx);" in bind
+    assert "const y = parseFloat(atHead ? l.dataset.labty : l.dataset.labsy);" in bind
+    # ABOVE that end, always. A label under a downward arrow's head read as belonging to whatever
+    # came next down the column.
+    assert "at.set(l, { h, top: y - LAB_DROP - h, x, atHead });" in bind
+    # Pinned by the edge facing the far box, and the unused offset CLEARED: a label placed both ways
+    # keeps the stale one otherwise and stretches across the whole gutter.
+    assert "l.style.right = a.atHead ? (stage.offsetWidth - (a.x - LAB_PAD)) + 'px' : '';" in bind
+    assert "l.style.left = a.atHead ? '' : (a.x + LAB_PAD) + 'px';" in bind
+    # …and it is re-decided on every repaint of the picture, since the answer moves with what is lit.
+    assert "placeLabels(key);" in bind
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    block = css[css.index(".story-elabel {"):css.index(".story-elabel.story-lab-on")]
+    # A wrapped pill needs no nowrap and no recentring transform — one EDGE is pinned, not the middle.
+    assert "white-space: nowrap" not in block, block
+    assert "transform:" not in block, block
+
+
+def test_two_story_labels_lit_together_stack_instead_of_piling_up() -> None:
+    """Far-end placement spreads a lit card's labels over the boxes on the other side, but two of
+    those boxes can still sit close enough for two wrapped labels to meet. One stack per gutter edge,
+    swept bottom to top, each pushed clear of the one before — which only ever moves a label further
+    above its own end, never below it."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = _story_fn(js, "bindStoryDiagram")
+    assert "const k = (atHead ? 'H' : 'T') + x;" in bind, "one stack per gutter edge"
+    assert "a.top = Math.min(a.top, ceil - a.h);" in bind   # never below the one before it
+    assert "ceil = a.top - LAB_STACK;" in bind
+    # Heights read first, tops written after: one browser layout, not one per label.
+    assert bind.index("const h = l.offsetHeight;") < bind.index("l.style.top = a.top + 'px';")
 
 
 def test_a_record_named_on_a_reference_arrow_is_a_door() -> None:
