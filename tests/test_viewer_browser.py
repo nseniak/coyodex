@@ -772,3 +772,54 @@ def test_the_picture_draws_the_people_and_the_pipe_on_both_shores() -> None:
         assert cells["I2"] == ["who:Org creator", "who:Team member",
                                "pipe:Google OAuth IdP"], cells
         assert not page.js_errors, page.js_errors
+
+
+def test_an_actors_page_names_the_surfaces_they_stand_at_and_says_which_shore() -> None:
+    """The far-side derivation read BACKWARDS. A surface's page already named the people at it, and
+    no page named the surfaces for a person — the link was one-way for as long as the actors column
+    was empty.
+
+    The two headings are not one sentence turned round: the actor COMES TO our surface, and the
+    product SENDS THEM to theirs. Google sign-in is where mcpolis sends three roles, and calling that
+    "where they reach the product" would be false."""
+    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
+            _page(url + "#v=actor&act=Org creator") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const out = [];
+            for (const el of document.querySelectorAll(
+                    '.usecases-wrap .card-group-head, .usecases-wrap .ecard[data-key]')) {
+                out.push(el.classList.contains('card-group-head')
+                    ? 'HEAD:' + el.textContent
+                    : 'card:' + el.querySelector('.ecard-name').textContent);
+            }
+            return out;
+        }""")
+        assert seen == ["HEAD:Where they reach the product", "card:The dashboard",
+                        "HEAD:Where the product sends them", "card:Google sign-in"], seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_actor_at_no_surface_says_so_and_the_products_own_work_says_why() -> None:
+    """Two different facts, two different sentences. An actor the map puts at no surface is a plain
+    absence; the product's OWN scheduled work — a service role that is internal — is inside the
+    product and crosses nothing, which is a complete answer. One sentence for both would report the
+    timer as an unfinished map."""
+    def outsider(m: dict) -> None:
+        _both_shores_carry_people_and_a_pipe()(m)
+    with _served_map(outsider) as url, _page(url + "#v=actor&act=Superadmin") as page:
+        _settle(page)
+        text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
+        assert "No surface in this map has this actor standing at it." in text, text
+        assert not page.js_errors, page.js_errors
+
+    def inside(m: dict) -> None:
+        _both_shores_carry_people_and_a_pipe()(m)
+        for r in m["roles"]:
+            if r["id"] == "R5":
+                r["kind"], r["audience"] = "service", "internal"
+    with _served_map(inside) as url, _page(url + "#v=actor&act=Superadmin") as page:
+        _settle(page)
+        text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
+        assert "crosses no surface" in text, text
+        assert not page.js_errors, page.js_errors

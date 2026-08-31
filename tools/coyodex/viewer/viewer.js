@@ -7718,6 +7718,47 @@ function actorHeroMetaHtml(actorName) {
   return parts.map((p, i) => '<span>' + (i === 0 ? cap(p.lead) : p.lead) + p.tail + '</span>')
     .join('<span class="journey-metasep">·</span>');
 }
+// WHERE THIS ACTOR MEETS THE PRODUCT — the surfaces they stand at. This is the far-side derivation
+// read BACKWARDS: a surface's page already named the people at it, and no page named the surfaces
+// for a person. The link was one-way for as long as the actors column was empty, and filling it from
+// the doors is what made the other direction worth drawing — every actor on both live maps but one
+// stands at a surface now.
+//
+// The CUT is by shore, and the two headings are not the same sentence turned round, because the two
+// shores are not the same event: the actor comes to OUR surface, and the product sends them to
+// THEIRS. Google sign-in is where mcpolis sends three roles; it is not where they reach the product.
+//
+// Cards, not chips, and the SAME card the Interfaces list draws — so a surface reads the same
+// wherever it is named, and its shape and its ways-in count come along without being restated here.
+function actorSurfacesHtml(actorName) {
+  // Gated on the map, not on the actor: a map that records no surface has no answer to give, and an
+  // empty block under every actor would read as a gap in every one of them.
+  if (!HAS_INTERFACES) return '';
+  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
+  // "Other" is a bucket, not a role (an actor the map never declared), so there is no id to match on
+  // and nothing true to say. The page keeps its board and stops there.
+  if (!role || !role.id) return '';
+  const at = (side) => ifaceList().filter(
+    (i) => i.side === side && (i.actors || []).includes(role.id));
+  const ours = at('ours'), theirs = at('theirs');
+  // NO SURFACE IS A REAL ANSWER for the product's own scheduled work — a timer or a boot hook is
+  // inside the product and crosses nothing — and it is a plain absence for anybody else. The two
+  // are different facts and get different sentences; one sentence for both would report the timer
+  // as an unfinished map.
+  if (!ours.length && !theirs.length) {
+    const inside = String(role.kind || '').trim().toLowerCase() === 'service'
+      && String(role.audience || '').trim().toLowerCase() === 'internal';
+    return '<h3 class="card-group-head">Where they meet the product</h3>'
+      + '<p class="feat-empty">' + (inside
+        ? 'Nowhere. This is the product’s own work, running inside it, so it crosses no surface.'
+        : 'No surface in this map has this actor standing at it.') + '</p>';
+  }
+  const section = (title, rows) => rows.length
+    ? `<h3 class="card-group-head">${esc(title)}</h3>` + cardGridHtml(rows.map(ifaceCardHtml).join(''))
+    : '';
+  return section('Where they reach the product', ours)
+    + section('Where the product sends them', theirs);
+}
 function actorPageHeroHtml(actorName) {
   const g = actorGroups().find((x) => x.actor === actorName);
   // A group is one role, or the "Other" bucket for an actor this map never declared. Other has no
@@ -7915,8 +7956,12 @@ function renderActorPage(actorName) {
     ? `<div class="journey-board">${journeyActorHeadHtml(actorName)}`
       + `${journeyRailHtml(hasPath, offLane, rail)}</div>`
     : '<p class="empty">This map records nothing this actor does.</p>';
-  diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}</div>`;
+  diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}`
+    + `${actorSurfacesHtml(actorName)}</div>`;
   bindActorPage(diagram, actorName);
+  // The surface cards are the only `data-key` cards on this page, and their door is that
+  // surface's own page — the same door the Interfaces list's cards open.
+  bindPlainCards(diagram, (id) => go({ kind: 'interfaces', iface: id }));
 }
 // ONE binder for both rails. The actor page and the feature page draw the SAME board out of the same
 // cells, so the clicks are wired once: a station opens the walk, a side stop opens that use case,
