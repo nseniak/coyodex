@@ -13238,3 +13238,354 @@ const LANDING = (HAS_DIFF && HAS_GROUPING) ? 'container'
 // in the map", and the diagram path degrades to "This view could not be rendered". A second list would
 // be one more thing to keep in step with the map's own kinds.
 go((URL_SYNC && stateFromUrl(location.hash)) || { kind: LANDING });
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════
+// THE MAP INSPECTOR — hold Ctrl+Shift to ask what the map actually SAYS about anything on screen.
+//
+// A development utility for working ON this viewer. It answers one question: the thing under my
+// cursor is drawn from WHICH record of `.coyodex/project-map.json`, and what does that record hold?
+// So it reads the STORED map (/api/rawmap), never the derived /api/view bundle the page draws from.
+// The bundle is a projection; "what does the map say" is not a question a projection can answer. The
+// header's path is a slot in the stored file (`use_cases[12]`, `flows[3].steps[5]`), so the same
+// record can be found by hand in the file on disk.
+//
+// Ctrl+Shift, because every other modifier is already spoken for: ⌘-click multi-selects and opens
+// code, Alt-click drills in, Shift-click moves the camera. The pair is free, and two keys held is a
+// deliberate enough gesture to carry a debug surface. Fn is not an option at all — macOS keeps it and
+// never delivers it to the browser, so no `fnKey` and no `getModifierState('Fn')` on any engine.
+//
+// Every listener here is on `document` in the CAPTURE phase. That is what keeps the pair off the
+// ⌘/Shift bindings it overlaps: `isMultiSelectClick` fires on ctrlKey, and the arrow handlers on
+// shiftKey, but all of those bind on the elements themselves, so the inspector sees the event first
+// and swallows it. Nothing below this line changes any behaviour while the pair is not held.
+
+let RAW = null;            // the stored map, parsed
+let RAW_BY_ID = null;      // element id -> {path, rec, kind}
+let rawPending = null;     // in-flight guard, so /api/rawmap is requested at most once
+let inspArmed = false;     // Ctrl+Shift currently held
+let inspHit = null;        // the element the outline is on
+let inspStack = [];        // the popup's own back stack of {path, rec, kind, id}
+let inspLastOpen = -1e9;   // event timeStamp of the last open, so one press opens one popup
+
+// The word the popup shows for "what kind of thing is this", per stored list. App words, not the
+// list names: the list name is already on screen in the path line right under it.
+// THE GESTURE, stated once. Everything below asks `inspPair`, and the badge names the same two keys,
+// so changing the pair is one edit. Ctrl+Shift is what is free here: ⌘-click multi-selects and opens
+// code, Alt-click drills in, Shift-click moves the camera.
+function inspPair(e) { return !!(e.ctrlKey && e.shiftKey); }
+const INSP_GESTURE = 'Ctrl+Shift';
+
+const INSP_KIND = {
+  roles: 'actor', capabilities: 'feature', use_cases: 'use case', happy_path: 'happy-path step',
+  subsystems: 'subsystem', components: 'component', deps: 'dependency', entry_points: 'way in',
+  subdomains: 'subdomain', entities: 'record type', flows: 'walk', subflows: 'shared walk',
+  rules: 'business rule', blocks: 'rule block', interfaces: 'surface', glossary: 'glossary term',
+  tests: 'test row', deployment: 'process', config: 'setting', observability: 'signal',
+  run_commands: 'command', non_entity_types: 'not a record type', extras: 'extra section',
+  edges: 'arrow', messaging: 'channel', environments: 'environment', security: 'security note',
+};
+// Which data-attribute wins when one element carries several. Innermost-first is decided by the walk
+// up the tree; this decides it WITHIN one element. A walk step carries both `data-step` (the step)
+// and `data-uc` (the use case it opens), and the thing under the cursor is the step.
+const INSP_ATTRS = ['data-step', 'data-br', 'data-blk', 'data-iface', 'data-sactor', 'data-sarea',
+  'data-sfeat', 'data-entity', 'data-dep', 'data-store', 'data-sd', 'data-cap', 'data-uc', 'data-id',
+  'data-goelement', 'data-gofeat', 'data-goactor', 'data-def', 'data-ctx', 'data-target'];
+// Rows the map keys by a NAME rather than an id: [attribute, stored list, the field it matches].
+const INSP_BY_FIELD = [['data-unit', 'deployment', 'unit'], ['data-term', 'glossary', 'term'],
+  ['data-key', 'config', 'key'], ['data-actor', 'roles', 'name']];
+// Every id shape the stored map mints, written ONCE. CAP/EP/BLK/BR/SF/SD lead their one-letter
+// siblings for the usual first-match reason: `CAP3` also starts with `C`, `SD1` with `S`, `BR2`
+// with `B` — an alternation in the other order matched the `C` branch, failed on "AP3", and
+// resolved nothing.
+const INSP_ID = '(?:CAP|EP|BLK|BR|SF|SD|UC|HP|R|C|D|E|I|S)\\d+';
+const INSP_ID_RE = new RegExp('\\b' + INSP_ID + '\\b', 'g');   // an id inside a record's text
+const INSP_MM_RE = new RegExp('(?:^|-)(' + INSP_ID + ')(?:-|$)');  // an id inside a Mermaid element id
+
+// ── the stored map, and its id index ─────────────────────────────────────────────────────────────
+function inspLoadMap() {
+  if (RAW || rawPending || !API_BASE) return rawPending;
+  rawPending = fetch(API_BASE + 'rawmap', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => { if (j) { RAW = j; RAW_BY_ID = inspIndex(j); } })
+    .catch(() => { /* no server, or an unreadable map: the inspector just finds nothing */ });
+  return rawPending;
+}
+// Every top-level list, every record in it that carries an `id`. First writer wins, so a duplicate id
+// in the stored map resolves to the earlier record rather than silently to the later one.
+function inspIndex(raw) {
+  const byId = {};
+  for (const [list, arr] of Object.entries(raw)) {
+    if (!Array.isArray(arr)) continue;
+    arr.forEach((rec, i) => {
+      if (rec && typeof rec === 'object' && typeof rec.id === 'string' && !byId[rec.id]) {
+        byId[rec.id] = { path: `${list}[${i}]`, rec, kind: INSP_KIND[list] || list, id: rec.id };
+      }
+    });
+  }
+  return byId;
+}
+function inspById(id) { return (RAW_BY_ID && RAW_BY_ID[id]) || null; }
+
+// ── resolving what is under the cursor ───────────────────────────────────────────────────────────
+// Walk out from the hovered node until one ancestor answers. Innermost wins, which is what makes a
+// card inside a feature section resolve to the card and not to the section.
+function inspResolve(target) {
+  if (!RAW) return null;
+  let el = target;
+  for (let depth = 0; el && el !== document.body && depth < 40; depth++) {
+    const hit = inspAt(el);
+    if (hit) return { hit, el };
+    el = el.parentElement;
+  }
+  return null;
+}
+function inspAt(el) {
+  if (!el.getAttribute) return null;
+  // An arrow. Mermaid names its edge `<diagram>-L_<src>_<dst>_<nth>`, the same spelling `eachEdge`
+  // reads, so the nth arrow between one pair picks the nth stored edge between that same pair.
+  if (el.classList && el.classList.contains('flowchart-link')) return inspEdge(el);
+  // A step of a walk, keyed by its position in the narration rather than by an id.
+  const step = el.getAttribute('data-step');
+  if (step && /^\d+$/.test(step)) return inspFlowStep(el, +step);
+  // A way in, named by ITS POSITION inside one component's list rather than by its own id — the shape
+  // all three screens that draw one share. Checked BEFORE the id attributes, because the same element
+  // also carries the COMPONENT's id, and the component is not the thing under the cursor.
+  if (el.hasAttribute('data-ep-idx')) {
+    const list = el.closest('.tb-list');
+    const found = list && inspEntryPoint(list.getAttribute('data-comp'), +el.getAttribute('data-ep-idx'));
+    if (found) return found;
+  }
+  if (el.hasAttribute('data-idx') && el.getAttribute('data-id')) {
+    const found = inspEntryPoint(el.getAttribute('data-id'), +el.getAttribute('data-idx'));
+    if (found) return found;
+  }
+  for (const a of INSP_ATTRS) {
+    const v = el.getAttribute(a);
+    const rec = v && inspById(v);
+    if (rec) return rec;
+  }
+  for (const [attr, list, field] of INSP_BY_FIELD) {
+    const v = el.getAttribute(attr);
+    if (!v) continue;
+    const i = (RAW[list] || []).findIndex((r) => r && r[field] === v);
+    if (i >= 0) return { path: `${list}[${i}]`, rec: RAW[list][i], kind: INSP_KIND[list] || list, id: null };
+  }
+  // A drawn box: `cy-<id>` is the viewer's own handle, and the raw element id is Mermaid's.
+  const cy = el.classList && [...el.classList].find((c) => c.startsWith('cy-'));
+  if (cy) { const r = inspById(cy.slice(3)); if (r) return r; }
+  const m = (el.id || '').match(INSP_MM_RE);
+  return m ? inspById(m[1]) : null;
+}
+function inspEdge(pathEl) {
+  const m = (pathEl.id || '').match(/L_(U_\d+|[^_]+)_(U_\d+|[^_]+)_(\d+)$/);
+  if (!m) return null;
+  const slots = [];
+  (RAW.edges || []).forEach((e, i) => { if (e.src === m[1] && e.dst === m[2]) slots.push(i); });
+  const i = slots.length ? (slots[+m[3]] !== undefined ? slots[+m[3]] : slots[0]) : -1;
+  return i < 0 ? null : { path: `edges[${i}]`, rec: RAW.edges[i], kind: 'arrow', id: null };
+}
+// One step of a walk. The narration FLATTENS a shared walk into its caller, so its own index is not
+// the stored one — the step's `sf` and `n` are, and they name the stored slot exactly.
+function inspFlowStep(el, i) {
+  const holder = el.closest('[data-uc]');
+  const uc = (holder && holder.getAttribute('data-uc')) || (history[hi] && history[hi].uc);
+  const st = uc && (FLOWS_NARR[uc] || [])[i];
+  if (!st) return null;
+  const list = st.sf ? 'subflows' : 'flows';
+  const j = (RAW[list] || []).findIndex((f) => (st.sf ? f.id === st.sf : f.uc === uc));
+  if (j < 0) return null;
+  const k = ((RAW[list][j] || {}).steps || []).findIndex((s) => String(s.n) === String(st.n));
+  if (k < 0) return null;
+  return { path: `${list}[${j}].steps[${k}]`, rec: RAW[list][j].steps[k], kind: 'walk step', id: null };
+}
+// The `idx`-th way in of one component. `views.model_to_graph` builds a component's list by filtering
+// the stored ways in on `component`, in file order, so the same filter here lands on the same record.
+function inspEntryPoint(comp, idx) {
+  if (!comp) return null;
+  const slots = [];
+  (RAW.entry_points || []).forEach((e, i) => { if (e.component === comp) slots.push(i); });
+  const i = slots[idx];
+  return i === undefined ? null
+    : { path: `entry_points[${i}]`, rec: RAW.entry_points[i], kind: 'way in', id: RAW.entry_points[i].id };
+}
+
+// Ctrl+Shift+click on something the stored map does not hold. A debug tool that answers a miss with
+// SILENCE is unusable: "not a map element" and "the inspector is broken" look identical, and every
+// resolver gap below then reads as the second one. So a miss is an answer too — what the click landed
+// on, and the handles it carried, which is exactly what extending the resolver needs.
+function inspMiss(target) {
+  const arrow = target && target.closest && target.closest('path.flowchart-link');
+  const why = arrow
+    ? 'An arrow between boxes that are not components. The map stores arrows between COMPONENTS only '
+      + '(every `edges[].src` is a C-id), so an arrow drawn between subsystems, subdomains or '
+      + 'processes has no record of its own — it stands for the component arrows underneath it.'
+    : 'Nothing under the cursor is an element of the stored map.';
+  return { path: '—', kind: 'not stored', id: null, rec: null, note: why, handles: inspHandles(target) };
+}
+// The DOM handles the resolver looked at, innermost first — an id, a `cy-<id>` class, and every
+// data-attribute. When something SHOULD have resolved, this names the attribute to add to INSP_ATTRS.
+function inspHandles(target) {
+  const seen = [];
+  let el = target;
+  for (let d = 0; el && el !== document.body && d < 6; el = el.parentElement, d++) {
+    if (!el.attributes) continue;
+    const bits = [...el.attributes].filter((a) => a.name.startsWith('data-')).map((a) => `${a.name}="${a.value}"`);
+    const cy = el.classList && [...el.classList].find((c) => c.startsWith('cy-'));
+    if (cy) bits.unshift('.' + cy);
+    if (el.id) bits.unshift('#' + el.id);
+    if (bits.length) seen.push(`${el.tagName.toLowerCase()}  ${bits.join('  ')}`);
+  }
+  return seen;
+}
+
+// ── the popup ────────────────────────────────────────────────────────────────────────────────────
+const inspPop = document.createElement('div');
+inspPop.className = 'insp-pop';
+inspPop.hidden = true;
+document.body.appendChild(inspPop);
+const inspBadge = document.createElement('div');
+inspBadge.className = 'insp-badge';
+inspBadge.textContent = INSP_GESTURE + ' — map inspector: click any element';
+inspBadge.hidden = true;
+document.body.appendChild(inspBadge);
+
+function inspOpen(hit) { inspStack.push(hit); inspRender(hit); }
+function inspRender(hit) {
+  const onScreen = hit.id && GRAPH.nodes[hit.id]
+    ? `<button type="button" class="insp-goto" data-goto="${esc(hit.id)}">Show on screen →</button>` : '';
+  const back = inspStack.length > 1 ? '<button type="button" class="insp-back">← back</button>' : '';
+  // The path gets a line of its own, under the pill and the buttons. Sharing one line, it competed
+  // with a two-word button for the same 560px and squeezed it into three stacked words.
+  // A DIV, not a <header>. The app styles the bare `header` tag (navy ground, 40px min-height, and a
+  // 26x26 square for every button inside it), and that rule reached straight into this panel: it
+  // clipped the path line off and squeezed "Show on screen" into a 26px stub.
+  inspPop.innerHTML = `<div class="insp-head">`
+    + `<div class="insp-top"><span class="insp-kind">${esc(hit.kind || 'record')}</span>`
+    + `<span class="insp-acts">${back}${onScreen}`
+    + `<button type="button" class="insp-x" title="Close">×</button></span></div>`
+    + `<code class="insp-path">project-map.json › ${esc(hit.path)}</code></div>`
+    + (hit.rec !== null && hit.rec !== undefined
+      ? `<pre class="insp-json">${inspVal(hit.rec, '')}</pre>`
+      : `<div class="insp-miss"><p>${esc(hit.note || '')}</p>`
+        + (hit.handles && hit.handles.length
+          ? `<p class="insp-misslead">What the click landed on:</p><pre>${esc(hit.handles.join('\n'))}</pre>` : '')
+        + '</div>');
+  inspPop.hidden = false;
+  inspPop.querySelector('.insp-x').addEventListener('click', inspClose);
+  const b = inspPop.querySelector('.insp-back');
+  if (b) b.addEventListener('click', () => { inspStack.pop(); inspRender(inspStack[inspStack.length - 1]); });
+  const g = inspPop.querySelector('.insp-goto');
+  if (g) g.addEventListener('click', () => selectFromTree(g.getAttribute('data-goto')));
+  // An id inside the JSON opens THAT record here, in place. A plain click is enough once the popup is
+  // open — the modifier is what finds an element on a crowded page, and there is nothing else a click
+  // on an id in this pane could mean.
+  inspPop.querySelectorAll('.insp-ref').forEach((r) => r.addEventListener('click', () => {
+    const next = inspById(r.getAttribute('data-ref'));
+    if (next) inspOpen(next);
+  }));
+}
+function inspClose() { inspPop.hidden = true; inspStack = []; }
+
+// Render one JSON value as HTML. Written out rather than regexed over `JSON.stringify` output so the
+// escaping happens once, on the raw text, and an id can never be found inside markup this same pass
+// just wrote.
+function inspVal(v, pad) {
+  if (v === null) return '<span class="insp-null">null</span>';
+  if (typeof v === 'boolean') return `<span class="insp-bool">${v}</span>`;
+  if (typeof v === 'number') return `<span class="insp-num">${v}</span>`;
+  if (typeof v === 'string') return `<span class="insp-str">"${inspRefs(v)}"</span>`;
+  const inner = pad + '  ';
+  if (Array.isArray(v)) {
+    if (!v.length) return '[]';
+    return '[\n' + v.map((x) => inner + inspVal(x, inner)).join(',\n') + '\n' + pad + ']';
+  }
+  const keys = Object.keys(v);
+  if (!keys.length) return '{}';
+  return '{\n' + keys.map((k) => `${inner}<span class="insp-key">"${esc(k)}"</span>: ${inspVal(v[k], inner)}`)
+    .join(',\n') + '\n' + pad + '}';
+}
+// Escape the string, then turn every token that IS an id of a stored record into a link. The index
+// lookup is the filter: a bare `C4` in prose links only when the map really holds a C4.
+function inspRefs(s) {
+  return esc(String(s)).replace(INSP_ID_RE, (tok) => (inspById(tok)
+    ? `<button type="button" class="insp-ref" data-ref="${tok}">${tok}</button>` : tok));
+}
+
+// ── arming, hovering, clicking ───────────────────────────────────────────────────────────────────
+// A CLICK asks the event itself, never the armed flag. The flag is a memory of the last key event,
+// and a key released while the window was not focused left it set — which turned every ordinary click
+// on the page into a swallowed one, with only a badge to say why.
+function inspSetArmed(on) {
+  if (on === inspArmed) return;
+  inspArmed = on;
+  document.body.classList.toggle('insp-on', on);
+  inspBadge.hidden = !on;
+  if (on) inspLoadMap(); else inspMark(null);
+}
+function inspMark(el) {
+  if (inspHit === el) return;
+  if (inspHit) inspHit.classList.remove('insp-lit');
+  inspHit = el;
+  if (inspHit) inspHit.classList.add('insp-lit');
+}
+document.addEventListener('keydown', (e) => inspSetArmed(inspPair(e)), true);
+document.addEventListener('keyup', (e) => inspSetArmed(inspPair(e)), true);
+window.addEventListener('blur', () => inspSetArmed(false));
+
+// ── while the pair is held, the app is DEAF ───────────────────────────────────────────────────────
+// Swallowing only the click was not enough. The pair overlaps two live bindings (⌘ multi-selects on
+// ctrlKey, the arrow handlers on shiftKey), and everything else the page does to a pointer — panning,
+// wheel-zoom, the hover glow, tooltips, the drill on a double-click — went on running underneath the
+// inspector. So: ONE capture-phase blocker on `document` for every pointer event, and the page sees
+// none of them. Capture at `document` is above every element handler AND above svg-pan-zoom's own,
+// and `stopPropagation` there means the event never reaches the target or the bubble phase at all.
+// `stopImmediatePropagation` covers the one other capture listener on document (the code viewer's
+// click-outside closer), which registers later than this one.
+const INSP_DEAF = ['mousedown', 'mouseup', 'click', 'auxclick', 'dblclick', 'contextmenu', 'wheel',
+  'pointerdown', 'pointerup', 'pointercancel', 'pointermove', 'dragstart', 'touchstart',
+  'mouseover', 'mouseout', 'mouseenter', 'mouseleave'];
+// `passive: false` so the wheel and touch blocks may actually call preventDefault — a passive
+// listener's preventDefault is ignored, which is the default the browser assumes for both.
+for (const type of INSP_DEAF) {
+  document.addEventListener(type, inspSwallow, { capture: true, passive: false });
+}
+function inspSwallow(e) {
+  if (!inspPair(e) || inspPop.contains(e.target)) return;
+  e.preventDefault();          // the native context menu, text selection, the browser's own zoom
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  // macOS makes Control-click the SECONDARY click: the system turns it into `contextmenu`, and no
+  // `click` event is ever produced. So the popup opens from whichever of the two arrives.
+  // The guard is the GAP, not the press: a platform that sends both sends them microseconds apart,
+  // while two real gestures cannot be a quarter-second apart. Keying it on the mousedown instead was
+  // wrong — a secondary click does not always carry the modifiers on its mousedown, so the press that
+  // most needed the flag was the one that never set it.
+  if (e.type === 'contextmenu' || e.type === 'click') {
+    if (e.timeStamp - inspLastOpen > 250) { inspLastOpen = e.timeStamp; inspShow(e.target); }
+  }
+}
+// Held BEFORE the map is known to have loaded, and resolved after: the stored map is fetched on the
+// first arm, and the first click easily beats it. Deciding "nothing here" against a map that has not
+// arrived yet made the first Ctrl+Shift+click of every session do nothing at all, silently.
+function inspShow(target) {
+  const open = () => {
+    const found = inspResolve(target);
+    inspStack = [];
+    inspOpen(found ? found.hit : inspMiss(target));
+  };
+  if (RAW) open(); else Promise.resolve(inspLoadMap()).then(open);
+}
+// `mousemove` is blocked like the rest — the outline is drawn from THIS handler, which runs before
+// the blocker because it is registered first, so the page never sees the move that moved the ring.
+document.addEventListener('mousemove', (e) => {
+  inspSetArmed(inspPair(e));
+  if (!inspArmed) return;
+  if (inspPop.contains(e.target)) { inspMark(null); return; }
+  const found = inspResolve(e.target);   // null until the stored map lands; the outline follows it
+  inspMark(found ? found.el : null);
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+}, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !inspPop.hidden) { e.preventDefault(); e.stopPropagation(); inspClose(); }
+}, true);

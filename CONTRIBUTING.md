@@ -164,6 +164,14 @@ Two things that will otherwise cost you an hour:
   line and files; a web product's map is screens and APIs. A screen that only looks right on
   the richer of the two is not finished, and the sparse one is where the empty states show.
 
+**Hold Ctrl+Shift** to ask what the map SAYS about anything on screen: every element the map
+stores lights up under the cursor, and Ctrl+Shift+click opens its stored record — the slot in
+`.coyodex/project-map.json` it came from, and the record itself. An id inside the record opens that
+record. A click on something the map does not store says so, and prints the DOM handles it looked
+at, which is what extending the resolver needs. While both keys are down the page itself is
+deaf — no pan, no wheel-zoom, no hover, no drill, and no browser context menu — and nothing at
+all is armed until they are.
+
 The viewer's own tests need a real browser and are slower than the rest: `tests/test_viewer_browser.py`.
 `node --check tools/coyodex/viewer/viewer.js` catches a syntax error in a second, so run it first.
 

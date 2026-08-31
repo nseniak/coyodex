@@ -2288,3 +2288,61 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
               box-shadow: 0 2px 8px rgba(30,34,53,.20); cursor: default; }
 .ifd-elabel.ifd-lab-on { display: block; }
 .ifd-none { font-size: 12px; color: #6b7280; margin: 0; padding: 8px 0; }
+
+/* ── THE MAP INSPECTOR ────────────────────────────────────────────────────────────────────────────
+   A development surface, so it is DELIBERATELY not the app's own skin: dark ground, monospace, no
+   indigo. Nothing here paints until Ctrl+Shift is held, and `.insp-on` is the only class that reaches
+   outside this block. */
+body.insp-on { cursor: crosshair; }
+/* One outline for HTML and SVG alike. `outline` renders on an SVG <g> in every engine this viewer
+   already requires, and the drop-shadow underneath it is what makes the ring readable over a diagram
+   box whose own fill is pale. Nothing here changes layout: no border, no padding. */
+.insp-lit { outline: 2px solid #f59e0b !important; outline-offset: 1px;
+            filter: drop-shadow(0 0 3px rgba(245, 158, 11, .9)); }
+.insp-badge { position: fixed; left: 16px; bottom: 16px; z-index: 3000;
+              background: #111827; color: #fbbf24; font: 600 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+              padding: 7px 12px; border-radius: 999px; pointer-events: none;
+              box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+/* Pinned bottom-right and capped at 80vh: the thing you just clicked is usually mid-screen, and a
+   centred dialog would cover the very box whose record you are reading. */
+.insp-pop { position: fixed; right: 16px; bottom: 16px; z-index: 3001; width: min(560px, 46vw);
+            max-height: 80vh; display: flex; flex-direction: column;
+            background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 10px;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, .45); overflow: hidden; }
+.insp-pop[hidden] { display: none; }
+.insp-head { flex: 0 0 auto; padding: 8px 10px; background: #1e293b; border-bottom: 1px solid #334155; }
+.insp-top { display: flex; align-items: center; gap: 8px; }
+.insp-kind { font: 600 11px/1 -apple-system, system-ui, sans-serif; text-transform: uppercase;
+             letter-spacing: .06em; color: #0f172a; background: #fbbf24;
+             padding: 4px 7px; border-radius: 4px; flex: 0 0 auto; }
+/* The path wraps rather than truncating: it is the one thing in this popup you may want to retype
+   against the file on disk, and an elided middle would make that impossible. */
+.insp-path { display: block; margin-top: 6px; overflow-wrap: anywhere;
+             font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #94a3b8; }
+.insp-acts { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: auto; }
+.insp-acts button { font: 600 11.5px/1 -apple-system, system-ui, sans-serif; cursor: pointer;
+                    border: 1px solid #475569; background: #334155; color: #e2e8f0;
+                    padding: 5px 8px; border-radius: 5px; }
+.insp-acts button:hover { background: #475569; }
+.insp-x { width: 26px; padding: 5px 0 !important; font-size: 15px !important; }
+.insp-json { margin: 0; padding: 10px 12px; overflow: auto; flex: 1 1 auto;
+             font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+             white-space: pre-wrap; overflow-wrap: anywhere; }
+.insp-key { color: #7dd3fc; }
+.insp-str { color: #bef264; }
+.insp-num { color: #fca5a5; }
+.insp-bool, .insp-null { color: #c4b5fd; }
+/* An id inside the JSON. Styled as text that happens to be clickable, not as a button: a record with
+   twenty step ids in it would otherwise read as a wall of chrome. */
+.insp-ref { font: inherit; color: #fbbf24; background: none; border: 0; padding: 0; cursor: pointer;
+            text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+.insp-ref:hover { color: #fff; background: #b45309; text-decoration: none; }
+/* A miss reads as prose, not as JSON: there is no record to colour, and the point of the pane here is
+   the sentence saying why. The handle dump under it stays monospace — it is DOM, and it is what an
+   unresolved element needs pasting into the resolver. */
+.insp-miss { padding: 12px; overflow: auto; font-size: 12.5px; color: #cbd5e1; }
+.insp-miss p { margin: 0 0 10px; }
+.insp-misslead { color: #94a3b8; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+.insp-miss pre { margin: 0; padding: 8px 10px; background: #1e293b; border-radius: 6px;
+                 font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #e2e8f0;
+                 white-space: pre-wrap; overflow-wrap: anywhere; }

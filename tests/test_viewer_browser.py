@@ -774,6 +774,194 @@ def test_the_picture_draws_the_people_and_the_pipe_on_both_shores() -> None:
         assert not page.js_errors, page.js_errors
 
 
+# ── the map inspector (Ctrl+Shift) ───────────────────────────────────────────────────────────────
+# These are browser tests because the whole feature IS browser behaviour: which DOM element the
+# cursor is over, which listener sees the click first, and what the popup then says. A source-text
+# assertion could not tell any of that apart from a resolver that silently finds nothing.
+
+_INSPECT_JS = """
+(sel) => {
+  const el = document.querySelector(sel);
+  if (!el) return { error: 'no element for ' + sel };
+  const opts = { bubbles: true, cancelable: true, view: window, ctrlKey: true, shiftKey: true };
+  el.dispatchEvent(new MouseEvent('mousemove', opts));
+  el.dispatchEvent(new MouseEvent('click', opts));
+  return { ok: true };
+}
+"""
+_READ_POP_JS = """
+() => {
+  const pop = document.querySelector('.insp-pop');
+  if (!pop || pop.hidden) return { open: false };
+  return {
+    open: true,
+    kind: pop.querySelector('.insp-kind').textContent,
+    path: pop.querySelector('.insp-path').textContent.replace('project-map.json › ', ''),
+    body: pop.textContent,
+    refs: [...pop.querySelectorAll('.insp-ref')].map((r) => r.textContent),
+  };
+}
+"""
+
+
+def _inspect(page: Any, selector: str) -> dict:
+    """Ctrl+Shift+click `selector` and read the popup. The wait covers the stored map's own fetch:
+    the first such click of a session lands before /api/rawmap has answered, and the handler holds
+    the click until it does."""
+    started = page.evaluate(_INSPECT_JS, selector)
+    assert "error" not in started, started
+    page.wait_for_timeout(700)
+    return dict(page.evaluate(_READ_POP_JS))
+
+
+def test_the_inspector_answers_with_the_record_the_map_stores() -> None:
+    """The whole point: the popup says WHICH slot of the stored file drew this box, and what that
+    slot holds — not what the view bundle made of it."""
+    with _served() as url, _page(url + "#v=usecases") as page:
+        _settle(page)
+        got = _inspect(page, "article.story-card.story-feature[data-sfeat]")
+        assert got["open"], got
+        assert got["kind"] == "feature", got
+        assert re.fullmatch(r"capabilities\[\d+\]", got["path"]), got
+        assert '"id"' in got["body"] and '"purpose"' in got["body"], got
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_click_without_both_keys_is_an_ordinary_click() -> None:
+    """The inspector overlaps two bindings that already exist (⌘ multi-selects, Shift frames), so
+    the one thing it must never do is change what a plain click means."""
+    with _served() as url, _page(url + "#v=usecases") as page:
+        _settle(page)
+        page.click("article.story-card.story-feature[data-sfeat] button")
+        _settle(page)
+        pop = page.evaluate(_READ_POP_JS)
+        assert not pop["open"], pop
+        assert "Features" in _crumb(page), _crumb(page)
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_smaller_things_answer_too_not_just_the_boxes() -> None:
+    """A step of the happy path and a way in are drawn from records of their own, and neither carries
+    an id on screen: the step is found by its id attribute, the way in by its POSITION in one
+    component's list. Both were invisible to a resolver that only knew about drawn boxes."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        step = _inspect(page, ".walk-step[data-step]")
+        assert step["open"] and step["kind"] == "happy-path step", step
+        assert re.fullmatch(r"happy_path\[\d+\]", step["path"]), step
+        assert not page.js_errors, page.js_errors
+    # A component's own details page is where a way in is drawn ("Triggered by"); the info pane
+    # beside a diagram carries only the card.
+    with _served() as url, _page(url + "#v=element&id=C1") as page:
+        _settle(page)
+        way = _inspect(page, ".tb-ep[data-ep-idx]")
+        assert way["open"] and way["kind"] == "way in", way
+        assert re.fullmatch(r"entry_points\[\d+\]", way["path"]), way
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_id_inside_a_record_opens_that_record_and_back_returns() -> None:
+    """A record is mostly ids pointing at other records, and reading one by hand meant scrolling the
+    file. Following one must also be undoable, or the popup is a one-way trip."""
+    with _served() as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        first = _inspect(page, ".walk-step[data-step]")
+        assert first["open"], first
+        moved = page.evaluate("""
+            () => {
+              const pop = document.querySelector('.insp-pop');
+              const r = [...pop.querySelectorAll('.insp-ref')].find((x) => /^UC\\d+$/.test(x.textContent));
+              if (!r) return { error: 'no use-case id in the step record' };
+              r.click();
+              return { ok: true };
+            }""")
+        assert "error" not in moved, moved
+        page.wait_for_timeout(300)
+        after = dict(page.evaluate(_READ_POP_JS))
+        assert after["kind"] == "use case", after
+        assert re.fullmatch(r"use_cases\[\d+\]", after["path"]), after
+        page.click(".insp-pop .insp-back")
+        page.wait_for_timeout(300)
+        back = dict(page.evaluate(_READ_POP_JS))
+        assert back["path"] == first["path"], (back, first)
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_click_on_something_the_map_does_not_store_says_so() -> None:
+    """Silence is the one answer a debug tool must not give: it makes a resolver gap and a broken
+    tool look identical. A miss reports what the click landed on instead."""
+    with _served() as url, _page(url + "#v=usecases") as page:
+        _settle(page)
+        got = _inspect(page, "#crumb")
+        assert got["open"], got
+        assert got["kind"] == "not stored", got
+        assert got["path"] == "—", got
+        assert "Nothing under the cursor" in got["body"], got
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_stored_map_is_served_byte_for_byte() -> None:
+    """The path the popup prints is only useful if it names a slot in the file on disk, which needs
+    the endpoint to hand over that file rather than a re-serialisation of the model."""
+    import urllib.request
+    with _served() as url:
+        with urllib.request.urlopen(url + "api/rawmap") as r:
+            body = r.read()
+        assert body == _FIXTURE_MAP.read_bytes()
+
+
+def test_the_secondary_click_opens_it_too_and_no_native_menu_appears() -> None:
+    """macOS makes Control-click the SECONDARY click: the system turns it into a context menu and no
+    ordinary click is ever produced. Held to `click` alone, the gesture opened the browser's own menu
+    and nothing else — on the one platform this tool is written for."""
+    with _served() as url, _page(url + "#v=usecases") as page:
+        _settle(page)
+        prevented = page.evaluate("""
+            () => {
+              const el = document.querySelector('article.story-card.story-feature[data-sfeat]');
+              const e = new MouseEvent('contextmenu',
+                { bubbles: true, cancelable: true, view: window, ctrlKey: true, shiftKey: true });
+              el.dispatchEvent(e);
+              return e.defaultPrevented;
+            }""")
+        assert prevented, "the native context menu was left to open"
+        page.wait_for_timeout(700)
+        got = dict(page.evaluate(_READ_POP_JS))
+        assert got["open"] and got["kind"] == "feature", got
+        assert not page.js_errors, page.js_errors
+
+
+def test_while_the_two_keys_are_held_the_page_itself_is_deaf() -> None:
+    """The gesture overlaps two live bindings (⌘ multi-selects on ctrlKey, the arrow handlers on
+    shiftKey), and panning, wheel-zoom, hover and the double-click drill all went on running under
+    the inspector. Held, the page must receive nothing; released, it must receive everything."""
+    probe = """
+        () => {
+          window.__seen = [];
+          for (const t of ['mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'wheel'])
+            document.addEventListener(t, (e) => window.__seen.push(t), false);
+        }"""
+    fire = """
+        (held) => {
+          const el = document.querySelector('article.story-card.story-feature[data-sfeat]');
+          const mods = held ? { ctrlKey: true, shiftKey: true } : {};
+          const o = { bubbles: true, cancelable: true, view: window, ...mods };
+          for (const t of ['mousedown', 'mouseup', 'dblclick', 'contextmenu'])
+            el.dispatchEvent(new MouseEvent(t, o));
+          el.dispatchEvent(new WheelEvent('wheel', { ...o, deltaY: -240 }));
+          return window.__seen.slice();
+        }"""
+    with _served() as url, _page(url + "#v=usecases") as page:
+        _settle(page)
+        page.evaluate(probe)
+        held = page.evaluate(fire, True)
+        assert held == [], held
+        page.evaluate("() => { window.__seen = []; }")
+        free = page.evaluate(fire, False)
+        assert set(free) == {"mousedown", "mouseup", "dblclick", "contextmenu", "wheel"}, free
+        assert not page.js_errors, page.js_errors
+
+
 def test_an_actors_page_names_the_surfaces_they_stand_at_and_says_which_shore() -> None:
     """The far-side derivation read BACKWARDS. A surface's page already named the people at it, and
     no page named the surfaces for a person — the link was one-way for as long as the actors column

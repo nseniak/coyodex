@@ -753,6 +753,17 @@ class Handler(BaseHTTPRequestHandler):
             except (ModelError, OSError, ValueError, KeyError, IndexError, TypeError) as e:
                 return self._send(500, "text/plain; charset=utf-8",
                                   f"could not build the view: {e}".encode("utf-8"))
+        if rest == ["rawmap"]:
+            # The map EXACTLY as `.coyodex/project-map.json` holds it, sent byte-for-byte. The map
+            # inspector (viewer.js) reads THIS, never /api/view: the view bundle is a projection of
+            # the model, so "what does the map actually say about this box" is a question it cannot
+            # answer. Verbatim, not re-serialised, so the slot the inspector names (`use_cases[12]`)
+            # is the slot a person opening the file by hand will find.
+            try:
+                return self._send(200, "application/json; charset=utf-8", proj.map_json.read_bytes())
+            except OSError as e:
+                return self._send(500, "text/plain; charset=utf-8",
+                                  f"could not read the map: {e}".encode("utf-8"))
         if rest == ["tree"]:
             try:
                 return self._json(project_tree(proj))
