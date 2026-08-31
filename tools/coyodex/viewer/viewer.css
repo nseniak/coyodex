@@ -2361,6 +2361,11 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    the same wherever a line names it. */
 .ifd-elabel-recs { margin-top: 5px; padding-top: 5px; border-top: 1px solid #eceef6;
                    font-size: 10.5px; color: #5a6072; }
+/* The data glyph leading the list, sized down from the 17px it takes on a card: here it is a mark on
+   a line of small text, not the head of a box. `#diagram`-scoped for the same reason every glyph in
+   this file is — `#diagram svg { width: 100% }` reaches every inline SVG under it. */
+#diagram .ifd-recmark { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+#diagram .ifd-recmark .story-glyph { width: 13px; height: 13px; }
 .ifd-elabel-rec { font: inherit; color: inherit; background: none; border: 0; padding: 0;
                   cursor: pointer; text-decoration: underline;
                   text-decoration-color: rgba(30,34,53,.35); text-underline-offset: 2px; }

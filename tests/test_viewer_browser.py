@@ -1314,7 +1314,11 @@ def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS(
 
     The tooltip is the record's own MEANING, not "Show X in context": that restated the underline,
     and a reader hovering a record wants to know what the record is. It comes from `cardFacts`, so
-    the tooltip and the record's own card cannot say different things."""
+    the tooltip and the record's own card cannot say different things.
+
+    It is THE APP'S tooltip, not the browser's `title`. A native tooltip's delay belongs to the
+    browser — about a second, and nothing in the viewer can shorten it. This one is ours and waits
+    half as long as an action icon's, which is asserted here by hovering and watching the clock."""
     with _served_map(_crossing_naming_a_record()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
@@ -1325,19 +1329,39 @@ def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS(
             const out = {};
             for (const l of document.querySelectorAll('.ifd-elabel.ifd-lab-on')) {
                 out[l.firstChild.textContent] = {
-                    recs: [...l.querySelectorAll('.ifd-elabel-rec')].map(
-                              e => [e.textContent, e.title]),
+                    recs: [...l.querySelectorAll('.ifd-elabel-rec')].map(e => e.textContent),
+                    titles: [...l.querySelectorAll('.ifd-elabel-rec')].map(
+                                e => e.getAttribute('title')),
+                    marks: l.querySelectorAll('.ifd-recmark svg').length,
                     tail: l.querySelector('.ifd-elabel-recs').textContent };
             }
             return out;
         }""")
         one, many = got["what is asked"], got["what comes back"]
-        assert one["recs"] == [["Organization",
-                                "A tenant — the top-level isolation boundary everything is "
-                                "scoped to."]], one
+        assert one["recs"] == ["Organization"], one
         # four records, three drawn, and the tail SAYS the rest are there rather than dropping them
-        assert [r[0] for r in many["recs"]] == ["Subscription", "PlanName", "Membership"], many
+        assert many["recs"] == ["Subscription", "PlanName", "Membership"], many
         assert many["tail"].endswith("+1 more"), many
+        # the DATA glyph leads each list, so the row says what kind of thing it names before naming one
+        assert one["marks"] == 1 and many["marks"] == 1, got
+        # and NOT the browser's tooltip, whose delay the viewer cannot touch
+        assert one["titles"] == [None], one
+
+        # THE APP'S TOOLTIP, and it is QUICKER THAN AN ICON'S. The window has to straddle 125ms and
+        # stop short of the 250ms an action icon waits, or the test cannot tell the two apart — a
+        # first attempt checked at 260ms, which both delays pass, and a mutation to 250 sailed through
+        # it. Quiet at 60ms, up by 190ms: 65ms of slack on each side of the real delay.
+        # NAMED, not "the first one": the labels are created opener-first, so the first record in DOM
+        # order belongs to the other sentence.
+        page.locator(".ifd-elabel-rec").filter(has_text="Organization").first.hover()
+        page.wait_for_timeout(60)
+        assert not page.evaluate(
+            "() => document.getElementById('tip').classList.contains('on')"), "tip too eager"
+        page.wait_for_timeout(130)
+        tip = page.evaluate("""() => ({ on: document.getElementById('tip').classList.contains('on'),
+                                        text: document.getElementById('tip').textContent })""")
+        assert tip["on"], tip
+        assert tip["text"].startswith("A tenant"), tip
         assert not page.js_errors, page.js_errors
 
 

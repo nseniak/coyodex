@@ -1466,6 +1466,10 @@ function ensureIconOverlay(container) {
   return g;
 }
 const ACTION_ICON_TIP_DELAY_MS = 250;
+// Half that, for a tooltip on TEXT rather than on an icon. An icon's tooltip waits because the icon
+// is already a mark you can read; a record's name tells you nothing about what the record is, so the
+// answer should arrive about as fast as you can ask for it.
+const TEXT_TIP_DELAY_MS = 125;
 let actionIconTipTimer = null;
 let actionIconHover = null;
 function hideActionIconTip() {
@@ -1474,7 +1478,7 @@ function hideActionIconTip() {
   actionIconHover = null;
   hideTip();
 }
-function scheduleActionIconTip(label, ev) {
+function scheduleActionIconTip(label, ev, delayMs) {
   hideActionIconTip();
   actionIconHover = { label, x: ev.clientX, y: ev.clientY };
   actionIconTipTimer = setTimeout(() => {
@@ -1484,7 +1488,7 @@ function scheduleActionIconTip(label, ev) {
     tip.classList.remove('action');
     tip.classList.add('on');
     moveTip(actionIconHover.x, actionIconHover.y);
-  }, ACTION_ICON_TIP_DELAY_MS);
+  }, delayMs === undefined ? ACTION_ICON_TIP_DELAY_MS : delayMs);
 }
 function moveActionIconTip(ev) {
   if (!actionIconHover) return;
@@ -10102,6 +10106,13 @@ function bindIfaceDiagram(root) {
     if (ids.length) {
       const row = document.createElement('div');
       row.className = 'ifd-elabel-recs';
+      // The DATA glyph leads the list, so the row says what kind of thing it is naming before it
+      // names any. The same drawing the Features page puts on a data area — one mark, one meaning,
+      // wherever stored data is named.
+      const mark = document.createElement('span');
+      mark.className = 'ifd-recmark';
+      mark.innerHTML = storyAreaGlyphSvg();
+      row.appendChild(mark);
       ids.slice(0, IFACE_LABEL_REC_CAP).forEach((id, n) => {
         if (n) row.appendChild(document.createTextNode(', '));
         const nm = (GRAPH.nodes[id] || {}).name || id;
@@ -10110,12 +10121,20 @@ function bindIfaceDiagram(root) {
         bt.type = 'button';
         bt.className = 'ifd-elabel-rec';
         bt.textContent = nm;
-        // ITS DESCRIPTION, not the gesture. "Show X in context" restated the underline, and a reader
+        // ITS MEANING, not the gesture. "Show X in context" restated the underline, and a reader
         // hovering a record wants to know what the record IS. The sentence is `cardFacts`', so the
         // tooltip and the record's own card cannot say different things. A record the map describes
-        // in no words falls back to naming the gesture, which is better than an empty tooltip.
+        // in no words falls back to naming the gesture, which beats an empty tooltip.
+        //
+        // THE APP'S OWN TOOLTIP, not the browser's `title`. A native tooltip's delay belongs to the
+        // browser — about a second, and nothing in this file can shorten it. This one is ours, and
+        // it is set to half the delay an action icon's waits.
         const facts = cardFacts(id);
-        bt.title = (facts && facts.desc) ? facts.desc : 'Show ' + nm + ' in context';
+        const tipText = (facts && facts.desc) ? facts.desc : 'Show ' + nm + ' in context';
+        bt.addEventListener('mouseenter', (ev) => scheduleActionIconTip(tipText, ev,
+                                                                       TEXT_TIP_DELAY_MS));
+        bt.addEventListener('mousemove', moveActionIconTip);
+        bt.addEventListener('mouseleave', hideActionIconTip);
         bt.addEventListener('click', (ev) => {
           ev.stopPropagation();      // the record's door is not the label's, nor the stage's unpin
           showInContext(id);
