@@ -17,6 +17,9 @@ __pycache__/
 # ones the tool files itself, but a named screenshot lands here, and a broad `git add -A` swept one
 # into a commit. Root only (a leading slash), so tracked art like assets/viewer.png is untouched.
 /*.png
+# …and the folder they get filed into when a session keeps a set to compare across runs. Same rule
+# as the loose ones: they are how a change was checked, not part of the product.
+.shots/
 tools/coyodex/viewer/build/
 map-backups/
 .venv/
