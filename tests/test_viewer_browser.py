@@ -100,6 +100,11 @@ def _page(url: str) -> Iterator[Any]:
         page.goto(url)
         page.wait_for_selector("#crumb")
         page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
+        # …and the LEGEND, which is an overlay pinned over the diagram. It sat clear of the old
+        # Interfaces picture and covers the top-left card of the new one, so a hover in a test
+        # resolved the element and then timed out on "another element intercepts pointer events".
+        # Closed here rather than per test: any page whose content reaches the top-left has it.
+        page.evaluate("() => { const b = document.getElementById('legendclose'); if (b) b.click(); }")
         try:
             yield page
         finally:
@@ -570,13 +575,26 @@ def _with_interface(kind: str) -> Any:
 
 def test_a_surface_card_says_what_shape_it_is() -> None:
     """"Show me every API this product exposes" was a question a reader answered off the surface's
-    NAME, and no tool could answer at all."""
-    with _served_map(_with_interface("hosted-screen")) as url, _page(url + "#v=interfaces") as page:
-        _settle(page)
-        pills = page.evaluate(
-            "() => [...document.querySelectorAll('.ecard .ecard-pill')].map(e => e.textContent)")
-        assert "their screen" in pills, pills
-        assert not page.js_errors, page.js_errors
+    NAME, and no tool could answer at all.
+
+    The picture answers it with a GLYPH now, not the word: eleven kinds is more than a reader learns,
+    so eight drawings cover them and three groupings are genuinely one thing. `hosted-screen` and
+    `screen` are both a browser window, which is what this asserts — the kind is not lost by being
+    folded, it is drawn. The WORD is still on the surface's own page, where there is room to read."""
+    for kind in ("hosted-screen", "screen"):
+        with _served_map(_with_interface(kind)) as url, _page(url + "#v=interfaces") as page:
+            _settle(page)
+            box = page.evaluate("""() => {
+                const b = document.querySelector('.ifd-box[data-iface="I1"]');
+                const g = b.querySelector('.ifd-head .ifd-glyph');
+                return { d: [...g.querySelectorAll('rect, path')].map(e =>
+                            e.getAttribute('d') || 'rect').join('|'),
+                         w: g.getBoundingClientRect().width };
+            }""")
+            # the browser-window drawing: a rounded rect with one line across it, near the top
+            assert box["d"] == "rect|M1.5 6.5h15", box
+            assert 12 <= box["w"] <= 18, box       # sized by CSS, not by the tag's attributes
+            assert not page.js_errors, page.js_errors
 
 
 def test_a_surface_a_person_goes_to_draws_the_person_and_one_we_merely_call_draws_nobody() -> None:
@@ -634,15 +652,15 @@ def test_the_interfaces_picture_draws_one_wire_per_direction_each_surface_carrie
         wires = page.evaluate("""() => {
             const p = [...document.querySelectorAll('#ifdstage path[data-iface]')];
             const out = {};
-            for (const x of p) {
-                const cls = x.getAttribute('class') || '';
-                (out[x.dataset.iface] = out[x.dataset.iface] || []).push(cls.trim());
-            }
+            for (const x of p) (out[x.dataset.iface] = out[x.dataset.iface] || []).push(1);
             return out;
         }""")
-        assert sorted(wires["I1"]) == ["ifd-w-in", "ifd-w-out"], wires
-        # …and the their-surface's outer wire runs to its far side, which is a CHIP, not a card.
-        assert sorted(wires["I2"]) == ["ifd-w-out", "ifd-w-outer"], wires
+        # I1 carries both directions and draws two; I2 carries one and draws ONE. A wire is drawn
+        # only where something crosses — drawing both and letting the empty label fall away leaves a
+        # line a reader can hover and get nothing from, and half the surfaces on both live maps
+        # carry one direction only.
+        assert len(wires["I1"]) == 2, wires
+        assert len(wires["I2"]) == 1, wires
         assert not page.js_errors, page.js_errors
 
 
@@ -699,22 +717,41 @@ def test_a_surface_with_no_kind_still_draws_a_box() -> None:
         m["interfaces"][0]["kind"] = ""
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
-        cls = page.evaluate(
-            "() => document.querySelector('.ifd-box[data-iface=\\\"I1\\\"]').className")
-        assert "ifd-fam-none" in cls, cls
-        assert page.evaluate(
-            "() => !document.querySelector('.ifd-box[data-iface=\\\"I1\\\"] .ifd-kind')")
+        got = page.evaluate("""() => {
+            const b = document.querySelector('.ifd-box[data-iface="I1"]');
+            return { name: b.querySelector('.ifd-name').textContent,
+                     glyphs: b.querySelectorAll('.ifd-head .ifd-glyph').length };
+        }""")
+        # It draws, it is named, and it takes the FALLBACK glyph rather than none: a box with a hole
+        # where every sibling has a mark reads as a rendering fault, not as a missing field.
+        assert got["name"] == "The dashboard", got
+        assert got["glyphs"] == 1, got
         assert not page.js_errors, page.js_errors
 
 
-def test_the_card_list_stays_reachable_under_the_picture() -> None:
-    """A picture is not a replacement for a list you can read down, and the Features page keeps
-    both. The picture answers "what shape is this product's edge"; the list answers "what does each
-    one of them do"."""
+def test_the_picture_is_the_list_and_there_is_no_second_copy_under_it() -> None:
+    """This REPLACES a test that asserted the opposite, and the reason it flipped is the picture.
+
+    There were two card lists under it, "Our surfaces" and "Their surfaces", on the rule that a
+    picture is not a replacement for a list you can read down. That rule was right about the old
+    picture, whose boxes were a name and two words. It is not right about this one: the boxes ARE
+    cards, in a stated order, carrying the same sentence the list carried. Keeping both drew every
+    surface twice on one page — and those two headings were the last place the words "our surface"
+    and "their surface" survived."""
     with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
-        n = page.evaluate("() => document.querySelectorAll('.ecard[data-key]').length")
-        assert n == 2, n
+        got = page.evaluate("""() => ({
+            boxes: [...document.querySelectorAll('.ifd-box')].map(
+                b => b.querySelector('.ifd-name').textContent),
+            sentences: [...document.querySelectorAll('.ifd-box .ifd-what')].map(e => e.textContent),
+            cards: document.querySelectorAll('.usecases-wrap .ecard[data-key]').length,
+            text: document.querySelector('.usecases-wrap').textContent,
+        })""")
+        assert sorted(got["boxes"]) == ["Crash reporting", "The dashboard"], got
+        assert "Screens a person signs in to." in got["sentences"], got
+        assert got["cards"] == 0, got                       # no second copy
+        assert "Our surfaces" not in got["text"], got       # and the words are gone with it
+        assert "Their surfaces" not in got["text"], got
         assert not page.js_errors, page.js_errors
 
 
@@ -755,16 +792,18 @@ def test_the_picture_draws_the_people_and_the_pipe_on_both_shores() -> None:
     handoffs each have a reader standing at them, mcpolis mails through a service and sends three
     people to Google. Every one of them was already on the surface's own page.
 
-    The ORDER is asserted too, and it is the same on both shores: the far side is the answer, the
-    pipe is only how it is reached, so the person is never named second."""
+    Both now live INSIDE the card, so the two halves cannot drift apart again — there is no longer a
+    per-shore builder to get wrong. The ORDER is still asserted, and it is the same on both shores:
+    the far side is the answer, the pipe is only how it is reached, so the person is never second."""
     with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
             _page(url + "#v=interfaces") as page:
         _settle(page)
         cells = page.evaluate("""() => {
             const out = {};
-            for (const c of document.querySelectorAll('.ifd-outer')) {
-                out[c.dataset.for] = [...c.children].map(
-                    e => (e.classList.contains('ifd-chip-actor') ? 'who:' : 'pipe:') + e.textContent);
+            for (const b of document.querySelectorAll('.ifd-box')) {
+                out[b.dataset.iface] = [
+                    ...[...b.querySelectorAll('.ifd-chip-actor')].map(e => 'who:' + e.textContent),
+                    ...[...b.querySelectorAll('.ifd-prov')].map(e => 'pipe:' + e.textContent)];
             }
             return out;
         }""")
@@ -1010,4 +1049,115 @@ def test_an_actor_at_no_surface_says_so_and_the_products_own_work_says_why() -> 
         _settle(page)
         text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
         assert "crosses no surface" in text, text
+        assert not page.js_errors, page.js_errors
+
+
+def _walk_ordered_interfaces() -> Any:
+    """Four surfaces the walk reaches in a KNOWN order, and two it never reaches.
+
+    UC1 is the fixture's first happy-path use case and its flow steps at `D4`; UC2 comes later.
+
+    THE IDS DISAGREE WITH THE WALK ON PURPOSE. "First" is `I9` and "Second" is `I2`, so a build that
+    lost the walk order and fell back to sorting by id would put them the other way round. Without
+    that the test passes against no ordering at all — which it did, until a mutation said so."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I3", "name": "Late and staffy", "what": "Never on the walk, operator-facing.",
+             "side": "ours", "facing": "operator", "kind": "screen",
+             "carries": [{"direction": "in", "what": "a", "elements": []}]},
+            {"id": "I2", "name": "Second", "what": "Reached later on the walk.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "b", "elements": []}]},
+            {"id": "I5", "name": "Never", "what": "Never on the walk, user-facing.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "c", "elements": []}]},
+            {"id": "I9", "name": "First", "what": "Reached at the start of the walk.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "d", "elements": []}]},
+            {"id": "I4", "name": "Theirs on the walk", "what": "Stands on the dep UC1 steps at.",
+             "side": "theirs", "facing": "user", "kind": "api",
+             "carries": [{"direction": "out", "what": "e", "elements": []}]},
+        ]
+        for d in m["deps"]:
+            if d["id"] == "D4":
+                d["interfaces"] = ["I4"]
+        door = {"phrase": "opens it", "note": "", "where": None, "no_call_site": False,
+                "subflow": None}
+        for f in m["flows"]:
+            if f["uc"] == "UC1":
+                f["steps"].insert(0, dict(door, n=0, src="R1", dst="I9"))
+            if f["uc"] == "UC2":
+                f["steps"].insert(0, dict(door, n=0, src="R2", dst="I2"))
+    return mutate
+
+
+def test_the_picture_reads_down_in_the_order_the_walk_touches_each_surface() -> None:
+    """The same rule the Features page's column uses, applied to surfaces: first touch on the happy
+    path, unbroken, then the ones the walk never reaches in a block after it.
+
+    On MCP Hero that reads as the product's own story — a prospect reads the public website, signs up
+    on the dashboard, a member uses the gateway, an operator the console — and it puts the one staff
+    surface last WITHOUT a staff rule, because the operator's steps are the end of the walk. The
+    untouched block keeps user-before-staff, since the walk has nothing to say about a surface it
+    never reaches."""
+    with _served_map(_walk_ordered_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        got = page.evaluate("""() => ({
+            ours: [...document.querySelectorAll('.ifd-col-ours .ifd-name')].map(e => e.textContent),
+            theirs: [...document.querySelectorAll('.ifd-col-theirs .ifd-name')].map(e => e.textContent),
+        })""")
+        assert got["ours"] == ["First", "Second", "Never", "Late and staffy"], got
+        assert got["theirs"] == ["Theirs on the walk"], got
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_opening_move_is_the_upper_wire_and_the_labels_carry_no_direction_word() -> None:
+    """Who speaks first is drawn, not written. A WAY IN is an address something outside invokes, so a
+    surface holding one is opened from outside and its `in` is the upper wire; a surface holding none
+    is one the product reaches for, so its `out` is.
+
+    The two labels carry NO direction word: each rides its own wire and that wire has an arrowhead,
+    so "in" and "out" restated in text what the reader could already see. That makes the ORDER the
+    only thing saying which is which, which is why it is asserted rather than assumed.
+
+    They must also never touch. The picture once drew ONE curve and its exact reverse, so a reader
+    saw a single line with a head at each end and both sentences landed on one spot."""
+    def mutate(m: dict) -> None:
+        both = [{"direction": "in", "what": "what the caller asks for", "elements": []},
+                {"direction": "out", "what": "the answer it gets back", "elements": []}]
+        # The committed fixture's entry points carry no ids, so one is named here. A way in has to be
+        # a REAL entry point of the map: `ways_in` is what the derivation reads, and a made-up id
+        # would make this test pass against a surface the map does not actually hold a way into.
+        m["entry_points"][0]["id"] = "EP1"
+        m["interfaces"] = [
+            {"id": "I1", "name": "Opened from outside", "what": "It holds a way in.",
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"],
+             "carries": list(both)},
+            {"id": "I2", "name": "We reach for it", "what": "It holds none.",
+             "side": "theirs", "facing": "user", "kind": "api", "carries": list(both)},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        got = page.evaluate("""() => {
+            const out = {};
+            for (const id of ['I1', 'I2']) {
+                const ls = [...document.querySelectorAll('.ifd-elabel')]
+                    .filter(l => l.dataset.iface === id)
+                    .sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));
+                ls.forEach(l => { l.style.visibility = 'hidden'; l.style.display = 'block'; });
+                const box = ls.map(l => ({ t: parseFloat(l.style.top) - l.offsetHeight / 2,
+                                           b: parseFloat(l.style.top) + l.offsetHeight / 2 }));
+                ls.forEach(l => { l.style.display = ''; l.style.visibility = ''; });
+                out[id] = { texts: ls.map(l => l.textContent),
+                            gap: Math.round(box[1].t - box[0].b) };
+            }
+            return out;
+        }""")
+        # I1 holds a way in, so the incoming sentence leads. I2 holds none, so the outgoing one does.
+        assert got["I1"]["texts"] == ["what the caller asks for", "the answer it gets back"], got
+        assert got["I2"]["texts"] == ["the answer it gets back", "what the caller asks for"], got
+        for id_ in ("I1", "I2"):
+            assert got[id_]["gap"] > 0, got                       # they never overlap
+            for t in got[id_]["texts"]:
+                assert "in" != t[:2] and "out" != t[:3], got      # no direction word, just the sentence
         assert not page.js_errors, page.js_errors

@@ -44,6 +44,7 @@ from coyodex.validate_model import (
     anchored_flow_steps,
     capability_audience,
     interface_actors,
+    interface_walk_order,
     rule_steps,
 )
 
@@ -177,6 +178,26 @@ class InterfaceFacts:
     #: What crosses, verbatim from the map: (direction, sentence, record ids). Carried rather than
     #: recomputed because the sentence is the whole point of the row — a direction alone says nothing.
     crossings: list[tuple[str, str, list[str]]] = field(default_factory=list)
+    #: WHERE THE WALK FIRST REACHES IT, as a happy-path position, or None for a surface no step of
+    #: the walk touches. The picture reads down in this order, which is the same rule `build_story`
+    #: gives the features column: first touch, unbroken, then the untouched in a block after it. On
+    #: MCP Hero that reads as the product's own story — a prospect reads the public website, signs up
+    #: on the dashboard, a member uses the gateway, an operator the console — and it puts the one
+    #: staff surface last with no staff rule, because the operator's steps ARE the end of the walk.
+    walk_pos: int | None = None
+    #: WHO SPEAKS FIRST, so the two crossings can be drawn in the order they happen.
+    #: A WAY IN is an address or a command that something outside invokes, so a surface holding one
+    #: is opened from outside and its `in` is the first move; a surface holding none is one the
+    #: product reaches for, so its `out` opens.
+    #: Measured against the walk on both live maps: the walk names an initiator for only 5 of the 7
+    #: MCP Hero surfaces where the order matters, this rule answers all 11 across the two maps, and
+    #: where both speak they AGREE — including the case that is not obvious, where the walk's
+    #: `C52 -> I8` says the product sends a person to Google sign-in and the ways-in rule says the
+    #: same because Google sign-in holds no way in.
+    #: MEANINGLESS ON A ONE-DIRECTION SURFACE, and deliberately not special-cased: with one crossing
+    #: there is nothing to order. 3 of coyodex's 11 read `out` while carrying only an `in`, and it
+    #: costs nothing because no consumer asks.
+    opens: str = "in"
 
 
 @dataclass(frozen=True)
@@ -512,6 +533,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                         feat_out[cap].add(iid)
 
     iface_actors = interface_actors(m)
+    iface_walk = interface_walk_order(m)
     interfaces = [
         InterfaceFacts(
             id=i.id, name=i.name, what=i.what, side=i.side, facing=i.facing,
@@ -528,6 +550,8 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                                  if u in uc_cap}),
             features_unknown=not (iface_ucs[i.id] or iface_out_ucs[i.id]),
             crossings=[(c.direction, c.what, list(c.elements)) for c in i.carries],
+            walk_pos=iface_walk.get(i.id),
+            opens="in" if i.ways_in else "out",
         )
         for i in m.interfaces
     ]
@@ -612,6 +636,7 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
              "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
              "components": i.components, "useCases": i.use_cases, "features": i.features,
              "featuresUnknown": i.features_unknown,
+             "walkPos": i.walk_pos, "opens": i.opens,
              "crossings": [{"direction": d, "what": w, "elements": e} for d, w, e in i.crossings]}
             for i in ix.interfaces],
         "areas": [

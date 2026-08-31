@@ -814,6 +814,46 @@ def person_role_ids(m: ProjectModel) -> set[str]:
     return {r.id for r in m.roles if (r.kind or "").strip().lower() != "service"}
 
 
+def interface_walk_order(m: ProjectModel) -> dict[str, int]:
+    """Per interface, WHERE THE WALK FIRST REACHES IT — a happy-path position. Absent from the dict
+    means no step of the walk touches it at all, which is a normal answer and not a gap.
+
+    This is `build_story`'s `first_cap` for surfaces instead of features, and deliberately the same
+    shape: the picture then reads down in the order the product's own story happens, exactly as the
+    features column does. On MCP Hero it comes out as the public website, the dashboard, the gateway,
+    the administration server, the operator console — which is the story — and it puts the one staff
+    surface last WITHOUT a staff rule, because the operator's steps are the end of the walk.
+
+    THREE ARMS, the same three `interface_actors` joins on, and for the same reason: a walk reaches a
+    surface when its use case names one of that surface's ways in, when one of its steps is doored at
+    the surface, or when one of its steps is drawn at a dep the surface stands on. Only the FIRST
+    position is kept, so a surface touched at step 2 and again at step 20 sorts at 2.
+
+    Measured: 5 of MCP Hero's 12 surfaces and 5 of coyodex's 11 are on the walk. The rest are ordered
+    by their caller, not here — this function says nothing about them on purpose."""
+    uc_by_id = {u.id: u for u in m.use_cases}
+    flow_by_uc = {f.uc: f for f in m.flows}
+    iface_ids = {i.id for i in m.interfaces}
+    ways = {i.id: set(i.ways_in) for i in m.interfaces}
+    dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
+    first: dict[str, int] = {}
+    for pos, hp in enumerate(m.happy_path):
+        u = uc_by_id.get(hp.uc or "")
+        if u is None:
+            continue
+        hit = {iid for iid, w in ways.items() if set(u.entry_points or ()) & w}
+        f = flow_by_uc.get(u.id)
+        if f is not None:
+            for st in f.steps:
+                for end in (st.src, st.dst):
+                    if end in iface_ids:
+                        hit.add(end)
+                    hit.update(dep_iface.get(end, ()))
+        for iid in hit:
+            first.setdefault(iid, pos)
+    return first
+
+
 def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
     """Per interface, WHO is on the far side of it. DERIVED, never authored — so the two can never
     contradict, which is the same rule `capability_audience` one function up was built on.
