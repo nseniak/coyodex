@@ -4763,6 +4763,39 @@ _DEPLOYMENT_FLAVORED_EXTRA_KEYS = {
 }
 
 
+NAMING_EXCEPTIONS_HEADING = "Naming exceptions"
+
+
+def _check_leading_article(m: ProjectModel) -> list[str]:
+    """ADVISORY: an element NAME is a label, and a label takes no leading article.
+
+    Measured when this landed, and the numbers are what make it a rule rather than a taste: across
+    the two live maps, components 0 of 138, entities 0 of 171, dependencies 0 of 49, use cases 0 of
+    80, roles 0 of 9 and capabilities 0 of 17 begin with "The" — while INTERFACES were 7 of 12 on one
+    map and 3 of 11 on the other. One element type had drifted away from a convention 360-odd names
+    already kept, and it was not even self-consistent.
+
+    The article is doing grammar, not meaning: the surfaces that skip it are the ones English would
+    not take one on — a proper name, a plural, a mass noun. A name is read on a card and in a
+    breadcrumb, never in a sentence, so the article buys nothing and costs a column of alignment.
+
+    ADVISORY, never a gate, and aggregated to ONE line: a product really can be called "The
+    Gateway", and a check that blocks on a legal name is a check the lead learns to route around."""
+    recorded = _recorded_ids(m, NAMING_EXCEPTIONS_HEADING, ("",))
+    hits = [(el.id, el.name)
+            for el in (*m.interfaces, *m.components, *m.deps, *m.entities, *m.roles,
+                       *m.use_cases, *m.subsystems, *m.subdomains, *m.capabilities)
+            if getattr(el, "name", "").lower().startswith("the ") and el.id not in recorded]
+    if not hits:
+        return []
+    return [f"{len(hits)} element name(s) start with 'The' — a name is a LABEL, read on a card and "
+            f"in a breadcrumb, never in a sentence, so it takes no leading article: "
+            f"{_shown([f'{i} {n!r}' for i, n in hits], 6, unit='name(s)')}. Drop the article "
+            f"('The dashboard' becomes 'Dashboard') unless the article is part of a real proper "
+            f"name. Record 'In: <why>' under a '{NAMING_EXCEPTIONS_HEADING}' extras heading for one "
+            f"that is."]
+
+
 def _check_prose(m: ProjectModel) -> list[str]:
     """ADVISORY: readability of the map's plain-language fields, counted rather than judged.
 
@@ -5360,6 +5393,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(extra_problems)
     warnings.extend(extra_warnings)
     warnings.extend(_check_prose(m))
+    warnings.extend(_check_leading_article(m))
 
     roots = _source_roots(model_path, repo_root) if model_path is not None else (
         [repo_root.resolve()] if repo_root is not None else [])

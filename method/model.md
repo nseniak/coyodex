@@ -365,7 +365,12 @@ Semantics, stated on the fields:
   footnote on another tab. Record an `En` line only for what a mode cannot say: a library that owns
   its own tables, a view the database refreshes, a throwaway CI database.
   The two never collide — each rule filters the heading by its own id prefix, so a `Cn` line can
-  never quiet an ownership gap and an `En` line can never quiet a writer gap. All
+  never quiet an ownership gap and an `En` line can never quiet a writer gap.
+  One more: **"Naming exceptions"** adjudicates an element NAME, as `In: <why>`. A name is a LABEL,
+  read on a card and in a breadcrumb, never inside prose, so it takes NO LEADING ARTICLE —
+  "Dashboard", not "The dashboard". Record a line here only for a real proper name, a product
+  actually called *The Gateway*. Measured when the rule landed: every other element type already
+  kept the convention across 360-odd names, and interfaces alone had drifted off it. All
   of these headings are machine-read by `validate`,
   so an adjudicated advisory goes quiet instead of re-firing forever.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).

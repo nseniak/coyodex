@@ -60,6 +60,7 @@ from coyodex.model import (
 )
 from coyodex.validate_model import (
     INTERFACE_EXCEPTIONS_HEADING,
+    NAMING_EXCEPTIONS_HEADING,
     _anchor_pairs,
     _inventory,
     _inheritance_runs_in_warnings,
@@ -4887,3 +4888,46 @@ def test_the_anchor_check_is_honoured_by_a_scoped_record():
     m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
                                  body="UC1/doors: the Makefile target really is where this starts"))
     assert not [w for w in warnings_of(m) if "has no way in" in w]
+
+
+def test_a_name_starting_with_the_is_nudged():
+    """A name is a LABEL, read on a card and in a breadcrumb, never in a sentence. Measured when this
+    landed: across the two live maps, components 0 of 138, entities 0 of 171, deps 0 of 49, use cases
+    0 of 80 and roles 0 of 9 began with "The", while INTERFACES were 7 of 12 on one map and 3 of 11 on
+    the other. One element type had drifted off a convention 360-odd names already kept."""
+    m = make_interface_model()
+    m.interfaces[0].name = "The command line"
+    fired = [w for w in warnings_of(m) if "start with 'The'" in w]
+    assert fired, warnings_of(m)
+    assert "I1" in fired[0] and "The command line" in fired[0], fired[0]
+    assert not [p for p in problems_of(m) if "start with 'The'" in p], "advisory, never a gate"
+    m.interfaces[0].name = "Command line"
+    assert not [w for w in warnings_of(m) if "start with 'The'" in w]
+
+
+def test_the_naming_nudge_reads_EVERY_element_type_not_only_surfaces():
+    """Surfaces are where it was found, but the convention belongs to every name. coyodex's own map
+    had 5 components and 3 subsystems doing the same thing."""
+    for setter in (lambda m: setattr(m.components[0], "name", "The viewer"),
+                   lambda m: setattr(m.deps[0], "name", "The database"),
+                   lambda m: setattr(m.roles[0], "name", "The reader"),
+                   lambda m: setattr(m.use_cases[0], "name", "The order view"),
+                   lambda m: setattr(m.entities[0], "name", "The order")):
+        m = make_interface_model()
+        setter(m)
+        assert [w for w in warnings_of(m) if "start with 'The'" in w], m
+
+
+def test_the_naming_nudge_is_ONE_line_and_is_honoured_by_a_record():
+    """A product really can be called "The Gateway", so the escape must work — and a map with many
+    names must produce one line, not one per name."""
+    m = make_interface_model()
+    m.interfaces[0].name = "The command line"
+    m.components[0].name = "The viewer"
+    fired = [w for w in warnings_of(m) if "start with 'The'" in w]
+    assert len(fired) == 1 and fired[0].startswith("2 element name(s)"), fired
+    assert NAMING_EXCEPTIONS_HEADING in fired[0], fired[0]
+    m.extras.append(ExtraSection(heading=NAMING_EXCEPTIONS_HEADING,
+                                 body="I1: the product is really called The Command Line\n"
+                                      "C1: and so is this one"))
+    assert not [w for w in warnings_of(m) if "start with 'The'" in w]

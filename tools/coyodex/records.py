@@ -136,6 +136,7 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # belongs to no surface). One heading, because an operator deciding "that is fine" is making the
     # same kind of decision in both cases.
     HeadingSpec("Interface exceptions", True, IFACE_KEY),
+    HeadingSpec("Naming exceptions", True, ANY_ID_KEY),
     # Keyed by a repo PATH, not an id — the thing being adjudicated is a file that used to hold an
     # access rule and no longer does. It had been pointed at "Audit exceptions", whose key
     # vocabulary is `[A-Z]+\d+`: a path can never be a key there, so twenty records written on one
