@@ -2356,6 +2356,27 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
               box-shadow: 0 6px 22px rgba(30,34,53,.22); transform: translateY(-50%);
               cursor: default; }
 .ifd-elabel.ifd-lab-on { display: block; }
+/* THE TAIL, pointing back at the wire this label belongs to. A label is 320px wide and its wire spans
+   155px, so the label is twice the length of the line it is about and sits 6px off it — touching
+   nothing and pointing nowhere. The oldest "this belongs to that" mark there is, and it costs 8px.
+   TWO TRIANGLES: the first is the outline, the second the fill, one pixel narrower and two shorter,
+   so the tail carries the same border the label does instead of floating loose off it.
+   HORIZONTALLY it sits near the label's CARD-SIDE edge, which is where the wire starts on either
+   shore — left on ours, right on theirs, keyed off the side the placement pass already records.
+   Running the wire behind the label instead was measured and rejected: the two labels would need
+   106px between the wires, and the wires attach at most 50px either side of a card's middle, so they
+   would leave from BESIDE the card rather than from it. */
+.ifd-elabel::before, .ifd-elabel::after { content: ''; position: absolute; width: 0; height: 0; }
+.ifd-elabel::before { border-left: 8px solid transparent; border-right: 8px solid transparent; }
+.ifd-elabel::after { border-left: 7px solid transparent; border-right: 7px solid transparent; }
+.ifd-tail-down::before { bottom: -8px; border-top: 8px solid #b9c0ee; }
+.ifd-tail-down::after  { bottom: -6px; border-top: 7px solid #fff; }
+.ifd-tail-up::before   { top: -8px; border-bottom: 8px solid #b9c0ee; }
+.ifd-tail-up::after    { top: -6px; border-bottom: 7px solid #fff; }
+.ifd-elabel[data-side="ours"]::before { left: 22px; }
+.ifd-elabel[data-side="ours"]::after { left: 23px; }
+.ifd-elabel[data-side="theirs"]::before { right: 22px; }
+.ifd-elabel[data-side="theirs"]::after { right: 23px; }
 /* THE RECORDS THAT CROSS, under the sentence. Text that happens to be a door, not a row of chrome —
    the same treatment the Features page gives a record on its own wire labels, so one record looks
    the same wherever a line names it. */

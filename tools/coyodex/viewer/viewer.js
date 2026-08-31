@@ -10216,6 +10216,9 @@ function bindIfaceDiagram(root) {
     lab.style.left = (lab.dataset.side === 'ours' ? anchor + LABEL_GAP
                                                   : anchor - LABEL_GAP - w) + 'px';
     const up = parseFloat(lab.style.top) < box.offsetTop + box.offsetHeight / 2;
+    // …and the TAIL points back at the wire the label was moved off. Named for where it POINTS, not
+    // for where the label sits: the upper label's tail points down, the lower one's points up.
+    lab.classList.add(up ? 'ifd-tail-down' : 'ifd-tail-up');
     lab.style.top = (parseFloat(lab.style.top) + (up ? -(h / 2 + 6) : (h / 2 + 6))) + 'px';
   }
   // Hover previews WHILE NOTHING IS PINNED; click PINS. The same gesture the Features page has, and

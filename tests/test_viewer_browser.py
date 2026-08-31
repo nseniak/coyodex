@@ -1415,3 +1415,59 @@ def test_a_click_that_is_not_on_a_box_drops_the_pin() -> None:
             assert got["picked"] == 0, (where, got)
             assert "sel=" not in got["hash"], (where, got)
         assert not page.js_errors, page.js_errors
+
+
+def test_each_sentence_points_back_at_the_wire_it_belongs_to() -> None:
+    """A label is 320px wide and its wire spans 155px, so the label is twice the length of the line
+    it is about, and the placement pass moves it 6px clear so the two never overlap. Touching
+    nothing and pointing nowhere, it read as floating beside the picture rather than labelling a line.
+
+    The tail is the fix, and this asserts the thing that makes it a fix: its TIP lands on its own
+    wire. Not that a triangle exists — a triangle pointing at nothing would pass that."""
+    def mutate(m: dict) -> None:
+        both = [{"direction": "in", "what": "what the caller asks for", "elements": []},
+                {"direction": "out", "what": "the answer it gets back", "elements": []}]
+        m["interfaces"] = [
+            {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
+             "facing": "user", "kind": "screen", "carries": list(both)},
+            {"id": "I2", "name": "Theirs", "what": "On theirs.", "side": "theirs",
+             "facing": "user", "kind": "api", "carries": list(both)},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        for iid in ("I1", "I2"):        # one on each shore: the tail sits on the card side of each
+            page.eval_on_selector(f'.ifd-box[data-iface="{iid}"]', "e => e.click()")
+            page.wait_for_timeout(250)
+            got = page.evaluate("""(iid) => {
+                const st = document.getElementById('ifdstage').getBoundingClientRect();
+                // every wire's y, in client space — a path here is dead horizontal, so one number
+                const wireYs = [...document.querySelectorAll(
+                        `#ifdstage path[data-iface="${iid}"]`)]
+                    .map(p => st.top + parseFloat(p.getAttribute('d').match(/-?[\\d.]+/g)[1]));
+                return [...document.querySelectorAll('.ifd-elabel.ifd-lab-on')].map(l => {
+                    const r = l.getBoundingClientRect();
+                    const down = l.classList.contains('ifd-tail-down');
+                    const up = l.classList.contains('ifd-tail-up');
+                    const cs = getComputedStyle(l, '::before');
+                    // the outline triangle is 8px deep, so its tip is 8px beyond the label's edge
+                    const tipY = down ? r.bottom + 8 : r.top - 8;
+                    return { down, up, side: l.dataset.side,
+                             offLeft: cs.left, offRight: cs.right,
+                             nearestWire: Math.min(...wireYs.map(y => Math.abs(y - tipY))) };
+                });
+            }""", iid)
+            assert len(got) == 2, (iid, got)
+            # exactly one tail each, and the two point OPPOSITE ways: the upper label down at its
+            # wire, the lower one up at its own.
+            assert sorted(g["down"] for g in got) == [False, True], (iid, got)
+            for g in got:
+                assert g["down"] != g["up"], (iid, g)
+                # THE TIP LANDS ON ITS WIRE, and slightly past it: the placement pass leaves a 6px
+                # gap and the tail is 8px deep, so it crosses the line by 2 rather than stopping
+                # short of it. Three pixels of tolerance covers that plus sub-pixel layout.
+                assert g["nearestWire"] <= 3, (iid, g)
+                # …and it sits on the CARD side, which is where the wire starts on that shore. Only
+                # the side that is SET is asserted: a computed style resolves the other one to a used
+                # value rather than `auto`, so checking for `auto` fails against correct code.
+                assert g["offLeft" if g["side"] == "ours" else "offRight"] == "22px", (iid, g)
+        assert not page.js_errors, page.js_errors
