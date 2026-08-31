@@ -584,16 +584,28 @@ def test_a_surface_card_says_what_shape_it_is() -> None:
     for kind in ("hosted-screen", "screen"):
         with _served_map(_with_interface(kind)) as url, _page(url + "#v=interfaces") as page:
             _settle(page)
-            box = page.evaluate("""() => {
+            # `FEATURES` is module-scoped inside viewer.js and unreachable from `evaluate`, so the
+            # STORED kind is read back off the served bundle — same origin, so a plain fetch does it.
+            box = page.evaluate("""async () => {
                 const b = document.querySelector('.ifd-box[data-iface="I1"]');
                 const g = b.querySelector('.ifd-head .ifd-glyph');
+                const v = await (await fetch('api/view')).json();
                 return { d: [...g.querySelectorAll('rect, path')].map(e =>
                             e.getAttribute('d') || 'rect').join('|'),
-                         w: g.getBoundingClientRect().width };
+                         w: g.getBoundingClientRect().width,
+                         word: b.querySelector('.ifd-kind').textContent,
+                         kind: v.features.interfaces.find(x => x.id === 'I1').kind };
             }""")
             # the browser-window drawing: a rounded rect with one line across it, near the top
             assert box["d"] == "rect|M1.5 6.5h15", box
             assert 12 <= box["w"] <= 18, box       # sized by CSS, not by the tag's attributes
+            # …and the WORD beside it, which is where the glyph stops being enough. `screen` shows as
+            # WEBSITE: the map defines the kind as "anything served to a browser", so that is what it
+            # has always meant, and "screen" was a word the reader had to translate. The stored kind
+            # is untouched — asserted here, since a rename that reached the model would break every
+            # map on disk and nothing else in the suite would notice.
+            assert box["word"] == ("their website" if kind == "hosted-screen" else "website"), box
+            assert box["kind"] == kind, box
             assert not page.js_errors, page.js_errors
 
 
@@ -1160,4 +1172,43 @@ def test_the_opening_move_is_the_upper_wire_and_the_labels_carry_no_direction_wo
             assert got[id_]["gap"] > 0, got                       # they never overlap
             for t in got[id_]["texts"]:
                 assert "in" != t[:2] and "out" != t[:3], got      # no direction word, just the sentence
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None:
+    """Both wires leave from inside the card's own height, so anything vertical and dark at that edge
+    closes them into a bracket and the pair reads as ONE line bent twice rather than two crossings.
+
+    Two things caused that and both are asserted here. The wires used to start ON the card's edge,
+    and the picked card used to wear a 2px border in the SAME indigo the lit wires use — a tall crisp
+    stroke of the wire's own colour, exactly where the wires begin. Clearance alone did not settle it;
+    the border had to stop being an edge and become a halo."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "what is asked", "elements": []},
+                         {"direction": "out", "what": "what comes back", "elements": []}]},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
+        page.wait_for_timeout(300)
+        got = page.evaluate("""() => {
+            const b = document.querySelector('.ifd-box[data-iface="I1"]');
+            const right = b.offsetLeft + b.offsetWidth;
+            const xs = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
+                .flatMap(p => p.getAttribute('d').match(/-?[\\d.]+/g).filter((_, i) => i % 2 === 0))
+                .map(Number);
+            const cs = getComputedStyle(b);
+            return { gap: Math.min(...xs.map(x => Math.abs(x - right))),
+                     wires: document.querySelectorAll('#ifdstage path[data-iface="I1"]').length,
+                     borderRight: cs.borderRightColor, borderW: cs.borderRightWidth };
+        }""")
+        assert got["wires"] == 2, got
+        # No wire may begin within ten pixels of the card it belongs to.
+        assert got["gap"] >= 10, got
+        # …and the picked card carries no edge in the wires' indigo. `#4f46e5` is that indigo; the
+        # halo is a box-shadow, which cannot be mistaken for a line.
+        assert "79, 70, 229" not in got["borderRight"], got
         assert not page.js_errors, page.js_errors

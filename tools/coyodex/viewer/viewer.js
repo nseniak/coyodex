@@ -9830,9 +9830,14 @@ const IFACE_ARROW = { in: '←', out: '→', both: '↔' };
 // The picture no longer prints these words: it draws IFACE_GLYPH instead, eight drawings for the
 // eleven kinds. The words are still what a surface's own page and its card elsewhere say, because
 // there a reader has room to read rather than to recognise.
+// `screen` shows as WEBSITE. The stored kind stays `screen` — this table is the one place a code
+// word becomes English, and renaming the kind itself would break every map on disk. The map's own
+// definition of `screen` is "a browser window: our web UI, a marketing site — anything served to a
+// browser", so "website" is what it has meant all along and "screen" was the word a reader had to
+// translate. `hosted-screen` follows it: someone else's website.
 const IFACE_KIND = {
-  'screen': 'screen', 'mobile-app': 'mobile app', 'desktop-app': 'desktop app',
-  'hosted-screen': 'their screen', 'command-line': 'command line', 'api': 'API',
+  'screen': 'website', 'mobile-app': 'mobile app', 'desktop-app': 'desktop app',
+  'hosted-screen': 'their website', 'command-line': 'command line', 'api': 'API',
   'agent-tools': 'agent tools', 'file': 'files', 'content': 'content', 'settings': 'settings',
   'handoff': 'handoff',
 };
@@ -10035,8 +10040,19 @@ function bindIfaceDiagram(root) {
   // ancestor transform skews client rects box by box while the animation runs. Offsets read the
   // settled layout regardless. Every box's offsetParent is the stage (the nearest positioned
   // ancestor), so the numbers are already in stage space.
+  // A wire starts WELL CLEAR OF THE CARD, not on its edge. Touching it, the two wires of one surface
+  // and the picked card's own border formed a BRACKET: the border is 2px of the same indigo, it runs
+  // the card's whole height, and both wires leave from inside that span — so the pair read as one
+  // line bent twice rather than as two crossings.
+  //
+  // MEASURED, not guessed: the card is 97px tall and the two wires sit 20px either side of its
+  // middle, so 40px of that border is between them and no colour change to the wires can break it.
+  // Only white space can. Six pixels was not enough at this scale; fourteen is, and the gutter is
+  // 155px wide so it costs nothing that shows.
+  const CARD_CLEARANCE = 14;
   const edge = (el, which, dy) => [
-    which === 'left' ? el.offsetLeft : el.offsetLeft + el.offsetWidth,
+    which === 'left' ? el.offsetLeft - CARD_CLEARANCE
+                     : el.offsetLeft + el.offsetWidth + CARD_CLEARANCE,
     el.offsetTop + el.offsetHeight / 2 + (dy || 0)];
   const paths = [], labels = [];
   const wire = (from, to, iid) => {
