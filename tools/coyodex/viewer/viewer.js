@@ -1466,6 +1466,10 @@ function ensureIconOverlay(container) {
   return g;
 }
 const ACTION_ICON_TIP_DELAY_MS = 250;
+// Half that, for a tooltip on TEXT rather than on an icon. An icon's tooltip waits because the icon
+// is already a mark you can read; a record's name tells you nothing about what the record is, so the
+// answer should arrive about as fast as you can ask for it.
+const TEXT_TIP_DELAY_MS = 125;
 let actionIconTipTimer = null;
 let actionIconHover = null;
 function hideActionIconTip() {
@@ -1474,7 +1478,7 @@ function hideActionIconTip() {
   actionIconHover = null;
   hideTip();
 }
-function scheduleActionIconTip(label, ev) {
+function scheduleActionIconTip(label, ev, delayMs) {
   hideActionIconTip();
   actionIconHover = { label, x: ev.clientX, y: ev.clientY };
   actionIconTipTimer = setTimeout(() => {
@@ -1484,7 +1488,7 @@ function scheduleActionIconTip(label, ev) {
     tip.classList.remove('action');
     tip.classList.add('on');
     moveTip(actionIconHover.x, actionIconHover.y);
-  }, ACTION_ICON_TIP_DELAY_MS);
+  }, delayMs === undefined ? ACTION_ICON_TIP_DELAY_MS : delayMs);
 }
 function moveActionIconTip(ev) {
   if (!actionIconHover) return;
@@ -4291,7 +4295,14 @@ let storyPinNow = null;   // {key, id} of the pinned card while the Features pag
 // clicked on their way out. The Happy Path's twin of `storyPinNow` — a page with no scene still has
 // a place in it, and this is what carries that place into the address and into history.
 let walkStepNow = null;
-const STORY_PIN_KEYS = ['sfeat', 'sactor', 'sarea'];
+// `siface` rides here with the Features page's three, because a pinned SURFACE is the same kind of
+// thing as a pinned card: an HTML page has no scene, so `mainScene.selection` cannot answer for it,
+// and this is what carries the pin into the address and into back/forward. One `sel` field covers
+// both pages and there is no second concept.
+const STORY_PIN_KEYS = ['sfeat', 'sactor', 'sarea', 'siface'];
+const IFACE_PIN_KEY = 'siface';
+// The live outside-click listener, so a re-render can take the previous one off `document`.
+let ifdOutsideClick = null;
 function storyPinKey(p) { return p ? p.key + ':' + p.id : null; }
 function storyPinFromKey(k) {
   const i = String(k || '').indexOf(':');
@@ -9064,7 +9075,10 @@ function bindStoryDiagram(root) {
     card.scrollIntoView({ block: 'center' });
     pin(p.key, p.id, card);
   };
-  if (pendingStoryPin) {
+  // GUARDED ON THE KEY, the mirror of the guard in `bindIfaceDiagram`. The two HTML pages share one
+  // `sel` field but not their ids, so each takes only the keys it draws. Unguarded this consumed a
+  // surface's pin and dropped it, which is only invisible because the two pages never render at once.
+  if (pendingStoryPin && pendingStoryPin.key !== IFACE_PIN_KEY) {
     const p = pendingStoryPin;
     pendingStoryPin = null;
     storyPinApply(p);
@@ -10111,6 +10125,9 @@ function wireCurveD(sx, sy, tx, ty) {
 // the picture used to draw ONE curve and its exact reverse, so a reader saw a single line with a
 // head at each end, and the two sentences landed on the same spot.
 const IFACE_WIRE_GAP = 20;
+// How many records a label names before it says "+n more". Three, the same cap the Features
+// page uses on its own wire labels.
+const IFACE_LABEL_REC_CAP = 3;
 function bindIfaceDiagram(root) {
   const stage = root.querySelector('#ifdstage');
   if (!stage) return;
@@ -10121,16 +10138,18 @@ function bindIfaceDiagram(root) {
   // ancestor transform skews client rects box by box while the animation runs. Offsets read the
   // settled layout regardless. Every box's offsetParent is the stage (the nearest positioned
   // ancestor), so the numbers are already in stage space.
-  // A wire starts WELL CLEAR OF THE CARD, not on its edge. Touching it, the two wires of one surface
-  // and the picked card's own border formed a BRACKET: the border is 2px of the same indigo, it runs
-  // the card's whole height, and both wires leave from inside that span — so the pair read as one
-  // line bent twice rather than as two crossings.
+  // A WIRE TOUCHES THE CARD IT BELONGS TO. It runs the whole way, edge to edge, with no gap at
+  // either end: a line that stops short of the thing it points at is a line the reader has to join
+  // up themselves.
   //
-  // MEASURED, not guessed: the card is 97px tall and the two wires sit 20px either side of its
-  // middle, so 40px of that border is between them and no colour change to the wires can break it.
-  // Only white space can. Six pixels was not enough at this scale; fourteen is, and the gutter is
-  // 155px wide so it costs nothing that shows.
-  const CARD_CLEARANCE = 14;
+  // THIS IS A REVERSAL AND THE COST IS KNOWN. The clearance was 14px, and it was there because the
+  // picked card's border is 2px of the SAME indigo a lit wire is, running the card's whole height,
+  // with both wires leaving from inside that span — the three together read as one line bent twice.
+  // Nitsan asked for no gap after being shown that, twice; what carries it now is the 40px between
+  // the wires (`IFACE_WIRE_GAP`) and the labels no longer sitting at the card's edge to frame the
+  // shape. If the bracket ever comes back, it is this constant, and the fix is not to shrink it in
+  // silence.
+  const CARD_CLEARANCE = 0;
   const edge = (el, which, dy) => [
     which === 'left' ? el.offsetLeft - CARD_CLEARANCE
                      : el.offsetLeft + el.offsetWidth + CARD_CLEARANCE,
@@ -10149,7 +10168,7 @@ function bindIfaceDiagram(root) {
   // very box the reader had just picked, hiding the name and the people. Anchored, it overhangs the
   // middle and the far column instead — both dimmed while it shows, and neither is what the reader
   // is looking at. `x` is the wire's own end at the card; the side says which way to grow.
-  const label = (x, y, side, text, iid) => {
+  const label = (x, y, side, text, ids, iid) => {
     if (!text) return;
     const lab = document.createElement('div');
     lab.className = 'ifd-elabel';
@@ -10157,6 +10176,52 @@ function bindIfaceDiagram(root) {
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
     lab.textContent = text;
+    // THE RECORDS THAT CROSS, under the sentence and each a door — the same treatment and the same
+    // cap the Features page gives a feature's records on its own wire labels, so a record named on a
+    // line looks and behaves the same on both diagrams. Capped at three with a "+n more" tail: a
+    // label is a glance, and its full list is on the surface's own page.
+    if (ids.length) {
+      const row = document.createElement('div');
+      row.className = 'ifd-elabel-recs';
+      // The DATA glyph leads the list, so the row says what kind of thing it is naming before it
+      // names any. The same drawing the Features page puts on a data area — one mark, one meaning,
+      // wherever stored data is named.
+      const mark = document.createElement('span');
+      mark.className = 'ifd-recmark';
+      mark.innerHTML = storyAreaGlyphSvg();
+      row.appendChild(mark);
+      ids.slice(0, IFACE_LABEL_REC_CAP).forEach((id, n) => {
+        if (n) row.appendChild(document.createTextNode(', '));
+        const nm = (GRAPH.nodes[id] || {}).name || id;
+        if (!GRAPH.nodes[id]) { row.appendChild(document.createTextNode(nm)); return; }
+        const bt = document.createElement('button');
+        bt.type = 'button';
+        bt.className = 'ifd-elabel-rec';
+        bt.textContent = nm;
+        // ITS MEANING, not the gesture. "Show X in context" restated the underline, and a reader
+        // hovering a record wants to know what the record IS. The sentence is `cardFacts`', so the
+        // tooltip and the record's own card cannot say different things. A record the map describes
+        // in no words falls back to naming the gesture, which beats an empty tooltip.
+        //
+        // THE APP'S OWN TOOLTIP, not the browser's `title`. A native tooltip's delay belongs to the
+        // browser — about a second, and nothing in this file can shorten it. This one is ours, and
+        // it is set to half the delay an action icon's waits.
+        const facts = cardFacts(id);
+        const tipText = (facts && facts.desc) ? facts.desc : 'Show ' + nm + ' in context';
+        bt.addEventListener('mouseenter', (ev) => scheduleActionIconTip(tipText, ev,
+                                                                       TEXT_TIP_DELAY_MS));
+        bt.addEventListener('mousemove', moveActionIconTip);
+        bt.addEventListener('mouseleave', hideActionIconTip);
+        bt.addEventListener('click', (ev) => {
+          ev.stopPropagation();      // the record's door is not the label's, nor the stage's unpin
+          showInContext(id);
+        });
+        row.appendChild(bt);
+      });
+      const rest = ids.length - IFACE_LABEL_REC_CAP;
+      if (rest > 0) row.appendChild(document.createTextNode(' +' + rest + ' more'));
+      lab.appendChild(row);
+    }
     lab.style.top = y + 'px';
     // Not a door, but not empty background either: a click on it must not clear the pin.
     lab.addEventListener('click', (ev) => ev.stopPropagation());
@@ -10168,6 +10233,19 @@ function bindIfaceDiagram(root) {
   const merged = (i, dir) => (i.crossings || [])
     .filter((c) => c.direction === dir && String(c.what || '').trim())
     .map((c) => String(c.what).trim()).join(' ');
+  // …and the RECORDS those crossings carry, unioned across the merged ones and de-duplicated. A
+  // crossing records single entities, never a data area — the model is explicit that an area name
+  // "cannot answer 'are the plan limits exposed?'". NAMING NONE IS A NORMAL ANSWER and covers most
+  // of them: a log line, a fetched web page and a source file all cross without being stored, and
+  // 12 of MCP Hero's 22 crossings and 12 of coyodex's 15 name nothing.
+  const mergedRecords = (i, dir) => {
+    const seen = [];
+    for (const c of (i.crossings || [])) {
+      if (c.direction !== dir) continue;
+      for (const e of (c.elements || [])) if (!seen.includes(e)) seen.push(e);
+    }
+    return seen;
+  };
   const px = rule.offsetLeft + rule.offsetWidth / 2;
   for (const i of ifaceList()) {
     const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(i.id)}"]`);
@@ -10184,9 +10262,11 @@ function bindIfaceDiagram(root) {
     const dy = (dir) => (i.opens === dir ? -IFACE_WIRE_GAP : IFACE_WIRE_GAP);
     const draw = {
       in: (t) => { wire(edge(box, boxSide, dy('in')), [px, mid + dy('in')], i.id);
-                   label(edge(box, boxSide)[0], mid + dy('in'), i.side, t, i.id); },
+                   label(edge(box, boxSide)[0], mid + dy('in'), i.side, t,
+                         mergedRecords(i, 'in'), i.id); },
       out: (t) => { wire([px, mid + dy('out')], edge(box, boxSide, dy('out')), i.id);
-                    label(edge(box, boxSide)[0], mid + dy('out'), i.side, t, i.id); },
+                    label(edge(box, boxSide)[0], mid + dy('out'), i.side, t,
+                          mergedRecords(i, 'out'), i.id); },
     };
     // A DIRECTION WITH NOTHING CROSSING DRAWS NO WIRE. Guarding on the merged sentence rather than
     // drawing both and letting the label fall away: a wire with no label is a line the reader can
@@ -10213,6 +10293,9 @@ function bindIfaceDiagram(root) {
     lab.style.left = (lab.dataset.side === 'ours' ? anchor + LABEL_GAP
                                                   : anchor - LABEL_GAP - w) + 'px';
     const up = parseFloat(lab.style.top) < box.offsetTop + box.offsetHeight / 2;
+    // …and the TAIL points back at the wire the label was moved off. Named for where it POINTS, not
+    // for where the label sits: the upper label's tail points down, the lower one's points up.
+    lab.classList.add(up ? 'ifd-tail-down' : 'ifd-tail-up');
     lab.style.top = (parseFloat(lab.style.top) + (up ? -(h / 2 + 6) : (h / 2 + 6))) + 'px';
   }
   // Hover previews WHILE NOTHING IS PINNED; click PINS. The same gesture the Features page has, and
@@ -10220,18 +10303,27 @@ function bindIfaceDiagram(root) {
   // another box must not take the picture away from it.
   let hideTimer = null, pinned = null;
   const boxes = [...stage.querySelectorAll('.ifd-box')];
+  // The pin MIRRORS into `storyPinNow`, because what is pinned is part of where you are: the URL
+  // restates it, back/forward restores it, and a reader who opens a surface's page and comes back
+  // finds the picture as they left it. `refreshUrl` is replaceState only, so pinning never grows the
+  // browser's Back button.
+  const remember = () => {
+    storyPinNow = pinned ? { key: IFACE_PIN_KEY, id: pinned } : null;
+    refreshUrl();
+  };
   const clear = () => {
     for (const p of paths) p.classList.remove('ifd-hot', 'ifd-cold');
     for (const l of labels) l.classList.remove('ifd-lab-on');
-    for (const b of boxes) b.classList.remove('ifd-dim');
   };
+  // THE CARDS DO NOT FADE. Only the WIRES answer a pick — one surface's lit, the rest pulled back.
+  // Fading every other card was tried and removed: on a twelve-surface map it greys eleven boxes to
+  // say something about one, and the reader loses the list they came to read while they are reading
+  // one row of it. The lit wires and the two sentences are already the whole answer.
   const show = (iid) => {
     clearTimeout(hideTimer);
     clear();
     for (const p of paths) p.classList.add(p.dataset.iface === iid ? 'ifd-hot' : 'ifd-cold');
     for (const l of labels) l.classList.toggle('ifd-lab-on', l.dataset.iface === iid);
-    // Fading the others is what makes the lit sentences the only thing on the page.
-    for (const b of boxes) b.classList.toggle('ifd-dim', b.dataset.iface !== iid);
   };
   const restore = () => { if (pinned) show(pinned); else clear(); };
   boxes.forEach((box) => {
@@ -10243,8 +10335,8 @@ function bindIfaceDiagram(root) {
     const pick = (ev) => {
       ev.stopPropagation();
       stage.querySelectorAll('.ifd-box.ifd-picked').forEach((b) => b.classList.remove('ifd-picked'));
-      if (pinned === iid) { pinned = null; clear(); return; }
-      pinned = iid; box.classList.add('ifd-picked'); show(iid);
+      if (pinned === iid) { pinned = null; clear(); remember(); return; }
+      pinned = iid; box.classList.add('ifd-picked'); show(iid); remember();
     };
     box.addEventListener('click', pick);
     // Enter OPENS the surface's page — the keyboard has no hover to preview with, so the key that
@@ -10256,6 +10348,14 @@ function bindIfaceDiagram(root) {
   });
   // The NAME is the card's one door to the surface's own page, the same split every other card on
   // this viewer makes: the name leaves, the body pins.
+  // …and a pin the address or a history step is carrying. Guarded on the KEY, so a `sel` left by the
+  // Features page cannot be read as a surface id here — the two pages share the field, not the ids.
+  if (pendingStoryPin && pendingStoryPin.key === IFACE_PIN_KEY) {
+    const p = pendingStoryPin;
+    pendingStoryPin = null;
+    const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(p.id)}"]`);
+    if (box) { pinned = p.id; box.classList.add('ifd-picked'); show(p.id); storyPinNow = p; }
+  }
   stage.querySelectorAll('.ifd-name').forEach((b) => {
     b.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -10264,6 +10364,29 @@ function bindIfaceDiagram(root) {
   });
   // Nothing else in a card is bound. The chips and the provider lines are facts, and a click on one
   // falls through to the card and pins it, which is what a click anywhere on the card does.
+
+  // A CLICK ANYWHERE THAT IS NOT A BOX DROPS THE PIN. One rule, stated once and tested at five
+  // places, because there was no rule at all before this: the picture had no outside-click handler,
+  // and what looked like one working was the gutter happening to clear the class. The product's own
+  // line, a column heading and the page below the diagram all left a surface pinned for good.
+  //
+  // The listener is REMOVED before a new one is added. It lives on `document`, which outlives the
+  // diagram, so every re-render would otherwise leave another behind — each holding a dead render's
+  // closure, and each still writing to the address bar.
+  if (ifdOutsideClick) document.removeEventListener('click', ifdOutsideClick);
+  ifdOutsideClick = (ev) => {
+    if (!pinned) return;
+    if (!ev.target.closest) return;
+    // INSIDE THE VIEW, and not on a box. Scoped, because unscoped it also fired on the app's own
+    // chrome — and a click on a VIEW TAB is a click on `document`, so the pin was dropped a moment
+    // before the navigation that was supposed to remember it. Leaving the picture is not the same
+    // gesture as putting a card down.
+    if (!ev.target.closest('#diagram')) return;
+    if (ev.target.closest('.ifd-box')) return;
+    stage.querySelectorAll('.ifd-box.ifd-picked').forEach((c) => c.classList.remove('ifd-picked'));
+    pinned = null; clear(); remember();
+  };
+  document.addEventListener('click', ifdOutsideClick);
 }
 function renderInterfaces(s) {
   // A typed or shared `#v=interfaces` on a map that records none used to render an empty page under a
@@ -10275,6 +10398,10 @@ function renderInterfaces(s) {
   // its boxes are full cards, in a stated order, carrying the same sentence the list carried. Keeping
   // both drew every surface twice on one page, and the two headings were the last place the words
   // "our surface" and "their surface" survived.
+  // The card this screen was left pinned on (back/forward, or a tab reopened where it was left), or
+  // the one a shared link names. A one-shot pin already asked for wins: that is a deliberate act and
+  // this is only memory.
+  if (!pendingStoryPin) pendingStoryPin = storyPinFromKey((s && s.sels || [])[0]);
   diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Interfaces')
     + ifaceDiagramHtml() + '</div>';
   bindIfaceDiagram(diagram);

@@ -1179,10 +1179,18 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
     """Both wires leave from inside the card's own height, so anything vertical and dark at that edge
     closes them into a bracket and the pair reads as ONE line bent twice rather than two crossings.
 
-    Two things caused that and both are asserted here. The wires used to start ON the card's edge,
-    and the picked card used to wear a 2px border in the SAME indigo the lit wires use — a tall crisp
-    stroke of the wire's own colour, exactly where the wires begin. Clearance alone did not settle it;
-    the border had to stop being an edge and become a halo."""
+    TWO EARLIER FIXES WERE TRIED AND BOTH ARE GONE, which is why this asserts what it does. A soft
+    halo instead of a border settled it completely, and made the Interfaces picture answer "which
+    card is picked" differently from a screen that looks the same — consistency won. Then 14px of
+    clearance between the wire and the card, which Nitsan reversed: a line that stops short of the
+    thing it points at is a line the reader has to join up themselves.
+
+    WHAT ACTUALLY CURED IT was neither: it was moving the LABELS off the card. The bracket was only
+    ever readable when the two labels sat over the card and framed a fragment of its border between
+    them. With the whole card outlined and both labels clear of it, the eye reads a card with two
+    arrows leaving it. So the invariants are the ones below — the wires stay 40px apart and each
+    reaches its card — and `test_a_crossings_sentence_never_covers_the_card_it_belongs_to` guards
+    the rest."""
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
@@ -1200,17 +1208,22 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
             const xs = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
                 .flatMap(p => p.getAttribute('d').match(/-?[\\d.]+/g).filter((_, i) => i % 2 === 0))
                 .map(Number);
-            const cs = getComputedStyle(b);
+            const ys = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
+                .map(p => parseFloat(p.getAttribute('d').match(/-?[\\d.]+/g)[1]));
             return { gap: Math.min(...xs.map(x => Math.abs(x - right))),
+                     apart: Math.abs(ys[0] - ys[1]),
                      wires: document.querySelectorAll('#ifdstage path[data-iface="I1"]').length,
-                     borderRight: cs.borderRightColor, borderW: cs.borderRightWidth };
+                     borderW: getComputedStyle(b).borderRightWidth };
         }""")
         assert got["wires"] == 2, got
-        # No wire may begin within ten pixels of the card it belongs to.
-        assert got["gap"] >= 10, got
-        # …and the picked card carries no edge in the wires' indigo. `#4f46e5` is that indigo; the
-        # halo is a box-shadow, which cannot be mistaken for a line.
-        assert "79, 70, 229" not in got["borderRight"], got
+        # Each wire REACHES its card — no gap to join up by eye.
+        assert got["gap"] == 0, got
+        # …and the two never share a path. This is the number that stops them reading as one line,
+        # now that neither the halo nor the clearance is there to help.
+        assert got["apart"] >= 30, got
+        # …and the picked card really is wearing the shared 2px edge, so the separation above is
+        # being asked to do the work this test says it does.
+        assert got["borderW"] == "2px", got
         assert not page.js_errors, page.js_errors
 
 
@@ -1334,4 +1347,183 @@ def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
             }""", iid)
             assert got["shown"] == 2, (iid, got)
             assert got["over"] == 0, (iid, got)
+        assert not page.js_errors, page.js_errors
+
+
+def _crossing_naming_a_record() -> Any:
+    """One surface whose two crossings name real records of the fixture map."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "what is asked", "elements": ["E1"]},
+                         {"direction": "out", "what": "what comes back",
+                          "elements": ["E2", "E12", "E3", "E4"]}]},
+        ]
+    return mutate
+
+
+def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS() -> None:
+    """The records a crossing carries, named under the sentence and each a door — the same treatment
+    and the same three-deep cap the Features page gives a feature's records on its own wire labels,
+    so one record looks and behaves the same wherever a line names it.
+
+    The tooltip is the record's own MEANING, not "Show X in context": that restated the underline,
+    and a reader hovering a record wants to know what the record is. It comes from `cardFacts`, so
+    the tooltip and the record's own card cannot say different things.
+
+    It is THE APP'S tooltip, not the browser's `title`. A native tooltip's delay belongs to the
+    browser — about a second, and nothing in the viewer can shorten it. This one is ours and waits
+    half as long as an action icon's, which is asserted here by hovering and watching the clock."""
+    with _served_map(_crossing_naming_a_record()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
+        page.wait_for_timeout(300)
+        # KEYED ON THE SENTENCE, not on DOM order: the labels are created opener-first, and this
+        # surface holds no way in, so its `out` is drawn before its `in`.
+        got = page.evaluate("""() => {
+            const out = {};
+            for (const l of document.querySelectorAll('.ifd-elabel.ifd-lab-on')) {
+                out[l.firstChild.textContent] = {
+                    recs: [...l.querySelectorAll('.ifd-elabel-rec')].map(e => e.textContent),
+                    titles: [...l.querySelectorAll('.ifd-elabel-rec')].map(
+                                e => e.getAttribute('title')),
+                    marks: l.querySelectorAll('.ifd-recmark svg').length,
+                    tail: l.querySelector('.ifd-elabel-recs').textContent };
+            }
+            return out;
+        }""")
+        one, many = got["what is asked"], got["what comes back"]
+        assert one["recs"] == ["Organization"], one
+        # four records, three drawn, and the tail SAYS the rest are there rather than dropping them
+        assert many["recs"] == ["Subscription", "PlanName", "Membership"], many
+        assert many["tail"].endswith("+1 more"), many
+        # the DATA glyph leads each list, so the row says what kind of thing it names before naming one
+        assert one["marks"] == 1 and many["marks"] == 1, got
+        # and NOT the browser's tooltip, whose delay the viewer cannot touch
+        assert one["titles"] == [None], one
+
+        # THE APP'S TOOLTIP, and it is QUICKER THAN AN ICON'S. The window has to straddle 125ms and
+        # stop short of the 250ms an action icon waits, or the test cannot tell the two apart — a
+        # first attempt checked at 260ms, which both delays pass, and a mutation to 250 sailed through
+        # it. Quiet at 60ms, up by 190ms: 65ms of slack on each side of the real delay.
+        # NAMED, not "the first one": the labels are created opener-first, so the first record in DOM
+        # order belongs to the other sentence.
+        page.locator(".ifd-elabel-rec").filter(has_text="Organization").first.hover()
+        page.wait_for_timeout(60)
+        assert not page.evaluate(
+            "() => document.getElementById('tip').classList.contains('on')"), "tip too eager"
+        page.wait_for_timeout(130)
+        tip = page.evaluate("""() => ({ on: document.getElementById('tip').classList.contains('on'),
+                                        text: document.getElementById('tip').textContent })""")
+        assert tip["on"], tip
+        assert tip["text"].startswith("A tenant"), tip
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_pinned_surface_is_part_of_where_you_are() -> None:
+    """A pinned card is not a passing highlight, it is WHERE YOU ARE: the address restates it, so a
+    link carries it, and leaving the view and coming back finds the picture as you left it.
+
+    It rides the same `sel` field the Features page's pin uses. The two pages share the field and not
+    their ids, so each takes only the keys it draws — asserted here by the key in the address."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.eval_on_selector('.ifd-box[data-iface="I2"]', "e => e.click()")
+        page.wait_for_timeout(300)
+        assert "sel=siface%3AI2" in page.evaluate("() => location.hash"), page.evaluate(
+            "() => location.hash")
+        # leave the view entirely, then come back
+        page.evaluate("() => document.querySelector('button[data-view=\\\"glossary\\\"]').click()")
+        _settle(page)
+        page.evaluate("() => document.querySelector('button[data-view=\\\"interfaces\\\"]').click()")
+        _settle(page)
+        back = page.evaluate("""() => ({
+            picked: [...document.querySelectorAll('.ifd-box.ifd-picked')].map(e => e.dataset.iface),
+            labels: document.querySelectorAll('.ifd-elabel.ifd-lab-on').length })""")
+        assert back["picked"] == ["I2"], back
+        assert back["labels"] >= 1, back        # …and its sentences came back lit with it
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_click_that_is_not_on_a_box_drops_the_pin() -> None:
+    """One rule, and it needs saying because there was no rule at all before: the picture had no
+    outside-click handler, and what looked like one working was the gutter happening to clear the
+    class. The product's own line, a column heading and the page below the diagram each left a
+    surface pinned for good.
+
+    The listener also has to be REMOVED between renders. It lives on `document`, which outlives the
+    diagram, so every re-render would otherwise leave another behind — each holding a dead render's
+    closure and each still writing to the address bar."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        # every one of these is outside a box, and every one must mean the same thing
+        for where in ("#ifdrule", ".ifd-col-ours .ifd-colhead", ".ifd-stage", ".usecases-wrap"):
+            page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
+            page.wait_for_timeout(200)
+            assert page.evaluate(
+                "() => document.querySelectorAll('.ifd-box.ifd-picked').length") == 1, where
+            page.eval_on_selector(where, "e => e.click()")
+            page.wait_for_timeout(200)
+            got = page.evaluate("""() => ({
+                picked: document.querySelectorAll('.ifd-box.ifd-picked').length,
+                hash: location.hash })""")
+            assert got["picked"] == 0, (where, got)
+            assert "sel=" not in got["hash"], (where, got)
+        assert not page.js_errors, page.js_errors
+
+
+def test_each_sentence_points_back_at_the_wire_it_belongs_to() -> None:
+    """A label is 320px wide and its wire spans 155px, so the label is twice the length of the line
+    it is about, and the placement pass moves it 6px clear so the two never overlap. Touching
+    nothing and pointing nowhere, it read as floating beside the picture rather than labelling a line.
+
+    The tail is the fix, and this asserts the thing that makes it a fix: its TIP lands on its own
+    wire. Not that a triangle exists — a triangle pointing at nothing would pass that."""
+    def mutate(m: dict) -> None:
+        both = [{"direction": "in", "what": "what the caller asks for", "elements": []},
+                {"direction": "out", "what": "the answer it gets back", "elements": []}]
+        m["interfaces"] = [
+            {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
+             "facing": "user", "kind": "screen", "carries": list(both)},
+            {"id": "I2", "name": "Theirs", "what": "On theirs.", "side": "theirs",
+             "facing": "user", "kind": "api", "carries": list(both)},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        for iid in ("I1", "I2"):        # one on each shore: the tail sits on the card side of each
+            page.eval_on_selector(f'.ifd-box[data-iface="{iid}"]', "e => e.click()")
+            page.wait_for_timeout(250)
+            got = page.evaluate("""(iid) => {
+                const st = document.getElementById('ifdstage').getBoundingClientRect();
+                // every wire's y, in client space — a path here is dead horizontal, so one number
+                const wireYs = [...document.querySelectorAll(
+                        `#ifdstage path[data-iface="${iid}"]`)]
+                    .map(p => st.top + parseFloat(p.getAttribute('d').match(/-?[\\d.]+/g)[1]));
+                return [...document.querySelectorAll('.ifd-elabel.ifd-lab-on')].map(l => {
+                    const r = l.getBoundingClientRect();
+                    const down = l.classList.contains('ifd-tail-down');
+                    const up = l.classList.contains('ifd-tail-up');
+                    const cs = getComputedStyle(l, '::before');
+                    // the outline triangle is 8px deep, so its tip is 8px beyond the label's edge
+                    const tipY = down ? r.bottom + 8 : r.top - 8;
+                    return { down, up, side: l.dataset.side,
+                             offLeft: cs.left, offRight: cs.right,
+                             nearestWire: Math.min(...wireYs.map(y => Math.abs(y - tipY))) };
+                });
+            }""", iid)
+            assert len(got) == 2, (iid, got)
+            # exactly one tail each, and the two point OPPOSITE ways: the upper label down at its
+            # wire, the lower one up at its own.
+            assert sorted(g["down"] for g in got) == [False, True], (iid, got)
+            for g in got:
+                assert g["down"] != g["up"], (iid, g)
+                # THE TIP LANDS ON ITS WIRE, and slightly past it: the placement pass leaves a 6px
+                # gap and the tail is 8px deep, so it crosses the line by 2 rather than stopping
+                # short of it. Three pixels of tolerance covers that plus sub-pixel layout.
+                assert g["nearestWire"] <= 3, (iid, g)
+                # …and it sits on the CARD side, which is where the wire starts on that shore. Only
+                # the side that is SET is asserted: a computed style resolves the other one to a used
+                # value rather than `auto`, so checking for `auto` fails against correct code.
+                assert g["offLeft" if g["side"] == "ours" else "offRight"] == "22px", (iid, g)
         assert not page.js_errors, page.js_errors
