@@ -2050,11 +2050,26 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
               margin: 51.5px 0 0 -14px; position: relative;
               border-top: 3px solid #4f46e5; border-right: 3px solid #4f46e5;
               border-top-right-radius: 10px; }
+/* The line RUNS ON past its own head and fades out, instead of stopping at it. The head alone said
+   "the line ends here", and the row it carries on into is a whole row down and 400 to 800px to the
+   left, so nothing said it carries on at all. Now the head sits at the MIDDLE of the drop, the way
+   a direction marker sits on a route, and the fade below it is what says "and onwards".
+   ONE stroke, drawn by `::before`, carrying straight on from where the elbow's own right border
+   stops square at y=30 (its border box): same 3px width, same x 19..22, no radius at that joint or
+   the two would meet in a notch. It runs to y=74, and the fade starts at 41% of its length — which
+   is y=48, exactly the head's point, so the line is solid up to the head and never after it. */
+.walk-elbow::before { content: ''; position: absolute; left: 19px; top: 27px;
+                      width: 3px; height: 44px; background: #4f46e5;
+                      -webkit-mask-image: linear-gradient(to bottom, #000 41%, rgba(0, 0, 0, 0) 100%);
+                      mask-image: linear-gradient(to bottom, #000 41%, rgba(0, 0, 0, 0) 100%); }
 /* -7.5px, not -4.5px: an absolutely positioned child is placed against its parent's PADDING box,
    which stops inside the elbow's own 3px right border. Offset from there, the head sat 3px left of
    the line it ends. 19px of padding box, plus 7.5, less half the head's 12px width, centres it on
-   the border's own middle at 20.5. */
-.walk-elbow::after { content: ''; position: absolute; right: -7.5px; bottom: -11px;
+   the border's own middle at 20.5.
+   `bottom: -18px` puts its point at y=48 and its body at 37..48, so its middle (42.5) lands on the
+   middle of the whole drop: the vertical starts at y=11.5, where the corner's 10px radius finishes,
+   and ends at y=74, whose midpoint is 42.75. */
+.walk-elbow::after { content: ''; position: absolute; right: -7.5px; bottom: -18px;
                      border-top: 11px solid #4f46e5;
                      border-left: 6px solid transparent; border-right: 6px solid transparent; }
 /* …and the hook hangs off the ROW, not off the strip: a strip is `overflow-x: auto`, and that clips
@@ -2077,7 +2092,13 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    The rule below is on the WRAPPER, not on the strip: `bindHFade` puts a wrapper round every
    scroller to hang the edge shadows on, so the row's flex item is that wrapper. Without this the
    wrapper sized itself to its content and a 13-step row pushed the whole page 900px sideways. */
-.walk-strip { min-width: 0; overflow-x: auto; padding: 8px 0 10px; }
+/* `overflow-y: hidden`, stated: `overflow-x: auto` alone turns the other axis into `auto` too, and
+   the elbow's drop now reaches 125.5px down the lane. That fits the 138 and 153px the two maps here
+   measure, but a map whose step titles are all two lines runs the lane down to about 119 — and the
+   1px of overflow would answer with a vertical scrollbar inside the row. Cut instead: the drop is
+   already three quarters of the way through its own fade by then, so what is lost is a few px of
+   line at about a fifth of full strength. Nothing in this strip ever wants to scroll downwards. */
+.walk-strip { min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 8px 0 10px; }
 .walk-row > .hfade-wrap, .walk-row > .walk-strip { flex: 1; min-width: 0; }
 /* `stretch`, so every feature box is the same height: the tallest step title sets it once for the
    whole walk, instead of each box ending where its own longest title happens to end. The person in
