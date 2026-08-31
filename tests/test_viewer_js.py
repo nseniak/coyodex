@@ -3993,7 +3993,9 @@ def test_search_and_show_in_context_pin_the_card_in_the_diagram() -> None:
     assert "if (storyPinApply) storyPinApply(t.storyPin);" in js
     bind = _story_fn(js, "bindStoryDiagram")
     assert "storyPinApply = (p) => {" in bind and "scrollIntoView" in bind
-    assert "if (pendingStoryPin) {" in bind
+    # …and it takes only the keys IT draws. The Interfaces picture pins through the same one-shot and
+    # the same `sel` field, so an unguarded consumer here swallowed a surface's pin and dropped it.
+    assert "if (pendingStoryPin && pendingStoryPin.key !== IFACE_PIN_KEY) {" in bind
 
 
 def test_story_chrome_never_term_links_but_card_prose_does() -> None:

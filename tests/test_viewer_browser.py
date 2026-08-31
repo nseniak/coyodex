@@ -1179,10 +1179,13 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
     """Both wires leave from inside the card's own height, so anything vertical and dark at that edge
     closes them into a bracket and the pair reads as ONE line bent twice rather than two crossings.
 
-    Two things caused that and both are asserted here. The wires used to start ON the card's edge,
-    and the picked card used to wear a 2px border in the SAME indigo the lit wires use — a tall crisp
-    stroke of the wire's own colour, exactly where the wires begin. Clearance alone did not settle it;
-    the border had to stop being an edge and become a halo."""
+    Two things caused it. The wires used to start ON the card's edge, and the picked card wears a 2px
+    border in the same indigo the lit wires use.
+
+    ONLY THE FIRST IS FIXED, and that is a decision, not an oversight. The border was briefly a soft
+    halo, which settled it completely — and made the Interfaces picture answer "which card is picked"
+    differently from the Features page, which reads as a different app. Consistency won; the wires'
+    clearance is what carries the whole load now, so it is what this asserts."""
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
@@ -1200,17 +1203,18 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
             const xs = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
                 .flatMap(p => p.getAttribute('d').match(/-?[\\d.]+/g).filter((_, i) => i % 2 === 0))
                 .map(Number);
-            const cs = getComputedStyle(b);
+            const sel = getComputedStyle(b);
             return { gap: Math.min(...xs.map(x => Math.abs(x - right))),
                      wires: document.querySelectorAll('#ifdstage path[data-iface="I1"]').length,
-                     borderRight: cs.borderRightColor, borderW: cs.borderRightWidth };
+                     borderW: sel.borderRightWidth };
         }""")
         assert got["wires"] == 2, got
-        # No wire may begin within ten pixels of the card it belongs to.
+        # No wire may begin within ten pixels of the card it belongs to. With the border kept, this
+        # is the only thing standing between the two wires and a bracket.
         assert got["gap"] >= 10, got
-        # …and the picked card carries no edge in the wires' indigo. `#4f46e5` is that indigo; the
-        # halo is a box-shadow, which cannot be mistaken for a line.
-        assert "79, 70, 229" not in got["borderRight"], got
+        # …and the picked card really is wearing the shared 2px edge, so the gap above is being
+        # asked to do the work this test says it does.
+        assert got["borderW"] == "2px", got
         assert not page.js_errors, page.js_errors
 
 
@@ -1278,4 +1282,103 @@ def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
             }""", iid)
             assert got["shown"] == 2, (iid, got)
             assert got["over"] == 0, (iid, got)
+        assert not page.js_errors, page.js_errors
+
+
+def _crossing_naming_a_record() -> Any:
+    """One surface whose two crossings name real records of the fixture map."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "what is asked", "elements": ["E1"]},
+                         {"direction": "out", "what": "what comes back",
+                          "elements": ["E2", "E12", "E3", "E4"]}]},
+        ]
+    return mutate
+
+
+def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS() -> None:
+    """The records a crossing carries, named under the sentence and each a door — the same treatment
+    and the same three-deep cap the Features page gives a feature's records on its own wire labels,
+    so one record looks and behaves the same wherever a line names it.
+
+    The tooltip is the record's own MEANING, not "Show X in context": that restated the underline,
+    and a reader hovering a record wants to know what the record is. It comes from `cardFacts`, so
+    the tooltip and the record's own card cannot say different things."""
+    with _served_map(_crossing_naming_a_record()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
+        page.wait_for_timeout(300)
+        # KEYED ON THE SENTENCE, not on DOM order: the labels are created opener-first, and this
+        # surface holds no way in, so its `out` is drawn before its `in`.
+        got = page.evaluate("""() => {
+            const out = {};
+            for (const l of document.querySelectorAll('.ifd-elabel.ifd-lab-on')) {
+                out[l.firstChild.textContent] = {
+                    recs: [...l.querySelectorAll('.ifd-elabel-rec')].map(
+                              e => [e.textContent, e.title]),
+                    tail: l.querySelector('.ifd-elabel-recs').textContent };
+            }
+            return out;
+        }""")
+        one, many = got["what is asked"], got["what comes back"]
+        assert one["recs"] == [["Organization",
+                                "A tenant — the top-level isolation boundary everything is "
+                                "scoped to."]], one
+        # four records, three drawn, and the tail SAYS the rest are there rather than dropping them
+        assert [r[0] for r in many["recs"]] == ["Subscription", "PlanName", "Membership"], many
+        assert many["tail"].endswith("+1 more"), many
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_pinned_surface_is_part_of_where_you_are() -> None:
+    """A pinned card is not a passing highlight, it is WHERE YOU ARE: the address restates it, so a
+    link carries it, and leaving the view and coming back finds the picture as you left it.
+
+    It rides the same `sel` field the Features page's pin uses. The two pages share the field and not
+    their ids, so each takes only the keys it draws — asserted here by the key in the address."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.eval_on_selector('.ifd-box[data-iface="I2"]', "e => e.click()")
+        page.wait_for_timeout(300)
+        assert "sel=siface%3AI2" in page.evaluate("() => location.hash"), page.evaluate(
+            "() => location.hash")
+        # leave the view entirely, then come back
+        page.evaluate("() => document.querySelector('button[data-view=\\\"glossary\\\"]').click()")
+        _settle(page)
+        page.evaluate("() => document.querySelector('button[data-view=\\\"interfaces\\\"]').click()")
+        _settle(page)
+        back = page.evaluate("""() => ({
+            picked: [...document.querySelectorAll('.ifd-box.ifd-picked')].map(e => e.dataset.iface),
+            labels: document.querySelectorAll('.ifd-elabel.ifd-lab-on').length })""")
+        assert back["picked"] == ["I2"], back
+        assert back["labels"] >= 1, back        # …and its sentences came back lit with it
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_click_that_is_not_on_a_box_drops_the_pin() -> None:
+    """One rule, and it needs saying because there was no rule at all before: the picture had no
+    outside-click handler, and what looked like one working was the gutter happening to clear the
+    class. The product's own line, a column heading and the page below the diagram each left a
+    surface pinned for good.
+
+    The listener also has to be REMOVED between renders. It lives on `document`, which outlives the
+    diagram, so every re-render would otherwise leave another behind — each holding a dead render's
+    closure and each still writing to the address bar."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        # every one of these is outside a box, and every one must mean the same thing
+        for where in ("#ifdrule", ".ifd-col-ours .ifd-colhead", ".ifd-stage", ".usecases-wrap"):
+            page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
+            page.wait_for_timeout(200)
+            assert page.evaluate(
+                "() => document.querySelectorAll('.ifd-box.ifd-picked').length") == 1, where
+            page.eval_on_selector(where, "e => e.click()")
+            page.wait_for_timeout(200)
+            got = page.evaluate("""() => ({
+                picked: document.querySelectorAll('.ifd-box.ifd-picked').length,
+                hash: location.hash })""")
+            assert got["picked"] == 0, (where, got)
+            assert "sel=" not in got["hash"], (where, got)
         assert not page.js_errors, page.js_errors
