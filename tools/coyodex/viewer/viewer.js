@@ -10057,16 +10057,18 @@ function bindIfaceDiagram(root) {
   // ancestor transform skews client rects box by box while the animation runs. Offsets read the
   // settled layout regardless. Every box's offsetParent is the stage (the nearest positioned
   // ancestor), so the numbers are already in stage space.
-  // A wire starts WELL CLEAR OF THE CARD, not on its edge. Touching it, the two wires of one surface
-  // and the picked card's own border formed a BRACKET: the border is 2px of the same indigo, it runs
-  // the card's whole height, and both wires leave from inside that span — so the pair read as one
-  // line bent twice rather than as two crossings.
+  // A WIRE TOUCHES THE CARD IT BELONGS TO. It runs the whole way, edge to edge, with no gap at
+  // either end: a line that stops short of the thing it points at is a line the reader has to join
+  // up themselves.
   //
-  // MEASURED, not guessed: the card is 97px tall and the two wires sit 20px either side of its
-  // middle, so 40px of that border is between them and no colour change to the wires can break it.
-  // Only white space can. Six pixels was not enough at this scale; fourteen is, and the gutter is
-  // 155px wide so it costs nothing that shows.
-  const CARD_CLEARANCE = 14;
+  // THIS IS A REVERSAL AND THE COST IS KNOWN. The clearance was 14px, and it was there because the
+  // picked card's border is 2px of the SAME indigo a lit wire is, running the card's whole height,
+  // with both wires leaving from inside that span — the three together read as one line bent twice.
+  // Nitsan asked for no gap after being shown that, twice; what carries it now is the 40px between
+  // the wires (`IFACE_WIRE_GAP`) and the labels no longer sitting at the card's edge to frame the
+  // shape. If the bracket ever comes back, it is this constant, and the fix is not to shrink it in
+  // silence.
+  const CARD_CLEARANCE = 0;
   const edge = (el, which, dy) => [
     which === 'left' ? el.offsetLeft - CARD_CLEARANCE
                      : el.offsetLeft + el.offsetWidth + CARD_CLEARANCE,

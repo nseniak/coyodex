@@ -1179,13 +1179,18 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
     """Both wires leave from inside the card's own height, so anything vertical and dark at that edge
     closes them into a bracket and the pair reads as ONE line bent twice rather than two crossings.
 
-    Two things caused it. The wires used to start ON the card's edge, and the picked card wears a 2px
-    border in the same indigo the lit wires use.
+    TWO EARLIER FIXES WERE TRIED AND BOTH ARE GONE, which is why this asserts what it does. A soft
+    halo instead of a border settled it completely, and made the Interfaces picture answer "which
+    card is picked" differently from a screen that looks the same — consistency won. Then 14px of
+    clearance between the wire and the card, which Nitsan reversed: a line that stops short of the
+    thing it points at is a line the reader has to join up themselves.
 
-    ONLY THE FIRST IS FIXED, and that is a decision, not an oversight. The border was briefly a soft
-    halo, which settled it completely — and made the Interfaces picture answer "which card is picked"
-    differently from the Features page, which reads as a different app. Consistency won; the wires'
-    clearance is what carries the whole load now, so it is what this asserts."""
+    WHAT ACTUALLY CURED IT was neither: it was moving the LABELS off the card. The bracket was only
+    ever readable when the two labels sat over the card and framed a fragment of its border between
+    them. With the whole card outlined and both labels clear of it, the eye reads a card with two
+    arrows leaving it. So the invariants are the ones below — the wires stay 40px apart and each
+    reaches its card — and `test_a_crossings_sentence_never_covers_the_card_it_belongs_to` guards
+    the rest."""
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
@@ -1203,17 +1208,21 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
             const xs = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
                 .flatMap(p => p.getAttribute('d').match(/-?[\\d.]+/g).filter((_, i) => i % 2 === 0))
                 .map(Number);
-            const sel = getComputedStyle(b);
+            const ys = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
+                .map(p => parseFloat(p.getAttribute('d').match(/-?[\\d.]+/g)[1]));
             return { gap: Math.min(...xs.map(x => Math.abs(x - right))),
+                     apart: Math.abs(ys[0] - ys[1]),
                      wires: document.querySelectorAll('#ifdstage path[data-iface="I1"]').length,
-                     borderW: sel.borderRightWidth };
+                     borderW: getComputedStyle(b).borderRightWidth };
         }""")
         assert got["wires"] == 2, got
-        # No wire may begin within ten pixels of the card it belongs to. With the border kept, this
-        # is the only thing standing between the two wires and a bracket.
-        assert got["gap"] >= 10, got
-        # …and the picked card really is wearing the shared 2px edge, so the gap above is being
-        # asked to do the work this test says it does.
+        # Each wire REACHES its card — no gap to join up by eye.
+        assert got["gap"] == 0, got
+        # …and the two never share a path. This is the number that stops them reading as one line,
+        # now that neither the halo nor the clearance is there to help.
+        assert got["apart"] >= 30, got
+        # …and the picked card really is wearing the shared 2px edge, so the separation above is
+        # being asked to do the work this test says it does.
         assert got["borderW"] == "2px", got
         assert not page.js_errors, page.js_errors
 
