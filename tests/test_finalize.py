@@ -1018,3 +1018,39 @@ def test_an_unreadable_baseline_is_INCOMPLETE_not_a_pass():
     # then incomplete, because a blocking problem is known and an unrun leg is unknown.
     assert report.verdict in ("BLOCKED", "INCOMPLETE"), report.verdict
     assert leg not in [l for l in report.legs if l.status == "ran"]
+
+
+# --- the warrant, and reading without writing (retro 2026-09-02, mcpolis N1 and 17) ---------------
+
+def _repo_with_warrant(tmp: Path) -> Path:
+    out = tmp / ".coyodex"
+    (out / "verify").mkdir(parents=True)
+    (out / "build-fragments").mkdir(parents=True)
+    (out / "project-map.json").write_text("{}")
+    (out / "project-map.md").write_text("#")
+    (out / "preindex.json").write_text("{}")
+    (out / "provenance.json").write_text("{}")
+    (out / "verify" / "worklist.json").write_text("[]")
+    (out / "verify" / "verdicts-a.json").write_text("{}")
+    (out / "build-fragments" / "a.json").write_text("{}")
+    return out / "project-map.json"
+
+
+def test_the_commit_line_names_the_maps_warrant(tmp_path, capsys):
+    """`grounding.note` cites the verdict rows as the reason to believe the map. Ship the counts
+    without the rows and a fresh clone has the conclusion and can check no part of it."""
+    from coyodex.finalize import _commit_hint
+    _commit_hint(_repo_with_warrant(tmp_path))
+    out = capsys.readouterr().out
+    assert "verify" in out and "build-fragments" in out, out
+    assert "WARRANT" in out, out
+
+
+def test_the_commit_line_omits_a_warrant_that_is_not_there(tmp_path, capsys):
+    from coyodex.finalize import _commit_hint
+    out_dir = tmp_path / ".coyodex"
+    out_dir.mkdir()
+    (out_dir / "project-map.json").write_text("{}")
+    _commit_hint(out_dir / "project-map.json")
+    printed = capsys.readouterr().out
+    assert "WARRANT" not in printed, printed

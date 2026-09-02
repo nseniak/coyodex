@@ -544,8 +544,8 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R99 — Six of fourteen agents wrote a generator script
 - **Where**: `method/templates/harvest-contract.md`
-- **Anchor**: `and do NOT write a program that writes your fragment.**`
-- **Evidence**: Six of fourteen agents on one build wrote a generator script instead. It predicted nothing about speed — the fastest agent of all used one — but the two slowest agents in that fan-out were both paying the patch-generate-copy-relint cost. On a live build a harvest agent that delegated returned prose instead of writing its fragment, and the whole slice had to be re-harvested.
+- **Anchor**: `that GENERATES your fragment.**`
+- **Evidence**: Six of fourteen agents on one build wrote a generator script instead. It predicted nothing about speed — the fastest agent of all used one — but the two slowest agents in that fan-out were both paying the patch-generate-copy-relint cost. On a live build a harvest agent that delegated returned prose instead of writing its fragment, and the whole slice had to be re-harvested. **Reworded 2026-09-02** from "writes your fragment" to "GENERATES your fragment", with the boundary spelled out: a 2026-09-02 retro found 9 of 30 harvest and trace agents using a program, and most were PATCHING a draft they had authored by hand — a two-anchor `.replace()`, not a generator. The old wording banned both and could not tell them apart, so the rule was read as broken rather than obeyed.
 
 ### R100 — confidence was listed as a stray key
 - **Where**: `method/templates/harvest-contract.md`

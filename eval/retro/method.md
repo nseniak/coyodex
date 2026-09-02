@@ -184,6 +184,12 @@ Three rules, each of which a real run has already broken:
 2. **Zero occurrences with no opportunity is `unproven`, not `fixed`.** Set `opportunity: false` and
    say so. One live case: scorecard assertion 21 printed `n/a`, which reads as "no opportunity",
    while the truth was that the build had filtered the line away with a grep.
+   **"No opportunity" means the check CANNOT be run, not that the build did not run it. If YOU can
+   run it, run it.** A retro filed `grounding lint --agent-transcripts` as unproven because the
+   BUILD never passed the flag — and the check is read-only, takes one command, and the transcripts
+   were on disk. Running it turned an open question into data in a single turn: 0 fabricated
+   citations, 29 of 1,048 rows resting on evidence the agent may only have seen in a grep. Before
+   writing `opportunity: false`, ask whether the retro itself is the missing opportunity.
 3. **Do not answer this by re-reading the previous `report.md` prose.** It runs 300 to 900 lines per
    retro, it is git-ignored, and a grep over it is unreliable: one alternation typed with a single
    wrong character reported 0 of 12 reports for a phrase that appears in 10 of them. The ledger
@@ -384,7 +390,11 @@ Four checks, all cheap, all deterministic, each one productive on that run:
    nothing checks it. One shipped note gave two of its eight per-theme counts wrong and stated a
    superseded total its own fields contradicted, because the prose was written against an earlier
    pass and re-pasted.
-2. **Match each `finalize` advisory to a record in the map's extras.** `finalize` says in its own
+2. **Match each `finalize` advisory to a record in the map's extras. Run it with `--no-write`.**
+   `finalize` OVERWRITES `.coyodex/finalize-report.{json,md}` on every run, so a report-only reader
+   that runs it plainly destroys the record of the build it came to read — the retro replaces the
+   build's own disposition with its own. `--no-write` prints the same report and leaves the files
+   alone. `finalize` says in its own
    output that each advisory is either fixed or recorded; it does not check it. Nine had been waved
    through, and the transcript could not show it because every read of the list had been filtered.
 3. **Check each use case's declared `actors` against the actor of its own flow's first step**, and

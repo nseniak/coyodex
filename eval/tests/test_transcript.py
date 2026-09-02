@@ -441,3 +441,36 @@ def test_a_system_reminder_is_not_the_operator():
     with tempfile.TemporaryDirectory() as td:
         out = _one_user_turn(Path(td), "<system-reminder>\nsome injected note\n</system-reminder>")
     assert "(operator)" not in out, out
+
+
+# --- the operator's own words, through a slash-command wrapper (retro 2026-09-02, mcpolis 11) -----
+# `--full` rendered 0 of 74 operator records on a real transcript: the harness WRAPS a slash command
+# rather than replacing it, and the reader dropped the whole record on seeing `<command-name>`.
+
+def test_a_slash_command_record_yields_the_operators_own_words():
+    from coyodex_eval.transcript import operator_text
+    raw = ("<command-message>coyodex is running…</command-message>\n"
+           "<command-name>coyodex</command-name>\n"
+           "<command-args>build the map, do not ask me anything</command-args>")
+    assert operator_text(raw) == "/coyodex build the map, do not ask me anything"
+
+
+def test_a_slash_command_with_no_args_is_still_the_operator_speaking():
+    from coyodex_eval.transcript import operator_text
+    assert operator_text("<command-name>coyodex-retro</command-name>\n"
+                         "<command-args></command-args>") == "/coyodex-retro"
+
+
+def test_plain_words_pass_through():
+    from coyodex_eval.transcript import operator_text
+    assert operator_text("stop and show me the scope") == "stop and show me the scope"
+
+
+def test_real_harness_text_is_still_hidden():
+    """Rendering machine text as a person is a worse answer than no answer — the question this
+    reader exists to answer is "who noticed this"."""
+    from coyodex_eval.transcript import operator_text
+    for raw in ("<system-reminder>do the thing</system-reminder>",
+                "Base directory for this skill: /x/y",
+                "<ide_opened_file>a.py</ide_opened_file>"):
+        assert operator_text(raw) == "", raw

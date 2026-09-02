@@ -961,6 +961,33 @@ _HARNESS_TEXT = (
 )
 
 
+#: A slash-command record: the harness WRAPS what the operator typed rather than replacing it. The
+#: words are in `<command-args>` (and `<command-name>` says which command), so dropping the whole
+#: record throws away the operator's own message. On the 2026-09-02 mcpolis transcript that is how
+#: `--full` rendered **0 of 74** operator records: every one of them was a slash command.
+_SLASH_COMMAND = re.compile(r"<command-name>\s*(?P<name>[^<]*?)\s*</command-name>", re.S)
+_COMMAND_ARGS = re.compile(r"<command-args>(?P<args>.*?)</command-args>", re.S)
+
+
+def operator_text(text: str) -> str:
+    """What the OPERATOR actually typed in this record, or "" when they typed nothing.
+
+    Three shapes. Plain words are themselves. A slash-command wrapper is unwrapped to
+    `/<name> <args>` — the words the operator typed, which is exactly what a reader auditing "who
+    noticed this" needs. Anything else the harness files under the user role (a skill body, a
+    `<system-reminder>`, an IDE notice) is machine text and stays hidden: rendering that as a person
+    is a worse answer than no answer."""
+    head = text.lstrip()
+    name = _SLASH_COMMAND.search(head)
+    if name is not None:
+        args = _COMMAND_ARGS.search(head)
+        body = (args.group("args").strip() if args else "")
+        return f"/{name.group('name')}" + (f" {body}" if body else "")
+    if any(marker in head[:400] for marker in _HARNESS_TEXT):
+        return ""
+    return text
+
+
 def _is_harness_text(text: str) -> bool:
     head = text.lstrip()[:400]
     return any(marker in head for marker in _HARNESS_TEXT)
@@ -983,8 +1010,9 @@ def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str
             # A USER turn with words is the OPERATOR, and it is the one thing this reader could
             # never show. It appears only in `--full` (the index is one line per tool call) and
             # only when it carries text, so a bare tool-result turn stays invisible as before.
-            if full and turn.text.strip() and not _is_harness_text(turn.text):
-                said = turn.text.splitlines()
+            spoken = operator_text(turn.text)
+            if full and spoken.strip():
+                said = spoken.splitlines()
                 kept = said if unlimited else said[:result_lines]
                 lines.append(f"[{turn.index:>4}] (operator) " + "\n        . ".join(kept))
                 if len(said) > len(kept):

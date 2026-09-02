@@ -1686,10 +1686,17 @@ synthesis → parallel trace.**
   synthesis, before you author a single rule:
 
   ```
-  1. dispatch the test-completeness + deployment/ops backfill agents      <- FIRST, always
+  1. dispatch the test-completeness + deployment/ops backfill agents      <- FIRST, if you dispatch
   2. THEN author the reconcile assignments while they run
   3. THEN author the T2b SURFACES, before any trace launches
   ```
+
+  **Step 1 says FIRST, not ALWAYS, and the two rules do not fight.** *Never fan out to ONE agent*
+  above is about WHETHER to dispatch; this is about WHEN, once you have decided to. So: if the
+  backfill work comes down to one slice, the lead does it and there is no step 1 — that is the other
+  rule, unchanged. If it is two or more slices, they go out BEFORE you start authoring, because
+  authoring first leaves them idle for as long as the authoring takes. The two sentences read as
+  competing absolutes for as long as one said "always"; only the ordering half was ever meant.
 
   Dispatch those agents before you start authoring.
 
@@ -2199,7 +2206,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   the skeptics found by reading; spend the skeptics on what it cannot decide. Stated as prose in
   this paragraph it was read as advice and skipped: one build ran `anchor-drift` exactly once, at
   the very end and WITH `--verdicts`, and paid three separate skeptics to report drifted anchors by
-  hand. It is a gate with an order, not a suggestion. Keep the split WITHIN
+  hand. It is a gate with an order, not a suggestion.
+  **SAY WHAT THE SHAPE-ONLY PASS DOES NOT COVER, when you report it.** It reads the LINE KIND at
+  each anchor: a `def` header, an import, a comment, a blank. It cannot tell whether the operative
+  line it points at is the RIGHT one — that is what a skeptic reading the code decides. So a clean
+  shape-only result means "no anchor points at a line that cannot act", and it does not mean "no
+  drifted anchors". A build reported the narrow result as the general one; the verdict-based pass
+  it ran later found 11. Keep the split WITHIN
   a theme (related claims still travel together). Each is told to *disprove* the claim, and to use
   the THREE-WAY verdict honestly: **refuted when the code contradicts the claim; `unverifiable` when
   the code cannot settle it either way**. Do not tell a skeptic to "default to refuted on doubt" —
@@ -2723,6 +2736,15 @@ untracked, so a map that cost hours and hundreds of dollars exists only in one w
 the whole argument for generating the gate block is that the commit is the durable half. `finalize`
 prints the exact `git add -f` line to use; run it, and commit the pre-index and provenance with the
 map.
+
+**COMMIT THE WARRANT TOO — `verify/` and `build-fragments/`.** The map is a set of claims; the
+reason to believe them is the pinned worklist, the claims batches and every skeptic's verdict file,
+plus the fragments each agent authored. `grounding.note` cites the verdict rows BY COUNT as that
+reason. Ship the counts without the rows and a fresh clone has the conclusion and can check no part
+of it — which is what happened on the 2026-09-02 mcpolis build: 71 verify files and 47 fragments,
+force-added by nothing, in a repo whose `.gitignore` ignores `.coyodex/`. The `git add -f` line
+`finalize` prints now names both directories. They are also what makes the NEXT build's
+change-analysis and the eval's archive possible; regenerating them costs another full build.
 
 **`finalize` also reads the advisory disposition** — each advisory as fixed / recorded / carried,
 against what the map's extras actually record. Read that table rather than the raw list.

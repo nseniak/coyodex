@@ -41,12 +41,18 @@ lead; nothing above this line goes into an agent prompt.
 > file matters to one of them, that is the fact worth returning; where it matters to none, say so
 > rather than padding the slice.
 > Read these files completely, then produce ONLY the rows below — the only file you may write is
-> your own fragment file (see the output rule below). **Do this work yourself — do NOT spawn your
-> own sub-agents / delegate, and do NOT write a program that writes your fragment.** Author the rows.
-> Speed is not the argument — the fastest agent on a measured build used one. The cost is every lint
-> round: patch-generator, regenerate, copy, re-lint instead of one edit. A sub-agent's output is
-> silently dropped: an agent
-> that delegates returns prose instead of a fragment, and the whole slice has to be re-harvested.
+> your own fragment file (see the output rule below).
+> **Do this work yourself — do NOT spawn your own sub-agents / delegate, and do NOT write a program
+> that GENERATES your fragment.** Author the rows. Speed is not the argument — the fastest agent on
+> a measured build used one. The cost is every lint round: patch-generator, regenerate, copy,
+> re-lint instead of one edit. A sub-agent's output is silently dropped: an agent that delegates
+> returns prose instead of a fragment, and the whole slice has to be re-harvested.
+> **What the ban is and is not.** Banned: a script that PRODUCES rows — reading the code, deciding
+> what a component is, emitting the JSON. Allowed: a small edit to a fragment you already authored
+> by hand — a `sed`, a two-anchor `.replace()`, a `json.dump` that reformats. The line is whether
+> the PROGRAM made the judgement or you did. The wording said "writes your fragment", which reads
+> as banning both: 9 of 30 agents on one build used a program, and most were patching an authored
+> draft rather than generating one. That is not the defect this rule names.
 > You read the files and write the one fragment; no delegation.
 >
 > **Files:** «FILES». **List a directory first, then read each file** — a slice read from the

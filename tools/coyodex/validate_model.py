@@ -2358,7 +2358,13 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                   if ep.id not in claimed_by and ep.id not in recorded]
     if unassigned:
         kinds = sorted({ep.kind for ep in unassigned})
-        warnings.append(f"{len(unassigned)} way(s) in belong to no interface ({', '.join(kinds)}) — "
+        # NAME THE IDS. The message used to give KINDS only, so the one thing an operator needs to
+        # act — which ways in — appeared nowhere, in any mode. `--json` already sets whole-list
+        # mode, so a machine consumer gets every id and a terminal reader gets the first few. The
+        # remedy the sentence names (`dump --id <EPn>`, a recorded `EPn:` line) is unusable without
+        # them, which is what "a sentence where the method promises a list" meant.
+        warnings.append(f"{len(unassigned)} way(s) in belong to no interface ({', '.join(kinds)}): "
+                        f"{_shown([ep.id for ep in unassigned], 12)} — "
                         f"every externally-activated way in belongs to exactly one surface. "
                         f"`coyodex dump --id <EPn>` shows what each one is; record "
                         f"'EPn: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading for "
@@ -2793,6 +2799,17 @@ _KIND_COVERAGE_LINE = re.compile(
     re.IGNORECASE)
 
 
+#: A COUNT of entry points stated inside a coverage record — "one signal-handler entry point",
+#: "4 http routes". Anchored on the noun so an unrelated number in the prose is not read as one.
+_COUNT_IN_COVERAGE = re.compile(
+    r"\b(\d+|no|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    r"(?:\w+[- ]){0,2}(?:entry\s+points?|routes?|handlers?|commands?|hooks?|jobs?|listeners?)\b",
+    re.I)
+
+_COVERAGE_WORD_NUMBERS = {"no": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                          "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+
+
 def _recorded_kind_coverage(m: ProjectModel) -> dict[str, str]:
     """The per-kind completeness contract recorded under an **'Entry-point coverage'** extras heading:
     CASEFOLDED canonical kind -> `complete` / `sampled` / `partial`. Keys fold through
@@ -2819,13 +2836,46 @@ def _kind_coverage_warnings(m: ProjectModel) -> list[str]:
     recorded = _recorded_kind_coverage(m)
     present = sorted({grammar.canonical_entry_kind(ep.kind)
                       for ep in m.entry_points if (ep.kind or "").strip()})
-    missing = [k for k in present if k.lower() not in recorded]
-    if not missing:
-        return []
-    return ["Entry-point coverage: no completeness statement for kind(s) "
-            + ", ".join(f"'{k}'" for k in missing)
-            + " — is each inventory complete or a sample? Record '<kind>: complete|sampled|partial "
-              "— <how it was enumerated>' under an 'Entry-point coverage' extras heading"]
+    out: list[str] = []
+    # THE RECORD'S OWN NUMBERS, against the rows of that kind. A coverage statement is prose, and
+    # prose written once and re-pasted goes stale: the 2026-09-02 mcpolis record said "one
+    # signal-handler entry point" where the map carries four. Nothing compared the sentence with the
+    # thing it describes, and the sentence is the map's only statement about whether an inventory is
+    # complete — so a wrong count there understates exactly what the heading exists to declare.
+    # Only a SPELLED NUMBER or digit immediately before the kind's own word is read; a sentence
+    # naming no count is not second-guessed.
+    by_kind: dict[str, int] = {}
+    for ep in m.entry_points:
+        if (ep.kind or "").strip():
+            by_kind[grammar.canonical_entry_kind(ep.kind).lower()] = 1 + by_kind.get(
+                grammar.canonical_entry_kind(ep.kind).lower(), 0)
+    for body in balance_lib.extras_bodies(m, "entry-point coverage"):
+        for line in body.splitlines():
+            hit = _KIND_COVERAGE_LINE.match(line)
+            if not hit:
+                continue
+            kind = grammar.canonical_entry_kind(hit.group(1)).lower()
+            actual = by_kind.get(kind, 0)
+            stated = _COUNT_IN_COVERAGE.search(line)
+            if stated is None:
+                continue
+            raw = stated.group(1).lower()
+            value = _COVERAGE_WORD_NUMBERS.get(raw, None)
+            if value is None:
+                value = int(raw) if raw.isdigit() else None
+            if value is not None and value != actual:
+                out.append(
+                    f"Entry-point coverage: the '{kind}' record states {stated.group(0)!r} and the "
+                    f"map carries {actual} row(s) of that kind — the statement was written once and "
+                    f"re-pasted. It is the map's only claim about whether this inventory is "
+                    f"complete, so a wrong count there understates the very thing it declares")
+    if missing := [k for k in present if k.lower() not in recorded]:
+        out.append("Entry-point coverage: no completeness statement for kind(s) "
+                   + ", ".join(f"'{k}'" for k in missing)
+                   + " — is each inventory complete or a sample? Record '<kind>: "
+                     "complete|sampled|partial — <how it was enumerated>' under an 'Entry-point "
+                     "coverage' extras heading")
+    return out
 
 
 def _cadence_row_warnings(m: ProjectModel) -> list[str]:
@@ -5596,7 +5646,13 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     # first, so the reader learns the tree was narrowed before reading any "no gaps here" result
     # computed over the narrowed tree.
     if walk_root is not None:
-        warnings.extend(ignore_disclosure(walk_root))
+        # The map's own anchors go in, so the disclosure can say when an exclusion hides part of a
+        # tree the map describes the rest of — the one comparison that can refute an exclusion's
+        # stated reason.
+        warnings.extend(ignore_disclosure(walk_root, [
+            strip_anchor(getattr(el, "source", "") or "")
+            for el in (*m.components, *m.entities, *m.deps)
+            if (getattr(el, "source", "") or "").strip()]))
     if check_coverage:
         cov_dirs = frozenset(_recorded_coverage_dirs(m))  # 'Coverage exceptions': conscious coarse-fold
         if walk_root is not None:

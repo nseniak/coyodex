@@ -344,6 +344,21 @@ def cmd_order(args: argparse.Namespace) -> int:
         for r in shown:
             extra = f"  ({r.items} items)" if r.items is not None else ""
             print(f"  {r.minutes:6.1f} min  {r.slice}{extra}")
+    # NAME THE SLICE TO SPLIT. Ordering is worth seconds — the whole dispatch stagger is 12.6 s for
+    # 9 agents — while straggler waste on the 2026-09-02 mcpolis build was 42% of active time. The
+    # lever is SIZING, and this record is the only place that knows which slice is oversized. A list
+    # sorted longest-first invites the reader to reorder; saying which one to CUT is the actionable
+    # half, and it costs one line.
+    if len(shown) >= 3:
+        longest = shown[0]
+        rest = [r.minutes for r in shown[1:]]
+        median = sorted(rest)[len(rest) // 2]
+        if median > 0 and longest.minutes >= 2 * median:
+            print(f"\nSPLIT '{longest.slice}': {longest.minutes:.1f} min against a median "
+                  f"{median:.1f} min for the rest — it holds the barrier for "
+                  f"{longest.minutes - median:.1f} min after its siblings are done. Reordering "
+                  f"cannot recover that; only cutting the slice smaller can. Launch order is worth "
+                  f"the dispatch stagger, which is SECONDS.")
     if unrecorded:
         print("\nno record for these — place them by the pre-index, not by this list:")
         for name in unrecorded:

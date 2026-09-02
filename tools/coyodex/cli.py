@@ -201,8 +201,16 @@ def main(argv: list[str] | None = None) -> int:
         from coyodex import ship  # stdlib-only; orchestrates the other subcommands in-process
         return ship.main(rest)
 
-    print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
+    # THE ERROR IS PRINTED TWICE, HEAD AND TAIL. A usage block is 40-odd lines, and a build reads a
+    # failed command through `2>&1 | tail -5` — which shows the LAST five lines of the usage text
+    # and not one word of what went wrong. On the 2026-09-02 mcpolis build a real argument error
+    # scrolled past exactly that way and the pipeline exited 0 (the pipe reports `tail`'s status),
+    # so the run read as a success. The head line is for a reader who sees the whole thing; the tail
+    # line is for the one who sees five lines of it.
+    line = f"coyodex: unknown command '{cmd}'"
+    print(f"{line}\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)
+    print(f"\nERROR: {line}", file=sys.stderr)
     return 2
 
 

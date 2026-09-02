@@ -286,7 +286,7 @@ def file_level_coverage(refs: set[str], root: Path,
             "'Coverage exceptions' heading."]
 
 
-def ignore_disclosure(root: Path) -> list[str]:
+def ignore_disclosure(root: Path, mapped_sources: Sequence[str] = ()) -> list[str]:
     """Advisory (non-blocking, and UNCONDITIONAL — not gated on `--check-coverage`): say out loud
     that `.coyodex/.ignore` narrowed the tree.
 
@@ -338,7 +338,47 @@ def ignore_disclosure(root: Path) -> list[str]:
                    f"this tree: {', '.join(rep.unused)} — nothing removed (and for a `!` line, "
                    f"nothing put back). A typo, a tree that moved, or a path already covered by a "
                    f"built-in exclusion; either way it reads as coverage the author never got.")
+    out.extend(_partly_mapped_disclosure(spec.patterns, mapped_sources))
     out.extend(_bad_line_disclosure(rep.bad_lines))
+    return out
+
+
+def _pattern_prefix(pattern: str) -> str:
+    """The fixed directory part of a glob — everything before its first wildcard.
+
+    `frontend/src/**/*.test.ts` -> `frontend/src/`. A pattern with no fixed part yields "" and is
+    skipped: it says nothing about WHERE."""
+    head = pattern.lstrip("!/").split("*", 1)[0].split("?", 1)[0].split("[", 1)[0]
+    return head if head.endswith("/") else head.rsplit("/", 1)[0] + "/" if "/" in head else ""
+
+
+def _partly_mapped_disclosure(patterns: Sequence[str], mapped_sources: Sequence[str]) -> list[str]:
+    """A pattern that hides part of a tree the map DESCRIBES the rest of.
+
+    An exclusion carries a reason, and the reason is usually about a KIND of code — "test trees are
+    out of scope". The map is the thing that can refute it: on the 2026-09-02 mcpolis map the ignore
+    file removed one test tree on exactly that reason while the map carried four test components
+    from elsewhere. So the map says tests ARE in scope and the ignore file says they are not, and
+    nothing put the two sentences side by side.
+
+    Says only what it can prove: this prefix is both excluded and mapped. Whether that is right is
+    the author's call — a vendored copy of a mapped library is a legitimate example — but it must be
+    a decision rather than a thing nobody noticed."""
+    if not mapped_sources:
+        return []
+    out: list[str] = []
+    for pattern in patterns:
+        prefix = _pattern_prefix(pattern)
+        if not prefix:
+            continue
+        inside = [src for src in mapped_sources if src.startswith(prefix)]
+        if inside:
+            out.append(
+                f"`.coyodex/.ignore` pattern {pattern!r} hides part of `{prefix}`, and the map "
+                f"DESCRIBES {len(inside)} element(s) from that same tree. The exclusion's reason is "
+                f"usually about a kind of code ('tests are out of scope'), and the map is what can "
+                f"refute it — one live map excluded a test tree on that reason while carrying four "
+                f"test components. Confirm the two agree, or narrow the pattern.")
     return out
 
 

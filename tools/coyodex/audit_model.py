@@ -356,6 +356,35 @@ def _unwritable_note(claim: str, match: ClaimMatch) -> str:
             f"have been rewritten since).")
 
 
+#: How far an anchor may move within one file before the move is worth saying out loud. A drift
+#: repair normally shifts a line or two — a function grew, an import moved. A jump of this size is a
+#: different KIND of event and deserves a reader.
+ANCHOR_MOVE_LINES = 40
+
+
+def _move_note(claim: str, before: str | None, after: str) -> str:
+    """A one-line report when an anchor move is bigger than a drift repair, or "" when it is not.
+
+    `apply-drift` rewrote 11 anchors on the 2026-09-02 mcpolis build and one landed in a DIFFERENT
+    FILE from the component it belongs to. All three long moves turned out to be correct, which is
+    the point: nothing said they had happened, so nobody could have known either way. A cross-file
+    move is not wrong by itself — a rule's operative line legitimately lives in the module that
+    enforces it — but it is a claim about WHERE something is, and it must not land in silence."""
+    from coyodex.anchors import strip_anchor
+    old_file, new_file = strip_anchor(before or ""), strip_anchor(after or "")
+    if old_file and new_file and old_file != new_file:
+        return (f"  NOTE: {claim}: the anchor moved to a DIFFERENT FILE, {old_file} → {new_file}. "
+                f"Correct when the operative line really lives there; read it before shipping.")
+    def _line(anchor: str | None) -> int | None:
+        tail = (anchor or "").rsplit(":", 1)[-1].split("-", 1)[0]
+        return int(tail) if tail.isdigit() else None
+    a, b = _line(before), _line(after)
+    if a is not None and b is not None and abs(a - b) > ANCHOR_MOVE_LINES:
+        return (f"  NOTE: {claim}: the anchor moved {abs(a - b)} lines within {new_file} — further "
+                f"than a drift repair usually goes; read the new line before shipping.")
+    return ""
+
+
 def apply_anchor_corrections(m: ProjectModel,
                              corrections: list[tuple[str, str]]) -> tuple[dict[str, int], list[str]]:
     """Write each `(claim, corrected anchor)` onto the element its claim identifies.
@@ -412,18 +441,24 @@ def apply_anchor_corrections(m: ProjectModel,
             e = m.edges[idx]
             if e.where != corrected:
                 notes.append(f"  {claim}: where {e.where!r} → {corrected!r}")
+                if note := _move_note(claim, e.where, corrected):
+                    notes.append(note)
                 e.where = corrected
                 counts["edge"] += 1
         elif kind == "security":
             s = m.security[idx]
             if s.source != corrected:
                 notes.append(f"  {claim}: source {s.source!r} → {corrected!r}")
+                if note := _move_note(claim, s.source, corrected):
+                    notes.append(note)
                 s.source = corrected
                 counts["security"] += 1
         elif kind == "rule_site":
             site = m.rules[idx].sites[sub]
             if site.where != corrected:
                 notes.append(f"  {claim}: where {site.where!r} → {corrected!r}")
+                if note := _move_note(claim, site.where, corrected):
+                    notes.append(note)
                 site.where = corrected
                 counts["rule_site"] += 1
         elif kind == "lifecycle":
@@ -431,12 +466,16 @@ def apply_anchor_corrections(m: ProjectModel,
             sm = getattr(el, "states", None)
             if sm is not None and sm.source != corrected:
                 notes.append(f"  {claim}: states.source {sm.source!r} → {corrected!r}")
+                if note := _move_note(claim, sm.source, corrected):
+                    notes.append(note)
                 sm.source = corrected
                 counts["lifecycle"] += 1
         else:
             ep = m.entry_points[idx]
             if ep.cadence_source != corrected:
                 notes.append(f"  {claim}: cadence_source {ep.cadence_source!r} → {corrected!r}")
+                if note := _move_note(claim, ep.cadence_source, corrected):
+                    notes.append(note)
                 ep.cadence_source = corrected
                 counts["cadence"] += 1
     return counts, notes

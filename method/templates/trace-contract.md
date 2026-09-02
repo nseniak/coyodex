@@ -49,8 +49,13 @@ lead; nothing above this line goes into an agent prompt.
 >
 > Read the code these use cases run through, then produce ONLY the rows below. The one file you may
 > write is your own fragment. **Do this work yourself — do NOT spawn sub-agents, and do NOT write a
-> program that writes your fragment.** A sub-agent's output is silently dropped, and an agent that
-> delegates returns prose instead of a fragment, which means the whole slice is re-run.
+> program that GENERATES your fragment.** A sub-agent's output is silently dropped, and an agent
+> that delegates returns prose instead of a fragment, which means the whole slice is re-run.
+> **What the ban is and is not.** Banned: a script that PRODUCES rows — reading the code, deciding
+> what a step is, emitting the JSON. Allowed: a small edit to a fragment you already authored by
+> hand — a `sed`, a two-anchor `.replace()`. The line is whether the PROGRAM made the judgement or
+> you did. The wording said "writes your fragment", which reads as banning both: 9 of 30 agents on
+> one build used a program, and most were patching an authored draft rather than generating one.
 >
 > ## What you return
 >

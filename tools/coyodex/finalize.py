@@ -434,6 +434,34 @@ def _unasked_verdicts_leg(found: list[Path]) -> Leg:
                note="the leg was skipped because no --verdicts was passed")
 
 
+def _undispatched_prose_leg(map_path: Path) -> Leg | None:
+    """Prose batches written and sent to nobody.
+
+    `audit --prose-batches` writes a numbered batch per chunk of reader-facing prose, for a fan-out
+    of prose reviewers. Writing them is one command; DISPATCHING them is the lead's next act, and
+    nothing observed whether it happened. Four builds in a row wrote batches and dispatched none:
+    the 2026-09-02 mcpolis build produced 459 prose fields across 12 batches that no agent ever
+    read, and the map shipped with the prose gate's own count as its only evidence.
+
+    A file pair, so it is cheap and it cannot be wrong: batches on disk, no `verdicts-prose-*`
+    beside them. Returns None when there is nothing to say, so a build that does not use the tier
+    pays no line."""
+    verify = map_path.parent / "verify"
+    if not verify.is_dir():
+        return None
+    batches = sorted(verify.glob("prose-*.json"))
+    if not batches:
+        return None
+    if sorted(verify.glob("verdicts-prose-*.json")):
+        return None
+    return Leg(name="prose review", status=RAN, blocking=[], advisory=[
+        f"{len(batches)} prose batch(es) sit in {verify} and NO `verdicts-prose-*.json` beside "
+        f"them — they were written and dispatched to nobody. This is the fourth build running: one "
+        f"produced 459 reader-facing fields across 12 batches that no agent read. Dispatch them, "
+        f"or delete the batches so the next reader is not told a review happened."],
+        note=f"{len(batches)} batch(es) written, 0 dispatched")
+
+
 def _balance_leg(map_path: Path) -> Leg:
     """Phase 3.5 left a trace, or it did not happen.
 
@@ -542,6 +570,7 @@ def build_report(map_path: Path, repo: Path, verdicts: list[Path],
         *([_refutations_leg(map_path, verdicts)] if verdicts else []),
         *([_unasked_verdicts_leg(unasked)] if unasked else []),
         *([_access_baseline_leg(map_path, access_baseline)] if access_baseline else []),
+        *([leg for leg in (_undispatched_prose_leg(map_path),) if leg is not None]),
         _balance_leg(map_path),
     ]
     blocking = sum(len(l.blocking) for l in legs)
@@ -937,11 +966,66 @@ def gate_block(report: FinalizeReport, map_sha: str) -> str:
     return "\n".join(lines)
 
 
+def _commit_hint(map_path: Path) -> None:
+    """What to commit, and the `git add -f` line that will actually take it."""
+    # The four artifacts the method says ship with the map, and whether git will actually take them.
+    # A live build ran `git check-ignore`, GOT the answer (`.gitignore:85:.coyodex/`), and then issued
+    # an un-forced `git add` two turns later that failed — shipping a map whose viewer symbol-search
+    # input (`preindex.json`) and provenance were left untracked. Naming the command removes the step
+    # where the operator has to remember the `-f`.
+    required = [map_path, map_path.with_suffix(".md"),
+                map_path.parent / "preindex.json", map_path.parent / "provenance.json"]
+    present = [p for p in required if p.exists()]
+    missing = [p for p in required if not p.exists()]
+    # THE WARRANT SHIPS WITH THE MAP. The four paths above are the map and its inputs; they are not
+    # the reason to BELIEVE it. That lives in `verify/` — the pinned worklist, the claims batches
+    # and every skeptic's verdict file — and in the fragments each agent authored. `grounding.note`
+    # cites "1,048 verdict rows … 33 skeptic labels" as the map's warrant, and on the 2026-09-02
+    # mcpolis build 71 verify files and 47 fragments were git-ignored and force-added by nothing.
+    # A fresh clone got the conclusion and could check no part of it.
+    #
+    # Named as DIRECTORIES, not expanded: `git add -f <dir>` takes the whole tree, the count is
+    # what an operator needs to see, and a 118-path command line is not copyable.
+    warrant = [d for d in (map_path.parent / "verify", map_path.parent / "build-fragments")
+               if d.is_dir() and any(d.iterdir())]
+    if present:
+        counts = ", ".join(f"{d.name}/ ({sum(1 for _ in d.rglob('*') if _.is_file())} files)"
+                           for d in warrant)
+        print("finalize: commit these with the map — "
+              f"git add -f {' '.join(str(p) for p in present + warrant)}\n"
+              "  (`-f` because a repo whose root .gitignore ignores `.coyodex/` refuses a plain "
+              "`git add`, and method.md requires the pre-index and provenance to ship with the map.)"
+              + (f"\n  The last of those are the map's WARRANT — {counts}. The note cites the "
+                 f"verdict rows as the reason to believe the map; without them a fresh clone has "
+                 f"the conclusion and can check no part of it." if warrant else ""))
+    if missing:
+        # NAME what is absent instead of quietly dropping it from the command. The filter above is
+        # right — `git add` on a non-existent path fails — but printing the survivors alone turns a
+        # missing artifact into a shorter, still-copyable line. A live build ran finalize before
+        # stamping provenance, and the hint it printed would have committed the map WITHOUT it: the
+        # exact omission the hint exists to prevent. The operator caught it by hand.
+        # NAME THE COMMAND for each, too. Telling a build to "produce them" without saying how
+        # cost a live run two extra finalize rounds: it re-ran finalize unchanged, got the identical
+        # complaint, and only then went hunting — provenance was, at the time, produced by a script
+        # in the coyodex clone that the shipped CLI does not install. It is `coyodex provenance
+        # stamp` now, and the hint says so.
+        how = {"provenance.json": "coyodex provenance stamp .",
+               "preindex.json": "coyodex preindex . --report"}
+        print(f"finalize: NOT in that command, because {'it does' if len(missing) == 1 else 'they do'}"
+              f" not exist yet — {', '.join(str(p) for p in missing)}. method.md requires the "
+              f"pre-index and provenance to ship WITH the map; produce them and re-run finalize "
+              f"rather than committing the shorter line above.")
+        for p_missing in missing:
+            cmd = how.get(p_missing.name)
+            if cmd:
+                print(f"  {p_missing.name}: {cmd}")
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex finalize [--repo <root>] [--verdicts <file>]... "
               "[--emit-gate-block <file>] [--access-baseline <map-or-surface.json>] "
+              "[--no-write] "
               "[.coyodex/project-map.json]\n\n"
               "The pre-commit read: validate (--check-sources --check-coverage) + audit +\n"
               "anchor-drift (shape-only, and verdict-based when --verdicts is given). Writes\n"
@@ -967,11 +1051,18 @@ def main(argv: list[str] | None = None) -> int:
     verdicts: list[Path] = []
     gate_block_path: Path | None = None
     access_baseline: Path | None = None
+    #: Report-only. `finalize` OVERWRITES `.coyodex/finalize-report.{json,md}` on every run, and
+    #: the retro method sends a read-only reader at it — so reading a finished build's disposition
+    #: destroyed the record of the disposition being read. A reader can now see it without
+    #: replacing what the build left behind.
+    no_write = False
     positional: list[str] = []
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a == "--emit-gate-block":
+        if a == "--no-write":
+            no_write = True
+        elif a == "--emit-gate-block":
             i += 1
             if i >= len(argv):
                 print("ERROR: --emit-gate-block needs a value", file=sys.stderr)
@@ -1036,49 +1127,20 @@ def main(argv: list[str] | None = None) -> int:
     report = build_report(map_path, repo, verdicts, access_baseline)
     json_path = map_path.parent / f"{REPORT_STEM}.json"
     md_path = map_path.parent / f"{REPORT_STEM}.md"
-    json_path.write_text(report.to_json(), encoding="utf-8")
-    md_path.write_text(format_report(report), encoding="utf-8")
+    if no_write:
+        # Print what would have been written, so `--no-write` is a READ and not a silence.
+        print(format_report(report))
+        print(f"finalize: --no-write, so {md_path} and {json_path} are unchanged", file=sys.stderr)
+    else:
+        json_path.write_text(report.to_json(), encoding="utf-8")
+        md_path.write_text(format_report(report), encoding="utf-8")
     if gate_block_path is not None:
         import hashlib
         sha = hashlib.sha256(map_path.read_bytes()).hexdigest()
         gate_block_path.parent.mkdir(parents=True, exist_ok=True)
         gate_block_path.write_text(gate_block(report, sha) + "\n", encoding="utf-8")
         print(f"finalize: wrote the commit-message gate block to {gate_block_path}")
-    # The four artifacts the method says ship with the map, and whether git will actually take them.
-    # A live build ran `git check-ignore`, GOT the answer (`.gitignore:85:.coyodex/`), and then issued
-    # an un-forced `git add` two turns later that failed — shipping a map whose viewer symbol-search
-    # input (`preindex.json`) and provenance were left untracked. Naming the command removes the step
-    # where the operator has to remember the `-f`.
-    required = [map_path, map_path.with_suffix(".md"),
-                map_path.parent / "preindex.json", map_path.parent / "provenance.json"]
-    present = [p for p in required if p.exists()]
-    missing = [p for p in required if not p.exists()]
-    if present:
-        print("finalize: commit these with the map — "
-              f"git add -f {' '.join(str(p) for p in present)}\n"
-              "  (`-f` because a repo whose root .gitignore ignores `.coyodex/` refuses a plain "
-              "`git add`, and method.md requires the pre-index and provenance to ship with the map.)")
-    if missing:
-        # NAME what is absent instead of quietly dropping it from the command. The filter above is
-        # right — `git add` on a non-existent path fails — but printing the survivors alone turns a
-        # missing artifact into a shorter, still-copyable line. A live build ran finalize before
-        # stamping provenance, and the hint it printed would have committed the map WITHOUT it: the
-        # exact omission the hint exists to prevent. The operator caught it by hand.
-        # NAME THE COMMAND for each, too. Telling a build to "produce them" without saying how
-        # cost a live run two extra finalize rounds: it re-ran finalize unchanged, got the identical
-        # complaint, and only then went hunting — provenance was, at the time, produced by a script
-        # in the coyodex clone that the shipped CLI does not install. It is `coyodex provenance
-        # stamp` now, and the hint says so.
-        how = {"provenance.json": "coyodex provenance stamp .",
-               "preindex.json": "coyodex preindex . --report"}
-        print(f"finalize: NOT in that command, because {'it does' if len(missing) == 1 else 'they do'}"
-              f" not exist yet — {', '.join(str(p) for p in missing)}. method.md requires the "
-              f"pre-index and provenance to ship WITH the map; produce them and re-run finalize "
-              f"rather than committing the shorter line above.")
-        for p_missing in missing:
-            cmd = how.get(p_missing.name)
-            if cmd:
-                print(f"  {p_missing.name}: {cmd}")
+    _commit_hint(map_path)
     unran = [f"{l.name} ({l.status})" for l in report.legs if not l.ran]
     print(f"finalize: {report.verdict} — {report.blocking_total} blocking, "
           f"{report.advisory_total} advisory"

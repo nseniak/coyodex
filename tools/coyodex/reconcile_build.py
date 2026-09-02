@@ -42,6 +42,7 @@ Stdlib-only (the cli.py firewall).
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -391,9 +392,21 @@ def main(argv: list[str] | None = None) -> int:
     for line in coverage_report(m, doc):
         print("  WARN " + line, file=sys.stderr)
     bad = unmatched_rules | undeclared_rules
+    # COUNT THE IDS THAT RESOLVED TO NOTHING, not only the rules that matched nothing at all. A rule
+    # naming 190 ids of which 111 are absent still assigns the other 79, so it is not "matched
+    # NOTHING" and the summary called the whole run clean: on the 2026-09-02 mcpolis build the block
+    # directives carried 111 unresolvable rule ids and this line read "479 clean". The per-rule
+    # detail was printed above and scrolled past; the SUMMARY is the line a build reads.
+    unknown_ids = 0
+    for line in report:
+        m_ids = re.search(r"(\d+) id\(s\) are not in the map", line)
+        if m_ids:
+            unknown_ids += int(m_ids.group(1))
     print(f"  SUMMARY: {len(rules)} rule(s) — {len(rules) - len(bad)} clean, "
           f"{len(unmatched_rules)} matched nothing, "
           f"{len(undeclared_rules)} assign an undeclared target."
+          + (f"  {unknown_ids} NAMED ID(S) ARE NOT IN THE MAP and were assigned nothing — a rule "
+             f"that resolves SOME of its ids is not a clean rule." if unknown_ids else "")
           + ("" if not (unmatched or undeclared) else
              "  Re-run with --only-unmatched to see just those."), file=sys.stderr)
     total = sum(len(s["ids"]) for s in doc["set"])
