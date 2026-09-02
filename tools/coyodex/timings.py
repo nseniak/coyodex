@@ -212,7 +212,10 @@ def _repo_of(args: argparse.Namespace) -> str:
     deliberate statement, `.` by default is not)."""
     if args.repo is not None:
         return str(args.repo)
-    if Path.cwd().resolve() == COYODEX_HOME:
+    # ANYWHERE INSIDE the clone, not just its root. From `<clone>/tools` an omitted `--repo` filed
+    # the measurement at `<clone>/tools/.coyodex/…`, which is the same loss one folder deeper.
+    cwd = Path.cwd().resolve()
+    if cwd == COYODEX_HOME or COYODEX_HOME in cwd.parents:
         raise ValueError(
             f"--repo is required here. The current folder is the coyodex clone "
             f"({COYODEX_HOME}), and the default would file this measurement in the clone's own "

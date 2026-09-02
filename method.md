@@ -1189,12 +1189,15 @@ legitimately has many cross-group edges, so never judge the top cut by edge coun
 directory-derived = verified, cohesion-derived = inferred — a cross-directory product-area group has no
 single directory home, so it simply **omits `source`**, never fabricates one) → **cluster entities into Subdomains**
 (large domain models: the same recipe on the entity graph — by `SOURCE` directory first, then
-`RELATIONS` cohesion) → trace T6 + edge list (**including the `C→E` edges**: which component
-persists/writes/reads each entity) → **re-balance the grouping against the traced edges** (the
+`RELATIONS` cohesion) → **group T2 + T4 into T2b interfaces** (the surfaces only — their inputs
+T2 and T4 both exist by here, and the trace is their CONSUMER, so they must precede it) →
+trace T6 + edge list, **dooring each flow as it is written** (**including the `C→E` edges**: which
+component persists/writes/reads each entity) → **re-balance the grouping against the traced edges** (the
 grouping was cut edge-blind — run `coyodex balance`, fix or justify each finding; Phase 3.5 in
 parallel mode) → **measure test completeness against the finished inventory**
 (the last structural step — it reads the assembled nodes + flows: use cases, T4 entry points, T5
-entities, critical-path branches) → **group T2 + T4 into T2b interfaces** —
+entities, critical-path branches) → **the `Cn → Dn` MIGRATION half of T2b** (the surfaces
+themselves were authored before the trace, four steps up) —
 the LEAD's job. **AUTHOR THE SURFACES BEFORE THE TRACE, and do the migration after it.** T2b used to
 sit entirely at the end, on the reasoning that it needs the TRACED FLOWS for its consumer. Only half
 of it does. Authoring a surface needs T2 and T4 and nothing else, and both exist well before the
@@ -1673,9 +1676,21 @@ synthesis → parallel trace.**
   ```
   1. dispatch the test-completeness + deployment/ops backfill agents      <- FIRST, always
   2. THEN author the reconcile assignments while they run
+  3. THEN author the T2b SURFACES, before any trace launches
   ```
 
   Dispatch those agents before you start authoring.
+
+  **Step 3 is the outside edge, and it belongs HERE, not at the end.** Group T2 + T4 into the `In`
+  rows, author each surface's `kind` with the row, and let `ways_in` / `deps[].interfaces` travel
+  through `reconcile` like a use case's `entry_points` — their ids are minted at assembly. Only the
+  `Cn → Dn` MIGRATION waits for the trace, because it needs flows to migrate. The reason is the
+  consumer: the trace agents door their own steps, and they cannot do that against surfaces that do
+  not exist yet. Left to the end, this section was written behind its own consumer and every flow
+  was traced door-blind — measured on the 2026-09-01 argus build, **30 of 31 flows owed an opening
+  and 96 steps owed a door**, and a whole extra four-agent wave went on the retrofit, after the
+  agents that wrote those steps were gone. Hand each trace agent `coyodex contract doors` alongside
+  its trace contract, and the `In` rows with their `ways_in`.
 
   **Run every sub-flow name you PRESCRIBE past the naming heuristic before you dispatch it.** A slice
   brief that hands agents `SF20 — Validate and store the token` freezes a fused-goal name into a

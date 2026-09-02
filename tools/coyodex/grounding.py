@@ -40,7 +40,7 @@ USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-tra
        coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
                                [--out <fragment.json>] [--json] [--partial]
                                [--note <text> | --note-file <path> | --keep-note]
-                               [--map <project-map.json>]
+                               [--note-cites-other-runs] [--map <project-map.json>]
 coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--map <map>] [--json]
        coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
        coyodex grounding by-element --worklist <audit.json> --verdicts <raw.json>... \\
@@ -70,7 +70,13 @@ applied). Writes a `{"grounding": {...}}` build fragment, or prints it with --js
 It REFUSES rather than guess:
   - a verdict whose claim is not in the pinned worklist  -> the worklist is the wrong snapshot
   - a worklist claim with no verdict at all              -> the pass did not challenge everything
-Both are the "gate did not run" failure wearing a different hat.
+  - a --note whose numbers contradict this record        -> the note was written against another run
+Both of the first two are the "gate did not run" failure wearing a different hat.
+
+`--note-cites-other-runs` is the escape for the third: it says the figures in the note are about
+OTHER runs, or are scoped to one theme rather than the whole pass. The refusal then becomes a
+warning. Pass it to `coyodex ship` too, which forwards it — without that, the refusal stops the
+prescribed closing sequence at step 6 of 12.
 
 The note: `--note` takes it inline, `--note-file` reads it from a file, `--keep-note` reuses the
 note already in `--out`. The last two exist because a re-run (the ordinary case — the record is
@@ -143,7 +149,12 @@ def multi_vote_agreement(rows: list[dict]) -> tuple[int, int, int]:
     anchor_disagree = 0
     for claim_rows in votes.values():
         voters = {str(r.get("skeptic", "")) for r in claim_rows if r.get("skeptic")}
-        if len(claim_rows) < 2 and len(voters) < 2:
+        # `or`, not `and`. Voters are read OFF the rows, so `len(rows) < 2` already implies
+        # `len(voters) < 2` and the `and` form reduced to "fewer than two rows" — counting a
+        # single skeptic's RE-VOTE of one claim, and a pair of rows carrying no `skeptic` field at
+        # all, as multi-voted. Both then produced anchor "disagreements" between one reader and
+        # itself. Unanimity is a fact about two or more READERS; two rows is not the same thing.
+        if len(claim_rows) < 2 or len(voters) < 2:
             continue
         multi += 1
         grounded = {str(r.get("grounded")).lower() for r in claim_rows}
@@ -203,10 +214,22 @@ def note_facts_block(worklist_claims: list[str], rows: list[dict], record: dict[
 
 
 _REDUNDANT_IN_NOTE = re.compile(r"(\d[\d,]*)\s+redundant\s+rows?", re.I)
-#: The note asserting the multi-vote agreement. Both spellings a real note used: "0 verdict
-#: disagreements" and "zero evidence-anchor disagreements".
+
+#: A note stating a disagreement COUNT: "0 verdict disagreements", "zero evidence-anchor
+#: disagreements", "anchor disagreements: 2".
 _AGREEMENT_IN_NOTE = re.compile(
-    r"\b(\d[\d,]*|no|zero)\s+(verdict|evidence[- ]anchor|anchor)\s+disagreements?", re.I)
+    r"\b(?:(\d[\d,]*|no|zero)\s+(verdict|evidence[- ]anchor|anchor)\s+disagreements?"
+    r"|(verdict|evidence[- ]anchor|anchor)\s+disagreements?\s*[:=]\s*(\d[\d,]*))", re.I)
+
+#: A note ASSERTING unanimity in words rather than a number — which is how the defect actually
+#: shipped: "the three security voters agreed on every anchor". A count regex could not see it, and
+#: a build that phrases its assurance this way is making exactly the claim that was wrong.
+#: Read as "0 disagreements of BOTH kinds", which is what the sentence means.
+_UNANIMITY_IN_NOTE = re.compile(
+    r"\b(?:agreed\s+on\s+every\s+anchor"
+    r"|unanimous(?:ly)?(?:\s+\w+){0,3}\s+(?:anchor|evidence|verdict)"
+    r"|(?:cited|read)\s+the\s+same\s+(?:anchor|evidence|line)"
+    r"|(?:every|all)\s+(?:multi|triple|double)-voted\s+claims?\s+agreed)", re.I)
 _COVERAGE_IN_NOTE = re.compile(r"(\d[\d,]*)\s+of\s+(?:those\s+|the\s+)?(\d[\d,]*)\s+"
                                r"(?:carry|have)\s+no\s+verdict", re.I)
 
@@ -253,31 +276,51 @@ def _note_contradictions(note: str, rows: list[dict], record: dict[str, object],
                 f"the note states {quoted} and this record says {live_total - live_done} of "
                 f"{live_total} — none of them. The note was written against an earlier pass; "
                 f"requote it from this run.")
-    # THE MULTI-VOTE AGREEMENT, the third shape. Same failure as the two above and the most
-    # dangerous, because it is an assurance rather than an arithmetic slip: "the three security
-    # voters agreed on every anchor" was published on a map where 2 of 80 triple-voted claims
-    # disagree. A note that states a disagreement count must state THIS pass's.
-    _multi, verdict_dis, anchor_dis = multi_vote_agreement(rows)
+    return problems
+
+
+def _agreement_contradictions(note: str, rows: list[dict]) -> list[str]:
+    """The multi-vote agreement the note asserts, against what this pass actually did.
+
+    ADVISORY, deliberately, where the two shapes above are blocking. The difference is what a regex
+    can know. "483 verdict rows over 161 redundant rows" is arithmetic: the number is stated, it is
+    about this pass, and it is wrong. An agreement claim is an ASSURANCE, and it shipped in words —
+    "the three security voters agreed on every anchor" — on a map where 2 of 80 triple-voted claims
+    disagree. Reading that reliably is a language problem, not a pattern problem: the count form
+    misses every word form, the word form guesses at scope, and both fire on an honest sentence
+    about an earlier run or one theme. Blocking on a guess would refuse correct notes, which is a
+    worse failure than the one being caught — the `NOTE FACTS` line already prints the true triple
+    right beside the author.
+
+    So this WARNS, loudly, with the real numbers. What is blocking is the arithmetic."""
+    multi, verdict_dis, anchor_dis = multi_vote_agreement(rows)
+    text = note or ""
     stated: dict[str, list[tuple[int, str]]] = {"verdict": [], "anchor": []}
-    for m in _AGREEMENT_IN_NOTE.finditer(note or ""):
-        raw = m.group(1).lower()
+    for m in _AGREEMENT_IN_NOTE.finditer(text):
+        raw = (m.group(1) or m.group(4) or "").lower()
+        which_raw = (m.group(2) or m.group(3) or "").lower()
         value = 0 if raw in ("no", "zero") else int(raw.replace(",", ""))
-        which = "verdict" if m.group(2).lower() == "verdict" else "anchor"
+        which = "verdict" if which_raw == "verdict" else "anchor"
         stated[which].append((value, m.group(0)))
+    # A worded assurance means zero of BOTH kinds, which is what the sentence claims.
+    for m in _UNANIMITY_IN_NOTE.finditer(text):
+        stated["verdict"].append((0, m.group(0)))
+        stated["anchor"].append((0, m.group(0)))
+    out: list[str] = []
     for which, actual in (("verdict", verdict_dis), ("anchor", anchor_dis)):
         claimed = stated[which]
         # ANY occurrence clears it, exactly as the redundant-row check allows: a note that compares
         # this pass with an earlier one legitimately states both numbers.
         if claimed and actual not in [v for v, _t in claimed]:
-            quoted = ", ".join(f"'{t}'" for _v, t in claimed)
+            quoted = ", ".join(f"'{t}'" for _v, t in dict.fromkeys(claimed))
             label = "verdict" if which == "verdict" else "evidence-anchor"
-            problems.append(
-                f"the note states {quoted} and this pass has {actual} {label} disagreement(s) — "
-                f"none of them. Over {_multi} multi-voted claim(s): {verdict_dis} where the voters "
-                f"returned different verdicts, {anchor_dis} where they agreed but cited different "
-                f"anchors. Quote the `NOTE FACTS` line rather than describing the pass from "
-                f"impression.")
-    return problems
+            out.append(
+                f"the note states {quoted} and this pass has {actual} {label} disagreement(s). "
+                f"Over {multi} multi-voted claim(s): {verdict_dis} where the voters returned "
+                f"different verdicts, {anchor_dis} where they agreed but cited different anchors. "
+                f"If the note is about another run or one theme, it is fine as it stands; if it is "
+                f"about THIS pass, quote the `NOTE FACTS` line.")
+    return out
 
 
 def live_claims_digest(claims: "Iterable[str]") -> str:
@@ -1562,6 +1605,10 @@ def main(argv: list[str] | None = None) -> int:
     # The note is a PERMANENT record and goes into the commit message, so a wrong number here
     # outlives every other artifact of the run, and the fix in each message is one word. That is the
     # bar for blocking: silent, durable, and cheap to correct.
+    # The agreement claim warns and never refuses — see `_agreement_contradictions` for why a regex
+    # may not block on an assurance. Printed first, so it is not buried under a refusal.
+    for line in _agreement_contradictions(note, rows):
+        print(f"WARNING: {line}", file=sys.stderr)
     note_faults = _note_contradictions(note, rows, record, live_claims)
     if note_faults and note_cites_other_runs:
         # The operator has ASSERTED that the numbers in the note are about other runs, or are

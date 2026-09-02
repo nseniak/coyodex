@@ -290,7 +290,7 @@ _COYODEX_SUBCOMMANDS = frozenset({
 })
 
 
-def _invokes(command: str, subcommand: str) -> bool:
+def _invokes(command: str, subcommand: str, output: str = "") -> bool:
     """Did this command actually RUN `coyodex <subcommand>`?
 
     Two failure modes, both found against the real corpus and both fixed here:
@@ -327,8 +327,10 @@ def _invokes(command: str, subcommand: str) -> bool:
         # make `ship` recognise itself twice, and on the note flag so a prepare-only run does not
         # get credit for the steps it does not reach.
         if subcommand != "ship" and (ship_named.search(seg) or ship_aliased.search(seg)):
-            runs = _SHIP_RUNS if re.search(r"--note-file\b", seg) else _SHIP_PREPARE_RUNS
-            if subcommand in runs:
+            # `output` is the call's captured result when the caller has it. A ship STOPS at its
+            # first failing step and says which, so crediting the whole plan for a ship that died
+            # at step 2 would score a failed close as a clean one.
+            if subcommand in _ship_ran(seg, output):
                 return True
     return False
 
@@ -1115,14 +1117,43 @@ _SHIP_RUNS = ("anchor-drift", "fix", "assemble", "grounding", "provenance", "lin
 #: note writes no record, so it must not satisfy the record-anchored assertions.
 _SHIP_PREPARE_RUNS = ("anchor-drift", "fix", "assemble", "grounding")
 
+#: `ship`'s plan IN ORDER, with repeats — `build_plan`'s steps, one subcommand each. Needed apart
+#: from the SET above because a stopped ship ran a PREFIX of it, and only the order says which.
+_SHIP_PLAN_ORDER = ("anchor-drift", "fix", "assemble", "grounding", "assemble", "provenance",
+                    "assemble", "lint-fragment", "grounding", "validate", "audit", "render",
+                    "finalize")
 
-def _ships_with_a_note(command: str) -> bool:
-    """A `coyodex ship … --note-file <path>` run — the form whose plan writes the record."""
+#: `run_plan`'s own failure line. `ship` STOPS at the first non-zero step and says which — so a
+#: ship that died at step 2 of 13 must not credit `finalize`. Gates are what stop a ship, so a
+#: stopped ship is the common case, not an edge one.
+_SHIP_STOPPED = re.compile(r"SHIP STOPPED at \[(\d+)/(\d+)\]")
+
+
+def _ship_ran(command: str, output: str) -> tuple[str, ...]:
+    """Which subcommands a `ship` invocation actually got through.
+
+    `output` is the call's captured result. Empty means unknown, and unknown credits the whole plan
+    — the optimistic default the assertions had before, kept so a scorecard run with no results
+    behaves as it did. A `SHIP STOPPED at [k/n]` line means steps 1..k-1 completed and step k
+    failed, so only that prefix is credited. `--help` prints usage and runs nothing at all."""
+    if re.search(r"(?:^|\s)--help(?:\s|$)", command):
+        return ()
+    full = _SHIP_RUNS if re.search(r"--note-file\b", command) else _SHIP_PREPARE_RUNS
+    stop = _SHIP_STOPPED.search(output or "")
+    if stop is None:
+        return full
+    ran = set(_SHIP_PLAN_ORDER[:max(0, int(stop.group(1)) - 1)])
+    return tuple(s for s in full if s in ran)
+
+
+def _ships_with_a_note(command: str, output: str = "") -> bool:
+    """A `coyodex ship … --note-file <path>` run that REACHED its `grounding write` step."""
     return any(_invokes(seg, "ship") and re.search(r"--note-file\b", seg)
+               and "grounding" in _ship_ran(seg, output)
                for seg in _segments(command))
 
 
-def _writes_the_grounding_record(command: str) -> bool:
+def _writes_the_grounding_record(command: str, output: str = "") -> bool:
     """Whether a command produces the grounding record.
 
     Two forms. `coyodex grounding WRITE` typed directly — `_invokes(cmd, "grounding")` matches the
@@ -1135,7 +1166,7 @@ def _writes_the_grounding_record(command: str) -> bool:
     this transcript" — about a build that wrote one."""
     typed = any(_invokes(seg, "grounding") and re.search(r"\bgrounding\s+write\b", seg)
                 for seg in _segments(command))
-    return typed or _ships_with_a_note(command)
+    return typed or _ships_with_a_note(command, output)
 
 
 #: Subcommands that READ the model and write only reports, and the git plumbing around a commit.
@@ -1303,9 +1334,13 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
     fragment or the map after it."""
     wrote_at: int | None = None
     edited_after: list[Evidence] = []
+    # The captured output per call. `ship` runs `grounding write` as one of its own steps, so this
+    # is what tells a ship that REACHED that step from one that stopped before it.
+    results_13 = results_by_tool_use_id(turns)
     for turn in turns:
         for call in turn.tool_calls:
-            if call.name == "Bash" and _writes_the_grounding_record(call.command):
+            if call.name == "Bash" and _writes_the_grounding_record(
+                    call.command, results_13.get(call.id, "")):
                 wrote_at = turn.index
                 # The anchor MOVED, so everything gathered against the previous one is no longer
                 # "after the record". Leaving it made the assertion contradict its own output: a
@@ -2785,9 +2820,28 @@ def _tokens(text: str) -> set[str]:
 #: persists across `;` and `&&`, so the relative path resolves against the TOOL's own map.
 #: `cd`/`pushd` into the coyodex clone. A newline is a terminator too: requiring `&&`/`;`/end-of-string
 #: missed 73 commands corpus-wide, since a multi-line Bash block separates by newline.
-_CD_INTO_CLONE = re.compile(r"(?:cd|pushd)\s+\S*coyodex/?\s*(?:&&|;|\n|$)")
-#: Any LATER `cd`/`pushd` re-anchors the shell, so what follows it is no longer inside the clone.
-_CD_ANYWHERE = re.compile(r"(?:cd|pushd)\s+\S+")
+#: `/coyodex` must sit on a PATH BOUNDARY. Without it, `cd /repo/argus-coyodex` — the mapped
+#: project, whose own name merely ends in the word — read as entering the clone, and every relative
+#: read after it was scored as reading the tool's map.
+_CD_INTO_CLONE = re.compile(r"(?:cd|pushd)\s+\S*(?:^|/)coyodex/?\s*(?:&&|;|\n|$)")
+#: Any `cd`/`pushd` re-anchors the shell, so what follows it is no longer where it was. `popd` and a
+#: BARE `cd` (which goes home) both leave the clone without naming a target, and both used to be
+#: invisible here — the flag stayed set for the rest of the transcript.
+_CD_ANYWHERE = re.compile(r"(?<![\w-])(?:(?:cd|pushd)(?:\s+\S+)?|popd)(?=\s|;|&|\||$)")
+#: A `cd` whose folder change belongs to a CHILD process, not to this shell: inside `( … )`, or in
+#: the body of a `bash -c` / `sh -c`. Matched over the text BEFORE the `cd`, so an unclosed `(` or a
+#: `-c` opener earlier in the command marks it.
+_CD_IN_A_CHILD_SHELL = re.compile(r"\((?![^()]*\))|(?:ba|z|k)?sh\s+(?:-\w+\s+)*-c\s+['\"]")
+
+
+def _blank_heredocs(command: str) -> str:
+    """`command` with every heredoc BODY replaced by spaces, keeping every character position.
+
+    Offset-preserving on purpose. The `cd` scan must not see a folder change written inside a
+    document (`cat > notes.md <<'EOF' … cd ~/Projects/coyodex … EOF` is text, not a command), while
+    the READ scan a few lines later must still see inside an interpreter heredoc. Deleting the body
+    would make the two scans disagree about where every later character is."""
+    return _HEREDOC.sub(lambda m: " " * (m.end() - m.start()), command)
 _RELATIVE_MAP_PATH = re.compile(r"(?<![\w/.])\.coyodex/")
 
 #: Text where a `.coyodex/` mention is not a path being READ: a heredoc body, an `echo`/`print`
@@ -2796,7 +2850,10 @@ _NOT_A_READ = (
     # A heredoc REDIRECTED INTO A FILE is inert text (a contract, a doc). One fed to an interpreter
     # (`python3 - <<'PY'`) is code that runs, and stripping those made the detector miss a live case:
     # a build cd'd into the clone and then had a python heredoc read a relative fragment path.
-    re.compile(r"(?:cat|tee)[^\n<]*>\s*\S+\s*<<'?\w+'?\n.*?\n\w+\n", re.S),
+    # The terminator may sit at END OF STRING: a command whose last line is `EOF` with no trailing
+    # newline is the normal shape when a heredoc closes the command, and requiring `\n` after it
+    # left the whole document body in view.
+    re.compile(r"(?:cat|tee)[^\n<]*>\s*\S+\s*<<'?\w+'?\n.*?\n\w+(?:\n|$)", re.S),
     re.compile(r"(?:echo|print|printf)[^\n]*"),
     re.compile(r"git\s+-C\s+\S+[^\n]*"),
 )
@@ -2825,8 +2882,12 @@ def assert_35_no_relative_map_path_after_cd_into_the_clone(turns: Sequence[Turn]
     So a running `inside` flag carries between calls, and the within-command scan is kept as well —
     a single command can enter the clone and read a relative path without any later call.
 
-    A `cd` whose target cannot be resolved (a variable, `-`, a subshell) clears the flag rather than
-    keeping it: this must not accuse a build whose folder the transcript cannot actually pin down."""
+    A `cd` that does not move THIS shell must not set the flag, and one that moves it away must
+    clear it. Both directions were wrong in the first cross-call version and both were found by an
+    adversarial review: a `cd` inside `( … )` or `bash -c '…'` changes only a child's folder, a
+    heredoc body is text and not a command at all, and a bare `cd` or a `popd` leaves the clone
+    without ever naming it. Each of those left the flag sticky for the whole rest of the transcript,
+    so ONE of them would accuse every later relative read in the build."""
     good: list[Evidence] = []
     bad: list[Evidence] = []
     inside = False           # does the shell currently stand in the coyodex clone?
@@ -2840,19 +2901,39 @@ def assert_35_no_relative_map_path_after_cd_into_the_clone(turns: Sequence[Turn]
     for turn in turns:
         for call in turn.calls_named("Bash"):
             cmd = call.command
+            # Heredoc bodies and multi-line quoted strings out FIRST: a `cd` in one is text a
+            # program will print or a document being written, not a folder change. Scanning the raw
+            # command let a `cat > notes.md <<'EOF' … cd ~/Projects/coyodex … EOF` poison the rest
+            # of the transcript.
+            #
+            # NOT `_shell_only`, which unwraps `bash -c '…'` first. That unwrap is right for "was
+            # this command RUN" and wrong here: a `bash -c` body's `cd` moves the CHILD's folder and
+            # leaves this shell where it was. Keeping the body quoted is what lets
+            # `_CD_IN_A_CHILD_SHELL` see the `-c` and skip it.
+            scannable = _blank_heredocs(cmd)
             # Walk the command in `cd`-delimited spans, carrying `inside` in and out. The span
             # before the first `cd` is governed by whatever the PREVIOUS call left behind, which is
             # the whole point of the flag.
-            spans: list[tuple[bool, str]] = []
+            # (state, start, end) — OFFSETS, so each span can be re-cut from the ORIGINAL command.
+            # `_reads_relative` applies `_NOT_A_READ`, which deliberately KEEPS an interpreter
+            # heredoc: a relative read inside `python3 - <<'PY'` is a real read. Only the `cd` scan
+            # wants heredocs gone, which is why the mask preserves offsets rather than deleting.
+            spans: list[tuple[bool, int, int]] = []
             pos = 0
             state = inside
-            for m in _CD_ANYWHERE.finditer(cmd):
-                spans.append((state, cmd[pos:m.start()]))
-                state = _CD_INTO_CLONE.match(cmd, m.start()) is not None
+            for m in _CD_ANYWHERE.finditer(scannable):
+                spans.append((state, pos, m.start()))
+                if _CD_IN_A_CHILD_SHELL.search(scannable, 0, m.start()):
+                    # A `cd` in a subshell or a `bash -c` body moves the CHILD's folder. This one
+                    # leaves the parent exactly where it was, so the state does not change at all.
+                    pos = m.end()
+                    continue
+                state = _CD_INTO_CLONE.match(scannable, m.start()) is not None
                 pos = m.end()
-            spans.append((state, cmd[pos:]))
+            spans.append((state, pos, len(scannable)))
             inside = state
-            for in_clone, text in spans:
+            for in_clone, start, end in spans:
+                text = cmd[start:end]
                 if not in_clone or not text.strip():
                     continue
                 ev = Evidence(turn.index, {"in_clone": text.strip()[:120]})
@@ -2997,16 +3078,23 @@ def _read_after_write_in_one_call(command: str, target: str) -> bool:
     because a gate's JSON is read by whatever tool the build reaches for, and enumerating those is
     the guessing this module avoids.
 
-    PROGRAM TEXT IS KEPT HERE, unlike everywhere else in this module. `_shell_only` exists so a
+    INTERPRETER TEXT IS KEPT HERE, unlike everywhere else in this module. `_shell_only` exists so a
     command NAMED inside a heredoc is not counted as a command RUN — the right rule for "was this
     invoked". It is the wrong rule for this question: the commonest way a build reads a gate's JSON
     is `python3 - <<'PY' … json.load(open('v.json')) … PY`, and stripping the body deletes the read
     itself. On the 2026-09-01 argus build that scored the run 0 of 1 for never reading a file it
-    read one statement later. Naming a path inside an interpreter body is not an ambiguous mention;
-    it IS the read."""
+    read one statement later. Naming a path inside an interpreter body IS the read.
+
+    A DOCUMENT heredoc is the opposite and is still stripped. `cat > report.md <<'EOF' … v.json …
+    EOF` is a markdown file being WRITTEN that happens to name the path; counting it as a read
+    credits the run for the very thing this assertion measures the absence of. `_NOT_A_READ[0]`
+    already draws exactly that line — a heredoc redirected into a file — so it is reused rather than
+    re-derived."""
     vars_ = _shell_vars(command)
+    # Strip only the heredocs that are being WRITTEN TO A FILE; keep the ones fed to an interpreter.
+    text = _NOT_A_READ[0].sub(" ", _unwrap_shell_c(command))
     segs = [_expand_shell_vars(x, vars_)
-            for x in re.split(r"&&|\|\||[;\n|]", _unwrap_shell_c(command)) if x.strip()]
+            for x in re.split(r"&&|\|\||[;\n|]", text) if x.strip()]
     wrote_at = next((i for i, seg in enumerate(segs)
                      if target in seg and any(target in t for t in _redirect_targets(seg))), None)
     if wrote_at is None:

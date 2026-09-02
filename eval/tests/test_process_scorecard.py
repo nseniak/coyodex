@@ -2845,3 +2845,69 @@ def test_8_does_not_credit_an_audit_json_nobody_opens():
     same mistake as a success."""
     turns = (make_turn(1, make_bash("$CX audit /repo/.coyodex/project-map.json --json > /tmp/a.json")),)
     assert P.assert_8_audit_read_as_json(turns).of == 0
+
+
+# --- the folder scan was wrong in BOTH directions (adversarial review, 2026-09-02) ---------------
+# A `cd` that does not move THIS shell must not set the flag, and one that moves it away must clear
+# it. The flag is sticky for the whole transcript, so one wrong set poisons every later read.
+
+def _cd_case(first: str) -> "tuple[int, int]":
+    turns = (make_turn(1, make_bash(first)),
+             make_turn(2, make_bash("coyodex validate .coyodex/project-map.json")))
+    a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
+    return a.observed, a.of
+
+
+def test_35_ignores_a_cd_that_only_moves_a_CHILD_shell():
+    assert _cd_case("( cd /Users/x/Projects/coyodex && git log -1 )") == (0, 0)
+    assert _cd_case("bash -c 'cd /Users/x/Projects/coyodex && git status'") == (0, 0)
+
+
+def test_35_ignores_a_cd_written_inside_a_document_heredoc():
+    assert _cd_case("cat > /tmp/n.md <<'EOF'\ncd ~/Projects/coyodex\nEOF") == (0, 0)
+
+
+def test_35_clears_on_a_bare_cd_and_on_popd():
+    """Both leave the clone without naming a target; both used to be invisible."""
+    assert _cd_case("cd /Users/x/Projects/coyodex\ncd") == (0, 0)
+    assert _cd_case("pushd /Users/x/Projects/coyodex\npopd") == (0, 0)
+
+
+def test_35_needs_a_path_boundary_before_coyodex():
+    """`argus-coyodex` is the MAPPED repo, whose name merely ends in the word."""
+    assert _cd_case("cd /repo/argus-coyodex") == (0, 0)
+
+
+def test_35_still_catches_the_real_thing_after_all_that():
+    assert _cd_case("cd /Users/x/Projects/coyodex") == (0, 1)
+
+
+def test_38_does_not_count_a_filename_named_in_a_DOCUMENT_heredoc():
+    """`cat > report.md <<'EOF' … v.json … EOF` is a markdown file being WRITTEN that happens to
+    name the path. Counting it credits the run for the very thing this assertion measures."""
+    cmd = ("$CX validate /repo/.coyodex/project-map.json --json > /tmp/v.json\n"
+           "cat > /tmp/report.md <<'EOF'\n"
+           "the gate output is in /tmp/v.json\n"
+           "EOF")
+    a = P.assert_38_written_json_is_read((make_turn(1, make_bash(cmd)),))
+    assert (a.observed, a.of) == (0, 1), a
+
+
+def test_a_ship_that_STOPPED_credits_only_the_steps_it_reached():
+    """`ship` stops at its first failing step and says which. Gates are what stop a ship, so a
+    stopped ship is the common case — crediting the whole plan scores a failed close as a clean."""
+    cmd = "$CX ship /repo --note-file /repo/note.md"
+    out = "=== ship [2/13] fix\nSHIP STOPPED at [2/13] fix apply-drift (exit 1)."
+    assert P._invokes(cmd, "anchor-drift", out)
+    for sub in ("grounding", "validate", "audit", "finalize"):
+        assert not P._invokes(cmd, sub, out), sub
+    assert not P._writes_the_grounding_record(cmd, out)
+
+
+def test_a_ship_help_runs_nothing():
+    assert not P._invokes("$CX ship --help", "anchor-drift")
+
+
+def test_an_unknown_outcome_still_credits_the_whole_plan():
+    """The optimistic default the assertions had before results were threaded through."""
+    assert P._invokes("$CX ship /repo --note-file /repo/note.md", "finalize")

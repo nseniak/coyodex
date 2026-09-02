@@ -968,17 +968,21 @@ def test_another_builds_figure_beside_this_pass_is_fine():
     assert not _write_with_note(note, rows, ["c1", "c2"])
 
 
-def _write_note_cli(note: str, extra: list[str] | None = None) -> tuple[int, str, bool]:
+def _write_note_cli(note: str, extra: list[str] | None = None,
+                    anchors: tuple[str, str, str] = ("a.py:1", "a.py:1", "a.py:1"),
+                    ) -> tuple[int, str, bool]:
     """Run `grounding write` end to end over one triple-voted claim. Returns
-    `(exit code, everything printed, whether the record was written)`."""
+    `(exit code, everything printed, whether the record was written)`.
+
+    `anchors` is one `evidence` per voter, so a test can make the three readers agree or disagree."""
     import contextlib, io
     from coyodex.grounding import main
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         v = tmp / "v.json"
         v.write_text(json.dumps({"grounding": [
-            {"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": s}
-            for s in ("a", "b", "c")]}), encoding="utf-8")
+            {"claim": "c1", "grounded": True, "evidence": ev, "skeptic": s}
+            for s, ev in zip(("a", "b", "c"), anchors)]}), encoding="utf-8")
         w = tmp / "w.json"
         w.write_text(json.dumps({"worklist": [{"claim": "c1"}]}), encoding="utf-8")
         buf = io.StringIO()
@@ -1051,20 +1055,63 @@ def test_a_missing_anchor_is_not_counted_as_agreement():
     assert multi_vote_agreement(rows) == (1, 0, 0)
 
 
+def _agreement(note: str, rows: list[dict]):
+    from coyodex.grounding import _agreement_contradictions
+    return _agreement_contradictions(note, rows)
+
+
 def test_a_wrong_anchor_unanimity_claim_is_reported():
     """The 2026-09-01 argus map shipped a note saying the three security voters agreed on every
     anchor. Two of its triple-voted claims disagree, and nothing computed the number."""
     rows = _voted("c1", [(True, "a.py:1"), (True, "a.py:9"), (True, "a.py:1")])
-    problems = _write_with_note("the voters agreed on every anchor: zero anchor disagreements.",
-                                rows, ["c1"])
-    assert problems, problems
-    assert "1 evidence-anchor disagreement(s)" in problems[-1], problems
+    out = _agreement("the voters agreed on every anchor: zero anchor disagreements.", rows)
+    assert out, out
+    assert "1 evidence-anchor disagreement(s)" in out[-1], out
+
+
+def test_the_sentence_that_actually_SHIPPED_is_caught_with_no_number_in_it():
+    """A count regex could not see it. The defect shipped in words: an assurance, not arithmetic."""
+    rows = _voted("c1", [(True, "a.py:1"), (True, "a.py:9"), (True, "a.py:1")])
+    assert _agreement("The three security voters agreed on every anchor.", rows)
+
+
+def test_the_agreement_claim_WARNS_and_never_refuses():
+    """Blocking on a language judgement would refuse honest notes — a worse failure than the one
+    being caught, since `NOTE FACTS` already prints the true triple beside the author. The two
+    ARITHMETIC shapes stay blocking; this one does not."""
+    rc, out, wrote = _write_note_cli("The three voters agreed on every anchor.",
+                                     anchors=("a.py:1", "a.py:9", "a.py:1"))
+    assert rc == 0, out
+    assert wrote, "an agreement claim must not stop the record being written"
+    assert "WARNING" in out and "disagreement" in out, out
+
+
+def test_a_single_skeptics_RE_VOTE_is_not_a_multi_voted_claim():
+    """Voters are read off the rows, so `len(rows) < 2 and len(voters) < 2` reduced to "fewer than
+    two rows" — counting one reader disagreeing with itself as a disagreement between readers."""
+    from coyodex.grounding import multi_vote_agreement
+    rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "s1"},
+            {"claim": "c1", "grounded": True, "evidence": "a.py:9", "skeptic": "s1"}]
+    assert multi_vote_agreement(rows) == (0, 0, 0)
+    assert not _agreement("zero anchor disagreements", rows)
+
+
+def test_rows_with_no_skeptic_field_are_not_multi_voted():
+    from coyodex.grounding import multi_vote_agreement
+    rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1"},
+            {"claim": "c1", "grounded": True, "evidence": "a.py:9"}]
+    assert multi_vote_agreement(rows) == (0, 0, 0)
 
 
 def test_the_right_agreement_numbers_pass():
     rows = _voted("c1", [(True, "a.py:1"), (True, "a.py:9"), (True, "a.py:1")])
-    assert not _write_with_note("1 evidence-anchor disagreements, 0 verdict disagreements.",
-                                rows, ["c1"])
+    assert not _agreement("1 evidence-anchor disagreements, 0 verdict disagreements.", rows)
+
+
+def test_the_colon_form_of_a_disagreement_count_is_read():
+    rows = _voted("c1", [(True, "a.py:1"), (True, "a.py:9"), (True, "a.py:1")])
+    assert _agreement("anchor disagreements: 0", rows)
+    assert not _agreement("anchor disagreements: 1", rows)
 
 
 def test_a_note_that_states_neither_number_is_not_second_guessed():

@@ -70,6 +70,17 @@ ANY_ID_KEY = r"[A-Z]+\d+"
 # shared one would quietly let every other family adjudicate a sub-domain it has no check for.
 OWNER_KEY = r"(?:SD|E)\d+"
 
+#: The 'Balance exceptions' vocabulary: `ID_KEY` plus the three ids the granularity family actually
+#: adjudicates. `UCn`/`HPn` come from `ID_KEY` (the flow-length band and the fused-goal name smell);
+#: `SFn` is the single-reference sub-flow, `BLKn` the thin block, `BRn` the rule in no block. All
+#: three were being read by the free-text `records_key` prefix test instead, which works on one key
+#: per line and DROPS every key on a merged `SF3, SF9: <why>` line — the exact form
+#: `recorded_line_warnings` tells the operator to write. So a record written on the tool's own
+#: advice silently stopped adjudicating, with nothing saying so.
+#: `BLK` precedes `BR` in the alternation for the usual first-match reason (`BLK1` also starts
+#: "B"); its own key rather than widening `ID_KEY`, for the reason `OWNER_KEY` states.
+BALANCE_KEY = r"(?:CAP|EP|UC|HP|BLK|BR|SF|R|C|E|I)\d+(?:/[a-z-]+)?"
+
 #: The 'Interface exceptions' vocabulary: `ID_KEY` plus `SF`. The doors family adjudicates a
 #: SUB-FLOW as well as a use case, because shared machinery can carry a step that names a pipe and
 #: the edit goes on the sub-flow, under its own id. Its own key rather than widening `ID_KEY`, for
@@ -116,7 +127,7 @@ class HeadingSpec:
 HEADINGS: tuple[HeadingSpec, ...] = (
     # Ids ride an anywhere-in-body scan here, so a list reads; the three LITERAL escapes
     # (`granularity`, `cadence`, `store`) are line-leading words and never merge.
-    HeadingSpec("Balance exceptions", True, ID_KEY),
+    HeadingSpec("Balance exceptions", True, BALANCE_KEY),
     HeadingSpec("Audit exceptions", True, ANY_ID_KEY, r"(?:\s*[:—-])", lead=AUDIT_LEAD,
                 merged_form="<check-name> <id>, <id>: <why>"),
     HeadingSpec("Drift exceptions", True),          # key = a whole quoted claim
@@ -143,6 +154,13 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # live build were unreadable the moment they were saved, and nothing read them anyway.
     HeadingSpec("Access baseline exceptions", True, DIR_KEY, SEP, strict_multi=DIR_KEY_STRICT,
                 merged_form="<path>, <path>: <why>"),
+    # Keyed by the element whose label is being adjudicated. Its own heading rather than an existing
+    # one because the question is unlike every other family's: not "is this finding acceptable" but
+    # "does this row's stated confidence stand". It exists because `verified` has TWO shipped
+    # meanings — `method/templates/project-map.template.md:9` says "read/traced", while
+    # `lint_fragment` says it is a statement about VOTES — so a map authored from the template and
+    # then checked against the votes has an honest third answer, and used to have nowhere to put it.
+    HeadingSpec("Confidence exceptions", True, ID_KEY),
     HeadingSpec("Sweep debt", True),                # key = a `path:line` anchor (free text)
     # Notes: machine-read too, but what they SAY is about the code, not about the map's own checks.
     HeadingSpec("Entry-point coverage", False),     # key = a kind + a contract word

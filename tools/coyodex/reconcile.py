@@ -592,7 +592,10 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
         hp, _warn = check_hierarchy(hier_parents, defined)
         problems.extend(f"reconcile: {p}" for p in hp)
     for di, de in enumerate(rec.drop_edges):
-        if de.repoint is not None and de.repoint not in elements:
+        # Against `all_elements`, NOT `_targets`. `_targets` adds the entry points so a `component`
+        # directive can address them; an `EPn` is not a valid edge endpoint, and widening this test
+        # with it would let a repoint aim an edge somewhere no edge can go.
+        if de.repoint is not None and de.repoint not in all_elements(m):
             problems.append(f"reconcile drop_edges[{di}]: repoint target '{de.repoint}' is not a "
                             f"defined element")
     return problems

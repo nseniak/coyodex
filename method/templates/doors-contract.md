@@ -75,18 +75,37 @@ lead; nothing above this line goes into an agent prompt.
 > redirect to a sign-in provider is THAT PROVIDER's screen, not the address that issued it. Picking
 > an already-drawn box to keep the box count down is choosing the wrong surface.
 >
+> **A use case with no `ways_in` has no authored answer.** Pick the surface whose OWN SENTENCE
+> describes where the actor stands. Only if none does is the map missing a surface.
+>
 > **If no surface fits, add NO door and SAY SO in the report you hand back** — naming the flow, the
 > step, and what the person is really standing at. There is no field for it and you must not invent
 > one. An invented door is worse than a missing one: the next reader cannot tell it was invented.
+>
+> **A flow whose LAST step is the actor acting AGAIN (`Rn → Cn`) still takes a door** — an inbound
+> one — because it is a crossing like any other. It has no hand-off, and that is a smell worth
+> reading twice: the story stops mid-conversation, so say in your report whether it is traced to its
+> outcome or hands over to another use case.
+>
+> **Nothing OUTSIDE the step list changes.** A door is a STEP. The surface's own `carries` rows are
+> authored separately and are not yours to touch.
+>
+> **A door is not only a way IN, and the direction is read off the INSIDE end** — never off whose
+> surface it is. `Cn → In` and `In → Rn` are the product reaching OUT; `Rn → In` and `In → Cn` are
+> the story coming IN. Both are commonly present on one surface (a request and its answer), and
+> **neither maps to `side`**: the files a product writes are OUR surface written OUT through, and a
+> chat platform is SOMEONE ELSE'S surface stories arrive IN from. Do not read `side` to decide a
+> direction, and do not change `side` because of one.
 >
 > **An actor reaching a DEPENDENCY or a stored RECORD is a crossing too** (`Rn → D7`, `Rn → E3`) and
 > takes the same treatment.
 >
 > **Name the surface, never the thing standing on it — and a dep and an actor differ.** A step
-> reaching an outside SERVICE names the surface and the dep is DROPPED: `C12 → D7` becomes
-> `C12 → I7`. A step reaching an ACTOR names the surface and the actor is KEPT: `C43 → R1` becomes
-> `C43 → I3 → R1`. A dep is a pipe the surface replaces; an actor is somebody the surface stands in
-> front of.
+> reaching an outside SERVICE names the surface, and the dep is then DERIVED rather than drawn:
+> `C12 → D7` becomes `C12 → I7`. A step reaching an ACTOR names the surface and the actor is KEPT:
+> `C43 → R1` becomes `C43 → I3 → R1`. A dep is a pipe the surface replaces; an actor is somebody the
+> surface stands in front of. Without either, a reader sees the PIPE and not the door — a flow that
+> draws `web browser` as its only outside box is naming the thing this rule tells you never to name.
 >
 > ## Which phrase goes where
 >

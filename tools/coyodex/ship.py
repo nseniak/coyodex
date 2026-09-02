@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Callable
 
 USAGE = """usage: coyodex ship <repo> [--note-file <path>] [--partial] [--keep-note]
+                    [--note-cites-other-runs]
                     [--access-baseline <map-or-surface.json>]
                     [--worklist <audit.json>] [--reconcile <file>]
                     [--verdicts <raw.json>]... [--fragments <dir>]
@@ -43,8 +44,13 @@ verify/gate-block.md.
 Two phases, split where the ONE judgement input sits:
   no --note-file : anchor-drift, apply-drift --to-reconcile, assemble, grounding report —
                    then stop, so the note is written FROM the report.
-  --note-file    : the full tail through finalize. --partial / --keep-note forward to
-                   `grounding write`; --access-baseline forwards to `finalize`.
+  --note-file    : the full tail through finalize. --partial / --keep-note /
+                   --note-cites-other-runs forward to `grounding write`;
+                   --access-baseline forwards to `finalize`.
+
+--note-cites-other-runs says the figures in the note are about OTHER runs, or are scoped
+to one theme. `grounding write` REFUSES a note whose numbers contradict its own record;
+without this flag that refusal stops ship at step 6 of 12 with no way past it.
 """
 
 #: The subcommand names a Step may use — the same names `coyodex <cmd>` dispatches on.
@@ -72,6 +78,10 @@ class ShipInputs:
     note_file: Path | None
     partial: bool
     keep_note: bool
+    #: Forwarded to `grounding write`. Without it a note whose numbers are about ANOTHER run kills
+    #: `ship` at step 6 of 12, and the operator's only route is to abandon the prescribed path and
+    #: hand-run the remaining seven steps — the failure `run_plan`'s "NOT RUN:" line exists to stop.
+    note_cites_other_runs: bool
     access_baseline: Path | None
 
 
@@ -79,6 +89,7 @@ def derive_inputs(repo: Path,
                   note_file: Path | None = None,
                   partial: bool = False,
                   keep_note: bool = False,
+                  note_cites_other_runs: bool = False,
                   access_baseline: Path | None = None,
                   worklist: Path | None = None,
                   reconcile: Path | None = None,
@@ -113,6 +124,7 @@ def derive_inputs(repo: Path,
         header=frag_dir / "header.json", md=out / "project-map.md",
         gate_block=out / "verify" / "gate-block.md",
         note_file=note_file, partial=partial, keep_note=keep_note,
+        note_cites_other_runs=note_cites_other_runs,
         access_baseline=access_baseline)
 
 
@@ -223,6 +235,8 @@ def build_plan(s: ShipInputs) -> list[Step]:
         write_argv.append("--partial")
     if s.keep_note:
         write_argv.append("--keep-note")
+    if s.note_cites_other_runs:
+        write_argv.append("--note-cites-other-runs")
     finalize_argv: list[str] = ["finalize", str(s.map_path), "--repo", str(s.repo),
                                 *_verdict_flags(s), "--emit-gate-block", str(s.gate_block)]
     if s.access_baseline is not None:
@@ -321,7 +335,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     repo: Path | None = None
     note_file: Path | None = None
-    partial = keep_note = False
+    partial = keep_note = note_cites_other_runs = False
     access_baseline: Path | None = None
     worklist: Path | None = None
     reconcile: Path | None = None
@@ -335,6 +349,8 @@ def main(argv: list[str] | None = None) -> int:
             partial = True
         elif a == "--keep-note":
             keep_note = True
+        elif a == "--note-cites-other-runs":
+            note_cites_other_runs = True
         elif a == "--access-baseline":
             access_baseline = Path(next(it, ""))
         elif a == "--worklist":
@@ -362,6 +378,7 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 2
     inputs = derive_inputs(repo, note_file=note_file, partial=partial, keep_note=keep_note,
+                           note_cites_other_runs=note_cites_other_runs,
                            access_baseline=access_baseline, worklist=worklist,
                            reconcile=reconcile,
                            verdicts=tuple(verdicts) if verdicts else None,

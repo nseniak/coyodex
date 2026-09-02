@@ -11,6 +11,12 @@ as-is, and every build "copied" it by rewriting it. So the instruction is mechan
 3. Change nothing else. If a rule reads wrong for this repo, fix it HERE, once, so the next build
    inherits the fix instead of re-deriving it.
 
+**Two slots need a word about what goes IN them**, since the agent half no longer explains itself:
+
+- **«SERVES»** — the UC / CAP / HP / R ids whose behavior runs through these files, one line each
+  on what they need from this slice.
+- **«EXPECTED_COMPONENTS»** — the slice's E from the pre-index `granularity.per_dir`.
+
 **The slot that keeps being left empty is «SERVES».** Structural slices exist to serve the
 behavioral layer. The behavioral draft exists before this fan-out precisely so the slices can be cut
 to it; a brief that names no use case is a brief cut from the file tree, and the harvest then comes
@@ -25,9 +31,7 @@ lead; nothing above this line goes into an agent prompt.
 
 > You are harvesting «SLICE_KIND» facts for a coyodex codebase map.
 >
-> **This slice serves: «SERVES».** Fill that slot with the UC / CAP / HP / R ids whose behavior
-> runs through these files, one line each on what they need from you.
-> They are why the slice is cut this way. Where a
+> **This slice serves: «SERVES».** They are why the slice is cut this way. Where a
 > file matters to one of them, that is the fact worth returning; where it matters to none, say so
 > rather than padding the slice.
 > Read these files completely, then produce ONLY the rows below — the only file you may write is
@@ -39,13 +43,13 @@ lead; nothing above this line goes into an agent prompt.
 > that delegates returns prose instead of a fragment, and the whole slice has to be re-harvested.
 > You read the files and write the one fragment; no delegation.
 >
-> **Files:** «FILES».
+> **Files:** «FILES». **List a directory first, then read each file** — a slice read from the
+> file names alone returns components nobody opened.
 > **Background:** «BACKGROUND» — what the main agent already learned about this slice, handed
 > down so you don't re-derive it.
 >
 > **Expect roughly «EXPECTED_COMPONENTS» components for your
-> slice** — the lead fills that slot with the slice's E from the pre-index `granularity.per_dir`
-> (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
+> slice** (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
 > out far under, you are folding subsystem-shaped dirs into single components — make those
 > subsystems and recurse into their units; far over, you are splitting module-sized units.
 > For every row give `file:line` evidence and a confidence tag. Write **`inferred`** — `verified`

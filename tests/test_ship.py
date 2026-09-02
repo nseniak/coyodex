@@ -227,7 +227,7 @@ def _plan_argvs(out: Path, tmp: Path):
                    reconcile=out / "reconcile.json", worklist=out / "verify" / "worklist.json",
                    verdicts=tuple(sorted((out / "verify").glob("verdicts-*.json"))),
                    note_file=tmp / "note.txt", fragments=(), partial=False, keep_note=False,
-                   access_baseline=None)
+                   note_cites_other_runs=False, access_baseline=None)
     return {step.title: step.argv for step in build_plan(s)}
 
 
@@ -267,7 +267,7 @@ def test_a_file_that_STRADDLES_the_pin_is_dropped_too():
                        reconcile=out / "reconcile.json", worklist=out / "verify" / "worklist.json",
                        verdicts=tuple(sorted((out / "verify").glob("verdicts-*.json"))),
                        note_file=tmp / "note.txt", fragments=(), partial=False, keep_note=False,
-                       access_baseline=None)
+                       note_cites_other_runs=False, access_baseline=None)
         dropped = [p.name for p in post_pin_verdicts(s)]
     write = " ".join(next(a for t, a in argvs.items() if t.startswith("grounding write")))
     final = " ".join(next(a for t, a in argvs.items() if t.startswith("finalize")))

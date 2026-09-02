@@ -474,11 +474,11 @@ def subflow_refcount_warnings(m: ProjectModel) -> list[str]:
     # and until now the message offered nowhere to record having made it. Two of these survived four
     # validates on argus, unfixed and unrecordable, which is what keeps a CLEAN verdict out of
     # reach. Same heading and key shape as the rule-granularity nudge: this IS a granularity call.
-    kept = _recorded_line_keys(m, "balance exceptions")
+    kept = records.recorded_keys(m, "balance exceptions")
     out: list[str] = []
     for sf in m.subflows:
         n_refs = ref_counts.get(sf.id, 0)
-        if n_refs < 2 and not _records_key(kept, sf.id):
+        if n_refs < 2 and sf.id not in kept:
             out.append(f"{sf.id} ({sf.name}) is referenced {n_refs} time(s) — a sub-flow earns its "
                        "keep at ≥2 references; consider inlining it, or record "
                        f"'{sf.id}: <why it stands alone>' under a 'Balance exceptions' extras "
@@ -1428,7 +1428,11 @@ def check_rules_model(m: ProjectModel,
     # pass every other check here AND maximise the swept count the eval prints, so nothing else in
     # the pipeline notices. Advisory: fusion is a judgement, and a genuinely one-site-per-decision
     # area is legitimate; recording the block id under 'Balance exceptions' is how you say so.
-    granular = _recorded_line_keys(m, "balance exceptions")
+    # `recorded_keys`, not `_recorded_line_keys` + `_records_key`. The free-text prefix test reads
+    # ONE key per line and drops every key on a merged `BLK3, BLK9: <why>` line — which is the exact
+    # form `recorded_line_warnings` tells the operator to write. A record written on this tool's own
+    # advice silently stopped adjudicating, and nothing said so.
+    granular = records.recorded_keys(m, "balance exceptions")
     by_block: dict[str, list[BusinessRule]] = {}
     for r in m.rules:
         by_block.setdefault(r.block or "", []).append(r)
@@ -1443,7 +1447,7 @@ def check_rules_model(m: ProjectModel,
     # assembled map can judge.
     if m.blocks:
         unassigned = [r.id for r in m.rules
-                      if not (r.block or "").strip() and not _records_key(granular, r.id)]
+                      if not (r.block or "").strip() and r.id not in granular]
         if unassigned:
             warnings.append(
                 f"Rule(s) in no block: {_shown(unassigned, 12)} — the map has {len(m.blocks)} "
@@ -1459,7 +1463,7 @@ def check_rules_model(m: ProjectModel,
         singles = [r for r in anchored if len(r.sites) == 1]
         if (bid and len(anchored) >= _GRANULAR_BLOCK_MIN
                 and len(singles) >= len(anchored) * _GRANULAR_BLOCK_SHARE
-                and not _records_key(granular, bid)):
+                and bid not in granular):
             thin.append(f"{bid} ({len(singles)} of {len(anchored)})")
     if thin:
         warnings.append(
@@ -3178,14 +3182,21 @@ def _grounding_warnings(m: ProjectModel) -> list[str]:
         # linted at all: one sat 113 turns unread on argus. With no record there is nothing for the
         # label to be measured against, and `finalize`'s comparison leg cannot run either — so this
         # is the only place the map can be told that it is asserting without evidence.
-        # Narrowed to `verified`, which is the only value that can be WRONG here. `inferred` with
-        # no pass is honest — it is exactly what a map with no pass knows. `verified` with no pass
-        # is an assurance nothing supports, and it has NO third state to record: the remedy is to
-        # run the pass or to write `inferred`, so this line is deliberately unescapable and is
-        # allowlisted as such in `tests/test_method_contract.py`.
-        claimed = [getattr(el, "id", "?") for el in (*m.components, *m.rules, *m.deps,
+        # Narrowed to `verified`, the only value that can be WRONG here: `inferred` with no pass is
+        # exactly what a map with no pass knows.
+        #
+        # RECORDABLE, and it must be. "There is no third state" was the first reading and it is
+        # false, because `verified` has two shipped meanings: `method/templates/project-map.template
+        # .md:9` defines it as "read/traced" and its own example rows are `verified`, while
+        # `lint_fragment` defines it as a statement about VOTES. An author who followed the template
+        # is not wrong, and this repo's own map carries 145 such rows. Until the two definitions are
+        # reconciled in the method, an unescapable line here would fire on correct work.
+        excused = records.recorded_keys(m, "confidence exceptions")
+        claimed = [eid for eid in
+                   (getattr(el, "id", "") for el in (*m.components, *m.rules, *m.deps,
                                                      *m.subsystems, *m.subdomains, *m.interfaces)
-                   if str(getattr(el, "confidence", "") or "").strip() == "verified"]
+                    if str(getattr(el, "confidence", "") or "").strip() == "verified")
+                   if eid and eid not in excused]
         if claimed:
             out.append(
                 f"{len(claimed)} element(s) state `confidence: verified` and this map has NO "
@@ -3193,8 +3204,9 @@ def _grounding_warnings(m: ProjectModel) -> list[str]:
                 "field, so the label says what its author believed while reading as what a "
                 "checking pass proved, and here no pass ran. `lint-fragment` nudges an authoring "
                 "agent about this, but a fragment the LEAD writes by hand may never be linted at "
-                "all (one sat 113 turns unread). Run the grounding pass, or write `inferred`, "
-                "which is what the map actually knows.")
+                "all (one sat 113 turns unread). Run the grounding pass, write `inferred`, or "
+                "record '<id>: <why the label stands with no pass>' under a 'Confidence "
+                "exceptions' extras heading")
         claim_surface = len(l2_worklist_model(m))     # only needed for this message
         if claim_surface >= 20:
             out.append(f"No `grounding` record: this map's {claim_surface} L2 claims (the same "
@@ -4636,10 +4648,10 @@ def roleless_cd_verb_warnings(m: ProjectModel) -> list[str]:
     # justified these firings instead of fixing them — three decisions with nowhere to live, so the
     # line came back on every rebuild and on argus it was one of the advisories that made a CLEAN
     # verdict unreachable.
-    excused = _recorded_line_keys(m, "naming exceptions")
+    excused = records.recorded_keys(m, "naming exceptions")
     roleless = [f"{e.src} {e.verb} {e.dst}" for e in m.edges
                 if e.dst.startswith("D") and e.dst not in folded
-                and grammar.edge_role(e.verb) is None and not _records_key(excused, e.dst)]
+                and grammar.edge_role(e.verb) is None and e.dst not in excused]
     if not roleless:
         return []
     shown = _shown(roleless, 8)

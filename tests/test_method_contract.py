@@ -99,6 +99,7 @@ MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "persistence exceptions", "data owner exceptions", "access baseline exceptions",
     "unclaimed surfaces", "drift exceptions", "interface exceptions",
     "bucket vocabulary", "sweep debt", "naming exceptions",
+    "confidence exceptions",
 )
 
 
@@ -640,9 +641,6 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     # empty value silently read as "off the walk".
     "{} ({}) has no `happy_path` expectation": "answer it — `excluded` IS the recorded decision",
     "Role(s) with no `audience`: {}": "answer it — there is no third state for a role to be in",
-    "{} element(s) state `confidence: verified` and this map has NO":
-        "answer it — with no grounding pass, `inferred` is what the map knows and `verified` is an "
-        "assurance nothing supports; there is no third state to record",
     # Deliberately un-escapable: the whole point is that a suppressed count stays visible.
     "{} {}: {} → {} claims entity use the backbone doesn't": "author the edge; the safety net derives it",
     # The same shape one level down: this line IS the disclosure of an already-recorded exception,
@@ -1305,6 +1303,11 @@ PARTIAL_ID_REGISTRIES: dict[tuple[str, frozenset[str]], str] = {
         "separately, and teaching this one `R` would blank the actor-attribution check)",
     ("coyodex/records.py", frozenset({"BLK", "BR", "D", "S", "SD", "SF"})):
         "ID_KEY: the adjudication vocabulary — only the families that HAVE a recordable advisory",
+    ("coyodex/records.py", frozenset({"D", "S", "SD"})):
+        "BALANCE_KEY: ID_KEY plus `BLK`, `BR` and `SF`, for the 'Balance exceptions' family alone — "
+        "the granularity checks adjudicate a thin block, a rule in no block and a "
+        "single-reference sub-flow, none of which ID_KEY can key. Its own key rather than a wider "
+        "ID_KEY, for the reason IFACE_KEY states one entry down",
     ("coyodex/records.py", frozenset({"BLK", "BR", "D", "S", "SD"})):
         "IFACE_KEY: ID_KEY plus `SF`, for the 'Interface exceptions' family alone. Shared machinery "
         "can carry a step naming a pipe, and the edit goes on the SUB-FLOW under its own id, so that "
@@ -1436,3 +1439,37 @@ def test_the_skeptic_contract_sends_a_reader_to_a_guards_callers():
     """Reading the guard line alone confirmed a guard its only caller switches off, 2 votes to 1."""
     half = _contract_agent_half("skeptic-contract.md").lower()
     assert "call site" in half and "caller" in half, half[-600:]
+
+
+# --- an escape must survive the merge the tool itself advises (adversarial review, 2026-09-02) ----
+# `recorded_line_warnings` tells the operator to write each reason ONCE and name every element it
+# answers on that line. The id-keyed escapes read the line with a free-text PREFIX test, which reads
+# one key per line and drops every key on a merged list — so a record written on the tool's own
+# advice silently stopped adjudicating, with nothing saying so.
+
+def _map_with_record(heading: str, body: str):
+    from coyodex.model import ExtraSection, ProjectModel
+    m = ProjectModel(title="t", goal="g")
+    m.extras = [ExtraSection(heading=heading, body=body)]
+    return m
+
+
+def test_a_MERGED_balance_record_adjudicates_every_key_on_the_line():
+    from coyodex import records
+    m = _map_with_record("Balance exceptions",
+                         "- SF3, SF9, BLK2, BR7: one reason, four elements\n")
+    keys = records.recorded_keys(m, "balance exceptions")
+    assert {"SF3", "SF9", "BLK2", "BR7"} <= keys, keys
+
+
+def test_a_MERGED_naming_record_adjudicates_every_key_on_the_line():
+    from coyodex import records
+    m = _map_with_record("Naming exceptions", "- D3, D7, D9: nothing they do reveals a role\n")
+    assert {"D3", "D7", "D9"} <= records.recorded_keys(m, "naming exceptions")
+
+
+def test_the_confidence_escape_is_readable_under_its_own_heading():
+    from coyodex import records
+    m = _map_with_record("Confidence exceptions",
+                         "- C1, C2: read and traced by hand before the pass existed\n")
+    assert {"C1", "C2"} <= records.recorded_keys(m, "confidence exceptions")
