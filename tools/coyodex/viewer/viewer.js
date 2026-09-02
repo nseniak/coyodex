@@ -591,10 +591,27 @@ const CARD_DESC_FIELD = {
 function wantsSentence(wants) {
   const s = String(wants || '').trim();
   if (!s) return '';
-  const body = s.replace(/^to\b\s*/i, '').trim();   // `\b`, or a lone `To` would leave `To to`-era data mangled
-  if (!body) return '';
-  return body[0].toUpperCase() + body.slice(1);
+  // `Goal:` LEADS IT, and the sentence after it is the author's, untouched. Both halves of that are
+  // decisions, and both were got wrong first:
+  //
+  // THE LABEL, because a goal standing alone does not say it is one. "Find out what Meerbot does" is
+  // a sentence about nobody until a word in front of it says whose aim it is, and an actor's card has
+  // no other line to carry that.
+  //
+  // THE CASE IS NOT TOUCHED. The leading `to` used to be stripped and the next letter raised, which
+  // rewrote the author's grammar and broke on a SECOND infinitive: "to find out what Meerbot does,
+  // and to decide whether to sign up" came out as "Find out what Meerbot does, and to decide whether
+  // to sign up", which is not a sentence. Measured across the six mapped projects: 22 of the 28 goals
+  // open with `to`, and 4 of those carry a second one. Raising the letter alone was the next attempt,
+  // and it is unnecessary once a label leads the line — and unsafe in the other direction, since
+  // lowering it would eat the capital on "Mio set up for the whole team".
+  //
+  // Mixed case ACROSS maps costs nothing, because no screen shows two maps, and every one of the six
+  // is internally consistent: three write every goal with a capital and three write every goal
+  // without one.
+  return 'Goal: ' + s;
 }
+
 
 // What a card SAYS about one element: title, the reader's word for its type, the one sentence, and the
 // few extra pills its type earns.
@@ -6096,7 +6113,7 @@ const FOLD_NARRATIVE = {
 // breadcrumb two lines above is the page's title, and a second copy here says it twice.
 //
 // THE SAME BUILDER the element pages use (pageHeroHtml), and the SAME division of labour: the type and
-// the pills it earns ride the BREADCRUMB two lines above (crumbPillsHtml), so the hero holds only what is
+// the pills it earns ride the hero's own name row (elementPillsHtml), so this block holds only what is
 // left. Print them here too and the reader meets `subsystem` twice, twenty pixels apart, about one thing.
 // What is left is a dependency's bucket and roles, and a change badge in diff mode — for a subsystem or a
 // use case that is nothing at all, and the hero is its sentence alone.
@@ -6527,11 +6544,11 @@ function actorNodeId(name) {
 // Plain text, never a control. Clicking a type pill means "show this in context", and the context of the
 // page you are already on is the page you are already on. A control that looks live and does nothing
 // teaches a reader to distrust the ones that work.
-function crumbPillsHtml(id) {
+function elementPillsHtml(id) {
   const c = id ? cardFacts(id) : null;
   if (!c) return '';
-  return `<span class="crumbpill crumbpill-type">${esc(c.type)}</span>`
-    + (c.pills || []).map((p) => `<span class="crumbpill ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('');
+  return `<span class="ecard-pill">${esc(c.type)}</span>`
+    + (c.pills || []).map((p) => `<span class="ecard-pill ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('');
 }
 function stateTitle(s) {
   if (s.kind === 'context') return 'Dependencies';
@@ -6814,15 +6831,10 @@ function renderChrome(s) {
     seg.textContent = stateTitle(node);
     if (!cur) seg.addEventListener('click', () => go(node));
     crumb.appendChild(seg);
-    // …and on a page about ONE element, its card's pills ride beside the name. The name and its pills sit
-    // on one line on every card in the viewer; on the element's own page they used to be split across two
-    // rows with a rule between them, so the page drew the element in a shape no card uses. On the 629
-    // entity, component and process pages the row below held ONE word and nothing else — a 48px strip
-    // whose whole job was to say `entity`.
-    if (cur) {
-      const pills = crumbPillsHtml(pageElementId(s));
-      if (pills) seg.insertAdjacentHTML('afterend', pills);
-    }
+    // NO PILLS HERE. They rode the breadcrumb for a while, beside the last crumb, and the trail is the
+    // wrong home for them: it says WHERE YOU ARE, one step per level, and a word describing the thing
+    // at the end of it is not a step. They sit on the hero's name row now, which is the shape every
+    // card in the viewer already uses — the name, then what kind of thing it is.
   });
   // Every path through render() ends here, so this is the ONE place the URL has to be restated after a
   // screen is drawn. The identity test skips the drill animation's intermediate flashes, which render a
@@ -7190,25 +7202,42 @@ function featRulesHtml(ids) {
 // A plain `div`, never a `<header>`: the page's own top bar is styled by a bare `header` selector (dark
 // navy, flex row), and a semantic header here inherited all of it and rendered unreadable.
 function pageHeroHtml(o) {
-  // `lbl` NAMES the sentence. Standing alone under a breadcrumb, one line of prose does not say what
-  // kind of statement it is, and the two pages that lead with a goal (a feature's, an actor's) were
-  // read as leading with a description. The label rides the sentence rather than sitting over it, so
-  // it costs no line, and it stays on the recorded-nothing case too: what the slot IS does not depend
-  // on the map having filled it.
-  // `lbl` names the SENTENCE, `metaLbl` names the row of context under it. Same span, because they are
-  // the same kind of thing: a word saying what the line beside it is.
-  const lbl = o.lbl ? `<span class="page-hero-lbl">${esc(o.lbl)}</span>` : '';
-  // The NAME is not here: the breadcrumb's last item is the page's h1. What is left is what hung off
-  // that name — the pills it earns, the sentence saying what it is, and one line of context.
-  return '<div class="page-hero">'
-    + (o.pills ? `<p class="page-hero-pills">${o.pills}</p>` : '')
+  // THE NAME ROW: the element's own figure, its name, and the pills it earns. Every page about ONE
+  // element draws it, and it is the one place the hero repeats the breadcrumb on purpose — the
+  // breadcrumb is the app's chrome and reads as a path, so on a page whose body is a timeline or a
+  // picture nothing in the body said what you were looking at.
+  //
+  // A page with NO name to give (a Deployment arrow, an entry-point kind, the info pane's subject)
+  // keeps its pills on a row of their own, which is what every one of them drew before this. So the
+  // slot is optional and its absence costs nothing.
+  //
+  // The GLYPH is optional for a harder reason than taste: only two element kinds own a drawing of
+  // themselves — an actor is a figure or a hexagon, a feature is a sparkle. A decision area, a
+  // surface and a Deployment arrow have none, and neither does a colour work in their place (the map
+  // gives no tint to a feature or a decision area). So the row is built to READ without one, and the
+  // two kinds that have a figure hand it over.
+  const name = o.name
+    ? `<p class="page-hero-name">${o.glyph || ''}`
+      + `<span class="page-hero-subject">${esc(o.name)}</span>${o.pills || ''}</p>`
+    : (o.pills ? `<p class="page-hero-pills">${o.pills}</p>` : '');
+  // NO LABEL, of any kind, on any line of this block. Three louder shapes were built and dropped: an
+  // uppercase label riding each line, a label column beside them, and a lead word set into the
+  // sentence. The first two told the reader they could not tell a description from anything else on
+  // a page named after the thing being described. The third was real, and it had exactly one user —
+  // an actor's goal, which does need a word saying it is a goal. That word belongs to the SENTENCE,
+  // not to the slot: an actor's goal is drawn on six screens and only one of them is this hero, so
+  // `wantsSentence` carries it and every one of the six says the same thing.
+  //
+  // It also fixes what the slot got wrong: a lead word applied to the recorded-nothing case too, so a
+  // map that never said what an actor wants announced "Goal: This map does not say what this actor
+  // wants."
+  return '<div class="page-hero">' + name
     // `noDesc: false` = this page HAS no sentence by design (an entry-point kind is a bare word), as
     // opposed to a page whose sentence the map failed to record, which says so.
-    + (o.desc ? `<p class="page-hero-purpose">${lbl}${o.desc}</p>`
+    + (o.desc ? `<p class="page-hero-purpose">${o.desc}</p>`
               : o.noDesc === false ? ''
-              : `<p class="page-hero-purpose feat-empty">${lbl}${esc(o.noDesc || 'Nothing recorded.')}</p>`)
-    + (o.meta ? `<p class="page-hero-meta">${o.metaLbl
-        ? `<span class="page-hero-lbl">${esc(o.metaLbl)}</span>` : ''}${o.meta}</p>` : '')
+              : `<p class="page-hero-purpose feat-empty">${esc(o.noDesc || 'Nothing recorded.')}</p>`)
+    + (o.meta ? `<p class="page-hero-meta">${o.meta}</p>` : '')
     + '</div>';
 }
 // What this feature IS, in the three lines a reader needs before anything else.
@@ -7223,9 +7252,16 @@ function featureHeadHtml(capId) {
   // below now names every one of them on its boxes — the drivers on the happy-path lane, and since the
   // side stops moved under their own driver, the off-walk ones too. Two rows of the same names, the
   // second of which claims no order, is the duplication the rail was built to remove.
+  // THE SAME HERO THE ACTOR'S PAGE DRAWS, from the same function: this page and that one are the
+  // same kind of screen — one element, named, described, with its own board under it — and they had
+  // drifted into two shapes, one with a name and one without.
+  //
+  // No lead word. `Feature objective` used to ride the sentence and it earned nothing: the sentence
+  // already describes the feature the page is named after, which is not true of an actor's goal.
   return pageHeroHtml({
+    glyph: storyFeatureGlyphSvg(),
     name: f.name,
-    lbl: 'Feature objective:',
+    pills: elementPillsHtml(capId),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
   });
@@ -7744,14 +7780,19 @@ function actorHeroMetaHtml(actorName) {
 function actorSurfacesHtml(actorName) {
   // Gated on the map, not on the actor: a map that records no surface has no answer to give, and an
   // empty block under every actor would read as a gap in every one of them.
-  if (!HAS_INTERFACES) return '';
+  if (!HAS_INTERFACES) return null;
   const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
   // "Other" is a bucket, not a role (an actor the map never declared), so there is no id to match on
   // and nothing true to say. The page keeps its board and stops there.
-  if (!role || !role.id) return '';
-  const at = (side) => ifaceList().filter(
-    (i) => i.side === side && (i.actors || []).includes(role.id));
-  const ours = at('ours'), theirs = at('theirs');
+  if (!role || !role.id) return null;
+  // ORDERED BY THE WALK, the same rule the Interfaces view's shores use, so a surface sits in one
+  // place in the product's story wherever it is listed. Both shores are read, because WHICH SHORE a
+  // surface sits on is not what this page cuts by — see actorSurfaceDiagramHtml.
+  const mine = ifaceSorted('ours').concat(ifaceSorted('theirs'))
+    .filter((i) => (i.actors || []).includes(role.id));
+  const rows = { in: mine.filter((i) => i.opens !== 'out'),
+                 out: mine.filter((i) => i.opens === 'out') };
+  const ours = rows.in, theirs = rows.out;
   // NO SURFACE IS A REAL ANSWER for the product's own scheduled work — a timer or a boot hook is
   // inside the product and crosses nothing — and it is a plain absence for anybody else. The two
   // are different facts and get different sentences; one sentence for both would report the timer
@@ -7759,30 +7800,202 @@ function actorSurfacesHtml(actorName) {
   if (!ours.length && !theirs.length) {
     const inside = String(role.kind || '').trim().toLowerCase() === 'service'
       && String(role.audience || '').trim().toLowerCase() === 'internal';
-    return '<h3 class="card-group-head">Where they meet the product</h3>'
-      + '<p class="feat-empty">' + (inside
-        ? 'Nowhere. This is the product’s own work, running inside it, so it crosses no surface.'
-        : 'No surface in this map has this actor standing at it.') + '</p>';
+    return { count: 0, body: '<p class="feat-empty">' + (inside
+        ? 'Nowhere. This is the product\u2019s own work, running inside it, so it crosses no surface.'
+        : 'No surface in this map has this actor standing at it.') + '</p>' };
   }
-  const section = (title, rows) => rows.length
-    ? `<h3 class="card-group-head">${esc(title)}</h3>` + cardGridHtml(rows.map(ifaceCardHtml).join(''))
-    : '';
-  return section('Where they reach the product', ours)
-    + section('Where the product sends them', theirs);
+  return { count: mine.length, body: actorSurfaceDiagramHtml(actorName, role, rows) };
+}
+// WHICH FEATURES THIS ACTOR MEETS THROUGH ONE SURFACE. Both halves of the join are already on the
+// map and neither is enough on its own: the surface knows its use cases, and a use case knows the
+// feature it belongs to. Taking the surface's features straight off `iface.features` would answer a
+// different question — every feature ANYONE meets there — and on MCP Hero's dashboard that is six
+// features for a prospect who meets exactly one.
+//
+// TWO WAYS A USE CASE COUNTS, and the second is not the first restated:
+//
+//   they DRIVE it     -> the use case names this actor as its actor
+//   they are AT a DOOR -> a step of that use case crosses between this surface and this actor
+//
+// Only the first was asked at first, and it reported "not stated" on a surface the map has plenty to
+// say about. MCP Hero's Outgoing email is the case: the use case behind it is "Warn a member that a
+// server sign-in expired", whose actor is the UPKEEP JOB — the product's own timer sends the mail —
+// and two of its steps are `Outgoing email → Organization admin` and `Outgoing email → Team member`.
+// The admin never drives that story; the story arrives at them. Asking only who drives it makes the
+// page silent about the one thing that surface does for them.
+//
+// A DOOR STEP is a step with an element at one end and a ROLE at the other: the walk carries a role
+// as a NAME with no id (`srcId`/`dstId` null), which is how a role is drawn in every flow.
+//
+// NAMING NONE IS STILL A REAL ANSWER — a surface whose use cases neither name this actor nor door
+// onto them has nothing to report, and says so rather than borrowing somebody else's list.
+function actorSurfaceFeatures(actorName, iface) {
+  const doorsOnto = (uc) => (FLOWS_NARR[uc] || []).some((st) =>
+    (st.srcId === iface.id && !st.dstId && st.dst === actorName)
+    || (st.dstId === iface.id && !st.srcId && st.src === actorName));
+  // …AND HOW MANY OF THIS ACTOR'S USE CASES GO THROUGH IT, per feature. The column named features and
+  // stopped, which left the page's two sections unconnected: one is a list of use cases, the other
+  // said which features they belong to, and nothing said how many of THOSE use cases came through
+  // THIS door. The number is the join, and it is also the door's own door — clicking it opens that
+  // feature's use cases filtered to this actor, which is a screen the viewer already draws.
+  //
+  // NAMES ARE NOT LISTED HERE and the count is what stands in for them. Measured on MCP Hero: the
+  // Organization admin reaches 23 use cases through the dashboard across 6 features, and 23 names in
+  // a column beside a 101px card is a wall, not an answer.
+  const order = [];
+  const per = {};
+  for (const uc of (iface.useCases || [])) {
+    const n = GRAPH.nodes[uc];
+    if (!n) continue;
+    if (!(n.actors || []).includes(actorName) && !doorsOnto(uc)) continue;
+    const p = n.parent;
+    if (!p || !GRAPH.nodes[p] || GRAPH.nodes[p].kind !== 'capability') continue;
+    if (!(p in per)) { per[p] = 0; order.push(p); }
+    per[p] += 1;
+  }
+  return order.map((id) => ({ id, ucs: per[id] }));
+}
+// THE ACTOR'S OWN PICTURE OF THE OUTSIDE EDGE, read left to right: what crosses, the surface it
+// crosses at, and what this actor does there.
+//
+// IT IS NOT THE INTERFACES VIEW'S PICTURE FILTERED. That one puts the PRODUCT down the middle and
+// sorts the surfaces onto two shores of it, because its question is "where does this product stop".
+// The question here is a person's, so the answer runs outward from what reaches them.
+//
+// THE CUT IS BY DIRECTION, NOT BY WHOSE SURFACE IT IS, and that is a correction. It was cut on
+// `side` — the authored fact of who defines the surface — under headings that claim which way the
+// actor goes. Those are different questions, and the difference was drawn wrong on 4 of the 35
+// actor-surface rows across the six mapped projects: every one of them is Outgoing email, which is
+// OUR surface and so sat under "where they reach the product", with no way in at all and one
+// outbound sentence. Nobody reaches the product through the mail; the mail reaches them.
+//
+// `opens` is the derived answer and it is already on the surface: "in" when something outside
+// invokes an address of ours, "out" when the product is what starts the exchange. Cutting on it puts
+// the dashboard and the admin MCP on one side and the mail and the hosted sign-in on the other,
+// which is what the two headings have always claimed to say.
+//
+// NO ACTOR CARD. It drew this actor's figure, name and pill for the second time in the page body,
+// 230px of a 1366px stage, and its only other job was to give the wires a left-hand anchor. What
+// crosses takes that place — the fact the picture was missing, in the column the repetition held.
+//
+// ONE GRID, ONE ROW PER SURFACE. The three cells of a row have to sit at one height, and only a
+// shared row can promise that: independent columns line up at the top and drift apart by the first
+// card whose sentence wraps to a different number of lines.
+function actorSurfaceDiagramHtml(actorName, role, rows) {
+  let row = 1;
+  const cells = [];
+  const shore = (head, list, none) => {
+    cells.push(`<p class="asf-shore" style="grid-row:${++row}">${esc(head)}</p>`);
+    if (!list.length) {
+      cells.push(`<p class="ifd-none asf-none" style="grid-row:${++row}">${esc(none)}</p>`);
+      return;
+    }
+    for (const i of list) {
+      const r = ++row;
+      // WHAT CROSSES, in the map's own two words. `in` and `out` are read against the PRODUCT, which
+      // is the reading the surface's own page prints and the only one that stays true on a surface
+      // someone else owns: Google sign-in's two sentences are the product talking to Google, and
+      // neither of them is this actor sending or receiving anything.
+      const cross = ['in', 'out'].map((dir) => {
+        const what = crossingsOf(i, dir);
+        if (!what.length) return '';
+        // ONE LINE PER SENTENCE, each carrying its own records at the end of it, from the same
+        // renderer the Interfaces picture's labels use — the two screens draw the same field and must
+        // not disagree about how much of it fits or which records belong to which sentence.
+        return `<p class="asf-cross-line"><span class="asf-cross-dir">${dir}</span>`
+          + `<span class="ifd-what-lines">${crossingLinesHtml(what, i.id)}</span></p>`;
+      }).join('');
+      cells.push(`<div class="asf-crosscell" data-iface="${esc(i.id)}" style="grid-row:${r}">`
+        + (cross ? `<div class="asf-cross">${cross}</div>`
+                 : '<p class="ifd-none asf-none">The map records nothing crossing here.</p>')
+        + '</div>');
+      cells.push(`<div class="asf-cell" style="grid-row:${r}">${ifaceBoxHtml(i, role.id)}</div>`);
+      const feats = actorSurfaceFeatures(actorName, i);
+      // THE COUNT IS THE JOIN between this page's two sections, and it is a door: it opens that
+      // feature's use cases filtered to this actor.
+      cells.push(`<div class="asf-featcell" data-iface="${esc(i.id)}" style="grid-row:${r}">`
+        + (feats.length
+          ? `<div class="asf-feats">${feats.map((f) =>
+              `<button type="button" class="asf-feat" data-cap="${esc(f.id)}" `
+              + `title="Open ${esc(featureName(f.id))}: the ${f.ucs} use case`
+              + `${f.ucs === 1 ? '' : 's'} ${esc(actorName)} has there">`
+              + `${storyFeatureGlyphSvg()}<span>${esc(featureName(f.id))}</span>`
+              + `<span class="asf-feat-n">${f.ucs}</span></button>`).join('')}</div>`
+          : '<p class="ifd-none asf-none" title="This actor stands at this surface, but no use case '
+            + 'of theirs is drawn at it">Not stated</p>')
+        + '</div>');
+    }
+  };
+  shore('Where they reach the product', rows.in,
+        'No surface in this map is one this actor comes to.');
+  shore('Where the product reaches them', rows.out,
+        'The product starts no exchange that reaches this actor.');
+  return '<div class="ifd-wrap"><div class="asf-stage" id="asfstage">'
+    + '<svg class="ifd-wires" aria-hidden="true"><defs>'
+    + '<marker id="asf-arr" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="9" markerHeight="9" '
+    + 'markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
+    + '<path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
+    + '<p class="ifd-colhead asf-head-cross">What crosses</p>'
+    + '<p class="ifd-colhead asf-head-surf">Where they meet the product</p>'
+    + '<p class="ifd-colhead asf-head-feat">What they do there</p>'
+    + cells.join('') + '</div></div>';
+}
+function bindActorSurfaces(root, actorName) {
+  const stage = root.querySelector('#asfstage');
+  if (!stage) return;
+  const svg = stage.querySelector('svg.ifd-wires');
+  if (!svg) return;
+  // OFFSET geometry, not getBoundingClientRect: a render can arrive mid drill-animation, whose
+  // ancestor transform skews client rects box by box. Every cell's offsetParent is the stage.
+  const rightMid = (el) => [el.offsetLeft + el.offsetWidth, el.offsetTop + el.offsetHeight / 2];
+  const leftMid = (el) => [el.offsetLeft, el.offsetTop + el.offsetHeight / 2];
+  const paths = [];
+  const wire = (from, to, iid) => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', wireCurveD(from[0], from[1], to[0], to[1]));
+    path.setAttribute('marker-end', 'url(#asf-arr)');
+    path.dataset.iface = iid;
+    svg.appendChild(path); paths.push(path);
+  };
+  for (const box of stage.querySelectorAll('.ifd-box')) {
+    const iid = box.dataset.iface;
+    // WHAT CROSSES -> the surface it crosses at -> what this actor does there. Each wire is drawn
+    // only when the thing at its far end exists: a line into a sentence saying nothing is a line
+    // that promises an answer.
+    const cross = stage.querySelector(`.asf-crosscell[data-iface="${CSS.escape(iid)}"] .asf-cross`);
+    if (cross) wire(rightMid(cross), leftMid(box), iid);
+    const feats = stage.querySelector(`.asf-featcell[data-iface="${CSS.escape(iid)}"] .asf-feats`);
+    if (feats) wire(rightMid(box), leftMid(feats), iid);
+  }
+  // The same pick gesture the Interfaces view has, from the one function both call. No labels here.
+  bindSurfacePick(stage, paths, []);
+  bindMoreTails(stage);
+  bindCrossingRecs(stage);
+  // A FEATURE OPENS ITS USE CASES, FILTERED TO THIS ACTOR — the screen the count is counting, which
+  // the viewer already draws. `act` is what filters it.
+  stage.querySelectorAll('.asf-feat').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();   // a feature's door is not the card's pin
+    go({ kind: 'capability', cap: b.getAttribute('data-cap'), act: actorName });
+  }));
 }
 function actorPageHeroHtml(actorName) {
   const g = actorGroups().find((x) => x.actor === actorName);
   // A group is one role, or the "Other" bucket for an actor this map never declared. Other has no
   // role, so it has no kind and nothing it wants, and the hero says so rather than drawing empty.
   const role = g && g.roles.length === 1 ? g.roles[0] : null;
-  // No pills here: the actor's card pills — `actor`, and `staff` / `user service` / `internal
-  // service` where the side varies — ride the breadcrumb beside the name, read from the one
-  // function that decides them (crumbPillsHtml via cardFacts).
   return pageHeroHtml({
-    lbl: 'Actor objective:',
+    // The actor's own figure and their name, from the one function that draws a who — the same
+    // figure the cast card and the board head give them.
+    glyph: storyGlyphSvg(role && role.kind),
+    name: actorName,
+    // `actor`, and the side where it varies (`staff`, `user service`, `internal service`) — the SAME
+    // pills this actor's card shows, from the one function that decides them, so a card and the page
+    // one click later cannot name two different kinds of actor.
+    pills: elementPillsHtml(actorNodeId(actorName)),
     desc: role && role.wants ? mdInline(wantsSentence(role.wants)) : '',
     noDesc: 'This map does not say what this actor wants.',
-    metaLbl: 'Notes:',
+    // The role change reads as a sentence already ("Was Prospect until …", "Becomes …"), so it
+    // takes no lead word of its own.
     meta: actorHeroMetaHtml(actorName),
   });
 }
@@ -7917,10 +8130,6 @@ function journeyHeadHtml(glyph, name) {
   return '<div class="journey-actorhead">' + glyph
     + `<span class="journey-actorname">${esc(name || '')}</span></div>`;
 }
-function journeyActorHeadHtml(actorName) {
-  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
-  return journeyHeadHtml(storyGlyphSvg(role && role.kind), actorName);
-}
 function renderActorPage(actorName) {
   const { zones, offZones } = actorJourney(actorName);
   const onRail = zones.map((z) => ({ z, o: { actor: actorName } }));
@@ -7963,16 +8172,36 @@ function renderActorPage(actorName) {
   // The actor heads the board WHATEVER the lanes are, including for an actor whose every use case is
   // off the happy path (argus's Page owner is one): the figure says whose board this is, and that is
   // as true of a board with one lane as of a board with two.
+  // NO ACTOR HEAD ON THE BOARD ANY MORE. It drew this actor's figure and name at the top of the
+  // frame, one line under a hero that had just drawn the same figure and the same name — and it never
+  // said the thing a reader actually needed, which is that the boxes are USE CASES. The section's own
+  // heading says that now, so the board is just the board.
   const board = rail
-    ? `<div class="journey-board">${journeyActorHeadHtml(actorName)}`
-      + `${journeyRailHtml(hasPath, offLane, rail)}</div>`
+    ? `<div class="journey-board">${journeyRailHtml(hasPath, offLane, rail)}</div>`
     : '<p class="empty">This map records nothing this actor does.</p>';
-  diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${board}`
-    + `${actorSurfacesHtml(actorName)}</div>`;
+  const g = actorGroups().find((x) => x.actor === actorName);
+  const ucs = g ? g.ucs.length : 0;
+  const secs = [];
+  // ONE SENTENCE. It ran to two, and the second explained the circles under the line — which the
+  // board's own gutter already names, in the words "Off the happy path", eight pixels away.
+  let html = itemSectionHtml(secs, 'uc', 'Use cases', ucs,
+    'Every use case this actor drives or takes part in, in the order the happy path runs.', board);
+  // INTERFACES, the word the tab uses. `surface` is the everyday word for one of them and the two
+  // shore headings inside the picture still speak it; the section is named after the tab it belongs
+  // to, so a reader who wants the whole edge knows where to go.
+  const surf = actorSurfacesHtml(actorName);
+  if (surf) {
+    html += itemSectionHtml(secs, 'iface', 'Interfaces', surf.count,
+      'Where this actor meets the product, and which features they reach through each place.',
+      surf.body);
+  }
+  diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}`
+    + `${tabIndexHtml(secs)}${html}</div>`;
+  bindTabIndex(diagram.querySelector('.usecases-wrap'));
   bindActorPage(diagram, actorName);
-  // The surface cards are the only `data-key` cards on this page, and their door is that
-  // surface's own page — the same door the Interfaces list's cards open.
-  bindPlainCards(diagram, (id) => go({ kind: 'interfaces', iface: id }));
+  // The surfaces picture: its own wires, and the pick gesture the Interfaces view shares with it.
+  // Silent when this actor stands at none — the block is a sentence then, with no stage to bind.
+  bindActorSurfaces(diagram, actorName);
 }
 // ONE binder for both rails. The actor page and the feature page draw the SAME board out of the same
 // cells, so the clicks are wired once: a station opens the walk, a side stop opens that use case,
@@ -8694,8 +8923,7 @@ function fillAreaTouchLabel(lab, t) {
     });
     lab.appendChild(b);
   });
-  const rest = (t.entities || []).length - ids.length;
-  if (rest > 0) lab.appendChild(document.createTextNode(' +' + rest + ' more'));
+  lab.insertAdjacentHTML('beforeend', moreTailHtml((t.entities || []).length - ids.length));
 }
 // Does the story diagram draw on this map? ONE answer, read by the renderer, by renderOverview
 // (which hides the duplicate card grid when it does), and by the search / "show in context"
@@ -9152,11 +9380,45 @@ function bindProductLead() {
 // page's summary as well as its contents — a reader learns "15 rules, 7 entities" without scrolling
 // to find out. The count is optional per section, so the tabs that index untallied things (the
 // System tab's tables) are unchanged.
+// ONE SECTION OF AN ITEM PAGE. A page about one element is a stack of these, and each one has to
+// answer three questions on its own: what is this, how much of it is there, and what am I looking at.
+// The actor page answered none of them — its board carried the actor's own figure and name and
+// nothing else, so it said WHOSE page this was (which the hero one line above already said) and never
+// said the boxes were use cases.
+//
+// THE HEADING IS PAGE TEXT, ABOVE THE FRAME, and the frame holds only the content. Four shapes were
+// drawn and compared: this one, a panel with the heading on a strip inside the frame, the same with a
+// rail of section names down the left, and no frame at all. The frame says "this is one block and it
+// may scroll sideways"; the text above says what the block is. Splitting the two is what lets the
+// frame hold anything — the shape has to work for a card list as well as a picture, and a panel
+// header over a list of rules is a title bar on a thing that needs no title bar.
+//
+// The COUNT rides the title and the SENTENCE sits under it. The sentence is the part that was missing
+// everywhere: "Use cases" says what the section is, and only "every use case this actor drives or
+// takes part in" says what is in it and what was left out.
+//
+// Registers itself in `secs` for the pinned chip bar (`tabIndexHtml`), which is the page's contents
+// and its summary in one strip. Two sections is the fewest that index anything; below that the bar
+// draws nothing and this still works.
+function itemSectionHtml(secs, key, title, count, note, body) {
+  const id = 'itemsec-' + key;
+  secs.push({ id, title, count });
+  return `<section class="item-sec" id="${id}">`
+    + `<h2 class="item-sec-title">${esc(title)}`
+    + (count === '' || count == null ? '' : `<span class="item-sec-n">${esc(String(count))}</span>`)
+    + '</h2>'
+    + (note ? `<p class="item-sec-note">${esc(note)}</p>` : '')
+    + `<div class="item-sec-frame">${body}</div></section>`;
+}
 function tabIndexHtml(secs) {
   if (!secs || secs.length < 2) return '';
   return `<nav class="tab-index" aria-label="Sections">${secs.map((sec) =>
     `<button type="button" class="tab-index-chip" data-target="${esc(sec.id)}">${esc(sec.title)}`
-    + (sec.count ? `<span class="tab-index-n">${esc(String(sec.count))}</span>` : '')
+    // ZERO IS A COUNT, not a missing one. `sec.count ? …` dropped it, so a section holding nothing
+    // showed a bare chip while its own heading said `0` — the bar and the page disagreeing about the
+    // same number. Only an ABSENT count draws nothing, which is what the untallied tables pass.
+    + (sec.count === undefined || sec.count === null || sec.count === ''
+        ? '' : `<span class="tab-index-n">${esc(String(sec.count))}</span>`)
     + '</button>'
   ).join('')}</nav>`;
 }
@@ -9182,10 +9444,17 @@ function bindTabIndex(wrap) {
     // The line must clear the sections' `scroll-margin-top` (--tab-index-h + 8px), or a section you
     // JUST jumped to lands 8px below a 6px line and the chip that lights is the one ABOVE the one you
     // clicked. Kept a couple of pixels looser than the margin so sub-pixel rounding cannot flip it.
-    const line = nav.getBoundingClientRect().bottom + 12;
+    const navRect = nav.getBoundingClientRect();
+    const line = navRect.bottom + 12;
     let active = 0;
     sections.forEach((sec, i) => { if (sec && sec.getBoundingClientRect().top <= line) active = i; });
     chips.forEach((c, i) => c.classList.toggle('active', i === active));
+    // ATTACHED, or sitting in the flow. A sticky element has no CSS state of its own, so the one
+    // reading that can answer it is geometric: the bar is attached exactly when it has reached its
+    // own `top: 0` and stopped moving with the page. Half a pixel of tolerance, because a fractional
+    // scroll position leaves the two edges a hair apart at the moment they meet.
+    nav.classList.toggle('tab-index-stuck',
+                         navRect.top - wrap.getBoundingClientRect().top < 0.5);
   };
   wrap.addEventListener('scroll', spy, { passive: true });
   spy();
@@ -9951,23 +10220,6 @@ function ifaceActorCardHtml(rid) {
     pill: cardPillsHtml(actorSidePills(r.kind, r.audience)),
   });
 }
-function ifaceCardHtml(i) {
-  const arrow = IFACE_ARROW[ifaceFlowWord(i)] || '';
-  const ways = (i.waysIn || []).length;
-  const bits = [];
-  if (ways) bits.push(`${ways} way${ways === 1 ? '' : 's'} in`);
-  if (i.facing) bits.push(i.facing === 'operator' ? 'operator-facing' : 'user-facing');
-  // The SHAPE leads the pill row: "show me every API this product exposes" is a question a reader
-  // answered off the surface's NAME until now, and off nothing a machine could read.
-  const kind = i.kind
-    ? `<span class="ecard-pill" title="what shape this surface is">${esc(ifaceKindWord(i.kind))}</span>`
-    : '';
-  return plainCardHtml({
-    key: i.id, name: i.name, desc: i.what,
-    pill: kind + (arrow ? `<span class="ecard-pill" title="which way data crosses">${arrow}</span>` : ''),
-    count: bits.join(' · '),
-  });
-}
 // ── the PICTURE ──────────────────────────────────────────────────────────────────────────────────
 // THREE TRACKS: the surfaces we define, the product's edge, the surfaces we use. Read across, the
 // picture says where the product stops. Read down each side, it says the order the product's own
@@ -10031,7 +10283,7 @@ function ifaceActorGlyphSvg(kind) {
 // only number here and it measured the wrong thing. 91 addresses behind a dashboard against 10
 // behind a marketing site says which is bigger, and this page is not about size. The count is still
 // on the surface's own page, where "how big is this" is a fair question.
-function ifaceBoxHtml(i) {
+function ifaceBoxHtml(i, me) {
   // THE SHAPE, in the reader's words, beside the name. The glyph alone asked the reader to recognise
   // eight drawings; the word asks nothing. Both, because they do different work: the glyph is what
   // makes a column scannable at a glance, and the word is what makes it unambiguous when it matters.
@@ -10043,10 +10295,14 @@ function ifaceBoxHtml(i) {
   // surface, not places to go — they were buttons opening an actor's page and a dependency in the
   // tree, which put three kinds of target on one small card and made a fact read as somewhere to
   // click. The same split every other card on this viewer makes: the name leaves, the body pins.
+  // ONE CHIP MAY BE MARKED. On an actor's page every card is there BECAUSE that actor stands at it,
+  // and the other people at the same surface are context worth keeping — so the chips stay as they
+  // are and the reader's own actor is lit, rather than the rest being dropped.
   const chips = (i.actors || []).map((rid) => {
     const r = ROLE_BY_ID[rid] || {};
     const svc = (r.kind || '').trim().toLowerCase() === 'service';
-    return `<span class="ifd-chip-actor${svc ? ' ifd-chip-svc' : ''}">`
+    return `<span class="ifd-chip-actor${svc ? ' ifd-chip-svc' : ''}`
+      + `${rid === me ? ' ifd-chip-me' : ''}">`
       + `${ifaceActorGlyphSvg(r.kind)}${esc(r.name || rid)}</span>`;
   }).join('');
   const prov = (i.deps || []).map((d) => {
@@ -10086,9 +10342,9 @@ function ifaceDiagramHtml() {
   const col = (side, head) => {
     const rows = ifaceSorted(side);
     return `<div class="ifd-col ifd-col-${side}"><p class="ifd-colhead">${esc(head)}</p>`
-      + (rows.length ? rows.map(ifaceBoxHtml).join('')
+      + (rows.length ? rows.map((i) => ifaceBoxHtml(i)).join('')
                      : `<p class="ifd-none">${esc(side === 'ours'
-                         ? 'This map records no surface of the product’s own.'
+                         ? 'This map records no surface of the product\u2019s own.'
                          : 'This map records no outside service the product exchanges data with.')}</p>`)
       + '</div>';
   };
@@ -10128,6 +10384,115 @@ const IFACE_WIRE_GAP = 20;
 // How many records a label names before it says "+n more". Three, the same cap the Features
 // page uses on its own wire labels.
 const IFACE_LABEL_REC_CAP = 3;
+// THE SENTENCES A SURFACE RECORDS, MERGED PER DIRECTION. A surface records as many crossings as it
+// likes, and the Interfaces picture used to draw only the FIRST in each direction — on MCP Hero's
+// dashboard that silently dropped 2 of its 4. Joining them keeps every one and still draws at most
+// two wires. Hoisted out of that picture when an actor's page began drawing the same sentences: two
+// readings of one field is how two screens come to disagree about what crosses a surface.
+// ONE TAIL FOR EVERY CAPPED LIST. There were four of them — the crossing sentences, the records
+// beside them on an actor's page, the records on an Interfaces wire label, and the entities on a
+// Features wire label — built THREE different ways (a styled span, text inside a template, a bare
+// DOM text node) and drawn in TWO looks. One idea, four implementations, and the two a reader sees
+// side by side in the same box did not match.
+//
+// IT IS A DOOR WHERE THERE IS SOMEWHERE TO GO. A tail says "there is more of this"; the reader's
+// next move is to see the rest, and for a surface that is the surface's own page, which carries the
+// whole crossing table. Where no single page holds the rest — the entities a feature touches in a
+// data area — it stays plain text rather than pretending to lead somewhere.
+//
+// The size is INHERITED, so the tail matches whatever line it ends (12.5px on a sentence, 11.5px on
+// a record row); what is shared is the treatment, which is what made the two look unrelated.
+function moreTailHtml(hidden, iface, title) {
+  if (!(hidden > 0)) return '';
+  const text = `+${hidden} more`;
+  return iface
+    ? `<button type="button" class="more-tail" data-more-iface="${esc(iface)}"`
+      + `${title ? ` title="${esc(title)}"` : ''}>${text}</button>`
+    : `<span class="more-tail">${text}</span>`;
+}
+function bindMoreTails(root) {
+  root.querySelectorAll('.more-tail[data-more-iface]').forEach((b) =>
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();   // the tail's door is not the card's pin, nor the stage's unpin
+      go({ kind: 'interfaces', iface: b.getAttribute('data-more-iface') });
+    }));
+}
+function crossingsOf(i, dir) {
+  return (i.crossings || []).filter((c) => c.direction === dir && String(c.what || '').trim());
+}
+// THE RECORDS ONE CROSSING CARRIES, at the END OF ITS OWN SENTENCE and on the same line. They used
+// to be unioned across every crossing in a direction and drawn as one row underneath, and the map
+// does not hold them that way: `elements` sits on each crossing. Measured across the six maps, 15 of
+// the 17 (surface, direction) groups that record more than one sentence give those sentences
+// DIFFERENT records, so the union threw away a link the map states — and on 5 groups it listed
+// records belonging only to a sentence the cap hides, leaving a record on screen with no sentence it
+// answers to. MCP Hero's dashboard showed 6 of them.
+//
+// ON ITS OWN LINE, under the sentence it belongs to. That is a smaller move than it looks: what was
+// wrong was the UNION, not the line break — the records sat under the whole label holding every
+// sentence's, and which ones belonged to which sentence was unrecoverable. Run on after the sentence
+// instead, they read as more of the sentence at 11-12px; a hairline between crossings and a line of
+// their own is what makes each crossing a unit. The DATA GLYPH leads that line, so it says what kind
+// of thing it is naming before it names one — the same mark the Features page puts on stored data.
+//
+// Capped at three with its own tail, unchanged: a label is a glance, and the whole list is on the
+// surface's own page.
+function crossingRecsHtml(recs, iface) {
+  if (!recs.length) return '';
+  return `<span class="ifd-what-recs">${storyAreaGlyphSvg()}`
+    + recs.slice(0, IFACE_LABEL_REC_CAP).map((id) => {
+        const nm = (GRAPH.nodes[id] || {}).name || id;
+        return GRAPH.nodes[id]
+          ? `<button type="button" class="ifd-what-rec" data-rec="${esc(id)}">${esc(nm)}</button>`
+          : esc(nm);
+      }).join(', ')
+    + moreTailHtml(recs.length - IFACE_LABEL_REC_CAP, iface,
+        'Open this surface: every record that crosses it')
+    + '</span>';
+}
+// A record's door, and the sentence saying what it IS. Bound rather than written into the markup:
+// the tooltip is the APP'S, not the browser's `title` — a native tooltip's delay belongs to the
+// browser, about a second, and nothing here can shorten it. This one waits half of what an action
+// icon's does. Its words are `cardFacts`', so the tooltip and the record's own card cannot differ.
+function bindCrossingRecs(root) {
+  root.querySelectorAll('.ifd-what-rec[data-rec]').forEach((b) => {
+    const id = b.getAttribute('data-rec');
+    const facts = cardFacts(id);
+    const tip = (facts && facts.desc) ? facts.desc : 'Show ' + b.textContent + ' in context';
+    b.addEventListener('mouseenter', (ev) => scheduleActionIconTip(tip, ev, TEXT_TIP_DELAY_MS));
+    b.addEventListener('mousemove', moveActionIconTip);
+    b.addEventListener('mouseleave', hideActionIconTip);
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();      // the record's door is not the label's, nor the stage's unpin
+      showInContext(id);
+    });
+  });
+}
+// HOW MANY OF THEM A PICTURE SHOWS before it says "+n more". Two, on the rule the record list one
+// line below has always followed: a label on a diagram is a glance, and its full list is on the
+// surface's own page, one click away on the card's name.
+//
+// THEY WERE JOINED INTO ONE PARAGRAPH, with a space between them and nothing else — so on the four
+// labels that merge three or more, the reader got a wall with no seam to read it by. MCP Hero's
+// dashboard is the worst: 4 sentences, 327 characters, 124px tall at 320px wide.
+//
+// SPLITTING THEM IS NOT ENOUGH ON ITS OWN. Measured on that label: one line per sentence takes it to
+// 140px, and a count line above them to 160px — a fix for the parsing that makes the overlay bigger
+// than the thing being complained about. Capped at two it comes to 105px, smaller than today.
+//
+// "+n more" IS NOT THE OLD BUG COMING BACK. That bug drew only the FIRST sentence and said nothing
+// about the rest; 2 of the dashboard's 4 vanished silently. A label that states how many it is
+// holding back is a different thing. 5 of the 79 labels across the six maps show the marker.
+const IFACE_LABEL_WHAT_CAP = 2;
+function crossingLinesHtml(list, iface) {
+  if (!list.length) return '';
+  return list.slice(0, IFACE_LABEL_WHAT_CAP)
+      .map((c) => `<span class="ifd-what-line">${esc(String(c.what).trim())}`
+        + crossingRecsHtml(c.elements || [], iface) + '</span>').join('')
+    + (list.length > IFACE_LABEL_WHAT_CAP
+        ? `<span class="ifd-what-more">${moreTailHtml(list.length - IFACE_LABEL_WHAT_CAP, iface,
+             'Open this surface: every sentence it records, in full')}</span>` : '');
+}
 function bindIfaceDiagram(root) {
   const stage = root.querySelector('#ifdstage');
   if (!stage) return;
@@ -10168,83 +10533,21 @@ function bindIfaceDiagram(root) {
   // very box the reader had just picked, hiding the name and the people. Anchored, it overhangs the
   // middle and the far column instead — both dimmed while it shows, and neither is what the reader
   // is looking at. `x` is the wire's own end at the card; the side says which way to grow.
-  const label = (x, y, side, text, ids, iid) => {
-    if (!text) return;
+  const label = (x, y, side, list, iid) => {
+    if (!list.length) return;
     const lab = document.createElement('div');
     lab.className = 'ifd-elabel';
     lab.dataset.iface = iid;
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
-    lab.textContent = text;
-    // THE RECORDS THAT CROSS, under the sentence and each a door — the same treatment and the same
-    // cap the Features page gives a feature's records on its own wire labels, so a record named on a
-    // line looks and behaves the same on both diagrams. Capped at three with a "+n more" tail: a
-    // label is a glance, and its full list is on the surface's own page.
-    if (ids.length) {
-      const row = document.createElement('div');
-      row.className = 'ifd-elabel-recs';
-      // The DATA glyph leads the list, so the row says what kind of thing it is naming before it
-      // names any. The same drawing the Features page puts on a data area — one mark, one meaning,
-      // wherever stored data is named.
-      const mark = document.createElement('span');
-      mark.className = 'ifd-recmark';
-      mark.innerHTML = storyAreaGlyphSvg();
-      row.appendChild(mark);
-      ids.slice(0, IFACE_LABEL_REC_CAP).forEach((id, n) => {
-        if (n) row.appendChild(document.createTextNode(', '));
-        const nm = (GRAPH.nodes[id] || {}).name || id;
-        if (!GRAPH.nodes[id]) { row.appendChild(document.createTextNode(nm)); return; }
-        const bt = document.createElement('button');
-        bt.type = 'button';
-        bt.className = 'ifd-elabel-rec';
-        bt.textContent = nm;
-        // ITS MEANING, not the gesture. "Show X in context" restated the underline, and a reader
-        // hovering a record wants to know what the record IS. The sentence is `cardFacts`', so the
-        // tooltip and the record's own card cannot say different things. A record the map describes
-        // in no words falls back to naming the gesture, which beats an empty tooltip.
-        //
-        // THE APP'S OWN TOOLTIP, not the browser's `title`. A native tooltip's delay belongs to the
-        // browser — about a second, and nothing in this file can shorten it. This one is ours, and
-        // it is set to half the delay an action icon's waits.
-        const facts = cardFacts(id);
-        const tipText = (facts && facts.desc) ? facts.desc : 'Show ' + nm + ' in context';
-        bt.addEventListener('mouseenter', (ev) => scheduleActionIconTip(tipText, ev,
-                                                                       TEXT_TIP_DELAY_MS));
-        bt.addEventListener('mousemove', moveActionIconTip);
-        bt.addEventListener('mouseleave', hideActionIconTip);
-        bt.addEventListener('click', (ev) => {
-          ev.stopPropagation();      // the record's door is not the label's, nor the stage's unpin
-          showInContext(id);
-        });
-        row.appendChild(bt);
-      });
-      const rest = ids.length - IFACE_LABEL_REC_CAP;
-      if (rest > 0) row.appendChild(document.createTextNode(' +' + rest + ' more'));
-      lab.appendChild(row);
-    }
+    // THE RECORDS RIDE THEIR OWN SENTENCE, at the end of it — see crossingRecsHtml. They were a row
+    // of their own under the whole label, unioned across every sentence in the direction, which the
+    // map does not say and which left records on screen belonging to a sentence the cap had hidden.
+    lab.innerHTML = crossingLinesHtml(list, iid);
     lab.style.top = y + 'px';
     // Not a door, but not empty background either: a click on it must not clear the pin.
     lab.addEventListener('click', (ev) => ev.stopPropagation());
     stage.appendChild(lab); labels.push(lab);
-  };
-  // THE SENTENCES, MERGED PER DIRECTION. A surface records as many crossings as it likes, and the
-  // picture used to draw only the FIRST in each direction — on MCP Hero's dashboard that silently
-  // dropped 2 of its 4. Joining them keeps every one and still draws at most two wires.
-  const merged = (i, dir) => (i.crossings || [])
-    .filter((c) => c.direction === dir && String(c.what || '').trim())
-    .map((c) => String(c.what).trim()).join(' ');
-  // …and the RECORDS those crossings carry, unioned across the merged ones and de-duplicated. A
-  // crossing records single entities, never a data area — the model is explicit that an area name
-  // "cannot answer 'are the plan limits exposed?'". NAMING NONE IS A NORMAL ANSWER and covers most
-  // of them: a log line, a fetched web page and a source file all cross without being stored, and
-  // 12 of MCP Hero's 22 crossings and 12 of coyodex's 15 name nothing.
-  const mergedRecords = (i, dir) => {
-    const seen = [];
-    for (const c of (i.crossings || [])) {
-      if (c.direction !== dir) continue;
-      for (const e of (c.elements || [])) if (!seen.includes(e)) seen.push(e);
-    }
-    return seen;
   };
   const px = rule.offsetLeft + rule.offsetWidth / 2;
   for (const i of ifaceList()) {
@@ -10262,18 +10565,16 @@ function bindIfaceDiagram(root) {
     const dy = (dir) => (i.opens === dir ? -IFACE_WIRE_GAP : IFACE_WIRE_GAP);
     const draw = {
       in: (t) => { wire(edge(box, boxSide, dy('in')), [px, mid + dy('in')], i.id);
-                   label(edge(box, boxSide)[0], mid + dy('in'), i.side, t,
-                         mergedRecords(i, 'in'), i.id); },
+                   label(edge(box, boxSide)[0], mid + dy('in'), i.side, t, i.id); },
       out: (t) => { wire([px, mid + dy('out')], edge(box, boxSide, dy('out')), i.id);
-                    label(edge(box, boxSide)[0], mid + dy('out'), i.side, t,
-                          mergedRecords(i, 'out'), i.id); },
+                    label(edge(box, boxSide)[0], mid + dy('out'), i.side, t, i.id); },
     };
     // A DIRECTION WITH NOTHING CROSSING DRAWS NO WIRE. Guarding on the merged sentence rather than
     // drawing both and letting the label fall away: a wire with no label is a line the reader can
     // hover and get nothing from, and half the surfaces on both live maps carry one direction only.
     for (const dir of (i.opens === 'in' ? ['in', 'out'] : ['out', 'in'])) {
-      const t = merged(i, dir);
-      if (t) draw[dir](t);
+      const t = crossingsOf(i, dir);
+      if (t.length) draw[dir](t);
     }
   }
   // Each label is pushed clear of its own wire, the upper one up and the lower one down, so the two
@@ -10298,6 +10599,20 @@ function bindIfaceDiagram(root) {
     lab.classList.add(up ? 'ifd-tail-down' : 'ifd-tail-up');
     lab.style.top = (parseFloat(lab.style.top) + (up ? -(h / 2 + 6) : (h / 2 + 6))) + 'px';
   }
+  bindSurfacePick(stage, paths, labels);
+  bindMoreTails(stage);
+  bindCrossingRecs(stage);
+}
+// HOW A SURFACE IS PICKED, on BOTH pictures that draw one. The Interfaces view and an actor's page
+// draw different pictures out of the same cards, and the gesture is not part of the difference: hover
+// previews, click pins, the pin rides the address, and a click off a card puts it down. Written once
+// here rather than twice, because two copies of a rule this small drift silently — one of them keeps
+// the pin on a view change and the other does not, and nothing on screen says which page you are on.
+//
+// It knows only three things: the stage, the wires, and the labels. Everything picture-specific — how
+// a wire is routed, where a label lands, what sits in the middle — stays with the picture that draws
+// it. A picture with no labels passes an empty list.
+function bindSurfacePick(stage, paths, labels) {
   // Hover previews WHILE NOTHING IS PINNED; click PINS. The same gesture the Features page has, and
   // the same rule: a pin is the reader's explicit choice, so a stray pass of the pointer over
   // another box must not take the picture away from it.
@@ -10509,7 +10824,8 @@ function renderRules(s) {
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({
       name: g.name,
-      pills: g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : '',
+      pills: elementPillsHtml(g.id)
+        + (g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : ''),
       desc: g.purpose ? mdInline(g.purpose) : '',
       noDesc: 'No description recorded for this decision area.',
       meta: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
@@ -10706,6 +11022,9 @@ async function renderView(sArg, transient, seq) {
   // One actor's page — the journey line: their happy-path stations on one rail, zoned by feature,
   // with everything else they can do as side stops. The drill out of a cast card.
   if (s.kind === 'actor') {
+    // …and the surface this page was left pinned on. Same one `sel` field the Interfaces view uses,
+    // and guarded on its key inside the binder, so it can only ever be read as a surface id.
+    if (!transient && !pendingStoryPin) pendingStoryPin = storyPinFromKey((s.sels || [])[0]);
     renderActorPage(s.act);
     mainScene = null;
     renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;

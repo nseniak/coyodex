@@ -501,9 +501,18 @@ def test_the_scroll_spy_clears_the_sections_scroll_margin() -> None:
     line and the chip that lights is the one ABOVE the one you clicked."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     spy = js[js.index("const spy = () => {"):js.index("wrap.addEventListener('scroll', spy")]
-    assert "getBoundingClientRect().bottom + 12" in spy
+    # The bar's rect is read ONCE per pass and used twice — for this line, and for the attached test
+    # below it. Two reads of the same box in one frame is a second forced layout for no new answer.
+    assert "const navRect = nav.getBoundingClientRect();" in spy
+    assert "const line = navRect.bottom + 12;" in spy
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "scroll-margin-top: calc(var(--tab-index-h) + 8px)" in css      # 8 < 12
+    # ATTACHED, in the same pass. A sticky element has no CSS state of its own, so the reading is
+    # geometric: the bar is attached when it has reached its own top and stopped moving with the page.
+    assert "nav.classList.toggle('tab-index-stuck'," in spy
+    assert "navRect.top - wrap.getBoundingClientRect().top < 0.5" in spy
+    assert ".usecases-wrap .tab-index-stuck { box-shadow:" in css
+    assert "transition: box-shadow" in css
 
 
 def test_a_text_tab_remembers_where_it_was_scrolled_to() -> None:
@@ -640,28 +649,22 @@ def test_features_owns_the_actor_page_and_the_actors_view_is_gone() -> None:
     assert "'grid'" not in over, "the matrix setting is gone, not hidden"
     assert "renderRoleGrid" not in js
 
+def test_a_board_is_headed_by_its_subject_only_where_the_page_does_not_say_it() -> None:
+    """A board's head is icon-then-name on one line, over the gutter and above both lane names. It is
+    a SLOT — a feature's sparkle and a feature's name drop into the same markup an actor's figure and
+    name used to — and the one line shape was chosen so that it would.
 
-def test_the_actor_heads_their_own_board_above_both_lanes() -> None:
-    """The board opens with the actor themself — icon then name on one line, over the gutter and
-    above BOTH lane names.
-
-    The figure was first drawn ON the rail, centred on the line, which is where the eye wants it.
-    That placement said the wrong thing: it sat inside the happy-path band, so the band under it read
-    as somebody else's use cases. The page is everything ONE actor does, on the path and off it, so
-    the head titles the whole board and the two lanes hang under it.
-
-    Icon THEN name, on one line, is the hand every other title on this page is written in — a feature
-    box's name, a cast card's name. The first draft stacked the name under a 30px figure, a shape
-    nothing else on the page had, and a shape that only fits a figure. One line makes the head a
-    SLOT: a feature's sparkle and a feature's name drop in with nothing redrawn.
+    THE ACTOR'S BOARD NO LONGER USES IT, and that is the point of this test now. Its head drew this
+    actor's figure and this actor's name at the top of the frame, one line under a hero that had just
+    drawn the same figure and the same name, and it never said the thing a reader needed: that the
+    boxes on the board are USE CASES. The section around it says that now, in a heading and a
+    sentence, so the head had nothing left to say. A feature's board keeps its head, because that
+    page has no section wrapper yet.
 
     The head is deliberately NOT a fourth cell of the rail grid. A cell in row 1 would grow that row
     for every feature too, and each tinted box would open with 26px of empty colour above its name —
     measured. Outside the grid the boxes are untouched, and the head is sticky like the gutter under
     it, so it stays put while the board scrolls sideways.
-
-    The drawing is the cast card's — `storyGlyphSvg`, person or service in the actor tints — because
-    one figure means "who" wherever a who is drawn.
 
     With the figure gone from the rail, the upper lane's name takes the rail's own height: 15.75px of
     padding puts its 13.5px line box's middle at 22.5px, which is `top: 21px` plus half of
@@ -671,16 +674,23 @@ def test_the_actor_heads_their_own_board_above_both_lanes() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
     page = js[js.index("function renderActorPage(actorName) {"):
               js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
-    # The head opens the board, OUTSIDE the rail grid, and is drawn whatever the lanes are — an actor
-    # whose every use case is off the happy path still owns their board.
-    assert '<div class="journey-board">${journeyActorHeadHtml(actorName)}`' in page
+    # THE ACTOR'S BOARD IS BARE: the section heading above it names it, and the hero above that names
+    # the actor. Neither the page nor the helper it used survives.
+    assert "journey-actorhead" not in page and "journeyActorHeadHtml" not in js
+    assert '<div class="journey-board">${journeyRailHtml(hasPath, offLane, rail)}</div>' in page
     assert "journeyRailHtml(hasPath, offLane, rail)" in page, "…and the two lanes come from one place"
     assert "hasPath ? `<div" not in page and "hasPath ? '<span" not in page, \
-        "the head is not conditional on there being a happy path"
+        "the board is not conditional on there being a happy path"
     railfn = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
                 js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
-    assert "journey-actorhead" not in railfn, "…and it is not one of the gutter's cells"
-    assert "journey-actorhead" not in page, "…nor written by the page: it comes from the shared slot"
+    assert "journey-actorhead" not in railfn, "…and it never was one of the gutter's cells"
+    # THE SLOT ITSELF SURVIVES, with one caller left: a feature's board.
+    slot = js[js.index("function journeyHeadHtml(glyph, name) {"):
+              js.index("\nfunction ", js.index("function journeyHeadHtml(glyph, name) {") + 10)]
+    assert '<span class="journey-actorname">${esc(name || \'\')}</span>' in slot
+    assert js.count("journeyHeadHtml(") == 2, "the slot, and the one board still headed by its subject"
+    assert "journeyHeadHtml(storyFeatureGlyphSvg(), featureName(capId))" in js, \
+        "a feature's board is headed by the feature, in that slot and that hand"
     assert ".journey-actorhead { position: sticky; left: 0;" in css, \
         "sticky like the gutter, so the head stays put when the board scrolls sideways"
     # One LINE — icon then name — not a figure with a name under it.
@@ -697,20 +707,6 @@ def test_the_actor_heads_their_own_board_above_both_lanes() -> None:
     # The upper lane's name sits ON the rail, which is drawn at top 21 with height 3.
     assert ".journey-track::before" in css and "top: 21px;" in css and "height: 3px;" in css
     assert ".journey-gutter-on { grid-row: 2; padding-top: 15.75px; }" in css
-    # Same drawing as the cast card's, read off the same role record, and the name beside it.
-    head = js[js.index("function journeyActorHeadHtml(actorName) {"):
-              js.index("\nfunction ", js.index("function journeyActorHeadHtml(actorName) {") + 10)]
-    assert "ROLE_BY_NAME[(actorName || '').trim().toLowerCase()]" in head
-    assert "storyGlyphSvg(role && role.kind)" in head, "one hand for who, wherever a who is drawn"
-    # …and the markup is the SLOT, filled twice: the actor's figure and name here, a feature's sparkle
-    # and name on a feature's board. One line was chosen so the slot would take either.
-    slot = js[js.index("function journeyHeadHtml(glyph, name) {"):
-              js.index("\nfunction ", js.index("function journeyHeadHtml(glyph, name) {") + 10)]
-    assert '<span class="journey-actorname">${esc(name || \'\')}</span>' in slot
-    assert "journeyHeadHtml(storyGlyphSvg(role && role.kind), actorName)" in head
-    assert "journeyHeadHtml(storyFeatureGlyphSvg(), featureName(capId))" in js, \
-        "the feature's board is headed by the feature, in the same slot and the same hand"
-
 
 def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
     """A station on the rail is a dot and a title. Its position in the whole walk was drawn over the
@@ -855,7 +851,11 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     # The row is labelled like the sentence above it, from the same slot in the shared hero.
     hero = js[js.index("function actorPageHeroHtml(actorName) {"):
               js.index("\nfunction ", js.index("function actorPageHeroHtml(actorName) {") + 10)]
-    assert "metaLbl: 'Notes:'," in hero
+    # NO LABEL on that row any more. The whole hero dropped its labels (see the trail test): a
+    # description on a page named after the thing being described does not need a word saying it is
+    # one, and the role change already reads as a sentence — "Was Prospect until …", "Becomes …".
+    assert "metaLbl" not in js and "'Notes:'" not in js
+    assert "meta: actorHeroMetaHtml(actorName)," in hero
     # The role change is drawn from BOTH ends. It was read off the predecessor only, so the role who
     # turns into another said nothing about it: MCP Hero's Visitor page was silent about becoming an
     # Organization admin while the Organization admin page carried "was Visitor until ...".
@@ -863,6 +863,101 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     assert "lead: 'becomes'" in meta and "at(rel, 'at')" in meta
     assert "lead: 'was'" in meta and "at(rel, 'until')" in meta
     assert 'class="journey-inclink"' in meta and ".journey-inclink {" in css
+    # THE SURFACES BLOCK IS A PICTURE, and it is the ACTOR'S picture, not the Interfaces view's one
+    # filtered. That one puts the PRODUCT down the middle, because its question is "where does this
+    # product stop"; this one is asked a person's question — what crosses, where, and what they do
+    # there.
+    surf = js[js.index("function actorSurfaceDiagramHtml(actorName, role, rows) {"):
+              js.index("\nfunction ",
+                       js.index("function actorSurfaceDiagramHtml(actorName, role, rows) {") + 10)]
+    assert "cardGridHtml" not in surf, "the two card grids it replaced are gone, not kept beside it"
+    assert "function ifaceCardHtml" not in js, "…and so is the card builder they were the only caller of"
+    assert "bindActorSurfaces(diagram, actorName);" in js
+    # NO ACTOR CARD. It drew this page's own subject a second time in its body — figure, name and
+    # pill — and its only other job was to anchor the wires. What crosses holds that column now.
+    assert "asf-who" not in js and "asf-who" not in css
+    # THE CUT IS BY DIRECTION, NOT BY WHOSE SURFACE IT IS. `side` says who defines a surface; these
+    # headings claim which way the actor goes. Cutting on `side` was wrong on 4 of the 35 actor-
+    # surface rows across the six mapped projects, every one of them Outgoing email: our surface, no
+    # way in, one outbound sentence, filed under "where they reach the product".
+    page_fn = js[js.index("function actorSurfacesHtml(actorName) {"):
+                 js.index("\nfunction ", js.index("function actorSurfacesHtml(actorName) {") + 10)]
+    assert "i.opens !== 'out'" in page_fn and "i.opens === 'out'" in page_fn
+    assert "i.side === 'ours'" not in page_fn, "whose surface it is decides nothing here"
+    assert "shore('Where they reach the product', rows.in," in surf
+    assert "shore('Where the product reaches them', rows.out," in surf
+    assert surf.count("cells.push(`<p class=\"ifd-none asf-none\"") == 1, \
+        "an empty group says so under its own heading, rather than the heading vanishing"
+    # ONE GRID, ONE ROW PER SURFACE — the only thing that can promise the three cells of a row sit at
+    # one height. Independent columns line up at the top and drift apart at the first card whose
+    # sentence wraps to a different number of lines.
+    assert "style=\"grid-row:${r}\"" in surf and ".asf-stage { position: relative; display: grid;" in css
+    # WHAT CROSSES, from the ONE reader both pictures use, in the map's own two words. `in` and `out`
+    # are read against the PRODUCT — the reading the surface's own page prints, and the only one that
+    # stays true on a surface someone else owns.
+    assert "crossingsOf(i, dir)" in surf
+    # THE RECORDS BELONG TO ONE CROSSING, at the end of its own sentence — `elements` sits on each
+    # crossing, and the union across a direction threw that away. Measured: 15 of the 17 groups with
+    # more than one sentence give them different records, and 5 groups listed records belonging only
+    # to a sentence the cap hides. Neither picture unions them any more.
+    assert "mergedCrossingRecords" not in js
+    assert "crossingRecsHtml(c.elements || [], iface)" in js
+    # ONE LINE PER SENTENCE, CAPPED, from the renderer both pictures share — the two screens draw the
+    # same field and must not disagree about how much of it fits. They were joined into a paragraph
+    # with a space between them: 4 sentences and 327 characters on MCP Hero's dashboard, with no seam
+    # to read it by. Splitting alone made the label TALLER than the wall it replaced; capped at two it
+    # comes to 145px against 166px, and the tail says how many it is holding back.
+    assert "crossingLinesHtml(what, i.id)" in surf
+    assert "const IFACE_LABEL_WHAT_CAP = 2;" in js
+    assert js.count("crossingLinesHtml(") == 3, "the renderer, and the two pictures that call it"
+    # ONE TAIL COMPONENT, for all four capped lists in the viewer. They were built three ways and
+    # drawn in two looks, and the two a reader meets in the same box were the two that differed.
+    assert js.count("moreTailHtml(") == 4, \
+        ("the component, and the three lists that cap something: the crossing sentences, the records "
+         "one crossing carries, and the entities a feature touches in a data area. It was four lists "
+         "until the two record lists — one per picture, written twice — became one renderer")
+    assert "' more'" not in js and "more</span>`" not in js, "no list still writes its own tail"
+    assert ".more-tail { font: inherit; font-style: italic;" in css, \
+        "the size is inherited, so the tail matches the line it ends; the treatment is what is shared"
+    # IT IS A DOOR WHERE A PAGE HOLDS THE REST — the surface's own page carries the whole table.
+    assert "go({ kind: 'interfaces', iface: b.getAttribute('data-more-iface') });" in js
+    assert js.count("bindMoreTails(stage);") == 2, "both pictures wire it"
+    lines = js[js.index("function crossingLinesHtml(list, iface) {"):
+               js.index("\n}", js.index("function crossingLinesHtml(list, iface) {"))]
+    assert "list.slice(0, IFACE_LABEL_WHAT_CAP)" in lines
+    assert "moreTailHtml(list.length - IFACE_LABEL_WHAT_CAP, iface," in lines, \
+        "…and it SAYS it is holding some back: the bug this replaced dropped them in silence"
+    bind = js[js.index("function bindActorSurfaces(root, actorName) {"):
+              js.index("\nfunction ", js.index("function bindActorSurfaces(root, actorName) {") + 10)]
+    # EACH WIRE IS DRAWN ONLY WHEN THE THING AT ITS FAR END EXISTS: a line into a sentence saying
+    # nothing is a line that promises an answer.
+    assert "if (cross) wire(rightMid(cross), leftMid(box), iid);" in bind
+    assert "if (feats) wire(rightMid(box), leftMid(feats), iid);" in bind
+    assert "bindSurfacePick(stage, paths, []);" in bind, "no hover labels: the sentences are drawn"
+    # The features are THIS actor's, joined through their own use cases. Taking the surface's own
+    # `features` would answer a different question — every feature ANYONE reaches there, which on MCP
+    # Hero's dashboard is six for a prospect who reaches one. The COUNT beside each is the join
+    # between this page's two sections, and it opens that feature's use cases filtered to this actor.
+    feat = js[js.index("function actorSurfaceFeatures(actorName, iface) {"):
+              js.index("\nfunction ", js.index("function actorSurfaceFeatures(actorName, iface) {") + 10)]
+    assert "(n.actors || []).includes(actorName)" in feat and "iface.features" not in feat
+    assert "return order.map((id) => ({ id, ucs: per[id] }));" in feat
+    assert "go({ kind: 'capability', cap: b.getAttribute('data-cap'), act: actorName });" in bind
+    # …and DRIVING IT IS NOT THE ONLY WAY IN. The far-side list this whole block is filtered by is
+    # built from DOORS, so the features had to be found by the same rule that put the actor there.
+    # Asking only who drives it reported "not stated" on MCP Hero's Outgoing email, whose one use
+    # case the UPKEEP JOB drives and whose walk hands out to the admin and the member.
+    assert "!doorsOnto(uc)" in feat
+    assert "st.srcId === iface.id && !st.dstId && st.dst === actorName" in feat
+    assert "st.dstId === iface.id && !st.srcId && st.src === actorName" in feat
+    # The column head has to cover both directions, so it says MEET — the same word the middle column
+    # already uses for two-way contact — and not "reach", which only fits the half they drive.
+    # WHAT THEY DO THERE, and not "features they meet": the column names features but the number
+    # beside each is this actor's use cases through that door, which is the thing they do.
+    assert "What they do there" in js
+    assert "Features they meet there" not in js and "What they reach there" not in js
+    # ONE PICK GESTURE for both pictures, from one function — two copies of a rule this small drift.
+    assert js.count("bindSurfacePick(") == 3, "the helper itself, and the two pictures that call it"
     assert "root.querySelectorAll('.journey-inclink')" in js, "the other actor's page is still a click away"
     # …and an actor the happy path never touches (argus's Page owner) loses the upper lane entirely
     # rather than showing an empty one under a dashed line that cuts nothing.
@@ -1930,9 +2025,10 @@ def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
     of them (every entity, component and process) that block held ONE word and nothing else — a 48px
     strip saying `entity` between the page's title and its first sentence.
 
-    The pills now ride the breadcrumb after the name, and the block is not drawn when nothing is left in
-    it. The breadcrumb's last item IS the page's title, so this is the name and its pills on one line,
-    exactly as a card reads.
+    They ride the HERO's name row. They sat on the breadcrumb for a while, beside its last item, and
+    the trail is the wrong home for them: it says WHERE YOU ARE, one step per level, and a word
+    describing the thing at the end of it is not a step. The hero names its own subject now, so the
+    name and its pills sit on one line there, exactly as a card reads.
 
     THE SAME PILLS THE CARD SHOWS, from `cardFacts` — its type, and the few extras its type earns. Not
     the page's full detail: a dependency's card says `dependency` and `service`, while its page also
@@ -1961,11 +2057,16 @@ def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
         assert f"'{kind}'" in which, kind
     for pair in ("edge", "domedge", "bridge", "depedge", "libs", "bucketfold"):
         assert f"'{pair}'" not in which, f"{pair} is a pair or a fold, not one element"
-    pills = js[js.index("function crumbPillsHtml(id) {"):
-               js.index("\n}", js.index("function crumbPillsHtml(id) {"))]
+    pills = js[js.index("function elementPillsHtml(id) {"):
+               js.index("\n}", js.index("function elementPillsHtml(id) {"))]
     assert "cardFacts(id)" in pills, "the same pills the card shows, from the same function"
     assert "<button" not in pills, "plain text: the pill's destination is the page you are on"
-    assert "crumbPillsHtml(pageElementId(s))" in js, "drawn on the LAST crumb, which is the page's title"
+    assert "crumbPillsHtml" not in js and "crumbpill" not in js and "crumbpill" not in css, \
+        "the trail draws none of them"
+    # Every page about one element asks that one function; a surface has no node to ask it about and
+    # builds its own words (`our surface`, its shape, who it faces).
+    assert js.count("elementPillsHtml(") == 4, \
+        "the helper itself, and the actor, feature and decision-area pages"
     # …and the body no longer draws what the trail carries.
     extra = js[js.index("function kindPillsExtra(n) {"):
                js.index("\n}", js.index("function kindPillsExtra(n) {"))]
@@ -2483,18 +2584,19 @@ def test_one_feature_reads_as_three_levels_and_not_seven_equal_rows() -> None:
     # No `Used by` row: it listed the feature's actors as buttons, and the rail one line below names
     # every one of them on its boxes — the walk's drivers, and since the side stops moved under their
     # own driver, the off-walk ones too. Two rows of the same names is what the rail exists to remove.
-    # The hero's line SAYS what kind of line it is. Standing alone under a breadcrumb, one line of
-    # prose does not say whether it describes the feature or states its goal.
-    assert "lbl: 'Feature objective:'," in head
+    # NO LEAD WORD HERE. `Feature objective` rode this sentence and earned nothing: the sentence
+    # already describes the feature the page is named after. An actor's goal is the one case that
+    # needs one, and it is the only caller that passes `descLbl`.
+    assert "descLbl" not in head, "an actor's goal is the one sentence that needs a lead word"
+    assert "glyph: storyFeatureGlyphSvg()," in head and "name: f.name," in head
+    css = (VIEWER_DIR / "viewer.css").read_text()
     hero = js[js.index("function pageHeroHtml(o) {"):
               js.index("\nfunction ", js.index("function pageHeroHtml(o) {") + 10)]
-    assert "o.lbl ? `<span class=\"page-hero-lbl\">${esc(o.lbl)}</span>` : ''" in hero
-    assert "o.metaLbl" in hero, "…and the row of context under it is labelled from the same slot"
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    # BASELINE, so the label's capitals end where the sentence's letters end. It is the default, so it
-    # is stated by the rule carrying no `vertical-align` at all.
-    lblcss = css[css.index(".page-hero-lbl {"): css.index("}", css.index(".page-hero-lbl {"))]
-    assert "vertical-align" not in lblcss
+    # NO UPPERCASE LABELS ANYWHERE IN THE HERO. Two louder forms were built and dropped — a label
+    # riding each line, and a label column beside them — and both told the reader they could not tell
+    # a description from anything else on a page named after the thing being described.
+    assert "page-hero-lbl" not in js and "page-hero-lbl" not in css
+    assert "o.lbl" not in hero and "o.metaLbl" not in hero
     assert ".page-hero-meta { display: flex; align-items: baseline;" in css
     # …and the width cap is gone, so the line runs the full column.
     assert "max-width: 68ch" not in css
@@ -2891,6 +2993,40 @@ def test_a_grouped_card_list_is_one_component_used_by_its_screens() -> None:
         assert "elementCardGroupsHtml(" in fn, caller
     assert "feat-rulegroup" not in js, "the hand-rolled group shape is gone, not shadowed"
 
+def test_an_actors_goal_keeps_the_grammar_its_author_wrote() -> None:
+    """The goal sentence is only ever capitalised. Its leading `to` used to be stripped, and that was
+    right for exactly as long as a `Wants to` label stood in front of it and would otherwise have
+    said the word twice. No caller draws that label any more, and the strip went on rewriting the
+    author's grammar.
+
+    IT BREAKS ON A SECOND INFINITIVE. "to find out what Meerbot does, and to decide whether to sign
+    up" came out as "Find out what Meerbot does, and to decide whether to sign up", which is not a
+    sentence — the two halves stopped being parallel. Measured across the six mapped projects: 22 of
+    the 28 goals open with `to`, and 4 of those carry a second one.
+
+    NOTHING IS CHANGED AT ALL NOW, not even the first letter. Raising it was the next attempt, and it
+    is unnecessary once a label leads the line — and unsafe in the other direction, since lowering it
+    would eat the capital on "Mio set up for the whole team". Mixed case across maps costs nothing:
+    no screen shows two maps, and each of the six is internally consistent."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function wantsSentence(wants) {"):
+            js.index("\n}", js.index("function wantsSentence(wants) {"))]
+    # THE LABEL LIVES HERE, not at the six call sites. An actor's goal is drawn on six screens, and a
+    # label added per screen is a label one screen forgets.
+    assert "return 'Goal: ' + s;" in fn
+    assert "replace(" not in fn and "toUpperCase" not in fn, "the sentence is the author's, untouched"
+    assert js.count("wantsSentence(") == 7, "the function, and the six screens that draw a goal"
+    # …and the hero's own lead-word slot went with it: it had exactly one user, and it applied the
+    # word to the recorded-nothing case too — "Goal: This map does not say what this actor wants."
+    assert "descLbl" not in js and "page-hero-lead" not in js
+    assert "page-hero-lead" not in (VIEWER_DIR / "viewer.css").read_text()
+    # …and no caller has put a `wants`-style label back in front of it, which is the only thing that
+    # would make the word redundant again. Checked on what is DRAWN, not on the comments that record
+    # why it went.
+    drawn = "".join(l for l in js.splitlines() if not l.lstrip().startswith("//"))
+    assert "Wants to" not in drawn and "Wants:" not in drawn
+
+
 def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     """The card said `SERVICE`; the actor's own page, one click later, said `service` + `STAFF-OWNED`
     about the same actor, and never printed a side on the card at all. Both now read ONE function.
@@ -2941,14 +3077,18 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     assert "OWNED" not in "".join(l for l in code.splitlines() if "ecard-pill" in l), \
         "no pill prints an -OWNED word"
     assert js.count("actorSidePills(") == 4, \
-        ("the helper itself, cardFacts, the story actor card and the interface page's far-side card "
-         "— nothing else. A ROLE is not in `GRAPH.nodes`, so `elementCardHtml` cannot draw one and "
-         "the far-side card is the fourth renderer that must ask this helper rather than decide for "
-         "itself which pill an actor wears")
+        ("the helper itself, cardFacts, the story actor card, and the interface page's far-side card. "
+         "Nothing else — an actor page's hero asks `cardFacts` through `elementPillsHtml`, which is "
+         "this same helper one call further down, and the actor card its surfaces picture used to "
+         "draw is gone. A ROLE is not in `GRAPH.nodes`, so `elementCardHtml` cannot draw one, and "
+         "every one of these renderers must ask this helper rather than decide for itself which pill "
+         "an actor wears")
     head = js[js.index("function actorPageHeroHtml(actorName) {"):
               js.index("\n}", js.index("function actorPageHeroHtml(actorName) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
-    assert "pills:" not in head, "the actor's page draws no pills of its own"
+    assert "pills: elementPillsHtml(actorNodeId(actorName))," in head, \
+        ("…from the ONE builder every element page uses. `of its own` is the guard that still "
+         "matters: no hand-built pill list here, so a card and this page cannot disagree")
     # The reader's word is applied in ONE place, and only where the side is about people.
     assert "function audienceWord(side) {" in js
     # `.ecard-pill` sets a grey background LATER in the file than `.uc-aud-*` sets its own, so a
@@ -3009,7 +3149,9 @@ def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
     head = js[js.index("function featureHeadHtml(capId) {"):
               js.index("\n}", js.index("function featureHeadHtml(capId) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
-    assert "pills:" not in head, "the feature's page draws no pills of its own"
+    assert "pills: elementPillsHtml(capId)," in head, \
+        ("…and it draws them from the ONE builder every element page uses, rather than deciding for "
+         "itself. `of its own` is the guard that still matters: no hand-built pill list here")
 
 
 def test_a_cards_name_takes_the_whole_first_line_everywhere() -> None:
@@ -3145,9 +3287,30 @@ def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     head = js[js.index("function actorPageHeroHtml(actorName) {"):
               js.index("\nfunction ", js.index("function actorPageHeroHtml(actorName) {") + 10)]
     assert "pageHeroHtml({" in head, "one hero builder, shared with the feature and rule-area pages"
-    assert "actorName" in head and "esc(actorName)" not in head, "the hero must not print the name"
+    # THE ONE PAGE THAT NAMES ITSELF IN ITS BODY, and it does it as a labelled ROW rather than as a
+    # heading. Every other hero leaves the name to the breadcrumb, and on this page that was not
+    # enough: the body is a timeline and a picture of surfaces, and nothing in it said whose page you
+    # were on. See the trail test for the heading that stays banned.
+    assert "name: actorName," in head and "pills: elementPillsHtml(actorNodeId(actorName))," in head
+    # NO LEAD WORD IN THE HERO. An actor's goal does need a word saying it is a goal, and that word
+    # belongs to the SENTENCE — it is drawn on six screens and only one of them is this hero, so
+    # `wantsSentence` carries it and all six say the same thing.
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "descLbl" not in head and "wantsSentence(role.wants)" in head
     # The "Other" bucket is not a role: no kind, nothing it wants, and the hero says so.
     assert "g.roles.length === 1 ? g.roles[0] : null" in head
+    # …and it hands the shared hero the actor's own figure, from the ONE actor-figure function, so the
+    # hero, the board head and the cast card cannot draw three different people.
+    assert "glyph: storyGlyphSvg(role && role.kind)," in head
+    hero = js[js.index("function pageHeroHtml(o) {"):
+              js.index("\nfunction ", js.index("function pageHeroHtml(o) {") + 10)]
+    # THE FIGURE IS OPTIONAL, and for a harder reason than taste: only two element kinds own a drawing
+    # of themselves. An actor is a person or a hexagon and a feature is a sparkle; a decision area, a
+    # surface and a Deployment arrow have none, and no colour stands in for it either — the map gives
+    # a feature and a decision area no tint. So the row is built to read without one.
+    assert "${o.glyph || ''}" in hero
+    assert "page-hero-callout" not in js and "page-hero-callout" not in css, \
+        "no box: it sat directly above a board that opens with the same figure and the same name"
 
 
 def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
@@ -3326,8 +3489,19 @@ def test_the_path_starts_at_the_view_and_never_at_a_level_inside_it() -> None:
     assert "view-title" not in head and "_title" in head
     hero = js[js.index("function pageHeroHtml(o) {"):
               js.index("\nfunction ", js.index("function pageHeroHtml(o) {") + 10)]
-    assert "o.name" not in hero and "page-hero-pills" in hero
-    assert "page-hero-name" not in js and "view-title" not in js
+    assert "view-title" not in js
+    # THE HERO NAMES ITS OWN SUBJECT, and that is not the banned heading coming back. The ban is on a
+    # page drawing a SECOND h1 under the breadcrumb's; this is a card's shape — the name, then what
+    # kind of thing it is — set at 16px in the body of the page, where the breadcrumb reads as the
+    # app's chrome and left the body saying nothing about what you were looking at.
+    #
+    # It stays OPTIONAL, and its absence still costs nothing: a page with no name to give (a
+    # Deployment arrow, an entry-point kind, the info pane's subject) keeps its pills on a row of
+    # their own, exactly as before.
+    assert 'o.name\n    ? `<p class="page-hero-name">' in hero
+    assert ": (o.pills ? `<p class=\"page-hero-pills\">${o.pills}</p>` : '');" in hero
+    assert ".page-hero-subject { font-size: 16px;" in css, "a name in the body, not a second title"
+    assert "<h1" not in hero and "<h2" not in hero
     for fn in ("renderRule", "renderElementDetails"):
         body = js[js.index(f"function {fn}("): js.index("\nfunction ", js.index(f"function {fn}(") + 10)]
         assert "ruleTitle(r)}</h3>" not in body and "view-title" not in body, fn
@@ -3818,7 +3992,11 @@ def test_a_record_named_on_a_reference_arrow_is_a_door() -> None:
     # An id the graph does not hold draws its name as TEXT — a button opening nothing is worse
     # than a word.
     assert "if (!GRAPH.nodes[id]) { lab.appendChild(document.createTextNode(name)); return; }" in fill
-    assert "createTextNode(' +' + rest + ' more')" in fill
+    # …and its tail comes from the ONE tail component, with NO door: no single page holds the rest of
+    # the entities a feature touches in a data area, and a tail that leads nowhere should not look
+    # like one that leads somewhere.
+    assert "moreTailHtml((t.entities || []).length - ids.length)" in fill
+    assert "data-more-iface" not in fill
     assert ".story-elabel-ent" in (VIEWER_DIR / "viewer.css").read_text()
 
 
