@@ -403,7 +403,14 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 .glossary-wrap > .glossary:first-child { margin-top: 0; }
 .usecases-wrap .tab-index { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
                             gap: 6px; margin: 0 -20px 12px; padding: 12px 20px 10px;
-                            background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+                            background: #f8fafc; border-bottom: 1px solid #e2e8f0;
+                            transition: box-shadow .15s; }
+/* ATTACHED: the bar has reached its own top and the page is now running under it. A shadow falling
+   from its grey line is what says so — without it the strip looks the same pinned as it does at
+   rest, and a reader cannot tell whether content is passing beneath it or has simply ended there.
+   Cast DOWNWARD only: a positive y-offset with a negative spread keeps it off the bar's own sides,
+   where a halo would read as a floating panel rather than an edge the page slides under. */
+.usecases-wrap .tab-index-stuck { box-shadow: 0 5px 9px -6px rgba(15, 23, 42, .38); }
 .usecases-wrap .tab-index-chip { font-size: 12px; font-weight: 600; color: #475569; background: #eef2f7;
                                  border: 1px solid transparent; border-radius: 9px; padding: 3px 10px;
                                  cursor: pointer; white-space: nowrap; }
@@ -417,8 +424,12 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
                               background: #fff; color: #64748b; font-weight: 700; font-size: 11px;
                               font-variant-numeric: tabular-nums; }
 .usecases-wrap .tab-index-chip.active .tab-index-n { color: #4338ca; }
-/* A jumped-to card clears the pinned bar instead of hiding under it. */
-.usecases-wrap .uc-group { scroll-margin-top: calc(var(--tab-index-h) + 8px); }
+/* A jumped-to card or SECTION clears the pinned bar instead of hiding under it. The section was
+   left out when it was added, so clicking a chip put its heading 45px under the bar that had just
+   been clicked — measured: the title landed at 119px with the bar's bottom edge at 164px. The
+   whole point of the chip is to land you on the thing it names, title first. */
+.usecases-wrap .uc-group,
+.usecases-wrap .item-sec { scroll-margin-top: calc(var(--tab-index-h) + 8px); }
 /* The System section header is NOT sticky. It was, back when nine collections were stacked on one
    scrolling page and the heading told you which one you had scrolled into. Each collection has its own
    page now, its title sits at the top of that page, and the breadcrumb names it permanently — so a
@@ -624,23 +635,79 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    use cases as the page's body, and the rest of the map under section headings the pinned chip index
    jumps to. The first shape was one definition list of seven equal rows, so the purpose weighed the
    same as the component list and the reader had to work out what mattered. */
-.page-hero { padding: 4px 0 14px; border-bottom: 1px solid #eef2f7; margin-bottom: 4px; }
+/* NO RULE UNDER IT. It separated the hero from a page that is now a stack of sections, each of which
+   announces itself with a heading and a sentence — so the line drew a boundary that was already
+   drawn, twice over, ten pixels below itself. Space does the job. */
+.page-hero { padding: 18px 0 14px; margin-bottom: 0; }
+/* THE NAME ROW. It repeats the breadcrumb on purpose: the breadcrumb is the app's chrome and reads
+   as a path, so on a page whose body is a timeline or a picture nothing in the body said what you
+   were looking at. Baseline-aligned, so the figure, the name and the pills sit on one line of text
+   rather than the pills floating at the name's middle. */
+.page-hero-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0 0 7px; }
+.page-hero-subject { font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -.005em; }
+/* The figure is the element's own drawing (an actor's person or hexagon, a feature's sparkle), which
+   paints its own tints, so nothing here colours it. `align-self: center` because a glyph has no
+   baseline of its own; left on `baseline` it hangs below the name's. */
+#diagram .page-hero-name .story-glyph { width: 19px; height: 19px; align-self: center; flex: none; }
 .page-hero-pills { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: 0 0 8px; }
 /* Full width. It was held to 68ch for readability, and under a breadcrumb that runs the whole width
    the short line read as a column the page did not otherwise have. */
-.page-hero-purpose { margin: 0 0 10px; font-size: 14.5px; line-height: 1.55; color: #374151; }
-/* BASELINE, not centre: the row opens with the same kind of label the sentence above it carries, and
-   a label centred on a row of taller text does not end where that text ends. */
-.page-hero-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0; }
-/* What KIND of line this is ("feature objective", "actor objective", "notes"). It rides the line
-   rather than sitting over it, so naming the line costs no line.
-   BASELINE, which is the default and is therefore stated by having no `vertical-align` at all. It
-   carried `vertical-align: 1px` for a moment, and 1px is exactly what that cost: measured on the
-   Organization admin page, the label's baseline sat at y=183.75 against the sentence's 184.75. The
-   label is all capitals, so its baseline IS the bottom of its letters, and the two rows of letters
-   have to end on one line. */
-.page-hero-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
-                 color: #6b7280; margin-right: 7px; }
+.page-hero-purpose { margin: 0 0 8px; font-size: 14.5px; line-height: 1.55; color: #374151; }
+.page-hero-purpose:last-child { margin-bottom: 0; }
+/* THE LEAD WORD, on the one line that needs one. It is SET AS PART OF THE SENTENCE — same size,
+   same colour, same weight — so it reads as the opening of the line rather than as a field name over
+   it. Two louder forms were built and dropped: an uppercase label riding the line, and a label
+   column beside it. Both told the reader they could not tell a description from anything else on a
+   page named after the thing being described.
+   Only an actor's page hands one over. "Give the team the MCP servers it needs" describes nobody
+   until something says it is a goal; a feature's sentence and a surface's sentence each describe the
+   thing their page is named after, and a word in front of them buys nothing. */
+.page-hero-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0;
+                  font-size: 13px; color: #6b7280; }
+/* ── ONE SECTION OF AN ITEM PAGE ──────────────────────────────────────────────────────────────────
+   THE HEADING IS PAGE TEXT AND THE FRAME HOLDS ONLY THE CONTENT. Three other shapes were drawn and
+   compared against this one: a panel with the heading on a strip inside the frame, the same with a
+   rail of section names down the left, and no frame at all. The split matters because the frame has
+   to hold ANYTHING — a picture that scrolls sideways, or a plain list of cards — and a title bar
+   welded to the top of a list of cards is a title bar on something that needs none.
+   The frame keeps its own meaning: this is one block, and it may scroll sideways. */
+.item-sec { margin: 0 0 30px; }
+/* THE GREY LINE BETWEEN SECTIONS. The air around it is DELIBERATELY UNEVEN: 30px above, so the line
+   is clearly the end of the section that just finished, and 12px below, which is exactly the gap the
+   chip bar leaves between its own grey line and the first section's heading. Every grey line on this
+   page then sits the same distance above the heading it introduces, and a reader meets the same
+   rhythm at the top of the page and at every break down it. Even 30px on both sides was drawn first
+   and read as a rule floating between two blocks, belonging to neither.
+   The bar's own line keeps its tight gap to the buttons ABOVE it — that line is the bottom edge of
+   the strip, not a separator between two things. */
+.item-sec + .item-sec { border-top: 1px solid #e2e8f0; padding-top: 12px; }
+.item-sec-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0;
+                  font-size: 14px; font-weight: 700; color: #111827; }
+/* The count rides the title in its own pill, the same shape the chip bar's count wears, so the two
+   places a section states its size cannot be read as two different measurements. */
+.item-sec-n { font-size: 11px; font-weight: 700; color: #64748b; background: #eef2f7;
+              border-radius: 6px; padding: 1px 6px; font-variant-numeric: tabular-nums; }
+/* WHAT THE SECTION SHOWS, in one sentence. It is the line every section was missing: `Use cases`
+   says what the block is called, and only this says which use cases are in it and which are not.
+   FULL WIDTH, and this is the second time the same cap has been tried and dropped. It was held to
+   78ch for readability, which measured 614px inside a 1400px frame — 44% of it, wrapping a sentence
+   that fits on one line into two. The hero's own sentence lost its 68ch cap for exactly this reason:
+   above a board that runs the whole width, a short line reads as a column the page does not have. */
+.item-sec-note { margin: 3px 0 9px; font-size: 12.5px; line-height: 1.5; color: #6b7280; }
+.item-sec-frame { background: #fff; border: 1px solid #cbd5e1; border-radius: 12px;
+                  box-shadow: 0 1px 3px rgba(15, 23, 42, .08); padding: 14px 16px; }
+/* NO BOX INSIDE THE BOX. The board drew its own frame when it was the page's only content; inside a
+   section frame that is a card containing a card, the shape this viewer removes everywhere it
+   appears. It keeps `overflow-x` — it is still the thing that scrolls sideways — and gives up the
+   border, the ground and the padding to the frame around it.
+   NO HEIGHT CAP ANYWHERE. A picture is drawn as tall as it needs to be, so nothing on this page
+   scrolls vertically inside itself; the page scrolls, once. */
+.item-sec-frame .journey-board, .item-sec-frame .hfade-wrap > .journey-board {
+  background: none; border: 0; border-radius: 0; padding: 0; margin: 0;
+}
+.item-sec-frame .hfade-wrap { margin: 0; }
+.item-sec-frame .ifd-wrap { margin: 0; }
+.item-sec-frame > :last-child { margin-bottom: 0; }
 /* What the map does NOT hold. Quiet, but never blank: an empty box and "nothing recorded" are
    different facts, and only one of them is honest. */
 .feat-empty { margin: 0; font-size: 13px; color: #9ca3af; }
@@ -1228,19 +1295,6 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #crumb h1.crumbseg.cur { font-size: 16px; font-weight: 600; color: #111827; line-height: 22px;
                          margin: 0; cursor: default; }
 #crumb h1.crumbseg.cur:hover { text-decoration: none; }
-/* The page's own element, said the way every card says it: the name, then its pills, on ONE line. The
-   pills used to sit in a row of their own below, with a rule between — on an entity, a component or a
-   process that row held one word and nothing else. Plain text, never a control: "show in context" from
-   the page you are already on goes nowhere, and an inert-looking control teaches distrust of the live
-   ones. Same size and shape as a card's pill so the two read as one idiom. */
-#crumb .crumbpill { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-                    color: #475569; background: #eef2f7; border: 1px solid #e2e8f0; border-radius: 999px;
-                    padding: 1px 7px; line-height: 15px; white-space: nowrap; align-self: center; }
-#crumb .crumbpill-type { color: #3730a3; background: #eef2ff; border-color: #e0e7ff; }
-/* The two words that vary keep the colour they carry on a card, so one word means one thing wherever a
-   reader meets it. */
-#crumb .crumbpill.uc-aud-internal { color: #92400e; background: #fef3c7; border-color: #fde68a; }
-#crumb .crumbpill.ecard-pill-service { color: #3730a3; background: #e0e7ff; border-color: #c7d2fe; }
 /* hover tooltip: previews an element's meaning without selecting it. pointer-events:none so it
    never steals the hover or the click. Kept in flow (opacity, not display) so offsetWidth is valid
    for the overflow-flip in moveTip. */
@@ -2383,24 +2437,113 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .ifd-elabel[data-side="ours"]::after { left: 23px; }
 .ifd-elabel[data-side="theirs"]::before { right: 22px; }
 .ifd-elabel[data-side="theirs"]::after { right: 23px; }
-/* THE RECORDS THAT CROSS, under the sentence. Text that happens to be a door, not a row of chrome —
-   the same treatment the Features page gives a record on its own wire labels, so one record looks
-   the same wherever a line names it. */
-.ifd-elabel-recs { margin-top: 5px; padding-top: 5px; border-top: 1px solid #eceef6;
-                   font-size: 10.5px; color: #5a6072; }
-/* The data glyph leading the list, sized down from the 17px it takes on a card: here it is a mark on
-   a line of small text, not the head of a box. `#diagram`-scoped for the same reason every glyph in
-   this file is — `#diagram svg { width: 100% }` reaches every inline SVG under it. */
-#diagram .ifd-recmark { display: inline-block; vertical-align: -2px; margin-right: 4px; }
-#diagram .ifd-recmark .story-glyph { width: 13px; height: 13px; }
-.ifd-elabel-rec { font: inherit; color: inherit; background: none; border: 0; padding: 0;
-                  cursor: pointer; text-decoration: underline;
-                  text-decoration-color: rgba(30,34,53,.35); text-underline-offset: 2px; }
-.ifd-elabel-rec:hover { text-decoration-color: #1e2235; color: #1e2235; }
-.ifd-elabel-rec:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px;
-                                border-radius: 3px; }
+/* ONE LINE PER SENTENCE. A surface records as many crossings in one direction as it likes, and they
+   were joined into a paragraph with a space between them — on MCP Hero's dashboard that is 4
+   sentences and 327 characters with no seam to read it by. The `+n more` tail keeps the label a
+   glance; the full list is on the surface's own page, one click away on the card's name. */
+.ifd-what-line, .ifd-what-more { display: block; }
+/* A HAIRLINE BETWEEN TWO CROSSINGS IN ONE DIRECTION. Space alone stopped separating them once each
+   sentence grew a second line of its own for its records: four lines of small text with only gaps
+   between them read as one block, and the reader had to work out which record row belonged to which
+   sentence. The rule makes each sentence and its records one unit. Never above the first crossing,
+   and never between an `in` and an `out` — both pictures draw one direction per block. */
+.ifd-what-line + .ifd-what-line, .ifd-what-line + .ifd-what-more {
+  margin-top: 7px; padding-top: 7px; border-top: 1px solid #eceef6;
+}
+/* ONE LOOK FOR EVERY "+n more" IN THE VIEWER. Four of them existed and two of them sat in the same
+   box — the sentences' tail italic at 12.5px, the records' tail plain grey at 11.5px — so a reader
+   met the same idea twice, dressed differently, three lines apart.
+   THE SIZE IS INHERITED on purpose: the tail ends whatever line it belongs to, and matching that
+   line is what makes it read as part of it. What is shared is the treatment. */
+.more-tail { font: inherit; font-style: italic; opacity: .7; color: inherit; padding: 0; border: 0;
+             background: none; }
+/* …and it is a DOOR wherever a page holds the rest. It looks the same at rest as the plain one, so
+   the two never read as two kinds of thing; the pointer and the underline are the only difference,
+   and both arrive on hover. */
+button.more-tail { cursor: pointer; }
+button.more-tail:hover { opacity: 1; color: #4338ca; text-decoration: underline; }
+/* …and in the actor page's own column, where the direction word sits beside them. */
+.ifd-what-lines { display: block; }
+/* THE RECORDS ONE CROSSING CARRIES, ON THEIR OWN LINE UNDER ITS OWN SENTENCE. They were a row of
+   their own under the WHOLE label, holding the union of every sentence's records — which the map
+   does not say (`elements` sits on each crossing) and which put records on screen belonging to a
+   sentence the cap had hidden. The union was the error; the line break was not. Run on after the
+   sentence they read as more of the sentence at this size, so they take a line, and the hairline
+   between crossings above is what keeps each sentence and its records together as one unit.
+   The DATA GLYPH leads that line, so it says what kind of thing it is naming before it names one.
+   Sized down from the 17px it takes on a card: here it is a mark on a line of small text, not the
+   head of a box. `#diagram`-scoped like every glyph rule in this file, because
+   `#diagram svg { width: 100% }` reaches every inline SVG under it. */
+.ifd-what-recs { display: block; margin-top: 3px; color: #5a6072; }
+#diagram .ifd-what-recs .story-glyph { width: 13px; height: 13px; display: inline-block;
+                                       vertical-align: -2px; margin: 0 4px 0 0; }
+.ifd-what-rec { font: inherit; color: inherit; background: none; border: 0; padding: 0;
+                cursor: pointer; text-decoration: underline;
+                text-decoration-color: rgba(30,34,53,.35); text-underline-offset: 2px; }
+.ifd-what-rec:hover { text-decoration-color: #1e2235; color: #1e2235; }
+.ifd-what-rec:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px; border-radius: 3px; }
 
 .ifd-none { font-size: 12px; color: #6b7280; margin: 0; padding: 8px 0; }
+
+/* ── an ACTOR's picture of the outside edge ───────────────────────────────────────────────────────
+   THREE COLUMNS, read left to right: what crosses, the surface it crosses at, and what this actor
+   does there. The Interfaces view answers a different question with the same cards — it puts the
+   PRODUCT down the middle and sorts the surfaces onto two shores of it, because it is asked "where
+   does this product stop". This one is asked a person's question.
+   COLUMN 1 HELD THE ACTOR and now holds what crosses. The actor card drew this page's own subject a
+   second time — figure, name and pill, 230px of a 1366px stage — and its only other job was to give
+   the wires a left-hand anchor. What crosses is the fact the picture was missing, and it takes that
+   place.
+   ONE GRID, ONE ROW PER SURFACE, which is the only thing that can promise the three cells of a row
+   sit at one height: independent columns line up at the top and drift apart at the first card whose
+   sentence wraps to a different number of lines. */
+.asf-stage { position: relative; display: grid; width: 100%; align-items: stretch;
+             grid-template-columns: minmax(0, 330px) 80px minmax(0, 380px) 80px minmax(0, 300px);
+             row-gap: 14px; }
+.asf-head-cross { grid-column: 1; grid-row: 1; }
+.asf-head-surf  { grid-column: 3; grid-row: 1; }
+.asf-head-feat  { grid-column: 5; grid-row: 1; }
+/* THE SHORE, as a sub-heading inside the middle column. It cuts by DIRECTION — which side starts the
+   exchange — and not by whose surface it is; see actorSurfaceDiagramHtml for the four rows the older
+   cut got wrong. Quieter than the column head above it, because it cuts one column rather than
+   naming one. */
+.asf-shore { grid-column: 3; margin: 6px 0 0; font-size: 11px; font-weight: 650;
+             letter-spacing: .04em; text-transform: uppercase; color: #9199a8; }
+/* WHAT CROSSES. `in` and `out` are read against the PRODUCT, which is the reading the surface's own
+   page prints and the only one that stays true on a surface someone else owns. The direction is a
+   fixed-width mark so the sentences all start at one place down the column. */
+.asf-crosscell { grid-column: 1; display: flex; align-items: center; }
+.asf-cross { flex: 1; align-self: center; display: flex; flex-direction: column; gap: 7px;
+             padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+.asf-cross-line { display: grid; grid-template-columns: 2.4em minmax(0, 1fr); gap: 8px; margin: 0;
+                  font-size: 12.5px; line-height: 1.45; color: #374151; }
+.asf-cross-dir { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+                 color: #6b7280; padding-top: 2px; }
+/* The surface card hugs its own content, for the same reason the boxes either side of it do: the
+   dashboard is a three-line card whose neighbours run to six, and a card stretched to their height
+   opens with 50px of empty white under its chips. Centred, the three middles meet and the wires
+   between them are straight lines. `flex: 1` is the WIDTH (this is a row-direction flex),
+   `align-items` the height, so the card still fills the column. */
+.asf-cell { grid-column: 3; display: flex; align-items: center; }
+.asf-cell > .ifd-box { flex: 1; }
+.asf-featcell { grid-column: 5; display: flex; align-items: center; }
+.asf-none { grid-column: 3; padding: 0; }
+.asf-crosscell > .asf-none, .asf-featcell > .asf-none { grid-column: auto; align-self: center;
+                                                        font-style: italic; }
+/* WHAT THEY DO THERE: the features, and how many of THIS actor's use cases come through this door.
+   The number is the join between the page's two sections, and it is a door of its own — it opens
+   that feature's use cases filtered to this actor. */
+.asf-feats { flex: 1; align-self: center; display: flex; flex-direction: column;
+             align-items: stretch; gap: 6px;
+             padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+.asf-feat { display: flex; align-items: center; gap: 6px; font: inherit; font-size: 12.5px;
+            font-weight: 600; color: #1f2430; text-align: left; padding: 2px 0; border: 0;
+            background: none; cursor: pointer; }
+.asf-feat:hover { color: #4338ca; text-decoration: underline; }
+.asf-feat-n { margin-left: auto; font-size: 11px; font-weight: 700; color: #64748b;
+              background: #eef2f7; border-radius: 6px; padding: 1px 6px;
+              font-variant-numeric: tabular-nums; text-decoration: none; }
+#diagram .asf-feat .story-glyph { width: 15px; height: 15px; flex: none; }
 
 /* ── THE MAP INSPECTOR ────────────────────────────────────────────────────────────────────────────
    A development surface, so it is DELIBERATELY not the app's own skin: dark ground, monospace, no

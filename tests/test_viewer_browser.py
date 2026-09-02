@@ -776,9 +776,15 @@ def _both_shores_carry_people_and_a_pipe() -> Any:
     live maps were derived and undrawn. The person on the `theirs` surface comes from the walk
     reaching `D4`, gated on a kind that means a person goes there."""
     def mutate(m: dict) -> None:
+        # A WAY IN on the dashboard, because that is what a screen people come to HAS. `opens` is
+        # derived from it, and `opens` is what the actor page cuts its two groups by — a surface with
+        # no address anything outside can invoke is one the product starts the exchange at.
+        m["entry_points"] = (m.get("entry_points") or []) + [
+            {"id": "EP900", "kind": "HTTP route", "trigger": "`GET /dashboard`",
+             "source": "backend/src/mcpolis/entrypoints/app.py:1", "component": "C1"}]
         m["interfaces"] = [
             {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
-             "side": "ours", "facing": "user", "kind": "screen",
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP900"],
              "carries": [{"direction": "in", "what": "what the person asks for", "elements": []}]},
             {"id": "I2", "name": "Google sign-in", "what": "Where a person proves who they are.",
              "side": "theirs", "facing": "user", "kind": "hosted-screen",
@@ -1013,6 +1019,147 @@ def test_while_the_two_keys_are_held_the_page_itself_is_deaf() -> None:
         assert not page.js_errors, page.js_errors
 
 
+def test_the_pinned_section_bar_casts_a_shadow_only_once_it_is_attached() -> None:
+    """A sticky bar looks identical pinned and at rest, so nothing on screen says whether the page is
+    running underneath it or has simply ended there. A shadow falling from its grey line is what says
+    it — and only while it is attached, or the shadow becomes decoration on a strip sitting in the
+    flow with the page's own top edge right above it.
+
+    A sticky element has no CSS state of its own, so the reading is geometric: the bar is attached
+    exactly when it has reached its own `top: 0` and stopped travelling with the page.
+
+    The TRANSITION is suppressed for the measurement. It is 150ms of real animation, and a headless
+    run reads a frame partway through it — the shadow then computes as a transparent zero and the
+    test fails on timing rather than on the rule."""
+    with _served() as url, _page(url + "#v=capability&cap=CAP2") as page:
+        # A SHORT WINDOW, so the page is taller than the pane and the bar can pin at all. The default
+        # is tall enough to hold this feature's whole page, and a bar that never reaches its own top
+        # tests nothing.
+        page.set_viewport_size({"width": 1280, "height": 520})
+        _settle(page)
+        out = page.evaluate("""() => {
+            const w = document.querySelector('.usecases-wrap');
+            const nav = w.querySelector('.tab-index');
+            if (!nav) return {noBar: true};
+            nav.style.transition = 'none';
+            const read = () => ({stuck: nav.classList.contains('tab-index-stuck'),
+                                 shadow: getComputedStyle(nav).boxShadow});
+            w.scrollTop = 0; w.dispatchEvent(new Event('scroll'));
+            const rest = read();
+            // How far this page must scroll before the bar reaches its own top at all.
+            const reach = nav.getBoundingClientRect().top - w.getBoundingClientRect().top;
+            w.scrollTop = w.scrollHeight; w.dispatchEvent(new Event('scroll'));
+            const stuck = read();
+            w.scrollTop = 0; w.dispatchEvent(new Event('scroll'));
+            const back = read();
+            nav.style.transition = '';
+            return {rest, stuck, back, reach, room: w.scrollHeight - w.clientHeight};
+        }""")
+        assert not out.get("noBar"), out
+        assert out["room"] > out["reach"], ("the page must be tall enough to pin the bar at all", out)
+        assert out["rest"] == {"stuck": False, "shadow": "none"}, out
+        assert out["stuck"]["stuck"] and out["stuck"]["shadow"] != "none", out
+        # …and it is cast DOWNWARD only: a positive y with a negative spread, so it never haloes the
+        # bar's own sides, where it would read as a floating panel rather than an edge.
+        assert "0px 5px" in out["stuck"]["shadow"] and "-6px" in out["stuck"]["shadow"], out
+        assert out["back"] == {"stuck": False, "shadow": "none"}, ("…and it lets go", out)
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_item_pages_sections_each_say_what_they_are_and_what_is_in_them() -> None:
+    """A page about one element is a stack of sections, and each one has to answer three questions on
+    its own: what is this, how much of it is there, and what am I looking at. The actor page answered
+    none of them. Its board carried the actor's own figure and name — which the hero one line above
+    had just drawn — and nothing said the boxes were USE CASES, or which use cases were in there and
+    which were not.
+
+    Three parts, and none of them is decoration: the heading names the section, the count states its
+    size, and the sentence says what is in it. A pinned chip bar indexes them, so a reader knows what
+    the page holds before scrolling and can jump between the parts.
+
+    NO HEIGHT CAP anywhere. The picture inside a section is drawn as tall as it needs to be, so
+    nothing scrolls vertically inside itself; the page scrolls, once. Sideways is a different matter —
+    the board is genuinely wider than any window, and that scroll stays."""
+    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
+            _page(url + "#v=actor&act=Org creator") as page:
+        _settle(page)
+        secs = page.evaluate("""() => [...document.querySelectorAll('.item-sec')].map((s) => ({
+            title: s.querySelector('.item-sec-title').firstChild.textContent.trim(),
+            count: s.querySelector('.item-sec-n').textContent,
+            note: s.querySelector('.item-sec-note').textContent.slice(0, 24),
+        }))""")
+        assert [s["title"] for s in secs] == ["Use cases", "Interfaces"], secs
+        assert all(s["note"] and s["count"] != "" for s in secs), secs
+        # The bar states the same numbers the headings do — one page, one set of counts.
+        chips = page.evaluate("""() => [...document.querySelectorAll('.tab-index-chip')].map((c) => ({
+            title: c.firstChild.textContent.trim(),
+            count: c.querySelector('.tab-index-n').textContent }))""")
+        assert chips == [{"title": s["title"], "count": s["count"]} for s in secs], (chips, secs)
+        # …and the actor's name is drawn ONCE in the page body, by the hero.
+        names = page.evaluate(
+            "() => [...document.querySelectorAll('#diagram .page-hero-subject,"
+            " #diagram .journey-actorname')].map((e) => e.textContent)")
+        assert names == ["Org creator"], names
+        # NOTHING SCROLLS VERTICALLY inside a section — not the frame, not anything in it.
+        tall = page.evaluate("""() => {
+            const bad = [];
+            for (const f of document.querySelectorAll('.item-sec-frame'))
+              for (const el of [f, ...f.querySelectorAll('*')])
+                if (el.scrollHeight > el.clientHeight + 1
+                    && ['auto', 'scroll'].includes(getComputedStyle(el).overflowY))
+                  bad.push(el.className);
+            return bad;
+        }""")
+        assert tall == [], tall
+        # The hero's rule went with them: the page is a stack of announced sections now, and the
+        # SPACE above the name is what sets the block off from the trail instead.
+        hero = page.evaluate(
+            "() => { const cs = getComputedStyle(document.querySelector('#diagram .page-hero'));"
+            "  return {b: cs.borderBottomWidth, p: parseFloat(cs.paddingTop)}; }")
+        assert hero["b"] == "0px" and hero["p"] >= 14, hero
+        # …and the GREY LINE is between the sections, with room on both sides of it. Never above the
+        # first: the chip bar draws its own line under itself and a second one below it is two rules
+        # for one boundary.
+        rules = page.evaluate("""() => [...document.querySelectorAll('.item-sec')].map((s) => {
+            const cs = getComputedStyle(s);
+            return {top: parseFloat(cs.borderTopWidth), pad: parseFloat(cs.paddingTop),
+                    below: parseFloat(cs.marginBottom)};
+        })""")
+        assert rules[0]["top"] == 0, rules
+        assert all(r["top"] == 1 for r in rules[1:]), rules
+        assert all(r["below"] >= 24 for r in rules[:-1]), rules
+        # …and the air around that line is DELIBERATELY UNEVEN. Below it sits exactly the gap the chip
+        # bar leaves under its own grey line, so every grey line on the page stands the same distance
+        # above the heading it introduces. Even air on both sides was drawn first and read as a rule
+        # floating between two blocks, belonging to neither.
+        gaps = page.evaluate("""() => {
+            const w = document.querySelector('.usecases-wrap');
+            const nav = w.querySelector('.tab-index');
+            const secs = [...w.querySelectorAll('.item-sec')];
+            const top = (s) => s.querySelector('.item-sec-title').getBoundingClientRect().top;
+            return {bar: Math.round(top(secs[0]) - nav.getBoundingClientRect().bottom),
+                    sep: Math.round(top(secs[1]) - secs[1].getBoundingClientRect().top),
+                    above: Math.round(secs[1].getBoundingClientRect().top
+                                      - secs[0].getBoundingClientRect().bottom)};
+        }""")
+        assert abs(gaps["sep"] - gaps["bar"]) <= 2, gaps
+        assert gaps["above"] >= gaps["sep"] * 2, gaps
+        # A CHIP LANDS YOU ON THE TITLE IT NAMES. The section was left out of the rule that clears the
+        # pinned bar, so clicking a chip put its heading under the very bar that was clicked.
+        landed = page.evaluate("""() => {
+            const w = document.querySelector('.usecases-wrap');
+            const nav = w.querySelector('.tab-index');
+            const chip = nav.querySelector('.tab-index-chip');
+            const sec = w.querySelector('#' + chip.dataset.target);
+            w.scrollTop = w.scrollHeight;
+            sec.scrollIntoView({block: 'start'});
+            const t = sec.querySelector('.item-sec-title').getBoundingClientRect();
+            return {title: t.top, bar: nav.getBoundingClientRect().bottom};
+        }""")
+        assert landed["title"] >= landed["bar"], landed
+        assert not page.js_errors, page.js_errors
+
+
 def test_an_actors_page_names_the_surfaces_they_stand_at_and_says_which_shore() -> None:
     """The far-side derivation read BACKWARDS. A surface's page already named the people at it, and
     no page named the surfaces for a person — the link was one-way for as long as the actors column
@@ -1020,22 +1167,125 @@ def test_an_actors_page_names_the_surfaces_they_stand_at_and_says_which_shore() 
 
     The two headings are not one sentence turned round: the actor COMES TO our surface, and the
     product SENDS THEM to theirs. Google sign-in is where mcpolis sends three roles, and calling that
-    "where they reach the product" would be false."""
+    "where they reach the product" would be false.
+
+    It is a PICTURE, read left to right: what crosses, the surface it crosses at, and what this actor
+    does there. The two groups are sub-headings inside the middle column.
+
+    THE GROUPS CUT BY DIRECTION, not by whose surface it is. `side` says who defines a surface and
+    the headings claim which way the actor goes, and those are different questions: the fixture's
+    dashboard is ours AND is where the creator comes in, while Google sign-in is theirs AND is where
+    the product starts the exchange. On the live maps the difference was drawn wrong on 4 of 35
+    rows — every one of them Outgoing email, our surface, with no way in and one outbound sentence."""
     with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
             _page(url + "#v=actor&act=Org creator") as page:
         _settle(page)
+        seen = page.evaluate("""() => [...document.querySelectorAll(
+                '#asfstage .asf-shore, #asfstage .ifd-box .ifd-name')]
+            .map((el) => (el.classList.contains('asf-shore') ? 'SHORE:' : 'surface:')
+                + el.textContent)""")
+        assert seen == ["SHORE:Where they reach the product", "surface:The dashboard",
+                        "SHORE:Where the product reaches them", "surface:Google sign-in"], seen
+        # The reader's OWN actor is marked on every card; the other people at the same surface stay
+        # drawn, because "who else stands here" is context the card should keep.
+        marked = page.evaluate(
+            "() => [...document.querySelectorAll('.ifd-chip-me')].map((c) => c.textContent.trim())")
+        assert marked == ["Org creator", "Org creator"], marked
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_surface_names_the_features_that_arrive_at_an_actor_not_only_the_ones_they_drive() -> None:
+    """WHO DRIVES IT AND WHO IS AT THE DOOR ARE DIFFERENT QUESTIONS, and the far-side list is built
+    from the DOOR. Asking only "does this use case name my actor" therefore reported "not stated" on
+    a surface the map has plenty to say about: the actor is on that surface BECAUSE of a door, and
+    the features had to be found by the same rule that put them there.
+
+    MCP Hero is the real case. Outgoing email carries one use case, "Warn a member that a server
+    sign-in expired" — its actor is the UPKEEP JOB, the product's own timer, and two of its steps are
+    `Outgoing email -> Organization admin` and `Outgoing email -> Team member`. The admin never
+    drives that story; it arrives at them. Their page said nothing about the one thing that surface
+    does for them.
+
+    Here the same shape: a use case the ORG ADMIN drives, whose walk hands out through the dashboard
+    to the Org creator, who drives none of it."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
+             "side": "ours", "facing": "user", "kind": "screen",
+             "carries": [{"direction": "out", "what": "what the product tells them",
+                          "elements": []}]},
+        ]
+        # UC2 is the ORG ADMIN's story. Its walk is made to hand out through the dashboard to the ORG
+        # CREATOR, who drives none of it — so the only thing that can put the creator on that surface,
+        # or name a feature for them there, is the door.
+        flow = next(f for f in m["flows"] if f["uc"] == "UC2")
+        last = flow["steps"][-1]
+        step = lambda n, src, dst, phrase: {
+            "n": n, "src": src, "dst": dst, "phrase": phrase, "note": "", "where": None,
+            "no_call_site": False, "subflow": None}
+        flow["steps"].append(step(len(flow["steps"]) + 1, last["src"], "I1", "writes the notice out"))
+        flow["steps"].append(step(len(flow["steps"]) + 1, "I1", "R1", "reaches the org creator"))
+    with _served_map(mutate) as url, _page(url + "#v=actor&act=Org creator") as page:
+        _settle(page)
         seen = page.evaluate("""() => {
-            const out = [];
-            for (const el of document.querySelectorAll(
-                    '.usecases-wrap .card-group-head, .usecases-wrap .ecard[data-key]')) {
-                out.push(el.classList.contains('card-group-head')
-                    ? 'HEAD:' + el.textContent
-                    : 'card:' + el.querySelector('.ecard-name').textContent);
-            }
-            return out;
+            const cell = document.querySelector('#asfstage .asf-featcell[data-iface="I1"]');
+            const box = cell && cell.querySelector('.asf-feats');
+            return box ? [...box.querySelectorAll('.asf-feat span')].map((f) => f.textContent)
+                       : 'NONE: ' + (cell ? cell.textContent.trim() : 'no cell at all');
         }""")
-        assert seen == ["HEAD:Where they reach the product", "card:The dashboard",
-                        "HEAD:Where the product sends them", "card:Google sign-in"], seen
+        assert isinstance(seen, list) and seen, seen
+        # …and the wire is drawn, because there is now an answer for it to land on.
+        wires = page.evaluate(
+            "() => document.querySelectorAll('#asfstage path[data-iface=I1]').length")
+        assert wires == 2, wires
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_actors_surfaces_picture_lines_each_one_up_with_what_they_reach_there() -> None:
+    """The third column answers "and what do I get through it?", per surface — so its box has to sit
+    at its own surface's height. Only a shared grid row can promise that: two independently stacked
+    columns line up at the top and drift apart at the first card whose sentence wraps to a different
+    number of lines. Measured, not eyeballed: the two middles must meet, because the wire between
+    them is drawn from one to the other.
+
+    The features are THIS actor's, joined through their own use cases — the surface's own feature
+    list would answer a different question, every feature ANYONE reaches there."""
+    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
+            _page(url + "#v=actor&act=Org creator") as page:
+        _settle(page)
+        rows = page.evaluate("""() => {
+            const st = document.querySelector('#asfstage');
+            return [...st.querySelectorAll('.ifd-box')].map((b) => {
+              const cell = st.querySelector(
+                  '.asf-featcell[data-iface="' + CSS.escape(b.dataset.iface) + '"]');
+              const box = cell && cell.querySelector('.asf-feats');
+              return {
+                surface: b.querySelector('.ifd-name').textContent,
+                cardMid: Math.round(b.offsetTop + b.offsetHeight / 2),
+                featMid: box ? Math.round(box.offsetTop + box.offsetHeight / 2) : null,
+                feats: box ? [...box.querySelectorAll('.asf-feat span')].map((f) => f.textContent)
+                           : cell.textContent.trim(),
+              };
+            });
+        }""")
+        assert rows, rows
+        for r in rows:
+            if r["featMid"] is not None:
+                assert abs(r["cardMid"] - r["featMid"]) <= 1, r
+            assert r["feats"], r
+        # …and every wire the picture draws belongs to a surface: this actor to it, and it to its
+        # features. A surface the map can name no feature for draws the second wire nowhere.
+        wired = page.evaluate("""() => {
+            const st = document.querySelector('#asfstage');
+            const per = {};
+            for (const p of st.querySelectorAll('svg.ifd-wires path[data-iface]'))
+              per[p.dataset.iface] = (per[p.dataset.iface] || 0) + 1;
+            const named = {};
+            for (const c of st.querySelectorAll('.asf-featcell'))
+              named[c.dataset.iface] = !!c.querySelector('.asf-feats');
+            return Object.keys(per).map((k) => [per[k], named[k]]);
+        }""")
+        assert wired and all(n == (c == 2) for c, n in wired), wired
         assert not page.js_errors, page.js_errors
 
 
@@ -1364,9 +1614,15 @@ def _crossing_naming_a_record() -> Any:
 
 
 def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS() -> None:
-    """The records a crossing carries, named under the sentence and each a door — the same treatment
-    and the same three-deep cap the Features page gives a feature's records on its own wire labels,
-    so one record looks and behaves the same wherever a line names it.
+    """The records a crossing carries, at the END OF ITS OWN SENTENCE and on the same line, each a
+    door — the same treatment and the same three-deep cap the Features page gives a feature's records
+    on its own wire labels, so one record looks and behaves the same wherever a line names it.
+
+    THEY BELONG TO ONE CROSSING, not to a direction. `elements` sits on each crossing and the picture
+    used to union them across every sentence in a direction and draw one row underneath: measured
+    across the six maps, 15 of the 17 groups with more than one sentence give those sentences
+    DIFFERENT records, and on 5 groups the row listed records belonging only to a sentence the cap
+    had hidden — a record on screen with nothing it answered to.
 
     The tooltip is the record's own MEANING, not "Show X in context": that restated the underline,
     and a reader hovering a record wants to know what the record is. It comes from `cardFacts`, so
@@ -1384,12 +1640,13 @@ def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS(
         got = page.evaluate("""() => {
             const out = {};
             for (const l of document.querySelectorAll('.ifd-elabel.ifd-lab-on')) {
-                out[l.firstChild.textContent] = {
-                    recs: [...l.querySelectorAll('.ifd-elabel-rec')].map(e => e.textContent),
-                    titles: [...l.querySelectorAll('.ifd-elabel-rec')].map(
+                const line = l.querySelector('.ifd-what-line');
+                out[line.firstChild.textContent] = {
+                    recs: [...l.querySelectorAll('.ifd-what-rec')].map(e => e.textContent),
+                    titles: [...l.querySelectorAll('.ifd-what-rec')].map(
                                 e => e.getAttribute('title')),
-                    marks: l.querySelectorAll('.ifd-recmark svg').length,
-                    tail: l.querySelector('.ifd-elabel-recs').textContent };
+                    marks: l.querySelectorAll('.ifd-what-recs svg').length,
+                    tail: l.querySelector('.ifd-what-recs').textContent };
             }
             return out;
         }""")
@@ -1398,7 +1655,8 @@ def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS(
         # four records, three drawn, and the tail SAYS the rest are there rather than dropping them
         assert many["recs"] == ["Subscription", "PlanName", "Membership"], many
         assert many["tail"].endswith("+1 more"), many
-        # the DATA glyph leads each list, so the row says what kind of thing it names before naming one
+        # the DATA glyph SEPARATES the sentence from its records, so the line says what kind of thing
+        # it has started naming
         assert one["marks"] == 1 and many["marks"] == 1, got
         # and NOT the browser's tooltip, whose delay the viewer cannot touch
         assert one["titles"] == [None], one
@@ -1409,7 +1667,7 @@ def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS(
         # it. Quiet at 60ms, up by 190ms: 65ms of slack on each side of the real delay.
         # NAMED, not "the first one": the labels are created opener-first, so the first record in DOM
         # order belongs to the other sentence.
-        page.locator(".ifd-elabel-rec").filter(has_text="Organization").first.hover()
+        page.locator(".ifd-what-rec").filter(has_text="Organization").first.hover()
         page.wait_for_timeout(60)
         assert not page.evaluate(
             "() => document.getElementById('tip').classList.contains('on')"), "tip too eager"
