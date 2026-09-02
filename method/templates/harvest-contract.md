@@ -70,12 +70,39 @@ lead; nothing above this line goes into an agent prompt.
 > skeptics, whose verdicts are worked out separately and never stored here. **Use both values**: one
 > shipped map carried `verified` on all 301 element rows, which tells a reader nothing about which
 > rows were read, and `lint-fragment` warns when a fragment's labels are all one value. Use only the schema IDs and edge verbs; reference nodes, never
-> invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
-> cannot fill one, return its header with `(none found)` and say why; never silently omit a
-> section.** Your output is **ONE JSON fragment** — a partial map model per
-> [model.md](«COYODEX_HOME»/method/model.md): an object holding only the top-level arrays your slice owns
-> (e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`,
-> `config`), each entry using that array's exact field names. **WRITE the fragment to
+> invent them.
+>
+> **THE ARRAYS THIS SLICE OWNS — the full list, not an example.** Author every one of these, and
+> nothing else:
+>
+> | array | yours when |
+> |---|---|
+> | `components` | always |
+> | `entry_points` | a file here is a trigger surface (a route, a command, a job) |
+> | `deps` | a third-party system is reached from a file here |
+> | `observability` | a logging / crash / analytics adapter lives here |
+> | `config` | a settings key is read literally in a file here |
+> | `deployment`, `run_commands` | a manifest, compose file or command declaration lives here |
+>
+> **`entities` is NOT yours** unless your brief carries the T5 addendum. Neither is any array not
+> listed above.
+>
+> **AUTHORING A `deps` ROW: one rule lives in `model.md` and blocks you if you do not know it.**
+> Every dep in the EXTERNAL group (`datastore` / `messaging` / `service` / `platform`) must either
+> name the surface(s) it belongs to in `interfaces`, or carry `not_an_interface: <why it is none>`.
+> Surface ids (`In`) are minted at synthesis by a slice you do not own, so from here the answer is
+> almost always `not_an_interface` — write the reason, do not invent an id, and do not leave both
+> empty. Frameworks and libraries are exempt: they become the product. Without this sentence one
+> agent read `model.md` itself to find the rule, and another would simply have returned no `deps`
+> at all and said nothing.
+>
+> **If an array is empty, return it as an empty array AND say why in your reply** — never silently
+> omit one. The lead cannot tell "nothing here" from "the agent forgot" otherwise. (This paragraph
+> used to read "return exactly this fixed set of sections — one per prescribed slice", which an
+> agent owning one slice could not parse at all: it reads as "return one section".)
+>
+> Your output is **ONE JSON fragment** — a partial map model per
+> [model.md](«COYODEX_HOME»/method/model.md), each entry using that array's exact field names. **WRITE the fragment to
 > `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
 > one-line inventory (row count per array)** — never inline the fragment in your reply: a large
 > fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
@@ -98,7 +125,10 @@ lead; nothing above this line goes into an agent prompt.
 > **Field discipline** (what `assemble` / `validate` reject — get it right at the source): (a) every
 > **required** field is present and non-null; for an **optional** field with no value **omit the key**
 > entirely — do NOT emit `null` (rejected on defaulted-string fields) and do NOT emit a placeholder like
-> `(none)` (fails the anchor gate). (b) Use **only** each array's exact field names — no stray keys
+> `(none)` (fails the anchor gate). **"Nothing is configured" is a VALUE, not a missing field.** If
+> the true answer is that this thing has no alerts, no schedule, no retention — say so in the field,
+> in words. Omitting the key means "I did not find out"; the two are different facts and the reader
+> cannot tell them apart afterwards. Omit only when you really did not find out. (b) Use **only** each array's exact field names — no stray keys
 > (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`). (c) Every anchor is **repo-root-relative**: the repo root
 > is «REPO_ABS» — prefix every path with it. Minimal valid fragment:
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.

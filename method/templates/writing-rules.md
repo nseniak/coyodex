@@ -1,7 +1,18 @@
 ## Writing the text a person reads
 
-Every sentence you author into a `purpose`, a trigger→outcome, a rule `statement`, a `risk`, a
-`used_for`, a `wants` or a glossary meaning is read ONE BOX AT A TIME. The reader does not read
+**Every sentence a PERSON READS.** The list of fields used to be closed — `purpose`, trigger→outcome,
+a rule `statement`, a `risk`, a `used_for`, a `wants`, a glossary meaning — and it was read as
+exhaustive, so an agent authoring 45 `evidence[].why` lines had no idea whether these rules applied
+and guessed. They do. The test is not which field it is: it is whether the sentence reaches a reader
+in the viewer. If it does, it obeys these rules; a step `phrase`, a crossing's `what`, an
+`evidence[].why` and a component `purpose` are all the same job.
+
+A closed vocabulary would have to be re-checked against the model every time a field is added, and
+it was not. What is NOT governed: ids, anchors, code links, and closed-vocabulary cells (`kind`,
+`side`, `confidence`) — those are labels or machine values, and a word limit on a label is
+meaningless.
+
+Each of those sentences is read ONE BOX AT A TIME. The reader does not read
 code, and has no paragraph around the box to lean on. Six rules:
 
 1. **One idea per sentence, at most 20 words.** Two clauses joined by "and" are two sentences.
