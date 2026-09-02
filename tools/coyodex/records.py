@@ -154,13 +154,6 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # live build were unreadable the moment they were saved, and nothing read them anyway.
     HeadingSpec("Access baseline exceptions", True, DIR_KEY, SEP, strict_multi=DIR_KEY_STRICT,
                 merged_form="<path>, <path>: <why>"),
-    # Keyed by the element whose label is being adjudicated. Its own heading rather than an existing
-    # one because the question is unlike every other family's: not "is this finding acceptable" but
-    # "does this row's stated confidence stand". It exists because `verified` has TWO shipped
-    # meanings — `method/templates/project-map.template.md:9` says "read/traced", while
-    # `lint_fragment` says it is a statement about VOTES — so a map authored from the template and
-    # then checked against the votes has an honest third answer, and used to have nowhere to put it.
-    HeadingSpec("Confidence exceptions", True, ID_KEY),
     HeadingSpec("Sweep debt", True),                # key = a `path:line` anchor (free text)
     # Notes: machine-read too, but what they SAY is about the code, not about the map's own checks.
     HeadingSpec("Entry-point coverage", False),     # key = a kind + a contract word

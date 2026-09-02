@@ -64,11 +64,12 @@ lead; nothing above this line goes into an agent prompt.
 > slice** (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
 > out far under, you are folding subsystem-shaped dirs into single components — make those
 > subsystems and recurse into their units; far over, you are splitting module-sized units.
-> For every row give `file:line` evidence and a confidence tag. Write **`inferred`** — `verified`
-> is a statement about VOTES, cast a phase after you by readers who have not run yet, and the
-> grounding pass is what raises a row to it. `lint-fragment` warns on an authored `verified`.
-> (Historically: **verified** = read in code /
-> **inferred** = guessed). Use only the schema IDs and edge verbs; reference nodes, never
+> For every row give `file:line` evidence and a confidence tag. **`verified`** = you read the code
+> and traced it; **`inferred`** = you took it from a name, a path or a convention. Nothing writes
+> this field, so it is the one fact only you have — it is NOT a statement about the grounding
+> skeptics, whose verdicts are worked out separately and never stored here. **Use both values**: one
+> shipped map carried `verified` on all 301 element rows, which tells a reader nothing about which
+> rows were read, and `lint-fragment` warns when a fragment's labels are all one value. Use only the schema IDs and edge verbs; reference nodes, never
 > invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
 > cannot fill one, return its header with `(none found)` and say why; never silently omit a
 > section.** Your output is **ONE JSON fragment** — a partial map model per

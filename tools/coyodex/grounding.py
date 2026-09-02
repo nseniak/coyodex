@@ -697,17 +697,20 @@ class ElementCheck:
         return "part-checked" if self.unvoted else "confirmed"
 
     @property
-    def disagrees(self) -> bool:
-        """The pair a reader is here for: an authored label the pass does not support.
+    def unseen(self) -> bool:
+        """No skeptic looked at this element at all.
 
-        `verified` on an element no skeptic confirmed, or `inferred` on one they all did. Both are
-        the same defect — the label and the evidence were written by different processes and nothing
-        ever compared them."""
-        if self.stated == "verified":
-            return self.status != "confirmed"
-        if self.stated == "inferred":
-            return self.status == "confirmed"
-        return False
+        This REPLACES a comparison of the authored `confidence` against the votes. That comparison
+        was built on reading `verified` as "the skeptics confirmed it", and that is not what the
+        field means: `confidence` records what the AUTHOR knew — read and traced, or taken from a
+        name — so an element can honestly be `verified` and unvoted, or `inferred` and confirmed,
+        with no defect in either. The old flag called both a disagreement and asked builds to
+        relabel honest rows.
+
+        What a reader of this report actually needs is coverage: which elements the pass never
+        reached. That is a fact about the pass, it needs no second field to compare against, and it
+        is the one thing the grounding record's totals cannot say per element."""
+        return self.status == "unchecked"
 
 
 def _stated_confidence(m: ProjectModel, t: ClaimTarget) -> str:
@@ -820,10 +823,10 @@ def element_checks(m: ProjectModel, worklist_claims: list[str],
                         confirmed=c["confirmed"], refuted=c["refuted"],
                         unverifiable=c["unverifiable"], unvoted=c["unvoted"])
            for k, c in tally.items()]
-    # Worst first — a refuted element is the one a reader must act on, and an element whose stated
-    # label the pass does not support is the next. Then by kind and id, so a re-run reads the same.
+    # Worst first — a refuted element is the one a reader must act on. Then by kind and id, so a
+    # re-run reads the same.
     order = {"refuted": 0, "unverifiable": 1, "unchecked": 2, "part-checked": 3, "confirmed": 4}
-    out.sort(key=lambda r: (order[r.status], not r.disagrees, r.kind, r.element_id, r.label))
+    out.sort(key=lambda r: (order[r.status], r.kind, r.element_id, r.label))
     return out, unresolved
 
 
@@ -835,13 +838,13 @@ def format_element_checks(rows: list[ElementCheck], unresolved: list[str],
     if as_json:
         return json.dumps({
             "elements": [{"id": r.element_id, "kind": r.kind, "label": r.label,
-                          "stated": r.stated, "status": r.status, "disagrees": r.disagrees,
+                          "stated": r.stated, "status": r.status, "unseen": r.unseen,
                           "claims": r.claims, "confirmed": r.confirmed, "refuted": r.refuted,
                           "unverifiable": r.unverifiable, "unvoted": r.unvoted} for r in rows],
             "unresolved_claims": unresolved,
         }, indent=2, ensure_ascii=False)
     lines: list[str] = []
-    disagreeing = [r for r in rows if r.disagrees]
+    unseen = [r for r in rows if r.unseen]
     # "checkable", not "carry a pinned claim": the table now seeds every element the worklist COULD
     # have claimed, so the count includes the ones it never did — which is the point.
     lines.append(f"{len(rows)} checkable element(s) · "
@@ -850,16 +853,16 @@ def format_element_checks(rows: list[ElementCheck], unresolved: list[str],
                  f"{sum(1 for r in rows if r.status == 'refuted')} refuted, "
                  f"{sum(1 for r in rows if r.status == 'unverifiable')} unverifiable, "
                  f"{sum(1 for r in rows if r.status == 'unchecked')} unchecked")
-    if disagreeing:
-        lines.append(f"{len(disagreeing)} element(s) state a confidence the pass does not support "
-                     f"— the authored label and the votes were written by different processes and "
-                     f"nothing ever compared them:")
+    if unseen:
+        lines.append(f"{len(unseen)} element(s) no skeptic looked at — the pass never reached them, "
+                     f"whatever their authored label says (`confidence` records what the AUTHOR "
+                     f"knew, not what the votes found):")
     lines.append("")
     lines.append(f"{'id':<7} {'kind':<12} {'stated':<9} {'checked':<13} {'votes':<24} label")
     for r in rows:
         votes = (f"{r.confirmed}✓ {r.refuted}✗ {r.unverifiable}? {r.unvoted}– "
                  f"of {r.claims}")
-        flag = "  <- disagrees" if r.disagrees else ""
+        flag = "  <- nobody looked" if r.unseen else ""
         lines.append(f"{r.element_id or '-':<7} {r.kind:<12} {r.stated or '-':<9} "
                      f"{r.status:<13} {votes:<24} {r.label[:46]}{flag}")
     if unresolved:
@@ -970,7 +973,10 @@ def format_refutations(surviving: list[SurvivingRefutation],
             "surviving_refutations": [
                 {"claim": s.claim, "id": s.element_id, "kind": s.kind, "label": s.label,
                  "refuted_by": s.refuted_by, "note": s.note} for s in surviving],
-            "stated_but_unchallenged": [
+            # RENAMED from `stated_but_unchallenged`, which described a comparison that no longer
+            # exists: these are the elements NO SKEPTIC LOOKED AT, whatever their authored
+            # `confidence` says. The old key implied the label was part of the test.
+            "unseen_by_any_skeptic": [
                 {"id": e.element_id, "kind": e.kind, "label": e.label, "stated": e.stated,
                  "status": e.status, "access": e.element_id in access,
                  "voted_under_any_anchor": e.element_id in voted} for e in disagreeing],
@@ -1547,7 +1553,7 @@ def main(argv: list[str] | None = None) -> int:
         # no `confidence` field at all. Widening it would add rows whose stated label is `-` to a
         # list whose whole subject is the stated label.
         checks, _unresolved = element_checks(live, [w.claim for w in l2_worklist_model(live)], rows)
-        print(format_refutations(surviving, [c for c in checks if c.disagrees],
+        print(format_refutations(surviving, [c for c in checks if c.unseen],
                                  as_json=as_json, m=live, grounding_rows=rows))
         # BLOCKING on a survivor, ADVISORY on a label the pass does not support. The second is a
         # judgement about wording; the first is the map asserting something its own skeptics

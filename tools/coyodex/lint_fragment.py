@@ -349,37 +349,45 @@ def _authored_runs_in_warnings(m: ProjectModel) -> list[str]:
             f"synthesis fragment, this is yours to keep."]
 
 
+#: Below this a fragment is too small for "every row says the same thing" to mean anything — three
+#: components read from the same file honestly are all `verified`.
+_CONFIDENCE_CONSTANT_MIN = 8
+
+
 def _authored_confidence_warnings(m: ProjectModel) -> list[str]:
-    """Advisory: a fragment authoring `confidence: verified`.
+    """Advisory: a fragment whose `confidence` is a CONSTANT.
 
-    Nothing in the toolchain WRITES `confidence`; every value in every shipped map was typed by the
-    agent that wrote the row. So the field says what its author believed, and reads as what the
-    grounding pass proved. On the 2026-08-29 mcpolis map that gap was total: all 301 element-level
-    values said `verified` — components, rules, deps, subsystems, subdomains, interfaces, every one
-    — while `inferred` appeared 64 times and never once outside the `tests` array. A constant
-    carries no information, and this one is a constant that reads as an assurance.
+    `confidence` says what its author KNEW: `verified` = I read the code and traced it,
+    `inferred` = I took it from a name or a convention. That is a fact only the author has, and
+    nothing else in the map records it — which is why the field exists and why nothing writes it.
 
-    An authoring agent cannot know the answer: `verified` is a statement about VOTES, which are cast
-    a phase later by readers who have not run yet. `inferred` is the honest label at authoring time,
-    and `finalize`'s own advisory already asks a build to "say `inferred` where nobody looked" —
-    this is where a build can act on that before the map is assembled.
+    (It does NOT mean "the skeptics confirmed it". That reading was tried and dropped: no process
+    can produce it, so `verified` would be a word nothing could ever legitimately write, and the
+    vote status is already DERIVED per element by `coyodex grounding by-element`, where it cannot go
+    stale. Two facts, two homes.)
 
-    ADVISORY, and the same shape as the authored-`runs_in` nudge above: a lead-authored fragment can
-    legitimately carry a `verified` the lead has grounds for, and a single-fragment linter cannot
-    tell the two apart."""
+    So the defect is not which value a row carries — it is a fragment that carries only ONE. On the
+    2026-08-29 mcpolis map all 301 element-level values said `verified` while `inferred` appeared 64
+    times and never once outside the `tests` array. A constant carries no information: it tells a
+    reader nothing about which rows were read and which were guessed, while reading as though every
+    row was read.
+
+    ADVISORY: a small, carefully-read slice really can be all `verified`, and a single-fragment
+    linter cannot tell that from a slice that never distinguished."""
     kinds = (("component", m.components), ("rule", m.rules), ("dep", m.deps),
              ("subsystem", m.subsystems), ("subdomain", m.subdomains),
              ("interface", m.interfaces))
-    rows = [(kind, el.id) for kind, group in kinds for el in group
-            if str(getattr(el, "confidence", "") or "").strip() == "verified"]
-    if not rows:
+    values = [str(getattr(el, "confidence", "") or "").strip()
+              for _kind, group in kinds for el in group
+              if str(getattr(el, "confidence", "") or "").strip()]
+    if len(values) < _CONFIDENCE_CONSTANT_MIN or len(set(values)) > 1:
         return []
-    listed = shown([r[1] for r in rows], 8, unit="row(s)")
-    return [f"{len(rows)} row(s) author `confidence: verified`: {listed} — `verified` is a "
-            f"statement about VOTES, and the skeptics have not run yet. Write `inferred`, which is "
-            f"what the fragment actually knows; the grounding pass is what can raise it. Measured "
-            f"on one shipped map: 301 of 301 element-level values said `verified`, so the field "
-            f"was a constant that reads as an assurance."]
+    only = values[0]
+    return [f"all {len(values)} row(s) in this fragment carry `confidence: {only}` and nothing "
+            f"else — the field says what YOU knew (`verified` = read and traced, `inferred` = taken "
+            f"from a name or a convention), so one value across every row tells a reader nothing "
+            f"about which rows you read. Measured on one shipped map: 301 of 301 element-level "
+            f"values said `verified`. If the slice really was uniform, say so in your reply."]
 
 
 def lint_fragment_warnings(m: ProjectModel) -> list[str]:

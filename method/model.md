@@ -366,14 +366,6 @@ Semantics, stated on the fields:
   its own tables, a view the database refreshes, a throwaway CI database.
   The two never collide — each rule filters the heading by its own id prefix, so a `Cn` line can
   never quiet an ownership gap and an `En` line can never quiet a writer gap.
-  **"Confidence exceptions"** adjudicates a row's stated `confidence`, as `<id>: <why>`. `validate`
-  says so when a map carries `confidence: verified` and NO `grounding` record: nothing in the
-  toolchain writes that field, so the label says what its author believed while reading as what a
-  checking pass proved. The honest answers are usually to run the pass or to write `inferred` — but
-  `verified` has two shipped meanings ("read/traced" in the map template, "the votes confirmed it"
-  in `lint-fragment`), so an author who followed the template is not wrong and needs a place to say
-  so. Record one line per element.
-
   One more: **"Naming exceptions"** adjudicates an element NAME, as `In: <why>`. A name is a LABEL,
   read on a card and in a breadcrumb, never inside prose, so it takes NO LEADING ARTICLE —
   "Dashboard", not "The dashboard". Record a line here only for a real proper name, a product

@@ -347,7 +347,7 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
         return Leg("grounding refutations", FAILED,
                    note=f"it did not return JSON (exit {code}): {(err or out).strip()[:200]}")
     surviving = list(payload.get("surviving_refutations") or [])
-    stated = list(payload.get("stated_but_unchallenged") or [])
+    stated = list(payload.get("unseen_by_any_skeptic") or [])
     blocking = [f"{s['claim']} — REFUTED by {s['refuted_by']} skeptic(s) and still in the map, "
                 f"unchanged. Correct the claim or drop the row; a reconciled refutation no longer "
                 f"resolves here." + (f" Skeptic: {s['note'][:300]}" if s.get("note") else "")
@@ -374,32 +374,42 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
     # `file:line` in it, so one `fix apply-drift` orphans every vote the rule had and the element
     # reads `unchecked`. Blocking on `unchecked` alone turned 50 confirmed access rules of a real
     # map into build failures under a message asserting nobody had voted.
+    # NO LONGER KEYED ON THE LABEL. This used to fire only on an access rule stating
+    # `confidence: verified`, on the reading that the label claimed the rule had been CHECKED. It
+    # does not: `confidence` records what the AUTHOR knew — read and traced, or taken from a name —
+    # and an access rule the author genuinely read is honestly `verified` whether or not a skeptic
+    # ever saw it. Dropping the label from the test makes the check both correct and STRONGER: an
+    # access rule nobody challenged is worth blocking on however its author labelled it, and the
+    # old form let an `inferred` one through in silence.
     unvetted_access = [e for e in stated
                        if e.get("access") and e.get("kind") == "rule_site"
-                       and e.get("status") == "unchecked" and e.get("stated") == "verified"
+                       and e.get("status") == "unchecked"
                        and not e.get("voted_under_any_anchor")]
-    blocking += [f"ACCESS rule {e['id']} ({e['label']}) states `confidence: verified` and NO skeptic "
-                 f"ever voted on it, under this anchor or any other — the map tells a reader that "
-                 f"who-may-do-what was checked, and it was not. Send it to a skeptic, or say "
-                 f"`inferred`, which is what the map actually knows."
+    blocking += [f"ACCESS rule {e['id']} ({e['label']}) was never challenged — NO skeptic voted on "
+                 f"it, under this anchor or any other. Who-may-do-what is the one thing a reader "
+                 f"trusts a map for, and this row has nothing behind it. Send it to a skeptic."
                  for e in unvetted_access]
     stated = [e for e in stated if e not in unvetted_access]
+    unchecked = [e for e in stated if e.get("status") == "unchecked"]
     kinds: dict[str, int] = {}
-    for e in stated:
+    for e in unchecked:
         kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
-    advisory = ([f"{len(stated)} element(s) state a confidence the grounding pass does not support "
-                 f"({', '.join(f'{n} {k}' for k, n in sorted(kinds.items()))}). Nothing writes "
-                 f"`confidence`, so the label and the votes come from different processes and this "
-                 f"is the only place they meet. Run `coyodex grounding by-element --map <this map> "
-                 f"--verdicts <…>` for the list — no `--worklist`, so it reads the LIVE map and "
-                 f"reproduces this count; adding the pinned worklist answers a different question "
-                 f"(what the skeptics saw) and gives a different number. Then either challenge the "
-                 f"elements or say `inferred` where nobody looked."]
-                if stated else [])
+    # WHAT THE PASS DID NOT REACH — not "elements whose label the pass does not support". The old
+    # line compared the author's `confidence` against the votes, which are two different facts about
+    # two different things; the number it produced meant nothing and asked for `inferred` on rows
+    # that were honestly read. What a reader needs from this leg is coverage: which elements no
+    # skeptic looked at.
+    advisory = ([f"{len(unchecked)} element(s) were never looked at by a skeptic "
+                 f"({', '.join(f'{n} {k}' for k, n in sorted(kinds.items()))}). Run `coyodex "
+                 f"grounding by-element --map <this map> --verdicts <…>` for the list — no "
+                 f"`--worklist`, so it reads the LIVE map and reproduces this count; adding the "
+                 f"pinned worklist answers a different question (what the skeptics saw) and gives "
+                 f"a different number."]
+                if unchecked else [])
     return Leg("grounding refutations", RAN if code in (0, 1) else FAILED,
                blocking=blocking, advisory=advisory,
                note=(f"{len(surviving)} refuted claim(s) still in the map, "
-                     f"{len(stated)} element(s) stating a confidence the pass does not support"))
+                     f"{len(unchecked)} element(s) no skeptic looked at"))
 
 
 #: Where a build keeps the skeptics' verdicts. `finalize` looks here when it was given none, so it

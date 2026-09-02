@@ -803,22 +803,34 @@ def _warn(fragment: dict) -> list[str]:
     return lint_fragment_warnings(load_fragment(json.dumps(fragment), "f.json"))
 
 
-def test_an_authored_verified_confidence_is_an_advisory():
-    hits = _warn({"format": "coyodex-map", "components": [
-        {"id": "C1", "name": "A box", "confidence": "verified"}]})
-    assert any("author `confidence: verified`" in h for h in hits), hits
-    assert any("C1" in h for h in hits), hits
+def _labels(values: list[str]) -> list[str]:
+    """One fragment whose components carry `values` as their confidence, in order."""
+    return _warn({"format": "coyodex-map", "components": [
+        {"id": f"C{i + 1}", "name": f"Box {i + 1}", "confidence": v}
+        for i, v in enumerate(values)]})
 
 
-def test_inferred_is_the_honest_label_and_raises_nothing():
-    assert not [h for h in _warn({"format": "coyodex-map", "components": [
-        {"id": "C1", "name": "A box", "confidence": "inferred"}]})
-        if "confidence" in h]
+def test_a_fragment_whose_labels_are_ALL_ONE_VALUE_is_an_advisory():
+    """The defect is not which value a row carries — `confidence` says what the AUTHOR knew, and
+    either value can be honest. It is a fragment that carries only ONE: on a shipped map all 301
+    element-level values said `verified`, which tells a reader nothing about which rows were read."""
+    hits = _labels(["verified"] * 10)
+    assert any("carry `confidence: verified` and nothing" in h for h in hits), hits
+    assert any("all 10 row(s)" in h for h in hits), hits
 
 
-def test_the_advisory_counts_every_element_kind_that_carries_the_field():
-    hits = _warn({"format": "coyodex-map",
-                  "components": [{"id": "C1", "name": "A", "confidence": "verified"}],
-                  "deps": [{"id": "D1", "name": "Mongo", "kind": "datastore",
-                            "confidence": "verified"}]})
-    assert any("2 row(s) author" in h for h in hits), hits
+def test_a_fragment_that_uses_BOTH_values_raises_nothing():
+    hits = _labels(["verified"] * 6 + ["inferred"] * 4)
+    assert not [h for h in hits if "confidence" in h], hits
+
+
+def test_an_all_inferred_fragment_is_flagged_the_same_way():
+    """It is not a check on the word `verified`. A slice that labelled nothing it read is making the
+    same non-statement in the other direction."""
+    assert any("carry `confidence: inferred` and nothing" in h for h in _labels(["inferred"] * 10))
+
+
+def test_a_small_fragment_is_not_second_guessed():
+    """Three components read from one file honestly are all `verified`; below the floor, "every row
+    says the same thing" says nothing."""
+    assert not [h for h in _labels(["verified"] * 3) if "confidence" in h]

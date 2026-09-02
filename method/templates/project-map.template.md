@@ -6,7 +6,10 @@
 > Every row is drillable: name a row and it expands to a lower table or a `file:line`.
 > **Schema v1** (ID-based): every element has a stable ID (`UC`/`C`/`D`/`E`/`HP`);
 > cross-references use IDs; validated by `coyodex validate`.
-> Confidence: **verified** (read/traced) vs **inferred** (naming/convention).
+> Confidence: **verified** (you read the code and traced it) vs **inferred** (taken from a name, a
+> path or a convention). It records what the AUTHOR knew and nothing writes it. Whether the
+> grounding skeptics confirmed a row is a different question, answered by
+> `coyodex grounding by-element` from the votes and never stored here.
 > **Commit:** `<sha>` · **Committed:** `<commit-date>` · **Built:** `<YYYY-MM-DD HH:MM>`
 
 ---

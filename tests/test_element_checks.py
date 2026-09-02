@@ -68,46 +68,50 @@ def row_for(rows: list, element_id: str):
 
 # --- the headline: a label the votes do not support ------------------------------
 
-def test_a_rule_three_skeptics_confirmed_still_reads_inferred_and_the_row_says_so():
-    """THE defect. On a live map every business rule read `inferred` after each of its sites had
-    been confirmed by three independent skeptics, because no code path writes the field. The row
-    keeps both facts side by side instead of picking one."""
+def test_a_rule_three_skeptics_confirmed_keeps_its_authored_label():
+    """The row keeps BOTH facts side by side and reconciles neither. `stated` is what the author
+    knew — read and traced, or taken from a name — and `status` is what the pass did. They are
+    different questions, so an `inferred` row three skeptics confirmed is not a contradiction."""
     m = make_model(confidence="inferred")
     claim = site_claim(m)
     rows, _ = element_checks(m, [claim], [make_vote(claim, True)] * 3)
     r = row_for(rows, "BR1")
     assert r.stated == "inferred"          # what the author typed, untouched
     assert r.status == "confirmed"         # what the pass actually did
-    assert r.disagrees                     # and the pair is flagged, not silently reconciled
+    assert not r.unseen                    # somebody looked, which is the flag's whole subject
 
 
-def test_a_verified_element_nobody_challenged_is_flagged_the_same_way():
-    """The opposite direction, and the more dangerous one: the author asserted `verified` and no
-    skeptic ever opened the claim. Reading the label alone, that element is indistinguishable from
-    one three skeptics proved."""
-    m = make_model(confidence="verified")
-    rows, _ = element_checks(m, [site_claim(m)], [])
-    r = row_for(rows, "BR1")
-    assert (r.stated, r.status, r.unvoted) == ("verified", "unchecked", 1)
-    assert r.disagrees
+def test_an_element_nobody_challenged_is_flagged_whatever_its_label_says():
+    """The fact a reader needs from this report: the pass never reached this element. It holds
+    however the author labelled it — which is why the flag no longer reads the label at all. The
+    old flag compared `stated` against the votes and called an honest `verified` a disagreement."""
+    for label in ("verified", "inferred", ""):
+        m = make_model(confidence=label)
+        rows, _ = element_checks(m, [site_claim(m)], [])
+        r = row_for(rows, "BR1")
+        assert (r.status, r.unvoted) == ("unchecked", 1), label
+        assert r.unseen, label
 
 
-def test_a_verified_element_the_pass_confirmed_is_not_flagged():
-    """The agreeing case must stay quiet, or the flag means nothing."""
-    m = make_model(confidence="verified")
-    claim = site_claim(m)
-    rows, _ = element_checks(m, [claim], [make_vote(claim, True)])
-    assert not row_for(rows, "BR1").disagrees
+def test_an_element_the_pass_reached_is_not_flagged():
+    """The flag must mean one thing, or it means nothing."""
+    for label in ("verified", "inferred"):
+        m = make_model(confidence=label)
+        claim = site_claim(m)
+        rows, _ = element_checks(m, [claim], [make_vote(claim, True)])
+        assert not row_for(rows, "BR1").unseen, label
 
 
-def test_an_element_whose_kind_carries_no_confidence_is_never_flagged():
-    """An edge and a cadenced entry point have no `confidence` field, so there is no authored label
-    to contradict. Flagging them would report the map's schema as a defect on every row."""
+def test_an_element_whose_kind_carries_no_confidence_still_reports_its_coverage():
+    """An edge and a cadenced entry point have no `confidence` field. Under the old label-comparison
+    that made them unflaggable; coverage is a fact about the PASS, so it applies to them too."""
     m = make_model()
     claim = store_claim("E1", "Thing", "D1", "things", "collection")
     rows, _ = element_checks(m, [claim], [make_vote(claim, True)])
     r = row_for(rows, "E1")
-    assert r.stated == "" and not r.disagrees
+    assert r.stated == "" and not r.unseen
+    rows, _ = element_checks(m, [claim], [])
+    assert row_for(rows, "E1").unseen
 
 
 # --- one row per element ---------------------------------------------------------
@@ -154,7 +158,7 @@ def test_a_partly_voted_element_is_not_called_confirmed():
     claims = [site_claim(m, 0, i) for i in range(2)]
     r = row_for(element_checks(m, claims, [make_vote(claims[0], True)])[0], "BR1")
     assert r.status == "part-checked" and (r.confirmed, r.unvoted) == (1, 1)
-    assert r.disagrees          # it says `verified`, and half of it was never opened
+    assert not r.unseen         # half of it WAS opened; `unseen` means nobody looked at all
 
 
 def test_a_tie_lands_on_unverifiable_not_on_a_silent_win():
@@ -191,7 +195,7 @@ def test_an_element_the_worklist_never_claimed_still_appears_as_unchecked():
     rows, _ = element_checks(m, [other], [make_vote(other, True)])
     r = row_for(rows, "BR1")
     assert (r.claims, r.status) == (0, "unchecked")
-    assert r.disagrees          # it says `verified` and nobody ever opened it
+    assert r.unseen             # nobody ever opened it, whatever its label says
 
 
 def test_an_element_the_worklist_would_never_claim_is_not_called_unchecked():
@@ -258,15 +262,16 @@ def test_the_writer_still_names_a_claim_that_matches_nothing():
 
 # --- the report and the CLI ------------------------------------------------------
 
-def test_the_report_names_the_disagreeing_elements_before_the_agreeing_ones():
+def test_the_report_names_the_elements_nobody_looked_at():
     m = make_model(confidence="inferred")
     claim = site_claim(m)
     store = store_claim("E1", "Thing", "D1", "things", "collection")
-    rows, unresolved = element_checks(m, [claim, store],
-                                      [make_vote(claim, True), make_vote(store, True)])
+    # E1's claim is pinned and never voted; BR1's is confirmed.
+    rows, unresolved = element_checks(m, [claim, store], [make_vote(claim, True)])
     text = format_element_checks(rows, unresolved)
-    assert "disagrees" in text
-    assert text.index("BR1") < text.index("E1")
+    assert "no skeptic looked at" in text
+    assert "nobody looked" in text
+    assert text.index("E1") < text.index("BR1")     # unchecked outranks confirmed
 
 
 def test_the_report_can_be_narrowed_to_one_kind():
@@ -287,7 +292,7 @@ def test_the_json_report_carries_the_unresolved_claims_too():
     doc = json.loads(format_element_checks(rows, unresolved, as_json=True))
     assert doc["unresolved_claims"] == [stale]
     br1 = [e for e in doc["elements"] if e["id"] == "BR1"]
-    assert br1 and br1[0]["disagrees"] is True and br1[0]["status"] == "confirmed"
+    assert br1 and br1[0]["unseen"] is False and br1[0]["status"] == "confirmed"
 
 
 def test_the_cli_refuses_without_a_map_rather_than_printing_an_empty_table():

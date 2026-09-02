@@ -3283,31 +3283,12 @@ def _grounding_warnings(m: ProjectModel) -> list[str]:
         # linted at all: one sat 113 turns unread on argus. With no record there is nothing for the
         # label to be measured against, and `finalize`'s comparison leg cannot run either — so this
         # is the only place the map can be told that it is asserting without evidence.
-        # Narrowed to `verified`, the only value that can be WRONG here: `inferred` with no pass is
-        # exactly what a map with no pass knows.
-        #
-        # RECORDABLE, and it must be. "There is no third state" was the first reading and it is
-        # false, because `verified` has two shipped meanings: `method/templates/project-map.template
-        # .md:9` defines it as "read/traced" and its own example rows are `verified`, while
-        # `lint_fragment` defines it as a statement about VOTES. An author who followed the template
-        # is not wrong, and this repo's own map carries 145 such rows. Until the two definitions are
-        # reconciled in the method, an unescapable line here would fire on correct work.
-        excused = records.recorded_keys(m, "confidence exceptions")
-        claimed = [eid for eid in
-                   (getattr(el, "id", "") for el in (*m.components, *m.rules, *m.deps,
-                                                     *m.subsystems, *m.subdomains, *m.interfaces)
-                    if str(getattr(el, "confidence", "") or "").strip() == "verified")
-                   if eid and eid not in excused]
-        if claimed:
-            out.append(
-                f"{len(claimed)} element(s) state `confidence: verified` and this map has NO "
-                f"`grounding` record: {_shown(claimed, 12)} — nothing in the toolchain writes that "
-                "field, so the label says what its author believed while reading as what a "
-                "checking pass proved, and here no pass ran. `lint-fragment` nudges an authoring "
-                "agent about this, but a fragment the LEAD writes by hand may never be linted at "
-                "all (one sat 113 turns unread). Run the grounding pass, write `inferred`, or "
-                "record '<id>: <why the label stands with no pass>' under a 'Confidence "
-                "exceptions' extras heading")
+        # NO CHECK HERE for `confidence: verified` with no grounding record. One was written and is
+        # removed: it read `verified` as "the skeptics confirmed it", and that is not what the field
+        # means. `confidence` records what the AUTHOR knew — read and traced, or taken from a name —
+        # which a map with no grounding pass can state perfectly honestly. The vote status is a
+        # different fact with a different home: `grounding by-element` derives it per element from
+        # the votes and stores nothing, so it cannot go stale.
         claim_surface = len(l2_worklist_model(m))     # only needed for this message
         if claim_surface >= 20:
             out.append(f"No `grounding` record: this map's {claim_surface} L2 claims (the same "

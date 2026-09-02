@@ -629,7 +629,7 @@ def test_a_confirmed_claim_never_blocks():
     assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
 
 
-def test_the_unchallenged_confidence_finding_is_ONE_advisory_not_one_per_element():
+def test_the_uncovered_element_finding_is_ONE_advisory_not_one_per_element():
     """An advisory here is contractually "fixed, or recorded under the heading its message names".
     A live map has 81 of these and no heading to record them under, so one row per element would
     push the ten real advisories off the top of the report."""
@@ -644,7 +644,7 @@ def test_the_unchallenged_confidence_finding_is_ONE_advisory_not_one_per_element
     doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert len(leg["advisory"]) == 1
-    assert "element(s) state a confidence" in leg["advisory"][0]
+    assert "never looked at by a skeptic" in leg["advisory"][0]
 
 
 def _map_with_rule(access: bool, confidence: str) -> tuple[Path, Path]:
@@ -663,12 +663,15 @@ def _map_with_rule(access: bool, confidence: str) -> tuple[Path, Path]:
     return root, p
 
 
-def test_an_ACCESS_rule_claiming_verified_with_no_vote_BLOCKS():
-    """The one shape promoted out of the confidence count line. `verified` on an access rule tells a
-    reader that who-may-do-what was checked; with no vote at all, nobody checked. A shipped mcpolis
-    map carried two — both authored after the worklist was pinned, so no skeptic could have seen
-    them, both labelled by the hand that wrote them — and the map's own note admits neither went to
-    a skeptic. It shipped as an advisory nobody acted on."""
+def test_an_ACCESS_rule_no_skeptic_EVER_voted_on_BLOCKS():
+    """Who-may-do-what is the one thing a reader trusts a map for, and an access rule nobody
+    challenged has nothing behind it. A shipped map carried two — both authored after the worklist
+    was pinned, so no skeptic could have seen them — and the map's own note admits it.
+
+    IT DOES NOT READ THE LABEL. It used to fire only on `confidence: verified`, on the reading that
+    the label claimed the rule had been checked. It does not: `confidence` says what the AUTHOR
+    knew. Dropping the label made the check correct AND stronger — see the `inferred` case below,
+    which the old form let through in silence."""
     root, p = _map_with_rule(access=True, confidence="verified")
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
@@ -676,7 +679,7 @@ def test_an_ACCESS_rule_claiming_verified_with_no_vote_BLOCKS():
     doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert len(leg["blocking"]) == 1 and "BR1" in leg["blocking"][0]
-    assert "NO skeptic ever voted" in leg["blocking"][0]
+    assert "never challenged" in leg["blocking"][0]
     assert doc["verdict"] == "BLOCKED" and code == 1
 
 
@@ -701,10 +704,10 @@ def test_a_rule_that_WAS_voted_on_and_then_RE_ANCHORED_does_not_block():
     assert not leg["blocking"]
 
 
-def test_a_NON_access_rule_claiming_verified_stays_advisory():
-    """The narrowness is the point. A rule about how something works, described as verified when the
-    pass did not reach it, is a wording overstatement — the judgement the count line already carries.
-    Gating on it would fail honest maps."""
+def test_a_NON_access_rule_nobody_voted_on_stays_advisory():
+    """The narrowness is the point. A rule about how something WORKS that the pass did not reach is
+    a coverage gap, and gating on every one of those would fail honest maps. Access is the
+    exception because of what it claims, not because of how it is labelled."""
     root, p = _map_with_rule(access=False, confidence="verified")
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
@@ -712,16 +715,20 @@ def test_a_NON_access_rule_claiming_verified_stays_advisory():
     doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert not leg["blocking"]
-    assert any("state a confidence" in a for a in leg["advisory"])
+    assert any("never looked at by a skeptic" in a for a in leg["advisory"])
 
 
-def test_an_ACCESS_rule_that_says_inferred_does_not_block():
-    """`inferred` is what the map actually knows when nobody looked, and saying so is the remedy the
-    blocking message names. It must be a real way out, or the gate is a dead end."""
+def test_an_unvoted_ACCESS_rule_BLOCKS_even_when_it_says_inferred():
+    """The old check read the label, so relabelling an unchallenged access rule `inferred` silenced
+    it — and `inferred` was the remedy the message itself named. An access rule nobody looked at is
+    the defect however its author labelled it; the remedy is to send it to a skeptic."""
     root, p = _map_with_rule(access=True, confidence="inferred")
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
-    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
+    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 1
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
+    assert len(leg["blocking"]) == 1 and "never challenged" in leg["blocking"][0]
 
 
 def test_the_leg_is_absent_rather_than_silently_clean_when_no_verdicts_are_given():

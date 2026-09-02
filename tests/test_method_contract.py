@@ -99,7 +99,6 @@ MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "persistence exceptions", "data owner exceptions", "access baseline exceptions",
     "unclaimed surfaces", "drift exceptions", "interface exceptions",
     "bucket vocabulary", "sweep debt", "naming exceptions",
-    "confidence exceptions",
 )
 
 
@@ -1476,11 +1475,6 @@ def test_a_MERGED_naming_record_adjudicates_every_key_on_the_line():
     assert {"D3", "D7", "D9"} <= records.recorded_keys(m, "naming exceptions")
 
 
-def test_the_confidence_escape_is_readable_under_its_own_heading():
-    from coyodex import records
-    m = _map_with_record("Confidence exceptions",
-                         "- C1, C2: read and traced by hand before the pass existed\n")
-    assert {"C1", "C2"} <= records.recorded_keys(m, "confidence exceptions")
 
 
 # --- the wrong-map guard covers every door (adversarial review, 2026-09-02) -----------------------

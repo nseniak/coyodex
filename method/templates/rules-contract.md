@@ -94,9 +94,12 @@ Those seven keys are the whole authored surface. Notes on each:
 - **`risk`** is **REQUIRED on an `access` rule** and the lint FAILS without it. It is the one thing a
   statement, a site and a `why` between them cannot say: not what the line does, but what its LIMIT
   costs.
-- **`confidence`** is **`inferred`** from a fragment, always. `verified` is a statement about
-  VOTES — cast a phase later by the grounding skeptics, who have not run yet — so an authoring
-  agent cannot know it, and `lint-fragment` warns on one. The grounding pass raises a row.
+- **`confidence`** — `confidence` says what YOU knew: **`verified`** = you read the code and traced it,
+  **`inferred`** = you took it from a name, a path or a convention. Nothing in the toolchain writes
+  this field, so it is the one fact only the author has. It is NOT a statement about the grounding
+  skeptics — that is worked out per element by `coyodex grounding by-element`, from the votes, and is
+  never stored. **Use both values.** One shipped map carried `verified` on all 301 element rows, which
+  tells a reader nothing about which rows were read.
 - **`sites[].where`** is the **OPERATIVE line** — the `if` / `raise` / `require_*` / decorator call
   that ENFORCES the decision. **Never a docstring, a comment, a `def` header, an import or a blank
   line** (`validate` flags each of those), and never a whole file without a `:line`.
