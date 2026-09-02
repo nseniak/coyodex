@@ -1539,3 +1539,49 @@ def test_a_deliberate_self_map_is_still_allowed_at_every_door():
             assert cli.main(["dump", ".coyodex/project-map.json", "--id", "C1"]) == 0
     finally:
         os.environ.pop("COYODEX_SELF_MAP", None)
+
+
+# --- the closing verb has to be REACHABLE (build review, 2026-09-02) ------------------------------
+# `coyodex ship` ran ZERO times on a build that then hand-typed its thirteen steps over 57 turns.
+# It was never avoided for a bad reason: it was named once, in a document read 540 turns earlier and
+# never reopened, and sat on help line 62 under the lead's own `head -60`.
+
+def test_ship_is_in_the_first_lines_of_the_help():
+    """A build reads `coyodex --help | head -60`. That is a fact about how it reads, not a thing to
+    argue with."""
+    from coyodex.cli import USAGE
+    lines = USAGE.splitlines()
+    at = next(i for i, l in enumerate(lines) if l.startswith("  ship "))
+    assert at < 20, f"`ship` is at help line {at + 1}; a `head -60` reader must meet it"
+
+
+def test_the_report_the_note_is_written_from_names_the_closing_verb():
+    """`grounding report` is where the lead stands at the start of the close. A build follows the
+    `Next:` lines the tools print — and none of them said `ship`."""
+    import io, contextlib, json, tempfile
+    from pathlib import Path
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        wl = Path(td) / "w.json"
+        wl.write_text(json.dumps({"worklist": [{"claim": "c1"}]}), encoding="utf-8")
+        v = Path(td) / "v.json"
+        v.write_text(json.dumps({"grounding": [
+            {"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "s"}]}),
+            encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            assert main(["report", "--worklist", str(wl), "--verdicts", str(v)]) == 0
+    assert "Next: coyodex ship" in out.getvalue(), out.getvalue()[-300:]
+
+
+def test_the_closing_step_list_carries_no_pasteable_commands():
+    """The thirteen steps used to sit as ready-to-paste lines directly under "…and `coyodex ship`
+    RUNS it", and that is what the build copied. A reference must not read as a script."""
+    from pathlib import Path
+    text = (Path(__file__).resolve().parents[1] / "method.md").read_text(encoding="utf-8")
+    block = text[text.index("Ordering — ONE sequence"):]
+    block = block[:block.index("13. commit the map")]
+    # The two `ship` invocations are the point of the block and stay runnable; nothing else does.
+    runnable = [l.strip() for l in block.splitlines()
+                if "coyodex " in l and "ship" not in l and l.strip().startswith(("coyodex", "."))]
+    assert not runnable, f"pasteable alternatives under the ship paragraph: {runnable}"

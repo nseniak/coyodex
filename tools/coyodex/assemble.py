@@ -984,6 +984,11 @@ def main(argv: list[str] | None = None) -> int:
     # alias the CLI) can see the auto-clean + reconcile effects without reverse-engineering a script.
     print(f"  {_assemble_digest(model, stats, rec_stats)}")
     print(f"Next: coyodex validate {out_dir / 'project-map.json'} --check-sources")
+    # AND, once the skeptics have voted, the verb that runs the whole close. A build follows these
+    # `Next:` lines literally; the close was hand-typed over 57 turns on a build where `ship` was
+    # named nowhere it would be seen.
+    print(f"      then, with the verdicts in: coyodex ship {out_dir.parent} "
+          f"(prepare) and again with --note-file (finish)")
     return 0
 
 

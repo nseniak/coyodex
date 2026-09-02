@@ -408,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     if inputs.note_file is None:
         print("\nSHIP PREPARED — the grounding report above is the reconcile worklist. Read it "
               "whole, write the grounding note to a file, then re-run:\n"
-              f"  coyodex ship {inputs.repo} --note-file <path> [--partial]")
+              f"  Next: coyodex ship {inputs.repo} --note-file <path> [--partial]")
     else:
         print("\nSHIP COMPLETE — quote finalize's verdict line in the commit message "
               f"(gate block at {inputs.gate_block}), then commit the map, the .md, the pre-index "

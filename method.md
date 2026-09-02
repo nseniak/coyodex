@@ -2393,32 +2393,38 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     Run the steps by hand only when ship refuses and the refusal is genuinely wrong for this build.
     Where an older note disagrees with the list below, the list wins.
 
+    **THE LIST BELOW IS A REFERENCE, NOT A SCRIPT — do not copy its lines.** It is written without
+    runnable commands on purpose. When the steps were spelled out as pasteable lines directly under
+    this paragraph, that is what a build reached for: the 2026-09-02 build announced "now the ship
+    sequence" and then hand-typed the thirteen steps over 57 turns, and `ship` ran zero times. It
+    was not avoiding the verb; the verb was named once, six hundred lines above where it was needed,
+    while the pieces were pasteable right here. The steps still have to be documented — a reader has
+    to know what runs, and steps 0, 1 and 13 are genuinely yours — so they are described rather than
+    supplied.
+
     ```
-    0. coyodex grounding lint --verdicts <v> … --agent-transcripts <dir>   # at COLLECTION, not here
-    1. every structural / fragment change, including the refutation reconcile
-    2. coyodex anchor-drift --map … --verdicts …            # what drifted
-    3. coyodex fix apply-drift … --to-reconcile <file>      # RECORD it; the map is not edited
-    4. coyodex assemble … --reconcile <file>                # last STRUCTURAL assemble; applies set_anchors
-    5. coyodex grounding report --worklist … --verdicts …   # WHICH claims were refuted / tied /
-                                                            #   unvoted — the reconcile worklist, and
-                                                            #   what `grounding.note` is written from
-    6. coyodex grounding write … --note …                   # measured against the map it describes
-    7. coyodex assemble … --reconcile <file>                # carries the RECORD in; idempotent, and
-                                                            #   not optional — skip it and the
-                                                            #   grounding record never reaches the map
-    8. coyodex provenance stamp <repo> --mode build \
-         --update-header .coyodex/build-fragments/header.json   # STAMPS and fills `built` in one
-                                                            #   run. Never hand-write that minute
-    9. assemble + render again, so the filled header reaches the map
-   10. coyodex lint-fragment … header.json                  # the one hand-authored fragment
-   11. coyodex validate --check-sources → coyodex audit → coyodex render
-   12. coyodex finalize … --verdicts <v> … --emit-gate-block <file>   # ONE run, both flags
-   12b. if this build ran an EXPERIMENT the backlog asked for, write its answer somewhere durable
-        BEFORE the commit — `COYODEX_HOME/eval/retro/backlog.md`, or the map's own extras. A
-        scratchpad is not a destination: on the 2026-08-29 mcpolis build the `owner: the next build`
-        experiment ran, answered its question with real numbers, and the 53-line write-up was left
-        in `/private/tmp/…/scratchpad/`, one sweep from gone, while the backlog row still read
-        unanswered. That question had been parked three times before somebody finally ran it
+    0.  YOURS — lint the verdicts at COLLECTION, not here (`grounding lint`, with
+        `--agent-transcripts`).
+    1.  YOURS — every structural / fragment change, including the refutation reconcile.
+    2.  anchor-drift against the verdicts: what drifted.
+    3.  apply-drift `--to-reconcile`: RECORDS it; the map is not edited.
+    4.  the last STRUCTURAL assemble; applies set_anchors.
+    5.  grounding report: WHICH claims were refuted / tied / unvoted — the reconcile worklist, and
+        what `grounding.note` is written from.
+    6.  grounding write, measured against the map it describes.
+    7.  assemble again, carrying the RECORD in. Idempotent, and not optional — skip it and the
+        grounding record never reaches the map.
+    8.  provenance stamp, which STAMPS and fills `built` in one run. Never hand-write that minute.
+    9.  assemble + render again, so the filled header reaches the map.
+    10. lint the header fragment — the one a hand authored.
+    11. validate `--check-sources`, then audit, then render.
+    12. finalize with the verdicts AND `--emit-gate-block`, in ONE run.
+    12b. YOURS — if this build ran an EXPERIMENT the backlog asked for, write its answer somewhere
+        durable BEFORE the commit: `COYODEX_HOME/eval/retro/backlog.md`, or the map's own extras. A
+        scratchpad is not a destination: on one build the experiment ran, answered its question with
+        real numbers, and the 53-line write-up was left in a temp folder, one sweep from gone, while
+        the backlog row still read unanswered. That question had been parked three times before
+        somebody finally ran it.
    13. commit the map, the .md, the pre-index and provenance
     ```
 

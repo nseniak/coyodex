@@ -1659,6 +1659,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if verb == "report":
         print(format_report(claims, rows, as_json=as_json, live_claims=live_claims))
+        # NAME THE NEXT VERB, HERE. This report is what the closing note is written FROM, so a lead
+        # reading it is standing exactly at the start of the close — and `ship` runs that whole
+        # close in one command. It was reached for ZERO times on the 2026-09-02 build, which then
+        # hand-typed the thirteen steps over 57 turns: the verb appears once in `method.md`, inside
+        # a document read 540 turns earlier and never reopened, and sits on help line 62 under a
+        # `head -60`. It was never unreachable for a bad reason; it was just never in front of
+        # anyone at the moment it mattered. A build follows the `Next:` lines the tools print.
+        if not as_json:
+            print("\nNext: coyodex ship <repo> --note-file <the note you write from this report> "
+                  "— the whole closing sequence in one command, stopping at the first failing step "
+                  "and naming every step that did not run.")
         return 0
     record, errors = build_record(claims, rows, note, live_claims=live_claims, partial=partial)
     # REFUSE, having been a warning and having failed as one. This used to warn, on the argument

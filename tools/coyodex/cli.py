@@ -17,6 +17,11 @@ from coyodex.model import WrongMapError
 USAGE = """usage: coyodex <command> [args...]
 
 Commands:
+  ship       The build's closing sequence (method.md's numbered list, steps 2-12) as one
+             command. Without --note-file it PREPARES (anchor-drift → apply-drift →
+             assemble → grounding report) and stops so the note is written from the
+             report; with --note-file it FINISHES through finalize. A failed step stops
+             the run and names every step that did not run.
   preindex   Build the structural pre-index (.coyodex/preindex.json). Needs the
              `preindex` extra (tree-sitter); install with: pip install -e '.[preindex]'
   validate   Validate a map (schema + semantic checks — is it WELL-FORMED?).
@@ -75,11 +80,6 @@ Commands:
              with whole lists. Adds no check of its own and compares nothing against
              a previous map. A convenience wrapper, not an enforcement point — exit 1
              for what validate/audit already block on, or when a check did not run.
-  ship       The build's closing sequence (method.md's numbered list, steps 2-12) as one
-             command. Without --note-file it PREPARES (anchor-drift → apply-drift →
-             assemble → grounding report) and stops so the note is written from the
-             report; with --note-file it FINISHES through finalize. A failed step stops
-             the run and names every step that did not run.
   scope      The up-front briefing, before any work: which files will be analyzed
              (git decides — .gitignore is out), what `.coyodex/.ignore` removed, and
              which commit the map will be pinned to, warning when uncommitted code
