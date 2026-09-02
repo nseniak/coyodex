@@ -17,12 +17,15 @@ reached the map without the reading the record says it had.
    regression sign: any traceback from that flag, or a `grounding.note` that says the pass could not
    run.
 
-2. expect: **no element ships `confidence: verified` with zero verdicts.** `coyodex grounding
-   by-element --map <map> --verdicts <each>` (no `--worklist`) reports the same count `finalize`
-   prints, and that count is 0. On the motivating build every one of 301 element-level values said
-   `verified` and one of them had been refuted by four readers of seven.
-   regression sign: the two numbers disagree again, or `finalize`'s advisory names a command whose
-   output does not reproduce it.
+2. **RETIRED 2026-09-02, and the reason matters more than the check.** It read: *"no element ships
+   `confidence: verified` with zero verdicts"* — which assumes `verified` means "the skeptics
+   confirmed it". It does not. `confidence` records what the AUTHOR knew (read and traced, versus
+   taken from a name), nothing in the toolchain writes it, and the vote status is derived per
+   element by `grounding by-element` instead. Under the old reading `verified` was a word no process
+   could ever produce. Do not restore this check.
+   What survives, as a NEW expectation: **`finalize`'s coverage advisory and `by-element` report the
+   same count.** regression sign: the two numbers disagree, or `finalize`'s advisory names a command
+   whose output does not reproduce it.
 
 3. expect: `.coyodex/fanout-timings.json` EXISTS after the build and holds one row per fan-out
    phase, written by `coyodex timings record --lines-from`. `timings order --phase harvest` prints

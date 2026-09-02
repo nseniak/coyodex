@@ -407,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         return rc
     if inputs.note_file is None:
         print("\nSHIP PREPARED — the grounding report above is the reconcile worklist. Read it "
-              "whole, write the grounding note to a file, then re-run:\n"
+              "whole, then write the grounding note to a file.\n"
               f"  Next: coyodex ship {inputs.repo} --note-file <path> [--partial]")
     else:
         print("\nSHIP COMPLETE — quote finalize's verdict line in the commit message "

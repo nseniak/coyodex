@@ -987,8 +987,13 @@ def main(argv: list[str] | None = None) -> int:
     # AND, once the skeptics have voted, the verb that runs the whole close. A build follows these
     # `Next:` lines literally; the close was hand-typed over 57 turns on a build where `ship` was
     # named nowhere it would be seen.
-    print(f"      then, with the verdicts in: coyodex ship {out_dir.parent} "
-          f"(prepare) and again with --note-file (finish)")
+    # TWO LINES, both runnable. The premise of naming the next verb is that a build pastes these
+    # literally, so a parenthetical inside the command (`coyodex ship . (prepare)`) is a shell
+    # parse error dressed as advice. `out_dir.parent` is `.` under the documented `--out .coyodex`.
+    print(f"      then, once the verdicts are in — PREPARE, read the report it ends on:")
+    print(f"        coyodex ship {out_dir.parent}")
+    print(f"      then FINISH, with the note you wrote from that report:")
+    print(f"        coyodex ship {out_dir.parent} --note-file <path>")
     return 0
 
 

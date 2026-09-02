@@ -2440,8 +2440,8 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     dropped its verdict-based anchor-drift leg, including the "challenged N of M" coverage line. The
     flags combine; run it once.
 
-    **Step 8 carries `--update-header` because the step it replaces was an instruction to
-    hand-write a map file** — copy the stamped minute across into `header.json` yourself. It read as
+    **Step 8 stamps AND fills the header in one run, because the step it replaces was an
+    instruction to hand-write a map file** — copy the stamped minute across into `header.json` yourself. It read as
     a two-line edit and it is one, which is exactly why no build treated it as a defect: one wrote
     the `built` string with a
     `python3 - <<'PY'` heredoc AFTER `grounding write`, making that heredoc the last fragment write

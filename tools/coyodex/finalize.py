@@ -374,23 +374,32 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
     # `file:line` in it, so one `fix apply-drift` orphans every vote the rule had and the element
     # reads `unchecked`. Blocking on `unchecked` alone turned 50 confirmed access rules of a real
     # map into build failures under a message asserting nobody had voted.
-    # NO LONGER KEYED ON THE LABEL. This used to fire only on an access rule stating
-    # `confidence: verified`, on the reading that the label claimed the rule had been CHECKED. It
-    # does not: `confidence` records what the AUTHOR knew — read and traced, or taken from a name —
-    # and an access rule the author genuinely read is honestly `verified` whether or not a skeptic
-    # ever saw it. Dropping the label from the test makes the check both correct and STRONGER: an
-    # access rule nobody challenged is worth blocking on however its author labelled it, and the
-    # old form let an `inferred` one through in silence.
+    # NO LONGER KEYED ON THE LABEL, and ADVISORY rather than blocking. Two separate decisions.
+    #
+    # The label went because it was never the right test: `confidence` records what the AUTHOR knew,
+    # so an access rule the author genuinely read is honestly `verified` whether or not a skeptic
+    # saw it. Keyed on `verified` the check was also DEAD BY CONSTRUCTION — the old contract told
+    # every agent to write `inferred`, and 49 of 49 access rules on one live map and 30 of 30 on
+    # another say exactly that. It had never fired.
+    #
+    # It is advisory because making it live and blocking in one step FAILED BOTH REFERENCE MAPS,
+    # with no way out: a blocking finding has no recorded-exception route at all, and the only
+    # remedy the message can offer ("send it to a skeptic") is unreachable once the verify phase has
+    # closed. That is the same trap the crossing-anchor and messaging-participant checks were kept
+    # advisory to avoid, on the same evidence, earlier the same day — and this one was shipped
+    # blocking anyway. A gate that fails every existing map teaches a lead to ignore the gate.
+    #
+    # PROMOTE IT once one build has shipped with zero of these, and give it a recordable heading
+    # first: an access rule minted after the worklist was pinned genuinely could not be challenged,
+    # and that is a build-ordering fact the operator has to be able to state.
     unvetted_access = [e for e in stated
                        if e.get("access") and e.get("kind") == "rule_site"
                        and e.get("status") == "unchecked"
                        and not e.get("voted_under_any_anchor")]
-    blocking += [f"ACCESS rule {e['id']} ({e['label']}) was never challenged — NO skeptic voted on "
-                 f"it, under this anchor or any other. Who-may-do-what is the one thing a reader "
-                 f"trusts a map for, and this row has nothing behind it. Send it to a skeptic."
-                 for e in unvetted_access]
-    stated = [e for e in stated if e not in unvetted_access]
-    unchecked = [e for e in stated if e.get("status") == "unchecked"]
+    # Every row in `unseen_by_any_skeptic` is `unchecked` by construction (`grounding.py` filters
+    # on `ElementCheck.unseen`, which IS `status == "unchecked"`), so this is the whole list. Named
+    # rather than re-filtered: a filter that never removes anything reads as a narrowing.
+    unchecked = stated
     kinds: dict[str, int] = {}
     for e in unchecked:
         kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
@@ -402,10 +411,22 @@ def _refutations_leg(map_path: Path, verdicts: list[Path]) -> Leg:
     advisory = ([f"{len(unchecked)} element(s) were never looked at by a skeptic "
                  f"({', '.join(f'{n} {k}' for k, n in sorted(kinds.items()))}). Run `coyodex "
                  f"grounding by-element --map <this map> --verdicts <…>` for the list — no "
-                 f"`--worklist`, so it reads the LIVE map and reproduces this count; adding the "
-                 f"pinned worklist answers a different question (what the skeptics saw) and gives "
-                 f"a different number."]
+                 f"`--worklist`, so it reads the LIVE map. It reports the same {len(unchecked)}; "
+                 f"adding the pinned worklist answers a different question (what the skeptics saw) "
+                 f"and gives a different number."]
                 if unchecked else [])
+    # THE ACCESS ROWS, SAID SEPARATELY AND FIRST. They are a subset of the count above, so this is
+    # not a second finding — it is the part of it that is worth acting on, named. Who-may-do-what is
+    # the one thing a reader trusts a map for.
+    if unvetted_access:
+        advisory.insert(0, (
+            f"{len(unvetted_access)} ACCESS rule(s) were never challenged — no skeptic voted on "
+            f"them under this anchor or any other: "
+            f"{', '.join(f'{e['id']} ({e['label']})' for e in unvetted_access[:6])}"
+            f"{' …' if len(unvetted_access) > 6 else ''}. These are among the count above and are "
+            f"called out because of what they claim. Send them to a skeptic, or say in the "
+            f"grounding note why they could not be (a rule minted after the worklist was pinned "
+            f"is the common honest reason)."))
     return Leg("grounding refutations", RAN if code in (0, 1) else FAILED,
                blocking=blocking, advisory=advisory,
                note=(f"{len(surviving)} refuted claim(s) still in the map, "

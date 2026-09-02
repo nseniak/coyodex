@@ -407,3 +407,44 @@ def test_the_gate_refuses_without_a_map():
         vp = Path(td) / "v.json"
         vp.write_text(json.dumps({"grounding": []}), encoding="utf-8")
         assert main(["refutations", "--verdicts", str(vp)]) == 2
+
+
+# --- the TEXT branch of format_refutations (adversarial review, 2026-09-02) -----------------------
+# It had NO test at all. So when the JSON branch stopped keying on the authored label, the text
+# branch went on asserting the old reading — and on a real map 24 of its 33 rows were edges, which
+# carry no `confidence` field, printing as `says , pass says unchecked`.
+
+def _unseen_report(confidence: str = "verified"):
+    from coyodex.grounding import format_refutations
+    m = make_model(confidence=confidence)
+    claim = site_claim(m)
+    store = store_claim("E1", "Thing", "D1", "things", "collection")
+    rows, _ = element_checks(m, [claim, store], [])
+    return format_refutations([], [r for r in rows if r.unseen], m=m, grounding_rows=[])
+
+
+def test_the_text_report_says_what_the_json_says():
+    text = _unseen_report()
+    assert "no skeptic looked at" in text, text
+    assert "state a confidence the pass does not support" not in text, text
+
+
+def test_a_row_with_no_confidence_field_does_not_print_an_empty_label():
+    """`says ,` — an edge and a crossing carry no `confidence`, and the label was printed
+    unconditionally."""
+    text = _unseen_report()
+    assert "says ," not in text and "author said ," not in text, text
+    # the one row that HAS a label still shows it
+    assert "author said verified" in text, text
+
+
+def test_the_access_rows_are_called_out_separately():
+    """Who-may-do-what is why the caller needs these told apart from a description."""
+    from coyodex.grounding import format_refutations
+    m = make_model(rules=[{"id": "BR1", "name": "Owner only", "access": True,
+                           "statement": "Only an owner may delete an org.", "block": "BLK1",
+                           "confidence": "inferred",
+                           "sites": [{"where": "a.py:7", "why": "refuses a non-owner"}]}])
+    rows, _ = element_checks(m, [site_claim(m)], [])
+    text = format_refutations([], [r for r in rows if r.unseen], m=m, grounding_rows=[])
+    assert "are ACCESS rules" in text and "BR1" in text, text

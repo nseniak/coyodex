@@ -349,9 +349,15 @@ def _authored_runs_in_warnings(m: ProjectModel) -> list[str]:
             f"synthesis fragment, this is yours to keep."]
 
 
-#: Below this a fragment is too small for "every row says the same thing" to mean anything — three
-#: components read from the same file honestly are all `verified`.
+#: Below this a fragment is too small for "nearly every row says the same thing" to mean anything —
+#: three components read from the same file honestly are all `verified`. Counts only rows that CARRY
+#: the field, not every row.
 _CONFIDENCE_CONSTANT_MIN = 8
+
+#: How much of one value makes the labelling uninformative. Not 1.0: a single dissenting token is
+#: what "use both values" produces from an agent that did not really distinguish, and equality on
+#: the value SET let that through — a 301-row fragment with one `inferred` passed.
+_CONFIDENCE_CONSTANT_SHARE = 0.95
 
 
 def _authored_confidence_warnings(m: ProjectModel) -> list[str]:
@@ -380,11 +386,15 @@ def _authored_confidence_warnings(m: ProjectModel) -> list[str]:
     values = [str(getattr(el, "confidence", "") or "").strip()
               for _kind, group in kinds for el in group
               if str(getattr(el, "confidence", "") or "").strip()]
-    if len(values) < _CONFIDENCE_CONSTANT_MIN or len(set(values)) > 1:
+    # A SHARE, not equality on the value set — see `_CONFIDENCE_CONSTANT_SHARE`.
+    from collections import Counter
+    if len(values) < _CONFIDENCE_CONSTANT_MIN:
         return []
-    only = values[0]
-    return [f"all {len(values)} row(s) in this fragment carry `confidence: {only}` and nothing "
-            f"else — the field says what YOU knew (`verified` = read and traced, `inferred` = taken "
+    only, n = Counter(values).most_common(1)[0]
+    if n < len(values) * _CONFIDENCE_CONSTANT_SHARE:
+        return []
+    return [f"{n} of {len(values)} labelled row(s) in this fragment carry `confidence: {only}` "
+            f"— the field says what YOU knew (`verified` = read and traced, `inferred` = taken "
             f"from a name or a convention), so one value across every row tells a reader nothing "
             f"about which rows you read. Measured on one shipped map: 301 of 301 element-level "
             f"values said `verified`. If the slice really was uniform, say so in your reply."]

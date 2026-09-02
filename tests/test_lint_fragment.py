@@ -803,11 +803,29 @@ def _warn(fragment: dict) -> list[str]:
     return lint_fragment_warnings(load_fragment(json.dumps(fragment), "f.json"))
 
 
-def _labels(values: list[str]) -> list[str]:
-    """One fragment whose components carry `values` as their confidence, in order."""
-    return _warn({"format": "coyodex-map", "components": [
-        {"id": f"C{i + 1}", "name": f"Box {i + 1}", "confidence": v}
-        for i, v in enumerate(values)]})
+def _labels(values: list[str], kind: str = "components") -> list[str]:
+    """One fragment whose rows carry `values` as their confidence, in order.
+
+    `kind` is parametrised because the test this replaced covered EVERY element kind that carries
+    the field, and the first rewrite covered components only. A mutation dropping `rule`, `dep`,
+    `subsystem`, `subdomain` and `interface` from the check's own tuple then survived the entire
+    suite — and rule fragments are the ones that sit at the size floor, so that is exactly where the
+    check would have gone silent unnoticed."""
+    rows: list[dict] = []
+    for i, v in enumerate(values):
+        n = i + 1
+        if kind == "components":
+            rows.append({"id": f"C{n}", "name": f"Box {n}", "confidence": v})
+        elif kind == "deps":
+            rows.append({"id": f"D{n}", "name": f"Dep {n}", "kind": "datastore", "confidence": v})
+        elif kind == "rules":
+            rows.append({"id": f"BR{n}", "name": f"Rule {n}",
+                         "statement": f"Only an owner may do thing {n}.",
+                         "sites": [{"where": f"a.py:{n}", "why": "refuses a non-owner"}],
+                         "confidence": v})
+        else:
+            raise AssertionError(kind)
+    return _warn({"format": "coyodex-map", kind: rows})
 
 
 def test_a_fragment_whose_labels_are_ALL_ONE_VALUE_is_an_advisory():
@@ -815,8 +833,8 @@ def test_a_fragment_whose_labels_are_ALL_ONE_VALUE_is_an_advisory():
     either value can be honest. It is a fragment that carries only ONE: on a shipped map all 301
     element-level values said `verified`, which tells a reader nothing about which rows were read."""
     hits = _labels(["verified"] * 10)
-    assert any("carry `confidence: verified` and nothing" in h for h in hits), hits
-    assert any("all 10 row(s)" in h for h in hits), hits
+    assert any("carry `confidence: verified`" in h for h in hits), hits
+    assert any("10 of 10 labelled row(s)" in h for h in hits), hits
 
 
 def test_a_fragment_that_uses_BOTH_values_raises_nothing():
@@ -827,7 +845,24 @@ def test_a_fragment_that_uses_BOTH_values_raises_nothing():
 def test_an_all_inferred_fragment_is_flagged_the_same_way():
     """It is not a check on the word `verified`. A slice that labelled nothing it read is making the
     same non-statement in the other direction."""
-    assert any("carry `confidence: inferred` and nothing" in h for h in _labels(["inferred"] * 10))
+    assert any("carry `confidence: inferred`" in h for h in _labels(["inferred"] * 10))
+
+
+def test_the_check_covers_every_element_kind_that_carries_the_field():
+    """A mutation dropping the non-component kinds from the check's own tuple survived the whole
+    suite. Rule fragments sit at the size floor, so that is where it would have gone silent."""
+    for kind in ("components", "deps", "rules"):
+        assert any("labelled row(s)" in h for h in _labels(["verified"] * 10, kind)), kind
+
+
+def test_one_dissenting_row_does_not_defeat_the_check():
+    """The motivating map was 301 of 301. Equality on the value SET is defeated by a single token,
+    and "use both values" is exactly the instruction that produces one."""
+    assert any("labelled row(s)" in h for h in _labels(["verified"] * 300 + ["inferred"]))
+
+
+def test_a_real_mix_raises_nothing():
+    assert not [h for h in _labels(["verified"] * 6 + ["inferred"] * 4) if "labelled row(s)" in h]
 
 
 def test_a_small_fragment_is_not_second_guessed():

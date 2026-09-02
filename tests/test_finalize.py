@@ -663,45 +663,40 @@ def _map_with_rule(access: bool, confidence: str) -> tuple[Path, Path]:
     return root, p
 
 
-def test_an_ACCESS_rule_no_skeptic_EVER_voted_on_BLOCKS():
-    """Who-may-do-what is the one thing a reader trusts a map for, and an access rule nobody
-    challenged has nothing behind it. A shipped map carried two — both authored after the worklist
-    was pinned, so no skeptic could have seen them — and the map's own note admits it.
+def test_an_ACCESS_rule_no_skeptic_EVER_voted_on_is_CALLED_OUT_but_does_not_block():
+    """Who-may-do-what is the one thing a reader trusts a map for, so an unchallenged access rule is
+    named separately and first. It is ADVISORY, and that is a deliberate reversal.
 
-    IT DOES NOT READ THE LABEL. It used to fire only on `confidence: verified`, on the reading that
-    the label claimed the rule had been checked. It does not: `confidence` says what the AUTHOR
-    knew. Dropping the label made the check correct AND stronger — see the `inferred` case below,
-    which the old form let through in silence."""
+    It shipped BLOCKING and keyed on nothing but coverage, which failed BOTH reference maps with no
+    way out: every access rule on them says `inferred` (49 of 49 on one, 30 of 30 on the other)
+    because the old contract mandated it, so the old `verified`-keyed gate had been dead by
+    construction and making it live blocked everything at once. A blocking finding has no
+    recorded-exception route at all, and the remedy the message names — send it to a skeptic — is
+    unreachable after the verify phase closes. Promote it once one build ships with zero of these,
+    and give it a recordable heading first."""
     root, p = _map_with_rule(access=True, confidence="verified")
     v = make_verdicts(root, "verdicts-a.json",
                       [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
-    code = finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)])
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
-    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
-    assert len(leg["blocking"]) == 1 and "BR1" in leg["blocking"][0]
-    assert "never challenged" in leg["blocking"][0]
-    assert doc["verdict"] == "BLOCKED" and code == 1
-
-
-def test_a_rule_that_WAS_voted_on_and_then_RE_ANCHORED_does_not_block():
-    """The over-block an adversarial review found, pinned. Votes pair to an element by exact claim
-    text and a rule-site claim carries the `file:line` inside it, so one `fix apply-drift` — the
-    method's own remedy for a drifted anchor, documented as covering security anchors — orphans
-    every vote the rule had and the element reads `unchecked`. Blocking on that alone turned 50
-    confirmed access rules of a real map into build failures, under a message asserting that no
-    skeptic had ever voted. The STATEMENT is the part of the claim that does not move."""
-    root, p = _map_with_rule(access=True, confidence="verified")
-    doc = json.loads(p.read_text())
-    doc["rules"][0]["sites"][0]["where"] = "src/a.py:1"          # the anchor moved
-    p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
-    # a vote that named the rule by STATEMENT, cast against the anchor it had before the move
-    v = make_verdicts(root, "verdicts-a.json", [
-        {"claim": "Rule 'A listener reaches one organization only.' is enforced at src/a.py:2",
-         "grounded": True, "evidence": "src/a.py:2"}])
     assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
     doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
-    assert not leg["blocking"]
+    assert not leg["blocking"], leg["blocking"]
+    assert "ACCESS rule(s) were never challenged" in leg["advisory"][0], leg["advisory"]
+    assert "BR1" in leg["advisory"][0]
+
+
+def test_the_access_call_out_does_not_read_the_label():
+    """It used to fire only on `confidence: verified`. `confidence` says what the AUTHOR knew, so an
+    access rule the author genuinely read is honestly `verified` whether or not a skeptic saw it —
+    and relabelling an unchallenged rule `inferred` used to silence the finding entirely, which was
+    the remedy the old message itself recommended."""
+    root, p = _map_with_rule(access=True, confidence="inferred")
+    v = make_verdicts(root, "verdicts-a.json",
+                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
+    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 0
+    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
+    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
+    assert "ACCESS rule(s) were never challenged" in leg["advisory"][0], leg["advisory"]
 
 
 def test_a_NON_access_rule_nobody_voted_on_stays_advisory():
@@ -716,19 +711,6 @@ def test_a_NON_access_rule_nobody_voted_on_stays_advisory():
     leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
     assert not leg["blocking"]
     assert any("never looked at by a skeptic" in a for a in leg["advisory"])
-
-
-def test_an_unvoted_ACCESS_rule_BLOCKS_even_when_it_says_inferred():
-    """The old check read the label, so relabelling an unchallenged access rule `inferred` silenced
-    it — and `inferred` was the remedy the message itself named. An access rule nobody looked at is
-    the defect however its author labelled it; the remedy is to send it to a skeptic."""
-    root, p = _map_with_rule(access=True, confidence="inferred")
-    v = make_verdicts(root, "verdicts-a.json",
-                      [{"claim": "C1 calls C2", "grounded": True, "evidence": "src/a.py:2"}])
-    assert finalize.main([str(p), "--repo", str(root), "--verdicts", str(v)]) == 1
-    doc = json.loads((root / ".coyodex" / "finalize-report.json").read_text())
-    leg = next(l for l in doc["legs"] if l["name"] == "grounding refutations")
-    assert len(leg["blocking"]) == 1 and "never challenged" in leg["blocking"][0]
 
 
 def test_the_leg_is_absent_rather_than_silently_clean_when_no_verdicts_are_given():

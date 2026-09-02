@@ -929,8 +929,9 @@ def surviving_refutations(m: ProjectModel,
 
 
 def _access_rule_ids(m: ProjectModel) -> set[str]:
-    """Ids of the rules the map marks `access: true` — the ones whose stated confidence is a claim
-    about who may do what, not about how something works."""
+    """Ids of the rules the map marks `access: true` — the ones whose CLAIM is about who may do
+    what, not about how something works. Named apart because leaving one unchallenged matters more
+    than leaving a description unchallenged, not because of anything its label says."""
     return {br.id for br in m.rules if getattr(br, "access", False) and br.id}
 
 
@@ -954,18 +955,21 @@ def _rules_voted_under_any_anchor(m: ProjectModel, grounding_rows: list[dict]) -
 
 
 def format_refutations(surviving: list[SurvivingRefutation],
-                       disagreeing: list[ElementCheck], as_json: bool = False,
+                       unseen: list[ElementCheck], as_json: bool = False,
                        m: ProjectModel | None = None,
                        grounding_rows: list[dict] | None = None) -> str:
-    """The gate's report: what the map still asserts against its own skeptics.
+    """The gate's report: refuted claims still in the map, and the elements no skeptic looked at.
 
-    `access` rides on each unchallenged element because the caller has to tell two cases apart that
-    read identically here. A component description stating `verified` with no vote is a prose
-    overstatement. An ACCESS rule stating `verified` with no vote is the map telling a reader that
-    someone checked who may do what, when nobody did — and a shipped mcpolis map carried exactly
-    two, `A sign-in return must carry an unforged ticket` and `Live updates never cross
-    organizations`, both authored after the worklist was pinned so no skeptic ever saw them, both
-    labelled `verified` by the hand that wrote them."""
+    `access` rides on each unseen element because the caller has to tell two cases apart that read
+    identically here. A component description nobody challenged is a coverage gap. An ACCESS rule
+    nobody challenged is the map making a claim about who may do what with nothing behind it — a
+    shipped map carried three, all authored after the worklist was pinned, so no skeptic could have
+    seen them.
+
+    The second list is NOT keyed on the authored `confidence`. It once was, and the text branch of
+    this function went on saying so after the JSON branch stopped: `format_refutations` has no test
+    at all, so nothing caught the two halves disagreeing. On a real map 24 of its 33 rows were edges,
+    which carry no `confidence` field, and printed as `says , pass says unchecked`."""
     access = _access_rule_ids(m) if m else set()
     voted = _rules_voted_under_any_anchor(m, grounding_rows or []) if m else set()
     if as_json:
@@ -979,7 +983,7 @@ def format_refutations(surviving: list[SurvivingRefutation],
             "unseen_by_any_skeptic": [
                 {"id": e.element_id, "kind": e.kind, "label": e.label, "stated": e.stated,
                  "status": e.status, "access": e.element_id in access,
-                 "voted_under_any_anchor": e.element_id in voted} for e in disagreeing],
+                 "voted_under_any_anchor": e.element_id in voted} for e in unseen],
         }, indent=2, ensure_ascii=False)
     lines: list[str] = []
     if surviving:
@@ -993,16 +997,23 @@ def format_refutations(surviving: list[SurvivingRefutation],
                 lines.append(f"      skeptic: {s.note[:200]}")
     else:
         lines.append("No refuted claim survives in this map.")
-    if disagreeing:
+    if unseen:
         lines.append("")
-        lines.append(f"{len(disagreeing)} element(s) state a confidence the pass does not support. "
-                     f"The label and the votes are written by different processes and nothing else "
-                     f"compares them (`coyodex grounding by-element` lists them in full):")
-        for e in disagreeing[:15]:
-            lines.append(f"  - {e.element_id or '-':<7} {e.kind:<12} says {e.stated}, "
-                         f"pass says {e.status} — {e.label[:44]}")
-        if len(disagreeing) > 15:
-            lines.append(f"  ... and {len(disagreeing) - 15} more")
+        access_rows = [e for e in unseen if e.element_id in access]
+        lines.append(f"{len(unseen)} element(s) no skeptic looked at — the pass never reached them "
+                     f"(`coyodex grounding by-element` lists them in full):")
+        for e in unseen[:15]:
+            # The authored label is printed only when the element HAS one: an edge and a crossing
+            # carry no `confidence` field, and `says , pass says unchecked` is what printing it
+            # unconditionally produced.
+            said = f", author said {e.stated}" if e.stated else ""
+            lines.append(f"  - {e.element_id or '-':<7} {e.kind:<12} unchecked{said}"
+                         f" — {e.label[:44]}")
+        if len(unseen) > 15:
+            lines.append(f"  ... and {len(unseen) - 15} more")
+        if access_rows:
+            lines.append(f"  {len(access_rows)} of those are ACCESS rules, which is what a reader "
+                         f"trusts a map for: {', '.join(e.element_id for e in access_rows[:8])}")
     return "\n".join(lines)
 
 
@@ -1547,11 +1558,11 @@ def main(argv: list[str] | None = None) -> int:
         for n in notes:
             print(n, file=sys.stderr)
         surviving = surviving_refutations(live, rows)
-        # DEFAULT tier here, deliberately, unlike `write` above. This surface feeds the advisory
-        # confidence cross-check only — the refutation GATE beside it walks the verdicts directly
-        # and is unaffected — and a behaviour claim resolves onto a flow or a crossing, which carry
-        # no `confidence` field at all. Widening it would add rows whose stated label is `-` to a
-        # list whose whole subject is the stated label.
+        # DEFAULT tier here, deliberately, unlike `write` above. This surface feeds the COVERAGE
+        # list only — the refutation GATE beside it walks the verdicts directly and is unaffected.
+        # Widening it to the behavioural tier would add every flow step and crossing to a list a
+        # reader scans for gaps, which is a different report; `by-element --with-behavioural` is
+        # where that question belongs.
         checks, _unresolved = element_checks(live, [w.claim for w in l2_worklist_model(live)], rows)
         print(format_refutations(surviving, [c for c in checks if c.unseen],
                                  as_json=as_json, m=live, grounding_rows=rows))
