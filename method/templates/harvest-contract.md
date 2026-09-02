@@ -64,6 +64,13 @@ lead; nothing above this line goes into an agent prompt.
 > slice** (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
 > out far under, you are folding subsystem-shaped dirs into single components — make those
 > subsystems and recurse into their units; far over, you are splitting module-sized units.
+> **WHEN THE BUDGET AND THE SIZE CEILING DISAGREE, THE CEILING WINS.** The budget is the lead's
+> pre-read ESTIMATE, made without opening your files; the ceiling is a property of the code in front
+> of you. A slice of 46 files and 11 kLOC cannot be 5 components without two of them breaking the
+> ~3 kLOC limit on their own, so it is 8, and the estimate was wrong. Return the number the code
+> has, and **say in your reply why it differs** — the lint warns outside 0.5x–1.5x of the budget, and
+> that warning is answered by your sentence, not by bending the count to it. Both agents this rule
+> was written for hit the conflict and neither could tell which side was meant to give.
 > For every row give `file:line` evidence and a confidence tag. **`verified`** = you read the code
 > and traced it; **`inferred`** = you took it from a name, a path or a convention. Nothing writes
 > this field, so it is the one fact only you have — it is NOT a statement about the grounding
@@ -90,11 +97,23 @@ lead; nothing above this line goes into an agent prompt.
 > **AUTHORING A `deps` ROW: one rule lives in `model.md` and blocks you if you do not know it.**
 > Every dep in the EXTERNAL group (`datastore` / `messaging` / `service` / `platform`) must either
 > name the surface(s) it belongs to in `interfaces`, or carry `not_an_interface: <why it is none>`.
-> Surface ids (`In`) are minted at synthesis by a slice you do not own, so from here the answer is
-> almost always `not_an_interface` — write the reason, do not invent an id, and do not leave both
-> empty. Frameworks and libraries are exempt: they become the product. Without this sentence one
-> agent read `model.md` itself to find the rule, and another would simply have returned no `deps`
-> at all and said nothing.
+> Surface ids (`In`) are minted at synthesis by a slice you do not own, so you cannot fill
+> `interfaces` from here even when you can see the answer. **Three cases, and the third is the one
+> that keeps being got wrong:**
+>
+> - it is genuinely NOT a surface (a library the product embeds, a store it writes only to read
+>   back) → `not_an_interface: <why>`.
+> - it IS a surface and you can see which one → say so in `not_an_interface` as a POINTER, in
+>   words: `"Not decided here — this is a surface; the id is minted at synthesis."` The lead reads
+>   it as a candidate, not as an exclusion.
+> - **you do not know** → the same pointer, saying that. Do not guess either way.
+>
+> **Never write a reason you do not believe.** An earlier draft of this paragraph said the answer is
+> "almost always `not_an_interface`", and an agent looking at a crash-reporting service — reports
+> leave the product and nothing inside reads them back, so it plainly IS a surface — was being asked
+> to state a false reason. It refused and wrote the pointer instead, which was right. A wrong
+> exclusion is worse than a missing one: the next reader cannot tell it was wrong.
+> Frameworks and libraries are exempt from the whole rule: they become the product.
 >
 > **If an array is empty, return it as an empty array AND say why in your reply** — never silently
 > omit one. The lead cannot tell "nothing here" from "the agent forgot" otherwise. (This paragraph
@@ -102,7 +121,28 @@ lead; nothing above this line goes into an agent prompt.
 > agent owning one slice could not parse at all: it reads as "return one section".)
 >
 > Your output is **ONE JSON fragment** — a partial map model per
-> [model.md](«COYODEX_HOME»/method/model.md), each entry using that array's exact field names. **WRITE the fragment to
+> [model.md](«COYODEX_HOME»/method/model.md), each entry using that array's exact field names.
+>
+> **THE FIELD NAMES, so you do not have to go and find them.** Required fields are in bold; omit an
+> optional one you have no value for (but see the "nothing is configured" rule below).
+>
+> | array | fields |
+> |---|---|
+> | `components` | **id**, **name**, **purpose**, **source**, confidence, subsystem, entry_point, files, depends_on |
+> | `entry_points` | **kind**, **trigger**, **source**, activation, runs_in, cadence, cadence_source — NO `id`, `assemble` mints it |
+> | `deps` | **id**, **name**, **kind**, type, used_for, where_configured, confidence, package, evidence, interfaces, not_an_interface |
+> | `observability` | **signal**, where_emitted, where_viewed, alerts |
+> | `config` | **key**, **purpose**, default, per_env |
+> | `deployment` | **unit**, runs_on, exposed_as, config_source, variants |
+> | `run_commands` | action, command, source |
+>
+> `deps[].kind` is a CLOSED vocabulary: `datastore`, `messaging`, `service`, `platform`,
+> `framework`, `library`. The first four are the EXTERNAL group the interface rule below governs;
+> the last two are folded — they become the product.
+>
+> This table exists because the brief used to give field names for `components` only and say "see
+> the schema" without saying where it is. Two agents out of two went and opened `model.md`, and one
+> opened `grammar.py` as well, to author rows the brief had told them to author. **WRITE the fragment to
 > `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
 > one-line inventory (row count per array)** — never inline the fragment in your reply: a large
 > fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
@@ -129,8 +169,12 @@ lead; nothing above this line goes into an agent prompt.
 > the true answer is that this thing has no alerts, no schedule, no retention — say so in the field,
 > in words. Omitting the key means "I did not find out"; the two are different facts and the reader
 > cannot tell them apart afterwards. Omit only when you really did not find out. (b) Use **only** each array's exact field names — no stray keys
-> (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`). (c) Every anchor is **repo-root-relative**: the repo root
-> is «REPO_ABS» — prefix every path with it. Minimal valid fragment:
+> (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`). (c) Every anchor is **repo-root-relative**, and that means
+> it does NOT carry the repo root. The root is «REPO_ABS»; write the part AFTER it, with no leading
+> slash — `backend/auth/gate.py:10`, never `«REPO_ABS»/backend/auth/gate.py:10`. (This used to read
+> "the repo root is «REPO_ABS» — prefix every path with it", which says the opposite of the rule in
+> the same breath: prefixing makes an anchor absolute. Two agents spotted the contradiction and did
+> the right thing anyway; a third would not have.) Minimal valid fragment:
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
 > **WRITE A DRAFT AS YOU GO (required).** Do not hold the fragment in your head until the end: an
 > agent that dies mid-run (API outage, machine sleep) loses ALL its reading. Write incremental
