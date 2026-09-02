@@ -53,6 +53,7 @@ from coyodex.model import (
     Component,
     Dep,
     Entity,
+    EntryPoint,
     ProjectModel,
     UseCase,
     load_model_path,
@@ -80,6 +81,12 @@ _FIELD_OWNER: dict[str, type] = {
     "ways_in": Interface,
     "interfaces": Dep,
     "interface_kind": Interface,
+    # An `EPn`'s owning `C` id. Here for the same reason `ways_in` is, one field over: `EPn` ids are
+    # MINTED BY `assemble` from content, so no fragment can name them, and the owning component is
+    # only decidable once every fragment's components exist. Without this entry the only way to set
+    # it was a hand-written heredoc over the assembled map — the 2026-09-01 argus build did exactly
+    # that for 88 entry points, outside every check `reconcile` applies.
+    "component": EntryPoint,
 }
 
 
@@ -93,8 +100,11 @@ def _elements(m: ProjectModel) -> list[object]:
 
     NOTE for authors: a `UseCase` has no `source`, so `_source_of` returns "" for one and a
     `source_glob` rule can never match it. `capability` / `entry_points` rules are addressed by
-    `ids` in practice."""
-    return [*m.components, *m.entities, *m.deps, *m.rules, *m.use_cases, *m.interfaces]
+    `ids` in practice. An `EntryPoint` DOES carry a `source`, so a `component` rule can be written
+    as a `source_glob` — which is the point: assigning 88 of them by id was what drove the
+    2026-09-01 argus build to a hand-written heredoc."""
+    return [*m.components, *m.entities, *m.deps, *m.rules, *m.use_cases, *m.interfaces,
+            *m.entry_points]
 
 
 def _source_of(el: object) -> str:

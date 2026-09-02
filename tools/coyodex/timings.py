@@ -55,8 +55,27 @@ PHASES: tuple[str, ...] = (
     "t7",
     "test-completeness",
     "skeptic",
+    # The interfaces/doors fan-out. Missing until 2026-09-01, when the argus build ran four door
+    # agents, tried to record them, and had all four slices refused by `_check_phase` — so the one
+    # wave the build was told to measure is the one wave with no measurement.
+    "doors",
     "gapfill",
 )
+
+#: Plural (and other obvious) spellings a build reaches for, mapped to the real phase name. A typo'd
+#: phase is refused on purpose, but refusing `--phase skeptics` teaches nothing: on the 2026-09-01
+#: argus build 19 `skeptics` records and 5 `doors` records were rejected outright. The alias is
+#: accepted silently — the canonical name is what gets stored, so `order` and `show` stay keyed on
+#: one spelling.
+PHASE_ALIASES: dict[str, str] = {
+    "skeptics": "skeptic",
+    "door": "doors",
+    "harvests": "harvest",
+    "traces": "trace",
+    "rule": "rules",
+    "gap-fill": "gapfill",
+    "test_completeness": "test-completeness",
+}
 
 #: Where the record lives, relative to the analyzed repo's root.
 RECORD_PATH = ".coyodex/fanout-timings.json"
@@ -174,11 +193,40 @@ def _pair_slices(slices: list[str], minutes: list[str]) -> list[tuple[str, float
     return pairs
 
 
+#: The coyodex clone this tool is running from — `<COYODEX_HOME>/tools/coyodex/timings.py`.
+COYODEX_HOME = Path(__file__).resolve().parents[2]
+
+
+def _repo_of(args: argparse.Namespace) -> str:
+    """The analyzed repo for this call, refusing the one mistake that cannot be seen afterwards.
+
+    `timings` writes to `<repo>/.coyodex/fanout-timings.json` and the default repo is the current
+    folder. A build runs the coyodex CLI by absolute path and its shell folder drifts, so an
+    omitted `--repo` silently files the measurement in the CLONE instead of the mapped project —
+    on the 2026-09-01 argus build, 9 harvest slices landed in the clone and were counted by nobody.
+    Nothing downstream can detect it: both files are well-formed, and the loss looks exactly like a
+    phase that was never measured.
+
+    So: an OMITTED `--repo` while standing in the clone is refused. An EXPLICIT one is always
+    honoured, which is what keeps coyodex mappable by itself (`--repo .` from the clone is a
+    deliberate statement, `.` by default is not)."""
+    if args.repo is not None:
+        return str(args.repo)
+    if Path.cwd().resolve() == COYODEX_HOME:
+        raise ValueError(
+            f"--repo is required here. The current folder is the coyodex clone "
+            f"({COYODEX_HOME}), and the default would file this measurement in the clone's own "
+            f"{RECORD_PATH} instead of the mapped project's. Pass `--repo <the mapped repo>` — or "
+            f"`--repo .` if you really are measuring a build OF coyodex.")
+    return "."
+
+
 def _check_phase(phase: str) -> str:
-    if phase not in PHASES:
+    canonical = PHASE_ALIASES.get(phase, phase)
+    if canonical not in PHASES:
         raise ValueError(f"unknown phase {phase!r}. The fan-out phases are: "
                          + ", ".join(PHASES) + ".")
-    return phase
+    return canonical
 
 
 @dataclass(frozen=True)
@@ -261,7 +309,7 @@ def cmd_record(args: argparse.Namespace) -> int:
     if items and len(items) != len(pairs):
         raise ValueError(f"--items was given {len(items)} time(s) for {len(pairs)} slice(s); "
                          "give one per slice or none at all.")
-    path = record_path(args.repo)
+    path = record_path(_repo_of(args))
     runs = load_runs(path)
     for i, (name, value) in enumerate(pairs):
         runs.append(Run(phase, name, value, items[i] if items else None, args.commit))
@@ -274,7 +322,7 @@ def cmd_record(args: argparse.Namespace) -> int:
 
 def cmd_order(args: argparse.Namespace) -> int:
     phase = _check_phase(args.phase)
-    ranked = latest_by_slice(load_runs(record_path(args.repo)), phase)
+    ranked = latest_by_slice(load_runs(record_path(_repo_of(args))), phase)
     asked = [s.strip() for s in (args.slice or []) if s.strip()]
     known = {r.slice for r in ranked}
     unrecorded = [s for s in asked if s not in known]
@@ -301,12 +349,13 @@ def cmd_order(args: argparse.Namespace) -> int:
 
 
 def cmd_show(args: argparse.Namespace) -> int:
-    runs = load_runs(record_path(args.repo))
+    repo = _repo_of(args)
+    runs = load_runs(record_path(repo))
     if args.json:
         print(json.dumps({"version": VERSION, "runs": [r.as_json() for r in runs]}, indent=2))
         return 0
     if not runs:
-        print(f"no fan-out timings recorded in {record_path(args.repo)}.")
+        print(f"no fan-out timings recorded in {record_path(repo)}.")
         return 0
     for phase in PHASES:
         ranked = latest_by_slice(runs, phase)
@@ -355,7 +404,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="verb")
 
     def common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--repo", default=".")
+        # `None`, not ".", so `_repo_of` can tell an OMITTED --repo from an explicit one. The
+        # default is still the current folder; what the distinction buys is the refusal below.
+        p.add_argument("--repo", default=None)
 
     rec = sub.add_parser("record", add_help=False)
     common(rec)

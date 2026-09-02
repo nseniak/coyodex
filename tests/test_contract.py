@@ -335,3 +335,44 @@ def test_a_fresh_path_still_writes():
         out = tmp / "nested" / "brief.md"
         rc, msg = _fill_to(tmp, out)
     assert rc == 0, msg
+
+
+# --- a slot key must be typable (retro 2026-09-01, argus row 8) -----------------------------------
+# `contract harvest --slots` returned keys like
+# `«absolute paths this agent owns; list a directory first, then read each file»`. Nobody types
+# that, so all four brief generators filled the skeleton BY POSITION — across 51 of 55 briefs — and
+# a positional fill is silent when it is wrong. `trace` already used bare tokens.
+
+def test_no_shipped_contract_has_a_prose_slot_key():
+    from coyodex.contract import CONTRACTS, slots
+    for name in CONTRACTS:
+        slots(name)          # raises ValueError naming the offending keys
+
+
+def test_a_prose_slot_key_is_refused_with_the_key_it_objects_to(tmp_path):
+    import re
+    from coyodex import contract
+    home = tmp_path / "home"
+    (home / "method" / "templates").mkdir(parents=True)
+    (home / "method" / "templates" / "toy-contract.md").write_text(
+        "lead half\n\n> agent half with «FINE» and «a whole sentence nobody types».\n",
+        encoding="utf-8")
+    contract.CONTRACTS["toy"] = "toy-contract.md"
+    try:
+        with pytest.raises(ValueError, match=re.escape("a whole sentence nobody types")):
+            contract.slots("toy", root=home)
+    finally:
+        del contract.CONTRACTS["toy"]
+
+
+def test_the_doors_contract_ships_and_names_its_own_slots():
+    """The doors rule is ~9 KB of method.md and was hand-paraphrased into every brief; the argus
+    build's was 9,031 bytes with no gate on the paraphrase."""
+    from coyodex.contract import render, slots
+    assert set(slots("doors")) == {"FLOWS", "MAP", "REPO", "SURFACES", "AGENT_ID", "COYODEX_HOME"}
+    text = render("doors")
+    # The rule the hand-written brief dropped.
+    assert "kind: service" in text and "audience: internal" in text
+    # The two halves a paraphrase most often loses.
+    assert "EVERY EXCHANGE IN BETWEEN" in text
+    assert "add NO door" in text

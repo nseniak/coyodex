@@ -49,6 +49,15 @@ CONTRACTS: dict[str, str] = {
     # the shared machinery: the gap-fill brief was the ONE trace-phase contract of eleven missing
     # "do NOT spawn sub-agents", and it lost four more blocks with it.
     "gapfill": "gapfill-contract.md",
+    # The T2b doors retrofit. The rule is ~9 KB of method.md and every build before this template
+    # hand-paraphrased it: the 2026-09-01 argus brief was 9,031 bytes of hand-composed text with no
+    # gate on the paraphrase, and it dropped the scheduled-work-is-not-an-actor rule outright.
+    "doors": "doors-contract.md",
+    # The Phase-4 closer. Its brief was hand-composed, and on the 2026-09-01 argus build it handed
+    # the closer the repo, forbade it `.coyodex/`, and then asked a question only the map answers.
+    # The contract's whole job is to say that the LEAD must paste the `dump --id` / `dump --edges`
+    # rows into the brief — the one thing no tool can do, because the lead composes the brief.
+    "closer": "closer-contract.md",
     # Appended to ONE harvest brief only — the T5 owner's. The entity-card spec used to sit in the
     # shared harvest contract, where 13 of ~14 agents read a detailed job they were forbidden to do.
     "harvest-t5": "t5-addendum.md",
@@ -132,10 +141,28 @@ def slots(name: str, root: Path | None = None) -> list[str]:
 
     Read from the AGENT half, never from the template file: the lead's own instructions above the
     divider talk *about* «angle-bracket» slots, and a skeleton listing those would ask the lead to
-    fill words that reach nobody."""
+    fill words that reach nobody.
+
+    A KEY MAY NOT CONTAIN WHITESPACE. A slot whose key is a whole sentence
+    (`«absolute paths this agent owns; list a directory first, then read each file»`) is unusable as
+    a key: nobody types it, so the skeleton gets filled BY POSITION instead — and a positional fill
+    is silent when it is wrong. Measured on the 2026-09-01 argus build: all four brief generators
+    bound their slots positionally, across 51 of 55 briefs. `trace` already used bare tokens; this
+    refusal is what stops the other templates drifting back."""
     seen: dict[str, None] = {}
+    prose_keys: list[str] = []
     for key in SLOT.findall(render(name, root)):
-        seen.setdefault(key.strip(), None)
+        key = key.strip()
+        if re.search(r"\s", key):
+            prose_keys.append(key)
+        seen.setdefault(key, None)
+    if prose_keys:
+        listed = "; ".join(f"«{k[:60]}»" for k in dict.fromkeys(prose_keys))
+        raise ValueError(
+            f"{CONTRACTS[name]} has {len(dict.fromkeys(prose_keys))} slot(s) whose key is prose, "
+            f"not a name: {listed}. A key nobody can type is filled by POSITION instead, which is "
+            f"silent when it is wrong. Rename each to a bare token (SLICE_KIND, FILES, "
+            f"BACKGROUND …) and move the explanation OUTSIDE the guillemets.")
     return list(seen)
 
 

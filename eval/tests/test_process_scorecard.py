@@ -2309,6 +2309,37 @@ def test_35_is_na_for_a_command_that_never_enters_the_clone():
     assert P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns).of == 0
 
 
+# --- the folder follows the SESSION, not one command (retro 2026-09-01, argus row 3) -------------
+# The first version required the `cd` and the relative path in the SAME Bash call. A shell folder
+# persists between calls, and the argus build cd'd into the clone in one call and read a relative
+# path several calls later — while this assertion returned 9 of 9 on that very build.
+
+def test_35_follows_the_clone_folder_ACROSS_bash_calls():
+    turns = (make_turn(1, make_bash("cd /Users/x/Projects/coyodex")),
+             make_turn(2, make_bash("git log --oneline -3")),
+             make_turn(3, make_bash(
+                 "python3 -c \"import json; json.load(open('.coyodex/project-map.json'))\"")))
+    a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
+    # 2 scored spans, not 3: the bare `cd` call has nothing after it to score.
+    assert (a.observed, a.of) == (1, 2), a
+    assert a.evidence[0].turn == 3, a
+
+
+def test_35_stops_following_once_a_later_call_cds_elsewhere():
+    turns = (make_turn(1, make_bash("cd /Users/x/Projects/coyodex")),
+             make_turn(2, make_bash("cd /Users/x/Projects/argus")),
+             make_turn(3, make_bash(
+                 "python3 -c \"import json; json.load(open('.coyodex/project-map.json'))\"")))
+    a = P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns)
+    assert a.of == 0, a
+
+
+def test_35_scores_nothing_when_the_session_never_enters_the_clone():
+    turns = (make_turn(1, make_bash("cd /Users/x/Projects/argus")),
+             make_turn(2, make_bash("cat .coyodex/provenance.json")))
+    assert P.assert_35_no_relative_map_path_after_cd_into_the_clone(turns).of == 0
+
+
 # --- 34 / 35 hardening, from the adversarial review of the 2026-08-14 work ------------------------
 
 def test_34_flags_an_UNCOMMENTED_split_that_retries_a_refused_command():
@@ -2710,3 +2741,107 @@ def test_a_second_command_after_a_newline_is_still_a_separate_command():
     ctx = P.ScoreContext(agent_lint_calls=calls)
     a = P.assert_40_no_subagent_narrowed_its_own_lint((), ctx)
     assert (a.observed, a.of) == (1, 1), a
+
+
+# --- ship runs its steps INSIDE itself (retro 2026-09-01, argus row 6) ---------------------------
+# This scorecard reads typed shell text. `coyodex ship` is now the method's prescribed path and runs
+# ten subcommands in one process, so a compliant build leaves no shell text for the assertions that
+# look for them: 13 and 30 read `n/a` and 38 read 0 of 1, all about work that ran.
+
+def test_ship_runs_matches_the_real_build_plan():
+    """The constant and `ship.build_plan` must move together, or the expansion silently rots — the
+    same contract the two reconcile field tables have."""
+    import tempfile
+    from pathlib import Path
+    from coyodex import ship
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td) / "repo"
+        out = repo / ".coyodex"
+        (out / "build-fragments").mkdir(parents=True)
+        (out / "verify").mkdir(parents=True)
+        (out / "build-fragments" / "a.json").write_text("{}")
+        (out / "verify" / "worklist.json").write_text("[]")
+        (out / "verify" / "verdicts-a.json").write_text("{}")
+        note = Path(td) / "note.txt"
+        note.write_text("n")
+        full = ship.derive_inputs(repo, note_file=note)
+        assert not isinstance(full, str), full
+        prepare = ship.derive_inputs(repo)
+        assert not isinstance(prepare, str), prepare
+        assert set(P._SHIP_RUNS) == {s.argv[0] for s in ship.build_plan(full)}
+        assert set(P._SHIP_PREPARE_RUNS) == {s.argv[0] for s in ship.build_plan(prepare)}
+
+
+def test_a_ship_with_a_note_counts_as_writing_the_grounding_record():
+    cmd = "cd /repo && $CX ship /repo --note-file /repo/.coyodex/note.md"
+    assert P._writes_the_grounding_record(cmd)
+
+
+def test_a_ship_WITHOUT_a_note_writes_no_record():
+    """The prepare leg stops at the report; crediting it would score a record that does not exist."""
+    assert not P._writes_the_grounding_record("$CX ship /repo")
+
+
+def test_a_ship_invocation_counts_as_invoking_the_steps_it_runs():
+    cmd = "$CX ship /repo --note-file /repo/.coyodex/note.md"
+    for sub in ("validate", "audit", "finalize", "render", "provenance", "lint-fragment"):
+        assert P._invokes(cmd, sub), sub
+
+
+def test_a_prepare_only_ship_does_not_claim_the_steps_it_never_reaches():
+    cmd = "$CX ship /repo"
+    assert P._invokes(cmd, "anchor-drift")
+    for sub in ("validate", "audit", "finalize", "render"):
+        assert not P._invokes(cmd, sub), sub
+
+
+def test_ship_still_recognises_itself():
+    assert P._invokes("$CX ship /repo --note-file n.md", "ship")
+
+
+def test_13_anchors_on_a_ship_that_wrote_the_record():
+    """It read `n/a` — "no grounding record written in this transcript" — about a build that wrote
+    one through `ship`."""
+    turns = (make_turn(1, make_bash("$CX ship /repo --note-file /repo/note.md")),)
+    a = P.assert_13_grounding_write_is_the_last_write(turns)
+    assert (a.observed, a.of) == (1, 1), a
+
+
+# --- program text is a read, and a redirect is the best shape (retro 2026-09-01, argus row 18) ----
+
+def test_38_sees_a_read_inside_a_python_heredoc_one_statement_later():
+    """`_shell_only` deletes interpreter bodies so a NAMED command is not counted as a RUN one.
+    That is the wrong rule for "was this file read": the commonest way a build reads a gate's JSON
+    is a python heredoc, and stripping the body deletes the read itself."""
+    cmd = ("$CX validate /repo/.coyodex/project-map.json --json > /tmp/v.json\n"
+           "python3 - <<'PY'\n"
+           "import json\n"
+           "d = json.load(open('/tmp/v.json'))\n"
+           "print(len(d['warnings']))\n"
+           "PY")
+    turns = (make_turn(1, make_bash(cmd)),)
+    a = P.assert_38_written_json_is_read(turns)
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_38_still_flags_a_json_nobody_opens():
+    cmd = "$CX validate /repo/.coyodex/project-map.json --json > /tmp/v.json"
+    turns = (make_turn(1, make_bash(cmd)),)
+    a = P.assert_38_written_json_is_read(turns)
+    assert (a.observed, a.of) == (0, 1), a
+
+
+def test_8_credits_an_audit_json_redirected_to_a_file_that_is_read():
+    """Redirecting leaves stdout empty, so the claim-row test found nothing and the ideal shape
+    scored as absent — the whole assertion read `n/a` for a run that did the right thing."""
+    turns = (make_turn(1, make_bash("$CX audit /repo/.coyodex/project-map.json --json > /tmp/a.json")),
+             make_turn(2, make_bash("python3 -c \"import json; json.load(open('/tmp/a.json'))\"")))
+    a = P.assert_8_audit_read_as_json(turns)
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_8_does_not_credit_an_audit_json_nobody_opens():
+    """A write nobody reads is the defect assertion 38 exists for; crediting it here would score the
+    same mistake as a success."""
+    turns = (make_turn(1, make_bash("$CX audit /repo/.coyodex/project-map.json --json > /tmp/a.json")),)
+    assert P.assert_8_audit_read_as_json(turns).of == 0

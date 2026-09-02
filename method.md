@@ -1194,19 +1194,31 @@ persists/writes/reads each entity) → **re-balance the grouping against the tra
 grouping was cut edge-blind — run `coyodex balance`, fix or justify each finding; Phase 3.5 in
 parallel mode) → **measure test completeness against the finished inventory**
 (the last structural step — it reads the assembled nodes + flows: use cases, T4 entry points, T5
-entities, critical-path branches) → **group T2 + T4 into T2b interfaces, then RETROFIT the flows** —
-the LEAD's job, and deliberately LAST, not "at synthesis": it needs T2 and T4 for its inputs, and it
-needs the TRACED FLOWS for its consumer, because a `Cn → Dn` step can only *migrate* to a surface if
-it already exists. The outside-edge rows are written here, `ways_in` and `deps[].interfaces` travel
+entities, critical-path branches) → **group T2 + T4 into T2b interfaces** —
+the LEAD's job. **AUTHOR THE SURFACES BEFORE THE TRACE, and do the migration after it.** T2b used to
+sit entirely at the end, on the reasoning that it needs the TRACED FLOWS for its consumer. Only half
+of it does. Authoring a surface needs T2 and T4 and nothing else, and both exist well before the
+trace; it is the `Cn → Dn` MIGRATION that needs flows to migrate. Leaving the whole section to the
+end meant every flow was traced door-blind and then rewritten: measured on the 2026-09-01 argus
+build, **30 of 31 flows owed an opening and 96 steps owed a door**, and a whole extra four-agent
+fan-out was spent putting them in — after the agents that wrote those steps were gone. With the
+surfaces authored first, the trace fan-out is handed the `In` rows and doors its own steps as it
+writes them, which is the phase that knows what each step is actually doing.
+So: author the outside-edge rows here, `ways_in` and `deps[].interfaces` travel
 through `reconcile` (their `EPn`/`In` ids are minted at assembly, exactly like a use case's
 `entry_points`), and every external-group dep is decided one way or the other.
 **Author `kind` with the row**, in the same pass, from the eleven seeds — it is a fact about the
 surface you have just named, not a later tidy-up, and nothing derives it. Who is on the far side is
 DERIVED from the walks and must never be written by hand.
-**Then go back through every flow AND every sub-flow and do ALL FOUR halves of the doors rule** —
-shared machinery is swept under its own id, and one undoored step there is drawn in every story that
-rides it. This is the step, and
-skipping it is the failure the gates below now catch: (1) OPEN each flow at its door, `Rn → In` then
+**Every flow AND every sub-flow does ALL FOUR halves of the doors rule** — shared machinery is swept
+under its own id, and one undoored step there is drawn in every story that rides it. **Halves 1–3
+belong to the TRACE, written with the steps; half 4 is the lead's, after the trace.** A trace agent
+that has the `In` rows doors its own arrival, its own hand-off and its own mid-story crossings while
+it still knows what each step does — give it `coyodex contract doors` alongside its trace contract.
+Half 4 stays with the lead because a `Cn → Dn` step can only migrate to a surface once the flows
+exist. When a build reaches this point with flows already traced door-blind — a rebuild of an older
+map, or a trace that skipped it — retrofit them here, which is what this step used to be.
+Skipping it is the failure the gates below now catch: (1) OPEN each flow at its door, `Rn → In` then
 `In → Cn`, for every use case whose ways in belong to a surface; (2) CLOSE each flow whose last step
 delivers to an actor, `Cn → In` then `In → Rn`, and draw that out-door even when it is the same
 surface the flow opened at; (3) DOOR EVERY OTHER CROSSING TOO — a preview, a question, an answer in
@@ -1217,8 +1229,12 @@ that authors the surfaces and stops leaves a map that can SAY what its outside e
 ever goes through a door — measured on the first real build to author the section: 12 surfaces, 517
 steps, zero doors, 5 migrations owed, and every one of its 42 flows owing both an opening and, for 27
 of them, a closing.
-**Schedule a section by its CONSUMERS as well as its inputs.** T2b was placed by its inputs alone,
-and its consumer — the flows — was written before it and never revisited. **No fan-out worker authors this** — a harvest agent sees one slice and cannot
+**Schedule a section by its CONSUMERS as well as its inputs.** T2b was first placed by its inputs
+alone, and its consumer — the flows — was written before it and never revisited. Moving it to the
+END fixed that and created the mirror of it: the section now sat behind its own consumer, so every
+flow was traced without it and rewritten afterwards. The rule is not "early" or "late" but SPLIT AT
+THE CONSUMER — the half the flows consume goes before them, the half that consumes the flows goes
+after. **No fan-out worker authors this** — a harvest agent sees one slice and cannot
 group a surface, and the first build after T2b shipped proved it: the dependency agent correctly
 refused, wrote a note saying the field was the lead's, and the lead never came back because no step
 in this order sent it. Nodes (T4/T5/T2)
@@ -1568,9 +1584,24 @@ synthesis → parallel trace.**
     somebody writes the answer down. At each barrier, record what the batch actually took —
     `coyodex timings record --phase <phase> --slice "<name>" --minutes <m>` — and the NEXT build
     orders from that instead of from T5-and-entry-points folklore. `order` prints longest-first and
-    says plainly when it has no record yet, so a first build is not blocked waiting for one. This is
-    worth **up to 7.7 minutes** on a large repo, and it is worth nothing on the first build of a
-    project: it is a second-build lever, which is why the recording half is not optional.
+    says plainly when it has no record yet, so a first build is not blocked waiting for one. It is a
+    second-build lever, which is why the recording half is not optional.
+
+    **What launch order is actually worth: SECONDS, not minutes.** This paragraph once priced it at
+    "up to 7.7 minutes", and that number was the STRAGGLER's runtime, not the cost of dispatching it
+    late. Measured on the 2026-09-01 argus build, the whole dispatch stagger — the gap between the
+    first and last agent of one batch starting — is **12.6 s for 9 agents, 20.7 s for 13, 34.8 s for
+    19**. That is the entire ceiling on what reordering can win, because every agent in a batch is
+    launched in one message and they all run at once; ordering changes who starts 12 seconds sooner,
+    not who finishes first. Straggler waste over the same build was **17.5 minutes** — eighty times
+    the stagger — and reordering cannot touch a second of it, because the slowest slice holds the
+    barrier whenever it is launched.
+
+    **So the lever is slice SIZING, not slice ORDER.** A slice that takes twice as long as its
+    siblings is the whole cost; cut it smaller, or merge the small ones, and the barrier closes
+    earlier. Keep recording the minutes — that is what tells you WHICH slice to resize — and keep
+    ordering longest-first, since it is free. Just do not spend judgement on the order: `cost` now
+    prints the stagger beside the straggler waste, so the two are read together.
 
   - **Never fan out to ONE agent.** A fan-out of one has every cost of a helper and none of the
     parallelism: the lead writes a brief, waits at a barrier, and reads a fragment, to get work it
@@ -2049,7 +2080,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   by any step written here. This is that step, and it runs in FRESH CONTEXT too: dispatch ONE
   **closer** agent with only the refuted claims — each with its skeptic's `evidence` and `note` —
   and the repo; never the build reasoning, and never the confirming rows. It opens each
-  refutation's file and returns **uphold / reject** per refutation with the line it read. WHY not
+  refutation's file and returns **uphold / reject** per refutation with the line it read.
+  **Use `coyodex contract closer`; do not compose the brief from this paragraph.** And note what
+  that contract requires of YOU: a refuted claim is a claim about a MAP ROW, so paste
+  `dump --id <element>` and `dump --edges <element>` under each claim. The closer is denied
+  `.coyodex/` on purpose — seeing the map whole would hand it the build's reasoning back — so a row
+  you leave out is a row it cannot get. A brief that forbade `.coyodex/` and then asked a map-only
+  question got a wrong answer, blocked the ship gate, and cost 5 turns to undo. WHY not
   the lead's own read by default: the lead re-reading the code is the build-context blind spot the
   fresh-context rule exists to break, reintroduced at the very step that decides what the map ends
   up saying (the same reason a lead tie-break is refused below). The lead applies the upheld ones

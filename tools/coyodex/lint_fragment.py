@@ -22,7 +22,7 @@ import re
 import sys
 from pathlib import Path
 
-from coyodex import grammar, provenance
+from coyodex import grammar, prose, provenance
 from coyodex.reporting import shown
 from coyodex.assemble import load_fragment
 from coyodex.model import ID_SHAPE, ModelError, ProjectModel, access_rules, all_elements
@@ -410,9 +410,20 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # rebuild inline three legitimate sub-flows and ship a fragment its author believed had passed.
     # `duplicate_security_warnings` rides here too: WITHIN one fragment a repeated surface is
     # answerable now, and the cross-fragment case (the common one) still surfaces at validate.
+    # PROSE rides here too. `validate` has run the same countable readability check since it
+    # existed, but only over the ASSEMBLED map — so a long sentence, an em dash or a raw code name
+    # written by a fan-out agent could not be seen until every fragment was merged, at which point
+    # the agent that wrote it is gone and the lead is the one editing prose it did not author. The
+    # 2026-09-01 argus build surfaced 21 long sentences that way. The check is row-local by
+    # construction (one field, one sentence, no cross-fragment reference), so a fragment can answer
+    # it alone, which is the test for belonging in a lint. Advisory here for the same reason it is
+    # advisory in `validate`: a long sentence is not a wrong map. The glossary comes from the
+    # fragment when it has one, which is the same allowance `prose.scan` makes at validate time.
+    prose_lines = prose.summarize(prose.scan(prose.iter_prose_fields(m),
+                                             terms=[g.term for g in m.glossary]))
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
             + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m)
-            + duplicate_security_warnings(m) + confidence_warnings(m))
+            + duplicate_security_warnings(m) + confidence_warnings(m) + prose_lines)
 
 
 # DELIBERATELY ABSENT: a per-fragment nudge about the entry-point per-kind COMPLETENESS statement.

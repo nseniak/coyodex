@@ -470,13 +470,19 @@ def subflow_refcount_warnings(m: ProjectModel) -> list[str]:
         for st in f.steps:
             if st.subflow:
                 ref_counts[st.subflow] = ref_counts.get(st.subflow, 0) + 1
+    # "another fragment's flow may hold the other reference" is a decision only a person can make,
+    # and until now the message offered nowhere to record having made it. Two of these survived four
+    # validates on argus, unfixed and unrecordable, which is what keeps a CLEAN verdict out of
+    # reach. Same heading and key shape as the rule-granularity nudge: this IS a granularity call.
+    kept = _recorded_line_keys(m, "balance exceptions")
     out: list[str] = []
     for sf in m.subflows:
         n_refs = ref_counts.get(sf.id, 0)
-        if n_refs < 2:
+        if n_refs < 2 and not _records_key(kept, sf.id):
             out.append(f"{sf.id} ({sf.name}) is referenced {n_refs} time(s) — a sub-flow earns its "
-                       "keep at ≥2 references; consider inlining it (advisory: another fragment's "
-                       "flow may hold the other reference)")
+                       "keep at ≥2 references; consider inlining it, or record "
+                       f"'{sf.id}: <why it stands alone>' under a 'Balance exceptions' extras "
+                       "heading (advisory: another fragment's flow may hold the other reference)")
     return out
 
 
@@ -487,6 +493,23 @@ def subflow_refcount_warnings(m: ProjectModel) -> list[str]:
 
 FLOW_STEPS_LO = 3     # under this, the flow is likely under-traced (advisory)
 FLOW_STEPS_HI = 15    # over this: a fused goal, wire-grain step altitude, or inline shared machinery
+
+
+def banded_step_count(steps: "Sequence[FlowStep]") -> int:
+    """How many of a flow's steps count toward the step-count band.
+
+    An INTERFACE step does not. The band exists to catch a fused goal or wire-grain detail, and
+    naming the door a story comes in by is neither — it is the same structural exemption a sub-flow
+    reference already gets (it counts as 1, not as its contents). Counting doors would put 33 of the
+    150 flows across the four live maps over the band the day doors were authored, which would read
+    as 33 new defects and is none.
+
+    A FUNCTION because two readers need the same answer and got different ones: this rule lived
+    inline in the advisory, and `coyodex-eval`'s `profile.flows_over_band_pct` counted raw
+    `len(f.steps)`. On the 2026-09-01 argus map the eval read 54.8% over band against `validate`'s
+    0% — the eval reporting a regression in the quality signal the gate had just called clean."""
+    return sum(1 for st in steps
+               if not (grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst)))
 _SHARED_RUN_MIN = 4   # contiguous identical (src, dst) hops that count as literal duplication
 
 
@@ -567,13 +590,7 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
     family: list[tuple[str, str, str]] = []
     for fid, name, steps in ([(f.uc, f.title, f.steps) for f in m.flows]
                              + [(sf.id, sf.name, sf.steps) for sf in m.subflows]):
-        # An INTERFACE step does not count toward the band. The band exists to catch a fused goal or
-        # wire-grain detail; naming the door a story comes in by is neither — it is the same
-        # structural exemption a sub-flow reference already gets (it counts as 1, not as its
-        # contents). Measured: counting them would put 33 of the 150 flows across the four live maps
-        # over the band the day doors are authored, which would read as 33 new defects and is none.
-        n = sum(1 for st in steps
-                if not (grammar.is_interface_id(st.src) or grammar.is_interface_id(st.dst)))
+        n = banded_step_count(steps)
         # The viewer numbers EVERY authored step, so a message saying "2 steps" about a flow the
         # reader sees five of is a message about a different flow. Say both numbers when they differ.
         doored = f"{n} of {len(steps)} steps (doors do not count)"
@@ -1415,6 +1432,27 @@ def check_rules_model(m: ProjectModel,
     by_block: dict[str, list[BusinessRule]] = {}
     for r in m.rules:
         by_block.setdefault(r.block or "", []).append(r)
+
+    # A rule with NO block at all. The granularity loop below groups by `r.block or ""` and then
+    # tests `if bid and ...`, so the unassigned group is skipped in silence — and an INVALID block
+    # id is caught by the reference check while an ABSENT one is caught by nothing. That made
+    # complete block coverage a property of how carefully the rules happened to be typed: the
+    # 2026-09-01 argus build had it right by luck, with no check that could have said otherwise.
+    # Advisory, not blocking: rules are authored one agent per block and `reconcile`'s `block`
+    # directive assigns them afterwards, so a fragment legitimately arrives unassigned and only the
+    # assembled map can judge.
+    if m.blocks:
+        unassigned = [r.id for r in m.rules
+                      if not (r.block or "").strip() and not _records_key(granular, r.id)]
+        if unassigned:
+            warnings.append(
+                f"Rule(s) in no block: {_shown(unassigned, 12)} — the map has {len(m.blocks)} "
+                "block(s), so a rule with no `block` sits outside the Rules view's forest and is "
+                "drawn nowhere. An INVALID block id is refused by the reference check; an ABSENT "
+                "one was silent until now. Assign them (`coyodex reconcile` with a `block` "
+                "directive), add the missing block, or record '<BRn>: <why this rule belongs to no "
+                "block>' under a 'Balance exceptions' extras heading")
+
     thin = []
     for bid, rules in sorted(by_block.items(), key=lambda kv: element_sort_key(kv[0])):
         anchored = [r for r in rules if any(not s.no_call_site for s in r.sites)]
@@ -2620,9 +2658,15 @@ def _check_dep_buckets(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"extras heading (seeds: "
                             f"{', '.join(grammar.DEP_BUCKET_SEEDS_LIBRARY)}).")
         else:
+            # The external half named no escape, while the library half one branch up did — so a
+            # build that minted an external bucket ON PURPOSE (which this very message calls
+            # encouraged) was told to keep it and given nowhere to record the decision, and the
+            # line came back on every rebuild. Same heading, same key shape as the library branch.
             warnings.append(f"External bucket '{bucket}' is minted (not a seed) — fine if it's a real "
                             f"product purpose (splitting the '{grammar.DEP_BUCKET_CATCHALL_EXTERNAL}' "
-                            f"catch-all this way is encouraged); reuse the exact spelling on rebuild.")
+                            f"catch-all this way is encouraged); reuse the exact spelling on "
+                            f"rebuild, or record '{bucket}: <why this project needs it>' under a "
+                            f"'Bucket vocabulary' extras heading.")
     if silenced_buckets:
         warnings.append(f"{len(silenced_buckets)} minted bucket(s) declared under 'Bucket "
                         f"vocabulary' and NOT re-nudged: {', '.join(sorted(silenced_buckets))}. "
@@ -2639,10 +2683,18 @@ def _check_dep_buckets(m: ProjectModel) -> tuple[list[str], list[str]]:
                             "Content) — mint a short purpose name per group (the seed list is a floor, "
                             "not a ceiling).")
     for label, buckets in (("external systems", ext), ("libraries", lib)):
-        if len(buckets) > grammar.DEP_BUCKET_CAP:
+        # SOFT cap, and the message always said so ("fine if the product genuinely spans this
+        # many") — while offering nowhere to say that it is. A soft cap an operator agrees with and
+        # cannot record re-fires at every validate forever, which is the "advisory waved through"
+        # failure by construction: on argus it survived four validates, unfixed and unrecordable.
+        # Keyed by the LABEL rather than a bucket name, because the decision being recorded is
+        # about the split as a whole, not about any one bucket in it.
+        if len(buckets) > grammar.DEP_BUCKET_CAP and not _records_key(declared, label):
             warnings.append(f"Many purpose buckets among {label}: {len(buckets)} > soft cap "
                             f"{grammar.DEP_BUCKET_CAP} ({', '.join(sorted(buckets))}) — check for "
-                            "near-duplicates to merge (fine if the product genuinely spans this many).")
+                            "near-duplicates to merge. Fine if the product genuinely spans this "
+                            f"many: record '{label}: <why this many purposes are real>' under a "
+                            "'Bucket vocabulary' extras heading to say so.")
     return problems, warnings
 
 
@@ -3118,14 +3170,39 @@ def _grounding_warnings(m: ProjectModel) -> list[str]:
     ever advisory: grounding is a judgement about effort, never a well-formedness property."""
     g = m.grounding
     if g is None:
+        out: list[str] = []
+        # AN AUTHORED CONFIDENCE WITH NO PASS BEHIND IT. Nothing in the toolchain writes
+        # `confidence`, so every value in a map was typed by the agent that wrote the row — it says
+        # what its author BELIEVED and reads as what the grounding pass PROVED. `lint-fragment`
+        # nudges an authoring agent about it, but a fragment the LEAD writes by hand may never be
+        # linted at all: one sat 113 turns unread on argus. With no record there is nothing for the
+        # label to be measured against, and `finalize`'s comparison leg cannot run either — so this
+        # is the only place the map can be told that it is asserting without evidence.
+        # Narrowed to `verified`, which is the only value that can be WRONG here. `inferred` with
+        # no pass is honest — it is exactly what a map with no pass knows. `verified` with no pass
+        # is an assurance nothing supports, and it has NO third state to record: the remedy is to
+        # run the pass or to write `inferred`, so this line is deliberately unescapable and is
+        # allowlisted as such in `tests/test_method_contract.py`.
+        claimed = [getattr(el, "id", "?") for el in (*m.components, *m.rules, *m.deps,
+                                                     *m.subsystems, *m.subdomains, *m.interfaces)
+                   if str(getattr(el, "confidence", "") or "").strip() == "verified"]
+        if claimed:
+            out.append(
+                f"{len(claimed)} element(s) state `confidence: verified` and this map has NO "
+                f"`grounding` record: {_shown(claimed, 12)} — nothing in the toolchain writes that "
+                "field, so the label says what its author believed while reading as what a "
+                "checking pass proved, and here no pass ran. `lint-fragment` nudges an authoring "
+                "agent about this, but a fragment the LEAD writes by hand may never be linted at "
+                "all (one sat 113 turns unread). Run the grounding pass, or write `inferred`, "
+                "which is what the map actually knows.")
         claim_surface = len(l2_worklist_model(m))     # only needed for this message
         if claim_surface >= 20:
-            return [f"No `grounding` record: this map's {claim_surface} L2 claims (the same worklist "
-                    "`coyodex audit` builds) were never challenged by fresh-context skeptics, and "
-                    "nothing in the map says so. Run the Phase-4 grounding pass, or record the "
-                    "decision in `grounding` (claims_total/claims_challenged + the verdict split "
-                    "confirmed/refuted/unverifiable + note)"]
-        return []
+            out.append(f"No `grounding` record: this map's {claim_surface} L2 claims (the same "
+                       "worklist `coyodex audit` builds) were never challenged by fresh-context "
+                       "skeptics, and nothing in the map says so. Run the Phase-4 grounding pass, "
+                       "or record the decision in `grounding` (claims_total/claims_challenged + "
+                       "the verdict split confirmed/refuted/unverifiable + note)")
+        return out
     out: list[str] = []
     # The split check runs BEFORE (and independently of) the coverage share, which needs a non-zero
     # `claims_total`. Ordering it after a `claims_total <= 0` early return meant a record of
@@ -4553,15 +4630,24 @@ def roleless_cd_verb_warnings(m: ProjectModel) -> list[str]:
     them — a nudge nobody ever acts on is noise)."""
     folded = {d.id for d in m.deps
               if grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_FOLDED}
+    # Keyed by the DEP, not by the edge: an edge has no id, and the judgement being recorded is
+    # about the dependency ("nothing this thing does has a role-revealing verb"), which is the same
+    # answer for every edge reaching it. The docstring above records that three live rebuilds
+    # justified these firings instead of fixing them — three decisions with nowhere to live, so the
+    # line came back on every rebuild and on argus it was one of the advisories that made a CLEAN
+    # verdict unreachable.
+    excused = _recorded_line_keys(m, "naming exceptions")
     roleless = [f"{e.src} {e.verb} {e.dst}" for e in m.edges
                 if e.dst.startswith("D") and e.dst not in folded
-                and grammar.edge_role(e.verb) is None]
+                and grammar.edge_role(e.verb) is None and not _records_key(excused, e.dst)]
     if not roleless:
         return []
     shown = _shown(roleless, 8)
     return [f"{len(roleless)} C→D edge(s) name no role (generic verb): {shown} — use a role-revealing "
             f"verb so the dependency's role is legible: publishes/emits/listens-to (message bus), "
-            f"reads/writes/persists/queries (data store), calls (service)."]
+            f"reads/writes/persists/queries (data store), calls (service). If the generic verb is "
+            f"the honest one, record '<Dn>: <why nothing it does reveals a role>' under a "
+            f"'Naming exceptions' extras heading."]
 
 
 def check_domain_relations(entities: list[Entity]) -> tuple[list[str], list[str]]:

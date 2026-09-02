@@ -344,6 +344,22 @@ class Batch:
     def waste(self) -> float:
         return max(0.0, self.wall - self.mean)
 
+    @property
+    def stagger(self) -> float:
+        """The gap between the FIRST and LAST agent of this batch starting.
+
+        The entire ceiling on what launch ORDER can win. `method.md` priced "dispatch the longest
+        slice first" at "up to 7.7 minutes" — which was the straggler's RUNTIME, not the cost of
+        launching it late. Every agent in a batch goes out in one message and they all run at once,
+        so ordering changes who starts a few seconds sooner and nothing else. Measured on the
+        2026-09-01 argus build: 12.6 s for 9 agents, 20.7 s for 13, 34.8 s for 19 — against 17.5
+        minutes of straggler waste over the same build, which reordering cannot touch at all.
+
+        Printed BESIDE `waste` on purpose. Apart, each number invites the wrong reading; together
+        they say plainly that the lever is slice SIZING, not slice order."""
+        starts = [s for s in (a.start for a in self.agents) if s is not None]
+        return max(starts) - min(starts) if starts else 0.0
+
     def cost(self, cache_ttl: str) -> float:
         """What this fan-out billed. The table above it reported only TIME, so a batch could be
         the most expensive in the build and read as unremarkable — `waste` answers "which barrier
@@ -619,7 +635,8 @@ def build_report(session: Path, *, map_path: Path | None = None, from_turn: int 
         batches=[{"index": float(b.index), "start": b.start - min(stamps), "wall": b.wall,
                   "agents": float(len(b.agents)), "slowest": b.durations[0] if b.agents else 0.0,
                   "median": statistics.median(b.durations) if b.agents else 0.0,
-                  "mean": b.mean, "waste": b.waste, "cost": b.cost(cache_ttl),
+                  "mean": b.mean, "waste": b.waste, "stagger": b.stagger,
+                  "cost": b.cost(cache_ttl),
                   "thinking_share": b.thinking_share()} for b in batches(agents)],
         base_context_median=int(statistics.median(bases)) if bases else 0,
         context_per_turn={
@@ -664,16 +681,26 @@ def format_report(report: Report) -> str:
     lines.append("")
     lines.append("FAN-OUT")
     lines.append(f"  {'#':>2} {'start':>7} {'wall':>7} {'n':>3} {'slowest':>8} {'median':>7}"
-                 f" {'mean':>7} {'waste':>7} {'$':>7} {'think':>6}")
+                 f" {'mean':>7} {'waste':>7} {'stagger':>8} {'$':>7} {'think':>6}")
     for b in report.batches:
         share = b.get("thinking_share", 0.0)
         lines.append(f"  {int(b['index']):>2} {_m(b['start']):>7} {_m(b['wall']):>7}"
                      f" {int(b['agents']):>3} {_m(b['slowest']):>8} {_m(b['median']):>7}"
-                     f" {_m(b['mean']):>7} {_m(b['waste']):>7} {b.get('cost', 0.0):>7.2f}"
+                     f" {_m(b['mean']):>7} {_m(b['waste']):>7}"
+                     f" {b.get('stagger', 0.0):>7.1f}s {b.get('cost', 0.0):>7.2f}"
                      f" {(f'{100 * share:.0f}%' if share else '-'):>6}")
     waste = sum(b["waste"] for b in report.batches)
+    stagger = sum(b.get("stagger", 0.0) for b in report.batches)
+    # THE TWO NUMBERS TOGETHER, always. `waste` alone reads as "reorder the dispatch", and
+    # `method.md` priced that at 7.7 minutes for years on exactly that reading. `stagger` is the
+    # whole ceiling on what reordering can win — every agent in a batch launches in one message —
+    # and it is measured in SECONDS. Apart, each invites the wrong lever; together they say the
+    # lever is slice SIZING.
     lines.append(f"  straggler waste {_m(waste)}"
-                 f" ({100 * waste / max(active, 1):.0f}% of active time)")
+                 f" ({100 * waste / max(active, 1):.0f}% of active time)"
+                 f"   ·   dispatch stagger {stagger:.1f}s total"
+                 f" — the whole ceiling on what LAUNCH ORDER can win; the waste above is a slice"
+                 f" SIZING problem")
 
     lines.append("")
     lines.append("TOKENS")

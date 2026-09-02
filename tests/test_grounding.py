@@ -968,11 +968,9 @@ def test_another_builds_figure_beside_this_pass_is_fine():
     assert not _write_with_note(note, rows, ["c1", "c2"])
 
 
-def test_these_checks_WARN_and_never_refuse():
-    """Prose has more shapes than a regex. A note citing only earlier builds' figures, or a
-    theme-scoped count, is honest and states a number this pass does not have — and `--keep-note`
-    exists so a 1,900-character note never goes back through a shell, which a refusal would force.
-    So the contradiction is printed beside the right numbers, and the write still happens."""
+def _write_note_cli(note: str, extra: list[str] | None = None) -> tuple[int, str, bool]:
+    """Run `grounding write` end to end over one triple-voted claim. Returns
+    `(exit code, everything printed, whether the record was written)`."""
     import contextlib, io
     from coyodex.grounding import main
     with tempfile.TemporaryDirectory() as td:
@@ -986,12 +984,33 @@ def test_these_checks_WARN_and_never_refuse():
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
             rc = main(["write", "--worklist", str(w), "--verdicts", str(v),
-                       "--note", "the build before produced 100 redundant rows",
-                       "--out", str(tmp / "g.json")])
-        out = buf.getvalue()
-        wrote = (tmp / "g.json").exists()
+                       "--note", note, "--out", str(tmp / "g.json")] + (extra or []))
+        return rc, buf.getvalue(), (tmp / "g.json").exists()
+
+
+def test_a_contradicting_note_REFUSES_and_prints_the_right_numbers():
+    """It warned, and warning did not work. The redundant-row error was found by one retrospective,
+    marked fixed by printing the right number, and shipped again on the next map; the anchor
+    unanimity claim then shipped on a third. The note is permanent and rides the commit message, so
+    a wrong number here outlives every other artifact of the run."""
+    rc, out, wrote = _write_note_cli("the build before produced 100 redundant rows")
+    assert rc == 1, out
+    assert not wrote, "a record whose note contradicts it must not be written"
+    assert "redundant" in out, out
+    # The numbers to fix it with must come WITH the refusal, or the next attempt is a guess.
+    assert "NOTE FACTS" in out and "2 row(s) that added no new claim" in out, out
+    assert "--note-cites-other-runs" in out, "the refusal must name its own escape"
+
+
+def test_note_cites_other_runs_turns_the_refusal_back_into_a_warning():
+    """Prose has more shapes than a regex: a note citing only earlier builds' figures, or a
+    theme-scoped count, is honest and states a number this pass does not have. The tool cannot read
+    which pass a sentence is about and the operator can, so the escape is an assertion of intent —
+    the same shape as `--partial`."""
+    rc, out, wrote = _write_note_cli("the build before produced 100 redundant rows",
+                                     ["--note-cites-other-runs"])
     assert rc == 0, out
-    assert wrote, "an honest note must still be written"
+    assert wrote, "an asserted-honest note must still be written"
     assert "WARNING" in out and "redundant" in out, out
 
 
@@ -1007,6 +1026,45 @@ def test_the_right_coverage_pair_passes():
     rows = [{"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "a"}]
     assert not _write_with_note("2 of those 3 carry no verdict.", rows, ["c1"],
                                 live=["c1", "c2", "c3"])
+
+
+def _voted(claim: str, votes: list[tuple[object, str]]) -> list[dict]:
+    """One claim, one row per voter: `(grounded, evidence anchor)`."""
+    return [{"claim": claim, "grounded": g, "evidence": ev, "skeptic": f"s{i}"}
+            for i, (g, ev) in enumerate(votes)]
+
+
+def test_multi_vote_agreement_counts_verdict_and_anchor_disagreements_apart():
+    from coyodex.grounding import multi_vote_agreement
+    rows = (_voted("agree", [(True, "a.py:1"), (True, "a.py:1"), (True, "a.py:1")])
+            + _voted("split-verdict", [(True, "b.py:2"), (False, "b.py:2")])
+            + _voted("split-anchor", [(True, "c.py:3"), (True, "c.py:9")])
+            + _voted("single", [(True, "d.py:4")]))
+    assert multi_vote_agreement(rows) == (3, 1, 1)
+
+
+def test_a_missing_anchor_is_not_counted_as_agreement():
+    """An absent citation is not a matching one — counting it as agreement is how a pass with two
+    silent voters reads as unanimous."""
+    from coyodex.grounding import multi_vote_agreement
+    rows = _voted("c1", [(True, "a.py:1"), (True, "")])
+    assert multi_vote_agreement(rows) == (1, 0, 0)
+
+
+def test_a_wrong_anchor_unanimity_claim_is_reported():
+    """The 2026-09-01 argus map shipped a note saying the three security voters agreed on every
+    anchor. Two of its triple-voted claims disagree, and nothing computed the number."""
+    rows = _voted("c1", [(True, "a.py:1"), (True, "a.py:9"), (True, "a.py:1")])
+    problems = _write_with_note("the voters agreed on every anchor: zero anchor disagreements.",
+                                rows, ["c1"])
+    assert problems, problems
+    assert "1 evidence-anchor disagreement(s)" in problems[-1], problems
+
+
+def test_the_right_agreement_numbers_pass():
+    rows = _voted("c1", [(True, "a.py:1"), (True, "a.py:9"), (True, "a.py:1")])
+    assert not _write_with_note("1 evidence-anchor disagreements, 0 verdict disagreements.",
+                                rows, ["c1"])
 
 
 def test_a_note_that_states_neither_number_is_not_second_guessed():

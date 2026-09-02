@@ -227,7 +227,13 @@ def test_harvest_prompt_carries_the_per_slice_expectation() -> None:
     templates = "".join(p.read_text(encoding="utf-8")
                         for p in sorted((METHOD_MD.parent / "method" / "templates").glob("*.md")))
     text = method + templates
-    assert "«the slice's E from the pre-index `granularity.per_dir`»" in text
+    # The slot NAME and the pointer are checked apart, because they are now two things. The slot
+    # used to BE the sentence — `«the slice's E from the pre-index `granularity.per_dir`»` — and a
+    # key nobody can type gets filled by position instead, silently: all four brief generators on
+    # the 2026-09-01 argus build bound their slots positionally, across 51 of 55 briefs. So the key
+    # is a bare token and the explanation sits beside it, where the lead still reads it.
+    assert "«EXPECTED_COMPONENTS»" in text
+    assert "the slice's E from the pre-index `granularity.per_dir`" in text
     # …and the unified under-delivery guidance points at the same E, not the old rough ratios
     assert "judge each return against its E" in text
     assert "1 component per 3–5 kLOC" not in text  # the pre-anchor heuristic was unified away

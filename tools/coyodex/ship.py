@@ -238,6 +238,15 @@ def build_plan(s: ShipInputs) -> list[Step]:
         _assemble_step(s, "assemble (step 9 — the filled header reaches the map)"),
         Step("lint-fragment header (step 10 — the one hand-authored fragment)",
              ("lint-fragment", str(s.header))),
+        # `by-element` between the map being final and the gates reading it. `finalize`'s grounding
+        # leg has told three builds in a row to run this command for the list behind its count, and
+        # it was run ZERO times on all three — the advisory names the command, the operator is 400
+        # lines downstream, and the count ships unexamined (112 elements on argus). Running it here
+        # costs one read of files already in memory and puts the list where the count is. No
+        # `--worklist` ON PURPOSE: that reads the LIVE map and reproduces finalize's number, while
+        # adding the pinned worklist answers a different question and gives a different one.
+        Step("grounding by-element (the list behind finalize's confidence count)",
+             ("grounding", "by-element", *_verdict_flags(s), "--map", str(s.map_path))),
         Step("validate --check-sources (step 11a)",
              ("validate", str(s.map_path), "--check-sources", "--repo", str(s.repo))),
         Step("audit (step 11b)", ("audit", str(s.map_path))),
@@ -386,8 +395,48 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("\nSHIP COMPLETE — quote finalize's verdict line in the commit message "
               f"(gate block at {inputs.gate_block}), then commit the map, the .md, the pre-index "
-              "and provenance. finalize printed the exact `git add -f` line.")
+              "and provenance. finalize printed the exact `git add -f` line."
+              + _coverage_line(inputs))
     return 0
+
+
+def _coverage_line(s: ShipInputs) -> str:
+    """The one number the OPERATOR REPORT keeps getting wrong, printed where the operator writes it.
+
+    The build's closing message to its user is written from what the lead remembers, and what the
+    lead remembers is `claims_total` — the size of the worklist the skeptics were given. That is not
+    coverage of the SHIPPED map: a claim reworded after the vote stays in the map and loses its
+    verdict. Two builds in a row headlined "all N claims challenged" while the record beside them
+    said otherwise — argus 2026-09-01 shipped "454 claims, all challenged" over 440 with a verdict.
+
+    The number already existed, in `grounding.json` as `claims_live_challenged`, and it is printed
+    by `grounding write`, in `gate-block.md`, and twice in the finalize report. It was missing from
+    the ONE place the sentence gets written, hundreds of lines after those. So it is repeated here,
+    last, where the operator report is composed.
+
+    Silent when the record cannot be read: an unreadable grounding file is `finalize`'s problem to
+    report, and a second voice guessing at it would only add noise to a run that already failed."""
+    try:
+        record = json.loads((s.header.parent / "grounding.json").read_text(encoding="utf-8"))
+        g = record["grounding"]
+        pinned = int(g["claims_total"])
+        live_done = int(g["claims_live_challenged"])
+        # The LIVE size is not stored directly, and must not be approximated by the pinned one —
+        # the whole defect is that the two differ. `build_record` writes both differences, so the
+        # live total is exact: pinned, minus the claims that left the map, plus the ones that
+        # arrived after the pin.
+        live_total = pinned - int(g["claims_superseded"]) + int(g["claims_added_since"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return ""
+    if live_done >= live_total:
+        return (f"\n\nCOVERAGE — every one of the shipped map's {live_total} claim(s) carries a "
+                f"verdict. Quote {live_total}, not the pinned worklist's {pinned}: the two are the "
+                f"same number only when nothing was reworded after the vote.")
+    return (f"\n\nCOVERAGE — say this, and NOT \"all {pinned} claims challenged\": the shipped map "
+            f"carries {live_total} claim(s), of which {live_done} have a verdict and "
+            f"{live_total - live_done} do NOT. Those were minted or reworded after the worklist "
+            f"was pinned, so no skeptic saw them. `claims_total` counts the PINNED worklist and "
+            f"will keep reading as full coverage.")
 
 
 if __name__ == "__main__":

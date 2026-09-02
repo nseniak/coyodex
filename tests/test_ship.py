@@ -106,10 +106,11 @@ def test_full_plan_runs_the_method_sequence_in_order():
         steps = ship.build_plan(make_inputs(repo, note_file=note, partial=True))
         heads = [(st.argv[0], st.argv[1] if len(st.argv) > 1 else "") for st in steps]
         assert [h[0] for h in heads] == [
-            "anchor-drift", "fix", "assemble",          # the idempotent prepare prefix
+            "anchor-drift", "fix", "assemble",           # the idempotent prepare prefix
             "grounding", "assemble", "provenance",       # write → carry in → stamp
-            "assemble", "lint-fragment", "validate",     # header in → lint → gates
-            "audit", "render", "finalize"], heads
+            "assemble", "lint-fragment",                 # header in → lint
+            "grounding",                                 # by-element: the list behind the count
+            "validate", "audit", "render", "finalize"], heads
         write = steps[3].argv
         assert write[1] == "write" and "--note-file" in write and "--partial" in write
         assert "--keep-note" not in write
@@ -274,3 +275,56 @@ def test_a_file_that_STRADDLES_the_pin_is_dropped_too():
     assert "verdicts-pinned.json" in write, write
     assert "verdicts-mixed.json" in final, "finalize still needs every verdict"
     assert dropped == ["verdicts-mixed.json"], dropped
+
+
+# --- the operator report's coverage line (retro 2026-09-01, argus row 2) -------------------------
+# The build's closing message is written from `claims_total`, the size of the worklist the skeptics
+# were given. That is not coverage of the SHIPPED map: a claim reworded after the vote stays in the
+# map and loses its verdict. Two builds in a row headlined "all N claims challenged" over fewer.
+
+def _grounding(repo: Path, **fields) -> None:
+    import json
+    record = {"claims_total": 454, "claims_live_challenged": 440,
+              "claims_superseded": 0, "claims_added_since": 0}
+    record.update(fields)
+    # where `ship`'s own plan sends `grounding write --out`: beside the header fragment.
+    (repo / ".coyodex" / "build-fragments" / "grounding.json").write_text(
+        json.dumps({"grounding": record}), encoding="utf-8")
+
+
+def test_the_coverage_line_states_the_shipped_map_not_the_pinned_worklist():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        _grounding(repo)
+        line = ship._coverage_line(make_inputs(repo))
+    assert "454 claims challenged" in line, line          # the sentence it refuses
+    assert "454 claim(s), of which 440" in line, line
+    assert "14 do NOT" in line, line
+
+
+def test_the_live_total_is_computed_from_the_record_not_assumed_equal_to_the_pinned_one():
+    """The whole defect is that the two differ. 454 pinned, 4 superseded, 10 added -> 460 live."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        _grounding(repo, claims_superseded=4, claims_added_since=10, claims_live_challenged=440)
+        line = ship._coverage_line(make_inputs(repo))
+    assert "460 claim(s), of which 440" in line, line
+    assert "20 do NOT" in line, line
+
+
+def test_full_coverage_says_so_and_still_names_the_right_number():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        _grounding(repo, claims_live_challenged=454)
+        line = ship._coverage_line(make_inputs(repo))
+    assert "every one of the shipped map's 454 claim(s)" in line, line
+
+
+def test_an_unreadable_grounding_record_makes_ship_silent_not_wrong():
+    """finalize reports a broken record; a second voice guessing at it only adds noise."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        assert ship._coverage_line(make_inputs(repo)) == ""
+        (repo / ".coyodex" / "build-fragments" / "grounding.json").write_text(
+            "{not json", encoding="utf-8")
+        assert ship._coverage_line(make_inputs(repo)) == ""

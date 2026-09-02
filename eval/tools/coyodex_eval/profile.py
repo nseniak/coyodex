@@ -381,7 +381,14 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     n_components = len({c.id for c in m.components})
     n_edges = len(m.edges)
     root_fanout, max_fanout, in_band_pct, depth = balance_lib.fanout_summary(m)
-    flow_lens = [len(f.steps) for f in m.flows]  # authored counts: a sub-flow reference counts as 1
+    # DOORS DO NOT COUNT, exactly as `validate`'s own band does not count them. A sub-flow
+    # reference still counts as 1 (the authored convention), but an INTERFACE step is a structural
+    # exemption there: the band exists to catch a fused goal or wire-grain detail, and naming the
+    # door a story comes in by is neither. The two measures disagreed the day doors were authored —
+    # on argus this read 54.8% over band against `validate`'s 0%, so the eval reported a regression
+    # in the very quality signal the gate said was clean. One rule, read from `validate_model`, so
+    # the two cannot drift again.
+    flow_lens = [validate_model.banded_step_count(f.steps) for f in m.flows]
     over_band = sum(1 for n in flow_lens if n > validate_model.FLOW_STEPS_HI)
     # Completeness — computed by the SAME helpers the validate advisory runs (never a second
     # implementation). Raw signal, pre-escape (see the field comments above).

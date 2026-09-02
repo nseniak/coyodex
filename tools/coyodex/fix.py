@@ -84,7 +84,18 @@ _WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", 
 #: `EntryPoint`, whose ids are minted at assemble and exist in no fragment — `fix row --id EP12`
 #: refuses by construction — so listing them promised a fix the verb cannot perform. The
 #: entry-point half of the original complaint is still open and needs a different verb.
-_GATE_REQUESTED_FIELDS: frozenset[str] = frozenset({"why", "risk", "purpose", "meaning"})
+#: (`component` on an `EntryPoint` now has that different verb: `reconcile`'s `component` directive,
+#: which runs after assemble where the `EPn` ids exist. It stays out of this set.)
+#:
+#: `owners` and `not_an_interface` meet both halves of the bar. `validate` asks for each by name —
+#: an owner-with-no-evidence names the area and asks for `owners`; a dependency the map treats as
+#: internal asks for `not_an_interface: <why>` — and both sit on elements `fix row` can reach:
+#: `owners` on a `Group` (`SDn`) or an `Entity` (`En`), `not_an_interface` on a `Dep` (`Dn`), all
+#: authored ids that exist in a fragment. Leaving them out sent the 2026-09-01 argus build to two
+#: raw heredocs over the assembled map, which is the exact failure this set exists to prevent.
+_GATE_REQUESTED_FIELDS: frozenset[str] = frozenset({
+    "why", "risk", "purpose", "meaning", "owners", "not_an_interface",
+})
 
 #: Writable themes whose claim is NOT edge-shaped, so `apply_anchor_corrections` can place it by
 #: recomputing the claim rather than by parsing `<Id> <verb> <Id>`. Everything writable and not in

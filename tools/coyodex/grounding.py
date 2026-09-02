@@ -115,7 +115,98 @@ def _verdict_bucket(rows: list[dict]) -> str:
     return "unverifiable"
 
 
+def multi_vote_agreement(rows: list[dict]) -> tuple[int, int, int]:
+    """`(multi-voted claims, verdict disagreements, evidence-anchor disagreements)`.
+
+    A claim voted by more than one skeptic is the only place unanimity is a MEANINGFUL word, and it
+    is the word notes reach for: "the three security voters agreed on every anchor". Nothing
+    computed it, so the sentence was written from impression. On the 2026-09-01 argus map the note
+    said ZERO anchor disagreements and 2 of 80 triple-voted claims disagree.
+
+    Two different disagreements, deliberately counted apart:
+
+    * **verdict** — the voters did not return the same `grounded` value. The record's buckets fold
+      these into a majority and the disagreement disappears.
+    * **evidence anchor** — the voters agreed on the verdict but cited DIFFERENT `path:line`s.
+      Harmless on its face and the reason to count it: it is the one signal that two readers who
+      agree were not looking at the same thing.
+
+    Rows carrying no `evidence` are skipped for the anchor test rather than counted as agreeing —
+    an absent citation is not a matching one."""
+    votes: dict[str, list[dict]] = {}
+    for r in rows:
+        claim = r.get("claim")
+        if isinstance(claim, str):
+            votes.setdefault(claim, []).append(r)
+    multi = 0
+    verdict_disagree = 0
+    anchor_disagree = 0
+    for claim_rows in votes.values():
+        voters = {str(r.get("skeptic", "")) for r in claim_rows if r.get("skeptic")}
+        if len(claim_rows) < 2 and len(voters) < 2:
+            continue
+        multi += 1
+        grounded = {str(r.get("grounded")).lower() for r in claim_rows}
+        if len(grounded) > 1:
+            verdict_disagree += 1
+        anchors = {str(r.get("evidence", "")).strip() for r in claim_rows
+                   if str(r.get("evidence", "")).strip()}
+        if len(anchors) > 1:
+            anchor_disagree += 1
+    return multi, verdict_disagree, anchor_disagree
+
+
+def note_facts_block(worklist_claims: list[str], rows: list[dict], record: dict[str, object],
+                     live_claims: "list[str] | None") -> str:
+    """THE NUMBERS A NOTE WILL CITE, COMPUTED, so nobody retypes one from an earlier view.
+
+    `--note` is free prose in a permanent record and in the commit message, and nothing checked it.
+    One shipped note said "Eighteen fresh-context skeptics" about a build that dispatched 17 and
+    produced 20 verdict labels: the 18 was read off a `grounding lint` line printed while one
+    verdict file was still being written, then carried forward. The same note said "Four superseded
+    claims had been CONFIRMED" where the report counts 11, leaving seven deliberate overrides of
+    settled claims undisclosed. Every number was available at the moment the note was written.
+
+    A FUNCTION rather than an inline print, because `_note_contradictions` now REFUSES rather than
+    warns: the operator whose note is rejected needs these numbers in the same breath, and they
+    used to be printed only on the success path, after the refusal had already returned."""
+    buckets = json.loads(format_report(worklist_claims, rows, as_json=True, live_claims=live_claims))
+    sup_confirmed = sum(1 for r in buckets["superseded"] if r.get("verdict") == "confirmed")
+    labels = sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")})
+    # REDUNDANT ROWS, spelled out, because the note has to state it and the arithmetic is the kind
+    # nobody re-does. A three-voted theme produces three rows per claim; "136 redundant rows" was
+    # published in a shipped map and in the operator report for a pass whose four security batches
+    # held 136 CLAIMS and 408 rows — 272 redundant. The note's author had the row count here and the
+    # claim count nowhere, so it quoted the number it could see.
+    # Both sides count the SAME rows: a row with no claim is excluded from each, or it would inflate
+    # `redundant` by one while belonging to neither side of the subtraction.
+    claimed_rows = [r for r in rows if r.get("claim")]
+    voted = len({str(r.get("claim")) for r in claimed_rows})
+    redundant = max(0, len(claimed_rows) - voted)
+    # The multi-vote agreement, for the same reason the redundant count is here: notes assert
+    # unanimity ("the three security voters agreed on every anchor") and nothing computed it, so the
+    # sentence came from impression and was wrong on a shipped map.
+    multi, verdict_dis, anchor_dis = multi_vote_agreement(rows)
+    return (f"  NOTE FACTS — quote these, do not retype them from an earlier run:\n"
+            f"    verdict rows {len(rows)} over {voted} distinct claim(s) — "
+            f"{redundant} row(s) that added no new claim (usually a re-vote)\n"
+            f"    distinct skeptic labels {len(labels)} "
+            f"(a label is not an agent: one agent may carry several batches)\n"
+            f"    confirmed {record['claims_confirmed']} · refuted {record['claims_refuted']} · "
+            f"unverifiable {record['claims_unverifiable']} · tied {len(buckets['tied'])}\n"
+            f"    multi-voted claims {multi} · verdict disagreements {verdict_dis} · "
+            f"evidence-anchor disagreements {anchor_dis} "
+            f"(unanimity is only a fact about the multi-voted ones)"
+            + (f"\n    superseded {record['claims_superseded']}, of which {sup_confirmed} "
+               f"had been CONFIRMED — each is a settled verdict the build overrode, and a note "
+               f"that does not say so hides it" if live_claims is not None else ""))
+
+
 _REDUNDANT_IN_NOTE = re.compile(r"(\d[\d,]*)\s+redundant\s+rows?", re.I)
+#: The note asserting the multi-vote agreement. Both spellings a real note used: "0 verdict
+#: disagreements" and "zero evidence-anchor disagreements".
+_AGREEMENT_IN_NOTE = re.compile(
+    r"\b(\d[\d,]*|no|zero)\s+(verdict|evidence[- ]anchor|anchor)\s+disagreements?", re.I)
 _COVERAGE_IN_NOTE = re.compile(r"(\d[\d,]*)\s+of\s+(?:those\s+|the\s+)?(\d[\d,]*)\s+"
                                r"(?:carry|have)\s+no\s+verdict", re.I)
 
@@ -162,6 +253,30 @@ def _note_contradictions(note: str, rows: list[dict], record: dict[str, object],
                 f"the note states {quoted} and this record says {live_total - live_done} of "
                 f"{live_total} — none of them. The note was written against an earlier pass; "
                 f"requote it from this run.")
+    # THE MULTI-VOTE AGREEMENT, the third shape. Same failure as the two above and the most
+    # dangerous, because it is an assurance rather than an arithmetic slip: "the three security
+    # voters agreed on every anchor" was published on a map where 2 of 80 triple-voted claims
+    # disagree. A note that states a disagreement count must state THIS pass's.
+    _multi, verdict_dis, anchor_dis = multi_vote_agreement(rows)
+    stated: dict[str, list[tuple[int, str]]] = {"verdict": [], "anchor": []}
+    for m in _AGREEMENT_IN_NOTE.finditer(note or ""):
+        raw = m.group(1).lower()
+        value = 0 if raw in ("no", "zero") else int(raw.replace(",", ""))
+        which = "verdict" if m.group(2).lower() == "verdict" else "anchor"
+        stated[which].append((value, m.group(0)))
+    for which, actual in (("verdict", verdict_dis), ("anchor", anchor_dis)):
+        claimed = stated[which]
+        # ANY occurrence clears it, exactly as the redundant-row check allows: a note that compares
+        # this pass with an earlier one legitimately states both numbers.
+        if claimed and actual not in [v for v, _t in claimed]:
+            quoted = ", ".join(f"'{t}'" for _v, t in claimed)
+            label = "verdict" if which == "verdict" else "evidence-anchor"
+            problems.append(
+                f"the note states {quoted} and this pass has {actual} {label} disagreement(s) — "
+                f"none of them. Over {_multi} multi-voted claim(s): {verdict_dis} where the voters "
+                f"returned different verdicts, {anchor_dis} where they agreed but cited different "
+                f"anchors. Quote the `NOTE FACTS` line rather than describing the pass from "
+                f"impression.")
     return problems
 
 
@@ -1211,6 +1326,7 @@ def main(argv: list[str] | None = None) -> int:
     keep_note = False
     as_json = False
     partial = False
+    note_cites_other_runs = False
     only_kind = ""
     i = 0
     while i < len(rest):
@@ -1227,6 +1343,8 @@ def main(argv: list[str] | None = None) -> int:
             partial = True
         elif a == "--keep-note":
             keep_note = True
+        elif a == "--note-cites-other-runs":
+            note_cites_other_runs = True
         elif a in ("--worklist", "--verdicts", "--out", "--note", "--note-file", "--map",
                    "--kind"):
             i += 1
@@ -1432,17 +1550,36 @@ def main(argv: list[str] | None = None) -> int:
         print(format_report(claims, rows, as_json=as_json, live_claims=live_claims))
         return 0
     record, errors = build_record(claims, rows, note, live_claims=live_claims, partial=partial)
-    # WARN, never refuse. These read free prose with two regexes, and prose has more shapes than a
-    # regex: a note that cites only EARLIER builds' figures ("the three before produced 160, 40 and
-    # 100 redundant rows") states a number this pass does not have and is completely honest, and a
-    # note whose count is theme-scoped rather than pass-wide is honest too. Refusing those would
-    # block the most careful notes written — and `--keep-note` exists precisely so a 1,900-character
-    # note never has to go back through a shell, which a refusal at this step would force.
+    # REFUSE, having been a warning and having failed as one. This used to warn, on the argument
+    # that prose has more shapes than a regex — a note citing only EARLIER builds' figures states a
+    # number this pass does not have and is honest. That case is already covered by the "any
+    # occurrence clears it" rule inside each check: a note that also quotes this pass passes. What
+    # the warning did not cover is the case it was built for. The redundant-row error was found by
+    # one retrospective, marked fixed by printing the right number, and shipped again on the next
+    # map; the anchor-unanimity claim then shipped on a third. A warning on stderr, inside a build
+    # that prints thousands of lines, is not seen.
     #
-    # The signal is worth having: on the map this came from, both checks fired on real defects the
-    # shipped note carried. So it prints, loudly, beside the NOTE FACTS that give the right numbers.
-    for line in _note_contradictions(note, rows, record, live_claims):
-        print(f"WARNING: {line}", file=sys.stderr)
+    # The note is a PERMANENT record and goes into the commit message, so a wrong number here
+    # outlives every other artifact of the run, and the fix in each message is one word. That is the
+    # bar for blocking: silent, durable, and cheap to correct.
+    note_faults = _note_contradictions(note, rows, record, live_claims)
+    if note_faults and note_cites_other_runs:
+        # The operator has ASSERTED that the numbers in the note are about other runs, or are
+        # theme-scoped. Warn and continue — the same escape `--partial` is, for the same reason:
+        # the tool cannot read which pass a sentence is about, and the operator can.
+        for line in note_faults:
+            print(f"WARNING: {line}", file=sys.stderr)
+        print(note_facts_block(claims, rows, record, live_claims), file=sys.stderr)
+    elif note_faults:
+        errors = list(errors) + [
+            f"the `--note` contradicts this pass's own numbers. {line}" for line in note_faults]
+        errors.append(
+            "If the numbers in the note are about OTHER runs, or are scoped to one theme rather "
+            "than the whole pass, pass `--note-cites-other-runs` to say so and this becomes a "
+            "warning.")
+        # The numbers to fix it with, in the same breath as the refusal. Without this the operator
+        # is told the note is wrong and not what right would be, and the next attempt is a guess.
+        print(note_facts_block(claims, rows, record, live_claims), file=sys.stderr)
     if errors:
         for e in errors:
             print(f"ERROR: {e}", file=sys.stderr)
@@ -1473,29 +1610,7 @@ def main(argv: list[str] | None = None) -> int:
         # same note said "Four superseded claims had been CONFIRMED" where this report counts 11,
         # leaving seven deliberate overrides of settled claims undisclosed. Both numbers were
         # available here, at the moment the note was written.
-        buckets = json.loads(format_report(claims, rows, as_json=True, live_claims=live_claims))
-        sup_confirmed = sum(1 for r in buckets["superseded"] if r.get("verdict") == "confirmed")
-        labels = sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")})
-        # REDUNDANT ROWS, spelled out, because the note has to state it and the arithmetic is the
-        # kind nobody re-does. A three-voted theme produces three rows per claim; "136 redundant
-        # rows" was published in a shipped map and in the operator report for a pass whose four
-        # security batches held 136 CLAIMS and 408 rows — 272 redundant. The note's author had the
-        # row count here and the claim count nowhere, so it quoted the number it could see.
-        # Both sides count the SAME rows: a row with no claim is excluded from each, or it would
-        # inflate `redundant` by one while belonging to neither side of the subtraction.
-        claimed_rows = [r for r in rows if r.get("claim")]
-        voted = len({str(r.get("claim")) for r in claimed_rows})
-        redundant = max(0, len(claimed_rows) - voted)
-        print(f"  NOTE FACTS — quote these, do not retype them from an earlier run:\n"
-              f"    verdict rows {len(rows)} over {voted} distinct claim(s) — "
-              f"{redundant} row(s) that added no new claim (usually a re-vote)\n"
-              f"    distinct skeptic labels {len(labels)} "
-              f"(a label is not an agent: one agent may carry several batches)\n"
-              f"    confirmed {record['claims_confirmed']} · refuted {record['claims_refuted']} · "
-              f"unverifiable {record['claims_unverifiable']} · tied {len(buckets['tied'])}"
-              + (f"\n    superseded {record['claims_superseded']}, of which {sup_confirmed} "
-                 f"had been CONFIRMED — each is a settled verdict the build overrode, and a note "
-                 f"that does not say so hides it" if live_claims is not None else ""))
+        print(note_facts_block(claims, rows, record, live_claims))
         live_done = record.get("claims_live_challenged")
         if live_claims is not None and isinstance(live_done, int):
             live_total = len(set(live_claims))

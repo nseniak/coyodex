@@ -41,6 +41,7 @@ from coyodex.model import (
     Component,
     Dep,
     Entity,
+    EntryPoint,
     FlowStep,
     ProjectModel,
     UseCase,
@@ -88,6 +89,14 @@ _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     # one outside system can sit on several surfaces (a coding agent hosts our skill AND writes the
     # transcript we read back).
     "interfaces": (Dep, "dependency"),
+    # An entry point's owning `C` id. Here for the same reason `ways_in` is, two fields up: `EPn`
+    # ids are MINTED BY `assemble` from harvested content, so no fragment can name one, and the
+    # owning component is only decidable once every fragment's components exist. Without this entry
+    # the only route was a hand-written heredoc over the assembled map, outside every check here —
+    # the 2026-09-01 argus build did that for 88 entry points. No collision on the FIELD-NAME key
+    # this dict is built on: `EntryPoint` is the only element type in the model with a `component`
+    # attribute (unlike `kind`, see `interface_kind` below).
+    "component": (EntryPoint, "entry point"),
     # `owners` is here for the SAME reason `capability` is, one field over: it names `CAPn` ids that
     # are minted at synthesis, and the entity it sits on was authored in the T5 harvest, before any
     # capability existed. A sub-domain needs no entry here — the areas are authored at synthesis
@@ -95,6 +104,22 @@ _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     # on the area and never has to travel through this file.
     "owners": (Entity, "entity"),
 }
+
+
+def _targets(m: ProjectModel) -> dict[str, object]:
+    """Every element a `set` directive may address, keyed by id.
+
+    `all_elements` walks `model.ID_ARRAYS`, and `entry_points` is deliberately NOT in it: `EPn` ids
+    are minted by `assemble` from content, so they are not part of the id space validate/remap treat
+    as authored. But a reconcile file is written AFTER assemble, against exactly those minted ids —
+    that is the whole reason `entry_points` and `ways_in` reference them — so the `component`
+    directive has to resolve them here. Added on top rather than into `ID_ARRAYS`, so the id-remap
+    and validate paths keep the id space they were built for."""
+    out = all_elements(m)
+    for ep in m.entry_points:
+        if ep.id:
+            out.setdefault(ep.id, ep)
+    return out
 
 
 @dataclass
@@ -111,6 +136,7 @@ class SetDirective:
     owners: list[str] | None = None
     bucket: str | None = None
     block: str | None = None
+    component: str | None = None           # sets `EntryPoint.component` — see `_SET_FIELD_OWNER`
     ways_in: list[str] | None = None
     interfaces: list[str] | None = None
     interface_kind: str | None = None      # sets `Interface.kind` — see `_SET_FIELD_OWNER`
@@ -312,7 +338,8 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         # `assigned_fields()` returns [] and the whole file is rejected with "assigns no field" — the
         # generator meanwhile emits it happily. `interface` shipped missing, and three directives made
         # the repo's own reconcile.json unloadable.
-        for fld in ("subsystem", "subdomain", "capability", "bucket", "block", "interface_kind"):
+        for fld in ("subsystem", "subdomain", "capability", "bucket", "block", "interface_kind",
+                    "component"):
             if fld in d:
                 if not isinstance(d[fld], str):
                     raise ReconcileError(f"{label}: set[{i}].{fld}: expected a string")
@@ -449,10 +476,11 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
             problems.append(f"reconcile keep_edges[{ki}]: {ke.src} {ke.verb} {ke.dst} is also in "
                             f"`drop_edges` — keeping an anchor and removing the edge cannot both "
                             f"be meant; the drop would win")
-    elements = all_elements(m)
+    elements = _targets(m)
     defined = set(elements) | {g.id for g in m.happy_path}
     units = {d.unit for d in m.deployment}
     cap_ids = {c.id for c in m.capabilities}
+    comp_ids = {c.id for c in m.components}
     blk_ids = {b.id for b in m.blocks}
     ep_ids = {ep.id for ep in m.entry_points if ep.id}
     ep_sources = {ep.id: (ep.source or "").strip() for ep in m.entry_points if ep.id}
@@ -514,6 +542,20 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                             f"authored against an older harvest and would point {eid} at a different "
                             f"front door. Re-author the entry_points assignments against this "
                             f"assemble's ids (`coyodex dump --id {ep_id}` shows what it is now)")
+                elif fld == "component":
+                    # Same shape as `capability` two branches up: `check_hierarchy` picks the
+                    # expected parent from the CHILD's prefix, and an entry point is not a
+                    # component, so resolve the target here — it must be a defined C id. A wrong
+                    # but DEFINED id is exactly what the hand-written heredoc route could not
+                    # catch, so an undefined one must not slip through either.
+                    comp = (sd.component or "").strip()
+                    if not comp:
+                        problems.append(f"reconcile set[{si}] {eid}: component is empty — name the "
+                                        f"owning component (a `Cn` in `components[]`), or drop the "
+                                        f"directive to leave the decision unmade")
+                    elif comp not in comp_ids:
+                        problems.append(f"reconcile set[{si}] {eid}: component '{comp}' is not a "
+                                        f"defined component (a `Cn` in `components[]`)")
                 elif fld == "interfaces":
                     bad_if = [i for i in (sd.interfaces or []) if i not in iface_ids]
                     if bad_if:
@@ -576,7 +618,7 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
     per-directive human notes (0-match warnings, riding-step reports/heals). MUST run AFTER
     `_derive_entity_edges` (B1) so a dropped C→E edge is not re-derived from its step in the same run."""
     notes: list[str] = []
-    elements = all_elements(m)
+    elements = _targets(m)
     # BEFORE the drops, deliberately: a keep narrows a triple to one row, and a later `drop_edges`
     # for the same triple should then see the single survivor rather than a set it no longer
     # describes. A 0-match keep WARNS and never fails, like `drop_edges` — the anchor may have been
@@ -673,6 +715,9 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             if sd.block is not None and isinstance(el, BusinessRule):
                 el.block = sd.block
                 set_counts["block"] += 1
+            if sd.component is not None and isinstance(el, EntryPoint):
+                el.component = sd.component
+                set_counts["component"] += 1
     stats["reconcile_set"] = set_counts
     dropped_total = 0
     # Riding steps left unhealed by a report-only drop. Counted here so `assemble` can put the number

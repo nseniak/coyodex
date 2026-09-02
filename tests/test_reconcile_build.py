@@ -546,6 +546,8 @@ def test_every_owner_type_the_generator_knows_is_reachable_in_a_map():
     m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only an owner may cancel.",
                             sites=[RuleSite(where="app/plugins/a.py:9", why="rejects a non-owner")])]
     m.interfaces = [Interface(id="I1", name="Command line", side="ours")]
+    m.entry_points = [EntryPoint(id="EP1", kind="cli", trigger="coyodex build",
+                                 source="app/cli.py:12", component="C1")]
     reachable = {type(el) for el in _elements(m)}
     unreachable = sorted({t.__name__ for t in _FIELD_OWNER.values()} - {t.__name__ for t in reachable})
     assert not unreachable, (
@@ -842,3 +844,61 @@ def test_every_scalar_set_field_is_parsed_by_the_loader():
     for fld in scalars:
         rec = load_reconcile(json.dumps({"set": [{"ids": ["X1"], fld: "Y1"}]}), "t")
         assert rec.sets[0].assigned_fields() == [fld], fld
+
+
+# --- an entry point's owning component (retro 2026-09-01, argus row 7) ---------------------------
+# `reconcile` had no way to say which component an entry point belongs to. `EPn` ids are minted by
+# `assemble` from content, so no fragment can name one, and the only remaining route was a
+# hand-written heredoc over the assembled map — 88 of them on one build, outside every check here.
+
+def _map_with_entry_points() -> ProjectModel:
+    m = make_map()
+    m.entry_points = [
+        EntryPoint(id="EP1", kind="cli", trigger="coyodex build", source="app/plugins/a.py:12"),
+        EntryPoint(id="EP2", kind="http", trigger="POST /orders", source="web/main.py:31"),
+    ]
+    return m
+
+
+def test_an_entry_point_can_be_assigned_its_owning_component():
+    from coyodex.reconcile import Reconcile, SetDirective, apply_reconcile, validate_reconcile
+    m = _map_with_entry_points()
+    rec = Reconcile(sets=[SetDirective(ids=["EP1", "EP2"], component="C1")])
+    assert not validate_reconcile(m, rec)
+    apply_reconcile(m, rec, {})
+    assert [ep.component for ep in m.entry_points] == ["C1", "C1"]
+
+
+def test_an_entry_point_component_that_names_no_component_is_refused():
+    """A wrong-but-DEFINED id is what nothing could catch on the heredoc route. An UNDEFINED one
+    must not slip through either."""
+    from coyodex.reconcile import Reconcile, SetDirective, validate_reconcile
+    m = _map_with_entry_points()
+    probs = validate_reconcile(m, Reconcile(sets=[SetDirective(ids=["EP1"], component="C99")]))
+    assert probs and "not a defined component" in probs[0], probs
+
+
+def test_an_empty_entry_point_component_is_refused():
+    """An empty directive would blank a component the map already carries while reading as an
+    assignment — the same trap `interface_kind` guards."""
+    from coyodex.reconcile import Reconcile, SetDirective, validate_reconcile
+    m = _map_with_entry_points()
+    probs = validate_reconcile(m, Reconcile(sets=[SetDirective(ids=["EP1"], component="  ")]))
+    assert probs and "is empty" in probs[0], probs
+
+
+def test_component_can_only_be_set_on_an_entry_point():
+    from coyodex.reconcile import Reconcile, SetDirective, validate_reconcile
+    m = _map_with_entry_points()
+    probs = validate_reconcile(m, Reconcile(sets=[SetDirective(ids=["C2"], component="C1")]))
+    assert probs and "can only be set on a entry point" in probs[0], probs
+
+
+def test_a_component_directive_round_trips_through_the_reconcile_file():
+    """The three registries — `_SET_FIELD_OWNER`, `SetDirective` and the scalar-string parse loop —
+    have to move together; a field missing from the third parses to None and the whole file is
+    rejected as "assigns no field"."""
+    from coyodex.reconcile import load_reconcile
+    rec = load_reconcile(json.dumps({"set": [{"ids": ["EP1"], "component": "C1"}]}), "test")
+    assert rec.sets[0].component == "C1"
+    assert rec.sets[0].assigned_fields() == ["component"]

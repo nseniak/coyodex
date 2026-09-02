@@ -23,10 +23,11 @@ verified/inferred discipline, which keeps the barrier synthesis clean.
 **The template starts at the quoted block below.** Everything above it is instructions to you, the
 lead; nothing above this line goes into an agent prompt.
 
-> You are harvesting «structural / operational / build» facts for a coyodex codebase map.
+> You are harvesting «SLICE_KIND» facts for a coyodex codebase map.
 >
-> **This slice serves: «SERVES — the UC / CAP / HP / R ids whose behavior runs through these files,
-> with one line each on what they need from you».** They are why the slice is cut this way. Where a
+> **This slice serves: «SERVES».** Fill that slot with the UC / CAP / HP / R ids whose behavior
+> runs through these files, one line each on what they need from you.
+> They are why the slice is cut this way. Where a
 > file matters to one of them, that is the fact worth returning; where it matters to none, say so
 > rather than padding the slice.
 > Read these files completely, then produce ONLY the rows below — the only file you may write is
@@ -38,12 +39,13 @@ lead; nothing above this line goes into an agent prompt.
 > that delegates returns prose instead of a fragment, and the whole slice has to be re-harvested.
 > You read the files and write the one fragment; no delegation.
 >
-> **Files:** «absolute paths this agent owns; list a directory first, then read each file».
-> **Background:** «what the main agent already learned about this slice, handed down so you
-> don't re-derive it».
+> **Files:** «FILES».
+> **Background:** «BACKGROUND» — what the main agent already learned about this slice, handed
+> down so you don't re-derive it.
 >
-> **Expect roughly «the slice's E from the pre-index `granularity.per_dir`» components for your
-> slice** (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
+> **Expect roughly «EXPECTED_COMPONENTS» components for your
+> slice** — the lead fills that slot with the slice's E from the pre-index `granularity.per_dir`
+> (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
 > out far under, you are folding subsystem-shaped dirs into single components — make those
 > subsystems and recurse into their units; far over, you are splitting module-sized units.
 > For every row give `file:line` evidence and a confidence tag. Write **`inferred`** — `verified`
@@ -55,8 +57,8 @@ lead; nothing above this line goes into an agent prompt.
 > cannot fill one, return its header with `(none found)` and say why; never silently omit a
 > section.** Your output is **ONE JSON fragment** — a partial map model per
 > [model.md](«COYODEX_HOME»/method/model.md): an object holding only the top-level arrays your slice owns
-> («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`,
-> `config`»), each entry using that array's exact field names. **WRITE the fragment to
+> (e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`,
+> `config`), each entry using that array's exact field names. **WRITE the fragment to
 > `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
 > one-line inventory (row count per array)** — never inline the fragment in your reply: a large
 > fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
@@ -81,7 +83,7 @@ lead; nothing above this line goes into an agent prompt.
 > entirely — do NOT emit `null` (rejected on defaulted-string fields) and do NOT emit a placeholder like
 > `(none)` (fails the anchor gate). (b) Use **only** each array's exact field names — no stray keys
 > (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`). (c) Every anchor is **repo-root-relative**: the repo root
-> is «absolute repo path» — prefix every path with it. Minimal valid fragment:
+> is «REPO_ABS» — prefix every path with it. Minimal valid fragment:
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
 > **WRITE A DRAFT AS YOU GO (required).** Do not hold the fragment in your head until the end: an
 > agent that dies mid-run (API outage, machine sleep) loses ALL its reading. Write incremental

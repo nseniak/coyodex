@@ -257,3 +257,61 @@ def test_a_line_that_is_not_a_pair_is_refused_and_nothing_is_written():
         rc = _record_lines(tmp, "h1 domain 9.0\njustaname\n")
         assert rc != 0, "a malformed line must be refused"
         assert not Path(record_path(str(tmp))).exists(), "a bad line in the batch writes nothing"
+
+
+def test_the_doors_phase_can_be_recorded() -> None:
+    """The interfaces/doors fan-out had no phase name, so on the 2026-09-01 argus build all four
+    door slices were refused and the one wave the build was told to measure went unmeasured."""
+    assert "doors" in PHASES
+    with tempfile.TemporaryDirectory() as tmp:
+        assert main(["record", "--repo", make_repo(tmp), "--phase", "doors",
+                     "--slice", "our surfaces", "--minutes", "6.2"]) == 0
+        assert read_record(tmp) == [{"phase": "doors", "slice": "our surfaces", "minutes": 6.2}]
+
+
+def test_a_plural_phase_name_is_accepted_and_stored_canonically() -> None:
+    """`--phase skeptics` was refused 19 times on one build. Refusing a typo is right; refusing the
+    obvious plural teaches nothing. The CANONICAL name is what gets stored, so `order` and `show`
+    stay keyed on one spelling."""
+    with tempfile.TemporaryDirectory() as tmp:
+        assert main(["record", "--repo", make_repo(tmp), "--phase", "skeptics",
+                     "--slice", "batch 1", "--minutes", "3.0"]) == 0
+        assert read_record(tmp)[0]["phase"] == "skeptic"
+        assert main(["order", "--repo", tmp, "--phase", "skeptic"]) == 0
+
+
+def test_a_real_typo_is_still_refused(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        assert main(["record", "--repo", make_repo(tmp), "--phase", "skpetic",
+                     "--slice", "s", "--minutes", "1.0"]) != 0
+        assert "unknown phase" in capsys.readouterr().err
+
+
+def test_an_omitted_repo_is_refused_from_inside_the_coyodex_clone(monkeypatch, capsys) -> None:
+    """`timings` writes to `<repo>/.coyodex/`, and a build runs the CLI by absolute path while its
+    shell folder drifts. On the 2026-09-01 argus build 9 harvest slices were filed in the clone
+    instead of the mapped project, and nothing downstream can see that: both files are well-formed,
+    and the loss looks exactly like a phase nobody measured."""
+    from coyodex.timings import COYODEX_HOME
+    monkeypatch.chdir(COYODEX_HOME)
+    assert main(["record", "--phase", "harvest", "--slice", "s", "--minutes", "1.0"]) != 0
+    assert "--repo is required here" in capsys.readouterr().err
+
+
+def test_an_explicit_repo_is_always_honoured_so_coyodex_stays_self_mappable(monkeypatch) -> None:
+    """`--repo .` from the clone is a deliberate statement; `.` by default is not."""
+    from coyodex.timings import COYODEX_HOME
+    with tempfile.TemporaryDirectory() as tmp:
+        make_repo(tmp)
+        monkeypatch.chdir(COYODEX_HOME)
+        assert main(["record", "--repo", tmp, "--phase", "harvest",
+                     "--slice", "s", "--minutes", "1.0"]) == 0
+        assert read_record(tmp)[0]["slice"] == "s"
+
+
+def test_an_omitted_repo_outside_the_clone_still_defaults_to_here(monkeypatch) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        make_repo(tmp)
+        monkeypatch.chdir(tmp)
+        assert main(["record", "--phase", "harvest", "--slice", "s", "--minutes", "1.0"]) == 0
+        assert read_record(tmp)[0]["slice"] == "s"

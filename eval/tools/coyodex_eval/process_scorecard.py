@@ -303,17 +303,33 @@ def _invokes(command: str, subcommand: str) -> bool:
       variable and calls `$CX anchor-drift …` / `$C audit …`. Requiring the literal token `coyodex`
       missed all of those — in the baseline corpus it hid every `audit` invocation mee6 made. A
       `$VAR` prefix is therefore accepted, but ONLY for a subcommand that is coyodex's alone
-      (`_COYODEX_SUBCOMMANDS`), so `$PY dump` cannot be mistaken for `coyodex dump`."""
+      (`_COYODEX_SUBCOMMANDS`), so `$PY dump` cannot be mistaken for `coyodex dump`.
+
+    A THIRD, and the one that made this whole scorecard drift away from the method: `coyodex ship`
+    runs a plan of ten other subcommands inside one process, and none of them is typed. So a build
+    doing exactly what the method prescribes left no shell text for the assertions that look for
+    `validate`, `audit`, `finalize` and the rest, and three of them mis-measured real work on the
+    2026-09-01 argus build. A `ship` invocation therefore counts as invoking every subcommand its
+    own plan runs — the full list with a `--note-file`, the prepare prefix without one."""
     sub = re.escape(subcommand)
     named = re.compile(r"^(?:[\w./~-]*/)?(?:\.?venv/bin/)?coyodex(?:-eval)?\s+" + sub + r"\b")
     aliased = re.compile(r"^\"?\$\{?\w+\}?\"?\s+" + sub + r"\b")
     allow_alias = subcommand in _COYODEX_SUBCOMMANDS
+    ship_named = re.compile(r"^(?:[\w./~-]*/)?(?:\.?venv/bin/)?coyodex(?:-eval)?\s+ship\b")
+    ship_aliased = re.compile(r"^\"?\$\{?\w+\}?\"?\s+ship\b")
     for seg in _segments(command):
         seg = re.sub(r"^(?:sudo|time|nohup|env(?:\s+\w+=\S+)*)\s+", "", seg)
         if named.search(seg):
             return True
         if allow_alias and aliased.search(seg):
             return True
+        # `ship` expands to its plan. Guarded on `subcommand != "ship"` so the expansion can never
+        # make `ship` recognise itself twice, and on the note flag so a prepare-only run does not
+        # get credit for the steps it does not reach.
+        if subcommand != "ship" and (ship_named.search(seg) or ship_aliased.search(seg)):
+            runs = _SHIP_RUNS if re.search(r"--note-file\b", seg) else _SHIP_PREPARE_RUNS
+            if subcommand in runs:
+                return True
     return False
 
 
@@ -774,6 +790,23 @@ def assert_8_audit_read_as_json(turns: Sequence[Turn]) -> Assertion:
             if not cmd or not _invokes(cmd, "audit"):
                 continue
             out = results.get(call.id, "")
+            # A REDIRECT IS THE BEST FORM OF THIS BEHAVIOUR, and it defeated the output test.
+            # `audit --json > audit.json` leaves stdout empty, so the claim-row test below finds
+            # nothing and the run is dropped as unmeasurable — the ideal shape scoring as absent.
+            # On the 2026-09-01 argus build the whole assertion read `n/a` for a run that captured
+            # its worklist to a file and read it back. Credited only when the file IS read
+            # afterwards: a write nobody opens is the defect assertion 38 exists for, and crediting
+            # it here would score the same mistake as a success.
+            redirected = [
+                seg for seg in re.split(r"&&|\|\||[;\n]", _shell_only(cmd))
+                if _invokes(seg, "audit") and "--json" in seg and "--batches" not in seg
+                and any(_json_target_is_read(turns, turn.index, cmd, t)
+                        for t in _redirect_targets(seg))]
+            if redirected:
+                for seg in redirected:
+                    good.append(Evidence(idx, {"json": True, "paged": False,
+                                               "command": seg.strip()[:120]}))
+                continue
             if not _L2_CLAIM_ROW.search(out):
                 # Either the read never reached the worklist, or nothing was captured. Neither is
                 # evidence about a rule that only governs the worklist.
@@ -1066,14 +1099,43 @@ def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Asse
 _WRITES_A_FILE = re.compile(
     r"((?<![0-9&\-])>>?\s*[^\s;&|<>]|\btee\b|json\.dump\b|\.write_text\b|\bcp\b|\bmv\b)")
 
-def _writes_the_grounding_record(command: str) -> bool:
-    """Whether a command runs `coyodex grounding WRITE` — the only form that produces the record.
+#: The subcommands `coyodex ship` runs INSIDE ITSELF, once it is given a `--note-file`. This
+#: scorecard reads typed shell text, so a build that follows the method's prescribed path — one
+#: `ship` call — leaves no trace of twelve steps that ran. Three assertions mis-measured the
+#: 2026-09-01 argus build for exactly this: 13 and 30 read `n/a` and 38 read 0 of 1, all about work
+#: that ran correctly. `ship` is now the prescribed path, so this recurs on every future build.
+#:
+#: A CONSTANT rather than a call into `ship.build_plan`, because building real `ShipInputs` needs a
+#: repo on disk. `eval/tests/test_process_scorecard.py` holds the two together against the real
+#: `build_plan`, the same way `reconcile`'s two field tables are held together.
+_SHIP_RUNS = ("anchor-drift", "fix", "assemble", "grounding", "provenance", "lint-fragment",
+              "validate", "audit", "render", "finalize")
 
-    `_invokes(cmd, "grounding")` matches the whole subcommand GROUP, so `grounding report` and
-    `grounding --help` counted too. Assertion 13 keys its anchor on this, so the group form let a
-    read-only command silently re-anchor and clear the evidence."""
-    return any(_invokes(seg, "grounding") and re.search(r"\bgrounding\s+write\b", seg)
+#: The prefix of a `ship` run that happens WITHOUT `--note-file` — the prepare leg. A ship with no
+#: note writes no record, so it must not satisfy the record-anchored assertions.
+_SHIP_PREPARE_RUNS = ("anchor-drift", "fix", "assemble", "grounding")
+
+
+def _ships_with_a_note(command: str) -> bool:
+    """A `coyodex ship … --note-file <path>` run — the form whose plan writes the record."""
+    return any(_invokes(seg, "ship") and re.search(r"--note-file\b", seg)
                for seg in _segments(command))
+
+
+def _writes_the_grounding_record(command: str) -> bool:
+    """Whether a command produces the grounding record.
+
+    Two forms. `coyodex grounding WRITE` typed directly — `_invokes(cmd, "grounding")` matches the
+    whole subcommand GROUP, so `grounding report` and `grounding --help` counted too, and assertion
+    13 keys its anchor here, so the group form let a read-only command silently re-anchor and clear
+    the evidence.
+
+    And `coyodex ship --note-file <path>`, which runs `grounding write` as step 6 of its own plan.
+    Without this second form the prescribed path scored `n/a` — "no grounding record written in
+    this transcript" — about a build that wrote one."""
+    typed = any(_invokes(seg, "grounding") and re.search(r"\bgrounding\s+write\b", seg)
+                for seg in _segments(command))
+    return typed or _ships_with_a_note(command)
 
 
 #: Subcommands that READ the model and write only reports, and the git plumbing around a commit.
@@ -2750,28 +2812,55 @@ def assert_35_no_relative_map_path_after_cd_into_the_clone(turns: Sequence[Turn]
     different answer, with nothing marking the first as wrong.
 
     That is the expensive shape: not a command that fails, a command that SUCCEEDS against the wrong
-    file. Nothing else in this scorecard can see it, because the run looks entirely healthy."""
+    file. Nothing else in this scorecard can see it, because the run looks entirely healthy.
+
+    **THE FOLDER IS TRACKED ACROSS CALLS, not within one.** The first version searched each Bash
+    command in isolation: a `cd` had to appear in the SAME call as the relative path. The shell
+    folder does not work that way — it persists between calls for the whole session — and the
+    2026-09-01 argus build proved the gap the expensive way. It cd'd into the clone in one call and
+    ran `validate` against a relative path several calls later, reading coyodex's own self-map, and
+    this assertion scored **9 of 9** on that build. An assertion that returns a perfect score on the
+    exact defect it was written for is worse than no assertion: it certifies the thing it missed.
+
+    So a running `inside` flag carries between calls, and the within-command scan is kept as well —
+    a single command can enter the clone and read a relative path without any later call.
+
+    A `cd` whose target cannot be resolved (a variable, `-`, a subshell) clears the flag rather than
+    keeping it: this must not accuse a build whose folder the transcript cannot actually pin down."""
     good: list[Evidence] = []
     bad: list[Evidence] = []
+    inside = False           # does the shell currently stand in the coyodex clone?
+
+    def _reads_relative(text: str) -> bool:
+        searchable = text
+        for pattern in _NOT_A_READ:
+            searchable = pattern.sub(" ", searchable)
+        return _RELATIVE_MAP_PATH.search(searchable) is not None
+
     for turn in turns:
         for call in turn.calls_named("Bash"):
             cmd = call.command
-            cd = _CD_INTO_CLONE.search(cmd)
-            if cd is None:
-                continue
-            tail = cmd[cd.end():]
-            later = _CD_ANYWHERE.search(tail)      # a later cd re-anchors: everything after is out
-            if later is not None:
-                tail = tail[:later.start()]
-            searchable = tail
-            for pattern in _NOT_A_READ:
-                searchable = pattern.sub(" ", searchable)
-            hit = _RELATIVE_MAP_PATH.search(searchable)
-            ev = Evidence(turn.index, {"after_cd": tail.strip()[:120]})
-            (bad if hit else good).append(ev)
-    return Assertion(35, "no relative map path after cd into the clone", len(good),
+            # Walk the command in `cd`-delimited spans, carrying `inside` in and out. The span
+            # before the first `cd` is governed by whatever the PREVIOUS call left behind, which is
+            # the whole point of the flag.
+            spans: list[tuple[bool, str]] = []
+            pos = 0
+            state = inside
+            for m in _CD_ANYWHERE.finditer(cmd):
+                spans.append((state, cmd[pos:m.start()]))
+                state = _CD_INTO_CLONE.match(cmd, m.start()) is not None
+                pos = m.end()
+            spans.append((state, cmd[pos:]))
+            inside = state
+            for in_clone, text in spans:
+                if not in_clone or not text.strip():
+                    continue
+                ev = Evidence(turn.index, {"in_clone": text.strip()[:120]})
+                (bad if _reads_relative(text) else good).append(ev)
+    return Assertion(35, "no relative map path while standing in the clone", len(good),
                      len(good) + len(bad), tuple(bad),
-                     "a `cd` persists across `;` and `&&` — the relative path reads the TOOL's map")
+                     "a `cd` persists across `;`, `&&` AND across Bash calls — the relative path "
+                     "reads the TOOL's map")
 
 
 
@@ -2906,14 +2995,37 @@ def _read_after_write_in_one_call(command: str, target: str) -> bool:
     Split on the same operators `_segments` uses, then ask whether any statement past the redirect
     names the file. Naming it is the whole test — the same standard the cross-turn arm applies —
     because a gate's JSON is read by whatever tool the build reaches for, and enumerating those is
-    the guessing this module avoids."""
+    the guessing this module avoids.
+
+    PROGRAM TEXT IS KEPT HERE, unlike everywhere else in this module. `_shell_only` exists so a
+    command NAMED inside a heredoc is not counted as a command RUN — the right rule for "was this
+    invoked". It is the wrong rule for this question: the commonest way a build reads a gate's JSON
+    is `python3 - <<'PY' … json.load(open('v.json')) … PY`, and stripping the body deletes the read
+    itself. On the 2026-09-01 argus build that scored the run 0 of 1 for never reading a file it
+    read one statement later. Naming a path inside an interpreter body is not an ambiguous mention;
+    it IS the read."""
     vars_ = _shell_vars(command)
-    segs = [_expand_shell_vars(x, vars_) for x in _segments(command)]
+    segs = [_expand_shell_vars(x, vars_)
+            for x in re.split(r"&&|\|\||[;\n|]", _unwrap_shell_c(command)) if x.strip()]
     wrote_at = next((i for i, seg in enumerate(segs)
                      if target in seg and any(target in t for t in _redirect_targets(seg))), None)
     if wrote_at is None:
         return False
     return any(target in seg for seg in segs[wrote_at + 1:])
+
+
+def _json_target_is_read(turns: Sequence[Turn], wrote_at: int, wrote_in: str,
+                         target: str) -> bool:
+    """Is `target` named again after the statement that wrote it — in this call or a later turn?
+
+    The same two-armed test assertion 38 applies, lifted out so assertion 8 can ask it too: a
+    `--json` redirected to a file is only the good shape when the file is actually opened, and a
+    write nobody reads is the defect 38 exists for."""
+    resolved = _expand_shell_vars(target, _shell_vars(wrote_in))
+    if _read_after_write_in_one_call(wrote_in, resolved):
+        return True
+    return any(resolved in _expand_shell_vars(cmd, _shell_vars(cmd))
+               for idx, cmd in bash_commands(turns) if idx > wrote_at)
 
 
 def assert_38_written_json_is_read(turns: Sequence[Turn]) -> Assertion:

@@ -640,6 +640,9 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     # empty value silently read as "off the walk".
     "{} ({}) has no `happy_path` expectation": "answer it — `excluded` IS the recorded decision",
     "Role(s) with no `audience`: {}": "answer it — there is no third state for a role to be in",
+    "{} element(s) state `confidence: verified` and this map has NO":
+        "answer it — with no grounding pass, `inferred` is what the map knows and `verified` is an "
+        "assurance nothing supports; there is no third state to record",
     # Deliberately un-escapable: the whole point is that a suppressed count stays visible.
     "{} {}: {} → {} claims entity use the backbone doesn't": "author the edge; the safety net derives it",
     # The same shape one level down: this line IS the disclosure of an already-recorded exception,
