@@ -37,6 +37,12 @@ lead; nothing above this line goes into an agent prompt.
 
 > You are tracing use cases for a coyodex codebase map — the ordered interactions inside each one.
 >
+> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
+> 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
+> and no agent had read it.
+>
 > **Your use cases:** «USE_CASES».
 > **Where to look:** «WHERE_TO_LOOK».
 > **Your sub-flow id range:** «SF_RANGE». Never mint an `SFn` outside it.

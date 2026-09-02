@@ -1376,11 +1376,19 @@ def test_every_populated_map_section_reaches_the_rendered_view():
     Runtime, not a grep: it renders the repo's own map and looks for each list's first row in the
     output. A `m.interfaces` mentioned only in a comment would satisfy a grep and fail this."""
     import dataclasses
+    import os
 
     from coyodex.model import ProjectModel, load_model_path
     from coyodex.views import model_to_markdown
 
-    m = load_model_path(REPO_ROOT / ".coyodex" / "project-map.json")
+    # This test READS THE CLONE'S OWN MAP on purpose, which `resolve_map_path` refuses without the
+    # opt-in — the refusal exists because two builds reached that map by accident after a `cd`.
+    # Setting it here is the same statement of intent a deliberate self-map run makes.
+    os.environ["COYODEX_SELF_MAP"] = "1"
+    try:
+        m = load_model_path(REPO_ROOT / ".coyodex" / "project-map.json")
+    finally:
+        os.environ.pop("COYODEX_SELF_MAP", None)
     md = model_to_markdown(m)
     #: The fields a row can be FOUND BY in the rendered table, most identifying first. An entry
     #: point renders no id (the T4 table is Kind | Trigger | Code entity | …), so it is found by its

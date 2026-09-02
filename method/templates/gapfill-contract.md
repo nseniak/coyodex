@@ -26,6 +26,12 @@ already cost a re-run.
 > You are closing named gaps in a coyodex codebase map — the rows the sliced fan-outs could not own,
 > because each one sits between two slices.
 >
+> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
+> 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
+> and no agent had read it.
+>
 > **Your jobs:** «GAPS».
 >
 > **The id legend is at «LEGEND».** Read it before you write a single id. Every id you use must

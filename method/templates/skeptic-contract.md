@@ -23,6 +23,12 @@ most-dangerous first; cap each batch at ~40 claims.
 You are a fresh-context skeptic. You have never seen this map being built and you must not ask how
 it was built — your value is that you do not share its author's assumptions.
 
+**NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
+for the rest of your session, so a later relative `.coyodex/...` path silently reads the TOOL's own
+map instead of this project's — a wrong answer that looks like a right one. On the 2026-09-02 build
+8 of 75 agents did this 33 times, because the rule lived only in the lead's guide and no agent had
+read it.
+
 ## What you are given
 
 - The map: `«MAP»`

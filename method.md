@@ -1091,11 +1091,23 @@ command is not.
 **Two shell hazards this method's own commands keep hitting.** Both are invisible until the output
 is wrong rather than absent.
 
-  * **Never `cd` into the coyodex clone in a command that also touches the mapped repo.** The `cd`
-    persists across `;` and `&&`, so a trailing `python3 -c "…open('.coyodex/project-map.json')…"`
-    reads *coyodex's own self-map* — a wrong answer that looks like a right one, carrying coyodex's
-    vocabulary rather than the mapped project's. Use absolute paths on both sides, or run the CLI by
-    its absolute path without `cd` at all.
+  * **NEVER `cd` into the coyodex clone. Not once, not in any command.** The `cd` persists across
+    `;`, across `&&`, **and across separate Bash calls for the rest of the session** — that last one
+    is what makes this expensive, and the sentence used to omit it. A later
+    `python3 -c "…open('.coyodex/project-map.json')…"`, in a command that mentions no clone at all,
+    then reads *coyodex's own self-map*: a wrong answer that looks like a right one, carrying
+    coyodex's vocabulary rather than the mapped project's. `git status` in the analyzed repo shows
+    nothing, because nothing happened there.
+    It has now cost two consecutive builds. One read a gate result about the wrong product; the next
+    went further and EDITED the clone's committed map plus a working file, and had to repair both.
+    Address BOTH repos by absolute path, always, and run the CLI by its absolute path with no `cd`.
+    **Say this to every sub-agent you dispatch, in its brief.** The rule lived only here, in the
+    lead's guide, and on the 2026-09-02 build **8 of 75 sub-agents stepped into the clone, 33 times**
+    — none of them had ever read this line. The shipped contracts carry it now; a brief you compose
+    by hand must too.
+    `coyodex` refuses to read the clone's own `.coyodex/` unless `COYODEX_SELF_MAP=1` is set, which
+    catches the verbs — but a bare `python3` heredoc is not a coyodex verb, so the rule still has to
+    be obeyed rather than relied on.
   * **This environment is zsh, and zsh does not word-split an unquoted expansion.** Building a
     repeated flag as a string — `VD="$VD --verdicts $f"` — arrives as ONE argument and the command
     refuses it. Use a bash array: `VD=(); VD+=(--verdicts "$f")`. This holds for every repeatable

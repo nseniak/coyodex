@@ -31,6 +31,12 @@ lead; nothing above this line goes into an agent prompt.
 
 > You are harvesting «SLICE_KIND» facts for a coyodex codebase map.
 >
+> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
+> 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
+> and no agent had read it.
+>
 > **This slice serves: «SERVES».** They are why the slice is cut this way. Where a
 > file matters to one of them, that is the fact worth returning; where it matters to none, say so
 > rather than padding the slice.

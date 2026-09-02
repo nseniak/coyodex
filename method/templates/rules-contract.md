@@ -20,6 +20,12 @@ Everything below the line is what the agent reads.
 
 You are writing the **business-logic layer** of a coyodex map of `«REPO»` — «PROJECT».
 
+**NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd` persists
+for the rest of your session, so a later relative `.coyodex/...` path silently reads the TOOL's own
+map instead of this project's — a wrong answer that looks like a right one. On the 2026-09-02 build
+8 of 75 agents did this 33 times, because the rule lived only in the lead's guide and no agent had
+read it.
+
 Every other layer of this map already exists: what the product stores, what it does in what order,
 and how it is built. **None of them says what the product DECIDES.** That is your layer, and it is
 the part a reader means by "what is special about this application".

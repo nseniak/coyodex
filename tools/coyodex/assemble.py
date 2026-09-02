@@ -38,6 +38,7 @@ from coyodex.model import (
     MessagingRow,
     ModelError,
     ProjectModel,
+    resolve_map_path,
     _build,
     _normalize_subflow_title,
     load_model,
@@ -176,7 +177,9 @@ def load_map_or_fragment(path: Path) -> tuple[ProjectModel, frozenset[str] | Non
     build inspecting or editing its own fragments had nothing to use and wrote `python3 - <<'EOF'`
     heredocs instead — about fifteen times in one live build, against the method's own instruction to
     use `dump`."""
-    text = path.read_text(encoding="utf-8")
+    # Through the shared resolver: this is the OTHER path a verb reaches a map by, and a guard on
+    # only one of two doors is not a guard. `fix` and `dump` both come in here.
+    text = resolve_map_path(path).read_text(encoding="utf-8")
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:

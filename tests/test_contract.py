@@ -135,9 +135,18 @@ def test_the_verb_prints_the_contract_to_stdout() -> None:
 # that comes back is well-formed and simply about the wrong thing. A hand-composed brief grows —
 # one build typed 159,993 bytes of brief across six fan-outs. Both jobs move into the verb here.
 
+#: Slots whose CONTENT is checked, not only its presence — `_slot_content_faults`. A uniform
+#: placeholder cannot satisfy those, so the builder gives each one a value of the right shape.
+_CONTENTFUL_SLOTS = {"SERVES": "UC7 rename a page, R1 the owner"}
+
+
 def make_slot_values(name: str, value: str = "filled") -> dict[str, str]:
     """Every slot of one contract, each filled with the same placeholder."""
-    return {k: value for k in contract.slots(name)}
+    out = {k: value for k in contract.slots(name)}
+    for key, real in _CONTENTFUL_SLOTS.items():
+        if key in out:
+            out[key] = real
+    return out
 
 
 def test_the_skeleton_lists_only_slots_the_agent_actually_receives() -> None:
@@ -376,3 +385,64 @@ def test_the_doors_contract_ships_and_names_its_own_slots():
     # The two halves a paraphrase most often loses.
     assert "EVERY EXCHANGE IN BETWEEN" in text
     assert "add NO door" in text
+
+
+# --- the cd rule must travel in the BRIEF (retro 2026-09-02, mcpolis N4) --------------------------
+# The rule lived only in `method.md`, which no sub-agent reads. On the 2026-09-02 build 8 of 75
+# agents stepped into the coyodex clone, 33 times, and one build before that the same slip edited
+# the clone's committed map. A rule an agent never sees is not a rule.
+
+def test_every_dispatched_contract_carries_the_cd_rule():
+    from coyodex.contract import CONTRACTS, render
+    # `harvest-t5` is an ADDENDUM appended to one harvest brief, which carries the rule itself.
+    for name in CONTRACTS:
+        if name == "harvest-t5":
+            continue
+        assert "NEVER `cd` into the coyodex clone" in render(name), name
+
+
+def test_the_cd_rule_says_it_persists_BEYOND_this_command():
+    """"across `;` and `&&`" was the whole sentence, and the expensive half is the rest of the
+    session — a later command that mentions no clone at all still reads the wrong map."""
+    from coyodex.contract import render
+    text = render("trace")
+    assert "rest of your session" in text, text[:400]
+
+
+# --- what a slot is filled WITH (retro 2026-09-02, mcpolis findings 5 and 6) ----------------------
+# A filled slot is a filled slot, so no other check could see either of these.
+
+def _harvest_values(**over) -> dict[str, str]:
+    from coyodex.contract import slots
+    base = {k: "x" for k in slots("harvest")}
+    base.update({"SERVES": "UC7 rename a page, R1 the owner", "SLICE_KIND": "structural",
+                 "EXPECTED_COMPONENTS": "6"})
+    base.update(over)
+    return base
+
+
+def test_a_SERVES_naming_no_behavioural_id_is_refused():
+    """All 14 harvest briefs on one build filled it with a map-section name. Assertion 31 went
+    1.00 -> 0.00 and the harvest returned components with no backbone edge at all."""
+    from coyodex.contract import fill
+    with pytest.raises(ValueError, match="names no behavioural id"):
+        fill("harvest", _harvest_values(SERVES="T5 domain model"))
+
+
+def test_a_SERVES_naming_any_behavioural_id_passes():
+    from coyodex.contract import fill
+    for value in ("UC7 rename a page", "R1 the owner", "CAP2 billing", "HP3 the third step"):
+        fill("harvest", _harvest_values(SERVES=value))
+
+
+def test_a_component_budget_on_a_slice_that_mints_none_is_refused():
+    """One entity slice was dispatched for 40 components it cannot author, so the fan-out's total
+    budget was wrong by 40 before any agent ran."""
+    from coyodex.contract import fill
+    with pytest.raises(ValueError, match="authors no"):
+        fill("harvest", _harvest_values(SLICE_KIND="T5 entities", EXPECTED_COMPONENTS="40"))
+
+
+def test_zero_is_the_honest_budget_for_such_a_slice():
+    from coyodex.contract import fill
+    fill("harvest", _harvest_values(SLICE_KIND="T5 entities", EXPECTED_COMPONENTS="0"))

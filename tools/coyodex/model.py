@@ -14,9 +14,12 @@ object IS a well-typed model.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 import types
 from dataclasses import dataclass, field, fields
+from pathlib import Path
 from typing import Union, get_args, get_origin, get_type_hints
 
 from coyodex import grammar
@@ -1282,7 +1285,49 @@ def load_model(text: str) -> ProjectModel:
     return m
 
 
+#: The coyodex clone this code is running from — `<COYODEX_HOME>/tools/coyodex/model.py`.
+COYODEX_HOME = Path(__file__).resolve().parents[2]
+
+
+def resolve_map_path(path) -> Path:
+    """The absolute path a verb is about to read, refusing the one slip nothing downstream can see.
+
+    THE SLIP. A build runs the coyodex CLI by absolute path while its shell folder drifts into the
+    clone. A RELATIVE `.coyodex/project-map.json` then resolves against the clone, and the verb
+    reads COYODEX'S OWN self-map: it succeeds, it prints a healthy result, and the result is about
+    the wrong product. It has now happened on two consecutive builds. The 2026-09-01 argus build
+    ran `validate` that way and got "7 of 74 isolated entities" in coyodex's vocabulary; the
+    2026-09-02 mcpolis build went further and EDITED the clone's committed map. `git status` in the
+    analyzed repo shows nothing either time, because nothing happened there.
+
+    THE RULE: reading the clone's own `.coyodex/` is refused unless `COYODEX_SELF_MAP=1` is set.
+    Coyodex DOES map itself, and that run is deliberate — setting one environment variable is the
+    whole cost of saying so, once per session. An accident cannot set it, which is the point: the
+    thing that moved was the shell folder, not anyone's intent.
+
+    An absolute path is NOT treated as proof of intent. It was the first rule tried and it is
+    wrong: the mcpolis build reached the clone's map through absolute paths too, having composed
+    them from a `cd`-ed shell.
+
+    It also PRINTS what it resolved, on stderr so a `--json` consumer is untouched. A verb that
+    names the file it read makes the next slip visible in the transcript instead of invisible."""
+    resolved = Path(path).resolve()
+    if os.environ.get("COYODEX_SELF_MAP", "") not in ("1", "true", "yes"):
+        try:
+            resolved.relative_to(COYODEX_HOME / ".coyodex")
+        except ValueError:
+            pass
+        else:
+            raise ValueError(
+                f"refusing to read {resolved} — that is the COYODEX CLONE'S OWN map, and this "
+                f"shell is standing in {Path.cwd()}. Two builds in a row reached it by accident "
+                f"after a `cd` into the clone, read a healthy-looking result about the wrong "
+                f"product, and one of them edited it. If you really are mapping coyodex itself, "
+                f"set COYODEX_SELF_MAP=1.")
+    print(f"reading {resolved}", file=sys.stderr)
+    return resolved
+
+
 def load_model_path(path) -> ProjectModel:
     """`load_model` from a file path (the common CLI entry)."""
-    from pathlib import Path
-    return load_model(Path(path).read_text(encoding="utf-8"))
+    return load_model(resolve_map_path(path).read_text(encoding="utf-8"))

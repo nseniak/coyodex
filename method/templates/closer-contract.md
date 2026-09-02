@@ -33,6 +33,12 @@ lead; nothing above this line goes into an agent prompt.
 > A refutation rewrites the map, and a FALSE refutation corrupts it silently — no gate can tell the
 > difference. Your job is to re-verify each one against the code and return **uphold** or **reject**.
 >
+> **NEVER `cd` into the coyodex clone.** Address both repos by ABSOLUTE path, always. A `cd`
+> persists for the rest of your session, so a later relative `.coyodex/...` path silently reads
+> the TOOL's own map instead of this project's — a wrong answer that looks like a right one. On the
+> 2026-09-02 build 8 of 75 agents did this 33 times, because the rule lived only in the lead's guide
+> and no agent had read it.
+>
 > **The repo:** «REPO». Read any source file in it.
 >
 > **Do NOT read `«REPO»/.coyodex/`.** You are deliberately outside the build's context: seeing the

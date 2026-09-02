@@ -215,6 +215,18 @@ def note_facts_block(worklist_claims: list[str], rows: list[dict], record: dict[
 
 _REDUNDANT_IN_NOTE = re.compile(r"(\d[\d,]*)\s+redundant\s+rows?", re.I)
 
+#: The note stating how many claims arrived AFTER the worklist was pinned. Third arithmetic shape,
+#: same failure as the other two: the 2026-09-02 mcpolis note said "9 post-pin claims" where its own
+#: record — and its own NEXT SENTENCE — said 13. Words and digits both, since notes write either.
+_ADDED_SINCE_IN_NOTE = re.compile(
+    r"\b(\d[\d,]*|no|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen)"
+    r"\s+(?:new\s+|post-pin\s+|added\s+)claims?\b", re.I)
+
+#: The words `_ADDED_SINCE_IN_NOTE` accepts, to their value.
+_WORD_NUMBERS = {"no": 0, "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                 "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+                 "twelve": 12, "thirteen": 13}
+
 #: A note stating a disagreement COUNT: "0 verdict disagreements", "zero evidence-anchor
 #: disagreements", "anchor disagreements: 2".
 _AGREEMENT_IN_NOTE = re.compile(
@@ -276,6 +288,24 @@ def _note_contradictions(note: str, rows: list[dict], record: dict[str, object],
                 f"the note states {quoted} and this record says {live_total - live_done} of "
                 f"{live_total} — none of them. The note was written against an earlier pass; "
                 f"requote it from this run.")
+    # THE POST-PIN COUNT, the third arithmetic shape. `claims_added_since` is the claims the map
+    # gained after the skeptics were given their worklist, so it is exactly the number a reader
+    # needs to know how much of the shipped map went unchallenged — and a note that understates it
+    # understates that. Blocking with the other two: it is a stated number about THIS pass, and the
+    # record beside it holds the right one.
+    added = record.get("claims_added_since")
+    if isinstance(added, int):
+        stated_added = [
+            (_WORD_NUMBERS.get(m.group(1).lower(), None)
+             if not m.group(1)[:1].isdigit() else int(m.group(1).replace(",", "")), m.group(0))
+            for m in _ADDED_SINCE_IN_NOTE.finditer(note or "")]
+        values = [v for v, _t in stated_added if v is not None]
+        if values and added not in values:
+            quoted = ", ".join(f"'{t}'" for _v, t in stated_added)
+            problems.append(
+                f"the note states {quoted} and this record says {added} claim(s) added since the "
+                f"pin. Those are the claims no skeptic saw, so understating them understates how "
+                f"much of the shipped map went unchallenged; requote it from this run.")
     return problems
 
 
@@ -970,6 +1000,28 @@ def format_refutations(surviving: list[SurvivingRefutation],
     return "\n".join(lines)
 
 
+def worklist_is_behavioural(path: Path) -> bool:
+    """Was this pinned worklist captured with `audit --with-behavioural`?
+
+    Read off the items' own `theme`, not a new file field: `audit --json` already writes the theme
+    per item, and the behavioural tier is the only producer of `behaviour`. Deriving it means an
+    existing worklist file answers the question with no migration.
+
+    WHY IT HAS TO BE ASKED. The live claim surface below is recomputed from the assembled map, and
+    it used to be recomputed at the DEFAULT tier always. So a build that pinned a behavioural
+    worklist got every behaviour claim back as `superseded` — 489 of them on the map this was
+    written from — and `live_claims_digest` described a different surface from the one that was
+    pinned. That made the tier unusable in practice, which is why 1,049 rows of the 2026-09-02
+    mcpolis map were outside the worklist "by construction". The two surfaces must be computed the
+    same way or the record is about neither."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    items = payload if isinstance(payload, list) else payload.get("worklist", [])
+    return any(isinstance(i, dict) and str(i.get("theme", "")) == "behaviour" for i in items)
+
+
 def _worklist_claims(path: Path) -> list[str]:
     """Claims from a worklist file, in either shape it legitimately arrives in.
 
@@ -1489,6 +1541,11 @@ def main(argv: list[str] | None = None) -> int:
         for n in notes:
             print(n, file=sys.stderr)
         surviving = surviving_refutations(live, rows)
+        # DEFAULT tier here, deliberately, unlike `write` above. This surface feeds the advisory
+        # confidence cross-check only — the refutation GATE beside it walks the verdicts directly
+        # and is unaffected — and a behaviour claim resolves onto a flow or a crossing, which carry
+        # no `confidence` field at all. Widening it would add rows whose stated label is `-` to a
+        # list whose whole subject is the stated label.
         checks, _unresolved = element_checks(live, [w.claim for w in l2_worklist_model(live)], rows)
         print(format_refutations(surviving, [c for c in checks if c.disagrees],
                                  as_json=as_json, m=live, grounding_rows=rows))
@@ -1577,7 +1634,12 @@ def main(argv: list[str] | None = None) -> int:
         # record describing a surface that moved.
         try:
             live_model = load_model(Path(map_path).read_text(encoding="utf-8"))
-            live_claims = [w.claim for w in l2_worklist_model(live_model)]
+            # AT THE PINNED WORKLIST'S OWN TIER. Computing the live surface at the default tier
+            # while the pin was behavioural reports every behaviour claim as superseded and makes
+            # the digest describe a surface nobody pinned.
+            behavioural = bool(worklist_path) and worklist_is_behavioural(Path(worklist_path))
+            live_claims = [w.claim
+                           for w in l2_worklist_model(live_model, behavioural=behavioural)]
         except Exception as e:
             print(f"ERROR: --map {map_path} could not be read as a map ({e})", file=sys.stderr)
             return 2

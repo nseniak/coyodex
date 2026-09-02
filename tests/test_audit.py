@@ -2316,3 +2316,62 @@ def test_a_behaviour_claim_is_report_only():
     items = [w for w in l2_worklist_model(_flow_model(), behavioural=True)
              if w.theme == "behaviour"]
     assert all(not w.drift_eligible for w in items), items
+
+
+# --- the behavioural tier covers the WHOLE behavioural layer (retro 2026-09-02, mcpolis 1 and 2) --
+# 1,049 map rows were outside the worklist by construction. The step loop existed; the use case's
+# own sentence and what crosses a surface did not — and a refuted PRIVACY fact shipped in the
+# second, because no skeptic could be sent at it.
+
+def _behavioural_map():
+    from coyodex.model import (Flow, FlowStep, Interface, InterfaceCrossing, ProjectModel, UseCase)
+    m = ProjectModel(title="t", goal="g")
+    m.use_cases = [UseCase(id="UC1", name="Rename a page",
+                           trigger_outcome="owner submits a new name → the page is renamed")]
+    m.flows = [Flow(uc="UC1", title="Rename a page",
+                    steps=[FlowStep(n=1, src="R1", dst="C1", phrase="submits the new name",
+                                    where="web/pages.py:12")])]
+    m.interfaces = [Interface(id="I1", name="Dashboard", side="ours", source="web/app.py:1",
+                              carries=[InterfaceCrossing(direction="out",
+                                                         what="the page's title and its owner",
+                                                         where="web/app.py:44")])]
+    return m
+
+
+def _claims(behavioural: bool) -> list[str]:
+    from coyodex.audit_model import l2_worklist_model
+    return [w.claim for w in l2_worklist_model(_behavioural_map(), behavioural=behavioural)]
+
+
+def test_a_use_cases_own_sentence_becomes_a_claim():
+    """The headline of the behavioural layer — the one line a reader takes away — had no claim."""
+    assert any("UC1 Rename a page: owner submits a new name" in c for c in _claims(True))
+
+
+def test_what_crosses_a_surface_becomes_a_claim():
+    assert any("I1 Dashboard carries out: the page's title" in c for c in _claims(True))
+
+
+def test_neither_appears_at_the_default_tier():
+    """The default surface is what three commands compare across builds; widening it silently
+    would move numbers nobody changed."""
+    text = " ".join(_claims(False))
+    assert "UC1 Rename a page:" not in text and "carries out" not in text
+
+
+def test_a_behavioural_worklist_is_recognised_from_its_own_themes():
+    """The live surface must be recomputed at the PINNED tier. Computing it at the default while
+    the pin was behavioural reported every behaviour claim as superseded — 489 on one map — and
+    made the digest describe a surface nobody pinned."""
+    import json
+    import tempfile
+    from pathlib import Path
+    from coyodex.audit_model import l2_worklist_model
+    from coyodex.grounding import worklist_is_behavioural
+    with tempfile.TemporaryDirectory() as td:
+        for behavioural, expect in ((True, True), (False, False)):
+            p = Path(td) / f"wl-{behavioural}.json"
+            items = [{"claim": w.claim, "theme": w.theme}
+                     for w in l2_worklist_model(_behavioural_map(), behavioural=behavioural)]
+            p.write_text(json.dumps({"worklist": items}), encoding="utf-8")
+            assert worklist_is_behavioural(p) is expect, (behavioural, items)

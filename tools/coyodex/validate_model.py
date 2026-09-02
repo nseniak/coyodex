@@ -45,6 +45,7 @@ from coyodex.pysrc import parse_python
 from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
+    resolve_map_path,
     BusinessRule,
     access_rules,
     Dep,
@@ -2206,6 +2207,26 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                 if eid not in ent_ids:
                     problems.append(f"{iface.id} crossing {ci}: '{eid}' is not a defined entity — "
                                     f"a crossing names single records (`En`), never a data area")
+        # A CROSSING WITH NO ANCHOR. `where` is optional by design — the surface's own `source`
+        # often reaches the crossing — but a crossing that names no line is a claim about the
+        # product's outside edge that no reader and no skeptic can check, and a refuted privacy
+        # fact shipped in exactly such a field on the 2026-09-02 mcpolis map.
+        #
+        # ADVISORY, and it must stay advisory for now. Measured across three live maps it would
+        # fail all three: mcpolis 35 of 35 crossings empty, its predecessor 22 of 22, coyodex's own
+        # self-map 11 of 15. The field IS authorable — coyodex authored 4 — so what is missing is
+        # the instruction landing, not the ability. Promote it to blocking once one build has
+        # shipped a clean one, and not before: a gate that fails every existing map teaches the
+        # lead to ignore the gate.
+        anchorless = [str(ci) for ci, cr in enumerate(iface.carries) if not (cr.where or "").strip()]
+        if anchorless and iface.id not in recorded:
+            warnings.append(
+                f"{iface.id} ({iface.name}): {len(anchorless)} of {len(iface.carries)} crossing(s) "
+                f"carry no `where` — what crosses a surface is a claim about the product's outside "
+                f"edge, and one with no line is a claim no reader and no skeptic can check. Anchor "
+                f"the line where the crossing happens, or record '{iface.id}: <why the surface's "
+                f"own source reaches them>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
+                f"heading")
         grounded = bool(iface.ways_in or deps_by_iface.get(iface.id) or iface.source
                         or any(c.where for c in iface.carries))
         if not grounded:
@@ -2942,13 +2963,24 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
             elif dk not in ("messaging", "datastore"):
                 warnings.append(f"{label}: broker {mr.broker} ({d.name}) classifies as '{dk}', "
                                 "not messaging/datastore — is this really where the channel lives?")
+            # RECORDABLE, and deliberately still advisory. Making it blocking was proposed and
+            # measured first: it fails 9 of the 15 archived maps that carry a `messaging` row, so it
+            # would turn a real gap into a wall in front of every rebuild. And the honest answer is
+            # sometimes "no edge" — on the 2026-09-02 mcpolis map the publishers reach Redis through
+            # an event-stream adapter, so authoring a direct `C → broker` edge would state a call
+            # that does not happen. The escape is what lets that be said once instead of every build.
+            excused_participants = records.recorded_keys(m, "interface exceptions")
             for role, ids in (("publisher", mr.publishers), ("consumer", mr.consumers)):
-                unbacked = [c for c in ids if (c, mr.broker) not in edge_pairs]
+                unbacked = [c for c in ids
+                            if (c, mr.broker) not in edge_pairs
+                            and c not in excused_participants]
                 if unbacked:
                     warnings.append(
                         f"{label}: {role}(s) {', '.join(unbacked)} carry no backbone edge to "
                         f"{mr.broker} — the diagrams and impact ripple only walk edges, so this "
-                        "participation is invisible to both; author the C→broker edge")
+                        "participation is invisible to both. Author the C→broker edge, or record "
+                        "'<Cn>: <why it reaches the broker through something else>' under an "
+                        "'Interface exceptions' extras heading")
         # A one-sided row is a claim with a hole in it, and the hole is INVISIBLE in every view: the
         # Deployment view composes its process→process arrows from publishers × consumers (each
         # resolved through `runs_in`), so a row missing either side silently produces no arrow at
@@ -5826,8 +5858,16 @@ def _run(argv: list[str] | None = None) -> int:
             return 1
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
+    # The wrong-map refusal comes FIRST and on its own. `ModelError` subclasses `ValueError`, so a
+    # single combined handler would have to re-dispatch by type — and a bare `raise` there escapes
+    # the function entirely, since the schema handler below is no longer in scope.
     try:
-        m = load_model(path.read_text(encoding="utf-8"))
+        resolved = resolve_map_path(path)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    try:
+        m = load_model(resolved.read_text(encoding="utf-8"))
     except ModelError as e:
         print("\nVALIDATION FAILED (schema):")
         print(f"  - {e}")
