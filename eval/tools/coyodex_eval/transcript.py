@@ -955,8 +955,12 @@ COMMAND_LINES = 40
 #: change is exposed to: the question it exists to answer is "who noticed this", and machine text
 #: rendered as a person is a worse answer than no answer. Measured on one real session: of 22
 #: text-carrying USER turns, 20 were human, 1 a skill body and 1 an `<ide_opened_file>` notice.
+#: `<command-name>` and `<command-message>` are NOT here. They mark a slash-command WRAPPER, which
+#: carries the operator's own words inside it — so they are recognised by an ANCHORED match in
+#: `operator_text`, not by a substring test. As substring markers they hid every message that merely
+#: quoted the tag, including a real operator's, and rendered the quotation as if it were the command.
 _HARNESS_TEXT = (
-    "<system-reminder", "<command-name>", "<command-message>", "<local-command-",
+    "<system-reminder", "<local-command-",
     "<ide_", "Base directory for this skill:", "Caveat: The messages below were generated",
 )
 
@@ -967,6 +971,7 @@ _HARNESS_TEXT = (
 #: `--full` rendered **0 of 74** operator records: every one of them was a slash command.
 _SLASH_COMMAND = re.compile(r"<command-name>\s*(?P<name>[^<]*?)\s*</command-name>", re.S)
 _COMMAND_ARGS = re.compile(r"<command-args>(?P<args>.*?)</command-args>", re.S)
+_COMMAND_MESSAGE = re.compile(r"\A<command-message>.*?</command-message>\s*", re.S)
 
 
 def operator_text(text: str) -> str:
@@ -978,19 +983,22 @@ def operator_text(text: str) -> str:
     `<system-reminder>`, an IDE notice) is machine text and stays hidden: rendering that as a person
     is a worse answer than no answer."""
     head = text.lstrip()
-    name = _SLASH_COMMAND.search(head)
+    # THE HARNESS FILTER RUNS FIRST. Searching for the wrapper before it meant any body that merely
+    # MENTIONED `<command-name>` was rendered as an operator saying `/that-command`: a
+    # `<system-reminder>` quoting one, a skill body describing one, and — worst — a real operator
+    # message that quotes the tag, whose actual words were then thrown away. The docstring's own
+    # rule is that machine text rendered as a person is worse than no answer, and the test that was
+    # meant to hold it only used bodies with no wrapper in them.
+    if any(marker in head[:400] for marker in _HARNESS_TEXT):
+        return ""
+    # ANCHORED AT THE HEAD, not searched. A slash-command record opens with the wrapper (optionally
+    # after a `<command-message>` block); a wrapper found deeper in a body is a quotation.
+    name = _SLASH_COMMAND.match(_COMMAND_MESSAGE.sub("", head).lstrip())
     if name is not None:
         args = _COMMAND_ARGS.search(head)
         body = (args.group("args").strip() if args else "")
         return f"/{name.group('name')}" + (f" {body}" if body else "")
-    if any(marker in head[:400] for marker in _HARNESS_TEXT):
-        return ""
     return text
-
-
-def _is_harness_text(text: str) -> bool:
-    head = text.lstrip()[:400]
-    return any(marker in head for marker in _HARNESS_TEXT)
 
 
 def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str, str] | None = None,

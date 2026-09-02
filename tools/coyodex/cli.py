@@ -12,6 +12,7 @@ import io
 import sys
 
 from coyodex import __version__
+from coyodex.model import WrongMapError
 
 USAGE = """usage: coyodex <command> [args...]
 
@@ -134,6 +135,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     cmd, rest = args[0], args[1:]
+    try:
+        return _dispatch(cmd, rest)
+    except WrongMapError as exc:
+        # ONE handler for every subcommand. `resolve_map_path` refuses a read of the clone's own
+        # map, and that refusal reaches a dozen `main`s — `validate` grew its own handler and the
+        # rest printed a ten-line traceback with the message buried at the bottom. A refusal whose
+        # whole value is that a person reads it must not arrive as a stack trace, and adding the
+        # same handler twelve times is how one of them gets forgotten.
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+def _dispatch(cmd: str, rest: list[str]) -> int:
     if cmd == "preindex":
         from coyodex import preindex  # lazy: only this path may touch tree-sitter
         return preindex.main(rest)

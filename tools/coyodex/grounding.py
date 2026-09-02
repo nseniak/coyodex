@@ -34,7 +34,7 @@ from pathlib import Path
 from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
 from coyodex.audit_model import ClaimTarget, l2_worklist_model, resolve_claim
-from coyodex.model import ModelError, ProjectModel, load_model
+from coyodex.model import ModelError, ProjectModel, load_model, resolve_map_path
 
 USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>]
        coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
@@ -1533,7 +1533,7 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
             return 2
         try:
-            live = load_model(Path(map_path).read_text(encoding="utf-8"))
+            live = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
         except (OSError, ModelError) as e:
             print(f"ERROR: --map {map_path} could not be read as a map ({e})", file=sys.stderr)
             return 2
@@ -1633,7 +1633,7 @@ def main(argv: list[str] | None = None) -> int:
         # captured file: a file goes stale between capture and write, and the whole defect here is a
         # record describing a surface that moved.
         try:
-            live_model = load_model(Path(map_path).read_text(encoding="utf-8"))
+            live_model = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
             # AT THE PINNED WORKLIST'S OWN TIER. Computing the live surface at the default tier
             # while the pin was behavioural reports every behaviour claim as superseded and makes
             # the digest describe a surface nobody pinned.

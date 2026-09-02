@@ -146,6 +146,17 @@ def load_rules(path: Path) -> list[dict]:
     return doc["rules"]
 
 
+def unresolved_ids(m: ProjectModel, rules: list[dict]) -> list[str]:
+    """Every id a rule NAMES that the map does not define.
+
+    One function, called by `expand`'s per-rule report line and by the summary, so the two cannot
+    disagree. The summary previously re-read `expand`'s own sentence with a regex — parsing your own
+    output — and a rule naming 190 ids of which 111 are absent is not "matched NOTHING", so it read
+    "479 clean" on a run that assigned 111 of its ids to no element at all."""
+    by_id = {getattr(el, "id") for el in _elements(m)}
+    return [eid for r in rules for eid in r.get("ids", []) if eid not in by_id]
+
+
 def expand(m: ProjectModel, rules: list[dict]) -> tuple[dict, list[str]]:
     """(reconcile document, report lines). Later rules override earlier ones per (element, field)."""
     by_id = {getattr(el, "id"): el for el in _elements(m)}
@@ -391,17 +402,16 @@ def main(argv: list[str] | None = None) -> int:
         print(("  " if "→" in line else "  WARN ") + line, file=sys.stderr)
     for line in coverage_report(m, doc):
         print("  WARN " + line, file=sys.stderr)
+    unknown_ids = len(unresolved_ids(m, rules))
     bad = unmatched_rules | undeclared_rules
     # COUNT THE IDS THAT RESOLVED TO NOTHING, not only the rules that matched nothing at all. A rule
     # naming 190 ids of which 111 are absent still assigns the other 79, so it is not "matched
     # NOTHING" and the summary called the whole run clean: on the 2026-09-02 mcpolis build the block
     # directives carried 111 unresolvable rule ids and this line read "479 clean". The per-rule
     # detail was printed above and scrolled past; the SUMMARY is the line a build reads.
-    unknown_ids = 0
-    for line in report:
-        m_ids = re.search(r"(\d+) id\(s\) are not in the map", line)
-        if m_ids:
-            unknown_ids += int(m_ids.group(1))
+    # DERIVED, not re-parsed. The summary used to read its own report sentence back with a regex,
+    # so a one-word rewording would silently zero the count and send the summary back to calling a
+    # run with 111 unresolved ids "clean" — the very bug it exists to report.
     print(f"  SUMMARY: {len(rules)} rule(s) — {len(rules) - len(bad)} clean, "
           f"{len(unmatched_rules)} matched nothing, "
           f"{len(undeclared_rules)} assign an undeclared target."

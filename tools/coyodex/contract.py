@@ -170,17 +170,11 @@ def slots(name: str, root: Path | None = None) -> list[str]:
 #: `CAPn` (feature), `HPn` (happy-path step).
 _BEHAVIOURAL_ID = re.compile(r"\b(?:CAP\d+|UC\d+|HP\d+|R\d+)\b")
 
-#: Harvest slice kinds that author NO `components[]` at all, so a component budget is meaningless on
-#: one. `«SLICE_KIND»` is free text, so this matches on the words a real brief uses.
-_NO_COMPONENT_SLICE = re.compile(r"\b(?:entit|domain model|glossar|deployment|observability|config)",
-                                 re.I)
-
-
 def _slot_content_faults(name: str, values: dict[str, str]) -> list[str]:
     """Faults in what a slot was filled WITH, as opposed to whether it was filled.
 
-    Two shapes, both measured on the 2026-09-02 mcpolis build, and both invisible to every other
-    check because a filled slot is a filled slot:
+    Measured on the 2026-09-02 build, and invisible to every other check because a filled slot is a
+    filled slot:
 
     * **`SERVES` naming no behavioural id.** The whole point of that slot is that a structural slice
       is cut to serve the behavioural layer, and `method.md` says a brief naming no use case is a
@@ -188,9 +182,8 @@ def _slot_content_faults(name: str, values: dict[str, str]) -> list[str]:
       ("T5 domain model"), which reads like an answer and is not one. Assertion 31 went 1.00 → 0.00
       and the harvest came back with components carrying no backbone edge.
 
-    * **A component budget on a slice that authors no components.** One entity slice was dispatched
-      with a budget of 40 components it cannot produce by construction, so the number guided nothing
-      and the total budget it fed was wrong by 40 before any agent ran."""
+    (A second shape — a component budget on a slice that authors none — was tried and reverted; see
+    the comment at the end of this function.)"""
     faults: list[str] = []
     serves = (values.get("SERVES") or "").strip()
     if serves and not _BEHAVIOURAL_ID.search(serves):
@@ -201,17 +194,14 @@ def _slot_content_faults(name: str, values: dict[str, str]) -> list[str]:
             f"map-section name ('T5 domain model') reads like an answer and is not one: all 14 "
             f"briefs on one build filled it that way, and the harvest came back with components "
             f"carrying no backbone edge at all")
-    budget = (values.get("EXPECTED_COMPONENTS") or "").strip()
-    kind = (values.get("SLICE_KIND") or "").strip()
-    # The slot is REQUIRED by the template, so the remedy cannot be "leave it out" — it is to say
-    # `0` (or `none`), which is both the honest number and what keeps the fan-out's total right.
-    if (name.startswith("harvest") and _NO_COMPONENT_SLICE.search(kind)
-            and budget.lower() not in ("0", "none", "n/a", "-")):
-        faults.append(
-            f"«EXPECTED_COMPONENTS» is {budget!r} on a {kind!r} slice, which authors no "
-            f"`components[]` at all — the number guides nothing and inflates the fan-out's total "
-            f"budget before any agent runs (one such slice was dispatched for 40). Write `0` on a "
-            f"slice that mints no components")
+    # NOT CHECKED HERE: a component budget on a slice that authors no components. It was written,
+    # and it is reverted. `«SLICE_KIND»` is FREE TEXT — a real value is a sentence — so matching it
+    # against words like `config` or `entit` refuses legitimate structural slices: "config loading
+    # and startup", "HTTP routing and config parsing", "deployment scripts and the CI workflow"
+    # were all refused by the version that shipped. And the remedy it demanded made the brief
+    # WORSE: writing `0` puts "Expect roughly 0 components" in front of a slice that really has
+    # seven. The retro's own reader called this half unimplementable before it was written, and was
+    # right: catching it needs an ENUM of slice kinds, which the contract does not have.
     return faults
 
 

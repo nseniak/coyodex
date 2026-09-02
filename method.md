@@ -2042,6 +2042,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   the lead has those numbers. **It never gates anything, and two runs may differ**: a model reading
   prose is not the deterministic check the rest of this step is, and a finding that says "this box
   is hard to read" is worth having without being worth blocking on.
+  **Each reader writes `verdicts-prose-<N>.json` beside its batch.** The name matters, and it is the
+  only thing that records the fan-out happened: `finalize` reads the pair, and says so when batches
+  sit there with no verdicts next to them. Four builds in a row wrote batches and dispatched none —
+  one of them 459 prose fields across 12 batches, read by nobody — and nothing could tell that from
+  a build that dispatched them all, because the batches look identical either way. If you decide
+  NOT to run the read fan-out on a build, delete the batch files; leaving them says a review
+  happened.
 
   **Write the per-theme batches with the tool, not a hand script:** `coyodex audit <map> --batches
   .coyodex/verify --cap 40` emits one claims file per theme, most-dangerous-first, each claim

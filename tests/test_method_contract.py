@@ -1481,3 +1481,67 @@ def test_the_confidence_escape_is_readable_under_its_own_heading():
     m = _map_with_record("Confidence exceptions",
                          "- C1, C2: read and traced by hand before the pass existed\n")
     assert {"C1", "C2"} <= records.recorded_keys(m, "confidence exceptions")
+
+
+# --- the wrong-map guard covers every door (adversarial review, 2026-09-02) -----------------------
+# The guard shipped on 4 readers of ~12, while `method.md` told the lead it "catches the verbs".
+# `audit`, `balance`, `anchor-drift`, `grounding` and `context` all read a map directly, and
+# `assemble` WRITES one — the destructive half of the incident the guard exists for.
+
+def test_every_map_reader_goes_through_the_guard():
+    """A guard on one of two doors is not a guard. This is a source scan on purpose: the failure is
+    a NEW reader added later that reads the file itself, which no runtime test would notice."""
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "tools" / "coyodex"
+    raw_read = re.compile(r"load_model\(\s*(?:Path\()?[\w.]+\)?\.read_text\(")
+    # The VIEWER is exempt, by design. `coyodex serve` displays every registered project INCLUDING
+    # coyodex's own, and reading your own map to draw it is the normal case there, not an accident.
+    # The guard exists for BUILD verbs, where the map being read is supposed to be the analysed
+    # repo's and a `cd` can silently make it the tool's.
+    exempt_dirs = {"viewer"}
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        if set(path.relative_to(root).parts[:-1]) & exempt_dirs:
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            # `resolved` is the name `resolve_map_path` returns into — the guard already ran.
+            if raw_read.search(line) and "resolve_map_path" not in line and "resolved." not in line:
+                offenders.append(f"{path.relative_to(root)}:{n}: {line.strip()[:80]}")
+    assert not offenders, (
+        "map read(s) bypassing `resolve_map_path` — a build whose shell folder drifted into the "
+        "clone reads coyodex's own map through these and gets a healthy answer about the wrong "
+        "product:\n  " + "\n  ".join(offenders))
+
+
+def test_the_refusal_is_one_line_at_every_door_not_a_traceback():
+    """`ModelError` subclasses `ValueError`, so a per-command handler could not catch the refusal
+    without swallowing schema errors — and a dozen `main`s would each have to grow one. `cli.py`
+    catches `WrongMapError` once."""
+    import io, contextlib, os
+    from coyodex import cli
+    was = os.environ.pop("COYODEX_SELF_MAP", None)
+    try:
+        for argv in (["dump", ".coyodex/project-map.json"],
+                     ["balance", ".coyodex/project-map.json"],
+                     ["validate", ".coyodex/project-map.json"]):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                code = cli.main(argv)
+            assert code == 1, argv
+            assert err.getvalue().lstrip().startswith("ERROR: refusing to read"), (argv, err.getvalue()[:200])
+            assert "Traceback" not in err.getvalue(), argv
+    finally:
+        if was is not None:
+            os.environ["COYODEX_SELF_MAP"] = was
+
+
+def test_a_deliberate_self_map_is_still_allowed_at_every_door():
+    import io, contextlib, os
+    from coyodex import cli
+    os.environ["COYODEX_SELF_MAP"] = "1"
+    try:
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            assert cli.main(["dump", ".coyodex/project-map.json", "--id", "C1"]) == 0
+    finally:
+        os.environ.pop("COYODEX_SELF_MAP", None)

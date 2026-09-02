@@ -77,6 +77,10 @@ PHASE_ALIASES: dict[str, str] = {
     "test_completeness": "test-completeness",
 }
 
+#: How long the longest slice must hold the barrier ALONE before splitting it is worth saying.
+#: Below this the advice costs more attention than the minutes it could recover.
+_SPLIT_MIN_MINUTES = 2.0
+
 #: Where the record lives, relative to the analyzed repo's root.
 RECORD_PATH = ".coyodex/fanout-timings.json"
 
@@ -350,15 +354,21 @@ def cmd_order(args: argparse.Namespace) -> int:
     # sorted longest-first invites the reader to reorder; saying which one to CUT is the actionable
     # half, and it costs one line.
     if len(shown) >= 3:
-        longest = shown[0]
-        rest = [r.minutes for r in shown[1:]]
-        median = sorted(rest)[len(rest) // 2]
-        if median > 0 and longest.minutes >= 2 * median:
-            print(f"\nSPLIT '{longest.slice}': {longest.minutes:.1f} min against a median "
-                  f"{median:.1f} min for the rest — it holds the barrier for "
-                  f"{longest.minutes - median:.1f} min after its siblings are done. Reordering "
-                  f"cannot recover that; only cutting the slice smaller can. Launch order is worth "
-                  f"the dispatch stagger, which is SECONDS.")
+        longest, runner_up = shown[0], shown[1]
+        # AGAINST THE SECOND-LONGEST, not the median. A barrier closes when the LAST agent finishes,
+        # so the time the longest slice holds it alone is the gap to its nearest sibling. Measured
+        # against a median, slices of 10/9/1/1 min reported 9 minutes of waste where the real figure
+        # is 1 — the 9-minute sibling is running the whole time.
+        alone = longest.minutes - runner_up.minutes
+        # AND AN ABSOLUTE FLOOR. Without one this fired on 0.4 against 0.2 min and advised splitting
+        # a slice to recover twelve seconds, in a message whose own last sentence says launch order
+        # is worth seconds and therefore not worth thinking about.
+        if alone >= _SPLIT_MIN_MINUTES and longest.minutes >= 2 * runner_up.minutes:
+            print(f"\nSPLIT '{longest.slice}': {longest.minutes:.1f} min against "
+                  f"{runner_up.minutes:.1f} min for the next longest — it holds the barrier ALONE "
+                  f"for {alone:.1f} min after every sibling is done. Reordering cannot recover any "
+                  f"of that; only cutting the slice smaller can. Launch order is worth the dispatch "
+                  f"stagger, which is SECONDS.")
     if unrecorded:
         print("\nno record for these — place them by the pre-index, not by this list:")
         for name in unrecorded:

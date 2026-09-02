@@ -52,7 +52,7 @@ from coyodex.reporting import shown
 if TYPE_CHECKING:
     from coyodex.model import ProjectModel
 
-from coyodex.model import ModelError, access_rules, load_model_path
+from coyodex.model import ModelError, access_rules, load_model_path, resolve_map_path
 
 #: The extras heading the access-baseline advisory offers as its escape, and READS. Named the way
 #: `AUDIT_EXCEPTIONS_HEADING` and `DRIFT_EXCEPTIONS_HEADING` are, so the method contract's scan for
@@ -445,7 +445,14 @@ def _undispatched_prose_leg(map_path: Path) -> Leg | None:
 
     A file pair, so it is cheap and it cannot be wrong: batches on disk, no `verdicts-prose-*`
     beside them. Returns None when there is nothing to say, so a build that does not use the tier
-    pays no line."""
+    pays no line.
+
+    THE FILENAME IS A CONVENTION, AND IT HAD TO BE LANDED FIRST. This check shipped keyed on
+    `verdicts-prose-*.json` while nothing in the method asked anyone to write that name — so it was
+    an advisory no build could ever satisfy except by deleting its own batches, and this repo's own
+    backlog had already recorded exactly that objection. `method.md` now names the file where it
+    tells the lead to dispatch the read fan-out. Without that sentence, delete this leg rather than
+    keeping an unsatisfiable one."""
     verify = map_path.parent / "verify"
     if not verify.is_dir():
         return None
@@ -670,7 +677,7 @@ def _shape_line(map_path: Path) -> str:
     reader trusts most, so these are generated from the same file the sha is taken over."""
     try:
         from coyodex.model import load_model
-        m = load_model(map_path.read_text(encoding="utf-8"))
+        m = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
     except Exception as e:
         # NOT a silent None. A gate block that quietly omits the shape sends the author straight
         # back to hand-writing the numbers, which is the defect this line exists to remove.
@@ -703,7 +710,7 @@ def _grounding_line(map_path: Path) -> str:
     it is what the skeptics did; the live figure follows whenever it disagrees."""
     try:
         from coyodex.model import load_model
-        g = load_model(map_path.read_text(encoding="utf-8")).grounding
+        g = load_model(resolve_map_path(map_path).read_text(encoding="utf-8")).grounding
     except Exception as e:
         return f"Grounding: UNAVAILABLE — could not re-read {map_path}: {e}"
     if g is None:
@@ -1030,6 +1037,10 @@ def main(argv: list[str] | None = None) -> int:
               "The pre-commit read: validate (--check-sources --check-coverage) + audit +\n"
               "anchor-drift (shape-only, and verdict-based when --verdicts is given). Writes\n"
               ".coyodex/finalize-report.{json,md} and prints one verdict line. It adds no check of\n"
+              "\n--no-write PRINTS the report instead of writing it, leaving the build's own\n"
+              "finalize-report.{json,md} untouched. For a report-only reader — a retrospective\n"
+              "running finalize to see a finished build's disposition would otherwise overwrite\n"
+              "the record it came to read. (--emit-gate-block still writes the file it names.)\n"
               "its own, and it compares nothing against a previous map — a map evolves with the\n"
               "code, so a build has no predecessor to diff against.\n\n"
               "A CONVENIENCE WRAPPER, not an enforcement point: exit 1 for what validate and audit\n"
@@ -1145,7 +1156,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"finalize: {report.verdict} — {report.blocking_total} blocking, "
           f"{report.advisory_total} advisory"
           + (f"; DID NOT RUN: {', '.join(unran)}" if unran else "")
-          + f". Full findings: {md_path}")
+          + (". Full findings above — `--no-write` printed the report instead of writing it, so "
+             f"{md_path.name} still holds the build's own." if no_write
+             else f". Full findings: {md_path}"))
     if report.verdict == "INCOMPLETE":
         print("finalize: INCOMPLETE — a check that should have run did not, so this run does NOT know "
               "whether the map is clean. Fix the cause above and re-run; do not read the absence of "

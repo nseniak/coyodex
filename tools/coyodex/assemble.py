@@ -38,6 +38,7 @@ from coyodex.model import (
     MessagingRow,
     ModelError,
     ProjectModel,
+    guard_wrong_map,
     resolve_map_path,
     _build,
     _normalize_subflow_title,
@@ -962,6 +963,10 @@ def main(argv: list[str] | None = None) -> int:
 
     _stamp_tool_build(model)
 
+    # THE WRITE SIDE OF THE SAME GUARD, and the destructive half of the incident it exists for. A
+    # read of the clone's own map produces a wrong answer; a WRITE replaces the clone's committed
+    # map, which is what the 2026-09-02 build did. `assemble` is the only verb that writes one.
+    guard_wrong_map(out_dir / "project-map.json")
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "project-map.json").write_text(to_canonical_json(model), encoding="utf-8")
     (out_dir / "project-map.md").write_text(model_to_markdown(model), encoding="utf-8")

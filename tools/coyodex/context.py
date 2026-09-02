@@ -33,7 +33,7 @@ from typing import Any
 
 from coyodex.anchors import parse_anchor
 from coyodex.dump import record_of
-from coyodex.model import ID_SHAPE, load_model
+from coyodex.model import ID_SHAPE, load_model, resolve_map_path
 
 #: How many lines either side of an anchor to quote. Twenty is the width the retro proposed, and it
 #: is a whole small function or the head of a large one.
@@ -193,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {ns.claims} holds no `claims` list", file=sys.stderr)
         return 2
     try:
-        model = load_model(Path(ns.map).read_text(encoding="utf-8"))
+        model = load_model(resolve_map_path(ns.map).read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         print(f"ERROR: --map {ns.map}: {exc}", file=sys.stderr)
         return 2

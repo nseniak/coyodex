@@ -315,3 +315,27 @@ def test_an_omitted_repo_outside_the_clone_still_defaults_to_here(monkeypatch) -
         monkeypatch.chdir(tmp)
         assert main(["record", "--phase", "harvest", "--slice", "s", "--minutes", "1.0"]) == 0
         assert read_record(tmp)[0]["slice"] == "s"
+
+
+# --- the barrier is set by the second-longest (adversarial review, 2026-09-02) --------------------
+
+def _order_out(minutes: list[float], capsys) -> str:
+    with tempfile.TemporaryDirectory() as tmp:
+        make_record(tmp, [{"phase": "harvest", "slice": f"s{i}", "minutes": m}
+                          for i, m in enumerate(minutes)])
+        assert main(["order", "--repo", tmp, "--phase", "harvest"]) == 0
+        return capsys.readouterr().out
+
+
+def test_the_split_advice_measures_against_the_SECOND_longest(capsys):
+    """A barrier closes when the LAST agent finishes. Measured against a median, 10/9/1/1 reported
+    9 minutes of waste where the real figure is 1 — the 9-minute sibling runs the whole time."""
+    assert "SPLIT" not in _order_out([10, 9, 1, 1], capsys)
+    out = _order_out([10, 1, 1], capsys)
+    assert "SPLIT" in out and "holds the barrier ALONE for 9.0 min" in out, out
+
+
+def test_the_split_advice_has_an_absolute_floor(capsys):
+    """It advised splitting a slice to recover twelve seconds, in a message whose own last sentence
+    says launch order is worth seconds and therefore not worth thinking about."""
+    assert "SPLIT" not in _order_out([0.4, 0.2, 0.2], capsys)

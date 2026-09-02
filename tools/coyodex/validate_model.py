@@ -2148,6 +2148,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                 f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if this product genuinely has none")
         return problems, warnings
     recorded = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("I", "EP"))
+    # The SCOPED keys under the same heading (`I5/crossings`). Read apart from the bare ids above so
+    # one recorded line answers one question — see the crossing check below for why that matters.
+    crossing_recorded = records.recorded_keys(m, INTERFACE_EXCEPTIONS_HEADING)
     #: (surface id, its kind, the roles the walks put at it) for the wrong-door nudge below.
     people_at_a_machine: list[tuple[str, str, str]] = []
     role_names = {r.id: r.name for r in m.roles}
@@ -2212,21 +2215,27 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # product's outside edge that no reader and no skeptic can check, and a refuted privacy
         # fact shipped in exactly such a field on the 2026-09-02 mcpolis map.
         #
-        # ADVISORY, and it must stay advisory for now. Measured across three live maps it would
-        # fail all three: mcpolis 35 of 35 crossings empty, its predecessor 22 of 22, coyodex's own
-        # self-map 11 of 15. The field IS authorable — coyodex authored 4 — so what is missing is
-        # the instruction landing, not the ability. Promote it to blocking once one build has
+        # ADVISORY, and it must stay advisory for now. Of the maps that HAVE interfaces it fails
+        # every one: 35 of 35 crossings empty on the map this came from, 22 of 22 on its
+        # predecessor, 11 of 15 on coyodex's own self-map. (Across the whole archive that is 2 of
+        # 25, because 23 of the archives carry no interfaces at all — the first draft of this
+        # comment quoted the wrong denominator.) The field IS authorable — coyodex authored 4 — so
+        # what is missing is the instruction landing, not the ability. Promote it to blocking once one build has
         # shipped a clean one, and not before: a gate that fails every existing map teaches the
         # lead to ignore the gate.
+        # ITS OWN KEY, not the bare `In` the other six per-interface advisories share. `IFACE_KEY`
+        # supports a `/scope` suffix for exactly this: writing `I5: <why>` to answer THIS check also
+        # silenced the `facing`, `kind` and evidence checks for `I5`, and vice versa — one line
+        # quietly adjudicating seven different questions.
         anchorless = [str(ci) for ci, cr in enumerate(iface.carries) if not (cr.where or "").strip()]
-        if anchorless and iface.id not in recorded:
+        if anchorless and f"{iface.id}/crossings" not in crossing_recorded:
             warnings.append(
                 f"{iface.id} ({iface.name}): {len(anchorless)} of {len(iface.carries)} crossing(s) "
                 f"carry no `where` — what crosses a surface is a claim about the product's outside "
                 f"edge, and one with no line is a claim no reader and no skeptic can check. Anchor "
-                f"the line where the crossing happens, or record '{iface.id}: <why the surface's "
-                f"own source reaches them>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
-                f"heading")
+                f"the line where the crossing happens, or record '{iface.id}/crossings: <why the "
+                f"surface's own source reaches them>' under an '{INTERFACE_EXCEPTIONS_HEADING}' "
+                f"extras heading")
         grounded = bool(iface.ways_in or deps_by_iface.get(iface.id) or iface.source
                         or any(c.where for c in iface.carries))
         if not grounded:
@@ -2801,9 +2810,13 @@ _KIND_COVERAGE_LINE = re.compile(
 
 #: A COUNT of entry points stated inside a coverage record — "one signal-handler entry point",
 #: "4 http routes". Anchored on the noun so an unrelated number in the prose is not read as one.
+#: ADJACENT, with no words between. The `{0,2}` gap this used to allow swallowed the wrong number
+#: twice over: "sampled — 4 of 40 routes read" matched `4 of 40 routes` and compared 4 against the
+#: map, and "complete — enumerated from the 3 route files" read a count of the SOURCE FILES as a
+#: count of entry points. A hyphenated compound is still one token (`signal-handler entry points`).
 _COUNT_IN_COVERAGE = re.compile(
     r"\b(\d+|no|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
-    r"(?:\w+[- ]){0,2}(?:entry\s+points?|routes?|handlers?|commands?|hooks?|jobs?|listeners?)\b",
+    r"(?:[\w-]+\s+)?(?:entry\s+points?|routes?|handlers?|commands?|hooks?|jobs?|listeners?)\b",
     re.I)
 
 _COVERAGE_WORD_NUMBERS = {"no": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -2855,6 +2868,12 @@ def _kind_coverage_warnings(m: ProjectModel) -> list[str]:
             if not hit:
                 continue
             kind = grammar.canonical_entry_kind(hit.group(1)).lower()
+            # ONLY a `complete` record. A `sampled` or `partial` one that names its sample size —
+            # "sampled — 4 of 40 routes read" — is doing exactly what the heading's format asks,
+            # and comparing that 4 against the map accused an honest record of being stale. Only a
+            # record claiming COMPLETENESS is making a statement the map's own row count can test.
+            if hit.group(2).lower() != "complete":
+                continue
             actual = by_kind.get(kind, 0)
             stated = _COUNT_IN_COVERAGE.search(line)
             if stated is None:
@@ -5917,11 +5936,9 @@ def _run(argv: list[str] | None = None) -> int:
     # The wrong-map refusal comes FIRST and on its own. `ModelError` subclasses `ValueError`, so a
     # single combined handler would have to re-dispatch by type — and a bare `raise` there escapes
     # the function entirely, since the schema handler below is no longer in scope.
-    try:
-        resolved = resolve_map_path(path)
-    except ValueError as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        return 1
+    # No local handler for the wrong-map refusal: `cli.py` catches `WrongMapError` for every
+    # subcommand, so one here would be a second copy of the same three lines.
+    resolved = resolve_map_path(path)
     try:
         m = load_model(resolved.read_text(encoding="utf-8"))
     except ModelError as e:

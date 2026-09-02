@@ -1054,3 +1054,42 @@ def test_the_commit_line_omits_a_warrant_that_is_not_there(tmp_path, capsys):
     _commit_hint(out_dir / "project-map.json")
     printed = capsys.readouterr().out
     assert "WARRANT" not in printed, printed
+
+
+# --- the prose leg keys on a convention the method now states (adversarial review, 2026-09-02) ----
+# It shipped keyed on `verdicts-prose-*.json` while nothing asked anyone to write that name, so it
+# was an advisory no build could satisfy except by deleting its own batches.
+
+def test_the_method_names_the_file_the_prose_leg_looks_for():
+    from pathlib import Path
+    method = (Path(__file__).resolve().parents[1] / "method.md").read_text(encoding="utf-8")
+    assert "verdicts-prose-" in method, (
+        "the prose leg reads a filename the method never asks anyone to write — an advisory whose "
+        "only achievable remedy is 'delete the batches'")
+
+
+def test_the_prose_leg_is_silent_when_the_verdicts_are_there(tmp_path):
+    from coyodex.finalize import _undispatched_prose_leg
+    out = tmp_path / ".coyodex"
+    (out / "verify").mkdir(parents=True)
+    (out / "verify" / "prose-1.json").write_text("{}")
+    assert _undispatched_prose_leg(out / "project-map.json") is not None
+    (out / "verify" / "verdicts-prose-1.json").write_text("{}")
+    assert _undispatched_prose_leg(out / "project-map.json") is None
+
+
+def test_no_write_does_not_point_at_the_file_it_left_alone(tmp_path, capsys):
+    """It printed 'Full findings: finalize-report.md' — the stale one it deliberately did not
+    overwrite — so a reader following the pointer read the previous build's disposition."""
+    import io, contextlib
+    from coyodex import finalize
+    out = tmp_path / ".coyodex"
+    (out / "build-fragments").mkdir(parents=True)
+    (out / "project-map.json").write_text('{"format": "coyodex/1", "title": "t", "goal": "g"}')
+    (out / "finalize-report.md").write_text("OLD REPORT")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+        finalize.main([str(out / "project-map.json"), "--repo", str(tmp_path), "--no-write"])
+    printed = buf.getvalue()
+    assert (out / "finalize-report.md").read_text() == "OLD REPORT"
+    assert "Full findings: " not in printed, printed[-400:]

@@ -344,12 +344,27 @@ def ignore_disclosure(root: Path, mapped_sources: Sequence[str] = ()) -> list[st
 
 
 def _pattern_prefix(pattern: str) -> str:
-    """The fixed directory part of a glob — everything before its first wildcard.
+    """The path this pattern is ABOUT — everything up to its first wildcard, as a directory prefix.
 
-    `frontend/src/**/*.test.ts` -> `frontend/src/`. A pattern with no fixed part yields "" and is
-    skipped: it says nothing about WHERE."""
-    head = pattern.lstrip("!/").split("*", 1)[0].split("?", 1)[0].split("[", 1)[0]
-    return head if head.endswith("/") else head.rsplit("/", 1)[0] + "/" if "/" in head else ""
+    `frontend/src/**/*.test.ts` -> `frontend/src/`, `a/b` -> `a/b/`, `build` -> `build/`.
+
+    Three shapes were wrong in the first version and each produced a false or missing report:
+    `a/b` yielded `a/` (its PARENT), so the warning counted three elements under `a/c` and `a/d`
+    that the pattern hides none of; `build` and `tests` yielded "" and were skipped silently, which
+    is the common case of a whole tree being excluded; and a `!` line — which PUTS BACK rather than
+    hides — produced a warning saying it hides something."""
+    if pattern.lstrip().startswith("!"):
+        return ""                      # a negation un-excludes; it hides nothing
+    head = pattern.strip().lstrip("/").split("*", 1)[0].split("?", 1)[0].split("[", 1)[0]
+    if not head:
+        return ""                      # a bare wildcard says nothing about WHERE
+    if not head.endswith("/"):
+        # A trailing fragment is only a directory when the wildcard was cut mid-name
+        # (`frontend/src/**` -> `frontend/src/`, but `a/b` -> `a/b/`). Cutting back to the parent
+        # is what made the prefix over-broad, so keep the whole fixed part.
+        head = head + "/" if head == pattern.strip().lstrip("/").rstrip("/") else head.rsplit(
+            "/", 1)[0] + "/"
+    return head if head != "/" else ""
 
 
 def _partly_mapped_disclosure(patterns: Sequence[str], mapped_sources: Sequence[str]) -> list[str]:

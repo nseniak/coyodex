@@ -29,6 +29,7 @@ from typing import Sequence, TypeVar
 from coyodex import balance_lib, prose, records, grammar
 from coyodex.anchors import FILEREF as _FILEREF
 from coyodex.model import (
+    resolve_map_path,
     ProjectModel,
     Role,
     RuleSite,
@@ -372,6 +373,11 @@ def _move_note(claim: str, before: str | None, after: str) -> str:
     enforces it — but it is a claim about WHERE something is, and it must not land in silence."""
     from coyodex.anchors import strip_anchor
     old_file, new_file = strip_anchor(before or ""), strip_anchor(after or "")
+    # A DIRECTORY anchor narrowing to a file inside it (`src/dir/` -> `src/dir/b.py`) is the anchor
+    # getting MORE precise, not moving somewhere else. Reporting it as a different file would train
+    # the reader to skip the line that matters.
+    if old_file.endswith("/") and new_file.startswith(old_file):
+        return ""
     if old_file and new_file and old_file != new_file:
         return (f"  NOTE: {claim}: the anchor moved to a DIFFERENT FILE, {old_file} → {new_file}. "
                 f"Correct when the operative line really lives there; read it before shipping.")
@@ -1565,7 +1571,7 @@ def _run(argv: list[str] | None = None) -> int:
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
     try:
-        m = load_model(path.read_text(encoding="utf-8"))
+        m = load_model(resolve_map_path(path).read_text(encoding="utf-8"))
     except Exception as e:
         print(f"AUDIT SKIPPED: {e} — run `coyodex validate` first.", file=sys.stderr)
         return 1
@@ -1573,13 +1579,14 @@ def _run(argv: list[str] | None = None) -> int:
     behavioural = "--with-behavioural" in argv
     worklist = l2_worklist_model(m, behavioural=behavioural)
     if behavioural:
-        # SAY THE LIMIT. `grounding write`, `refutations` and `by-element` all compute the LIVE
-        # surface with a bare `l2_worklist_model(live)` — the DEFAULT surface — so a record built
-        # against a behavioural worklist reports every behaviour claim as `superseded` (489 of them
-        # on the map this was written for) and `live_claims_digest` describes a different surface
-        # from the one that was pinned. The tier is still worth running: the batches it writes are
-        # readable by skeptics, and the verdicts are real. What is not yet safe is folding them into
-        # the grounding RECORD, and a build that is not told that will fold them.
+        # THE LIMIT THIS USED TO STATE IS GONE. `grounding write` now recomputes the live surface at
+        # the PINNED worklist's own tier (`grounding.worklist_is_behavioural`), so a record built
+        # against a behavioural worklist no longer reports every behaviour claim as `superseded` —
+        # 489 of them on the map that limit was written for — and the digest describes the surface
+        # that was pinned. Folding them into the record is now the supported path.
+        # `refutations` still computes its ADVISORY confidence surface at the default tier, on
+        # purpose: a behaviour claim resolves onto a flow or a crossing, neither of which carries a
+        # `confidence` field.
         print("NOTE: `--with-behavioural` widens the worklist and NOT the grounding record. "
               "`grounding write` measures against the default surface, so behaviour claims come "
               "back as `superseded` and the digest describes a different surface. Batch and "

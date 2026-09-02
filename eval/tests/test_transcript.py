@@ -474,3 +474,17 @@ def test_real_harness_text_is_still_hidden():
                 "Base directory for this skill: /x/y",
                 "<ide_opened_file>a.py</ide_opened_file>"):
         assert operator_text(raw) == "", raw
+
+
+def test_a_quoted_wrapper_inside_a_real_message_is_not_read_as_the_command():
+    """Searching for the wrapper before the harness filter rendered any body that merely MENTIONED
+    `<command-name>` as an operator saying that command — and threw the real words away."""
+    from coyodex_eval.transcript import operator_text
+    said = "stop — the skill body says `<command-name>coyodex</command-name>` is the wrapper"
+    assert operator_text(said) == said
+
+
+def test_harness_text_quoting_the_wrapper_is_still_hidden():
+    from coyodex_eval.transcript import operator_text
+    assert operator_text("<system-reminder>\nran <command-name>clear</command-name>\n"
+                         "</system-reminder>") == ""

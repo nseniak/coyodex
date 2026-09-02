@@ -18,7 +18,7 @@ from pathlib import Path
 from coyodex import reporting
 from coyodex.anchors import DriftResult, anchor_drift, parse_anchor
 from coyodex.audit_model import WorkItem, l2_worklist_model
-from coyodex.model import ProjectModel, load_model
+from coyodex.model import ProjectModel, load_model, resolve_map_path
 from coyodex.validate_analysis import _source_roots
 from coyodex.validate_model import check_operative_lines_model
 
@@ -399,7 +399,7 @@ def main(argv: list[str] | None = None) -> int:
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
         return 2
-    m = load_model(Path(map_path).read_text(encoding="utf-8"))
+    m = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
     if not verdicts_paths:
         # No verdicts → the shape-only pass, so a serial build still gets a grounding floor.
         roots = _source_roots(Path(map_path).resolve(),

@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 from coyodex import balance_lib
-from coyodex.model import ModelError, ProjectModel, load_model
+from coyodex.model import ModelError, ProjectModel, load_model, resolve_map_path
 
 
 def _fanout_rows(m: ProjectModel, forest: str = "S") -> list[tuple[str, str, int, str]]:
@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
     try:
-        m = load_model(path.read_text(encoding="utf-8"))
+        m = load_model(resolve_map_path(path).read_text(encoding="utf-8"))
     except ModelError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1

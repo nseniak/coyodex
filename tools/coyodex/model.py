@@ -1289,6 +1289,35 @@ def load_model(text: str) -> ProjectModel:
 COYODEX_HOME = Path(__file__).resolve().parents[2]
 
 
+class WrongMapError(ValueError):
+    """A verb was about to read the coyodex clone's OWN map by accident.
+
+    Its own class so `cli.py` can catch exactly this and print it as one line. A bare `ValueError`
+    could not be caught there without swallowing every other one, and `ModelError` subclasses
+    `ValueError` too — so a dozen `main`s each grew (or, mostly, did not grow) their own handler and
+    the refusal arrived as a ten-line traceback with the message at the bottom. A refusal whose
+    entire value is that a person reads it must not look like a crash."""
+
+
+def guard_wrong_map(path) -> Path:
+    """The refusal alone, with no `reading` line — for a WRITE.
+
+    `assemble` is the only verb that writes a map, and overwriting the clone's own is the
+    destructive half of the accident `resolve_map_path` guards the reads against. Same rule, same
+    escape; it just is not a read, so it must not say it is reading."""
+    resolved = Path(path).resolve()
+    if os.environ.get("COYODEX_SELF_MAP", "") in ("1", "true", "yes"):
+        return resolved
+    try:
+        resolved.relative_to(COYODEX_HOME / ".coyodex")
+    except ValueError:
+        return resolved
+    raise WrongMapError(
+        f"refusing to WRITE {resolved} — that is the coyodex clone's OWN map, and this shell is "
+        f"standing in {Path.cwd()}. A build that reached it by accident after a `cd` overwrote the "
+        f"clone's committed map. If you really are mapping coyodex itself, set COYODEX_SELF_MAP=1.")
+
+
 def resolve_map_path(path) -> Path:
     """The absolute path a verb is about to read, refusing the one slip nothing downstream can see.
 
@@ -1318,7 +1347,7 @@ def resolve_map_path(path) -> Path:
         except ValueError:
             pass
         else:
-            raise ValueError(
+            raise WrongMapError(
                 f"refusing to read {resolved} — that is the COYODEX CLONE'S OWN map, and this "
                 f"shell is standing in {Path.cwd()}. Two builds in a row reached it by accident "
                 f"after a `cd` into the clone, read a healthy-looking result about the wrong "

@@ -435,14 +435,14 @@ def test_a_SERVES_naming_any_behavioural_id_passes():
         fill("harvest", _harvest_values(SERVES=value))
 
 
-def test_a_component_budget_on_a_slice_that_mints_none_is_refused():
-    """One entity slice was dispatched for 40 components it cannot author, so the fan-out's total
-    budget was wrong by 40 before any agent ran."""
+def test_a_component_budget_is_NOT_judged_by_the_slice_kind_text():
+    """This check was written and REVERTED. `«SLICE_KIND»` is free text — a real value is a
+    sentence — so matching it against words like `config` or `entit` refused legitimate structural
+    slices, and the remedy it demanded (write `0`) put "Expect roughly 0 components" in front of a
+    slice that really had seven. Catching the real fault needs an enum of slice kinds, which the
+    contract does not have."""
     from coyodex.contract import fill
-    with pytest.raises(ValueError, match="authors no"):
-        fill("harvest", _harvest_values(SLICE_KIND="T5 entities", EXPECTED_COMPONENTS="40"))
-
-
-def test_zero_is_the_honest_budget_for_such_a_slice():
-    from coyodex.contract import fill
-    fill("harvest", _harvest_values(SLICE_KIND="T5 entities", EXPECTED_COMPONENTS="0"))
+    for kind in ("config loading and startup", "HTTP routing and config parsing",
+                 "deployment scripts and the CI workflow", "the entity store adapters",
+                 "T5 entities"):
+        fill("harvest", _harvest_values(SLICE_KIND=kind, EXPECTED_COMPONENTS="7"))
