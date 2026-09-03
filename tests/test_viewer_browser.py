@@ -656,30 +656,40 @@ def _two_sided_interfaces() -> Any:
     return mutate
 
 
-def test_the_interfaces_picture_draws_one_wire_per_direction_each_surface_carries() -> None:
-    """The COUNT is the shape's honesty: a surface that answers as well as asks draws two wires, and
-    a their-surface is not always an exit — the cut is by side, the arrows carry direction."""
+def test_a_surface_draws_one_wire_and_wears_a_head_per_direction_it_carries() -> None:
+    """ONE WIRE PER SURFACE, and the HEADS are what say which way things cross. A surface that
+    answers as well as asks wears a head at each end; one that only asks wears one.
+
+    This was two wires 20px either side of the card's middle, and the merge is only safe because the
+    sentences merged with it: a double-headed line whose two labels landed on the same spot was the
+    reason the pair was split in the first place."""
     with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         wires = page.evaluate("""() => {
-            const p = [...document.querySelectorAll('#ifdstage path[data-iface]')];
             const out = {};
-            for (const x of p) (out[x.dataset.iface] = out[x.dataset.iface] || []).push(1);
+            for (const p of document.querySelectorAll('#ifdstage path[data-iface]'))
+                (out[p.dataset.iface] = out[p.dataset.iface] || []).push({
+                    into: !!p.getAttribute('marker-end'),      // points AT the product: `in`
+                    back: !!p.getAttribute('marker-start') });  // points back at the card: `out`
             return out;
         }""")
-        # I1 carries both directions and draws two; I2 carries one and draws ONE. A wire is drawn
-        # only where something crosses — drawing both and letting the empty label fall away leaves a
-        # line a reader can hover and get nothing from, and half the surfaces on both live maps
-        # carry one direction only.
-        assert len(wires["I1"]) == 2, wires
+        # Whatever it carries, a surface is ONE line. The direction lives in the heads, never in the
+        # count — a reader who sees two lines leaving one card reads two crossings, not one exchange.
+        assert len(wires["I1"]) == 1, wires
         assert len(wires["I2"]) == 1, wires
+        # I1 carries both directions, so both ends are pointed. I2 carries one, so ONE end is: a head
+        # with no sentence behind it is a claim the reader can hover and get nothing from, and half
+        # the surfaces on both live maps carry one direction only.
+        assert wires["I1"][0] == {"into": True, "back": True}, wires
+        assert sorted(wires["I2"][0].values()) == [False, True], wires
         assert not page.js_errors, page.js_errors
 
 
-def test_hovering_a_surface_lights_its_own_wires_and_separates_its_two_labels() -> None:
-    """At rest every wire is grey and unlabelled. Hover makes ONE surface the picture — and its two
-    crossings join the same pair of edges, so without a nudge the two labels land exactly on top of
-    each other and the reader sees one sentence where the map holds two."""
+def test_hovering_a_surface_lights_its_wire_and_opens_its_one_box_of_crossings() -> None:
+    """At rest every wire is grey and unlabelled. Hover makes ONE surface the picture — and its
+    crossings arrive as ONE box holding a row per direction, not as a box per direction. The pair
+    used to stack to 206px against a 109px card on the live map; merged, every sentence is still
+    there and the stack is gone."""
     with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         page.hover('.ifd-box[data-iface="I1"]')
@@ -691,14 +701,15 @@ def test_hovering_a_surface_lights_its_own_wires_and_separates_its_two_labels() 
                         .map(p => p.dataset.iface),
                 cold: [...document.querySelectorAll('#ifdstage path.ifd-cold')]
                         .map(p => p.dataset.iface),
-                labels: on.map(l => ({ text: l.textContent, top: l.offsetTop })),
+                labels: on.length,
+                rows: on.flatMap(l => [...l.querySelectorAll('.ifd-elabel-row')]
+                                        .map(r => r.dataset.dir)),
             };
         }""")
         assert set(shown["hot"]) == {"I1"}, shown
         assert set(shown["cold"]) == {"I2"}, shown
-        assert len(shown["labels"]) == 2, shown
-        tops = sorted(l["top"] for l in shown["labels"])
-        assert tops[1] - tops[0] >= 18, shown          # two sentences, two lines
+        assert shown["labels"] == 1, shown             # one box…
+        assert sorted(shown["rows"]) == ["in", "out"], shown   # …holding both directions
         assert not page.js_errors, page.js_errors
 
 
@@ -1373,17 +1384,19 @@ def test_the_picture_reads_down_in_the_order_the_walk_touches_each_surface() -> 
         assert not page.js_errors, page.js_errors
 
 
-def test_the_opening_move_is_the_upper_wire_and_the_labels_carry_no_direction_word() -> None:
-    """Who speaks first is drawn, not written. A WAY IN is an address something outside invokes, so a
-    surface holding one is opened from outside and its `in` is the upper wire; a surface holding none
-    is one the product reaches for, so its `out` is.
+def test_the_opening_move_leads_the_box_and_says_it_is_the_opening_move() -> None:
+    """Who speaks first is written now, not drawn. A WAY IN is an address something outside invokes,
+    so a surface holding one is opened from outside and its `in` row leads; a surface holding none is
+    one the product reaches for, so its `out` row does.
 
-    The two labels carry NO direction word: each rides its own wire and that wire has an arrowhead,
-    so "in" and "out" restated in text what the reader could already see. That makes the ORDER the
-    only thing saying which is which, which is why it is asserted rather than assumed.
+    EACH ROW CARRIES ITS DIRECTION WORD. The two sentences used to ride two wires with one arrowhead
+    each, so the word would have restated what the reader could see. One merged wire has a head at
+    BOTH ends and cannot say which sentences belong to which, so `in` and `out` move into the text —
+    the same two words the surface's own page sets its crossings table in.
 
-    They must also never touch. The picture once drew ONE curve and its exact reverse, so a reader
-    saw a single line with a head at each end and both sentences landed on one spot."""
+    AND THE ORDER IS MARKED `first` / `then`. Order alone does not read as order: the picture used to
+    say it with POSITION — the opening move was the upper wire — and two rows of equal weight in one
+    box read as a table of facts, not as a sequence."""
     def mutate(m: dict) -> None:
         both = [{"direction": "in", "what": "what the caller asks for", "elements": []},
                 {"direction": "out", "what": "the answer it gets back", "elements": []}]
@@ -1404,43 +1417,64 @@ def test_the_opening_move_is_the_upper_wire_and_the_labels_carry_no_direction_wo
             const out = {};
             for (const id of ['I1', 'I2']) {
                 const ls = [...document.querySelectorAll('.ifd-elabel')]
-                    .filter(l => l.dataset.iface === id)
-                    .sort((a, b) => parseFloat(a.style.top) - parseFloat(b.style.top));
-                ls.forEach(l => { l.style.visibility = 'hidden'; l.style.display = 'block'; });
-                const box = ls.map(l => ({ t: parseFloat(l.style.top) - l.offsetHeight / 2,
-                                           b: parseFloat(l.style.top) + l.offsetHeight / 2 }));
-                ls.forEach(l => { l.style.display = ''; l.style.visibility = ''; });
-                out[id] = { texts: ls.map(l => l.textContent),
-                            gap: Math.round(box[1].t - box[0].b) };
+                    .filter(l => l.dataset.iface === id);
+                const rows = [...ls[0].querySelectorAll('.ifd-elabel-row')];
+                out[id] = { boxes: ls.length,
+                            dirs: rows.map(r => r.dataset.dir),
+                            words: rows.map(r => r.querySelector('.ifd-elabel-dir').textContent),
+                            ords: rows.map(r => { const o = r.querySelector('.ifd-elabel-ord');
+                                                  return o ? o.textContent : null; }),
+                            texts: rows.map(r => [...r.querySelectorAll('.ifd-what-line')]
+                                                   .map(e => e.textContent)) };
             }
             return out;
         }""")
-        # I1 holds a way in, so the incoming sentence leads. I2 holds none, so the outgoing one does.
-        assert got["I1"]["texts"] == ["what the caller asks for", "the answer it gets back"], got
-        assert got["I2"]["texts"] == ["the answer it gets back", "what the caller asks for"], got
         for id_ in ("I1", "I2"):
-            assert got[id_]["gap"] > 0, got                       # they never overlap
-            for t in got[id_]["texts"]:
-                assert "in" != t[:2] and "out" != t[:3], got      # no direction word, just the sentence
+            assert got[id_]["boxes"] == 1, got            # one box, whatever it carries
+            assert got[id_]["ords"] == ["first", "then"], got
+        # I1 holds a way in, so the incoming row leads. I2 holds none, so the outgoing one does.
+        assert got["I1"]["dirs"] == ["in", "out"], got
+        assert got["I2"]["dirs"] == ["out", "in"], got
+        # …and the word is really ON each row, not merely implied by its position.
+        assert got["I1"]["words"] == ["in", "out"], got
+        assert got["I2"]["words"] == ["out", "in"], got
+        assert got["I1"]["texts"] == [["what the caller asks for"],
+                                      ["the answer it gets back"]], got
         assert not page.js_errors, page.js_errors
 
 
-def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None:
-    """Both wires leave from inside the card's own height, so anything vertical and dark at that edge
-    closes them into a bracket and the pair reads as ONE line bent twice rather than two crossings.
+def test_a_surface_carrying_one_direction_is_not_marked_first() -> None:
+    """`first` is a promise that something follows it. A surface with one direction has nothing to
+    follow, so its single row carries the direction word alone."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "One way only", "what": "It only reports.", "side": "theirs",
+             "facing": "operator", "kind": "api",
+             "carries": [{"direction": "out", "what": "what went wrong", "elements": []}]},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        got = page.evaluate("""() => {
+            const l = document.querySelector('.ifd-elabel');
+            return { rows: l.querySelectorAll('.ifd-elabel-row').length,
+                     ords: l.querySelectorAll('.ifd-elabel-ord').length,
+                     dirs: [...l.querySelectorAll('.ifd-elabel-dir')].map(e => e.textContent) };
+        }""")
+        assert got == {"rows": 1, "ords": 0, "dirs": ["out"]}, got
+        assert not page.js_errors, page.js_errors
 
-    TWO EARLIER FIXES WERE TRIED AND BOTH ARE GONE, which is why this asserts what it does. A soft
-    halo instead of a border settled it completely, and made the Interfaces picture answer "which
-    card is picked" differently from a screen that looks the same — consistency won. Then 14px of
-    clearance between the wire and the card, which Nitsan reversed: a line that stops short of the
-    thing it points at is a line the reader has to join up themselves.
 
-    WHAT ACTUALLY CURED IT was neither: it was moving the LABELS off the card. The bracket was only
-    ever readable when the two labels sat over the card and framed a fragment of its border between
-    them. With the whole card outlined and both labels clear of it, the eye reads a card with two
-    arrows leaving it. So the invariants are the ones below — the wires stay 40px apart and each
-    reaches its card — and `test_a_crossings_sentence_never_covers_the_card_it_belongs_to` guards
-    the rest."""
+def test_a_surfaces_wire_reaches_its_card_and_lands_on_the_product() -> None:
+    """Both ends of the line are asserted, because both used to be wrong in their own way.
+
+    AT THE CARD: no gap. A line that stops short of the thing it points at is a line the reader has
+    to join up themselves. 14px of clearance was tried and Nitsan reversed it twice. What made the
+    clearance seem necessary was the BRACKET — the picked card's 2px indigo border closing a
+    surface's TWO wires into one line bent twice — and a surface draws ONE wire now, so the bracket
+    cannot form at all.
+
+    AT THE PRODUCT: on the circle's edge, along a radius. Aimed anywhere else the lines would cross
+    inside the shape, and a hub with lines crossing through it stops reading as one thing."""
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
@@ -1455,24 +1489,28 @@ def test_a_surfaces_two_wires_do_not_join_into_one_bracket_at_its_card() -> None
         got = page.evaluate("""() => {
             const b = document.querySelector('.ifd-box[data-iface="I1"]');
             const right = b.offsetLeft + b.offsetWidth;
-            const xs = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
-                .flatMap(p => p.getAttribute('d').match(/-?[\\d.]+/g).filter((_, i) => i % 2 === 0))
-                .map(Number);
-            const ys = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')]
-                .map(p => parseFloat(p.getAttribute('d').match(/-?[\\d.]+/g)[1]));
-            return { gap: Math.min(...xs.map(x => Math.abs(x - right))),
-                     apart: Math.abs(ys[0] - ys[1]),
-                     wires: document.querySelectorAll('#ifdstage path[data-iface="I1"]').length,
+            const hub = document.getElementById('ifdhub');
+            const cx = hub.offsetLeft + hub.offsetWidth / 2;
+            const cy = hub.offsetTop + hub.offsetHeight / 2;
+            const r = hub.offsetWidth / 2;
+            const ps = [...document.querySelectorAll('#ifdstage path[data-iface="I1"]')];
+            const n = ps[0].getAttribute('d').match(/-?[\\d.]+/g).map(Number);
+            return { wires: ps.length,
+                     startGap: Math.abs(n[0] - right),
+                     endOffCircle: Math.abs(Math.hypot(n[n.length - 2] - cx,
+                                                       n[n.length - 1] - cy) - r),
+                     heads: [!!ps[0].getAttribute('marker-start'),
+                             !!ps[0].getAttribute('marker-end')],
                      borderW: getComputedStyle(b).borderRightWidth };
         }""")
-        assert got["wires"] == 2, got
-        # Each wire REACHES its card — no gap to join up by eye.
-        assert got["gap"] == 0, got
-        # …and the two never share a path. This is the number that stops them reading as one line,
-        # now that neither the halo nor the clearance is there to help.
-        assert got["apart"] >= 30, got
-        # …and the picked card really is wearing the shared 2px edge, so the separation above is
-        # being asked to do the work this test says it does.
+        assert got["wires"] == 1, got
+        assert got["heads"] == [True, True], got     # both ways, so both ends are pointed
+        # It REACHES its card — no gap to join up by eye.
+        assert got["startGap"] <= 1, got
+        # …and it LANDS ON the product, on the circle itself rather than short of it or inside it.
+        assert got["endOffCircle"] <= 1, got
+        # …and the picked card really is wearing the shared 2px edge, so the single line above is
+        # leaving from inside the span that used to close the bracket.
         assert got["borderW"] == "2px", got
         assert not page.js_errors, page.js_errors
 
@@ -1567,11 +1605,12 @@ def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
     of it over the very box the reader had just picked, hiding the name and the people.
 
     It now starts where its wire starts and grows AWAY from the card, overhanging the middle and the
-    far column instead — both dimmed while it shows, and neither is what the reader is looking at."""
+    far column instead — both dimmed while it shows, and neither is what the reader is looking at.
+    ONE box per surface, so what is asserted is that the single box clears the card on both shores."""
     def mutate(m: dict) -> None:
-        # BOTH directions on BOTH shores, so the test sees two labels per surface and both growth
+        # BOTH directions on BOTH shores, so the box is at its TALLEST and the test sees both growth
         # directions. `_both_shores_carry_people_and_a_pipe` carries one crossing each, which would
-        # have let this pass while only ever placing a single label.
+        # have let this pass against the smallest box the picture can draw.
         both = [{"direction": "in", "what": "what the caller asks for, at some length so the label "
                                             "is wide enough to reach the card", "elements": []},
                 {"direction": "out", "what": "the answer it gets back, also long enough to matter "
@@ -1595,7 +1634,7 @@ def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
                          over: ls.filter(l => { const r = l.getBoundingClientRect();
                                    return r.left < br.right && r.right > br.left; }).length };
             }""", iid)
-            assert got["shown"] == 2, (iid, got)
+            assert got["shown"] == 1, (iid, got)
             assert got["over"] == 0, (iid, got)
         assert not page.js_errors, page.js_errors
 
@@ -1635,22 +1674,21 @@ def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS(
         _settle(page)
         page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
         page.wait_for_timeout(300)
-        # KEYED ON THE SENTENCE, not on DOM order: the labels are created opener-first, and this
-        # surface holds no way in, so its `out` is drawn before its `in`.
+        # KEYED ON THE DIRECTION, not on DOM order: the rows are written opener-first, and this
+        # surface holds no way in, so its `out` row leads.
         got = page.evaluate("""() => {
             const out = {};
-            for (const l of document.querySelectorAll('.ifd-elabel.ifd-lab-on')) {
-                const line = l.querySelector('.ifd-what-line');
-                out[line.firstChild.textContent] = {
-                    recs: [...l.querySelectorAll('.ifd-what-rec')].map(e => e.textContent),
-                    titles: [...l.querySelectorAll('.ifd-what-rec')].map(
+            for (const r of document.querySelectorAll('.ifd-elabel.ifd-lab-on .ifd-elabel-row')) {
+                out[r.dataset.dir] = {
+                    recs: [...r.querySelectorAll('.ifd-what-rec')].map(e => e.textContent),
+                    titles: [...r.querySelectorAll('.ifd-what-rec')].map(
                                 e => e.getAttribute('title')),
-                    marks: l.querySelectorAll('.ifd-what-recs svg').length,
-                    tail: l.querySelector('.ifd-what-recs').textContent };
+                    marks: r.querySelectorAll('.ifd-what-recs svg').length,
+                    tail: r.querySelector('.ifd-what-recs').textContent };
             }
             return out;
         }""")
-        one, many = got["what is asked"], got["what comes back"]
+        one, many = got["in"], got["out"]
         assert one["recs"] == ["Organization"], one
         # four records, three drawn, and the tail SAYS the rest are there rather than dropping them
         assert many["recs"] == ["Subscription", "PlanName", "Membership"], many
@@ -1665,8 +1703,8 @@ def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS(
         # stop short of the 250ms an action icon waits, or the test cannot tell the two apart — a
         # first attempt checked at 260ms, which both delays pass, and a mutation to 250 sailed through
         # it. Quiet at 60ms, up by 190ms: 65ms of slack on each side of the real delay.
-        # NAMED, not "the first one": the labels are created opener-first, so the first record in DOM
-        # order belongs to the other sentence.
+        # NAMED, not "the first one": the rows are written opener-first, so the first record in DOM
+        # order belongs to the other row.
         page.locator(".ifd-what-rec").filter(has_text="Organization").first.hover()
         page.wait_for_timeout(60)
         assert not page.evaluate(
@@ -1707,7 +1745,7 @@ def test_the_pinned_surface_is_part_of_where_you_are() -> None:
 def test_a_click_that_is_not_on_a_box_drops_the_pin() -> None:
     """One rule, and it needs saying because there was no rule at all before: the picture had no
     outside-click handler, and what looked like one working was the gutter happening to clear the
-    class. The product's own line, a column heading and the page below the diagram each left a
+    class. The product's own shape, a column heading and the page below the diagram each left a
     surface pinned for good.
 
     The listener also has to be REMOVED between renders. It lives on `document`, which outlives the
@@ -1716,7 +1754,7 @@ def test_a_click_that_is_not_on_a_box_drops_the_pin() -> None:
     with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         # every one of these is outside a box, and every one must mean the same thing
-        for where in ("#ifdrule", ".ifd-col-ours .ifd-colhead", ".ifd-stage", ".usecases-wrap"):
+        for where in ("#ifdhub", ".ifd-col-ours .ifd-colhead", ".ifd-stage", ".usecases-wrap"):
             page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
             page.wait_for_timeout(200)
             assert page.evaluate(
@@ -1731,13 +1769,16 @@ def test_a_click_that_is_not_on_a_box_drops_the_pin() -> None:
         assert not page.js_errors, page.js_errors
 
 
-def test_each_sentence_points_back_at_the_wire_it_belongs_to() -> None:
-    """A label is 320px wide and its wire spans 155px, so the label is twice the length of the line
-    it is about, and the placement pass moves it 6px clear so the two never overlap. Touching
-    nothing and pointing nowhere, it read as floating beside the picture rather than labelling a line.
+def test_the_box_of_crossings_points_back_at_the_wire_it_belongs_to() -> None:
+    """A label is 300px wide and wider than the gutter its wire leaves through, and the placement
+    pass moves it 6px clear so the two never overlap. Touching nothing and pointing nowhere, it read
+    as floating beside the picture rather than labelling a line.
 
     The tail is the fix, and this asserts the thing that makes it a fix: its TIP lands on its own
-    wire. Not that a triangle exists — a triangle pointing at nothing would pass that."""
+    wire. Not that a triangle exists — a triangle pointing at nothing would pass that.
+
+    The box goes BELOW its wire unless below would run off the bottom of the picture, which is the
+    only constraint left now that a surface has one box rather than two to keep apart."""
     def mutate(m: dict) -> None:
         both = [{"direction": "in", "what": "what the caller asks for", "elements": []},
                 {"direction": "out", "what": "the answer it gets back", "elements": []}]
@@ -1754,10 +1795,9 @@ def test_each_sentence_points_back_at_the_wire_it_belongs_to() -> None:
             page.wait_for_timeout(250)
             got = page.evaluate("""(iid) => {
                 const st = document.getElementById('ifdstage').getBoundingClientRect();
-                // every wire's y, in client space — a path here is dead horizontal, so one number
-                const wireYs = [...document.querySelectorAll(
-                        `#ifdstage path[data-iface="${iid}"]`)]
-                    .map(p => st.top + parseFloat(p.getAttribute('d').match(/-?[\\d.]+/g)[1]));
+                // the wire leaves the card at the card's own middle, in client space
+                const b = document.querySelector(`.ifd-box[data-iface="${iid}"]`);
+                const wireY = st.top + b.offsetTop + b.offsetHeight / 2;
                 return [...document.querySelectorAll('.ifd-elabel.ifd-lab-on')].map(l => {
                     const r = l.getBoundingClientRect();
                     const down = l.classList.contains('ifd-tail-down');
@@ -1767,21 +1807,18 @@ def test_each_sentence_points_back_at_the_wire_it_belongs_to() -> None:
                     const tipY = down ? r.bottom + 8 : r.top - 8;
                     return { down, up, side: l.dataset.side,
                              offLeft: cs.left, offRight: cs.right,
-                             nearestWire: Math.min(...wireYs.map(y => Math.abs(y - tipY))) };
+                             offWire: Math.abs(wireY - tipY) };
                 });
             }""", iid)
-            assert len(got) == 2, (iid, got)
-            # exactly one tail each, and the two point OPPOSITE ways: the upper label down at its
-            # wire, the lower one up at its own.
-            assert sorted(g["down"] for g in got) == [False, True], (iid, got)
-            for g in got:
-                assert g["down"] != g["up"], (iid, g)
-                # THE TIP LANDS ON ITS WIRE, and slightly past it: the placement pass leaves a 6px
-                # gap and the tail is 8px deep, so it crosses the line by 2 rather than stopping
-                # short of it. Three pixels of tolerance covers that plus sub-pixel layout.
-                assert g["nearestWire"] <= 3, (iid, g)
-                # …and it sits on the CARD side, which is where the wire starts on that shore. Only
-                # the side that is SET is asserted: a computed style resolves the other one to a used
-                # value rather than `auto`, so checking for `auto` fails against correct code.
-                assert g["offLeft" if g["side"] == "ours" else "offRight"] == "22px", (iid, g)
+            assert len(got) == 1, (iid, got)     # one surface, one box
+            g = got[0]
+            assert g["down"] != g["up"], (iid, g)          # exactly one tail, pointing one way
+            # THE TIP LANDS ON ITS WIRE, and slightly past it: the placement pass leaves a 6px gap
+            # and the tail is 8px deep, so it crosses the line by 2 rather than stopping short of
+            # it. Three pixels of tolerance covers that plus sub-pixel layout.
+            assert g["offWire"] <= 3, (iid, g)
+            # …and it sits on the CARD side, which is where the wire starts on that shore. Only the
+            # side that is SET is asserted: a computed style resolves the other one to a used value
+            # rather than `auto`, so checking for `auto` fails against correct code.
+            assert g["offLeft" if g["side"] == "ours" else "offRight"] == "22px", (iid, g)
         assert not page.js_errors, page.js_errors

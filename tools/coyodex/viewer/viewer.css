@@ -1866,9 +1866,9 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    picture had drifted to a soft halo and read as a different app. The two cards carry the same base
    padding so a single half-pixel compensation serves both: the extra border width comes out of the
    padding, so the box keeps its measured size and the wires drawn against it cannot drift.
-   KNOWN COST, accepted deliberately: the border is the same indigo as a lit wire and runs the card's
-   whole height, and both of a surface's wires leave from inside that span. `IFACE_WIRE_GAP` and the
-   wires' 14px clearance are what keep the three from reading as one line bent twice. */
+   The border is the same indigo as a lit wire and runs the card's whole height, which used to close
+   a surface's TWO wires into a bracket reading as one line bent twice. A surface draws ONE wire now,
+   so there is nothing left to close. */
 .story-card.story-selected,
 .ifd-box.ifd-picked { border-color: #4f46e5; border-width: 2px;
                       padding: 9.5px 13.5px 8.5px; box-shadow: 0 3px 14px rgba(79,70,229,.28); }
@@ -2294,18 +2294,24 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    WHICH SIDE a card sits on is what says whose surface it is. There is no `our surface` / `their
    surface` wording anywhere, because position is read in one glance and never re-read.
 
-   The middle is a HAIRLINE, not a panel. It was a filled block carrying one word, and it cannot
-   simply go: `in` and `out` are directions RELATIVE TO THE PRODUCT, and with nothing in the middle
-   those two words point at nothing. The wires also need something to land on AT THEIR OWN HEIGHT —
-   a small centred badge would turn each gutter into a fan of lines meeting at one point. */
+   THE MIDDLE IS A CIRCLE, and it was a full-height hairline before. The hairline was honest about
+   the wires — every one of them landed on it at its own height, so nothing crossed and nothing
+   fanned — but it never read as the PRODUCT. It read as a divider between two lists, which is the
+   one thing this picture must not say: the two shores are not opposites, they are both edges of the
+   same thing. A shape with a boundary and a name inside it says "this is the product" without a
+   word of explanation.
+   THE COST IS KNOWN AND WAS CHOSEN. A single hub sits at ONE height, so the wires fan instead of
+   running flat, and it scrolls out of view on a long map the way any other single element does. A
+   full-height BOX was built first and rejected on sight: it took the whole middle and carried no
+   information for the space it took. */
 .ifd-wrap { margin: 0 0 26px; overflow-x: auto; }
-/* `width: 100%` with the two card columns CAPPED rather than fixed. At `max-content` and a flat
-   380px each the stage came to 1070 and the reading column is 1060 at a 1440 window, so the picture
-   overflowed its own container by ten pixels and grew a scrollbar. Capped, the side columns give
-   those pixels back and keep giving at 1280, which is the width this has to survive. */
+/* `width: 100%` with the two card columns CAPPED rather than fixed, and the two gutters taking
+   whatever is left. The caps came DOWN from 380 to buy the gutters their width: a wire to a circle
+   needs room to leave the card and turn before it arrives, which a wire to a flat rule did not.
+   320 + 160 for the hub leaves 130 a side at a 1440 window and stays whole at 1280. */
 .ifd-stage { position: relative; display: grid; width: 100%; align-items: stretch;
              grid-template-columns:
-               minmax(0, 380px) 100px 110px 100px minmax(0, 380px); }
+               minmax(0, 320px) minmax(60px, 1fr) 160px minmax(60px, 1fr) minmax(0, 320px); }
 svg.ifd-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* At rest EVERY wire is grey and unlabelled: the picture is for choosing, not for reading. Hover or
    pin makes one surface's wires the picture and fades the rest hard. */
@@ -2338,22 +2344,30 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .ifd-colhead { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                letter-spacing: .06em; color: #6b7280; white-space: nowrap; }
 .ifd-col-theirs > .ifd-colhead { text-align: right; }
-.ifd-spine { grid-column: 3; display: flex; flex-direction: column; align-items: center; }
-.ifd-spine > .ifd-colhead { color: #1e2235; font-size: 11.5px; letter-spacing: .05em; }
-/* The line the wires land on. It IS the product's edge, so it runs the whole height — and it is
-   drawn heavier and darker than a wire, because it is the one thing on this picture that is not a
-   crossing. At 3px of #c9d0f0 it was lighter than the greyed wires meeting it and read as one more
-   of them. */
-.ifd-rule { width: 5px; flex: 1; border-radius: 3px; background: #4f46e5; }
+/* The middle track. It holds ONE thing, vertically centred, and no heading of its own: the product's
+   name is inside the circle, and a heading above an empty column was the old shape's worst moment —
+   a column title with nothing under it for the length of the page. */
+.ifd-spine { grid-column: 3; display: flex; flex-direction: column; justify-content: center;
+             align-items: center; }
+/* THE PRODUCT. Round, not square: a rectangle in a picture whose every other element is a rectangle
+   reads as one more card, and this is the one thing here that is not a surface. Sized to hold a
+   two-word name at 12.5px without eliding — a name the reader cannot finish is worse than no shape
+   at all, so it wraps and the circle keeps its size. */
+.ifd-hub { width: 160px; height: 160px; border-radius: 50%; background: #4f46e5;
+           display: flex; align-items: center; justify-content: center; text-align: center;
+           padding: 18px; box-sizing: border-box;
+           box-shadow: 0 4px 18px rgba(79,70,229,.30); }
+.ifd-hub > span { color: #fff; font-size: 12.5px; font-weight: 700; line-height: 1.3;
+                  letter-spacing: .04em; text-transform: uppercase; overflow-wrap: anywhere; }
 /* IN FRONT OF THE WIRES. The wires' SVG is absolutely positioned and the columns are not, so it
-   paints over them by default and the greyed lines crossed the product's own edge. The edge is the
+   paints over them by default and the greyed lines ran across the product itself. The product is the
    one thing here that is not a crossing; nothing may run over it. Below the labels' z-index 5, since
-   a sentence the reader asked for outranks the line it is about.
-   ON THE RULE, NOT ON `.ifd-spine`. Positioning the spine makes it the rule's `offsetParent`, so
-   `rule.offsetLeft` stops being measured from the stage and reads 0 — and every wire, which lands on
-   that x, stretched from the far column to the card. Positioning the rule itself changes what its
-   own DESCENDANTS measure against, and it has none. */
-.ifd-rule { position: relative; z-index: 3; }
+   a sentence the reader asked for outranks the shape it is about.
+   ON THE HUB, NOT ON `.ifd-spine`. Positioning the spine makes it the hub's `offsetParent`, so
+   `hub.offsetLeft` stops being measured from the stage and reads 0 — and every wire, which lands on
+   that circle, stretched from the far column to the card. Positioning the hub itself changes what
+   its own DESCENDANTS measure against, and its one child is centred by flex, not by offsets. */
+.ifd-hub { position: relative; z-index: 3; }
 
 /* ONE SURFACE, as a card. Three bands, the same three a feature card has: glyph + name + pill, one
    sentence, then what is attached to it. */
@@ -2405,19 +2419,38 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .ifd-staff { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
              padding: 1px 7px; border-radius: 9px; background: #fef3c7; color: #92400e; }
 
-/* A CROSSING'S SENTENCE, hidden at rest and shown for the surface the reader picked. It FLOATS above
-   everything, so its width is free of the gutter's, and only one surface's labels ever show — which
-   is why overlaying its neighbours costs nothing. It wraps and is never elided: the longest sentence
-   across the two live maps is 144 characters and is drawn whole. It carries NO direction word, since
-   it rides its own wire and that wire has an arrowhead. */
-.ifd-elabel { position: absolute; display: none; z-index: 5; width: 320px;
+/* WHAT CROSSES, hidden at rest and shown for the surface the reader picked. ONE box per surface,
+   both directions inside it. It was one box PER DIRECTION, and on the ten two-way surfaces of MCP
+   Hero the pair stacked to 206px against a 109px card — twice the height of the thing it described.
+   Merged, a two-way surface costs one box and the stack is gone.
+   IT CARRIES THE DIRECTION WORD, which the split boxes did not have to: each rode its own wire and
+   that wire had one arrowhead. One merged wire has a head at each end and cannot say which sentences
+   are which, so the word moves into the text — the same `in` / `out`, in the same small caps, the
+   surface's own page already sets its crossings table in.
+   It FLOATS above everything, so its width is free of the gutter's, and only one surface's box ever
+   shows. It wraps and is never elided: the longest sentence across the two live maps is 144
+   characters and is drawn whole. */
+.ifd-elabel { position: absolute; display: none; z-index: 5; width: 300px;
               background: #fff; color: #1e2235; font-size: 11px; line-height: 1.4;
               padding: 7px 11px; border-radius: 9px; border: 1px solid #b9c0ee;
               box-shadow: 0 6px 22px rgba(30,34,53,.22); transform: translateY(-50%);
               cursor: default; }
 .ifd-elabel.ifd-lab-on { display: block; }
-/* THE TAIL, pointing back at the wire this label belongs to. A label is 320px wide and its wire spans
-   155px, so the label is twice the length of the line it is about and sits 6px off it — touching
+/* The two directions, one under the other, in the order the surface's own story takes them. A rule
+   between rather than a gap: the box holds two separate facts now, and a reader must not be able to
+   read the second direction's sentences as a continuation of the first's. */
+.ifd-elabel-row + .ifd-elabel-row { margin-top: 6px; padding-top: 6px; border-top: 1px solid #e4e7f4; }
+/* `in` / `out`, set exactly as `.if-dir` sets them on the surface's page: small caps, grey, so the
+   word marks the sentences without competing with them. */
+.ifd-elabel-dir { color: #6b7280; font-variant: small-caps; letter-spacing: .03em;
+                  font-weight: 700; margin-right: 6px; }
+/* `first` / `then`, in front of the direction word and lighter than it. The order used to be drawn —
+   the opening move was the upper of a surface's two wires — and a box has no upper and lower. It is
+   set a shade back so the pair reads as "first · in" and not as two labels of equal rank. */
+.ifd-elabel-ord { color: #9aa1b4; font-variant: small-caps; letter-spacing: .03em;
+                  margin-right: 5px; }
+/* THE TAIL, pointing back at the wire this label belongs to. A label is 300px wide and wider than
+   the gutter its wire leaves through, so it sits 6px off the line — touching
    nothing and pointing nowhere. The oldest "this belongs to that" mark there is, and it costs 8px.
    TWO TRIANGLES: the first is the outline, the second the fill, one pixel narrower and two shorter,
    so the tail carries the same border the label does instead of floating loose off it.

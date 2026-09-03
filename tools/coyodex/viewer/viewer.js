@@ -10357,8 +10357,12 @@ function ifaceDiagramHtml() {
     + 'markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
     + '<path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
     + col('ours', 'We define')
-    + `<div class="ifd-spine"><p class="ifd-colhead">${esc(GRAPH.title || 'the product')}</p>`
-    + '<div class="ifd-rule" id="ifdrule"></div></div>'
+    // THE PRODUCT, as one circle carrying its own name — no column heading above it. The middle used
+    // to be a heading over a full-height rule, and the heading was the shape's worst moment: a
+    // column title with an empty column under it for the whole length of the page. The name is
+    // inside the thing it names now, so there is nothing left to head.
+    + `<div class="ifd-spine"><div class="ifd-hub" id="ifdhub">`
+    + `<span>${esc(GRAPH.title || 'the product')}</span></div></div>`
     + col('theirs', 'We use')
     + '</div></div>';
 }
@@ -10377,10 +10381,16 @@ function wireCurveD(sx, sy, tx, ty) {
   const dx = Math.min(Math.max(Math.abs(ty - sy) * 0.55, 22), Math.max(span * 0.45, 8));
   return `M ${sx} ${sy} C ${sx + dir * dx} ${sy}, ${tx - dir * dx} ${ty}, ${tx} ${ty}`;
 }
-// How far above and below a card's middle the two crossing wires sit. They must never share a path:
-// the picture used to draw ONE curve and its exact reverse, so a reader saw a single line with a
-// head at each end, and the two sentences landed on the same spot.
-const IFACE_WIRE_GAP = 20;
+// ONE WIRE PER SURFACE, WITH A HEAD AT EACH END WHEN IT GOES BOTH WAYS. This is a reversal: the
+// picture drew a curve per direction, 20px either side of the card's middle, because a single
+// double-headed line left the two directions' sentences landing on the same spot. What makes the
+// single line work now is that there is only ONE box to land — both directions are inside it, each
+// under its own `first` / `then` and `in` / `out`. The heads say the shape of the exchange, the
+// words say which sentences belong to which head, and neither has to do the other's job.
+//
+// How far a wire's end sits from the hub's own edge. Zero, for the same reason a wire touches its
+// card: a line that stops short of the thing it points at is a line the reader has to join up.
+const IFACE_HUB_CLEARANCE = 0;
 // How many records a label names before it says "+n more". Three, the same cap the Features
 // page uses on its own wire labels.
 const IFACE_LABEL_REC_CAP = 3;
@@ -10497,8 +10507,8 @@ function bindIfaceDiagram(root) {
   const stage = root.querySelector('#ifdstage');
   if (!stage) return;
   const svg = stage.querySelector('svg.ifd-wires');
-  const rule = stage.querySelector('#ifdrule');
-  if (!svg || !rule) return;
+  const hub = stage.querySelector('#ifdhub');
+  if (!svg || !hub) return;
   // OFFSET geometry, not getBoundingClientRect: a render can arrive mid drill-animation, whose
   // ancestor transform skews client rects box by box while the animation runs. Offsets read the
   // settled layout regardless. Every box's offsetParent is the stage (the nearest positioned
@@ -10507,97 +10517,147 @@ function bindIfaceDiagram(root) {
   // either end: a line that stops short of the thing it points at is a line the reader has to join
   // up themselves.
   //
-  // THIS IS A REVERSAL AND THE COST IS KNOWN. The clearance was 14px, and it was there because the
+  // THIS IS A REVERSAL AND THE COST WAS KNOWN. The clearance was 14px, and it was there because the
   // picked card's border is 2px of the SAME indigo a lit wire is, running the card's whole height,
-  // with both wires leaving from inside that span — the three together read as one line bent twice.
-  // Nitsan asked for no gap after being shown that, twice; what carries it now is the 40px between
-  // the wires (`IFACE_WIRE_GAP`) and the labels no longer sitting at the card's edge to frame the
-  // shape. If the bracket ever comes back, it is this constant, and the fix is not to shrink it in
-  // silence.
+  // with the surface's TWO wires leaving from inside that span — the three together read as one line
+  // bent twice. Nitsan asked for no gap after being shown that, twice. The bracket cannot form at
+  // all now: a surface draws ONE wire, and one line off a border is a line, not a bracket.
   const CARD_CLEARANCE = 0;
-  const edge = (el, which, dy) => [
+  const edge = (el, which) => [
     which === 'left' ? el.offsetLeft - CARD_CLEARANCE
                      : el.offsetLeft + el.offsetWidth + CARD_CLEARANCE,
-    el.offsetTop + el.offsetHeight / 2 + (dy || 0)];
+    el.offsetTop + el.offsetHeight / 2];
   const paths = [], labels = [];
-  const wire = (from, to, iid) => {
+  // THE HEADS ARE THE ARGUMENT, not a decoration on a line that would exist anyway. A wire runs from
+  // the card to the product; a head at the product end means something crosses INWARD, a head at the
+  // card end means something crosses back OUT, and a surface that does both wears both. The marker
+  // is declared `orient="auto-start-reverse"`, which is what lets one definition serve both ends.
+  const wire = (from, to, iid, heads) => {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', wireCurveD(from[0], from[1], to[0], to[1]));
-    path.setAttribute('marker-end', 'url(#ifd-arr)');
+    if (heads.in) path.setAttribute('marker-end', 'url(#ifd-arr)');
+    if (heads.out) path.setAttribute('marker-start', 'url(#ifd-arr)');
     path.dataset.iface = iid;
     svg.appendChild(path); paths.push(path);
-    return [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
   };
   // THE LABEL STARTS WHERE ITS WIRE STARTS, and grows AWAY from the card. Centred on the wire's
-  // midpoint it straddled the card: 320px of label against a 155px gutter put 75px of it over the
+  // midpoint it straddled the card: 300px of label against a 130px gutter put a third of it over the
   // very box the reader had just picked, hiding the name and the people. Anchored, it overhangs the
   // middle and the far column instead — both dimmed while it shows, and neither is what the reader
   // is looking at. `x` is the wire's own end at the card; the side says which way to grow.
-  const label = (x, y, side, list, iid) => {
-    if (!list.length) return;
+  //
+  // ONE BOX PER SURFACE, holding A ROW PER DIRECTION. It was a box per direction, and on the ten
+  // two-way surfaces of MCP Hero the pair stacked to 206px against a 109px card — twice the height
+  // of the thing it described. The sentences inside each row are still `crossingLinesHtml`'s, so a
+  // crossing looks the same here as it does on an actor's page.
+  const label = (x, y, side, rows, iid) => {
+    if (!rows.length) return;
     const lab = document.createElement('div');
     lab.className = 'ifd-elabel';
     lab.dataset.iface = iid;
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
-    // THE RECORDS RIDE THEIR OWN SENTENCE, at the end of it — see crossingRecsHtml. They were a row
-    // of their own under the whole label, unioned across every sentence in the direction, which the
-    // map does not say and which left records on screen belonging to a sentence the cap had hidden.
-    lab.innerHTML = crossingLinesHtml(list, iid);
+    for (const r of rows) {
+      const row = document.createElement('div');
+      row.className = 'ifd-elabel-row';
+      row.dataset.dir = r.dir;
+      // WHO MOVES FIRST, said in words. The old picture said it with POSITION — the opening move was
+      // the upper of a surface's two wires — and a reader could see it without being told. Two rows
+      // stacked in one box have no upper and lower, only first and second, and two rows of equal
+      // weight read as a table of facts rather than as a sequence. `first` / `then` is the order put
+      // back, and it is the plainest pair of words there is for it.
+      // ONLY WHERE THERE IS AN ORDER: a surface carrying one direction shows the direction alone,
+      // because "first" with nothing after it is a promise the box does not keep.
+      if (rows.length > 1) {
+        const ord = document.createElement('span');
+        ord.className = 'ifd-elabel-ord';
+        ord.textContent = r === rows[0] ? 'first' : 'then';
+        row.appendChild(ord);
+      }
+      // THE DIRECTION WORD, which the split boxes did not need: each rode its own wire and that wire
+      // had one arrowhead. One merged wire has a head at BOTH ends and cannot say which sentences
+      // belong to which, so `in` and `out` move into the text — the same two words, in the same
+      // small caps, the surface's own page already sets its crossings table in.
+      const dir = document.createElement('span');
+      dir.className = 'ifd-elabel-dir';
+      dir.textContent = r.dir;
+      row.appendChild(dir);
+      // THE RECORDS RIDE THEIR OWN SENTENCE, at the end of it — see crossingRecsHtml. They were a row
+      // of their own under the whole label, unioned across every sentence in the direction, which the
+      // map does not say and which left records on screen belonging to a sentence the cap had hidden.
+      const lines = document.createElement('span');
+      lines.className = 'ifd-what-lines';
+      lines.innerHTML = crossingLinesHtml(r.list, iid);
+      row.appendChild(lines);
+      lab.appendChild(row);
+    }
     lab.style.top = y + 'px';
     // Not a door, but not empty background either: a click on it must not clear the pin.
     lab.addEventListener('click', (ev) => ev.stopPropagation());
     stage.appendChild(lab); labels.push(lab);
   };
-  const px = rule.offsetLeft + rule.offsetWidth / 2;
+  // THE PRODUCT'S CIRCLE, in stage space: centre and radius. The radius is read from the laid-out
+  // element rather than hard-coded beside the stylesheet's, so the two can never drift apart.
+  const hcx = hub.offsetLeft + hub.offsetWidth / 2;
+  const hcy = hub.offsetTop + hub.offsetHeight / 2;
+  const hr = hub.offsetWidth / 2 + IFACE_HUB_CLEARANCE;
+  // WHERE ON THE CIRCLE a card's wire lands: straight out from the centre towards the card, so every
+  // wire arrives along a radius and no two of them cross inside the shape. A card sitting exactly on
+  // the centre would divide by zero, which cannot happen (the columns are either side of the hub)
+  // but is guarded anyway so a degenerate layout draws a line rather than throwing.
+  const hubPoint = (tx, ty) => {
+    const dx = tx - hcx, dy = ty - hcy;
+    const d = Math.hypot(dx, dy) || 1;
+    return [hcx + (dx / d) * hr, hcy + (dy / d) * hr];
+  };
   for (const i of ifaceList()) {
     const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(i.id)}"]`);
     if (!box) continue;
-    const ours = i.side === 'ours';
-    const boxSide = ours ? 'right' : 'left';
+    const boxSide = i.side === 'ours' ? 'right' : 'left';
     const mid = box.offsetTop + box.offsetHeight / 2;
+    // A DIRECTION WITH NOTHING CROSSING GETS NO ARROWHEAD. Guarding on the sentences rather than
+    // drawing both heads and letting the empty row fall away: a head with no sentence behind it is a
+    // claim the reader can hover and get nothing from, and half the surfaces on both live maps carry
+    // one direction only.
+    //
+    // THE OPENING MOVE LEADS THE BOX, so the two directions read in the order they happen. `opens`
+    // is derived (see InterfaceFacts): a way in is an address something outside invokes.
+    const order = i.opens === 'in' ? ['in', 'out'] : ['out', 'in'];
+    const rows = order.map((dir) => ({ dir, list: crossingsOf(i, dir) }))
+                      .filter((r) => r.list.length);
+    if (!rows.length) continue;
+    const from = edge(box, boxSide);
+    const heads = { in: rows.some((r) => r.dir === 'in'), out: rows.some((r) => r.dir === 'out') };
     // ONE RULE FOR BOTH SHORES: `in` points AT the product, `out` points away from it. That reads
     // the same whichever side you are looking at, so nobody has to remember which half they are in.
-    // Both shores land on the SAME line, from opposite directions — it is one edge, not two.
-    //
-    // THE OPENING MOVE IS THE UPPER WIRE, so the pair reads down the page in the order it happens.
-    // `opens` is derived (see InterfaceFacts): a way in is an address something outside invokes.
-    const dy = (dir) => (i.opens === dir ? -IFACE_WIRE_GAP : IFACE_WIRE_GAP);
-    const draw = {
-      in: (t) => { wire(edge(box, boxSide, dy('in')), [px, mid + dy('in')], i.id);
-                   label(edge(box, boxSide)[0], mid + dy('in'), i.side, t, i.id); },
-      out: (t) => { wire([px, mid + dy('out')], edge(box, boxSide, dy('out')), i.id);
-                    label(edge(box, boxSide)[0], mid + dy('out'), i.side, t, i.id); },
-    };
-    // A DIRECTION WITH NOTHING CROSSING DRAWS NO WIRE. Guarding on the merged sentence rather than
-    // drawing both and letting the label fall away: a wire with no label is a line the reader can
-    // hover and get nothing from, and half the surfaces on both live maps carry one direction only.
-    for (const dir of (i.opens === 'in' ? ['in', 'out'] : ['out', 'in'])) {
-      const t = crossingsOf(i, dir);
-      if (t.length) draw[dir](t);
-    }
+    // The wire is always drawn card→product, so `in` is its end head and `out` its start head.
+    wire(from, hubPoint(from[0], from[1]), i.id, heads);
+    label(from[0], mid, i.side, rows, i.id);
   }
-  // Each label is pushed clear of its own wire, the upper one up and the lower one down, so the two
-  // of one surface never touch and each stays nearest the line it belongs to.
+  // The label is pushed clear of its own wire, so the sentences never sit on the line they are about.
+  // BELOW BY DEFAULT, and above only when below would run off the bottom of the picture: with one
+  // box per surface there is no second one to make room for, so the only constraint left is the
+  // stage's own edge — a sentence half outside the scroll area is a sentence the reader has to hunt.
   //
   // MEASURED WITH THE LABEL LAID OUT. A `display: none` element has no box at all, so `offsetHeight`
   // reads 0 and every label shifts by the same amount — which is how two of them stayed on top of
   // each other through a first attempt at this. `visibility: hidden` lays it out without painting.
-  const LABEL_GAP = 4;
+  const LABEL_GAP = 4, WIRE_GAP = 6;
   for (const lab of labels) {
-    const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(lab.dataset.iface)}"]`);
-    if (!box) continue;
     lab.style.visibility = 'hidden'; lab.style.display = 'block';
     const h = lab.offsetHeight, w = lab.offsetWidth;
     lab.style.display = ''; lab.style.visibility = '';
     const anchor = parseFloat(lab.dataset.anchor);
     lab.style.left = (lab.dataset.side === 'ours' ? anchor + LABEL_GAP
                                                   : anchor - LABEL_GAP - w) + 'px';
-    const up = parseFloat(lab.style.top) < box.offsetTop + box.offsetHeight / 2;
+    // `top` is the wire's own height and the box is centred on it (`translateY(-50%)`), so pushing
+    // down by half the height plus the gap puts its TOP edge that gap below the line.
+    const mid = parseFloat(lab.style.top);
+    const down = mid + WIRE_GAP + h <= stage.offsetHeight;
     // …and the TAIL points back at the wire the label was moved off. Named for where it POINTS, not
-    // for where the label sits: the upper label's tail points down, the lower one's points up.
-    lab.classList.add(up ? 'ifd-tail-down' : 'ifd-tail-up');
-    lab.style.top = (parseFloat(lab.style.top) + (up ? -(h / 2 + 6) : (h / 2 + 6))) + 'px';
+    // for where the label sits: a box below the line has its tail on top, pointing up.
+    lab.classList.add(down ? 'ifd-tail-up' : 'ifd-tail-down');
+    lab.style.top = (mid + (down ? (h / 2 + WIRE_GAP) : -(h / 2 + WIRE_GAP))) + 'px';
   }
   bindSurfacePick(stage, paths, labels);
   bindMoreTails(stage);
