@@ -872,8 +872,9 @@ def interface_walk_order(m: ProjectModel) -> dict[str, int]:
     return first
 
 
-def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
-    """Per interface, WHO is on the far side of it. DERIVED, never authored — so the two can never
+def interface_actor_use_cases(m: ProjectModel) -> dict[str, dict[str, list[str]]]:
+    """Per interface, WHO is on the far side of it AND which use cases bring them there. DERIVED,
+    never authored — so the two can never
     contradict, which is the same rule `capability_audience` one function up was built on.
 
     An authored field was designed and then dropped: it was mostly unfilled (0 of coyodex's 11
@@ -925,26 +926,42 @@ def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
     #: The DOOR arm, keyed by interface id and holding ROLE ids directly — not use-case ids like the
     #: other two arms, because a door names the role itself and does not need the use case's actor
     #: list to reach one.
-    doors: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    #: …and WHICH WALKS doored it, so a caller can say not only who stands at a surface but what
+    #: brings them. A door names one role in one walk, so this is the finest grain the map holds.
+    door_ucs: dict[str, dict[str, set[str]]] = {i.id: {} for i in m.interfaces}
     for f in m.flows:
         for st in expanded_flow_steps(m, f):
             for near, far in ((st.src, st.dst), (st.dst, st.src)):
                 if near in iface_ids:
                     broad[near].add(f.uc)
                     if far in role_ids:
-                        doors[near].add(far)
+                        door_ucs[near].setdefault(far, set()).add(f.uc)
                 for iid in dep_iface.get(near, ()):
                     broad[iid].add(f.uc)
     uc_actors = {u.id: [a for a in (u.actors or ()) if a in role_ids] for u in m.use_cases}
-    out: dict[str, list[str]] = {}
+    out: dict[str, dict[str, list[str]]] = {}
     for i in m.interfaces:
         kind = grammar.canonical_interface_kind(i.kind)
         if i.side == "theirs":
             ucs = broad[i.id] if kind in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO else set()
         else:
             ucs = narrow[i.id]
-        out[i.id] = sorted_ids(doors[i.id] | {a for u in ucs for a in uc_actors.get(u, ())})
+        per: dict[str, set[str]] = {}
+        # The two use-case arms name the role THROUGH the use case, so the use case comes with it.
+        for u in ucs:
+            for a in uc_actors.get(u, ()):
+                per.setdefault(a, set()).add(u)
+        # The door arm names the role directly, and its own use cases are the walks that doored it.
+        for a, ucs_at_door in door_ucs[i.id].items():
+            per.setdefault(a, set()).update(ucs_at_door)
+        out[i.id] = {a: sorted_ids(per[a]) for a in sorted_ids(set(per))}
     return out
+
+
+def interface_actors(m: ProjectModel) -> dict[str, list[str]]:
+    """Just the names, for every caller that does not need the use cases behind them. One
+    derivation, read two ways — a second copy of this join is exactly the drift the module forbids."""
+    return {iid: list(per) for iid, per in interface_actor_use_cases(m).items()}
 
 
 def capability_elements(m: ProjectModel) -> dict[str, set[str]]:

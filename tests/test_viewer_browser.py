@@ -636,14 +636,20 @@ def test_a_surface_a_person_goes_to_draws_the_person_and_one_we_merely_call_draw
 
 
 def _two_sided_interfaces() -> Any:
-    """Two surfaces, one on each shore, one of them carrying BOTH directions.
+    """Two surfaces, one on each shore, and BOTH SHAPES the page has to draw: one people come to, one
+    only the product reaches.
 
-    Both-direction is the common case, not a corner: 4 of coyodex's 11 surfaces and 7 of mcpolis's
-    12 carry two crossings, and two wires joining the same pair of edges have the same midpoint."""
+    I1 holds a way in, so use cases and the people driving them derive onto it. I2 stands on a dep a
+    walk step is drawn at, so journeys reach it with nobody at the far side — 5 of MCP Hero's 16 are
+    like that, and the box says something different for each."""
     def mutate(m: dict) -> None:
+        m["entry_points"][0]["id"] = "EP1"
+        for u in m["use_cases"]:
+            if u["id"] in ("UC1", "UC2"):
+                u["entry_points"] = ["EP1"]
         m["interfaces"] = [
             {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
-             "side": "ours", "facing": "user", "kind": "screen",
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"],
              "carries": [{"direction": "in", "what": "what the person asks for", "elements": []},
                          {"direction": "out", "what": "the page they get back", "elements": []}]},
             {"id": "I2", "name": "Crash reporting", "what": "Where a crash is reported.",
@@ -656,40 +662,38 @@ def _two_sided_interfaces() -> Any:
     return mutate
 
 
-def test_a_surface_draws_one_wire_and_wears_a_head_per_direction_it_carries() -> None:
-    """ONE WIRE PER SURFACE, and the HEADS are what say which way things cross. A surface that
-    answers as well as asks wears a head at each end; one that only asks wears one.
+def test_every_surface_draws_one_plain_line_to_the_product() -> None:
+    """ONE LINE PER SURFACE, and it says only that this surface is one of the places the product
+    meets the outside.
 
-    This was two wires 20px either side of the card's middle, and the merge is only safe because the
-    sentences merged with it: a double-headed line whose two labels landed on the same spot was the
-    reason the pair was split in the first place."""
+    NO HEADS. They carried the crossings' `in` and `out`, and the page stopped reading the crossings:
+    what data moves turned out to be a written summary of what the walks already show, so the page
+    reads the walks instead. Deriving a head from the walks would be a guess dressed as a fact —
+    they disagree with the map's own answer on one of MCP Hero's sixteen surfaces."""
     with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
-        wires = page.evaluate("""() => {
+        got = page.evaluate("""() => {
             const out = {};
             for (const p of document.querySelectorAll('#ifdstage path[data-iface]'))
                 (out[p.dataset.iface] = out[p.dataset.iface] || []).push({
-                    into: !!p.getAttribute('marker-end'),      // points AT the product: `in`
-                    back: !!p.getAttribute('marker-start') });  // points back at the card: `out`
-            return out;
+                    start: !!p.getAttribute('marker-start'),
+                    end: !!p.getAttribute('marker-end') });
+            return { wires: out,
+                     cards: [...document.querySelectorAll('.ifd-box')].map(b => b.dataset.iface) };
         }""")
-        # Whatever it carries, a surface is ONE line. The direction lives in the heads, never in the
-        # count — a reader who sees two lines leaving one card reads two crossings, not one exchange.
-        assert len(wires["I1"]) == 1, wires
-        assert len(wires["I2"]) == 1, wires
-        # I1 carries both directions, so both ends are pointed. I2 carries one, so ONE end is: a head
-        # with no sentence behind it is a claim the reader can hover and get nothing from, and half
-        # the surfaces on both live maps carry one direction only.
-        assert wires["I1"][0] == {"into": True, "back": True}, wires
-        assert sorted(wires["I2"][0].values()) == [False, True], wires
+        # EVERY card is joined, including one no use case reaches — the line is membership, not traffic
+        for iid in got["cards"]:
+            assert len(got["wires"].get(iid, [])) == 1, (iid, got)
+            assert got["wires"][iid][0] == {"start": False, "end": False}, (iid, got)
         assert not page.js_errors, page.js_errors
 
 
-def test_hovering_a_surface_lights_its_wire_and_opens_its_one_box_of_crossings() -> None:
-    """At rest every wire is grey and unlabelled. Hover makes ONE surface the picture — and its
-    crossings arrive as ONE box holding a row per direction, not as a box per direction. The pair
-    used to stack to 206px against a 109px card on the live map; merged, every sentence is still
-    there and the stack is gone."""
+def test_hovering_a_surface_lights_its_line_and_says_who_comes_and_what_for() -> None:
+    """At rest every line is grey and unlabelled. Hover makes ONE surface the picture, and its box
+    answers the page's question for that surface: who comes here, and what brings them.
+
+    It used to say what DATA crosses. That is authored on the surface, and it is a written summary of
+    what the walks already show — so the page reads the walks, and the two can no longer drift."""
     with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         page.hover('.ifd-box[data-iface="I1"]')
@@ -702,14 +706,93 @@ def test_hovering_a_surface_lights_its_wire_and_opens_its_one_box_of_crossings()
                 cold: [...document.querySelectorAll('#ifdstage path.ifd-cold')]
                         .map(p => p.dataset.iface),
                 labels: on.length,
-                rows: on.flatMap(l => [...l.querySelectorAll('.ifd-elabel-row')]
-                                        .map(r => r.dataset.dir)),
+                heads: on.flatMap(l => [...l.querySelectorAll('.ifd-elabel-dir')]
+                                        .map(e => e.textContent)),
+                doors: on.flatMap(l => [...l.querySelectorAll('.ifd-elabel-uc')]
+                                        .map(e => e.textContent)),
             };
         }""")
         assert set(shown["hot"]) == {"I1"}, shown
         assert set(shown["cold"]) == {"I2"}, shown
-        assert shown["labels"] == 1, shown             # one box…
-        assert sorted(shown["rows"]) == ["in", "out"], shown   # …holding both directions
+        assert shown["labels"] == 1, shown
+        # a heading per person, naming them and counting what brings them
+        assert shown["heads"] and all("use case" in h for h in shown["heads"]), shown
+        # …and each use case under it is a door
+        assert shown["doors"], shown
+        assert not page.js_errors, page.js_errors
+
+
+def test_what_we_own_holds_the_product_and_our_surfaces_and_keeps_its_distance() -> None:
+    """The dashed box makes a claim, and it is asserted as a claim rather than as a drawing: the
+    product and every surface we define are inside it, every surface we use is outside.
+
+    A ring around the CIRCLE alone was built first and was false — the map's own words say an
+    our-surface is one whose shape we define, so our dashboard and our command line ARE the product,
+    and a ring left them outside it.
+
+    AND IT KEEPS ITS DISTANCE. Stretched to the grid it drew its left border exactly on the cards'
+    left edge and its top border through the `We define` heading, and its own title fell off the top
+    of what the page will paint. `.ifd-wrap` is what clips the picture, so the room it needs had to
+    come from there without moving the stage — the cards still share the breadcrumb's left edge.
+
+    Three widths, because the gutters are `1fr`: a fixed width was right at 1440 and ran across the
+    cards at 1024."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        for width in (1440, 1280, 1024):
+            page.set_viewport_size({"width": width, "height": 900})
+            _settle(page)
+            m = page.evaluate("""() => {
+                const own = document.querySelector('.ifd-own');
+                const o = own.getBoundingClientRect();
+                const inside = (r) => r.left >= o.left && r.right <= o.right
+                                   && r.top >= o.top && r.bottom <= o.bottom;
+                const rects = (sel) => [...document.querySelectorAll(sel + ' .ifd-box')]
+                    .map(c => c.getBoundingClientRect());
+                const t = rects('.ifd-col-theirs');
+                const stage = document.getElementById('ifdstage');
+                const wrap = stage.parentElement;
+                const w = wrap.getBoundingClientRect();
+                const title = own.querySelector('span').getBoundingClientRect();
+                const card = rects('.ifd-col-ours')[0];
+                const head = document.querySelector('.ifd-col-ours .ifd-colhead')
+                    .getBoundingClientRect();
+                return {
+                    holdsHub: inside(document.getElementById('ifdhub').getBoundingClientRect()),
+                    ours: rects('.ifd-col-ours').map(inside),
+                    // a their-surface must be wholly clear of it, not merely not-contained
+                    theirsClear: t.every(r => r.left >= o.right),
+                    hits: getComputedStyle(own).pointerEvents,
+                    gapLeft: card.left - o.left,
+                    gapRight: t.length ? t[0].left - o.right : 99,
+                    belowHeading: o.top - head.bottom,
+                    cardsSetTheTop:
+                        document.querySelector('.ifd-col-ours .ifd-box').offsetTop
+                        <= document.getElementById('ifdhub').offsetTop,
+                    aboveFirstCard: card.top - o.top,
+                    // `.ifd-wrap` is what clips, so "drawn whole" means inside ITS box
+                    titleWhole: title.top >= w.top && title.bottom <= w.bottom
+                             && title.left >= w.left && title.right <= w.right,
+                    noScroll: wrap.scrollWidth === wrap.clientWidth
+                           && wrap.scrollHeight === wrap.clientHeight,
+                    // …and the picture still starts where the rest of the page does
+                    stageLeft: Math.round(stage.getBoundingClientRect().left),
+                };
+            }""")
+            assert m["holdsHub"], (width, m)
+            assert m["ours"] and all(m["ours"]), (width, m)
+            assert m["theirsClear"], (width, m)
+            assert m["hits"] == "none", (width, m)   # it must not eat the click that drops the pin
+            assert m["gapLeft"] >= 10, (width, m)
+            assert m["gapRight"] >= 10, (width, m)
+            assert m["aboveFirstCard"] >= 6, (width, m)
+            # THE HEADING IS ONLY CLEARED WHERE THE CARDS SET THE TOP. On a picture this short the
+            # circle is the tallest thing in it and starts at the stage's own edge, so holding the
+            # product wins and the heading ends up inside the box — which is not wrong, since the
+            # surfaces `We define` heads are the product too.
+            if m["cardsSetTheTop"]:
+                assert m["belowHeading"] >= 6, (width, m)
+            assert m["titleWhole"], (width, m)
+            assert m["noScroll"], (width, m)
         assert not page.js_errors, page.js_errors
 
 
@@ -1300,7 +1383,7 @@ def test_an_actors_surfaces_picture_lines_each_one_up_with_what_they_reach_there
         assert not page.js_errors, page.js_errors
 
 
-def test_an_actor_at_no_surface_says_so_and_the_products_own_work_says_why() -> None:
+def test_an_actor_at_no_interface_says_so_and_the_products_own_work_says_why() -> None:
     """Two different facts, two different sentences. An actor the map puts at no surface is a plain
     absence; the product's OWN scheduled work — a service role that is internal — is inside the
     product and crosses nothing, which is a complete answer. One sentence for both would report the
@@ -1310,7 +1393,7 @@ def test_an_actor_at_no_surface_says_so_and_the_products_own_work_says_why() -> 
     with _served_map(outsider) as url, _page(url + "#v=actor&act=Superadmin") as page:
         _settle(page)
         text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
-        assert "No surface in this map has this actor standing at it." in text, text
+        assert "No interface in this map has this actor standing at it." in text, text
         assert not page.js_errors, page.js_errors
 
     def inside(m: dict) -> None:
@@ -1321,7 +1404,7 @@ def test_an_actor_at_no_surface_says_so_and_the_products_own_work_says_why() -> 
     with _served_map(inside) as url, _page(url + "#v=actor&act=Superadmin") as page:
         _settle(page)
         text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
-        assert "crosses no surface" in text, text
+        assert "crosses no interface" in text, text
         assert not page.js_errors, page.js_errors
 
 
@@ -1384,83 +1467,92 @@ def test_the_picture_reads_down_in_the_order_the_walk_touches_each_surface() -> 
         assert not page.js_errors, page.js_errors
 
 
-def test_the_opening_move_leads_the_box_and_says_it_is_the_opening_move() -> None:
-    """Who speaks first is written now, not drawn. A WAY IN is an address something outside invokes,
-    so a surface holding one is opened from outside and its `in` row leads; a surface holding none is
-    one the product reaches for, so its `out` row does.
+def test_the_people_at_a_surface_are_ordered_by_the_happy_path() -> None:
+    """Surfaces are sorted by where the product's own story first reaches them, and so are the people
+    inside each one. On MCP Hero's dashboard that is Visitor, then Organization admin, then Team
+    member — the sequence the story takes, not the alphabet and not who is busiest.
 
-    EACH ROW CARRIES ITS DIRECTION WORD. The two sentences used to ride two wires with one arrowhead
-    each, so the word would have restated what the reader could see. One merged wire has a head at
-    BOTH ends and cannot say which sentences belong to which, so `in` and `out` move into the text —
-    the same two words the surface's own page sets its crossings table in.
-
-    AND THE ORDER IS MARKED `first` / `then`. Order alone does not read as order: the picture used to
-    say it with POSITION — the opening move was the upper wire — and two rows of equal weight in one
-    box read as a table of facts, not as a sequence."""
+    Ordering by size was tried first and reads as a ranking, which is a claim the map does not make.
+    The story order is a fact it does."""
     def mutate(m: dict) -> None:
-        both = [{"direction": "in", "what": "what the caller asks for", "elements": []},
-                {"direction": "out", "what": "the answer it gets back", "elements": []}]
-        # The committed fixture's entry points carry no ids, so one is named here. A way in has to be
-        # a REAL entry point of the map: `ways_in` is what the derivation reads, and a made-up id
-        # would make this test pass against a surface the map does not actually hold a way into.
+        # Two of the fixture's own use cases on one surface, driven by two different people. The
+        # happy path takes UC1 (Org creator) before UC2 (Org admin), and the ALPHABET takes them the
+        # other way round — so a page sorted by name and a page sorted by the story disagree here.
         m["entry_points"][0]["id"] = "EP1"
+        for u in m["use_cases"]:
+            if u["id"] in ("UC1", "UC2"):
+                u["entry_points"] = ["EP1"]
         m["interfaces"] = [
-            {"id": "I1", "name": "Opened from outside", "what": "It holds a way in.",
-             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"],
-             "carries": list(both)},
-            {"id": "I2", "name": "We reach for it", "what": "It holds none.",
-             "side": "theirs", "facing": "user", "kind": "api", "carries": list(both)},
+            {"id": "I1", "name": "The door", "what": "One surface.", "side": "ours",
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
-        got = page.evaluate("""() => {
-            const out = {};
-            for (const id of ['I1', 'I2']) {
-                const ls = [...document.querySelectorAll('.ifd-elabel')]
-                    .filter(l => l.dataset.iface === id);
-                const rows = [...ls[0].querySelectorAll('.ifd-elabel-row')];
-                out[id] = { boxes: ls.length,
-                            dirs: rows.map(r => r.dataset.dir),
-                            words: rows.map(r => r.querySelector('.ifd-elabel-dir').textContent),
-                            ords: rows.map(r => { const o = r.querySelector('.ifd-elabel-ord');
-                                                  return o ? o.textContent : null; }),
-                            texts: rows.map(r => [...r.querySelectorAll('.ifd-what-line')]
-                                                   .map(e => e.textContent)) };
-            }
-            return out;
-        }""")
-        for id_ in ("I1", "I2"):
-            assert got[id_]["boxes"] == 1, got            # one box, whatever it carries
-            assert got[id_]["ords"] == ["first", "then"], got
-        # I1 holds a way in, so the incoming row leads. I2 holds none, so the outgoing one does.
-        assert got["I1"]["dirs"] == ["in", "out"], got
-        assert got["I2"]["dirs"] == ["out", "in"], got
-        # …and the word is really ON each row, not merely implied by its position.
-        assert got["I1"]["words"] == ["in", "out"], got
-        assert got["I2"]["words"] == ["out", "in"], got
-        assert got["I1"]["texts"] == [["what the caller asks for"],
-                                      ["the answer it gets back"]], got
+        page.hover('.ifd-box[data-iface="I1"]')
+        page.wait_for_timeout(250)
+        got = page.evaluate("""() => ({
+            chips: [...document.querySelectorAll('.ifd-box[data-iface="I1"] .ifd-chip-actor')]
+                     .map(e => e.textContent.trim()),
+            heads: [...document.querySelectorAll('.ifd-elabel.ifd-lab-on .ifd-elabel-dir')]
+                     .map(e => e.textContent),
+        })""")
+        # `Org admin` wins the alphabet; `Org creator` comes first on the story, and wins here.
+        assert got["chips"] == ["Org creator", "Org admin"], got
+        assert [h.split(" ·")[0] for h in got["heads"]] == ["Org creator", "Org admin"], got
         assert not page.js_errors, page.js_errors
 
 
-def test_a_surface_carrying_one_direction_is_not_marked_first() -> None:
-    """`first` is a promise that something follows it. A surface with one direction has nothing to
-    follow, so its single row carries the direction word alone."""
+def test_a_surface_no_use_case_reaches_is_drawn_quiet_and_sorted_last() -> None:
+    """Three of MCP Hero's sixteen surfaces are named by no use case at all. A surface off the happy
+    path but used by some journey is still part of the product's work; one no journey names is a
+    different thing, and both the order and the drawing say so.
+
+    Zero is A REAL ANSWER, said in words rather than as an empty space."""
     def mutate(m: dict) -> None:
+        m["entry_points"][0]["id"] = "EP1"
+        for u in m["use_cases"]:
+            if u["id"] == "UC1":
+                u["entry_points"] = ["EP1"]
         m["interfaces"] = [
-            {"id": "I1", "name": "One way only", "what": "It only reports.", "side": "theirs",
-             "facing": "operator", "kind": "api",
-             "carries": [{"direction": "out", "what": "what went wrong", "elements": []}]},
+            {"id": "I1", "name": "Untouched", "what": "No journey names it.", "side": "ours",
+             "facing": "user", "kind": "screen", "carries": []},
+            {"id": "I2", "name": "Used", "what": "A journey comes here.", "side": "ours",
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
-        got = page.evaluate("""() => {
-            const l = document.querySelector('.ifd-elabel');
-            return { rows: l.querySelectorAll('.ifd-elabel-row').length,
-                     ords: l.querySelectorAll('.ifd-elabel-ord').length,
-                     dirs: [...l.querySelectorAll('.ifd-elabel-dir')].map(e => e.textContent) };
-        }""")
-        assert got == {"rows": 1, "ords": 0, "dirs": ["out"]}, got
+        got = page.evaluate("""() => ({
+            order: [...document.querySelectorAll('.ifd-col-ours .ifd-box')]
+                     .map(b => b.dataset.iface),
+            quiet: [...document.querySelectorAll('.ifd-col-ours .ifd-box')]
+                     .map(b => b.classList.contains('ifd-box-quiet')),
+            pills: [...document.querySelectorAll('.ifd-col-ours .ifd-box')]
+                     .map(b => { const e = b.querySelector('.ifd-ucs');
+                                 return e ? e.textContent : null; }),
+        })""")
+        # the used one leads, the untouched one is last and drawn quiet
+        assert got["order"] == ["I2", "I1"], got
+        assert got["quiet"] == [False, True], got
+        # …and NONE draws no pill at all: a label for an absence is one more thing to read
+        assert got["pills"] == ["1 use case", None], got
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_surfaces_own_page_does_not_repeat_its_name_on_every_crossing() -> None:
+    """Same two verbs, and the subject is left out where the screen has already said it: a surface's
+    own page is about one surface, so naming it on every row would repeat the page's own title."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
+             "facing": "user", "kind": "screen",
+             "carries": [{"direction": "in", "what": "what is asked", "elements": []},
+                         {"direction": "out", "what": "what comes back", "elements": []}]},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces&iface=I1") as page:
+        _settle(page)
+        got = page.evaluate(
+            "() => [...document.querySelectorAll('.if-dir')].map(e => e.textContent)")
+        assert got == ["receives", "sends"], got
         assert not page.js_errors, page.js_errors
 
 
@@ -1474,13 +1566,21 @@ def test_a_surfaces_wire_reaches_its_card_and_lands_on_the_product() -> None:
     cannot form at all.
 
     AT THE PRODUCT: on the circle's edge, along a radius. Aimed anywhere else the lines would cross
-    inside the shape, and a hub with lines crossing through it stops reading as one thing."""
+    inside the shape, and a hub with lines crossing through it stops reading as one thing.
+
+    AND NO HEADS AT EITHER END. They carried the crossings' two directions, and the page no longer
+    reads those — a head derived instead from the walks would be a guess dressed as a fact."""
     def mutate(m: dict) -> None:
+        # A WAY IN, so a use case reaches it: the box is drawn for what comes through a surface, and
+        # a surface nothing reaches is given no box at all.
+        m["entry_points"][0]["id"] = "EP1"
+        for u in m["use_cases"]:
+            if u["id"] == "UC1":
+                u["entry_points"] = ["EP1"]
         m["interfaces"] = [
             {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
-             "side": "ours", "facing": "user", "kind": "screen",
-             "carries": [{"direction": "in", "what": "what is asked", "elements": []},
-                         {"direction": "out", "what": "what comes back", "elements": []}]},
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"],
+             "carries": []},
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
@@ -1504,7 +1604,7 @@ def test_a_surfaces_wire_reaches_its_card_and_lands_on_the_product() -> None:
                      borderW: getComputedStyle(b).borderRightWidth };
         }""")
         assert got["wires"] == 1, got
-        assert got["heads"] == [True, True], got     # both ways, so both ends are pointed
+        assert got["heads"] == [False, False], got   # a plain line: membership, not traffic
         # It REACHES its card — no gap to join up by eye.
         assert got["startGap"] <= 1, got
         # …and it LANDS ON the product, on the circle itself rather than short of it or inside it.
@@ -1604,22 +1704,22 @@ def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
     """The label used to straddle its wire's midpoint. At 320px against a 155px gutter that put 75px
     of it over the very box the reader had just picked, hiding the name and the people.
 
-    It now starts where its wire starts and grows AWAY from the card, overhanging the middle and the
+    It now starts where its line starts and grows AWAY from the card, overhanging the middle and the
     far column instead — both dimmed while it shows, and neither is what the reader is looking at.
-    ONE box per surface, so what is asserted is that the single box clears the card on both shores."""
+    ONE box per interface, so what is asserted is that the single box clears the card on both
+    shores."""
     def mutate(m: dict) -> None:
-        # BOTH directions on BOTH shores, so the box is at its TALLEST and the test sees both growth
-        # directions. `_both_shores_carry_people_and_a_pipe` carries one crossing each, which would
-        # have let this pass against the smallest box the picture can draw.
-        both = [{"direction": "in", "what": "what the caller asks for, at some length so the label "
-                                            "is wide enough to reach the card", "elements": []},
-                {"direction": "out", "what": "the answer it gets back, also long enough to matter "
-                                             "when it is placed", "elements": []}]
+        # ONE ON EACH SHORE, each with a way in so a use case reaches it — an interface nothing
+        # reaches gets no box, and this test is about where a box goes.
+        m["entry_points"][0]["id"] = "EP1"
+        m["entry_points"][1]["id"] = "EP2"
+        m["use_cases"][0]["entry_points"] = ["EP1"]
+        m["use_cases"][1]["entry_points"] = ["EP2"]
         m["interfaces"] = [
             {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
-             "facing": "user", "kind": "screen", "carries": list(both)},
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
             {"id": "I2", "name": "Theirs", "what": "On theirs.", "side": "theirs",
-             "facing": "user", "kind": "api", "carries": list(both)},
+             "facing": "user", "kind": "hosted-screen", "ways_in": ["EP2"], "carries": []},
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
@@ -1652,68 +1752,41 @@ def _crossing_naming_a_record() -> Any:
     return mutate
 
 
-def test_a_record_on_a_label_is_a_door_and_its_tooltip_is_what_the_record_MEANS() -> None:
-    """The records a crossing carries, at the END OF ITS OWN SENTENCE and on the same line, each a
-    door — the same treatment and the same three-deep cap the Features page gives a feature's records
-    on its own wire labels, so one record looks and behaves the same wherever a line names it.
+def test_a_use_case_on_the_box_is_a_door_and_the_rest_are_counted() -> None:
+    """The box lists what brings each person here, and every one of them is a screen of its own — the
+    same treatment the records it used to list already had.
 
-    THEY BELONG TO ONE CROSSING, not to a direction. `elements` sits on each crossing and the picture
-    used to union them across every sentence in a direction and draw one row underneath: measured
-    across the six maps, 15 of the 17 groups with more than one sentence give those sentences
-    DIFFERENT records, and on 5 groups the row listed records belonging only to a sentence the cap
-    had hidden — a record on screen with nothing it answered to.
-
-    The tooltip is the record's own MEANING, not "Show X in context": that restated the underline,
-    and a reader hovering a record wants to know what the record is. It comes from `cardFacts`, so
-    the tooltip and the record's own card cannot say different things.
-
-    It is THE APP'S tooltip, not the browser's `title`. A native tooltip's delay belongs to the
-    browser — about a second, and nothing in the viewer can shorten it. This one is ours and waits
-    half as long as an action icon's, which is asserted here by hovering and watching the clock."""
-    with _served_map(_crossing_naming_a_record()) as url, _page(url + "#v=interfaces") as page:
+    CAPPED AT THREE, with a tail that SAYS how many are held back. MCP Hero's dashboard brings its
+    admin through 27 use cases; a box that listed them all would be taller than the picture, and one
+    that showed three and stopped would be lying by omission. The tail is the shared `+n more`, the
+    one look every capped list in this viewer uses."""
+    def mutate(m: dict) -> None:
+        # Five use cases through one surface, all driven by the same person: more than the cap.
+        m["entry_points"][0]["id"] = "EP1"
+        for u in m["use_cases"]:
+            if u["id"] in ("UC2", "UC3", "UC4", "UC5", "UC6"):
+                u["entry_points"] = ["EP1"]
+        m["interfaces"] = [
+            {"id": "I1", "name": "Busy", "what": "One person, many journeys.", "side": "ours",
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
+        ]
+    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
         page.wait_for_timeout(300)
-        # KEYED ON THE DIRECTION, not on DOM order: the rows are written opener-first, and this
-        # surface holds no way in, so its `out` row leads.
         got = page.evaluate("""() => {
-            const out = {};
-            for (const r of document.querySelectorAll('.ifd-elabel.ifd-lab-on .ifd-elabel-row')) {
-                out[r.dataset.dir] = {
-                    recs: [...r.querySelectorAll('.ifd-what-rec')].map(e => e.textContent),
-                    titles: [...r.querySelectorAll('.ifd-what-rec')].map(
-                                e => e.getAttribute('title')),
-                    marks: r.querySelectorAll('.ifd-what-recs svg').length,
-                    tail: r.querySelector('.ifd-what-recs').textContent };
-            }
-            return out;
+            const l = document.querySelector('.ifd-elabel.ifd-lab-on');
+            return { head: l.querySelector('.ifd-elabel-dir').textContent,
+                     doors: [...l.querySelectorAll('.ifd-elabel-uc')].map(e => e.textContent),
+                     tail: (l.querySelector('.ifd-what-more') || {}).textContent || '' };
         }""")
-        one, many = got["in"], got["out"]
-        assert one["recs"] == ["Organization"], one
-        # four records, three drawn, and the tail SAYS the rest are there rather than dropping them
-        assert many["recs"] == ["Subscription", "PlanName", "Membership"], many
-        assert many["tail"].endswith("+1 more"), many
-        # the DATA glyph SEPARATES the sentence from its records, so the line says what kind of thing
-        # it has started naming
-        assert one["marks"] == 1 and many["marks"] == 1, got
-        # and NOT the browser's tooltip, whose delay the viewer cannot touch
-        assert one["titles"] == [None], one
-
-        # THE APP'S TOOLTIP, and it is QUICKER THAN AN ICON'S. The window has to straddle 125ms and
-        # stop short of the 250ms an action icon waits, or the test cannot tell the two apart — a
-        # first attempt checked at 260ms, which both delays pass, and a mutation to 250 sailed through
-        # it. Quiet at 60ms, up by 190ms: 65ms of slack on each side of the real delay.
-        # NAMED, not "the first one": the rows are written opener-first, so the first record in DOM
-        # order belongs to the other row.
-        page.locator(".ifd-what-rec").filter(has_text="Organization").first.hover()
-        page.wait_for_timeout(60)
-        assert not page.evaluate(
-            "() => document.getElementById('tip').classList.contains('on')"), "tip too eager"
-        page.wait_for_timeout(130)
-        tip = page.evaluate("""() => ({ on: document.getElementById('tip').classList.contains('on'),
-                                        text: document.getElementById('tip').textContent })""")
-        assert tip["on"], tip
-        assert tip["text"].startswith("A tenant"), tip
+        assert "5 use cases" in got["head"], got        # the head counts them all…
+        assert len(got["doors"]) == 3, got              # …the list shows three…
+        assert got["tail"].strip().startswith("+2"), got   # …and the tail names the rest
+        # …and a door really opens its use case
+        page.click(".ifd-elabel-uc")
+        page.wait_for_timeout(300)
+        assert "uc=" in page.evaluate("() => location.hash"), page.evaluate("() => location.hash")
         assert not page.js_errors, page.js_errors
 
 
@@ -1769,56 +1842,85 @@ def test_a_click_that_is_not_on_a_box_drops_the_pin() -> None:
         assert not page.js_errors, page.js_errors
 
 
-def test_the_box_of_crossings_points_back_at_the_wire_it_belongs_to() -> None:
-    """A label is 300px wide and wider than the gutter its wire leaves through, and the placement
-    pass moves it 6px clear so the two never overlap. Touching nothing and pointing nowhere, it read
-    as floating beside the picture rather than labelling a line.
+def test_the_leader_meets_its_arrow_at_a_right_angle_clear_of_the_head() -> None:
+    """The leader is the placement made visible, so it is asserted as geometry, not as a decoration.
 
-    The tail is the fix, and this asserts the thing that makes it a fix: its TIP lands on its own
-    wire. Not that a triangle exists — a triangle pointing at nothing would pass that.
+    PERPENDICULAR, and A CONSTANT LENGTH. It used to be drawn straight down and always 14px, and
+    these arrows run from nearly flat to very steep — slopes 0.05 to 2.34 on MCP Hero — so the gap a
+    reader actually saw ranged 5.5px to 14px across sixteen surfaces. Boxes on steep arrows looked
+    glued on and boxes on flat ones looked loose.
 
-    The box goes BELOW its wire unless below would run off the bottom of the picture, which is the
-    only constraint left now that a surface has one box rather than two to keep apart."""
+    AND CLEAR OF THE HEAD. The anchor used to be wherever box and arrow came closest, which on four
+    of those sixteen was within 2px of the arrow's end at the card — landing on the very arrowhead
+    the box is moved aside to keep visible.
+
+    All three are read back from the laid-out page: where the leader starts, how long it is, which
+    way it is turned. A dashed line that merely EXISTS would pass a test that only looked for one."""
     def mutate(m: dict) -> None:
-        both = [{"direction": "in", "what": "what the caller asks for", "elements": []},
-                {"direction": "out", "what": "the answer it gets back", "elements": []}]
+        # AS LONG AS THE REAL MAPS GET, not longer. MCP Hero's dashboard is the tallest box on any
+        # of the three live maps at 378px — two sentences a direction, each wrapping three or four
+        # lines. A fixture beyond that is a picture no build produces, and every box in it clamps,
+        # which tests the exemption rather than the rule.
+        # A WAY IN EACH, so every one is reached by a use case: an interface nothing reaches
+        # gets no box at all, and this test is about where the boxes go.
+        for n, ep in enumerate(m["entry_points"][:16], start=1):
+            ep["id"] = f"EP{n}"
+        for n, u in enumerate(m["use_cases"][:16], start=1):
+            u["entry_points"] = [f"EP{n}"]
         m["interfaces"] = [
-            {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
-             "facing": "user", "kind": "screen", "carries": list(both)},
-            {"id": "I2", "name": "Theirs", "what": "On theirs.", "side": "theirs",
-             "facing": "user", "kind": "api", "carries": list(both)},
+            {"id": f"I{n}", "name": f"Surface {n}", "what": "One of several.",
+             "side": "ours" if n % 2 else "theirs", "facing": "user", "kind": "screen",
+             "ways_in": [f"EP{n}"], "carries": []}
+            # SIXTEEN, the size of the largest live map. The stage's height comes from the
+            # number of cards, and the room a box has to get off its line comes from the
+            # stage. Eight interfaces make a 500px picture a 300px box cannot be placed in.
+            for n in range(1, 17)
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
-        for iid in ("I1", "I2"):        # one on each shore: the tail sits on the card side of each
-            page.eval_on_selector(f'.ifd-box[data-iface="{iid}"]', "e => e.click()")
-            page.wait_for_timeout(250)
-            got = page.evaluate("""(iid) => {
-                const st = document.getElementById('ifdstage').getBoundingClientRect();
-                // the wire leaves the card at the card's own middle, in client space
-                const b = document.querySelector(`.ifd-box[data-iface="${iid}"]`);
-                const wireY = st.top + b.offsetTop + b.offsetHeight / 2;
-                return [...document.querySelectorAll('.ifd-elabel.ifd-lab-on')].map(l => {
-                    const r = l.getBoundingClientRect();
-                    const down = l.classList.contains('ifd-tail-down');
-                    const up = l.classList.contains('ifd-tail-up');
-                    const cs = getComputedStyle(l, '::before');
-                    // the outline triangle is 8px deep, so its tip is 8px beyond the label's edge
-                    const tipY = down ? r.bottom + 8 : r.top - 8;
-                    return { down, up, side: l.dataset.side,
-                             offLeft: cs.left, offRight: cs.right,
-                             offWire: Math.abs(wireY - tipY) };
-                });
-            }""", iid)
-            assert len(got) == 1, (iid, got)     # one surface, one box
-            g = got[0]
-            assert g["down"] != g["up"], (iid, g)          # exactly one tail, pointing one way
-            # THE TIP LANDS ON ITS WIRE, and slightly past it: the placement pass leaves a 6px gap
-            # and the tail is 8px deep, so it crosses the line by 2 rather than stopping short of
-            # it. Three pixels of tolerance covers that plus sub-pixel layout.
-            assert g["offWire"] <= 3, (iid, g)
-            # …and it sits on the CARD side, which is where the wire starts on that shore. Only the
-            # side that is SET is asserted: a computed style resolves the other one to a used value
-            # rather than `auto`, so checking for `auto` fails against correct code.
-            assert g["offLeft" if g["side"] == "ours" else "offRight"] == "22px", (iid, g)
+        got = page.evaluate("""() => {
+            return [...document.querySelectorAll('.ifd-elabel')].map(l => {
+                const [x0, y0, x1, y1] = String(l.dataset.wire).split(' ').map(Number);
+                const bl = parseFloat(l.style.left), bt = parseFloat(l.style.top);
+                // laid out to read its width: a `display: none` element measures 0, and the corner
+                // the leader leaves from is either 0 or the box's full width across.
+                l.style.visibility = 'hidden'; l.style.display = 'block';
+                const w = l.offsetWidth;
+                l.style.display = ''; l.style.visibility = '';
+                const cs = getComputedStyle(l);
+                const num = (k) => parseFloat(cs.getPropertyValue(k));
+                const len = num('--lead-len');
+                // where it starts (the box's own corner) and where it ends, from the same three
+                // numbers the stylesheet draws it with: a line straight down, then rotated.
+                const qx = bl + num('--lead-x'), qy = bt + num('--lead-y');
+                const rot = num('--lead-rot') * Math.PI / 180;
+                const ex = qx - len * Math.sin(rot), ey = qy + len * Math.cos(rot);
+                const dx = x1 - x0, dy = y1 - y0, seg = Math.hypot(dx, dy);
+                const t = ((ex - x0) * dx + (ey - y0) * dy) / (seg * seg);
+                return {
+                    clamped: !!l.dataset.clamped, len,
+                    // how far the far end misses the arrow by
+                    offArrow: Math.hypot(ex - (x0 + dx * t), ey - (y0 + dy * t)),
+                    // 0 when the leader and the arrow meet at a right angle
+                    cosine: Math.abs((ex - qx) * dx + (ey - qy) * dy) / (len * seg),
+                    along: t * seg,
+                    // …and the corner it leaves from is a corner OF THE BOX
+                    onBox: Math.abs(num('--lead-x')) < 1 || Math.abs(num('--lead-x') - w) < 1,
+                };
+            });
+        }""")
+        assert got, got
+        drawn = [g for g in got if not g["clamped"]]
+        assert drawn, got                      # or this asserts nothing at all
+        for g in drawn:
+            assert abs(g["len"] - 14) < 0.5, g          # the constant, not whatever fitted
+            assert g["cosine"] < 0.02, g                # a right angle
+            assert g["offArrow"] < 0.5, g               # …ending ON the arrow
+            assert g["along"] >= 27.5, g                # …and never on its head
+            assert g["onBox"], g
+        for g in got:
+            # A CLAMPED BOX HAS NO LEADER, and must not have one: the picture was too short to hold
+            # it off its arrow, so it is ON the line and there is no gap to draw across.
+            if g["clamped"]:
+                assert g["len"] == 0, g
         assert not page.js_errors, page.js_errors

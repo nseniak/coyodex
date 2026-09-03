@@ -36,36 +36,39 @@ the code's names.
   are deliberately NOT criteria: who runs the machine, and whether the far side
   does something "business". The word also means a code declaration in a
   TypeScript or Java project, so a map of one shows both meanings.
-- **shape** (of a surface) — what kind of thing a surface IS, in one word: a
+- **shape** (of an interface) — what kind of thing an interface IS, in one word: a
   screen, a command line, an API, files, a handoff. There are eleven of these
   words. Shape is not PURPOSE: a payment service and a crash reporter are both
   an API, and what tells them apart is the dependency's own purpose word.
-- **who is on the far side** — the people the map can show standing at a surface.
-  Never written by hand: it is worked out from the walks. A surface with nobody
+- **who is on the far side** — the people the map can show standing at an interface.
+  Never written by hand: it is worked out from the walks. An interface with nobody
   on it is a normal answer, because the product itself is what reaches most of
   the outside services.
-- **surface** — the everyday word for one interface. **our surface** = we define
-  its shape (our command line, our web pages). **their surface** = someone else
-  does (a payment processor, a sign-in provider). The test: if the far side
-  vanished tomorrow, would this thing's shape change?
-- **way in** — one address, command or tool an interface is made of. A surface
-  groups many; coyodex's own command line is 32 ways in.
-- **far side** — who or what is on the other side of a surface.
-- **pipe** — something on the path to a far side that is not itself a surface: a
+- **our interface / their interface** — **ours** = we define its shape (our
+  command line, our web pages). **theirs** = someone else does (a payment
+  processor, a sign-in provider). The test: if the far side vanished tomorrow,
+  would this thing's shape change? The word *surface* was used for this and is
+  retired: two words for one idea, and the screens said one while the glossary
+  said the other. *Surface* survives only in its security sense, as in attack
+  surface, which is a different word.
+- **way in** — one address, command or tool an interface is made of. An
+  interface groups many; coyodex's own command line is 32 ways in.
+- **far side** — who or what is on the other side of an interface.
+- **pipe** — something on the path to a far side that is not itself an interface: a
   reverse proxy, a log shipper, the library that calls a service. Name the far
   side, never the pipe.
-- **what crosses** — the list on a surface saying, in each direction, what goes
+- **what crosses** — the list on an interface saying, in each direction, what goes
   through it in one sentence, and which stored records. Naming no record is a
   normal answer: a log line, a fetched web page and a source file all cross
   without being stored.
-- **user-facing / operator-facing** — who a surface serves. Written by hand, not
+- **user-facing / operator-facing** — who an interface serves. Written by hand, not
   worked out: the actor field that looks like it answers this asks a different
   question, and marks a bought payment service *internal* while its interface is
   user-facing.
-- **door** — a crossing between an actor and the product, at a surface, in one
-  story. Narrower than a surface: a surface is a place, a door is one crossing.
+- **door** — a crossing between an actor and the product, at an interface, in one
+  story. Narrower: an interface is a place, a door is one crossing.
   A door works BOTH ways. A story arrives through one, and hands its result back
-  through one, and the way out is drawn even when it is the same surface the
+  through one, and the way out is drawn even when it is the same interface the
   story came in by. EVERY crossing takes a door, not only the two ends: an
   exchange in the middle of a story goes through one too. Two actors reaching the same goal
   through different doors are two use cases, and a gate blocks the map otherwise.
@@ -129,10 +132,10 @@ design principles these come from)
   everything else is the lower one.
 - **gutter** — the strip on the left of the timeline that names the two lanes.
 - **Interfaces** (a view) — the tab under Product, after Happy Path. It answers
-  "where does this product meet the outside world?" with two sections, Our
-  surfaces and Their surfaces. Each card opens that surface's own page.
+  "where does this product meet the outside world?" with two sections, We define
+  and We use. Each card opens that interface's own page.
 - **what it reaches out to** — the block on a feature's page listing the
-  surfaces that feature calls out to. It reads *not stated* on most features,
+  interfaces that feature calls out to. It reads *not stated* on most features,
   because a feature is linked to a service only when a step of its own walk is
   drawn at that service.
 

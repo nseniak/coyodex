@@ -499,7 +499,8 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 .uc-seg button.on { background: #6366f1; color: #fff; }
 /* The capability badge — on a group heading it names the label, on a row it names the capability. */
 .uc-caplabel { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-               padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }
+               padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280;
+               border: 1px solid #d5d9df; }
 /* WHO a feature is for. `happy_path` (must the walk reach it) is deliberately NOT drawn: it is an
    authoring decision the Coverage rule reads, and a reader of the map has no use for it. */
 .uc-aud-user { background: #e0e7ff; color: #4338ca; }
@@ -720,7 +721,10 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .if-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .if-table td { padding: 7px 10px 7px 0; border-bottom: 1px solid #eceef2; vertical-align: top; }
 .if-table tr:last-child td { border-bottom: 0; }
-.if-dir { width: 3.5em; color: #6b7280; font-variant: small-caps; letter-spacing: .03em; }
+/* `we receive` / `we send`, one word-pair with the picture's own labels — see CROSSING_DIR_WORD.
+   The column was 3.5em for `in` and `out`; a phrase needs room, and must not wrap mid-phrase. */
+.if-dir { width: 5.5em; color: #6b7280; font-variant: small-caps; letter-spacing: .03em;
+          white-space: nowrap; }
 /* A chip list, optionally under the name of the group its members live in — a component under its
    subsystem, an entity under its subdomain. Thirty-one loose chips is a wall; the same thirty-one
    under six subsystem names say which parts of the machine the feature lives in. */
@@ -1876,10 +1880,10 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .story-desc { margin: 2px 0 0; color: #5a6072; font-size: 11.5px; line-height: 1.35; }
 .story-pills { display: flex; gap: 5px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
 /* A count under the sentence, on either column: a LABEL, never a door. It carries no cursor and no
-   hover, because a card has exactly one door and that door is its name. */
-.story-pill { font: inherit; font-size: 9.5px; letter-spacing: .05em; padding: 1.5px 7px;
-              border-radius: 99px; background: #f1f2f7; color: #5a6072; font-weight: 600;
-              border: 0; }
+   hover, because a card has exactly one door and that door is its name.
+   ONE LOOK, SHARED WITH THE INTERFACES PAGE — see `.ifd-ucs`. Two pages counting the same kind of
+   thing in two different pills is two vocabularies for one idea, and a reader moving between them
+   has to learn both. */
 .story-who { display: flex; gap: 8px; align-items: center; font-weight: 650; font-size: 13.5px;
              flex-wrap: wrap; }
 /* `#diagram svg` sizes every diagram to its pane (100%); the glyph is an icon, so it needs the
@@ -2304,7 +2308,18 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    running flat, and it scrolls out of view on a long map the way any other single element does. A
    full-height BOX was built first and rejected on sight: it took the whole middle and carried no
    information for the space it took. */
-.ifd-wrap { margin: 0 0 26px; overflow-x: auto; }
+/* ROOM FOR THE OWNERSHIP BOX TO SIT OUTSIDE THE CARDS, without moving the cards. This element is
+   what clips the picture, so anything drawn past the stage's own edge is cut — which is how the
+   ownership box came to be drawn exactly ON the cards' left edge and its title sheared off the top.
+   The negative margin and the matching padding cancel: the border box starts 14px further left and
+   14px lower, the content box lands exactly where it did, and the stage's left edge still shares the
+   breadcrumb's. The 26px below is unchanged, 10 of margin and 16 of padding instead of 26 of
+   margin, and the top pair cancel outright. TWO PIXELS MORE PADDING THAN THE BOX REACHES, so its
+   1.5px dash sits inside the clip rather than half on it.
+   THE TOP NEEDS IT TOO, for a short map: with two surfaces the circle is the tallest thing in the
+   picture and starts at the stage's own top edge, so the box has to reach ABOVE the stage to hold
+   it. */
+.ifd-wrap { margin: -16px 0 10px -16px; padding: 16px 0 16px 16px; overflow-x: auto; }
 /* `width: 100%` with the two card columns CAPPED rather than fixed, and the two gutters taking
    whatever is left. The caps came DOWN from 380 to buy the gutters their width: a wire to a circle
    needs room to leave the card and turn before it arrives, which a wire to a flat rule did not.
@@ -2339,16 +2354,43 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    them (a hosted sign-in, a code-hosting site, an editor), and it is the person who goes, not us.
    "We use" is still true — the product is what chose that surface and built the way to it. */
 .ifd-col { display: flex; flex-direction: column; gap: 14px; }
-.ifd-col-ours { grid-column: 1; }
-.ifd-col-theirs { grid-column: 5; }
+/* EVERY ITEM NAMES ITS ROW. Auto-placement will not let a later item overlap an earlier one, so the
+   ownership box spanning tracks 1-4 would otherwise push the columns onto a second row. */
+.ifd-col-ours { grid-column: 1; grid-row: 1; }
+.ifd-col-theirs { grid-column: 5; grid-row: 1; }
 .ifd-colhead { margin: 0 0 8px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                letter-spacing: .06em; color: #6b7280; white-space: nowrap; }
 .ifd-col-theirs > .ifd-colhead { text-align: right; }
+/* WHAT WE OWN. It holds the product and the surfaces we define; the surfaces we use fall outside it.
+   A ring around the circle ALONE was built first and was false — the map's own words say an our-
+   surface is one whose shape we define, so our dashboard and our command line are the product, and a
+   ring left them outside it. Only the RIGHT edge carries the message; the other three are there to
+   close the shape, because a bare vertical line reads as a divider between two opposite lists rather
+   than as "these things are ours".
+   A GRID ITEM spanning tracks 1-4, not an absolute box: the gutters are `1fr`, so a fixed width is
+   right at one window and wrong at the next. Its right edge lands in the far gutter, 12px clear of
+   the cards it excludes, at every width.
+   Drawn before the wires and inert to the mouse, so a spoke crosses it whole and a click over it
+   still means "nothing here", which drops the pin. */
+.ifd-own { grid-column: 1 / 5; grid-row: 1; align-self: stretch; justify-self: stretch;
+           position: relative; z-index: 0;
+           margin: var(--own-top, 26px) 14px -14px -14px;
+           border: 1.5px dashed #c3c8d9; border-radius: 14px; pointer-events: none; }
+/* Its name, on the top edge and at the RIGHT end of it — the left end already carries the `We define`
+   heading, and two labels in one corner is a corner nobody reads. It carries the page's own
+   background so the dashes break for it, the way a fieldset's legend breaks its border.
+   It sits half above the box's top border, which is why the box needs `--own-top`: pinned to the
+   stage's own top edge, the name's upper half fell outside what `.ifd-wrap` will paint. */
+.ifd-own > span { position: absolute; right: 18px; top: -8px; padding: 0 8px;
+                  background: #f8fafc; white-space: nowrap;
+                  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: .07em; color: #9aa1b4; }
+
 /* The middle track. It holds ONE thing, vertically centred, and no heading of its own: the product's
    name is inside the circle, and a heading above an empty column was the old shape's worst moment —
    a column title with nothing under it for the length of the page. */
-.ifd-spine { grid-column: 3; display: flex; flex-direction: column; justify-content: center;
-             align-items: center; }
+.ifd-spine { grid-column: 3; grid-row: 1; display: flex; flex-direction: column;
+             justify-content: center; align-items: center; }
 /* THE PRODUCT. Round, not square: a rectangle in a picture whose every other element is a rectangle
    reads as one more card, and this is the one thing here that is not a surface. Sized to hold a
    two-word name at 12.5px without eliding — a name the reader cannot finish is worse than no shape
@@ -2413,11 +2455,42 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    piece of software, and the same indigo as the glyph it sits next to, so the two read as one fact
    said twice rather than as two. */
 .ifd-kind { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-            padding: 1px 7px; border-radius: 9px; background: #eef2ff; color: #3730a3; }
+            padding: 1px 7px; border-radius: 9px; background: #eef2ff; color: #3730a3;
+            border: 1px solid #cdd6fb; }
 /* `staff`, the SAME word and the same amber a feature card and an actor card use for an internal
    audience. A user-facing surface shows nothing at all, which is the silence features already keep. */
 .ifd-staff { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-             padding: 1px 7px; border-radius: 9px; background: #fef3c7; color: #92400e; }
+             padding: 1px 7px; border-radius: 9px; background: #fef3c7; color: #92400e;
+             border: 1px solid #eed9a0; }
+/* HOW MUCH OF THE PRODUCT'S WORK COMES THROUGH HERE — sixteen cards with nothing to separate them
+   read as sixteen equal things, and MCP Hero's dashboard carries 32 use cases against its command
+   line's none. ON ITS OWN LINE under the name: in the head row it was a third label competing with
+   the name and the shape, and it is a measure of the card rather than a label on it.
+   NONE DRAWS NOTHING. A pill saying "no use case" was a label for an absence; the card goes dashed
+   instead, and the quiet is the statement. */
+/* ONE BORDER WEIGHT FOR EVERY PILL. Each one carries a hairline in its own hue at about 1.4
+   contrast on white — the weight the actor chip has always had. A pill is a LABEL, and the family
+   only reads as a family if no member is louder than the rest; the count pill was tried at 2.29 and
+   started shouting over the people beside it.
+   THE COUNT PILL, wherever a card carries one: how many use cases come through an interface, and on
+   the Features page how many a feature holds and how many rules it decides. One look, written once.
+   THE BORDER IS WHAT MAKES IT VISIBLE, not the fill. A feature card carries one of eight pale tints
+   (`FEATURE_TINTS`), and the pill's fill measures 1.00 to 1.09 against them — 1.00 is the same
+   brightness, so the pill vanishes. White fill is no better at 1.00 to 1.18: NO pale fill can
+   separate two pale washes.
+   AT THE ACTOR CHIP'S WEIGHT, not heavier. `#7fb894` was tried and reads at 2.29 on white against
+   the actor chip's 1.42 — the count started shouting over the people, and a count is the smaller
+   fact of the two. This one measures 1.44 on white and 1.23-1.32 on the tints, which is the actor
+   chip's own 1.42 and 1.21-1.30 in green. Quiet, and no longer invisible. */
+.ifd-ucs, .story-pill {
+  font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; padding: 1px 7px; border-radius: 9px;
+  background: #eef7f0; color: #166534; border: 1px solid #c3ddcc; white-space: nowrap; }
+/* …and on an interface card it stands on its own line under the name. */
+.ifd-ucs { display: inline-block; margin: 5px 0 0; }
+/* …and the card itself steps back. Dashed rather than faded, because faded reads as "loading" and
+   dashed reads as "outside the story", which is what it is. */
+.ifd-box-quiet { border-style: dashed; background: #fcfcfe; }
 
 /* WHAT CROSSES, hidden at rest and shown for the surface the reader picked. ONE box per surface,
    both directions inside it. It was one box PER DIRECTION, and on the ten two-way surfaces of MCP
@@ -2433,43 +2506,43 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .ifd-elabel { position: absolute; display: none; z-index: 5; width: 300px;
               background: #fff; color: #1e2235; font-size: 11px; line-height: 1.4;
               padding: 7px 11px; border-radius: 9px; border: 1px solid #b9c0ee;
-              box-shadow: 0 6px 22px rgba(30,34,53,.22); transform: translateY(-50%);
-              cursor: default; }
+              box-shadow: 0 6px 22px rgba(30,34,53,.22); cursor: default; }
+/* `top` and `left` are the box's REAL top-left corner. They used to name whichever edge faced the
+   wire, with a transform putting the box back — needed while the box was pinned to the wire's height
+   and pushed clear of it. The placement hangs the box off its own arrow by a corner now, so the
+   corner is what there is to write. `.ifd-tail-up` / `.ifd-tail-down` survive as a record of which
+   side of the arrow the box landed on, and carry no style. */
 .ifd-elabel.ifd-lab-on { display: block; }
-/* The two directions, one under the other, in the order the surface's own story takes them. A rule
-   between rather than a gap: the box holds two separate facts now, and a reader must not be able to
-   read the second direction's sentences as a continuation of the first's. */
-.ifd-elabel-row + .ifd-elabel-row { margin-top: 6px; padding-top: 6px; border-top: 1px solid #e4e7f4; }
-/* `in` / `out`, set exactly as `.if-dir` sets them on the surface's page: small caps, grey, so the
-   word marks the sentences without competing with them. */
-.ifd-elabel-dir { color: #6b7280; font-variant: small-caps; letter-spacing: .03em;
-                  font-weight: 700; margin-right: 6px; }
-/* `first` / `then`, in front of the direction word and lighter than it. The order used to be drawn —
-   the opening move was the upper of a surface's two wires — and a box has no upper and lower. It is
-   set a shade back so the pair reads as "first · in" and not as two labels of equal rank. */
-.ifd-elabel-ord { color: #9aa1b4; font-variant: small-caps; letter-spacing: .03em;
-                  margin-right: 5px; }
-/* THE TAIL, pointing back at the wire this label belongs to. A label is 300px wide and wider than
-   the gutter its wire leaves through, so it sits 6px off the line — touching
-   nothing and pointing nowhere. The oldest "this belongs to that" mark there is, and it costs 8px.
-   TWO TRIANGLES: the first is the outline, the second the fill, one pixel narrower and two shorter,
-   so the tail carries the same border the label does instead of floating loose off it.
-   HORIZONTALLY it sits near the label's CARD-SIDE edge, which is where the wire starts on either
-   shore — left on ours, right on theirs, keyed off the side the placement pass already records.
-   Running the wire behind the label instead was measured and rejected: the two labels would need
-   106px between the wires, and the wires attach at most 50px either side of a card's middle, so they
-   would leave from BESIDE the card rather than from it. */
-.ifd-elabel::before, .ifd-elabel::after { content: ''; position: absolute; width: 0; height: 0; }
-.ifd-elabel::before { border-left: 8px solid transparent; border-right: 8px solid transparent; }
-.ifd-elabel::after { border-left: 7px solid transparent; border-right: 7px solid transparent; }
-.ifd-tail-down::before { bottom: -8px; border-top: 8px solid #b9c0ee; }
-.ifd-tail-down::after  { bottom: -6px; border-top: 7px solid #fff; }
-.ifd-tail-up::before   { top: -8px; border-bottom: 8px solid #b9c0ee; }
-.ifd-tail-up::after    { top: -6px; border-bottom: 7px solid #fff; }
-.ifd-elabel[data-side="ours"]::before { left: 22px; }
-.ifd-elabel[data-side="ours"]::after { left: 23px; }
-.ifd-elabel[data-side="theirs"]::before { right: 22px; }
-.ifd-elabel[data-side="theirs"]::after { right: 23px; }
+/* The two directions, one under the other, in the order the surface's own story takes them. SPACE
+   between them, not a rule. There were four greys inside one box — its border, one between the
+   directions, one between the sentences of each — delimiting three different kinds of thing, and a
+   reader met them all at once. The heading below carries the separation on its own. */
+.ifd-elabel-row + .ifd-elabel-row { margin-top: 11px; }
+/* THE HEADING OF ONE PERSON, on its own line: their name and how many use cases bring them here.
+   It headed a DIRECTION when the box listed what data crossed; the box lists who comes and what for
+   now, so the heading names them. Darker than the text it heads, because a heading lighter than its
+   content is not read as a heading. */
+.ifd-elabel-dir { display: block; margin-bottom: 4px;
+                  color: #3f4660; font-variant: small-caps; letter-spacing: .04em;
+                  font-weight: 700; }
+/* THE LEADER, joining the box to its own arrow. PERPENDICULAR to the arrow and a constant 14px, and
+   both of those are the placement's doing rather than the drawing's: the box hangs off the arrow at
+   a right angle, and this is that offset made visible. A vertical leader of constant length spanned
+   5.5px to 14px of real gap across sixteen surfaces, because the arrows run from nearly flat to very
+   steep, so boxes on steep ones looked glued down and boxes on flat ones looked loose.
+   DASHED, so it reads as a pointer and not as another arrow on a picture made of arrows — but 2px
+   of it, not a hairline: at 1px it was so quiet that the box read as floating loose beside the
+   picture, which is the thing the leader exists to deny. The dash length follows the border width,
+   so the same change also gives it dashes a reader can count.
+   ONE BORDER, TURNED. It is a line drawn straight down from the box's own corner and rotated until
+   it points back at the arrow, which keeps a slanted connector in the stylesheet instead of adding a
+   drawing layer for sixteen short lines. `--lead-x`/`--lead-y` place the corner inside the box,
+   `--lead-rot` turns it, and `--lead-len` is 0 for the one case with no gap to span. */
+.ifd-elabel::after { content: ''; position: absolute;
+                     left: var(--lead-x, 0px); top: var(--lead-y, 0px);
+                     width: 0; height: var(--lead-len, 0px);
+                     border-left: 2px dashed #8b93d9;
+                     transform-origin: top left; transform: rotate(var(--lead-rot, 0deg)); }
 /* ONE LINE PER SENTENCE. A surface records as many crossings in one direction as it likes, and they
    were joined into a paragraph with a space between them — on MCP Hero's dashboard that is 4
    sentences and 327 characters with no seam to read it by. The `+n more` tail keeps the label a
@@ -2483,6 +2556,28 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .ifd-what-line + .ifd-what-line, .ifd-what-line + .ifd-what-more {
   margin-top: 7px; padding-top: 7px; border-top: 1px solid #eceef6;
 }
+/* …EXCEPT INSIDE A POPUP, where a tick and an indent do the same work without a rule. The hairline
+   is there because space alone stopped grouping a sentence with its own record row; hanging a mark
+   off each sentence and indenting the records under it groups them by position instead, which is
+   one less grey line in a box that had four. Scoped, because an actor's page draws this same markup
+   inside a card and keeps the rule. */
+.ifd-elabel .ifd-what-line, .ifd-elabel .ifd-what-more { padding-left: 13px; position: relative; }
+.ifd-elabel .ifd-what-line + .ifd-what-line,
+.ifd-elabel .ifd-what-line + .ifd-what-more { margin-top: 6px; padding-top: 0; border-top: 0; }
+.ifd-elabel .ifd-what-line::before { content: ''; position: absolute; left: 2px; top: 7px;
+                                     width: 5px; height: 1px; background: #b9c0ee; }
+/* ONE USE CASE the reader can open. Text that happens to be a door, the same treatment a record on
+   this box already had — a row of buttons here would be chrome in a box that is meant to be read. */
+.ifd-elabel-uc { display: block; position: relative; padding-left: 13px; text-align: left;
+                 font: inherit; color: inherit; background: none; border: 0; width: 100%;
+                 cursor: pointer; text-decoration: underline; text-decoration-color: #c3c8d9; }
+/* TIGHT. These are list items, not paragraphs: a person can bring 27 of them and the reader is
+   scanning names, so the gap only has to separate one line from the next. */
+.ifd-elabel-uc + .ifd-elabel-uc { margin-top: 1px; }
+.ifd-elabel-uc::before { content: ''; position: absolute; left: 2px; top: 7px; width: 5px;
+                         height: 1px; background: #b9c0ee; }
+.ifd-elabel-uc:hover { text-decoration-color: #1e2235; color: #1e2235; }
+.ifd-elabel-uc:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px; border-radius: 3px; }
 /* ONE LOOK FOR EVERY "+n more" IN THE VIEWER. Four of them existed and two of them sat in the same
    box — the sentences' tail italic at 12.5px, the records' tail plain grey at 11.5px — so a reader
    met the same idea twice, dressed differently, three lines apart.

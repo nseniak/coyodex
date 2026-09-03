@@ -43,7 +43,7 @@ from coyodex.model import ProjectModel, entity_owners, expanded_flow_steps
 from coyodex.validate_model import (
     anchored_flow_steps,
     capability_audience,
-    interface_actors,
+    interface_actor_use_cases,
     interface_walk_order,
     rule_steps,
 )
@@ -162,6 +162,10 @@ class InterfaceFacts:
     #: reporter has nobody on the far side, and only the two kinds that mean a person goes there
     #: derive anyone on a `theirs` surface.
     actors: list[str] = field(default_factory=list)          # Rn
+    #: …and which walks bring each of them here. Same derivation, one grain finer: the Interfaces
+    #: page orders the people by where the happy path first reaches them, and lists what each is
+    #: here for. Keyed by role id, values are use-case ids.
+    actor_use_cases: dict[str, list[str]] = field(default_factory=dict)
     flow: list[str] = field(default_factory=list)            # in and/or out — DERIVED from crossings
     ways_in: list[str] = field(default_factory=list)         # EPn
     deps: list[str] = field(default_factory=list)            # Dn naming this surface
@@ -532,13 +536,14 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                     if cap:
                         feat_out[cap].add(iid)
 
-    iface_actors = interface_actors(m)
+    iface_actor_ucs = interface_actor_use_cases(m)
     iface_walk = interface_walk_order(m)
     interfaces = [
         InterfaceFacts(
             id=i.id, name=i.name, what=i.what, side=i.side, facing=i.facing,
             kind=grammar.canonical_interface_kind(i.kind),
-            actors=iface_actors.get(i.id, []),
+            actors=list(iface_actor_ucs.get(i.id, {})),
+            actor_use_cases=iface_actor_ucs.get(i.id, {}),
             flow=[d for d in ("in", "out") if any(c.direction == d for c in i.carries)],
             ways_in=sorted_ids(set(i.ways_in)),
             deps=sorted_ids(set(iface_deps.get(i.id, ()))),
@@ -632,7 +637,7 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
             for f in ix.features],
         "interfaces": [
             {"id": i.id, "name": i.name, "what": i.what, "side": i.side, "facing": i.facing,
-             "kind": i.kind, "actors": i.actors,
+             "kind": i.kind, "actors": i.actors, "actorUseCases": i.actor_use_cases,
              "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
              "components": i.components, "useCases": i.use_cases, "features": i.features,
              "featuresUnknown": i.features_unknown,

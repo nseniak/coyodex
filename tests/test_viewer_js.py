@@ -909,13 +909,16 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     # comes to 145px against 166px, and the tail says how many it is holding back.
     assert "crossingLinesHtml(what, i.id)" in surf
     assert "const IFACE_LABEL_WHAT_CAP = 2;" in js
-    assert js.count("crossingLinesHtml(") == 3, "the renderer, and the two pictures that call it"
+    # ONE picture calls it now. The Interfaces page stopped reading the crossings altogether — it
+    # reads the walks and says who comes to a surface and what for — so the renderer and the actor's
+    # page are what is left.
+    assert js.count("crossingLinesHtml(") == 2, "the renderer, and the one picture that calls it"
     # ONE TAIL COMPONENT, for all four capped lists in the viewer. They were built three ways and
     # drawn in two looks, and the two a reader meets in the same box were the two that differed.
-    assert js.count("moreTailHtml(") == 4, \
-        ("the component, and the three lists that cap something: the crossing sentences, the records "
-         "one crossing carries, and the entities a feature touches in a data area. It was four lists "
-         "until the two record lists — one per picture, written twice — became one renderer")
+    assert js.count("moreTailHtml(") == 5, \
+        ("the component, and the four lists that cap something: the crossing sentences, the records "
+         "one crossing carries, the entities a feature touches in a data area, and the use cases a "
+         "person has at a surface")
     assert "' more'" not in js and "more</span>`" not in js, "no list still writes its own tail"
     assert ".more-tail { font: inherit; font-style: italic;" in css, \
         "the size is inherited, so the tail matches the line it ends; the treatment is what is shared"

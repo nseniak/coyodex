@@ -7801,8 +7801,8 @@ function actorSurfacesHtml(actorName) {
     const inside = String(role.kind || '').trim().toLowerCase() === 'service'
       && String(role.audience || '').trim().toLowerCase() === 'internal';
     return { count: 0, body: '<p class="feat-empty">' + (inside
-        ? 'Nowhere. This is the product\u2019s own work, running inside it, so it crosses no surface.'
-        : 'No surface in this map has this actor standing at it.') + '</p>' };
+        ? 'Nowhere. This is the product\u2019s own work, running inside it, so it crosses no interface.'
+        : 'No interface in this map has this actor standing at it.') + '</p>' };
   }
   return { count: mine.length, body: actorSurfaceDiagramHtml(actorName, role, rows) };
 }
@@ -7921,13 +7921,13 @@ function actorSurfaceDiagramHtml(actorName, role, rows) {
               + `${f.ucs === 1 ? '' : 's'} ${esc(actorName)} has there">`
               + `${storyFeatureGlyphSvg()}<span>${esc(featureName(f.id))}</span>`
               + `<span class="asf-feat-n">${f.ucs}</span></button>`).join('')}</div>`
-          : '<p class="ifd-none asf-none" title="This actor stands at this surface, but no use case '
+          : '<p class="ifd-none asf-none" title="This actor stands at this interface, but no use case '
             + 'of theirs is drawn at it">Not stated</p>')
         + '</div>');
     }
   };
   shore('Where they reach the product', rows.in,
-        'No surface in this map is one this actor comes to.');
+        'No interface in this map is one this actor comes to.');
   shore('Where the product reaches them', rows.out,
         'The product starts no exchange that reaches this actor.');
   return '<div class="ifd-wrap"><div class="asf-stage" id="asfstage">'
@@ -10203,6 +10203,47 @@ const IFACE_KIND = {
 };
 function ifaceKindWord(k) { return IFACE_KIND[k] || k || ''; }
 function ifaceList() { return FEATURES.interfaces || []; }
+// WHERE THE HAPPY PATH FIRST REACHES A USE CASE, and `null` for one it never does. The Interfaces
+// page orders everything by this — surfaces, the people at them, and each person's use cases — so
+// the page reads in the order the product's own story takes, rather than alphabetically or by size.
+let HP_UC_POS = null;
+function hpPosOfUc(uc) {
+  if (!HP_UC_POS) {
+    HP_UC_POS = new Map();
+    (GRAPH.happy_path || []).forEach((st, n) => {
+      if (st.uc != null && !HP_UC_POS.has(st.uc)) HP_UC_POS.set(st.uc, n);
+    });
+  }
+  const v = HP_UC_POS.get(uc);
+  return v === undefined ? null : v;
+}
+// The earliest of a set — the position of the whole set on the story, or null if none of it is on it.
+function hpPosOfUcs(ucs) {
+  let best = null;
+  for (const u of ucs || []) {
+    const p = hpPosOfUc(u);
+    if (p != null && (best == null || p < best)) best = p;
+  }
+  return best;
+}
+// One comparator for every list this page orders: on the story first, in story order; then the rest,
+// on the tie-break the caller gives.
+function byHappyPath(posOf, tieOf) {
+  return (a, b) => {
+    const pa = posOf(a), pb = posOf(b);
+    if ((pa == null) !== (pb == null)) return pa == null ? 1 : -1;
+    if (pa != null && pa !== pb) return pa - pb;
+    return String(tieOf(a)).localeCompare(String(tieOf(b)));
+  };
+}
+// WHO STANDS AT A SURFACE, in the order the story brings them, each with the use cases that do it.
+// `actorUseCases` is derived beside `actors` (see InterfaceFacts) so the two cannot disagree.
+function ifaceActorRows(i) {
+  const per = i.actorUseCases || {};
+  return Object.keys(per)
+    .sort(byHappyPath((r) => hpPosOfUcs(per[r]), (r) => (ROLE_BY_ID[r] || {}).name || r))
+    .map((r) => ({ role: r, ucs: (per[r] || []).slice().sort(byHappyPath(hpPosOfUc, (u) => u)) }));
+}
 function ifaceById(id) { return ifaceList().find((i) => i.id === id) || null; }
 function ifaceFlowWord(i) {
   const f = i.flow || [];
@@ -10298,7 +10339,10 @@ function ifaceBoxHtml(i, me) {
   // ONE CHIP MAY BE MARKED. On an actor's page every card is there BECAUSE that actor stands at it,
   // and the other people at the same surface are context worth keeping — so the chips stay as they
   // are and the reader's own actor is lit, rather than the rest being dropped.
-  const chips = (i.actors || []).map((rid) => {
+  // IN THE ORDER THE STORY BRINGS THEM, not alphabetically and not by how busy each one is. On MCP
+  // Hero's dashboard that is Visitor, then Organization admin, then Team member — the sequence the
+  // product's own happy path takes, which is the same rule the surfaces themselves are sorted by.
+  const chips = ifaceActorRows(i).map(({ role: rid }) => {
     const r = ROLE_BY_ID[rid] || {};
     const svc = (r.kind || '').trim().toLowerCase() === 'service';
     return `<span class="ifd-chip-actor${svc ? ' ifd-chip-svc' : ''}`
@@ -10310,14 +10354,28 @@ function ifaceBoxHtml(i, me) {
     const nm = (n && n.name) || d;
     // The tooltip stays: it says what a provider IS, which is the one thing the line cannot.
     return `<span class="ifd-prov" `
-      + `title="${esc(nm)} — the pipe this surface is reached through, not the far side">`
+      + `title="${esc(nm)} — the pipe this interface is reached through, not the far side">`
       + `${ifaceGlyphSvg('provider', '#6b7280')}${esc(nm)}</span>`;
   }).join('');
-  return `<article class="ifd-box" data-iface="${esc(i.id)}" tabindex="0">`
+  // HOW MUCH OF THE PRODUCT'S WORK COMES THROUGH HERE, as one number. Sixteen cards with nothing to
+  // separate them read as sixteen equal things, and they are not: MCP Hero's dashboard carries 32
+  // use cases and its command line carries none. In the head row it competed with the name and the
+  // shape for a line that already holds two labels; under the name it split the name from the
+  // sentence explaining it.
+  // NONE SHOWS NOTHING. A pill reading "no use case" was a label for an absence, and the card is
+  // already drawn dashed for it — the quiet is the statement.
+  const n = (i.useCases || []).length;
+  const count = n ? `<p class="ifd-ucs">${n} use case${n === 1 ? '' : 's'}</p>` : '';
+  return `<article class="ifd-box${n ? '' : ' ifd-box-quiet'}" data-iface="${esc(i.id)}"`
+    + ` tabindex="0">`
     + `<span class="ifd-head">${ifaceGlyphSvg(IFACE_GLYPH[i.kind], '#3730a3')}`
     + `<button type="button" class="ifd-name" title="Open ${esc(i.name)}">${esc(i.name)}</button>`
     + `${kind}${staff}</span>`
     + (i.what ? `<p class="ifd-what">${esc(i.what)}</p>` : '')
+    // …ON ITS OWN LINE, BETWEEN the sentence and the people. It sat under the name, where it split
+    // the name from the sentence that explains it. Here it heads the band of facts the card ends
+    // with — how much work comes through, then who comes.
+    + count
     + (chips ? `<div class="ifd-chips">${chips}</div>` : '')
     + prov + '</article>';
 }
@@ -10334,6 +10392,11 @@ function ifaceSorted(side) {
     const aw = a.walkPos == null ? 1 : 0, bw = b.walkPos == null ? 1 : 0;
     if (aw !== bw) return aw - bw;
     if (!aw) return a.walkPos - b.walkPos;
+    // …and BELOW the untouched ones, the surfaces no use case reaches AT ALL. A surface off the
+    // happy path but used by some journey is still part of the product's work; one no journey names
+    // is a different thing, and burying it is the honest ranking. 3 of MCP Hero's 16 are like that.
+    const au = (a.useCases || []).length ? 0 : 1, bu = (b.useCases || []).length ? 0 : 1;
+    if (au !== bu) return au - bu;
     const as = a.facing === 'operator' ? 1 : 0, bs = b.facing === 'operator' ? 1 : 0;
     return as !== bs ? as - bs : String(a.id).localeCompare(String(b.id));
   });
@@ -10344,11 +10407,17 @@ function ifaceDiagramHtml() {
     return `<div class="ifd-col ifd-col-${side}"><p class="ifd-colhead">${esc(head)}</p>`
       + (rows.length ? rows.map((i) => ifaceBoxHtml(i)).join('')
                      : `<p class="ifd-none">${esc(side === 'ours'
-                         ? 'This map records no surface of the product\u2019s own.'
+                         ? 'This map records no interface of the product\u2019s own.'
                          : 'This map records no outside service the product exchanges data with.')}</p>`)
       + '</div>';
   };
   return '<div class="ifd-wrap"><div class="ifd-stage" id="ifdstage">'
+    // WHAT WE OWN, drawn around the product AND the surfaces we define — because those surfaces ARE
+    // the product. A ring around the circle alone was tried and was simply false: it put our own
+    // dashboard and our own command line outside the product. Everything in this box is us, and
+    // everything outside it is not, which is the one claim this view exists to make.
+    // Drawn BEFORE the wires, so a spoke crosses it rather than stopping at it.
+    + '<div class="ifd-own" aria-hidden="true"><span>The product</span></div>'
     + '<svg class="ifd-wires" aria-hidden="true"><defs>'
     // The same fixed-size head the story diagram draws, and for the same reason: a marker scales
     // with its line's stroke width by default, so the head would grow and shift every time a wire
@@ -10427,6 +10496,26 @@ function bindMoreTails(root) {
       go({ kind: 'interfaces', iface: b.getAttribute('data-more-iface') });
     }));
 }
+// WHAT A DIRECTION IS CALLED, in one place, because the picture and the surface's own page must not
+// name the same fact two ways.
+//
+// THE SURFACE IS THE SUBJECT, and it took three tries to get here. `in` / `out` never said in and
+// out OF WHAT. `we receive` / `we send` left the reader asking whether "we" meant the surface or the
+// product. `the product receives` broke on the dashed box, which claims the word "product" for the
+// whole area the reader can see, surfaces included. Naming the surface asks nothing of the reader:
+// it is the title of the card the sentence belongs to.
+//
+// AND THE VERB FLIPS BY SHORE, because `out` always means "leaves the product": on our shore the
+// surface is the mouth that sends it, on theirs it is the far side receiving it. Same inversion the
+// arrowheads already make, so the words and the picture cannot disagree.
+const CROSSING_DIR_VERB = { ours: { in: 'receives', out: 'sends' },
+                            theirs: { in: 'sends', out: 'receives' } };
+// `name` is left out where the screen has already said it — a surface's own page is about one
+// surface, so every row there would otherwise repeat its title.
+function crossingDirWord(dir, side, name) {
+  const verb = (CROSSING_DIR_VERB[side] || CROSSING_DIR_VERB.ours)[dir] || dir;
+  return name ? name + ' ' + verb : verb;
+}
 function crossingsOf(i, dir) {
   return (i.crossings || []).filter((c) => c.direction === dir && String(c.what || '').trim());
 }
@@ -10457,7 +10546,7 @@ function crossingRecsHtml(recs, iface) {
           : esc(nm);
       }).join(', ')
     + moreTailHtml(recs.length - IFACE_LABEL_REC_CAP, iface,
-        'Open this surface: every record that crosses it')
+        'Open this interface: every record that crosses it')
     + '</span>';
 }
 // A record's door, and the sentence saying what it IS. Bound rather than written into the markup:
@@ -10501,7 +10590,7 @@ function crossingLinesHtml(list, iface) {
         + crossingRecsHtml(c.elements || [], iface) + '</span>').join('')
     + (list.length > IFACE_LABEL_WHAT_CAP
         ? `<span class="ifd-what-more">${moreTailHtml(list.length - IFACE_LABEL_WHAT_CAP, iface,
-             'Open this surface: every sentence it records, in full')}</span>` : '');
+             'Open this interface: every sentence it records, in full')}</span>` : '');
 }
 function bindIfaceDiagram(root) {
   const stage = root.querySelector('#ifdstage');
@@ -10528,68 +10617,82 @@ function bindIfaceDiagram(root) {
                      : el.offsetLeft + el.offsetWidth + CARD_CLEARANCE,
     el.offsetTop + el.offsetHeight / 2];
   const paths = [], labels = [];
-  // THE HEADS ARE THE ARGUMENT, not a decoration on a line that would exist anyway. A wire runs from
-  // the card to the product; a head at the product end means something crosses INWARD, a head at the
-  // card end means something crosses back OUT, and a surface that does both wears both. The marker
-  // is declared `orient="auto-start-reverse"`, which is what lets one definition serve both ends.
-  const wire = (from, to, iid, heads) => {
+  // A PLAIN LINE. It had a head at each end for the two directions a surface carries; the page no
+  // longer reads those, so the heads would be stating something the picture can no longer back.
+  const wire = (from, to, iid) => {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', wireCurveD(from[0], from[1], to[0], to[1]));
-    if (heads.in) path.setAttribute('marker-end', 'url(#ifd-arr)');
-    if (heads.out) path.setAttribute('marker-start', 'url(#ifd-arr)');
+    // STRAIGHT, not the curve the Features page draws. That curve leaves and arrives horizontally,
+    // which is right when both ends sit on vertical edges — it was, when every wire ran flat into a
+    // vertical rule. Against a circle the two horizontal tangents bend each line twice on its way to
+    // a centre, and sixteen of them read as an octopus rather than as spokes. A straight line to the
+    // rim is also the truer drawing: it IS the radius the landing point was chosen along.
+    // `wireCurveD` is untouched — the Features page still needs it, and its ends are still vertical.
+    path.setAttribute('d', `M ${from[0]} ${from[1]} L ${to[0]} ${to[1]}`);
     path.dataset.iface = iid;
     svg.appendChild(path); paths.push(path);
   };
-  // THE LABEL STARTS WHERE ITS WIRE STARTS, and grows AWAY from the card. Centred on the wire's
-  // midpoint it straddled the card: 300px of label against a 130px gutter put a third of it over the
-  // very box the reader had just picked, hiding the name and the people. Anchored, it overhangs the
-  // middle and the far column instead — both dimmed while it shows, and neither is what the reader
-  // is looking at. `x` is the wire's own end at the card; the side says which way to grow.
+  // WHAT THE BOX SAYS: who comes to this surface, and what for. It used to say what DATA crosses,
+  // which the map authored on the surface itself — and that turned out to be a written summary of
+  // what the walks already show, so the page reads the walks and nothing can drift.
   //
-  // ONE BOX PER SURFACE, holding A ROW PER DIRECTION. It was a box per direction, and on the ten
-  // two-way surfaces of MCP Hero the pair stacked to 206px against a 109px card — twice the height
-  // of the thing it described. The sentences inside each row are still `crossingLinesHtml`'s, so a
-  // crossing looks the same here as it does on an actor's page.
-  const label = (x, y, side, rows, iid) => {
-    if (!rows.length) return;
+  // THREE SHAPES, and each is a real answer rather than a degraded one:
+  //   people come here      -> one section per person, in the order the story brings them
+  //   nobody, but we reach  -> the use cases that reach it; the "who" is the product
+  //   nothing reaches it    -> said plainly, and the card is already drawn quiet
+  //
+  // ANCHORED AT THE CARD and grown away from it, as before: 300px of box against a 130px gutter put
+  // a third of it over the very card the reader had just picked.
+  const UC_CAP = 3;
+  const label = (x, y, side, i, ends) => {
+    // NOTHING REACHES IT, NOTHING TO OPEN. Three of MCP Hero's sixteen are named by no use case at
+    // all, and a box saying only that is a box the reader opened for nothing — the card already says
+    // it in its own pill, and is drawn dashed for it.
+    if (!ifaceActorRows(i).length && !(i.useCases || []).length) return;
     const lab = document.createElement('div');
     lab.className = 'ifd-elabel';
-    lab.dataset.iface = iid;
+    lab.dataset.iface = i.id;
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
-    for (const r of rows) {
+    lab.dataset.wire = ends.join(' ');
+    const sec = (headText, ucs, cap) => {
       const row = document.createElement('div');
       row.className = 'ifd-elabel-row';
-      row.dataset.dir = r.dir;
-      // WHO MOVES FIRST, said in words. The old picture said it with POSITION — the opening move was
-      // the upper of a surface's two wires — and a reader could see it without being told. Two rows
-      // stacked in one box have no upper and lower, only first and second, and two rows of equal
-      // weight read as a table of facts rather than as a sequence. `first` / `then` is the order put
-      // back, and it is the plainest pair of words there is for it.
-      // ONLY WHERE THERE IS AN ORDER: a surface carrying one direction shows the direction alone,
-      // because "first" with nothing after it is a promise the box does not keep.
-      if (rows.length > 1) {
-        const ord = document.createElement('span');
-        ord.className = 'ifd-elabel-ord';
-        ord.textContent = r === rows[0] ? 'first' : 'then';
-        row.appendChild(ord);
+      const h = document.createElement('span');
+      h.className = 'ifd-elabel-dir';
+      h.textContent = headText;
+      row.appendChild(h);
+      ucs.slice(0, cap).forEach((u) => {
+        const it = document.createElement('button');
+        it.type = 'button';
+        it.className = 'ifd-elabel-uc';
+        it.textContent = (GRAPH.nodes[u] || {}).name || u;
+        // A USE CASE IS A DOOR. The box lists what brings someone here, and each of those is a
+        // screen of its own — the same treatment a record on this box already had.
+        it.addEventListener('click', (ev) => { ev.stopPropagation(); showInContext(u); });
+        row.appendChild(it);
+      });
+      const rest = ucs.length - cap;
+      if (rest > 0) {
+        const tail = document.createElement('span');
+        tail.className = 'ifd-what-more';
+        tail.innerHTML = moreTailHtml(rest, i.id,
+                                      'Open this interface: every use case that comes through it');
+        row.appendChild(tail);
       }
-      // THE DIRECTION WORD, which the split boxes did not need: each rode its own wire and that wire
-      // had one arrowhead. One merged wire has a head at BOTH ends and cannot say which sentences
-      // belong to which, so `in` and `out` move into the text — the same two words, in the same
-      // small caps, the surface's own page already sets its crossings table in.
-      const dir = document.createElement('span');
-      dir.className = 'ifd-elabel-dir';
-      dir.textContent = r.dir;
-      row.appendChild(dir);
-      // THE RECORDS RIDE THEIR OWN SENTENCE, at the end of it — see crossingRecsHtml. They were a row
-      // of their own under the whole label, unioned across every sentence in the direction, which the
-      // map does not say and which left records on screen belonging to a sentence the cap had hidden.
-      const lines = document.createElement('span');
-      lines.className = 'ifd-what-lines';
-      lines.innerHTML = crossingLinesHtml(r.list, iid);
-      row.appendChild(lines);
       lab.appendChild(row);
+    };
+    const rows = ifaceActorRows(i);
+    const ucs = (i.useCases || []).slice().sort(byHappyPath(hpPosOfUc, (u) => u));
+    if (rows.length) {
+      for (const r of rows) {
+        const nm = (ROLE_BY_ID[r.role] || {}).name || r.role;
+        sec(`${nm} · ${r.ucs.length} use case${r.ucs.length === 1 ? '' : 's'}`, r.ucs, UC_CAP);
+      }
+    } else {
+      // NOBODY AT THE FAR SIDE is a normal answer, not a gap — 5 of MCP Hero's 16 are reached by the
+      // product itself. The heading says so by naming no one, and a sentence explaining it was one
+      // more line to read on every hover for something the section already states.
+      sec(`reached in ${ucs.length} use case${ucs.length === 1 ? '' : 's'}`, ucs, UC_CAP + 1);
     }
     lab.style.top = y + 'px';
     // Not a door, but not empty background either: a click on it must not clear the pin.
@@ -10615,49 +10718,141 @@ function bindIfaceDiagram(root) {
     if (!box) continue;
     const boxSide = i.side === 'ours' ? 'right' : 'left';
     const mid = box.offsetTop + box.offsetHeight / 2;
-    // A DIRECTION WITH NOTHING CROSSING GETS NO ARROWHEAD. Guarding on the sentences rather than
-    // drawing both heads and letting the empty row fall away: a head with no sentence behind it is a
-    // claim the reader can hover and get nothing from, and half the surfaces on both live maps carry
-    // one direction only.
-    //
-    // THE OPENING MOVE LEADS THE BOX, so the two directions read in the order they happen. `opens`
-    // is derived (see InterfaceFacts): a way in is an address something outside invokes.
-    const order = i.opens === 'in' ? ['in', 'out'] : ['out', 'in'];
-    const rows = order.map((dir) => ({ dir, list: crossingsOf(i, dir) }))
-                      .filter((r) => r.list.length);
-    if (!rows.length) continue;
+    // EVERY SURFACE GETS A LINE, and the line says only that this surface belongs to the picture.
+    // NO HEADS, NO DIRECTION. The heads carried the crossings' `in` and `out`, and once the page
+    // stopped reading the crossings there was nothing left for them to state — a head derived from
+    // the walks instead would be a guess dressed as a fact, and the walks disagree with the map's
+    // own answer on one of MCP Hero's sixteen surfaces. A plain line reads as membership, which is
+    // exactly the claim: this is one of the places the product meets the outside.
     const from = edge(box, boxSide);
-    const heads = { in: rows.some((r) => r.dir === 'in'), out: rows.some((r) => r.dir === 'out') };
-    // ONE RULE FOR BOTH SHORES: `in` points AT the product, `out` points away from it. That reads
-    // the same whichever side you are looking at, so nobody has to remember which half they are in.
-    // The wire is always drawn card→product, so `in` is its end head and `out` its start head.
-    wire(from, hubPoint(from[0], from[1]), i.id, heads);
-    label(from[0], mid, i.side, rows, i.id);
+    const to = hubPoint(from[0], from[1]);
+    wire(from, to, i.id);
+    // …and the line's two ends go ON the box, because the placement pass has to know where the line
+    // actually runs before it can put the box beside it. Passed in rather than written afterwards:
+    // an interface nothing reaches gets no box at all, and reaching back for "the one just made"
+    // then found the PREVIOUS interface's — or nothing, on the first.
+    label(from[0], mid, i.side, i, [from[0], from[1], to[0], to[1]]);
   }
-  // The label is pushed clear of its own wire, so the sentences never sit on the line they are about.
-  // BELOW BY DEFAULT, and above only when below would run off the bottom of the picture: with one
-  // box per surface there is no second one to make room for, so the only constraint left is the
-  // stage's own edge — a sentence half outside the scroll area is a sentence the reader has to hunt.
+  // WHERE THE BOX GOES, and it is ONE rule now: the box hangs off its own arrow at a right angle, a
+  // fixed distance out, from a point far enough along the arrow to leave the head alone. The leader
+  // is that offset drawn. Placement and connector stopped being two decisions that had to agree.
+  //
+  // A CONSTANT PERPENDICULAR DISTANCE, not a constant vertical one. The gap used to be 14px measured
+  // straight down whatever the arrow was doing, and these arrows run from nearly flat to very steep
+  // (slopes 0.05 to 2.34 on MCP Hero), so the gap a reader actually SEES ranged 5.5px to 14px across
+  // sixteen surfaces. Boxes on steep arrows looked glued on and boxes on flat ones looked loose.
+  //
+  // AND CLEAR OF THE TIP. The anchor used to be wherever box and arrow came closest, which on four
+  // of those sixteen was within 2px of the arrow's end at the card — a leader landing on the very
+  // arrowhead the box was moved aside to protect.
+  //
+  // THE ANCHOR IS THE FREE VARIABLE, and the box follows it: the corner facing the arrow sits at the
+  // end of the offset. Scanned rather than solved, because the box's height comes from its content,
+  // the two shores mirror, and the arrow may re-cross the box further along whatever the anchor is —
+  // that last one is a constraint no closed form was going to catch quietly.
+  //
+  // TWO THINGS BOUND IT. Sideways the box stays between its own card and the far column, so it
+  // covers a card on neither shore. Up and down it stays inside the picture: a sentence half outside
+  // the scroll area is a sentence the reader has to hunt for. Among everything that fits, the one
+  // nearest the arrow's tip wins — that tip is what the reader is looking at.
   //
   // MEASURED WITH THE LABEL LAID OUT. A `display: none` element has no box at all, so `offsetHeight`
-  // reads 0 and every label shifts by the same amount — which is how two of them stayed on top of
-  // each other through a first attempt at this. `visibility: hidden` lays it out without painting.
-  const LABEL_GAP = 4, WIRE_GAP = 6;
+  // reads 0 and every box would be placed as if it were empty. `visibility: hidden` lays it out
+  // without painting.
+  const LABEL_GAP = 4, LEAD_LEN = 14, TIP_CLEAR = 28, SCAN_STEP = 4;
+  const colOurs = stage.querySelector('.ifd-col-ours');
+  const colTheirs = stage.querySelector('.ifd-col-theirs');
+  // WHERE THE OWNERSHIP BOX'S TOP EDGE GOES: below the two column headings and clear of the first
+  // card. Stretched to the whole row it ran straight through `We define`, and took its own title
+  // above the top of what the page will paint. Measured from the first card rather than added up
+  // from the heading's type, so a change to that type cannot leave the border sitting on it.
+  const firstCard = stage.querySelector('.ifd-box');
+  //
+  // …AND CLEAR OF THE CIRCLE, which is the binding one on a SHORT map: with two surfaces the circle
+  // is the tallest thing in the picture and starts at the stage's own top edge, so an inset measured
+  // only from the cards cuts straight through the product. Allowed to go negative for that case —
+  // `.ifd-wrap` carries the padding to draw in. The clamp is -6 rather than the full -16 because the
+  // box's NAME sits 8px above its top border and has to stay inside that padding too.
+  if (firstCard) {
+    stage.style.setProperty('--own-top',
+      Math.max(-6, Math.min(firstCard.offsetTop, hub.offsetTop) - 12) + 'px');
+  }
+  const gutterFrom = colOurs ? colOurs.offsetLeft + colOurs.offsetWidth : 0;
+  const gutterTo = colTheirs ? colTheirs.offsetLeft : stage.offsetWidth;
   for (const lab of labels) {
     lab.style.visibility = 'hidden'; lab.style.display = 'block';
     const h = lab.offsetHeight, w = lab.offsetWidth;
     lab.style.display = ''; lab.style.visibility = '';
+    const ours = lab.dataset.side === 'ours';
     const anchor = parseFloat(lab.dataset.anchor);
-    lab.style.left = (lab.dataset.side === 'ours' ? anchor + LABEL_GAP
-                                                  : anchor - LABEL_GAP - w) + 'px';
-    // `top` is the wire's own height and the box is centred on it (`translateY(-50%)`), so pushing
-    // down by half the height plus the gap puts its TOP edge that gap below the line.
-    const mid = parseFloat(lab.style.top);
-    const down = mid + WIRE_GAP + h <= stage.offsetHeight;
-    // …and the TAIL points back at the wire the label was moved off. Named for where it POINTS, not
-    // for where the label sits: a box below the line has its tail on top, pointing up.
-    lab.classList.add(down ? 'ifd-tail-up' : 'ifd-tail-down');
-    lab.style.top = (mid + (down ? (h / 2 + WIRE_GAP) : -(h / 2 + WIRE_GAP))) + 'px';
+    const [wx0, wy0, wx1, wy1] = String(lab.dataset.wire).split(' ').map(Number);
+    const dx = wx1 - wx0, dy = wy1 - wy0, seg = Math.hypot(dx, dy) || 1;
+    const at = (x) => wy0 + dy * (x - wx0) / dx;
+    const wLo = Math.min(wx0, wx1), wHi = Math.max(wx0, wx1);
+    const minL = ours ? anchor + LABEL_GAP : gutterFrom;
+    const maxL = ours ? gutterTo - w : anchor - LABEL_GAP - w;
+    // Does the arrow cross this box anywhere? The offset only guarantees the corner; a diagonal can
+    // come back through the far end of a 300px box, and that is the thing the whole rule is for.
+    const hits = (bl, bt) => {
+      const lo = Math.max(wLo, bl), hi = Math.min(wHi, bl + w);
+      if (hi < lo || dx === 0) return false;
+      const a = at(lo), b = at(hi);
+      return Math.max(a, b) >= bt && Math.min(a, b) <= bt + h;
+    };
+    // …and how far the box would sit from the arrow's tip at the card, which is what we minimise.
+    const away = (bl, bt) => Math.hypot(Math.max(bl - wx0, 0, wx0 - (bl + w)),
+                                        Math.max(bt - wy0, 0, wy0 - (bt + h)));
+    let best = null;
+    for (let along = Math.min(TIP_CLEAR, seg); along <= seg + 0.5; along += SCAN_STEP) {
+      const t = Math.min(along / seg, 1);
+      const px = wx0 + dx * t, py = wy0 + dy * t;
+      // the two unit normals of the arrow: the box hangs off one side or the other
+      for (const sgn of [1, -1]) {
+        const nx = sgn * -dy / seg, ny = sgn * dx / seg;
+        const qx = px + nx * LEAD_LEN, qy = py + ny * LEAD_LEN;
+        // the corner facing the arrow IS that point: left or right by which way the box grows, top
+        // or bottom by which side of the arrow it landed on.
+        const bl = ours ? qx : qx - w;
+        const bt = ny < 0 ? qy - h : qy;
+        if (bl < minL || bl > maxL) continue;
+        if (bt < 0 || bt + h > stage.offsetHeight) continue;
+        if (hits(bl, bt)) continue;
+        const d = away(bl, bt);
+        if (!best || d < best.d) best = { d, bl, bt, px, py, qx, qy, ny };
+      }
+    }
+    // NOWHERE CLEAR? Then the picture is too short to hold this box off this arrow anywhere, and
+    // staying INSIDE the picture beats staying off the line: a sentence the reader cannot scroll to
+    // is worse than one with a line across it. NO LEADER in that case — the box is ON the arrow, so
+    // there is no gap to draw across, and a stub of dashes going nowhere was the old tail's mistake.
+    if (!best) {
+      const mid = wy0;
+      const bt = Math.max(0, Math.min(stage.offsetHeight - h,
+                                      mid < stage.offsetHeight / 2 ? mid + LEAD_LEN : mid - LEAD_LEN - h));
+      best = { bl: Math.max(minL, Math.min(maxL, minL)), bt, clamped: true };
+      // SAID OUT LOUD, so nobody reads a covered arrow as the placement working, and so a test
+      // asserting "never lands on its arrow" can name the one case that is exempt.
+      lab.dataset.clamped = '1';
+    }
+    lab.style.left = best.bl + 'px';
+    lab.style.top = best.bt + 'px';
+    // WHICH SIDE the box ended up, kept as a class for the diagnostics and the tests to read. It
+    // carries no style of its own any more: the box is placed by its real top-left corner now, so
+    // nothing has to be shifted after the fact.
+    lab.classList.add(best.clamped || best.ny >= 0 ? 'ifd-tail-up' : 'ifd-tail-down');
+    // THE LEADER: the offset itself, drawn. It starts at the box's own corner and runs back down the
+    // normal to the arrow, so it is exactly perpendicular and exactly LEAD_LEN long. Expressed as an
+    // origin and a rotation, so a stylesheet can draw it with one dashed border — see the rules for
+    // `.ifd-elabel::after`. A clamped box has no gap and gets no leader.
+    if (best.clamped) { lab.style.setProperty('--lead-len', '0px'); continue; }
+    lab.style.setProperty('--lead-x', (best.qx - best.bl) + 'px');
+    lab.style.setProperty('--lead-y', (best.qy - best.bt) + 'px');
+    lab.style.setProperty('--lead-len', LEAD_LEN + 'px');
+    // A line drawn straight down from the corner, turned until it points at the anchor. CSS rotates
+    // clockwise with y running down, so (0, len) maps to (-len sin r, len cos r).
+    // Solving (0, len) rotated by r == (px - qx, py - qy): sin r = (qx - px)/len, cos r = (py - qy)/len.
+    lab.style.setProperty('--lead-rot',
+      (Math.atan2(best.qx - best.px, best.py - best.qy) * 180 / Math.PI) + 'deg');
   }
   bindSurfacePick(stage, paths, labels);
   bindMoreTails(stage);
@@ -10721,7 +10916,7 @@ function bindSurfacePick(stage, paths, labels) {
     });
     box.addEventListener('dblclick', () => go({ kind: 'interfaces', iface: iid }));
   });
-  // The NAME is the card's one door to the surface's own page, the same split every other card on
+  // The NAME is the card's one door to the interface's own page, the same split every other card on
   // this viewer makes: the name leaves, the body pins.
   // …and a pin the address or a history step is carrying. Guarded on the KEY, so a `sel` left by the
   // Features page cannot be read as a surface id here — the two pages share the field, not the ids.
@@ -10790,7 +10985,7 @@ function renderInterface(s) {
     return;
   }
   const pills = [
-    `<span class="uc-caplabel">${esc(i.side === 'ours' ? 'our surface' : 'their surface')}</span>`,
+    `<span class="uc-caplabel">${esc(i.side === 'ours' ? 'our interface' : 'their interface')}</span>`,
     i.kind ? `<span class="uc-caplabel">${esc(ifaceKindWord(i.kind))}</span>` : '',
     i.facing ? `<span class="uc-caplabel">${esc(i.facing)}-facing</span>` : '',
     ifaceFlowWord(i) ? `<span class="uc-caplabel">${esc(ifaceFlowWord(i))} ${esc(IFACE_ARROW[ifaceFlowWord(i)] || '')}</span>` : '',
@@ -10798,7 +10993,8 @@ function renderInterface(s) {
   // What crosses, in then out. An EMPTY record list is the honest answer for a log line, a fetched
   // page or a source file, so the row still renders — only the sentence is required.
   const rows = (i.crossings || []).map((c) =>
-    `<tr><td class="if-dir">${esc(c.direction === 'in' ? 'in' : 'out')}</td>`
+    `<tr><td class="if-dir">`
+    + `${esc(crossingDirWord(c.direction === 'in' ? 'in' : 'out', i.side))}</td>`
     + `<td>${esc(c.what)}</td>`
     + `<td>${(c.elements || []).length ? mdRefs(c.elements.join(' '), GRAPH.nodes) : '<span class="feat-empty">nothing stored</span>'}</td></tr>`).join('');
   // WHO is on the far side, as cards rather than one free-text line. Both halves are DERIVED, and
@@ -10812,11 +11008,11 @@ function renderInterface(s) {
   const depIds = i.deps || [];
   const goesThere = i.kind === 'hosted-screen' || i.kind === 'handoff';
   const noActors = i.side === 'ours'
-    ? 'No walk in this map reaches this surface, so nothing here can say who comes to it.'
+    ? 'No walk in this map reaches this interface, so nothing here can say who comes to it.'
     : goesThere
       ? 'No walk in this map shows anyone going there. That is a gap in the stories, not a missing '
-        + 'field — this shape of surface is one a person goes to.'
-      : 'Nobody. The product itself reaches this surface; no person goes there.';
+        + 'field — this shape of interface is one a person goes to.'
+      : 'Nobody. The product itself reaches this interface; no person goes there.';
   const farSide =
     (actorIds.length ? `<div class="ecard-list">${actorIds.map(ifaceActorCardHtml).join('')}</div>`
                      : `<p class="feat-empty">${esc(noActors)}</p>`)
@@ -10825,15 +11021,15 @@ function renderInterface(s) {
     + (depIds.length
         ? '<h3 class="card-group-head">Reached through</h3>' + elementCardListHtml(depIds) : '');
   const feats = i.featuresUnknown
-    ? '<p class="feat-empty">Not stated. No walk in this map comes through this surface, so nothing here can say which features use it.</p>'
+    ? '<p class="feat-empty">Not stated. No walk in this map comes through this interface, so nothing here can say which features use it.</p>'
     : (i.features || []).length ? elementCardListHtml(i.features)
-                                : '<p class="feat-empty">No feature reaches this surface.</p>';
+                                : '<p class="feat-empty">No feature reaches this interface.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({ name: i.name, pills, desc: i.what ? mdInline(i.what) : '',
-                     noDesc: 'No description recorded for this surface.' })
+                     noDesc: 'No description recorded for this interface.' })
     + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
     + (rows ? `<h3 class="card-group-head">What crosses</h3><table class="if-table">${rows}</table>`
-            : '<h3 class="card-group-head">What crosses</h3><p class="feat-empty">The map records nothing crossing this surface.</p>')
+            : '<h3 class="card-group-head">What crosses</h3><p class="feat-empty">The map records nothing crossing this interface.</p>')
     + '<h3 class="card-group-head">Features through it</h3>' + feats
     + ((i.components || []).length
         ? '<h3 class="card-group-head">The code behind it</h3>' + elementCardListHtml(i.components) : '')
@@ -13927,7 +14123,7 @@ const INSP_KIND = {
   roles: 'actor', capabilities: 'feature', use_cases: 'use case', happy_path: 'happy-path step',
   subsystems: 'subsystem', components: 'component', deps: 'dependency', entry_points: 'way in',
   subdomains: 'subdomain', entities: 'record type', flows: 'walk', subflows: 'shared walk',
-  rules: 'business rule', blocks: 'rule block', interfaces: 'surface', glossary: 'glossary term',
+  rules: 'business rule', blocks: 'rule block', interfaces: 'interface', glossary: 'glossary term',
   tests: 'test row', deployment: 'process', config: 'setting', observability: 'signal',
   run_commands: 'command', non_entity_types: 'not a record type', extras: 'extra section',
   edges: 'arrow', messaging: 'channel', environments: 'environment', security: 'security note',
