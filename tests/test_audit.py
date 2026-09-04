@@ -2343,6 +2343,77 @@ def _claims(behavioural: bool) -> list[str]:
     return [w.claim for w in l2_worklist_model(_behavioural_map(), behavioural=behavioural)]
 
 
+def test_who_is_on_the_far_side_is_a_CLAIM_anchored_at_the_evidence_that_made_it():
+    """A DERIVED fact used to reach no skeptic at all. Measured on the shipped mcpolis map before
+    this existed: 1 of 1667 worklist claims mentioned a derived far side, while four surfaces each
+    stated who stands at them with nothing challenging it.
+
+    THE ANCHOR IS THE EVIDENCE, which is what made this look unfixable — a derived fact comes from a
+    JOIN and has no line of its own, but each arm of the join does. Here the role is put at the
+    surface by a way in its own use case drives, so the anchor is that entry point's source."""
+    from coyodex.audit_model import l2_worklist_model
+    from coyodex.model import EntryPoint, Interface, ProjectModel, Role, UseCase
+    m = ProjectModel(title="t", goal="g")
+    m.roles = [Role(id="R1", name="Admin", kind="human", audience="user", wants="in")]
+    m.use_cases = [UseCase(id="UC1", name="Do it", actors=["R1"], entry_points=["EP1"],
+                           trigger_outcome="asks -> gets")]
+    m.entry_points = [EntryPoint(id="EP1", kind="http-route", trigger="GET /x", activation="external",
+                                 source="src/routes.py:12", component="C1")]
+    m.interfaces = [Interface(id="I1", name="Console", what="Where an admin works.", side="ours",
+                              facing="user", kind="screen", source="src/app.py:1", ways_in=["EP1"])]
+    got = [w for w in l2_worklist_model(m, behavioural=False) if "far side" in w.claim]
+    assert len(got) == 1, [w.claim for w in got]
+    w = got[0]
+    assert w.claim == "I1 'Console': R1 'Admin' is on its far side"
+    assert w.anchor == "src/routes.py:12", w.anchor      # the way in, NOT the surface's own source
+    assert "derived" in (w.detail or "") and "UC1" in (w.detail or "")
+    # The anchor points at EVIDENCE, never at a line where "being on the far side" happens, so a
+    # skeptic reading a different line is not drift to correct.
+    assert w.drift_eligible is False
+
+
+def test_a_far_side_with_nothing_to_anchor_is_reported_UNANCHORED_not_dropped():
+    """mcpolis's "Visitor's mail program" is the live case: a `theirs` surface with no ways in and no
+    dependency, so there is genuinely no line. Dropping it would put the claim back where it started,
+    which is unchallenged."""
+    from coyodex.audit_model import l2_worklist_model
+    from coyodex.model import (EvidenceItem, Flow, FlowStep, Interface, ProjectModel, Role, UseCase)
+    m = ProjectModel(title="t", goal="g")
+    m.roles = [Role(id="R1", name="Reader", kind="human", audience="user", wants="the page")]
+    m.use_cases = [UseCase(id="UC1", name="Open it", actors=["R1"], trigger_outcome="a -> b")]
+    m.flows = [Flow(uc="UC1", title="Open it",
+                    steps=[FlowStep(n=1, src="C1", dst="I1", phrase="hands them over",
+                                    where="src/v.py:3"),
+                           FlowStep(n=2, src="I1", dst="R1", phrase="opens in their own app")])]
+    m.interfaces = [Interface(id="I1", name="Their mail app", what="Their own program.",
+                              side="theirs", facing="user", kind="handoff",
+                              evidence=[EvidenceItem(file="src/v.py:3", why="the link")])]
+    got = [w for w in l2_worklist_model(m, behavioural=False) if "far side" in w.claim]
+    assert len(got) == 1, [w.claim for w in got]
+    assert got[0].anchor is None, got[0].anchor
+    assert "nothing anchorable" in (got[0].detail or "")
+
+
+def test_a_far_side_claim_names_the_way_in_THAT_ROLE_drives_not_the_first_one():
+    """Taking the surface's first way in put a dev-stub sign-in line under "who is on the far side of
+    the Dashboard" — a real file, and not the one that puts that person there."""
+    from coyodex.audit_model import l2_worklist_model
+    from coyodex.model import EntryPoint, Interface, ProjectModel, Role, UseCase
+    m = ProjectModel(title="t", goal="g")
+    m.roles = [Role(id="R1", name="Admin", kind="human", audience="user", wants="in")]
+    m.use_cases = [UseCase(id="UC1", name="Do it", actors=["R1"], entry_points=["EP2"],
+                           trigger_outcome="a -> b")]
+    m.entry_points = [
+        EntryPoint(id="EP1", kind="http-route", trigger="a stub", activation="external",
+                   source="src/dev_stub.py:1", component="C1"),
+        EntryPoint(id="EP2", kind="http-route", trigger="the real one", activation="external",
+                   source="src/admin.py:44", component="C1")]
+    m.interfaces = [Interface(id="I1", name="Console", what="Where an admin works.", side="ours",
+                              facing="user", kind="screen", ways_in=["EP1", "EP2"])]
+    got = [w for w in l2_worklist_model(m, behavioural=False) if "far side" in w.claim]
+    assert got[0].anchor == "src/admin.py:44", got[0].anchor
+
+
 def test_a_SUB_FLOW_step_phrase_is_challenged_too_and_exactly_once():
     """The hole an adversarial review found: the step loop read `f.steps`, so a phrase living inside
     a shared walk reached readers — in the flow picture and at an interface — with no skeptic on it.

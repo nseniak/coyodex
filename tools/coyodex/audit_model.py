@@ -1214,6 +1214,65 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
             why_risky=("whose data crosses is not visible at the call site — read what this service "
                        "actually holds or returns, and refute the row if the data is the product's "
                        "own.")))
+    # ── WHO IS ON THE FAR SIDE — a DERIVED fact, and until now one no skeptic could reach ─────────
+    # Measured on the shipped mcpolis map before this existed: 1 of 1667 worklist claims mentioned a
+    # derived far side, while `Gateway`, `Administration MCP`, `Operator console` and `Operator MCP`
+    # each stated who stands at them with nothing challenging it. An AUTHORED field gets a claim, an
+    # anchor and a vote; a DERIVED one appeared on a page and was checked by nothing. That is the
+    # standing cost of every derive-instead-of-author decision this project makes, and it has made
+    # several.
+    #
+    # THE ANCHOR IS THE EVIDENCE THAT PRODUCED THE FACT, which is what made this look unfixable: a
+    # derived claim comes from a JOIN, so it has no line of its own. But each arm of the join does.
+    # A door is a step and a step has a `where`; a way in has a `source`; a dep has its configuration
+    # line. Anchored that way, 23 of the 24 derived far sides across the two live maps land on a real
+    # line, and the one that does not is reported unanchored rather than dropped.
+    #
+    # NOT drift-eligible: the anchor points at the EVIDENCE, never at a line where "being on the far
+    # side" happens, so a skeptic reading a different line is not drift to correct.
+    from coyodex.validate_model import interface_actor_use_cases  # noqa: PLC0415 — circular at import
+    far_side = interface_actor_use_cases(m)
+    role_name = {r.id: r.name for r in m.roles}
+    ep_src = {e.id: e.source for e in m.entry_points if e.id}
+    step_where: dict[tuple[str, str], str] = {}
+    for f in m.flows:
+        for st in f.steps:
+            for near, far_end in ((st.src, st.dst), (st.dst, st.src)):
+                if (st.where or "").strip():
+                    step_where.setdefault((near, far_end), str(st.where))
+    uc_eps: dict[str, set[str]] = {u.id: set(u.entry_points or ()) for u in m.use_cases}
+    for iface in m.interfaces:
+        ways_here = set(iface.ways_in)
+        for rid, ucs_here in far_side.get(iface.id, {}).items():
+            door = step_where.get((iface.id, rid), "")
+            # THE WAY IN THAT BROUGHT THIS ROLE, not the surface's first. Taking the first put a
+            # dev-stub sign-in line under "who is on the far side of the Dashboard" — a real file,
+            # and not the one that puts that person there. The role's own use cases name the address.
+            mine = [w for u in ucs_here for w in sorted(uc_eps.get(u, set()) & ways_here)]
+            ways = next((ep_src[w] for w in mine if w in ep_src and (ep_src[w] or "").strip()), "")
+            dep = next((d.where_configured for d in m.deps
+                        if iface.id in d.interfaces and (d.where_configured or "").strip()), "")
+            via = ("the walk step that names them both" if door else
+                   "a way in their own use case drives" if ways else
+                   "the dependency standing on this surface" if dep else "nothing anchorable")
+            # CAPPED THROUGH `shown`, never by hand. One role drove 27 use cases at mcpolis's
+            # dashboard and a detail line that long buries the part a skeptic reads — but a
+            # hand-written `+N more` also truncates `--json`, which is meant to emit whole lists.
+            # `test_no_hand_written_truncation_bypasses_the_helper` catches exactly that, and caught
+            # this.
+            ucs = _shown(ucs_here, 6)
+            items.append(WorkItem(
+                claim=(f"{iface.id} '{iface.name}': {rid} '{role_name.get(rid, rid)}' is on its "
+                       f"far side"),
+                anchor=_anchor(door or ways or dep),
+                detail=(f"derived, brought by {ucs}; anchored at {via}" if ucs
+                        else f"derived; anchored at {via}"),
+                drift_eligible=False, theme="interface",
+                why_risky=("DERIVED, so nothing else checks it: no field states this and the map "
+                           "will draw whoever the join produces. A wrong one puts a person at a "
+                           "surface only a program reaches, or hides that a surface hands "
+                           "something to somebody.")))
+
     if behavioural:
         # A flow title and a step phrase are CLAIMS about the code: "the caller opens the sign-in
         # page" is true or false at the step's own `where`. Anchored there; steps with no call site
