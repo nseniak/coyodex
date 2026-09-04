@@ -76,7 +76,7 @@ Every capability's audience is derived from it.
 | Role | Kind | Audience | What they want | Use cases they drive |
 |---|---|---|---|---|
 | **Map reader** | human | user | To understand a codebase top down, and to drop into the code only where it matters. | Installs the skill, starts the map server, reads the map, and asks for map changes in plain words. |
-| **Coding agent** | service | user | To follow the written method end to end and produce a map every gate accepts. | Runs the briefing, the tree sizing, the fan-out, the merge, every gate, and the change-impact report. |
+| **Coding agent** | ai-agent | user | To follow the written method end to end and produce a map every gate accepts. | Runs the briefing, the tree sizing, the fan-out, the merge, every gate, and the change-impact report. |
 | **coyodex developer** | human | internal | To know whether a change to the method made the maps better or worse. | Archives a map, scores a rebuild against the accepted one, and reviews what a finished build did. |
 
 ---

@@ -44,7 +44,11 @@ _EXTRA_DESC = ("freeform authored columns — any JSON value, agent-chosen keys.
 # `description` explains WHY a constraint exists, not just what it is; `pattern`/`enum`/`const`
 # encode the constraint itself where one is actually enforced (by `coyodex validate` or the loader).
 FIELD_META: dict[tuple[str, str], dict] = {
-    ("Role", "kind"): {"description": "human | service, free text (not a closed vocabulary)."},
+    ("Role", "kind"): {"description": "human | service | ai-agent, free text (not a closed "
+                            "vocabulary). `ai-agent` is a program driven by a language model, "
+                            "acting for somebody, and is ALWAYS outside the product — only "
+                            "`service` with an `internal` audience is the product's own scheduled "
+                            "work."},
     ("Role", "audience"): {"enum": ["", *grammar.ROLE_AUDIENCE], "description": "WHICH SIDE of the "
                             "product this actor sits on. `internal` = the side of the company that "
                             "ships it; `user` = everyone else, including someone who has not bought "

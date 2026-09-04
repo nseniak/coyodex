@@ -14,6 +14,7 @@ from typing import TypedDict
 
 # Shared schema grammar lives in tools/coyodex/grammar.py (one grammar; the table helpers serve
 # the change-impact report parser below).
+from coyodex import grammar
 from coyodex.grammar import ID_TOKEN, is_separator_row, iter_pipe_runs, split_cells, strip_fences
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href
@@ -232,9 +233,20 @@ SERVICE_HINTS = re.compile(
 
 
 def _role_kind(name: str, explicit: str) -> str:
-    """Explicit 'human'/'service' (from a Kind column) wins; else infer 'service' from name hints."""
+    """An explicit kind wins; with none, infer `service` from name hints.
+
+    A KNOWN KIND PASSES THROUGH VERBATIM. This used to collapse every explicit value into two —
+    `startswith("s")` meant service, everything else meant human — and `ai-agent` starts with an
+    `a`, so the day that kind arrived every AI actor reached the browser labelled `human`: a stick
+    figure, the wrong pill, and the wrong colour on every diagram, with the map itself saying
+    otherwise. It is the most dangerous shape of bug in this file, because nothing downstream can
+    tell a coerced value from an authored one.
+
+    The two-value fallback stays for a spelling this build does not know (`svc`, `bot`), so an old
+    or hand-typed map still draws something sensible."""
     if explicit:
-        return "service" if explicit.strip().lower().startswith("s") else "human"
+        k = explicit.strip().lower()
+        return k if k in grammar.ROLE_KINDS else ("service" if k.startswith("s") else "human")
     return "service" if SERVICE_HINTS.search(name) else "human"
 
 

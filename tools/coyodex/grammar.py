@@ -245,7 +245,37 @@ ACTIVATIONS = ("self", "external")
 # printed in 12 places and only 4 of them were people. A scheduler is not staff, and neither is a
 # payment provider the company pays, so the viewer had grown a second form (`staff-owned`) just to
 # make the word usable on a machine. One word that fits every actor beats two that fit half each.
+#: WHAT AN ACTOR IS. Three values, and the third was added on 2026-09-03 because `service` was
+#: covering two things that behave differently: the product's own timer, and a customer's AI
+#: assistant. Across the three live maps 4 roles were `service` and 3 of them were AI agents —
+#: coyodex's "Coding agent", argus's "Assistant", mcpolis's "Headless agent" — wearing the same pill
+#: as mcpolis's "Upkeep job", which is a cron inside the product.
+#:
+#: THE RULE EVERY READER USES: anything not `human` is a MACHINE (`is_machine_role`), and only
+#: `service` + `audience: internal` is INSIDE the product (`outside_actor_ids`). An `ai-agent` is
+#: therefore always outside, always a machine, and never the product's own scheduled work — which is
+#: the whole reason it is not spelled `service`.
+#:
+#: Free text at the model layer, like `Role.kind` has always been: `validate` nudges an unknown
+#: spelling and never blocks, so a map may still say `bot` or `agent`.
+ROLE_KINDS = ("human", "service", "ai-agent")
 ROLE_AUDIENCE = ("user", "internal")
+
+
+def is_machine_role(kind: str) -> bool:
+    """Is this actor a program rather than a person?
+
+    ONE PREDICATE, and it reads `!= human` rather than `== service` deliberately. Three places used
+    to string-compare against `service` and each would have silently reclassified an `ai-agent`
+    as a person the day that value appeared: the audience vote (which one used `startswith("s")`),
+    the person-at-a-machine-surface nudge, and the human-plus-service use-case advisory. An
+    adversarial review has already broken this file once over two copies of "who is an actor" that
+    disagreed, so the third value arrives with one function instead of three edits.
+
+    An unlabelled role counts as a PERSON, which is the safe direction: the checks that read this
+    exist to raise a question a person answers, and a nudge too many is recoverable where a nudge
+    too few is the silence they were added to close."""
+    return (kind or "").strip().lower() not in ("", "human")
 
 # ── Interfaces (T2b) — the product's outside edge ────────────────────────────────────────────────
 # An INTERFACE is a surface through which the product sends data/events NOT consumed by the product
@@ -305,7 +335,7 @@ INTERFACE_KIND_SEEDS_THEIRS = (
 INTERFACE_KIND_SEEDS_EITHER = (
     "api",            # a plug: one program calling another over a network, either direction,
                       # webhooks included
-    "agent-tools",    # a wrench: tools an AI assistant calls, ours or theirs — the shape, whatever
+    "agent-tools",    # a wrench: tools an AI agent calls, ours or theirs — the shape, whatever
                       # protocol carries it
     #: THE ONE PROTOCOL NAME IN THIS LIST, and it is here on purpose after being argued down twice.
     #: Every other seed says what a surface IS; `mcp` says which protocol it speaks, which is a

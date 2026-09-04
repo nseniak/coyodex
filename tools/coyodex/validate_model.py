@@ -793,7 +793,7 @@ def capability_audience(m: ProjectModel) -> dict[str, list[str]]:
                 role = roles.get(rid)
                 if role is None or not (tag := (role.audience or "").strip().lower()):
                     continue
-                (machine if (role.kind or "").strip().lower().startswith("s") else human).add(tag)
+                (machine if grammar.is_machine_role(role.kind) else human).add(tag)
         votes = human or machine
         out[cap] = [a for a in grammar.ROLE_AUDIENCE if a in votes]
     return out
@@ -807,6 +807,12 @@ def outside_actor_ids(m: ProjectModel) -> set[str]:
     a signal handler in the process. It crosses nothing, so it owes no door and it never stands on
     the far side of a surface. BOTH fields are required: an internal HUMAN role is an operator or a
     staff admin, who very much does come in through a door.
+
+    IT READS `service` LITERALLY, NOT `is_machine_role`, and that is the point of the third kind.
+    An `ai-agent` is a machine and is ALWAYS outside the product — a customer's assistant is not
+    the product's cron — so it must not be swept up by an exemption written for the product's own
+    scheduled work. Widening this to "any machine that is internal" would exempt it the moment
+    someone marked one internal, and it would owe no doors.
 
     Written after an adversarial review broke the change that introduced the idea. Two copies of it
     existed and DISAGREED: the door checks exempted the product's own timer and `interface_actors`
@@ -823,13 +829,15 @@ def outside_actor_ids(m: ProjectModel) -> set[str]:
 def person_role_ids(m: ProjectModel) -> set[str]:
     """The roles that are PEOPLE, for the one nudge whose message says "a PERSON".
 
-    `Role.kind` is a two-value field (`human` | `service`), so anything not spelled `service` counts.
-    That deliberately errs toward NUDGING on an unlabelled role: this check exists to raise a
-    question a person then answers, and a nudge too many is recoverable where a nudge too few is the
-    silence it was added to close. A SERVICE role at a machine-shaped surface is the normal case —
-    a partner's bot calling an `api` is what an `api` is for — and firing on one was a false defect
-    whose only escape silenced six unrelated checks on the same row."""
-    return {r.id for r in m.roles if (r.kind or "").strip().lower() != "service"}
+    Reads `grammar.is_machine_role`, so it is anything not spelled `human`. It used to test
+    `!= "service"` directly, which would have counted an `ai-agent` as a PERSON the day that
+    kind appeared and fired this nudge on argus's software "Assistant" standing at its `api` sign-in.
+    An unlabelled role still counts as a person, which errs toward NUDGING: this check exists to
+    raise a question a person then answers, and a nudge too many is recoverable where a nudge too
+    few is the silence it was added to close. A MACHINE role at a machine-shaped surface is the
+    normal case — a partner's bot calling an `api` is what an `api` is for — and firing on one was a
+    false defect whose only escape silenced six unrelated checks on the same row."""
+    return {r.id for r in m.roles if not grammar.is_machine_role(r.kind)}
 
 
 def interface_walk_order(m: ProjectModel) -> dict[str, int]:
@@ -2678,8 +2686,14 @@ def _check_actor_kinds(m: ProjectModel) -> list[str]:
     name = {r.id: r.name for r in m.roles}
     out: list[str] = []
     for u in m.use_cases:
-        humans = [a for a in u.actors if kind.get(a) == "human"]
-        services = [a for a in u.actors if kind.get(a) == "service"]
+        # BOTH SIDES REQUIRE A LABELLED KIND, and the `kind[a]` guard is what keeps that true.
+        # `is_machine_role` calls an unlabelled role a PERSON, which is the safe default for the
+        # nudge that reads it — but here it would invent a human where the map states nothing and
+        # fire this advisory on a pair nobody authored. The two checks want opposite defaults, so
+        # this one filters first rather than widening the shared predicate.
+        labelled = [a for a in u.actors if kind.get(a)]
+        humans = [a for a in labelled if not grammar.is_machine_role(kind[a])]
+        services = [a for a in labelled if grammar.is_machine_role(kind[a])]
         if humans and services:
             h = ", ".join(f"{a} ({name.get(a, a)})" for a in humans)
             s = ", ".join(f"{a} ({name.get(a, a)})" for a in services)

@@ -20,7 +20,7 @@
     {
       "id": "R2",
       "name": "Coding agent",
-      "kind": "service",
+      "kind": "ai-agent",
       "audience": "user",
       "wants": "To follow the written method end to end and produce a map every gate accepts.",
       "drives": "Runs the briefing, the tree sizing, the fan-out, the merge, every gate, and the change-impact report.",

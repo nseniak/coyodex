@@ -557,7 +557,12 @@ function elName(id) { return (GRAPH.nodes[id] || {}).name || UNKNOWN_NAME; }
 // search badge all read it, so the product's vocabulary changes in one place. Three copies of this map
 // used to exist and two of them disagreed.
 const ELEMENT_LABEL = {
-  capability: 'feature', usecase: 'use case', human: 'actor', service: 'actor',
+  capability: 'feature', usecase: 'use case',
+  // EVERY ACTOR KIND READS "actor" HERE. This pill says WHAT KIND OF ELEMENT a thing is, and all
+  // three are actors; which kind of actor is the pill beside it (`actorSidePills`). Missing the
+  // third entry printed the raw `ai-agent` next to the reader's "AI agent", so one card
+  // carried the same fact twice, once in the code's words.
+  human: 'actor', service: 'actor', 'ai-agent': 'actor',
   component: 'component', subsystem: 'subsystem', entity: 'entity', subdomain: 'subdomain',
   dep: 'dependency', process: 'process', rule: 'business rule', block: 'decision area',
   system: 'system',
@@ -652,14 +657,35 @@ const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process'])
 // `human` from every actor card and `user` from a feature card (see shownAudience). Printing it on
 // every person was tried for one round and undone: the axis reads as incomplete beside the programs,
 // but the cure is a word on eleven cards that only ever restates the default.
+// IS THIS ACTOR A PROGRAM? The mirror of `grammar.is_machine_role`, and it reads `!= human` for the
+// same reason: four places here tested `=== 'service'` and each would have dropped an
+// `ai-agent` on the floor the day that kind appeared — no pill, no hexagon, a card that does not
+// open. An unlabelled kind is a person, matching the model.
+function isMachineActor(kind) {
+  const k = String(kind || '').trim().toLowerCase();
+  return k !== '' && k !== 'human';
+}
+// THE READER'S WORD for an actor kind. `service` is already the reader's word; `ai-agent` is
+// not, and printing the stored spelling put a code word on a card. Anything unknown prints as
+// stored, which is the honest fallback for a map that minted its own.
+const ACTOR_KIND_WORD = { 'service': 'service', 'ai-agent': 'AI agent' };
+function actorKindWord(kind) {
+  const k = String(kind || '').trim().toLowerCase();
+  return ACTOR_KIND_WORD[k] || k;
+}
 function actorSidePills(kind, audience) {
   const side = String(audience || '').trim().toLowerCase();
   // COLOUR says what the thing IS; the WORDS say whose it is. So both program readings keep the one
   // program colour and differ only in the word, and `staff` takes the audience colour a feature card
   // already uses for the same word — one word, one colour, wherever it appears.
   // A program with no side recorded falls back to the bare kind word rather than inventing one.
-  if (kind === 'service') {
-    return [{ text: side ? `${side} service` : 'service', cls: 'ecard-pill-service' }];
+  // ONE BRANCH FOR EVERY PROGRAM, and it always prints its side. Dropping the side for an AI
+  // assistant was tried and undone by the test above this rule: whose machine it is, is exactly what
+  // the side answers, and a customer's assistant and one the company runs are a real difference.
+  // Only the WORD varies by kind; the colour never does, because the colour says it is a program.
+  if (isMachineActor(kind)) {
+    const w = actorKindWord(kind);
+    return [{ text: side ? `${side} ${w}` : w, cls: 'ecard-pill-service' }];
   }
   if (kind === 'human' && side === 'internal') {
     return [{ text: audienceWord(side), cls: `uc-aud-${side}` }];
@@ -675,7 +701,7 @@ function cardFacts(id) {
   // description field then holds the same words. One copy, not two.
   if (desc.trim() === (n.name || '').trim()) desc = '';
   // An actor's sentence says what they are AFTER, and says so in words — see wantsSentence.
-  if (n.kind === 'human' || n.kind === 'service') desc = wantsSentence(desc);
+  if (n.kind === 'human' || isMachineActor(n.kind)) desc = wantsSentence(desc);
   const pills = [];
   // A feature's audience, an actor's nature and a dependency's kind each change how the rest of the
   // card reads, so each rides beside the type pill rather than eating the description. A feature can
@@ -827,7 +853,8 @@ function drillInto(id) {
   switch (n.kind) {
     case 'capability': return go({ kind: 'capability', cap: id });
     case 'usecase': return go({ kind: 'usecase', uc: id });
-    case 'human': case 'service': return go({ kind: 'actor', act: n.name });
+    case 'human': case 'service': case 'ai-agent':
+      return go({ kind: 'actor', act: n.name });
     case 'subsystem': return go({ kind: 'subsystem', sid: id });
     case 'subdomain': return go({ kind: 'domsub', sd: id });
     case 'block': return go({ kind: 'rules', blk: id });
@@ -1157,7 +1184,11 @@ function applyTint(rect, kind) {
 // Both sequence views call this (the Happy Path and the per-use-case flows) with the `kind` their actor
 // list already carries from the Roles table — build_graph normalizes it to exactly human/service, and an
 // actor with no matching role keeps Mermaid's default rather than being painted as a guess.
-const SEQ_ACTOR_TINT = { human: 'human', service: 'svc' };
+// An AI agent takes the PROGRAM tint, like a service: colour says it is a program, shape says which
+// one. A missing entry here is not a missing colour, it is no styling at all — `styleSeqActor`
+// returns early on an unknown kind — so a new actor kind must be added here or it renders as a bare
+// Mermaid stick figure whatever the map says.
+const SEQ_ACTOR_TINT = { human: 'human', service: 'svc', 'ai-agent': 'svc' };
 const HEX_ACTOR_PAD = 18;      // how much wider than the stick figure's own footprint the hexagon sits
 const HEX_ACTOR_RATIO = 0.72;  // its height, as a fraction of that width — the Dependencies view's squat shape
 function styleSeqActor(root, aid, kind) {
@@ -1170,9 +1201,60 @@ function styleSeqActor(root, aid, kind) {
     // part added below (the hexagon) all inherit it, so one property recolours the whole figure. FILL is
     // set per shape instead — the label is a group child too, and filling it would repaint the text.
     g.style.setProperty('stroke', tint.stroke, 'important');
-    if (kind === 'service') hexagonifyActor(g);
-    for (const shape of g.querySelectorAll('circle, polygon')) shape.style.setProperty('fill', tint.fill, 'important');
+    // An AI agent keeps its BODY and changes only its head, so it stands in the story the way a
+    // person does; a service has no body at all and becomes one hexagon.
+    if (kind === 'ai-agent') botHeadActor(g);
+    else if (isMachineActor(kind)) hexagonifyActor(g);
+    // `rect` reaches the bot's head; `:not([data-solid])` spares the antenna's tip, which is a solid
+    // dot in the stroke colour and would read as a hole in the pale tint.
+    for (const shape of g.querySelectorAll('circle:not([data-solid]), polygon, rect'))
+      shape.style.setProperty('fill', tint.fill, 'important');
   }
+}
+// Swap the stick figure's ROUND HEAD for a bot's square one, in place, and leave the four limbs
+// exactly where Mermaid put them. That is the whole difference between this and `hexagonifyActor`
+// below: an AI agent stands in a story the way a person does, so it keeps the body and changes only
+// what its head says about it. Nothing is relaid out, so the lifeline, the label and every message
+// keep the positions Mermaid gave them.
+//
+// NO FACE, matching the small glyph and the person beside it: the square head and the antenna are
+// the whole distinction, and a Mermaid actor is drawn at the size where two eye dots would be the
+// only detail on any figure in the diagram.
+// MEASURED OFF THE SMALL GLYPH, not chosen by eye — the two are the same figure at two sizes, and a
+// reader carries the shape from a card to a diagram. The card glyph is head 8x5.2, mast 1.3, tip
+// r 0.85, which is w/h 1.54, mast 0.25 of the head's height, tip 0.106 of its width. These are those
+// three ratios re-expressed against Mermaid's round head diameter. The first pass eyeballed them and
+// drew a mast 0.48 of the head's height, twice the card's, which read as an aerial rather than a bot.
+const BOT_HEAD_W = 1.50;   // head width, as a fraction of the round head's own diameter
+const BOT_HEAD_H = 0.98;   // …and its height, giving the card's 1.54 width-to-height
+const BOT_ANTENNA = 0.24;  // the mast, same fraction — 0.25 of the head's height, as on the card
+function botHeadActor(g) {
+  if (g.dataset.botHead) return;   // already swapped (a re-bind over the same rendered scene)
+  const head = g.querySelector('circle');
+  if (!head) return;
+  let b; try { b = head.getBBox(); } catch (_) { return; }
+  const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+  const w = b.width * BOT_HEAD_W, h = b.height * BOT_HEAD_H;
+  const top = cy - h / 2, mast = b.height * BOT_ANTENNA;
+  const box = document.createElementNS(SVGNS, 'rect');
+  box.setAttribute('x', String(cx - w / 2)); box.setAttribute('y', String(top));
+  box.setAttribute('width', String(w)); box.setAttribute('height', String(h));
+  box.setAttribute('rx', String(h * 0.3));
+  box.setAttribute('stroke-width', '2');   // the weight Mermaid strokes the stick figure with
+  const stem = document.createElementNS(SVGNS, 'line');
+  stem.setAttribute('x1', String(cx)); stem.setAttribute('y1', String(top));
+  stem.setAttribute('x2', String(cx)); stem.setAttribute('y2', String(top - mast));
+  stem.setAttribute('stroke-width', '2');
+  const tip = document.createElementNS(SVGNS, 'circle');
+  tip.setAttribute('cx', String(cx)); tip.setAttribute('cy', String(top - mast));
+  tip.setAttribute('r', String(Math.max(1.6, b.width * 0.159)));   // 0.106 of the head's width
+  tip.dataset.solid = '1';   // the tint loop skips it; it is filled by the group's own stroke colour
+  tip.setAttribute('fill', 'currentColor');
+  head.remove();
+  g.insertBefore(box, g.firstChild);
+  g.insertBefore(stem, g.firstChild);
+  g.insertBefore(tip, g.firstChild);
+  g.dataset.botHead = '1';
 }
 // Swap one stick figure for the hexagon outline, in place: the hexagon is centred on the figure's own
 // footprint and the label is left untouched, so the lifeline, the label and every message keep the exact
@@ -1227,6 +1309,29 @@ function stickFigureNode(el) {
     p.setAttribute('d', d);
     p.style.setProperty('stroke-width', '1.8', 'important');  // a box outline's hairline reads as a broken figure
     p.dataset.stick = '1';
+  }
+}
+// The AI-agent twin of `stickFigureNode`, and it works the same way for the same reason: Mermaid has
+// no bot shape, so the generator emits the stadium node a person gets (blank first label line and
+// all) under its own `agent` class, and the node's own outline path is re-pathed in place.
+function botFigureNode(el) {
+  const label = el.querySelector('g.label');
+  const paths = [...el.querySelectorAll('path')];
+  if (!label || !paths.length || paths[0].dataset.stick) return;
+  if (!/<br/i.test(label.innerHTML)) return;
+  let box = null;
+  for (const p of paths) {
+    let b; try { b = p.getBBox(); } catch (_) { continue; }
+    if (!box || b.height > box.height) box = b;
+  }
+  if (!box) return;
+  const top = box.y + STICK_NODE_INSET, h = -STICK_NODE_GAP - top;
+  if (h <= 0) return;
+  const d = botFigurePath(0, top, h);
+  for (const p of paths) {
+    p.setAttribute('d', d);
+    p.style.setProperty('stroke-width', '1.8', 'important');
+    p.dataset.stick = '1';   // the same guard the person uses; one re-path per rendered scene
   }
 }
 // Container kinds — the group boxes (subsystem/subdomain) the diagram draws with a thick dashed frame.
@@ -3323,6 +3428,24 @@ function stickFigurePath(cx, top, h) {
     + `M${n(cx - 0.26 * h)},${n(top + h)}L${n(cx)},${n(hip)}`
     + `M${n(cx)},${n(hip)}L${n(cx + 0.26 * h)},${n(top + h)}`;
 }
+// THE SAME FIGURE AS `stickFigurePath`, with a square head and an antenna instead of a round head.
+// One path, because Mermaid gives a node's outline a single `d` and the re-path swaps it in place.
+// The body proportions are COPIED, not re-tuned: an agent and a person stand side by side in these
+// views, and a torso a few percent different reads as a mistake rather than a distinction.
+function botFigurePath(cx, top, h) {
+  const r = 0.17 * h, hip = top + 0.66 * h, arm = top + 0.40 * h;
+  const hw = 1.5 * r, hh = 1.15 * r, mast = 0.55 * r, head = top + 2 * r;
+  const n = (v) => v.toFixed(2);
+  // The head box hangs from the same point the round head's top sits at, so the neck, the arms and
+  // the legs land exactly where the person's do.
+  return `M${n(cx - hw)},${n(top)}h${n(2 * hw)}v${n(2 * hh)}h${n(-2 * hw)}Z`
+    + `M${n(cx)},${n(top)}L${n(cx)},${n(top - mast)}`
+    + `M${n(cx - mast * 0.5)},${n(top - mast)}L${n(cx + mast * 0.5)},${n(top - mast)}`
+    + `M${n(cx)},${n(Math.max(head, top + 2 * hh))}L${n(cx)},${n(hip)}`
+    + `M${n(cx - 0.30 * h)},${n(arm)}L${n(cx + 0.30 * h)},${n(arm)}`
+    + `M${n(cx - 0.26 * h)},${n(top + h)}L${n(cx)},${n(hip)}`
+    + `M${n(cx)},${n(hip)}L${n(cx + 0.26 * h)},${n(top + h)}`;
+}
 function legendSwatch(kind, shape) {
   const t = (ELEMENT_TINT || {})[kind] || {};
   const svg = document.createElementNS(SVGNS, 'svg');
@@ -3837,6 +3960,7 @@ function bindNodes(scene, onActivate) {
     // Only the Context family draws a `human` box, so this reaches every view that has one (Dependencies
     // itself, the Libraries drill, a bucket drill) and is a no-op on the rest.
     if (el.classList.contains('human')) stickFigureNode(el);
+    else if (el.classList.contains('agent')) botFigureNode(el);
     markOpenSrc(el, id);  // leaf with a source ref -> ⌘-held cursor shows the open-source affordance
     bindHoverGlow(scene, el, id);  // hover affordance — skip while this node is the active selection, so HILITE wins
     attachTip(el, () => actionTipNode(id));  // ⌘-hover shows the open-source action
@@ -5262,6 +5386,7 @@ function bindFlowMap(uc) {
     if (!a) return;
     scene.nodeEls[aid] = el;
     if (el.classList.contains('human')) stickFigureNode(el);
+    else if (el.classList.contains('agent')) botFigureNode(el);
     el.style.cursor = 'pointer';
     // Built lazily (like every other node descriptor): `nodeFocus` reads scene.edgeEls, which bindEdges
     // below fills in after this runs.
@@ -6533,7 +6658,7 @@ function pageElementId(s) {
 }
 function actorNodeId(name) {
   const n = Object.values(GRAPH.nodes || {}).find((x) =>
-    (x.kind === 'human' || x.kind === 'service') && x.name === name);
+    (x.kind === 'human' || isMachineActor(x.kind)) && x.name === name);
   return n ? n.id : null;
 }
 // The pills that ride the breadcrumb, as HTML. THE SAME PILLS THE ELEMENT'S CARD SHOWS, from the same
@@ -6992,7 +7117,9 @@ function roleKindOf(n) {
   const names = (n.actors && n.actors.length ? n.actors : []).map((s) => String(s).trim().toLowerCase());
   const kinds = new Set(names.map((nm) => ((ROLE_BY_NAME[nm] || {}).kind || '').trim().toLowerCase()));
   const k = kinds.size === 1 ? [...kinds][0] : '';
-  return (k === 'human' || k === 'service') ? k : 'human';
+  // KEEP A KNOWN KIND, and fall back to `human` only for one this build does not know. It used to
+  // whitelist `human` and `service`, so an `ai-agent` came out a stick figure.
+  return (k === 'human' || isMachineActor(k)) ? k : 'human';
 }
 
 // The catalog's ACTOR axis, the twin of capabilityGroups(). Lifted out of renderUseCases when the
@@ -7429,8 +7556,8 @@ function renderUseCases(sel) {
     // each of a pair wants something of their own and one header cannot speak for both.
     const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
     const kind = kinds.size === 1 ? [...kinds][0] : '';
-    const badge = kind === 'service'
-      ? `<span class="ecard-pill ecard-pill-service">${esc(kind)}</span>` : '';
+    const badge = isMachineActor(kind)
+      ? `<span class="ecard-pill ecard-pill-service">${esc(actorKindWord(kind))}</span>` : '';
     const w = (g.roles || []).length === 1 ? g.roles[0].wants : '';
     const wants = w ? `<p class="uc-wants">${mdInline(wantsSentence(w))}</p>` : '';
     secs.push({ id: secId, title: g.actor });
@@ -7798,6 +7925,10 @@ function actorSurfacesHtml(actorName) {
   // are different facts and get different sentences; one sentence for both would report the timer
   // as an unfinished map.
   if (!ours.length && !theirs.length) {
+    // LITERALLY `service`, never `isMachineActor` — the same rule `outside_actor_ids` keeps. This
+    // sentence claims the actor is the product's OWN scheduled work; a customer's AI agent is a
+    // machine and is never that, so widening this would tell a reader an outside agent runs inside
+    // the product.
     const inside = String(role.kind || '').trim().toLowerCase() === 'service'
       && String(role.audience || '').trim().toLowerCase() === 'internal';
     return { count: 0, body: '<p class="feat-empty">' + (inside
@@ -8737,11 +8868,40 @@ function bindWalk(root) {
 // the counts under the sentence are labels. A label with a happy-path step is a door to that step;
 // one without says so and stays put.
 function storyGlyphSvg(kind) {
-  // The same identity the sequence diagrams give an actor — person vs service shape, in the actor
+  // The same identity the sequence diagrams give an actor — person vs program shape, in the actor
   // tints (ELEMENT_TINT) — hand-drawn small, since the Mermaid glyphs only exist as SVG mutations.
-  const t = ELEMENT_TINT[kind === 'service' ? 'svc' : 'human'] || {};
+  const t = ELEMENT_TINT[isMachineActor(kind) ? 'svc' : 'human'] || {};
   const stroke = t.stroke || '#6b7280', fill = t.fill || '#fff';
-  if (kind === 'service') {
+  // AN AI AGENT IS A BOT HEAD ON A PERSON'S BODY, and the composition is the meaning: it is a
+  // PROGRAM (the head), and it STANDS WHERE A PERSON STANDS in a story (the same limbs a human
+  // wears, so it reads as a member of the actor family and not as a new mark).
+  //
+  // ANTENNA, SQUARE HEAD, BODY — AND NO FACE. Eyes were drawn and removed: the person beside it has
+  // no face either, so two dots made the pair inconsistent, one figure detailed and the other bare.
+  // Two marks already separate them at 20px, the square head against a round one and the antenna,
+  // and neither asks the reader to see something 0.8px across.
+  //
+  // The antenna costs the top of the box and the head shrinks by 0.4 to make room. That is the whole
+  // trade, and it buys reading "bot" at a glance instead of on a second look.
+  //
+  // A SPARKLE WAS THE OBVIOUS CHOICE AND IS TAKEN: the four-point sparkle is the FEATURE glyph,
+  // picked precisely because it collided with nothing. Reusing it would put one mark on a feature
+  // and on an actor. A hexagon head was tried first and dropped — it is the SERVICE silhouette, so
+  // the two programs differed only by having a body.
+  //
+  // THE COLOUR DOES NOT CHANGE. It stays the program tint, because colour says WHAT the thing is and
+  // the shape says which program — the same split `actorSidePills` keeps between its colour and its
+  // words.
+  if (String(kind || '').trim().toLowerCase() === 'ai-agent') {
+    return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
+      + `<path d="M10 2.6 V1.3" stroke="${stroke}" stroke-width="1.4" stroke-linecap="round"/>`
+      + `<circle cx="10" cy="0.95" r="0.85" fill="${stroke}"/>`
+      + `<rect x="6" y="2.6" width="8" height="5.2" rx="1.7" fill="${fill}" stroke="${stroke}" `
+      + 'stroke-width="1.5"/>'
+      + '<path d="M10 7.8 V13 M4.8 9.9 H15.2 M10 13 L6.4 18.5 M10 13 L13.6 18.5" fill="none" '
+      + `stroke="${stroke}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  }
+  if (isMachineActor(kind)) {
     return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
       + `<polygon points="5.5,3.5 14.5,3.5 18.5,10 14.5,16.5 5.5,16.5 1.5,10" fill="${fill}" `
       + `stroke="${stroke}" stroke-width="1.6"/></svg>`;
@@ -10323,7 +10483,18 @@ function ifaceGlyphSvg(key, color) {
 }
 // A person or a piece of software, the same two shapes the story diagram draws.
 function ifaceActorGlyphSvg(kind) {
-  return kind === 'service'
+  // The same bot head on the same body as `storyGlyphSvg`, redrawn in this row's hand: 18px,
+  // stroke-only, `currentColor`. Two hands for one figure, because a chip inherits its colour from
+  // the chip and a card glyph carries the actor tint. The antenna's tip is the one FILLED mark in an
+  // otherwise stroke-only figure: a 0.75px ring at this size renders as a smudge.
+  if (String(kind || '').trim().toLowerCase() === 'ai-agent') {
+    return '<svg class="ifd-agly" viewBox="0 0 18 18" fill="none" stroke="currentColor" '
+      + 'stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'
+      + '<path d="M9 2.1V1.1"/><circle cx="9" cy="0.75" r="0.75" fill="currentColor" stroke="none"/>'
+      + '<rect x="5.2" y="2.1" width="7.6" height="4.8" rx="1.6"/>'
+      + '<path d="M9 6.9v4.5M5.4 8.5h7.2M6.4 15.5 9 11.4l2.6 4.1"/></svg>';
+  }
+  return isMachineActor(kind)
     ? '<svg class="ifd-agly" viewBox="0 0 18 18" fill="none" stroke="currentColor" '
       + 'stroke-width="1.6" aria-hidden="true"><rect x="2" y="5" width="14" height="8" rx="4"/></svg>'
     : '<svg class="ifd-agly" viewBox="0 0 18 18" fill="none" stroke="currentColor" '
@@ -10354,7 +10525,7 @@ function ifaceBoxHtml(i, me) {
   // product's own happy path takes, which is the same rule the surfaces themselves are sorted by.
   const chips = ifaceActorRows(i).map(({ role: rid }) => {
     const r = ROLE_BY_ID[rid] || {};
-    const svc = (r.kind || '').trim().toLowerCase() === 'service';
+    const svc = isMachineActor(r.kind);
     return `<span class="ifd-chip-actor${svc ? ' ifd-chip-svc' : ''}`
       + `${rid === me ? ' ifd-chip-me' : ''}">`
       + `${ifaceActorGlyphSvg(r.kind)}${esc(r.name || rid)}</span>`;

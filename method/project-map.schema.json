@@ -235,7 +235,7 @@
         },
         "kind": {
           "type": "string",
-          "description": "human | service, free text (not a closed vocabulary)."
+          "description": "human | service | ai-agent, free text (not a closed vocabulary). `ai-agent` is a program driven by a language model, acting for somebody, and is ALWAYS outside the product \u2014 only `service` with an `internal` audience is the product's own scheduled work."
         },
         "audience": {
           "type": "string",

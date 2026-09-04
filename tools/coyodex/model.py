@@ -68,7 +68,12 @@ class RoleRelation:
 class Role:
     id: str                   # Rn — a role is a first-class element, referenced by id (not by name)
     name: str
-    kind: str = ""            # human | service (free text preserved; the viewer normalizes)
+    #: human | service | ai-agent (grammar.ROLE_KINDS; free text preserved, the viewer normalizes).
+    #: `ai-agent` is a program driven by a language model, acting for somebody. It is always
+    #: OUTSIDE the product, which is why it is not spelled `service`: only `service` + an `internal`
+    #: audience means the product's own scheduled work. Every "is this a program" question reads
+    #: `grammar.is_machine_role`, which is `!= human`, so a new kind is a machine by default.
+    kind: str = ""
     audience: str = ""        # user | internal (grammar.ROLE_AUDIENCE) — WHICH SIDE of the product
                               # this actor sits on. A PERSON: does the person work for the company
                               # that ships it? A PROGRAM: whose machine is it — the customer set it

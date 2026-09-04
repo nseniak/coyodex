@@ -53,7 +53,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "goal":   "<T0 prose — the problem the project solves and for whom>",
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
-  "roles":       [ { "id": "Rn", "name", "kind": "human|service", "audience": "user|internal",
+  "roles":       [ { "id": "Rn", "name", "kind": "human|service|ai-agent", "audience": "user|internal",
                      "wants", "drives",
                      "relations": [ { "kind": "becomes", "role": "Rn", "at": "UCn" },
                                     { "kind": "includes", "role": "Rn" } ] } ],

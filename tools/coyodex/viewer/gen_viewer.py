@@ -41,6 +41,7 @@ from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
 from coyodex.features import as_bundle, build_index
 from coyodex.model import ModelError, ProjectModel, load_model
 from coyodex.impact_git import Extents, load_map_extents
+from coyodex import grammar
 from coyodex.grammar import (  # external-dep Kind fold rule + the purpose-bucket grouping axis
     DEP_BUCKET_FOLD_AT, DEP_KINDS_FOLDED, DEP_KINDS_SYSTEM, canonical_bucket, order_buckets,
     resolve_bucket, unit_name_matches_dep,
@@ -1425,8 +1426,15 @@ def _context_head(graph: GraphDict) -> list[str]:
     for i, r in enumerate(graph["roles"]):
         rid = _actor_id(i)
         label = _safe_label(str(r["name"]))
-        if r["kind"] == "service":
-            lines.append(f'  {rid}{{{{"{label}"}}}}:::cy-{rid}')   # hexagon = service actor
+        # AN AI AGENT TAKES THE PERSON'S SHAPE, not the hexagon, and the viewer re-paths it into a bot
+        # figure (`botFigureNode`) the same way it re-paths a person into a stick figure. It needs the
+        # same blank first label line, for the same reason: that blank line IS the room the figure is
+        # drawn in, and without it the figure lands on top of the name.
+        if str(r["kind"]).strip().lower() == "ai-agent":
+            lines.append(f'  {rid}([" <br/>{label}"]):::cy-{rid}')
+            lines.append(f"  class {rid} agent")
+        elif grammar.is_machine_role(str(r["kind"])):   # every other program
+            lines.append(f'  {rid}{{{{"{label}"}}}}:::cy-{rid}')   # hexagon = a program
             lines.append(f"  class {rid} svc")
         else:
             # Stick figure = human actor, the same figure the sequence views draw — but a flowchart has
@@ -1445,6 +1453,8 @@ CONTEXT_CLASSDEFS = [
     "  classDef system fill:#1e1b4b,stroke:#312e81,color:#fff;",
     f"  classDef human {ACTOR_HUMAN_STYLE};",
     f"  classDef svc {ACTOR_SVC_STYLE};",
+    # An AI agent wears the PROGRAM colour and its own shape: colour says what it is, shape says which.
+    f"  classDef agent {ACTOR_SVC_STYLE};",
     f"  classDef dep {DEP_STYLE};",
     # Group CONTAINERS (the Libraries bundle box + folded bucket count boxes) share one look: the same
     # emerald hue as the individual deps/libraries they hold, but a paler fill and a DASHED border — the
@@ -2866,7 +2876,10 @@ FLOW_MAP_SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]'), "entity": ('
 FLOW_MAP_STYLE = {"component": COMPONENT_STYLE, "dep": DEP_STYLE, "entity": ENTITY_STYLE,
                   "subsystem": SUBSYSTEM_STYLE, "subdomain": SUBDOMAIN_STYLE,
                   "interface": INTERFACE_STYLE,
-                  "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE}
+                  # An AI agent wears the PROGRAM colour and the person's node shape; the viewer
+                  # re-paths that shape into a bot figure. Missing this entry is a KeyError at the
+                  # classDef loop, not a silent miss, which is the failure mode to prefer.
+                  "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE, "agent": ACTOR_SVC_STYLE}
 
 
 def _flow_map_arrow_label(ns: list[int]) -> str:
@@ -2919,7 +2932,16 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
             # the Context view and the sequence lifelines, so one flow cannot say "a person did this"
             # where the other says "a scheduled job did".
             role = roles_by_name.get(token.strip().lower())
-            if role is not None and str(role.get("kind") or "").strip().lower() == "service":
+            rkind = str((role or {}).get("kind") or "").strip().lower()
+            # An AI agent takes the PERSON'S node shape — it stands in a story the way a person does —
+            # and the viewer re-paths it into a bot figure. The blank first label line is the room
+            # that figure is drawn in, exactly as for a person.
+            if rkind == "ai-agent":
+                kinds.add("agent")
+                decls.append(f'  {aid}([" <br/>{_safe_label(token)}"]):::cy-{aid}')
+                decls.append(f"  class {aid} agent")
+                return
+            if role is not None and grammar.is_machine_role(rkind):
                 kinds.add("svc")
                 decls.append(f'  {aid}{{{{"{_safe_label(token)}"}}}}:::cy-{aid}')   # hexagon = service
                 decls.append(f"  class {aid} svc")
@@ -2960,7 +2982,7 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     for (a, b), ns in pairs.items():
         lines.append(f"  {a} -->|{_edge_label(_flow_map_arrow_label(ns))}| {b}")
     for kind in ("component", "dep", "entity", "subsystem", "subdomain", "interface",
-                 "human", "svc"):
+                 "human", "svc", "agent"):
         if kind in kinds:
             lines.append(f"  classDef {kind} {FLOW_MAP_STYLE[kind]};")
     return "\n".join(lines)

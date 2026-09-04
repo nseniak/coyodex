@@ -3062,7 +3062,13 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
     fn = js[js.index("function actorSidePills(kind, audience) {"):
             js.index("\nfunction ", js.index("function actorSidePills(kind, audience) {") + 10)]
-    assert "text: side ? `${side} service` : 'service'" in fn, "a program always prints its side"
+    assert "text: side ? `${side} ${w}` : w" in fn, "a program always prints its side"
+    # …AND SO DOES AN AI AGENT. Leaving the side off one was tried and undone by this very rule: for a
+    # program the side is the whole point, because it says whether the CUSTOMER set it up or we did.
+    # One branch covers every program, so a fourth kind cannot quietly get different treatment.
+    assert fn.count("isMachineActor(kind)") == 1, \
+        "ONE branch for every program, so the side can never be dropped for one kind of them"
+    assert "actorKindWord(kind)" in fn, "only the WORD varies by kind; `ai-agent` is not a reader's word"
     assert "audienceWord(side)" in fn and "staff service" not in fn, "a program is never called staff"
     assert "kind === 'human' && side === 'internal'" in fn, \
         "a person prints a side only when it is the company's"
