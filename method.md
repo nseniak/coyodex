@@ -418,10 +418,10 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   address that only serves the product's own front end belongs to that front end's surface; a
   separate API surface exists only when someone outside is expected to call it directly.
   `Side` is whose DESIGN it is (`ours`/`theirs`): if the far side vanished tomorrow, would this
-  thing's shape change? `Facing` is who it serves (`user`/`operator`) and is AUTHORED — the actor
+  thing's design change? `Facing` is who it serves (`user`/`operator`) and is AUTHORED — the actor
   `audience` field answers a different question and marks a bought payment service `internal` while
   its interface is user-facing.
-  **`Kind` is what SHAPE the surface is** — authored with the row, one word, from these eleven seeds:
+  **`Kind` is WHAT THE SURFACE IS** — authored with the row, one word, from these eleven seeds:
 
   | Seed | The picture | Covers | Side |
   |---|---|---|---|
@@ -431,17 +431,27 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   | `command-line` | a prompt | commands typed in a terminal | ours |
   | `file` | a document | files we write that something else opens | ours |
   | `settings` | a gear | the values a person or an operator sets | ours |
-  | `hosted-screen` | a window someone else owns | a sign-in, a vendor console, a chat platform | theirs |
+  | `hosted-screen` | a window someone else owns | a sign-in, a chat platform, a vendor console the product's own flow sends a person to | theirs |
   | `content` | a page | data we read that we did not write: the open web, a repo, a transcript | theirs |
   | `handoff` | an arrow out | we hand the PERSON to another program: a link, their editor | theirs |
   | `api` | a plug | one program calling another over a network, either direction, webhooks included | either |
   | `agent-tools` | a wrench | tools an AI assistant calls, ours or theirs | either |
 
-  **SHAPE, never PURPOSE.** A payment processor and a crash reporter are both `api`; which is which
+  **THE MOST SPECIFIC SEED THAT FITS WINS, and `api` is the fallback.** `api` is a SUPERSET of
+  several of the others: every `agent-tools` surface is also one program calling another over a
+  network, and so is much of `content`. Nothing in the list used to say which to pick when both fit,
+  so the vaguer word tended to win — never flagged as wrong, and never the better answer. It cost a
+  real row: mcpolis's "Upstream
+  MCP servers" — the servers its gateway asks for their tools and forwards each call to — is `api`,
+  where `agent-tools` says the same thing and more. So the gateway wore a wrench and the servers it
+  calls wore a plug, on one screen, for one protocol. Reach for `api` only when nothing more
+  specific describes the surface.
+
+  **WHAT IT IS, never WHAT IT IS FOR.** A payment processor and a crash reporter are both `api`; which is which
   is already authored one table over, on the dependency's `bucket`, in a richer vocabulary. A kind
   that answers "what is it FOR" means the row has been mis-modelled — `validate` nudges rather than
-  blocks, and you adjudicate. On the `theirs` side almost every surface IS the same shape (an HTTPS
-  call to a vendor), so expect several rows to share `api` and let `bucket` tell them apart.
+  blocks, and you adjudicate. On the `theirs` side almost every surface IS the same kind of thing (an
+  HTTPS call to a vendor), so expect several rows to share `api` and let `bucket` tell them apart.
   The `Side` column above is GUIDANCE, not a rule: a product can host a screen someone else designed
   and publish an API someone else's spec defines.
   **Seeded-open**, like an entry point's kind: prefer a seed, mint only when none fits (there is
@@ -455,6 +465,27 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   names where the PEOPLE are, but only when the product's own flow takes them there.* A chat
   platform the product lives in, a sign-in redirect and a hosted checkout are `hosted-screen`; a code
   link we hand over is `handoff`; a crash reporter an operator opens on their own is `api`.
+  **A vendor console is the case this decides, so read it twice.** "A vendor console" sits in the
+  `hosted-screen` row above AND under this tiebreak, and the two point opposite ways: the row says
+  the console IS a window someone else owns, the tiebreak says it is `api` unless our flow takes the
+  person there. THE TIEBREAK WINS. Crash reporters, analytics and log stores are `api` — staff open
+  them on their own — and they become `hosted-screen` only where the product itself links a person
+  in. Measured: this one question decides 3 of mcpolis's 16 rows and 3 of argus's 12, and two
+  independent readers of this page called the pair a contradiction before it was written down.
+
+  **`content` versus `api`: it is the FAR SIDE that decides, not the data.** Both bring back things
+  we did not write, so the data cannot separate them. `content` is MATERIAL we read, with no service
+  on the far side to have a contract with: the open web, a repo, someone else's transcript, source
+  files on disk. `api` is a NAMED SERVICE we call. Measured across the three live maps and it splits
+  every row cleanly — `content` on the open web, project source files and a coding agent's
+  transcript; `api` on Scrapfly, Sentry, Mixpanel, Elastic and E2B. The hard case proves the rule:
+  a paid service that FETCHES WEB PAGES for us is `api`, because we call Scrapfly, even though what
+  comes back is exactly the material `content` describes.
+
+  **`settings` versus `screen`.** `screen` covers anything served to a browser, which swallows
+  `settings` whenever the values live in a web page — so `settings` is for values set OUTSIDE a
+  browser: a config file, environment variables, a flag file an operator edits. Values a person
+  types into a page of ours are `screen`.
   **`actors` is DERIVED and is NOT a field — never author it.** Who is on the far side falls out of
   the walks, from THREE sources, and the first is the strongest. **(1) The DOORS**: any role standing
   at a step next to the surface, `Rn → In` or `In → Rn`, either side, on ANY surface and with no kind
@@ -665,9 +696,21 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   reading polarity flipped argus's "Tracked web pages" from `in` to `out`), and no step names the
   records that cross. Three redaction guarantees — "stripped of credentials before it leaves" —
   live only here.
-  **So say the thing a step cannot.** Prefer the guarantee over the mechanism: what is stripped,
-  hashed or masked before data leaves; which records really cross; which way. A row that merely
-  re-tells a step you have already written is the one row worth cutting.
+  **So say the thing a step cannot**: which way, which records, and — where one exists — what is
+  stripped, hashed or masked before data leaves. A row that merely re-tells a step you have already
+  written is the one row worth cutting.
+  **A GUARANTEE NEEDS A LINE YOU HAVE READ. Never reason one out of the prose.** "Nothing else is
+  removed", "no other account's data", "no password is typed here" are the shape of claim this block
+  exists to carry AND the shape that has shipped refuted: one did, on the 2026-09-02 mcpolis map,
+  because nobody could check it. If you cannot point at the code that strips, hashes or masks, write
+  what crosses plainly and stop. A row with no guarantee is complete; an invented one is a defect,
+  and it is the worst defect this block can hold.
+  **THE WRITING RULES APPLY, and they bite here**: one idea per row, at most 20 words. Measured on
+  the two live maps, the shipped rows average 12 words and not one exceeds 20.
+  **HOW MANY ROWS.** One per distinct thing that crosses, per direction — distinct meaning it names
+  different records or makes a different claim. Live maps carry 4 to 7 rows on their busiest screen.
+  Past about eight you are re-telling steps: the walks are shown beside these rows, so a rich walk
+  is a reason to write FEWER rows, not more.
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).

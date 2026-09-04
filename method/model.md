@@ -432,18 +432,23 @@ Semantics, stated on the fields:
   and tests it. An outside consumer **the map records** beats the read-back exclusion. Name the far
   side, never the pipe that reaches it.
   **`side`** is whose DESIGN the surface is (`ours`/`theirs`): if the far side vanished tomorrow,
-  would its shape change? **`facing`** is who it serves (`user`/`operator`) and is AUTHORED —
+  would its design change? **`facing`** is who it serves (`user`/`operator`) and is AUTHORED —
   `roles[].audience` answers a different question and marks a bought service `internal` while its
   interface is user-facing. **There is NO field for the far side in words.** The dependencies
   standing on the surface are DERIVED from each dep's own `interfaces` list, and WHO is on the far
   side is DERIVED from the walks — neither is authored here. A free-text `party` was tried and
   removed: 14 of its 15 values across the two live maps repeated one of those two neighbours, and
   the fifteenth repeated its own row's `what`. Anything genuinely unsaid goes in `what`.
-  **`kind`** is what SHAPE the surface is, seeded-open over
+  **`kind`** is WHAT THE SURFACE IS, seeded-open over
   `grammar.INTERFACE_KIND_SEEDS`: `screen`, `mobile-app`, `desktop-app`, `command-line`, `file`,
-  `settings`, `hosted-screen`, `content`, `handoff`, `api`, `agent-tools`. **SHAPE, never PURPOSE** —
+  `settings`, `hosted-screen`, `content`, `handoff`, `api`, `agent-tools`. **WHAT IT IS, never WHAT
+  IT IS FOR** —
   a payment processor and a crash reporter are both `api`, and `deps[].bucket` already says which is
   which in a richer vocabulary; a kind answering "what is it FOR" means the row is mis-modelled.
+  **The MOST SPECIFIC seed that fits wins; `api` is the fallback.** It is a superset of several of
+  the others (every `agent-tools` surface is also one program calling another over a network), so
+  the vaguer word wins by default unless the instruction says otherwise. mcpolis's "Upstream MCP
+  servers" is the live case: authored `api`, where `agent-tools` is true and says more.
   AUTHORED, not derived, and the measurement is why: deriving it from the ways in gives one clean
   answer on 4 of coyodex's 11 surfaces and 1 of mcpolis's 12, and NOTHING on any `theirs` surface,
   which has no ways in by definition. It is also a LEVEL above `entry_points[].kind`, never a
@@ -459,11 +464,11 @@ Semantics, stated on the fields:
   (the two that MEAN a person goes there). Anything else derives nobody, and nobody is the correct
   answer — most surfaces are reached by the product itself, not by a person. An authored value
   beside a derived one is the failure mode this shape exists to remove.
-  **A person derived at an `api` or a `content` surface draws a nudge**, because those two shapes are
+  **A person derived at an `api` or a `content` surface draws a nudge**, because those two kinds are
   one program calling another. It is the only check that can ask whether a door is the RIGHT door:
   every other door check verifies a door EXISTS, and cannot tell a right one from a wrong one. Two
   causes, either of which can be the wrong one — the walk names the wrong surface, or the surface
-  wears the wrong shape.
+  wears the wrong kind.
   **`ways_in`** lists the `EPn`s the surface is made of and
   travels through `reconcile` (field `ways_in`) exactly like a use case's `entry_points`, for the
   same reason: those ids are minted at assembly. **`carries`** is one row per thing that crosses, in

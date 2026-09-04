@@ -254,7 +254,7 @@ ROLE_AUDIENCE = ("user", "internal")
 # the product; the pipeline that builds and tests it. An outside consumer THE MAP RECORDS beats the
 # read-back exclusion. Name the far side, never the pipe that reaches it.
 INTERFACE_SIDES = ("ours", "theirs")      # whose design the surface is: if the far side vanished,
-                                          # would the shape of this thing change?
+                                          # would the design of this thing change?
 INTERFACE_FACINGS = ("user", "operator")  # who it serves. AUTHORED, never derived from
                                           # `Role.audience`: that answers a different question (which
                                           # side of the COMPANY an actor sits on) and marks a bought
@@ -264,9 +264,10 @@ INTERFACE_FACINGS = ("user", "operator")  # who it serves. AUTHORED, never deriv
 CROSSING_DIRECTIONS = ("in", "out")       # per crossing; an interface's overall flow is DERIVED as
                                           # the set of directions its crossings carry.
 
-# ── Interface KIND — what SHAPE a surface is, seeded-open (mirror of the entry-point kind axis) ───
-# `kind` is SHAPE. `Dep.bucket` is PURPOSE. A payment processor and a crash reporter are both `api`
-# in shape, and what tells them apart is already authored one table over, in a richer vocabulary. A
+# ── Interface KIND — WHAT a surface IS, seeded-open (mirror of the entry-point kind axis) ────────
+# `kind` says WHAT IT IS. `Dep.bucket` says WHAT IT IS FOR. A payment processor and a crash reporter
+# are both `api`, and what tells them apart is already authored one table over, in a richer set of
+# words. A
 # kind that answers "what is it FOR" is the sign this field has been mis-modelled — `validate` nudges
 # on the purpose-shaped spellings below rather than blocking, because the author adjudicates.
 #
@@ -275,8 +276,8 @@ CROSSING_DIRECTIONS = ("in", "out")       # per crossing; an interface's overall
 # `store`, `compute` and `message` after an adversarial review measured all 7 of mcpolis's `theirs`
 # surfaces mapping 1:1 from `Dep.bucket` to the kind — those three were `bucket` under another name,
 # and `grammar` already seeds "Observability", "Infrastructure & runtime", "Messaging & delivery".
-# On the `theirs` side almost every surface IS the same shape (an HTTPS call to a vendor) and what
-# differs is purpose, so a shape vocabulary should say little there: the log store, the analytics
+# On the `theirs` side almost every surface IS the same kind of thing (an HTTPS call to a vendor) and
+# what differs is purpose, so this vocabulary should say little there: the log store, the analytics
 # service and the crash reporter all take `api`.
 #
 # DRIFT is the other reason to keep it small: a seeded-open vocabulary is what the eval compares
@@ -323,12 +324,12 @@ INTERFACE_KINDS_A_PERSON_GOES_TO = ("hosted-screen", "handoff")
 # The other end of the same question, and it answers a DIFFERENT one — do not merge the two tuples.
 # Above: which `theirs` kinds let the map INFER that a person goes there. Here: which kinds say
 # NOBODY STANDS THERE AT ALL, so a walk that draws a person at one is worth a second look. Both
-# shapes are one program talking to another: `api` is a call over a network, `content` is data we
+# kinds are one program talking to another: `api` is a call over a network, `content` is data we
 # read that we did not write. Every other seed can legitimately have a person at it, `agent-tools`
 # included, because a headless agent is a role in its own right.
 #
 # This is a NUDGE, never a gate, and it names TWO possible causes because either can be the wrong
-# one: the door may be on the wrong surface, or the surface may be wearing the wrong shape. It exists
+# one: the door may be on the wrong surface, or the surface may be wearing the wrong kind. It exists
 # because the door checks verify a door EXISTS and can never tell a RIGHT door from a WRONG one —
 # measured by repointing every door on a 42-story map onto the crash reporter, which raised 2
 # advisories and ZERO blocking problems.
@@ -345,7 +346,7 @@ INTERFACE_KINDS_NOBODY_STANDS_AT = ("api", "content")
 # `content`, sending two spellings of one word to opposite seeds; `sdk` cannot tell an SDK we publish
 # from one we consume; `skill` -> `file` was wrong outright. Those spellings stay MINTED and draw the
 # aggregated synonym nudge, where the author adjudicates.
-# The last group folds the three CUT seeds: they were purpose words, and their shape is `api`.
+# The last group folds the three CUT seeds: they were purpose words, and their kind is `api`.
 INTERFACE_KIND_ALIASES = {
     "web-ui": "screen", "webui": "screen", "ui": "screen", "marketing-site": "screen",
     "cli": "command-line",

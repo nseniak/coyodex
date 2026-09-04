@@ -41,6 +41,31 @@ picks a Google account and approves — a step belonging to the human "Visitor".
 read `flows[].steps` only, so 195 sub-flow step phrases across the three maps (coyodex 59, argus 65,
 mcpolis 71) reached readers with no skeptic on them.
 
+## What the partial run changed, and one thing it found in a LIVE map
+
+The `carries[]` guidance was rewritten after a tier-2b run, on both live maps, measured against the
+rows those maps actually ship:
+
+| | rows | words/row | over the 20-word rule | guarantee-shaped claims with nothing behind them |
+|---|---|---|---|---|
+| mcpolis, shipped | 7 | 13 | 0 | 1 |
+| mcpolis, first wording | 20 | 29 | 18 | 3 |
+| mcpolis, after the fix | 7 | 13 | 0 | 0 |
+| argus, shipped | 4 | 12 | 0 | 0 |
+| argus, first wording | 7 | 26 | 5 | 3 |
+| argus, after the fix | 6 | 13 | 0 | 0 |
+
+The first wording said "prefer the guarantee over the mechanism" and gave no way to get one honestly.
+Both readers filled the gap by inference — "no other account's pages", "no password is typed here",
+"nothing outside what the command names is removed" — each a security claim reasoned out of prose
+with no code read. That is the failure that shipped a refuted privacy fact on the 2026-09-02 map.
+The fix bounds it: a guarantee needs a line you have read, and a row with no guarantee is complete.
+
+**AND IT CAUGHT ONE IN A SHIPPED MAP.** mcpolis's live row "A newly minted agent credential, shown
+exactly once" is that shape. Under the new wording the reader refused to write it: *"I have no code
+line that proves the value is not readable later."* Either that row earns an anchor or it loses its
+"once". It was not touched here, because a hand edit to a built map is thrown away by the next build.
+
 ## Checks
 
 1. expect: on a surface with both, the "What crosses" rows and "What the stories show here" say
