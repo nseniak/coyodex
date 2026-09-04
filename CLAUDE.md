@@ -1,5 +1,35 @@
 # coyodex
 
+## Design philosophy
+
+What coyodex is FOR. This shapes design decisions about the map and the viewer, and
+it outranks any local argument about a single screen or a single field.
+
+- **Use cases and business rules are the two ways in, and they are PEERS.** Not a
+  main screen and a detail screen. The reader understands the product starting from
+  these two.
+- **They are what makes the pieces mean something.** Components, records and
+  interfaces on their own are an inventory. A use case or a rule ties them into a
+  picture of what the product actually does.
+- **The critical pieces are surfaced, not buried.** A reader gets the product's
+  functionality AND the edge of its architecture without having to drill down.
+- **Today "critical" means interfaces and records.** That list is NOT settled. What
+  is worth surfacing will change as we use coyodex on real projects, so treat the
+  list as this year's answer rather than a principle.
+- **Everything else is drill-down.** A reader who wants more implementation detail
+  goes and gets it.
+
+**This is OURS. It must NEVER be written into `method.md` or `method/`.** A
+map-building agent reads "use cases are the spine" as permission to delete whatever
+no use case reaches. That failure has already happened once, and was reverted. The
+same ban covers the related rule that we prefer information DERIVED from the use case
+walks over a new authored field: it guides us when we extend the model, and it
+attacks existing fields on every rebuild if the method ever states it.
+
+**Known gap, agreed and not scheduled.** The viewer does not match this yet. It has
+12 views in 4 groups, and several that should be drill-down destinations are
+top-level tabs. We will restructure at some point, not now.
+
 ## Glossary
 
 The words we use when talking about this project. Use these; don't drift back to

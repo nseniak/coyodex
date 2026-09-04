@@ -880,6 +880,43 @@ def interface_walk_order(m: ProjectModel) -> dict[str, int]:
     return first
 
 
+def interface_use_cases(m: ProjectModel) -> dict[str, set[str]]:
+    """Per interface, EVERY use case that reaches it. Empty is a legitimate answer for a surface the
+    product touches outside any story (log shipping, crash reporting, an ops command line).
+
+    THE SAME THREE ARMS as `interface_walk_order` one function up, and deliberately so — that one
+    asks *where on the happy path* a surface is first reached and answers only for the spine, this
+    one asks *whether any story reaches it at all* and answers for every use case:
+
+        ways in  -> the use case names one of the surface's `ways_in`
+        step     -> a walk step is drawn AT the surface
+        dep      -> a walk step is drawn at a DEP the surface stands on
+
+    Arm three is why this cannot be `interface_walk_steps(...)` with a truth test: a story that names
+    an outside system, rather than the surface it is met at, still reaches that surface. It scores
+    zero on the two live maps (no step on either names a `Dn`), which is exactly why it must stay —
+    a check that quietly assumed steps never name a dep would report a false gap the day one does.
+
+    Sub-flows are EXPANDED, so a surface reached only from inside an `SFn` counts as reached."""
+    iface_ids = {i.id for i in m.interfaces}
+    ways = {i.id: set(i.ways_in) for i in m.interfaces}
+    dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
+    out: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    for u in m.use_cases:
+        named = set(u.entry_points or ())
+        for iid, w in ways.items():
+            if named & w:
+                out[iid].add(u.id)
+    for f in m.flows:
+        for st in expanded_flow_steps(m, f):
+            for end in (st.src, st.dst):
+                if end in iface_ids:
+                    out[end].add(f.uc)
+                for iid in dep_iface.get(end, ()):
+                    out[iid].add(f.uc)
+    return out
+
+
 @dataclass(frozen=True)
 class InterfaceWalkStep:
     """One walk step drawn AT an interface — what the STORIES show happening there."""
@@ -2262,6 +2299,7 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     iface_ids = {i.id for i in m.interfaces}
     ifs_by_id = {i.id: i for i in m.interfaces}
     actors_by_iface = interface_actors(m)
+    ucs_by_iface = interface_use_cases(m)
     minted_kinds: dict[str, list[str]] = {}
     deps_by_iface: dict[str, list[str]] = {}
     for d in m.deps:
@@ -2384,8 +2422,10 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # receiving use case drives). Deriving nobody means neither was written. Deliberately NOT
         # gated on `kind`, unlike the advisory above: `file`, `settings` and `api` are all shapes a
         # product hands something over through, and none of them means a person goes anywhere.
-        if (iface.side == "ours" and any(c.direction == "out" for c in iface.carries)
-                and not actors_by_iface.get(iface.id) and iface.id not in recorded):
+        hands_over_to_nobody = (iface.side == "ours"
+                                and any(c.direction == "out" for c in iface.carries)
+                                and not actors_by_iface.get(iface.id) and iface.id not in recorded)
+        if hands_over_to_nobody:
             warnings.append(f"{iface.id} ({iface.name}) is OUR surface and something crosses OUT of "
                             f"it, but the map derives nobody on the far side — so it says the "
                             f"product hands something over and never says to whom. `actors` is "
@@ -2394,6 +2434,33 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"a way in that a use case drives. Record '{iface.id}: <why>' under an "
                             f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if nothing on the far "
                             f"side is a role this map names")
+        # (b) The map says this surface exists FOR A PERSON, and no use case reaches it. That is the
+        # map contradicting itself: `facing: user` claims the surface serves somebody's goal, and not
+        # one story pursuing a goal goes near it, so the Interfaces page can say what crosses and
+        # never say when.
+        #
+        # `facing: operator` IS EXEMPT, and that exemption is the whole check. Crash reporting, log
+        # shipping and an ops command line exist so the team can run the product; no use case is
+        # expected to reach them, and firing there would bury the one real case under three false
+        # ones. Measured across the two live maps: 5 of the 28 surfaces are in no use case, 4 are
+        # operator-facing and stay silent, and the single advisory is argus's paid page-reading
+        # service. Its story reaches it in PROSE only — two neighbouring steps say "paid reading
+        # allowance" and "the credits the paid reading spent" — while the step that actually leaves
+        # the product is drawn at the free readers' far side, the open web. One box behind three
+        # readers, one step written for all three, and the paid far side never named.
+        #
+        # Silent when (a) already fired: both end in "draw the story", and one gap owes one line.
+        if (iface.facing == "user" and not ucs_by_iface.get(iface.id)
+                and iface.id not in recorded and not hands_over_to_nobody):
+            warnings.append(f"{iface.id} ({iface.name}) is `facing: user` and NO use case reaches "
+                            f"it — the map says this surface exists for a person, then tells no "
+                            f"story that crosses it. Draw the step where it belongs: the call, "
+                            f"fetch or hand-off goes at THIS surface, not at the one a cheaper path "
+                            f"on the same code reaches. A surface can also be reached by a use case "
+                            f"naming one of its `ways_in`, or by a step drawn at a dep standing on "
+                            f"it. Record '{iface.id}: <why no story crosses it>' under an "
+                            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading, or set "
+                            f"`facing: operator` if it serves the team rather than a person")
         if iface.side == "theirs" and not iface.evidence and iface.id not in recorded:
             warnings.append(f"{iface.id} ({iface.name}) is a `theirs` surface with no evidence — "
                             f"whose data crosses is not visible at the call site (a search over the "

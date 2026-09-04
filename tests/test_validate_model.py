@@ -5007,3 +5007,87 @@ def test_the_naming_nudge_is_ONE_line_and_is_honoured_by_a_record():
                                  body="I1: the product is really called The Command Line\n"
                                       "C1: and so is this one"))
     assert not [w for w in warnings_of(m) if "start with 'The'" in w]
+
+
+# ── a user-facing surface no use case reaches ──────────────────────────────────────────────────
+
+def make_unreached_surface_model() -> ProjectModel:
+    """A `theirs` surface the product calls, that no story goes near. argus's paid page-reading
+    service in miniature: the map carries the surface AND the dep standing on it, and the one flow
+    step that leaves the product is drawn at a different, cheaper far side."""
+    m = make_interface_model()
+    m.deps.append(Dep(id="D2", name="Paid reader", kind="service", type="api",
+                      interfaces=["I2"]))
+    m.interfaces.append(Interface(
+        id="I2", name="Paid reading service", what="Fetches a page we cannot get past, for a fee.",
+        side="theirs", facing="user", kind="api", source="src/v.py:60",
+        evidence=[EvidenceItem(file="src/v.py:60",
+                               why="hands one address to the paid service")],
+        carries=[InterfaceCrossing(direction="out", what="one address to fetch",
+                                   elements=[])]))
+    return m
+
+
+def test_a_user_facing_surface_no_use_case_reaches_warns():
+    m = make_unreached_surface_model()
+    hits = [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+    assert len(hits) == 1, hits
+    assert "facing: operator" in hits[0]          # the other legitimate fix is offered
+
+
+def test_the_same_surface_facing_the_operator_is_silent():
+    # THE WHOLE POINT of the check. Crash reporting, log shipping and an ops command line are in no
+    # use case and never should be; firing on them would bury the one real case under false ones.
+    m = make_unreached_surface_model()
+    m.interfaces[1].facing = "operator"
+    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+
+
+def test_a_walk_step_drawn_at_the_surface_clears_it():
+    m = make_unreached_surface_model()
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="I2", phrase="asks the paid service",
+                                     where="src/v.py:60"))
+    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+
+
+def test_a_step_drawn_at_the_dep_standing_on_it_clears_it():
+    # The third arm: a story that names the outside SYSTEM, not the surface it is met at, still
+    # reaches that surface. Scores zero on both live maps, and must stay for the day one does.
+    m = make_unreached_surface_model()
+    m.edges.append(Edge(src="C1", verb="calls", dst="D2", why="fetch", where="src/v.py:60"))
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="D2", phrase="asks the paid service",
+                                     where="src/v.py:60"))
+    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+
+
+def test_a_use_case_naming_one_of_its_ways_in_clears_it():
+    m = make_unreached_surface_model()
+    m.entry_points.append(EntryPoint(id="EP9", kind="http-route", trigger="GET /paid",
+                                     activation="external", source="src/v.py:60", component="C1"))
+    m.interfaces[1].ways_in = ["EP9"]
+    m.use_cases[0].entry_points = ["EP9"]
+    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+
+
+def test_a_recorded_line_silences_it():
+    m = make_unreached_surface_model()
+    m.extras = [ExtraSection(
+        heading="Interface exceptions",
+        body="I2: the paid reader is a fallback the stories deliberately do not branch on")]
+    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+
+
+def test_it_never_blocks():
+    m = make_unreached_surface_model()
+    assert not [p for p in problems_of(m) if "NO use case reaches it" in p]
+
+
+def test_one_gap_owes_one_line_not_two():
+    # An OURS surface that sends, reaching nobody, already draws the "hands something over and never
+    # says to whom" advisory, and its fix is the same story. Billing both would charge one gap twice.
+    m = make_unreached_surface_model()
+    m.interfaces[1].side = "ours"
+    m.interfaces[1].evidence = []
+    hits = [w for w in warnings_of(m) if "I2" in w]
+    assert any("never says to whom" in w for w in hits), hits
+    assert not any("NO use case reaches it" in w for w in hits), hits
