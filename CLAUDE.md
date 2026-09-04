@@ -36,18 +36,24 @@ the code's names.
   are deliberately NOT criteria: who runs the machine, and whether the far side
   does something "business". The word also means a code declaration in a
   TypeScript or Java project, so a map of one shows both meanings.
-- **shape** (of an interface) — what kind of thing an interface IS, in one word: a
+- **kind** (of an interface) — what kind of thing an interface IS, in one word: a
   screen, a command line, an API, files, a handoff. There are eleven of these
-  words. Shape is not PURPOSE: a payment service and a crash reporter are both
+  words. Kind is not PURPOSE: a payment service and a crash reporter are both
   an API, and what tells them apart is the dependency's own purpose word.
+  The word *shape* was used for this and is retired: it appeared nowhere in the
+  map, so every sentence had to say "the shape field, called kind".
+  ALWAYS SAY WHAT IT IS THE KIND OF. Four different things carry a kind and the
+  vocabularies do not overlap: an interface's (11 words, above), a way in's (11
+  words, the mechanism: `mcp-tool`, `http-route`), an actor's (human or software),
+  a dependency's (its context group). A bare "kind" names none of them.
 - **who is on the far side** — the people the map can show standing at an interface.
   Never written by hand: it is worked out from the walks. An interface with nobody
   on it is a normal answer, because the product itself is what reaches most of
   the outside services.
-- **our interface / their interface** — **ours** = we define its shape (our
-  command line, our web pages). **theirs** = someone else does (a payment
-  processor, a sign-in provider). The test: if the far side vanished tomorrow,
-  would this thing's shape change? The word *surface* was used for this and is
+- **our interface / their interface** — **ours** = we design it (our command
+  line, our web pages). **theirs** = someone else does (a payment processor, a
+  sign-in provider). The test: if the far side vanished tomorrow, would this
+  thing's design change? The word *surface* was used for this and is
   retired: two words for one idea, and the screens said one while the glossary
   said the other. *Surface* survives only in its security sense, as in attack
   surface, which is a different word.
@@ -98,7 +104,7 @@ design principles these come from)
 - **drill in** — click a card. A container opens its contents; anything else
   opens its own details.
 - **show in context** — click the type pill. On a diagram, select and centre
-  the shape. On a card list, scroll to the card and briefly ring it.
+  the box. On a card list, scroll to the card and briefly ring it.
 - **view question** — the one sentence a view answers. It belongs to the view,
   not to any page, so it leads the content and never changes as you drill.
 - **group tab row** — the strip of group tabs: Product, Data, Under the hood,
