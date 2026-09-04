@@ -1219,12 +1219,20 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
         # page" is true or false at the step's own `where`. Anchored there; steps with no call site
         # carry the flow's use-case id instead and are still worth reading, because a phrase that
         # describes a call that does not happen is the defect this tier exists to catch.
-        for f in m.flows:
-            for st in f.steps:
+        #
+        # SUB-FLOW STEPS TOO, under their OWN container id so each fires exactly once however many
+        # walks run it — the same shape `check_dependency_phrasing` already uses, and the reason it
+        # is not `expanded_flow_steps`: expansion would raise one claim per referencing walk and
+        # send several skeptics at one line. They were missing entirely, and an adversarial review
+        # found it: 195 phrases across the three live maps (coyodex 59, argus 65, mcpolis 71) were
+        # shown to readers in flow pictures and at an interface, with nothing challenging them.
+        for label, steps in ([(f.uc, f.steps) for f in m.flows]
+                             + [(sf.id, sf.steps) for sf in m.subflows]):
+            for st in steps:
                 if not (st.phrase or "").strip():
                     continue
                 items.append(WorkItem(
-                    claim=f"{f.uc} step {st.n}: {st.src} → {st.dst} — {st.phrase}",
+                    claim=f"{label} step {st.n}: {st.src} → {st.dst} — {st.phrase}",
                     # REPORT-ONLY, like `interface`: a phrase that misdescribes what happens is
                     # re-authored, not nudged onto another line. `apply-drift` places a correction
                     # by re-deriving an edge-shaped or claim-shaped row, and a step phrase is

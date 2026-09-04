@@ -2343,6 +2343,28 @@ def _claims(behavioural: bool) -> list[str]:
     return [w.claim for w in l2_worklist_model(_behavioural_map(), behavioural=behavioural)]
 
 
+def test_a_SUB_FLOW_step_phrase_is_challenged_too_and_exactly_once():
+    """The hole an adversarial review found: the step loop read `f.steps`, so a phrase living inside
+    a shared walk reached readers — in the flow picture and at an interface — with no skeptic on it.
+    195 phrases across the three live maps (coyodex 59, argus 65, mcpolis 71).
+
+    ONCE, under its OWN container id, however many walks run it. Expanding instead would raise one
+    claim per referencing walk and send several skeptics at one line."""
+    from coyodex.audit_model import l2_worklist_model
+    from coyodex.model import Flow, FlowStep, SubFlow
+    m = _behavioural_map()
+    m.subflows = [SubFlow(id="SF1", name="Check the token",
+                          steps=[FlowStep(n=1, src="C1", dst="C2", phrase="checks the token",
+                                          where="web/auth.py:9")])]
+    # TWO walks run it, so the "exactly once" half of this test is not vacuous.
+    for uc in ("UC1", "UC2"):
+        m.flows.append(Flow(uc=uc, title="runs it",
+                            steps=[FlowStep(n=9, src="C1", dst="C2", phrase="", subflow="SF1")]))
+    claims = [w.claim for w in l2_worklist_model(m, behavioural=True)]
+    got = [c for c in claims if "checks the token" in c]
+    assert got == ["SF1 step 1: C1 → C2 — checks the token"], claims
+
+
 def test_a_use_cases_own_sentence_becomes_a_claim():
     """The headline of the behavioural layer — the one line a reader takes away — had no claim."""
     assert any("UC1 Rename a page: owner submits a new name" in c for c in _claims(True))

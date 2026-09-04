@@ -872,6 +872,84 @@ def interface_walk_order(m: ProjectModel) -> dict[str, int]:
     return first
 
 
+@dataclass(frozen=True)
+class InterfaceWalkStep:
+    """One walk step drawn AT an interface — what the STORIES show happening there."""
+    phrase: str                      # the step's own words
+    uc: str                          # the use case whose walk this step belongs to
+    #: The container that AUTHORED the step — the `uc` itself, or the `SFn` a reference step expanded
+    #: to. Carried because `(container, n)` is the only unique step identity after expansion, and a
+    #: screen linking to "step n of this walk" with `(uc, n)` alone silently lands on another step.
+    container: str
+    n: int                           # the step number within that container
+    role: str = ""                   # the role on the far side, when the step is a door; "" otherwise
+
+
+def interface_walk_steps(m: ProjectModel) -> dict[str, list[InterfaceWalkStep]]:
+    """Per interface, every walk step drawn at it — the GROUNDED half of what crosses a surface.
+
+    IT DOES NOT REPLACE `interfaces[].carries[]`, AND AN ATTEMPT TO MAKE IT DO SO WAS REVERTED.
+    The two answer different questions and the map needs both: `carries` is the BOUNDARY statement
+    (which way data goes, which records cross, what is stripped before it leaves), and this is WHAT
+    THE STORIES SHOW HAPPENING there. Measured on the three live maps when the replacement was
+    tried, the derivation could not stand in for the field:
+
+      * 16 of the 39 interfaces have no step at all, so 22 authored sentences would have become
+        silence — including every one of coyodex's own 11 surfaces, whose map draws no doors, and
+        three redaction guarantees ("stripped of credentials before it leaves") that no story reaches.
+      * DIRECTION IS NOT DERIVABLE. A step records who talks to whom, not which way data goes: a
+        PULL points outward and the data comes back, and the map draws that as one step. Reading
+        polarity as direction flipped argus's "Tracked web pages" from `in` to `out` — a page the
+        product fetches — and on every disagreement across the two maps the AUTHORED value was the
+        better one. Nothing here reports a direction, and nothing downstream may infer one from it.
+      * The records that cross are on `carries[].elements` and appear nowhere in a step.
+
+    NO STEP IS DROPPED. An "outer step wins" filter was tried, keeping only the steps whose far end
+    is outside the product; it read well on a dashboard and silently deleted the sign-in
+    back-channel, where a member's verified email actually crosses (mcpolis UC28 steps 18-19,
+    150 of 317 steps dropped on that map). A reader asking what happens at a surface is owed all of
+    it. Only a step with no phrase (it says nothing) and an exact repeat of one already kept are
+    left out; repeats are rare, 4 on argus and 9 on mcpolis.
+
+    Sub-flows are EXPANDED, so machinery hidden behind an `SFn` is not invisible here."""
+    role_ids = outside_actor_ids(m)
+    iface_ids = {i.id for i in m.interfaces}
+    out: dict[str, list[InterfaceWalkStep]] = {i.id: [] for i in m.interfaces}
+    seen: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    for f in m.flows:
+        for container, st in expanded_steps_with_container(m, f):
+            phrase = (st.phrase or "").strip()
+            if not phrase:
+                continue
+            for near, far in ((st.dst, st.src), (st.src, st.dst)):
+                if near not in iface_ids or phrase in seen[near]:
+                    continue
+                seen[near].add(phrase)
+                out[near].append(InterfaceWalkStep(
+                    phrase=phrase, uc=f.uc, container=container, n=st.n,
+                    role=far if far in role_ids else ""))
+    return out
+
+
+def interface_steps_by_use_case(m: ProjectModel) -> dict[str, list[tuple[str, list[InterfaceWalkStep]]]]:
+    """The same steps, GROUPED BY THE STORY they belong to and ordered by the happy path.
+
+    Grouped rather than listed flat because the reader's question at a surface is "what happens
+    here", and a step means little without the story it sits in: mcpolis's dashboard draws 89 steps
+    from 20 different walks, and read as one list they are noise. Ordered by the happy path so the
+    busiest surface still reads in the order the product's own story happens — the same rule
+    `interface_walk_order` gives the Interfaces picture."""
+    pos = {hp.uc: n for n, hp in enumerate(m.happy_path) if hp.uc}
+    per: dict[str, dict[str, list[InterfaceWalkStep]]] = {}
+    for iid, steps in interface_walk_steps(m).items():
+        groups: dict[str, list[InterfaceWalkStep]] = {}
+        for st in steps:
+            groups.setdefault(st.uc, []).append(st)
+        per[iid] = groups
+    return {iid: sorted(groups.items(), key=lambda kv: (pos.get(kv[0], len(pos)), kv[0]))
+            for iid, groups in per.items()}
+
+
 def interface_actor_use_cases(m: ProjectModel) -> dict[str, dict[str, list[str]]]:
     """Per interface, WHO is on the far side of it AND which use cases bring them there. DERIVED,
     never authored — so the two can never
@@ -2165,9 +2243,6 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                 f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if this product genuinely has none")
         return problems, warnings
     recorded = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("I", "EP"))
-    # The SCOPED keys under the same heading (`I5/crossings`). Read apart from the bare ids above so
-    # one recorded line answers one question — see the crossing check below for why that matters.
-    crossing_recorded = records.recorded_keys(m, INTERFACE_EXCEPTIONS_HEADING)
     #: (surface id, its kind, the roles the walks put at it) for the wrong-door nudge below.
     people_at_a_machine: list[tuple[str, str, str]] = []
     role_names = {r.id: r.name for r in m.roles}
@@ -2227,32 +2302,17 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                 if eid not in ent_ids:
                     problems.append(f"{iface.id} crossing {ci}: '{eid}' is not a defined entity — "
                                     f"a crossing names single records (`En`), never a data area")
-        # A CROSSING WITH NO ANCHOR. `where` is optional by design — the surface's own `source`
-        # often reaches the crossing — but a crossing that names no line is a claim about the
-        # product's outside edge that no reader and no skeptic can check, and a refuted privacy
-        # fact shipped in exactly such a field on the 2026-09-02 mcpolis map.
-        #
-        # ADVISORY, and it must stay advisory for now. Of the maps that HAVE interfaces it fails
-        # every one: 35 of 35 crossings empty on the map this came from, 22 of 22 on its
-        # predecessor, 11 of 15 on coyodex's own self-map. (Across the whole archive that is 2 of
-        # 25, because 23 of the archives carry no interfaces at all — the first draft of this
-        # comment quoted the wrong denominator.) The field IS authorable — coyodex authored 4 — so
-        # what is missing is the instruction landing, not the ability. Promote it to blocking once one build has
-        # shipped a clean one, and not before: a gate that fails every existing map teaches the
-        # lead to ignore the gate.
-        # ITS OWN KEY, not the bare `In` the other six per-interface advisories share. `IFACE_KEY`
-        # supports a `/scope` suffix for exactly this: writing `I5: <why>` to answer THIS check also
-        # silenced the `facing`, `kind` and evidence checks for `I5`, and vice versa — one line
-        # quietly adjudicating seven different questions.
-        anchorless = [str(ci) for ci, cr in enumerate(iface.carries) if not (cr.where or "").strip()]
-        if anchorless and f"{iface.id}/crossings" not in crossing_recorded:
-            warnings.append(
-                f"{iface.id} ({iface.name}): {len(anchorless)} of {len(iface.carries)} crossing(s) "
-                f"carry no `where` — what crosses a surface is a claim about the product's outside "
-                f"edge, and one with no line is a claim no reader and no skeptic can check. Anchor "
-                f"the line where the crossing happens, or record '{iface.id}/crossings: <why the "
-                f"surface's own source reaches them>' under an '{INTERFACE_EXCEPTIONS_HEADING}' "
-                f"extras heading")
+        # NO ADVISORY ON A CROSSING WITH NO ANCHOR. There was one, and it was REMOVED as dead
+        # weight. Of the maps that have interfaces it failed every single one — 35 of 35 crossings
+        # empty on the map it came from, 22 of 22 on its predecessor, 11 of 15 on coyodex's own —
+        # and its own comment already said what that means: a gate that fails every existing map
+        # teaches the lead to ignore the gate. It was written to make crossings checkable after a
+        # refuted privacy fact shipped in one; the thing that actually closes that hole is `audit`
+        # putting every crossing sentence in front of a skeptic, which it does, so this asked a
+        # second time for something already answered. Do not re-add it.
+        # The crossing anchor stays a GROUNDING arm even though its advisory is gone: two of
+        # coyodex's own surfaces (Settings, Project source files) stand on nothing else, and the
+        # anchor really does prove the surface exists.
         grounded = bool(iface.ways_in or deps_by_iface.get(iface.id) or iface.source
                         or any(c.where for c in iface.carries))
         if not grounded:

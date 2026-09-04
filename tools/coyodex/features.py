@@ -44,6 +44,7 @@ from coyodex.validate_model import (
     anchored_flow_steps,
     capability_audience,
     interface_actor_use_cases,
+    interface_steps_by_use_case,
     interface_walk_order,
     rule_steps,
 )
@@ -181,7 +182,18 @@ class InterfaceFacts:
     features_unknown: bool = False
     #: What crosses, verbatim from the map: (direction, sentence, record ids). Carried rather than
     #: recomputed because the sentence is the whole point of the row — a direction alone says nothing.
+    #: AUTHORED, and it stays authored. A change replacing it with `steps` below was built and
+    #: reverted: 16 of the 39 interfaces across the three live maps have no step at all, direction is
+    #: not derivable from a step (a PULL points outward while its data comes back), and no step names
+    #: the records that cross. See `interface_walk_steps`.
     crossings: list[tuple[str, str, list[str]]] = field(default_factory=list)
+    #: …and BESIDE it, what the stories show happening here: the walk steps drawn at this surface,
+    #: grouped by the story they belong to, in happy-path order. Each entry is
+    #: (use case, [(phrase, container, step number, far-side role or "")]).
+    #: The pair is the point. The authored rows are the boundary CLAIM — which way, which records,
+    #: what is stripped before it leaves — and these are the GROUNDED detail, every one of them a
+    #: line in the code a skeptic has already been sent at. Neither is a summary of the other.
+    steps: list[tuple[str, list[tuple[str, str, int, str]]]] = field(default_factory=list)
     #: WHERE THE WALK FIRST REACHES IT, as a happy-path position, or None for a surface no step of
     #: the walk touches. The picture reads down in this order, which is the same rule `build_story`
     #: gives the features column: first touch, unbroken, then the untouched in a block after it. On
@@ -538,6 +550,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
 
     iface_actor_ucs = interface_actor_use_cases(m)
     iface_walk = interface_walk_order(m)
+    iface_steps = interface_steps_by_use_case(m)
     interfaces = [
         InterfaceFacts(
             id=i.id, name=i.name, what=i.what, side=i.side, facing=i.facing,
@@ -555,6 +568,8 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                                  if u in uc_cap}),
             features_unknown=not (iface_ucs[i.id] or iface_out_ucs[i.id]),
             crossings=[(c.direction, c.what, list(c.elements)) for c in i.carries],
+            steps=[(uc, [(st.phrase, st.container, st.n, st.role) for st in group])
+                   for uc, group in iface_steps.get(i.id, ())],
             walk_pos=iface_walk.get(i.id),
             opens="in" if i.ways_in else "out",
         )
@@ -642,7 +657,10 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
              "components": i.components, "useCases": i.use_cases, "features": i.features,
              "featuresUnknown": i.features_unknown,
              "walkPos": i.walk_pos, "opens": i.opens,
-             "crossings": [{"direction": d, "what": w, "elements": e} for d, w, e in i.crossings]}
+             "crossings": [{"direction": d, "what": w, "elements": e} for d, w, e in i.crossings],
+             "steps": [{"uc": uc, "steps": [{"phrase": ph, "container": ct, "n": n, "role": r}
+                                            for ph, ct, n, r in group]}
+                       for uc, group in i.steps]}
             for i in ix.interfaces],
         "areas": [
             {"id": a.id, "name": a.name, "purpose": a.purpose, "entities": a.entities,

@@ -7892,22 +7892,32 @@ function actorSurfaceDiagramHtml(actorName, role, rows) {
     }
     for (const i of list) {
       const r = ++row;
-      // WHAT CROSSES, in the map's own two words. `in` and `out` are read against the PRODUCT, which
-      // is the reading the surface's own page prints and the only one that stays true on a surface
-      // someone else owns: Google sign-in's two sentences are the product talking to Google, and
-      // neither of them is this actor sending or receiving anything.
-      const cross = ['in', 'out'].map((dir) => {
-        const what = crossingsOf(i, dir);
-        if (!what.length) return '';
-        // ONE LINE PER SENTENCE, each carrying its own records at the end of it, from the same
-        // renderer the Interfaces picture's labels use — the two screens draw the same field and must
-        // not disagree about how much of it fits or which records belong to which sentence.
-        return `<p class="asf-cross-line"><span class="asf-cross-dir">${dir}</span>`
-          + `<span class="ifd-what-lines">${crossingLinesHtml(what, i.id)}</span></p>`;
-      }).join('');
+      // WHAT THIS PERSON DOES HERE, in the story's own words — their own walk steps at this
+      // surface, narrowed to them (see `stepGroupsOf`).
+      //
+      // IT USED TO BE THE PRODUCT'S SENTENCES, not this person's: the surface's authored crossings
+      // say what crosses for the PRODUCT, so Google sign-in showed the product talking to Google on
+      // a page about a member, and neither sentence was anything that member sent or received.
+      // Those rows still lead the surface's OWN page, which is where a boundary claim belongs; this
+      // page is a person's, so its answer is a person's.
+      //
+      // NO DIRECTION SPLIT. The rows on the surface's page carry `in`/`out` because a person
+      // AUTHORED it. A step cannot: it records who talks to whom, not which way data goes, and a
+      // pull points outward while its data comes back.
+      const ACTOR_STEP_CAP = 2;
+      const groups = stepGroupsOf(i, role.id);
+      const shown = groups.flatMap((g) => g.steps.map((st) => [st, g.uc]));
+      const cross = shown.length
+        ? `<ul class="ifs-steps asf-steps">`
+          + shown.slice(0, ACTOR_STEP_CAP).map(([st, uc]) => stepLineHtml(st, uc, true, false)).join('')
+          + '</ul>'
+          + moreTailHtml(shown.length - ACTOR_STEP_CAP, i.id,
+                         'Open this interface: every step drawn at it')
+        : '';
       cells.push(`<div class="asf-crosscell" data-iface="${esc(i.id)}" style="grid-row:${r}">`
         + (cross ? `<div class="asf-cross">${cross}</div>`
-                 : '<p class="ifd-none asf-none">The map records nothing crossing here.</p>')
+                 : '<p class="ifd-none asf-none">No step of any story in this map shows this actor '
+                   + 'doing anything here. What crosses is on the interface\'s own page.</p>')
         + '</div>');
       cells.push(`<div class="asf-cell" style="grid-row:${r}">${ifaceBoxHtml(i, role.id)}</div>`);
       const feats = actorSurfaceFeatures(actorName, i);
@@ -7970,7 +7980,7 @@ function bindActorSurfaces(root, actorName) {
   // The same pick gesture the Interfaces view has, from the one function both call. No labels here.
   bindSurfacePick(stage, paths, []);
   bindMoreTails(stage);
-  bindCrossingRecs(stage);
+  bindStepFroms(stage);
   // A FEATURE OPENS ITS USE CASES, FILTERED TO THIS ACTOR — the screen the count is counting, which
   // the viewer already draws. `act` is what filters it.
   stage.querySelectorAll('.asf-feat').forEach((b) => b.addEventListener('click', (ev) => {
@@ -10460,9 +10470,6 @@ function wireCurveD(sx, sy, tx, ty) {
 // How far a wire's end sits from the hub's own edge. Zero, for the same reason a wire touches its
 // card: a line that stops short of the thing it points at is a line the reader has to join up.
 const IFACE_HUB_CLEARANCE = 0;
-// How many records a label names before it says "+n more". Three, the same cap the Features
-// page uses on its own wire labels.
-const IFACE_LABEL_REC_CAP = 3;
 // THE SENTENCES A SURFACE RECORDS, MERGED PER DIRECTION. A surface records as many crossings as it
 // likes, and the Interfaces picture used to draw only the FIRST in each direction — on MCP Hero's
 // dashboard that silently dropped 2 of its 4. Joining them keeps every one and still draws at most
@@ -10481,12 +10488,17 @@ const IFACE_LABEL_REC_CAP = 3;
 //
 // The size is INHERITED, so the tail matches whatever line it ends (12.5px on a sentence, 11.5px on
 // a record row); what is shared is the treatment, which is what made the two look unrelated.
-function moreTailHtml(hidden, iface, title) {
+// …AND ON THE SURFACE'S OWN PAGE IT OPENS IN PLACE. That page IS where the rest lives, so there is
+// nowhere to send the reader: `expand` reveals its own list and takes the tail off screen. Written
+// as a third mode of THIS function rather than a tail of its own, because that is the mistake this
+// function was extracted to end — four capped lists, three implementations, two looks.
+function moreTailHtml(hidden, iface, title, expand) {
   if (!(hidden > 0)) return '';
   const text = `+${hidden} more`;
+  const tip = title ? ` title="${esc(title)}"` : '';
+  if (expand) return `<button type="button" class="more-tail more-tail-open"${tip}>${text}</button>`;
   return iface
-    ? `<button type="button" class="more-tail" data-more-iface="${esc(iface)}"`
-      + `${title ? ` title="${esc(title)}"` : ''}>${text}</button>`
+    ? `<button type="button" class="more-tail" data-more-iface="${esc(iface)}"${tip}>${text}</button>`
     : `<span class="more-tail">${text}</span>`;
 }
 function bindMoreTails(root) {
@@ -10494,6 +10506,15 @@ function bindMoreTails(root) {
     b.addEventListener('click', (ev) => {
       ev.stopPropagation();   // the tail's door is not the card's pin, nor the stage's unpin
       go({ kind: 'interfaces', iface: b.getAttribute('data-more-iface') });
+    }));
+  // The in-place mode: reveal the rest of the list this tail closes, then remove the tail.
+  // `.more-hidden` is what the renderer marked the overflow with, so the two agree by one name.
+  root.querySelectorAll('.more-tail-open').forEach((b) =>
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const box = b.parentElement;
+      if (box) box.querySelectorAll('.more-hidden').forEach((el) => el.classList.remove('more-hidden'));
+      b.remove();
     }));
 }
 // WHAT A DIRECTION IS CALLED, in one place, because the picture and the surface's own page must not
@@ -10516,81 +10537,58 @@ function crossingDirWord(dir, side, name) {
   const verb = (CROSSING_DIR_VERB[side] || CROSSING_DIR_VERB.ours)[dir] || dir;
   return name ? name + ' ' + verb : verb;
 }
-function crossingsOf(i, dir) {
-  return (i.crossings || []).filter((c) => c.direction === dir && String(c.what || '').trim());
-}
-// THE RECORDS ONE CROSSING CARRIES, at the END OF ITS OWN SENTENCE and on the same line. They used
-// to be unioned across every crossing in a direction and drawn as one row underneath, and the map
-// does not hold them that way: `elements` sits on each crossing. Measured across the six maps, 15 of
-// the 17 (surface, direction) groups that record more than one sentence give those sentences
-// DIFFERENT records, so the union threw away a link the map states — and on 5 groups it listed
-// records belonging only to a sentence the cap hides, leaving a record on screen with no sentence it
-// answers to. MCP Hero's dashboard showed 6 of them.
+// WHAT THE STORIES SHOW HAPPENING AT A SURFACE — the walk steps drawn at it, grouped by the story
+// they belong to. It sits BESIDE the authored crossings above and does not replace them: a change
+// that made it the only answer was built and reverted, because 16 of the 39 surfaces across the
+// three live maps have no step at all, direction is not derivable from a step, and no step names
+// the records that cross.
 //
-// ON ITS OWN LINE, under the sentence it belongs to. That is a smaller move than it looks: what was
-// wrong was the UNION, not the line break — the records sat under the whole label holding every
-// sentence's, and which ones belonged to which sentence was unrecoverable. Run on after the sentence
-// instead, they read as more of the sentence at 11-12px; a hairline between crossings and a line of
-// their own is what makes each crossing a unit. The DATA GLYPH leads that line, so it says what kind
-// of thing it is naming before it names one — the same mark the Features page puts on stored data.
-//
-// Capped at three with its own tail, unchanged: a label is a glance, and the whole list is on the
-// surface's own page.
-function crossingRecsHtml(recs, iface) {
-  if (!recs.length) return '';
-  return `<span class="ifd-what-recs">${storyAreaGlyphSvg()}`
-    + recs.slice(0, IFACE_LABEL_REC_CAP).map((id) => {
-        const nm = (GRAPH.nodes[id] || {}).name || id;
-        return GRAPH.nodes[id]
-          ? `<button type="button" class="ifd-what-rec" data-rec="${esc(id)}">${esc(nm)}</button>`
-          : esc(nm);
-      }).join(', ')
-    + moreTailHtml(recs.length - IFACE_LABEL_REC_CAP, iface,
-        'Open this interface: every record that crosses it')
-    + '</span>';
+// `role` narrows to ONE PERSON'S steps, for the actor's page. THE FALLBACK IS TO THE UNATTRIBUTED
+// STEPS ONLY, never to every step: an actor reaches a surface three ways and only a door names the
+// role on the step, so a person with no door still has plenty to show — but falling back to ALL of
+// them put another named person's steps on this one's page, and argus told a reader that the
+// software "Assistant" picks a Google account and approves (a step belonging to the human Visitor).
+function stepGroupsOf(i, role) {
+  const groups = (i.steps || []);
+  if (!role) return groups;
+  const mine = groups.map((g) => ({ uc: g.uc, steps: (g.steps || []).filter((st) => st.role === role) }))
+                     .filter((g) => g.steps.length);
+  if (mine.length) return mine;
+  return groups.map((g) => ({ uc: g.uc, steps: (g.steps || []).filter((st) => !st.role) }))
+               .filter((g) => g.steps.length);
 }
-// A record's door, and the sentence saying what it IS. Bound rather than written into the markup:
-// the tooltip is the APP'S, not the browser's `title` — a native tooltip's delay belongs to the
-// browser, about a second, and nothing here can shorten it. This one waits half of what an action
-// icon's does. Its words are `cardFacts`', so the tooltip and the record's own card cannot differ.
-function bindCrossingRecs(root) {
-  root.querySelectorAll('.ifd-what-rec[data-rec]').forEach((b) => {
-    const id = b.getAttribute('data-rec');
-    const facts = cardFacts(id);
-    const tip = (facts && facts.desc) ? facts.desc : 'Show ' + b.textContent + ' in context';
-    b.addEventListener('mouseenter', (ev) => scheduleActionIconTip(tip, ev, TEXT_TIP_DELAY_MS));
-    b.addEventListener('mousemove', moveActionIconTip);
-    b.addEventListener('mouseleave', hideActionIconTip);
+// WHICH STEP SAYS IT, at the end of its own line, and it is a door: it selects that step in that
+// walk's picture, so a reader who doubts a sentence lands on the arrow that makes the claim.
+//
+// THE NUMBER IS THE POSITION IN THE WALK, not the authored `n`, and the two differ: a sub-flow's
+// steps are spliced into every walk that runs it keeping their own numbering, so one walk runs
+// 1..24 over authored ns like [1,2,3,1,2,3,4,…]. Every other screen counts positions, so a chip
+// saying "step 6" that landed on "Step 18 / 24" would promise a number the picture never shows.
+// This is why the model carries the CONTAINER beside the number: `(container, n)` is the only
+// unique step identity once a sub-flow is spliced in.
+function stepFromHtml(st, uc, withName) {
+  const i = flowStepIndex(uc, st.container || uc, st.n);
+  const nm = withName ? ((GRAPH.nodes[uc] || {}).name || uc) + (i >= 0 ? ' · ' : '') : '';
+  return `<button type="button" class="ifd-what-from" data-uc="${esc(uc)}" `
+    + `data-i="${esc(String(i))}" title="Open this walk at the step that says it">`
+    + `${esc(nm)}${i >= 0 ? esc(`step ${i + 1}`) : ''}</button>`;
+}
+function bindStepFroms(root) {
+  root.querySelectorAll('.ifd-what-from[data-uc]').forEach((b) => {
     b.addEventListener('click', (ev) => {
-      ev.stopPropagation();      // the record's door is not the label's, nor the stage's unpin
-      showInContext(id);
+      ev.stopPropagation();   // the step's door is not the card's pin, nor the stage's unpin
+      const uc = b.getAttribute('data-uc');
+      const i = Number(b.getAttribute('data-i'));
+      if (i >= 0) selectFlowStep(uc, i, true);
+      else go({ kind: 'usecase', uc });
     });
   });
 }
-// HOW MANY OF THEM A PICTURE SHOWS before it says "+n more". Two, on the rule the record list one
-// line below has always followed: a label on a diagram is a glance, and its full list is on the
-// surface's own page, one click away on the card's name.
-//
-// THEY WERE JOINED INTO ONE PARAGRAPH, with a space between them and nothing else — so on the four
-// labels that merge three or more, the reader got a wall with no seam to read it by. MCP Hero's
-// dashboard is the worst: 4 sentences, 327 characters, 124px tall at 320px wide.
-//
-// SPLITTING THEM IS NOT ENOUGH ON ITS OWN. Measured on that label: one line per sentence takes it to
-// 140px, and a count line above them to 160px — a fix for the parsing that makes the overlay bigger
-// than the thing being complained about. Capped at two it comes to 105px, smaller than today.
-//
-// "+n more" IS NOT THE OLD BUG COMING BACK. That bug drew only the FIRST sentence and said nothing
-// about the rest; 2 of the dashboard's 4 vanished silently. A label that states how many it is
-// holding back is a different thing. 5 of the 79 labels across the six maps show the marker.
-const IFACE_LABEL_WHAT_CAP = 2;
-function crossingLinesHtml(list, iface) {
-  if (!list.length) return '';
-  return list.slice(0, IFACE_LABEL_WHAT_CAP)
-      .map((c) => `<span class="ifd-what-line">${esc(String(c.what).trim())}`
-        + crossingRecsHtml(c.elements || [], iface) + '</span>').join('')
-    + (list.length > IFACE_LABEL_WHAT_CAP
-        ? `<span class="ifd-what-more">${moreTailHtml(list.length - IFACE_LABEL_WHAT_CAP, iface,
-             'Open this interface: every sentence it records, in full')}</span>` : '');
+// One walk step as a line: what happens, then which step said it. Shared by the surface's own page
+// and an actor's page, so the two cannot disagree about how a step reads.
+function stepLineHtml(st, uc, withName, hidden) {
+  return `<li class="ifs-step${hidden ? ' more-hidden' : ''}">${esc(String(st.phrase).trim())}`
+    + `<span class="ifd-what-from-line">${stepFromHtml(st, uc, withName)}</span></li>`;
 }
 function bindIfaceDiagram(root) {
   const stage = root.querySelector('#ifdstage');
@@ -10856,7 +10854,6 @@ function bindIfaceDiagram(root) {
   }
   bindSurfacePick(stage, paths, labels);
   bindMoreTails(stage);
-  bindCrossingRecs(stage);
 }
 // HOW A SURFACE IS PICKED, on BOTH pictures that draw one. The Interfaces view and an actor's page
 // draw different pictures out of the same cards, and the gesture is not part of the difference: hover
@@ -11020,6 +11017,29 @@ function renderInterface(s) {
     // gets its own heading rather than sitting in the same list as the people.
     + (depIds.length
         ? '<h3 class="card-group-head">Reached through</h3>' + elementCardListHtml(depIds) : '');
+  // WHAT THE STORIES SHOW HAPPENING HERE — the second half of the pair, under the authored table.
+  // The table above is the map's boundary CLAIM (which way, which records, what is stripped before
+  // it leaves); this is the grounded detail, every line a step someone drew at a real call site.
+  // Neither is a summary of the other, and a change that deleted the table in favour of this was
+  // built and reverted: 16 of the 39 surfaces across the three live maps have no step at all.
+  //
+  // GROUPED BY STORY, because a step means little without the story it sits in — mcpolis's
+  // dashboard draws 89 of them from 20 different walks, and read as one list they are noise.
+  //
+  // CAPPED PER STORY, WITH THE REST ONE CLICK AWAY IN PLACE. This is the page the rest lives on, so
+  // the tail cannot be a door to somewhere else the way it is on a diagram label.
+  const IFACE_PAGE_STEP_CAP = 5;
+  const storyBlocks = (i.steps || []).map((g) => {
+    const nm = (GRAPH.nodes[g.uc] || {}).name || g.uc;
+    return `<div class="ifs-dir"><h4 class="ifs-dir-head">`
+      + `<button type="button" class="ifs-story" data-uc="${esc(g.uc)}">${esc(nm)}</button></h4>`
+      + `<ul class="ifs-steps">`
+      + g.steps.map((st, n) => stepLineHtml(st, g.uc, false, n >= IFACE_PAGE_STEP_CAP)).join('')
+      + '</ul>'
+      + moreTailHtml(g.steps.length - IFACE_PAGE_STEP_CAP, '',
+                     'Show every step this story draws here', true)
+      + '</div>';
+  }).join('');
   const feats = i.featuresUnknown
     ? '<p class="feat-empty">Not stated. No walk in this map comes through this interface, so nothing here can say which features use it.</p>'
     : (i.features || []).length ? elementCardListHtml(i.features)
@@ -11030,6 +11050,11 @@ function renderInterface(s) {
     + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
     + (rows ? `<h3 class="card-group-head">What crosses</h3><table class="if-table">${rows}</table>`
             : '<h3 class="card-group-head">What crosses</h3><p class="feat-empty">The map records nothing crossing this interface.</p>')
+    + '<h3 class="card-group-head">What the stories show here</h3>'
+    + (storyBlocks ? `<div class="ifs-cross">${storyBlocks}</div>`
+                   : '<p class="feat-empty">No step of any walk in this map is drawn at this '
+                     + 'interface, so the rows above are all the map says about it. That is normal '
+                     + 'for a service the product only reports to, such as a crash reporter.</p>')
     + '<h3 class="card-group-head">Features through it</h3>' + feats
     + ((i.components || []).length
         ? '<h3 class="card-group-head">The code behind it</h3>' + elementCardListHtml(i.components) : '')
@@ -11042,6 +11067,11 @@ function renderInterface(s) {
   diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) => {
     btn.addEventListener('click', () => selectFromTree(btn.getAttribute('data-id')));
   });
+  bindStepFroms(diagram);
+  bindMoreTails(diagram);   // the "+n more" under a story, in its open-in-place mode
+  // A STORY HEADING IS A DOOR to that story, the same treatment its steps get one line down.
+  diagram.querySelectorAll('.ifs-story[data-uc]').forEach((b) =>
+    b.addEventListener('click', () => go({ kind: 'usecase', uc: b.getAttribute('data-uc') })));
 }
 function renderRules(s) {
   const groups = ruleBlockGroups();

@@ -894,6 +894,13 @@ def _both_shores_carry_people_and_a_pipe() -> Any:
                 f["steps"].insert(0, {"n": 0, "src": "R1", "dst": "I1",
                                       "phrase": "opens the dashboard", "note": "", "where": None,
                                       "no_call_site": False, "subflow": None})
+                # …and a step at the `theirs` surface, naming NOBODY. The left column of this
+                # picture is the walk now, so a surface with no step there has an empty cell and
+                # draws one wire, not two — and an unattributed step is what the fallback shows.
+                f["steps"].insert(1, {"n": -1, "src": "C1", "dst": "I2",
+                                      "phrase": "sends them to Google to sign in", "note": "",
+                                      "where": "backend/src/mcpolis/entrypoints/app.py:4",
+                                      "no_call_site": False, "subflow": None})
     return mutate
 
 
@@ -1367,19 +1374,56 @@ def test_an_actors_surfaces_picture_lines_each_one_up_with_what_they_reach_there
             if r["featMid"] is not None:
                 assert abs(r["cardMid"] - r["featMid"]) <= 1, r
             assert r["feats"], r
-        # …and every wire the picture draws belongs to a surface: this actor to it, and it to its
-        # features. A surface the map can name no feature for draws the second wire nowhere.
+        # …and every wire the picture draws belongs to a surface: what this person does there, to
+        # the surface, to the features they get through it. EACH wire needs the thing at its far end
+        # to exist, and there are TWO such things — a surface no step of this actor's is drawn at
+        # has nothing in the left cell and loses the first wire, exactly as a surface with no
+        # feature loses the second.
         wired = page.evaluate("""() => {
             const st = document.querySelector('#asfstage');
             const per = {};
             for (const p of st.querySelectorAll('svg.ifd-wires path[data-iface]'))
               per[p.dataset.iface] = (per[p.dataset.iface] || 0) + 1;
-            const named = {};
+            const has = {};
             for (const c of st.querySelectorAll('.asf-featcell'))
-              named[c.dataset.iface] = !!c.querySelector('.asf-feats');
-            return Object.keys(per).map((k) => [per[k], named[k]]);
+              has[c.dataset.iface] = { feats: !!c.querySelector('.asf-feats') };
+            for (const c of st.querySelectorAll('.asf-crosscell'))
+              (has[c.dataset.iface] = has[c.dataset.iface] || {}).cross = !!c.querySelector('.asf-cross');
+            return Object.keys(per).map((k) => [per[k], !!has[k].cross, !!has[k].feats]);
         }""")
-        assert wired and all(n == (c == 2) for c, n in wired), wired
+        assert wired, wired
+        assert all(count == cross + feats for count, cross, feats in wired), wired
+        assert any(count == 2 for count, _c, _f in wired), "the fixture exercises the full shape"
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_actors_page_never_shows_ANOTHER_named_persons_steps() -> None:
+    """The blocking finding of an adversarial review. The cell falls back when the walks name no
+    step of this actor's own, and the fallback used to be EVERY step at the surface — including ones
+    the map attributes to a different named role. On argus that told a reader the software
+    "Assistant" picks a Google account and approves, a step belonging to the human "Visitor".
+
+    The fallback is now to the UNATTRIBUTED steps only. A step naming nobody is machinery this actor
+    can legitimately be shown; a step naming SOMEONE ELSE is another person's story."""
+    def mutate(m: dict) -> None:
+        _both_shores_carry_people_and_a_pipe()(m)
+        for f in m["flows"]:
+            if f["uc"] == "UC1":
+                # R2 is a DIFFERENT person, and their step is the one that must not leak. It sits at
+                # I2, where the actor under test (R1) has no step of their own.
+                f["steps"].insert(2, {"n": -2, "src": "R2", "dst": "I2",
+                                      "phrase": "picks the account and approves", "note": "",
+                                      "where": None, "no_call_site": True, "subflow": None})
+        m["roles"].append({"id": "R2", "name": "Somebody else", "kind": "human",
+                           "audience": "user", "wants": "to sign in"})
+    with _served_map(mutate) as url, _page(url + "#v=actor&act=Org creator") as page:
+        _settle(page)
+        text = page.evaluate("""() => [...document.querySelectorAll('.asf-crosscell')]
+            .map((c) => c.textContent).join(' ')""")
+        assert "picks the account and approves" not in text, text
+        # …and the unattributed step at that same surface IS shown, or the fix would be a blanket
+        # silence rather than a narrowing.
+        assert "sends them to Google to sign in" in text, text
         assert not page.js_errors, page.js_errors
 
 

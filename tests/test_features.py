@@ -538,6 +538,37 @@ def test_a_surface_flow_is_derived_from_what_crosses_it():
     assert by_id["I2"].flow == ["out"]
 
 
+def test_the_walk_steps_ship_BESIDE_the_authored_crossings_not_instead_of_them():
+    """The pair. Replacing the authored rows with these steps was built and reverted — 16 of the 39
+    surfaces on the three live maps have no step at all, a step cannot say which way data goes, and
+    no step names the records that cross."""
+    doc = make_interface_map()
+    doc["flows"][0]["steps"] = [{"n": 1, "src": "R1", "dst": "I1", "phrase": "hands over the card"},
+                               {"n": 2, "src": "I1", "dst": "C1", "phrase": "carries it inward"},
+                               {"n": 3, "src": "C2", "dst": "I3", "phrase": "ships a log line"}]
+    by_id = {i.id: i for i in build_index(load_model(json.dumps(doc))).interfaces}
+    # the authored rows are untouched…
+    assert by_id["I1"].crossings[0] == ("in", "the card details", [])
+    assert by_id["I1"].flow == ["in", "out"], "…and `flow` still comes from them"
+    # …and the steps arrive beside them, grouped by story, in walk order and none dropped
+    assert by_id["I1"].steps == [("UC1", [("hands over the card", "UC1", 1, "R1"),
+                                          ("carries it inward", "UC1", 2, "")])], by_id["I1"].steps
+    assert by_id["I3"].steps == [("UC1", [("ships a log line", "UC1", 3, "")])]
+    # a surface no step reaches keeps its authored rows and simply has no second block
+    assert by_id["I2"].steps == [] and by_id["I2"].crossings
+
+
+def test_the_bundle_ships_both_halves_of_what_crosses():
+    doc = make_interface_map()
+    doc["flows"][0]["steps"] = [{"n": 1, "src": "R1", "dst": "I1", "phrase": "hands over the card"}]
+    b = as_bundle(build_index(load_model(json.dumps(doc))))
+    i1 = next(i for i in cast(list[dict[str, object]], b["interfaces"]) if i["id"] == "I1")
+    assert i1["crossings"] == [{"direction": "in", "what": "the card details", "elements": []},
+                               {"direction": "out", "what": "the receipt", "elements": ["E1"]}]
+    assert i1["steps"] == [{"uc": "UC1", "steps": [
+        {"phrase": "hands over the card", "container": "UC1", "n": 1, "role": "R1"}]}]
+
+
 def test_a_surface_nothing_reaches_says_UNKNOWN_not_none():
     # Measured on Meerbot: 8 of 344 walk steps touch an outside service at all, so most `theirs`
     # surfaces are legitimately unknowable. "none" would read as a defect that is not there.

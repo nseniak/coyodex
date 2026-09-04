@@ -68,6 +68,8 @@ from coyodex.validate_model import (
     check_domain_coverage_model,
     check_domain_relations,
     interface_actors,
+    interface_steps_by_use_case,
+    interface_walk_steps,
     validate_model,
 )
 from coyodex.views import model_to_markdown
@@ -4149,6 +4151,80 @@ def test_a_crossing_naming_an_unknown_record_blocks():
     m = make_interface_model()
     m.interfaces[0].carries[0].elements = ["E99"]
     assert any("E99" in p and "not a defined entity" in p for p in problems_of(m))
+
+
+def test_the_walk_steps_at_a_surface_are_derived_BESIDE_the_authored_crossings():
+    """The pair, and the reason it is a pair. Deleting `carries[]` in favour of this was built and
+    reverted: the two answer different questions and neither summarises the other."""
+    m = make_interface_model()
+    assert interface_walk_steps(m)["I1"] == [], "no step yet, and that is a real answer"
+    assert m.interfaces[0].carries, "…while the authored rows still say what crosses"
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="types the command"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="hands it to the runner",
+                                 where="src/v.py:3")]
+    assert [st.phrase for st in interface_walk_steps(m)["I1"]] == [
+        "types the command", "hands it to the runner"]
+    assert m.interfaces[0].carries[0].what == "the command and its arguments", "untouched"
+
+
+def test_NO_step_at_a_surface_is_dropped():
+    """An "outer step wins" filter was tried — keep only the steps whose far end is outside the
+    product — and it silently deleted the sign-in back-channel where a member's verified email
+    actually crosses (150 of 317 steps on mcpolis). A reader asking what happens here is owed all
+    of it."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
+                        FlowStep(n=3, src="C1", dst="I1", phrase="trades it for the token",
+                                 where="src/v.py:4")]
+    assert [st.phrase for st in interface_walk_steps(m)["I1"]] == [
+        "opens it", "asks", "trades it for the token"]
+
+
+def test_the_derivation_reports_NO_direction():
+    """A step records who talks to whom, not which way data goes: a PULL points outward while its
+    data comes back, and the map draws that as one step. Reading polarity as direction flipped
+    argus's "Tracked web pages" from `in` to `out` — a page the product FETCHES — and on every
+    disagreement across the two live maps the authored value was the better one. Direction is
+    authored on `carries[]` and nothing here may re-derive it."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", phrase="fetches the page",
+                                 where="src/v.py:4")]
+    st = interface_walk_steps(m)["I1"][0]
+    assert not hasattr(st, "direction"), "a derived direction is the bug this test pins"
+    assert {f for f in vars(st)} == {"phrase", "uc", "container", "n", "role"}, vars(st)
+
+
+def test_a_step_with_no_phrase_says_nothing_and_a_repeat_is_kept_once():
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
+                        FlowStep(n=2, src="I1", dst="C1", phrase="   ", where="src/v.py:3"),
+                        FlowStep(n=3, src="R1", dst="I1", phrase="opens it")]
+    assert [st.phrase for st in interface_walk_steps(m)["I1"]] == ["opens it"]
+
+
+def test_a_step_names_the_walk_and_the_container_that_identifies_it():
+    """`(container, n)` is the only unique step identity once a sub-flow is spliced in, so a link
+    built from `(uc, n)` alone lands the reader on a different step."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it")]
+    st = interface_walk_steps(m)["I1"][0]
+    assert (st.uc, st.container, st.n, st.role) == (m.flows[0].uc, m.flows[0].uc, 1, "R1")
+
+
+def test_the_steps_are_grouped_by_story_in_happy_path_order():
+    """A step means little without the story it sits in: mcpolis's dashboard draws 89 of them from
+    20 walks, and read as one list they are noise."""
+    m = make_interface_model()
+    m.use_cases.append(UseCase(id="UC2", name="Second", trigger_outcome="asks -> gets",
+                               capability=m.use_cases[0].capability))
+    m.happy_path.append(HappyStep(id="HP2", title="Second", uc="UC2"))
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="a")]
+    m.flows.append(Flow(uc="UC2", title="Second",
+                        steps=[FlowStep(n=1, src="R1", dst="I1", phrase="b")]))
+    got = [(uc, [st.phrase for st in group])
+           for uc, group in interface_steps_by_use_case(m)["I1"]]
+    assert got == [(m.flows[0].uc, ["a"]), ("UC2", ["b"])], got
 
 
 def test_an_interface_grounded_by_nothing_blocks_but_a_source_alone_is_enough():

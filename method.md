@@ -656,6 +656,18 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   records (`En`) that cross — never a data area. An EMPTY record list is legitimate and common: a log
   line, a fetched web page, a source file and a tool call are real crossings no stored record holds.
   The sentence is never optional.
+  **AUTHOR IT EVEN WHERE THE WALKS ARE RICH, and do not think of it as a summary of them.** The
+  viewer shows these rows and the walk steps drawn at the surface SIDE BY SIDE, and they answer
+  different questions: these are the boundary claim, the steps are what happens. Deleting these in
+  favour of the steps was built and reverted, and the measurements are the reason — on the three
+  live maps, 16 of the 39 surfaces have no step at all (including every one of coyodex's own 11),
+  a step cannot say WHICH WAY data goes (a pull points outward while its data comes back, and
+  reading polarity flipped argus's "Tracked web pages" from `in` to `out`), and no step names the
+  records that cross. Three redaction guarantees — "stripped of credentials before it leaves" —
+  live only here.
+  **So say the thing a step cannot.** Prefer the guarantee over the mechanism: what is stripped,
+  hashed or masked before data leaves; which records really cross; which way. A row that merely
+  re-tells a step you have already written is the one row worth cutting.
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).

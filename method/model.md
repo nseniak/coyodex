@@ -472,6 +472,11 @@ Semantics, stated on the fields:
   and a tool call are real crossings no stored record holds), the sentence never is. The overall flow
   is DERIVED as the set of directions the crossings carry, so a surface cannot claim to send while
   listing nothing that goes out.
+  **It is NOT a summary of the walks, and it is not derivable from them.** The viewer draws it beside
+  the walk steps drawn at the surface (`interface_walk_steps`), as a pair. Replacing it with those
+  steps was built and reverted: 16 of the 39 surfaces on the three live maps have no step at all,
+  direction cannot be read off a step (a PULL points outward while its data comes back), and no step
+  names the records that cross. Read that function's docstring before proposing the merge again.
   **`deps[].interfaces`** lists the surfaces a dep belongs to, on EITHER side of each: a dep can BE
   the surface, or sit on the FAR SIDE of one of ours. A LIST, because one outside system really does
   sit on several surfaces — a coding agent hosts our skill AND writes the transcript we read back,
