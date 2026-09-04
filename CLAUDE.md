@@ -69,6 +69,12 @@ the code's names.
 - **way in** — one address, command or tool an interface is made of. An
   interface groups many; coyodex's own command line is 32 ways in.
 - **far side** — who or what is on the other side of an interface.
+- **client** — what a person reaches an interface THROUGH: a browser for a web
+  page, a terminal for a command line, an AI agent for an MCP address. Never an
+  actor, because it wants nothing of its own; the person is the actor and the
+  client carries them. Mostly implied by the interface's kind and left unsaid —
+  the viewer names one only where it can do something the person did not ask for,
+  which today is 2 of the 13 kinds.
 - **pipe** — something on the path to a far side that is not itself an interface: a
   reverse proxy, a log shipper, the library that calls a service. Name the far
   side, never the pipe.
