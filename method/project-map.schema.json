@@ -818,12 +818,6 @@
           },
           "description": "the entry points this surface is made of. Assigned through `reconcile` (`ways_in`), never hand-written into a fragment: `EPn` ids are minted by `assemble` from content. Empty is legitimate \u2014 a `theirs` surface has none, and neither do the files a product writes or the settings an operator sets."
         },
-        "carries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/InterfaceCrossing"
-          }
-        },
         "source": {
           "type": "string",
           "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
@@ -848,40 +842,6 @@
       "required": [
         "id",
         "name"
-      ],
-      "additionalProperties": false
-    },
-    "InterfaceCrossing": {
-      "type": "object",
-      "properties": {
-        "direction": {
-          "type": "string",
-          "enum": [
-            "in",
-            "out"
-          ],
-          "description": "in = the product receives it; out = the product sends it. An interface's overall flow is DERIVED as the set of directions its crossings carry."
-        },
-        "what": {
-          "type": "string",
-          "description": "one sentence, plain words: what actually crosses here, and why."
-        },
-        "elements": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "pattern": "^E\\d+$"
-          },
-          "description": "the stored records that cross \u2014 SINGLE ENTITIES, never a sub-domain: an area name cannot answer 'are the plan limits exposed?'. EMPTY IS LEGITIMATE and common: a log line, a fetched web page, a source file and a gateway tool call are real crossings that no stored record holds."
-        },
-        "where": {
-          "type": "string",
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
-          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
-        }
-      },
-      "required": [
-        "direction"
       ],
       "additionalProperties": false
     },
@@ -1202,6 +1162,16 @@
         "no_call_site": {
           "type": "boolean",
           "description": "explicit opt-out (mirrors Edge.no_call_site): this step has no single call site \u2014 `where` may be null."
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "in",
+            "out",
+            "both",
+            ""
+          ],
+          "description": "WHICH WAY THE DATA MOVES, read from the PRODUCT's own code: in = it arrives, out = it leaves, both = one exchange runs each way. Owed where the map's OWN CODE touches a SURFACE (in = the product receives, out = it sends) or a RECORD (in = a read, out = a write); EMPTY on every other step, INCLUDING A DOOR \u2014 a role standing at a surface is a human action with no product end. It is the map's only statement of direction: the arrows between a component and a record say both read and write on half the record steps, and no arrow reaches a surface at all."
         },
         "subflow": {
           "type": [

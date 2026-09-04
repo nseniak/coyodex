@@ -168,7 +168,8 @@
      "note": "",
      "where": "src/services/ticket_service.py:36",
      "no_call_site": false,
-     "subflow": null
+     "subflow": null,
+     "direction": "in"
     },
     {
      "n": 6,
@@ -234,7 +235,8 @@
      "note": "",
      "where": "src/services/ticket_service.py:25",
      "no_call_site": false,
-     "subflow": null
+     "subflow": null,
+     "direction": "in"
     },
     {
      "n": 6,
@@ -300,7 +302,8 @@
      "note": "",
      "where": "src/services/ticket_service.py:44",
      "no_call_site": false,
-     "subflow": null
+     "subflow": null,
+     "direction": "out"
     },
     {
      "n": 6,
@@ -396,7 +399,8 @@
      "note": "",
      "where": "src/services/ticket_service.py:50",
      "no_call_site": false,
-     "subflow": null
+     "subflow": null,
+     "direction": "out"
     },
     {
      "n": 5,
@@ -462,7 +466,8 @@
      "note": "",
      "where": "src/services/ticket_service.py:56",
      "no_call_site": false,
-     "subflow": null
+     "subflow": null,
+     "direction": "out"
     },
     {
      "n": 5,

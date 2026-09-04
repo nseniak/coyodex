@@ -507,17 +507,23 @@ def make_interface_map() -> dict:
                          "where": "src/b.py:30"})
     doc["flows"][0]["steps"].append({"n": 5, "src": "C2", "dst": "D1", "phrase": "charges the card",
                                      "where": "src/b.py:30"})
+    # WHAT CROSSES IS THE STEPS. `carries[]` was removed, so a surface's directions come from the
+    # steps drawn at it — `I1` receives what a person types and sends the receipt back, and the
+    # charge at `D1` reaches `I2` through the dep standing on it.
+    doc["flows"][0]["steps"][-1]["direction"] = "out"
+    # A DOOR PAIR at `I1`, which is how a surface comes to carry both directions now. Deliberately
+    # a door and not `C1 → I1`: a step INTO a surface from inside the product is the feature
+    # REACHING OUT, and this fixture's `I1` is a surface the feature is entered by.
+    doc["flows"][0]["steps"] += [
+        {"n": 6, "src": "R1", "dst": "I1", "phrase": "types the card details", "direction": "in"},
+        {"n": 7, "src": "I1", "dst": "R1", "phrase": "shows them the receipt", "direction": "out"}]
     doc["interfaces"] = [
         {"id": "I1", "name": "Web app", "what": "Where a person pays.", "side": "ours",
-         "facing": "user", "source": "src/a.py:1", "ways_in": ["EP1"],
-         "carries": [{"direction": "in", "what": "the card details"},
-                     {"direction": "out", "what": "the receipt", "elements": ["E1"]}]},
+         "facing": "user", "source": "src/a.py:1", "ways_in": ["EP1"]},
         {"id": "I2", "name": "Payments", "what": "Where the money moves.", "side": "theirs",
-         "facing": "user",
-         "carries": [{"direction": "out", "what": "a charge"}]},
+         "facing": "user"},
         {"id": "I3", "name": "Log store", "what": "Where the logs go.", "side": "theirs",
-         "facing": "operator", "source": "",
-         "carries": [{"direction": "out", "what": "one record per request"}]}]
+         "facing": "operator", "source": ""}]
     return doc
 
 
@@ -530,43 +536,48 @@ def test_a_surface_carries_the_walks_and_features_that_come_through_it():
     assert by_id["I2"].deps == ["D1"]
 
 
-def test_a_surface_flow_is_derived_from_what_crosses_it():
-    # Never authored: a surface cannot claim to send while listing nothing that goes out.
+def test_a_surface_flow_is_derived_from_the_DIRECTIONS_ITS_STEPS_CARRY():
+    """Never authored. `interfaces[].carries[]` said it by hand beside the walks, and a surface
+    could claim to send while no story sent anything through it."""
     ix = build_index(load_model(json.dumps(make_interface_map())))
     by_id = {i.id: i for i in ix.interfaces}
-    assert by_id["I1"].flow == ["in", "out"]
-    assert by_id["I2"].flow == ["out"]
+    assert by_id["I1"].flow == ["in", "out"], "a door pair drawn at it, one each way"
+    # …and a surface reached only THROUGH A DEP states no direction. That is the honest answer, not
+    # a gap to paper over: the step is drawn at the dependency, which is the PIPE, so nothing says
+    # which way data crossed the SURFACE. The fix is to draw the step at the surface, which is
+    # exactly what the method now tells an author to do.
+    assert by_id["I2"].flow == []
 
 
-def test_the_walk_steps_ship_BESIDE_the_authored_crossings_not_instead_of_them():
-    """The pair. Replacing the authored rows with these steps was built and reverted — 16 of the 39
-    surfaces on the three live maps have no step at all, a step cannot say which way data goes, and
-    no step names the records that cross."""
+def test_the_walk_steps_ARE_what_crosses_and_each_carries_its_own_direction():
+    """`interfaces[].carries[]` is removed and these replaced it. An earlier removal WITHOUT the
+    step direction was reverted, because a step could not say which way data went."""
     doc = make_interface_map()
-    doc["flows"][0]["steps"] = [{"n": 1, "src": "R1", "dst": "I1", "phrase": "hands over the card"},
-                               {"n": 2, "src": "I1", "dst": "C1", "phrase": "carries it inward"},
-                               {"n": 3, "src": "C2", "dst": "I3", "phrase": "ships a log line"}]
+    doc["flows"][0]["steps"] = [
+        {"n": 1, "src": "R1", "dst": "I1", "phrase": "hands over the card", "direction": "in"},
+        {"n": 2, "src": "I1", "dst": "C1", "phrase": "carries it inward", "direction": "in"},
+        {"n": 3, "src": "C2", "dst": "I3", "phrase": "ships a log line", "direction": "out"}]
     by_id = {i.id: i for i in build_index(load_model(json.dumps(doc))).interfaces}
-    # the authored rows are untouched…
-    assert by_id["I1"].crossings[0] == ("in", "the card details", [])
-    assert by_id["I1"].flow == ["in", "out"], "…and `flow` still comes from them"
-    # …and the steps arrive beside them, grouped by story, in walk order and none dropped
-    assert by_id["I1"].steps == [("UC1", [("hands over the card", "UC1", 1, "R1"),
-                                          ("carries it inward", "UC1", 2, "")])], by_id["I1"].steps
-    assert by_id["I3"].steps == [("UC1", [("ships a log line", "UC1", 3, "")])]
-    # a surface no step reaches keeps its authored rows and simply has no second block
-    assert by_id["I2"].steps == [] and by_id["I2"].crossings
+    assert not hasattr(by_id["I1"], "crossings"), "the authored rows are gone for good"
+    assert by_id["I1"].flow == ["in"], "…and `flow` now comes from the steps themselves"
+    # grouped by story, in walk order, none dropped, each with its direction
+    assert by_id["I1"].steps == [("UC1", [("hands over the card", "UC1", 1, "R1", "in"),
+                                          ("carries it inward", "UC1", 2, "", "in")])], \
+        by_id["I1"].steps
+    assert by_id["I3"].steps == [("UC1", [("ships a log line", "UC1", 3, "", "out")])]
+    assert by_id["I2"].steps == [] and by_id["I2"].flow == []
 
 
-def test_the_bundle_ships_both_halves_of_what_crosses():
+def test_the_bundle_ships_the_steps_with_their_direction():
     doc = make_interface_map()
-    doc["flows"][0]["steps"] = [{"n": 1, "src": "R1", "dst": "I1", "phrase": "hands over the card"}]
+    doc["flows"][0]["steps"] = [{"n": 1, "src": "R1", "dst": "I1",
+                                 "phrase": "hands over the card", "direction": "in"}]
     b = as_bundle(build_index(load_model(json.dumps(doc))))
     i1 = next(i for i in cast(list[dict[str, object]], b["interfaces"]) if i["id"] == "I1")
-    assert i1["crossings"] == [{"direction": "in", "what": "the card details", "elements": []},
-                               {"direction": "out", "what": "the receipt", "elements": ["E1"]}]
+    assert "crossings" not in i1, "the authored rows no longer ship"
     assert i1["steps"] == [{"uc": "UC1", "steps": [
-        {"phrase": "hands over the card", "container": "UC1", "n": 1, "role": "R1"}]}]
+        {"phrase": "hands over the card", "container": "UC1", "n": 1, "role": "R1",
+         "direction": "in"}]}]
 
 
 def test_a_surface_nothing_reaches_says_UNKNOWN_not_none():
@@ -591,7 +602,9 @@ def test_a_feature_is_NOT_wired_to_a_service_through_a_shared_component():
     # not pretend it can. Otherwise one shared helper wires nearly every feature to every service:
     # there are 24/41/32/102 such edges on the four live maps.
     doc = make_interface_map()
-    doc["flows"][0]["steps"] = doc["flows"][0]["steps"][:-1]
+    # Drop the DEP step by its number, not by position: the fixture now ends with a door pair, and
+    # slicing the tail silently dropped one of those instead of the step under test.
+    doc["flows"][0]["steps"] = [st for st in doc["flows"][0]["steps"] if st["n"] != 5]
     ix = build_index(load_model(json.dumps(doc)))
     assert ix.features[0].reaches_out == []
     assert {i.id: i.features for i in ix.interfaces}["I2"] == []

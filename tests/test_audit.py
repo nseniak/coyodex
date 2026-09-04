@@ -2324,17 +2324,19 @@ def test_a_behaviour_claim_is_report_only():
 # second, because no skeptic could be sent at it.
 
 def _behavioural_map():
-    from coyodex.model import (Flow, FlowStep, Interface, InterfaceCrossing, ProjectModel, UseCase)
+    from coyodex.model import (Flow, FlowStep, Interface, ProjectModel, UseCase)
     m = ProjectModel(title="t", goal="g")
     m.use_cases = [UseCase(id="UC1", name="Rename a page",
                            trigger_outcome="owner submits a new name → the page is renamed")]
+    # What crosses the dashboard is a STEP now, not a sentence on the surface. The step arm of the
+    # worklist already challenges it, at its own call site.
     m.flows = [Flow(uc="UC1", title="Rename a page",
                     steps=[FlowStep(n=1, src="R1", dst="C1", phrase="submits the new name",
-                                    where="web/pages.py:12")])]
-    m.interfaces = [Interface(id="I1", name="Dashboard", side="ours", source="web/app.py:1",
-                              carries=[InterfaceCrossing(direction="out",
-                                                         what="the page's title and its owner",
-                                                         where="web/app.py:44")])]
+                                    where="web/pages.py:12"),
+                           FlowStep(n=2, src="C1", dst="I1", direction="out",
+                                    phrase="shows the page's title and its owner",
+                                    where="web/app.py:44")])]
+    m.interfaces = [Interface(id="I1", name="Dashboard", side="ours", source="web/app.py:1")]
     return m
 
 
@@ -2442,14 +2444,17 @@ def test_a_use_cases_own_sentence_becomes_a_claim():
 
 
 def test_what_crosses_a_surface_becomes_a_claim():
-    assert any("I1 Dashboard carries out: the page's title" in c for c in _claims(True))
+    """It is a STEP claim now. `interfaces[].carries[]` was removed, and the sentence it held about
+    the outside edge has to be a walk step, which the step arm already challenges at a call site.
+    That is what closed the hole this file's header describes, rather than a second arm."""
+    assert any("shows the page's title and its owner" in c for c in _claims(True))
 
 
 def test_neither_appears_at_the_default_tier():
     """The default surface is what three commands compare across builds; widening it silently
     would move numbers nobody changed."""
     text = " ".join(_claims(False))
-    assert "UC1 Rename a page:" not in text and "carries out" not in text
+    assert "UC1 Rename a page:" not in text
 
 
 def test_a_behavioural_worklist_is_recognised_from_its_own_themes():

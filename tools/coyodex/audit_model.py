@@ -1193,6 +1193,8 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
     # from the rejected one — 4 of the 6 claims went out anchored at a line the surface does not
     # name. The surface's own evidence is the author's answer to "where is this true"; read it
     # first, and fall back to the dep's configuration line only when there is none.
+    from coyodex.validate_model import interface_directions  # noqa: PLC0415 — circular at import
+    iface_dirs = interface_directions(m)
     for iface in m.interfaces:
         if iface.side != "theirs":
             continue
@@ -1200,7 +1202,7 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
         cited = next((e.file for e in iface.evidence if getattr(e, "file", "")), "")
         anchor_raw = (cited or iface.source
                       or (owning[0].where_configured if owning else ""))
-        crossings = "; ".join(f"{c.direction}: {c.what}" for c in iface.carries if c.what)
+        crossings = ", ".join(iface_dirs.get(iface.id, ())) or ""
         # The dependencies that stand on this surface — the direction every other membership in
         # this model runs. Two free-text fields once named the far side here as well: `party_ref`
         # held the dep half a second time (the two agreed only by luck), and `party` said in words
@@ -1209,7 +1211,8 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
         items.append(WorkItem(
             claim=(f"{iface.id} '{iface.name}' is an interface the product exchanges data through"
                    + (f" with {far}" if far else "")),
-            anchor=_anchor(anchor_raw), detail=crossings or None,
+            anchor=_anchor(anchor_raw),
+            detail=(f"the walks carry {crossings} through it" if crossings else None),
             drift_eligible=False, theme="interface",
             why_risky=("whose data crosses is not visible at the call site — read what this service "
                        "actually holds or returns, and refute the row if the data is the product's "
@@ -1317,22 +1320,13 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
                 anchor=_anchor(first), drift_eligible=False, theme="behaviour",
                 why_risky=("the headline sentence of the behavioural layer — a reader takes the "
                            "trigger and the outcome away as what the product does.")))
-        # WHAT CROSSES A SURFACE. `interfaces[].carries[]` states, in one sentence per direction,
-        # what goes in and out of the product — claims about the outside edge, and among the most
-        # consequential the map makes: on the 2026-09-02 mcpolis map a refuted PRIVACY fact shipped
-        # in exactly this field, because it sat outside the worklist and no skeptic could reach it.
-        # Anchored at the crossing's own `where` when it has one, else the surface's `source`.
-        for iface in m.interfaces:
-            for cr in iface.carries:
-                what = (cr.what or "").strip()
-                if not what:
-                    continue
-                items.append(WorkItem(
-                    claim=f"{iface.id} {iface.name} carries {cr.direction}: {what}",
-                    anchor=_anchor((cr.where or "").strip() or iface.source or ""),
-                    drift_eligible=False, theme="behaviour",
-                    why_risky=("what crosses the product's outside edge — a wrong sentence here "
-                               "misstates what leaves the product, which is a privacy claim.")))
+        # WHAT CROSSES A SURFACE is now a WALK STEP, and every walk step is already challenged by
+        # the flow arm above, at its own call site. `interfaces[].carries[]` used to state it in a
+        # sentence per direction and needed its own worklist entry, because it sat outside every
+        # other arm — on the 2026-09-02 mcpolis map a refuted PRIVACY fact shipped in exactly that
+        # field, and no skeptic could reach it. Removing the field closed that hole by construction:
+        # a sentence about the outside edge now has to be a step, and a step has an anchor.
+        # DO NOT re-add an interface-sentence arm here; there is no sentence left to challenge.
     # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
     # a branch, and the map's lifecycle silently lies. Each recorded machine is a prime skeptic
     # target, anchored at its declaring line (else the element's own source).

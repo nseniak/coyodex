@@ -259,19 +259,6 @@ FIELD_META: dict[tuple[str, str], dict] = {
                             "place."},
     ("Interface", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""], "description":
                             "verified = read in the code; inferred = deduced. '' = unstated."},
-    ("InterfaceCrossing", "direction"): {"enum": [*grammar.CROSSING_DIRECTIONS], "description":
-                            "in = the product receives it; out = the product sends it. An "
-                            "interface's overall flow is DERIVED as the set of directions its "
-                            "crossings carry."},
-    ("InterfaceCrossing", "what"): {"description": "one sentence, plain words: what actually "
-                            "crosses here, and why."},
-    ("InterfaceCrossing", "elements"): {"items": {"type": "string", "pattern": r"^E\d+$"},
-                            "description": "the stored records that cross — SINGLE ENTITIES, never "
-                            "a sub-domain: an area name cannot answer 'are the plan limits "
-                            "exposed?'. EMPTY IS LEGITIMATE and common: a log line, a fetched web "
-                            "page, a source file and a gateway tool call are real crossings that no "
-                            "stored record holds."},
-    ("InterfaceCrossing", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EntryPoint", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EntryPoint", "component"): {"pattern": r"^C\d+$", "description": "the owning component's id."},
     ("EntryPoint", "kind"): {"description": "what the entry point IS — a SEEDED-OPEN vocabulary "
@@ -354,6 +341,16 @@ FIELD_META: dict[tuple[str, str], dict] = {
                              "on element↔element steps unless `no_call_site`."},
     ("FlowStep", "no_call_site"): {"description": "explicit opt-out (mirrors Edge.no_call_site): this "
                                     "step has no single call site — `where` may be null."},
+    ("FlowStep", "direction"): {"enum": [*grammar.STEP_DIRECTIONS, ""], "description":
+                            "WHICH WAY THE DATA MOVES, read from the PRODUCT's own code: in = it "
+                            "arrives, out = it leaves, both = one exchange runs each way. Owed "
+                            "where the map's OWN CODE touches a SURFACE (in = the product receives, "
+                            "out = it sends) or a RECORD (in = a read, out = a write); EMPTY on "
+                            "every other step, INCLUDING A DOOR — a role standing at a surface is a "
+                            "human action with no product end. It is the map's only statement "
+                            "of direction: the arrows between a component and a record say both "
+                            "read and write on half the record steps, and no arrow reaches a "
+                            "surface at all."},
     ("FlowStep", "subflow"): {"pattern": r"^SF\d+$", "description": "a REFERENCE step: 'runs SFn "
                                "here'. src/dst stay authored (the run's entry/exit endpoints); "
                                "`phrase` may be empty (defaults to the sub-flow's name); the step "

@@ -734,16 +734,10 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .card-group-head { margin: 20px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
                    text-transform: uppercase; color: #6b7280; }
 .card-group-head:first-of-type { margin-top: 8px; }
-.if-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.if-table td { padding: 7px 10px 7px 0; border-bottom: 1px solid #eceef2; vertical-align: top; }
-.if-table tr:last-child td { border-bottom: 0; }
-/* `we receive` / `we send`, one word-pair with the picture's own labels — see CROSSING_DIR_WORD.
-   The column was 3.5em for `in` and `out`; a phrase needs room, and must not wrap mid-phrase. */
-.if-dir { width: 5.5em; color: #6b7280; font-variant: small-caps; letter-spacing: .03em;
-          white-space: nowrap; }
-/* WHAT THE STORIES SHOW HERE — the grounded half of the pair, under the authored table above. Cut
-   into one block per story, because a step means little without the story it sits in: mcpolis's
-   dashboard draws 89 steps from 20 different walks, and read as one list they are noise. */
+/* WHAT CROSSES — the walk steps drawn at this surface, and the whole answer now that
+   `interfaces[].carries[]` and its `.if-table` are gone. Cut into one block per story, because a
+   step means little without the story it sits in: mcpolis's dashboard draws 89 steps from 20
+   different walks, and read as one list they are noise. */
 .ifs-cross { display: flex; flex-direction: column; gap: 16px; }
 /* The story's name heads its own block and is a door to it, the same treatment its steps get one
    line down. A button, not a heading with a link inside it, so the whole name is the target. */
@@ -756,6 +750,14 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .ifs-steps { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .ifs-step { padding: 7px 0; border-bottom: 1px solid #eceef2; }
 .ifs-step:last-child { border-bottom: 0; }
+/* WHICH WAY THIS STEP WENT, in the same small-caps treatment the removed crossing table's own
+   column used, so the fact did not change how it looks when it changed where it lives. It LEADS
+   the line rather than sitting in a column of its own: a step is one sentence, and a fixed column
+   beside a wrapping sentence is what made the old table need a width at all. Inline-block so the
+   phrase wraps beside it and never under it. */
+.ifs-dirtag { display: inline-block; margin-right: 7px; color: #6b7280; font-variant: small-caps;
+              letter-spacing: .03em; white-space: nowrap; font-size: 12px; }
+.ifs-dir-both { color: #4f46e5; }
 /* The rest of a long block, revealed in place by its own "+n more". `display: none` rather than a
    height, so a hidden row costs nothing to lay out. The class is shared with the tail that reveals
    it (`moreTailHtml`'s open-in-place mode), so renderer and binder agree by one name. */

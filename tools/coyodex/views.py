@@ -43,6 +43,7 @@ from coyodex.validate_model import (
     capability_audience,
     element_capabilities,
     interface_actors,
+    interface_directions,
     rule_components,
     rule_entities,
     rule_steps,
@@ -444,10 +445,12 @@ def model_to_markdown(m: ProjectModel) -> str:
         # committed file. Both are columns rather than a second section: the row is the surface, and
         # a reader answering "which of my products has a mobile app?" reads down one column.
         actors_by_iface = interface_actors(m)
+        # "Crosses" is DERIVED from the directions this surface's walk steps carry — the successor
+        # to the removed `carries[]` rows, and now the map's only answer.
+        dirs_by_iface = interface_directions(m)
         rows = []
         for i in m.interfaces:
-            flow = ", ".join(x for x in ("in", "out")
-                             if any(c.direction == x for c in i.carries))
+            flow = ", ".join(dirs_by_iface.get(i.id, ()))
             rows.append([f"**{i.id}**", i.name, i.side, grammar.canonical_interface_kind(i.kind),
                          i.facing, flow, i.what,
                          ", ".join(actors_by_iface.get(i.id, [])),
@@ -457,11 +460,9 @@ def model_to_markdown(m: ProjectModel) -> str:
         section("T2b — Interfaces (the product's outside edge)",
                 _table(["ID", "Name", "Side", "Kind", "Facing", "Crosses", "What it is",
                         "Actors", "Ways in", "Deps", "Source", "Conf."], rows))
-        cross = [[i.id, c.direction, c.what, ", ".join(c.elements), _anchor_link(c.where)]
-                 for i in m.interfaces for c in i.carries]
-        if cross:
-            section("T2b — What crosses each interface",
-                    _table(["Interface", "Direction", "What crosses", "Records", "Where"], cross))
+        # The "What crosses each interface" table went with `carries[]`. What a surface carries is
+        # now its walk steps, which the viewer draws grouped by the story they belong to; a flat
+        # table here would repeat T6 in a worse order.
     if m.run_commands:
         section("T3 — How to run / build / test",
                 _table(["Action", "Command", "Source"],
@@ -1177,8 +1178,9 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         nodes[d.id] = node
     # INTERFACES reach the browser as nodes because a flow STEP may end at one: `R1 → I3 → C12` reads
     # "a person, through the dashboard, into the code". Without a node the step would draw a bare id.
+    iface_dirs = interface_directions(m)
     for iface in m.interfaces:
-        flow = [x for x in ("in", "out") if any(c.direction == x for c in iface.carries)]
+        flow = iface_dirs.get(iface.id, [])
         kind = grammar.canonical_interface_kind(iface.kind)
         fields = {"Name": iface.name, "What it is": iface.what,
                   "Side": iface.side,

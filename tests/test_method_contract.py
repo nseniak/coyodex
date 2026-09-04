@@ -514,6 +514,13 @@ def test_a_mode_flag_does_not_silently_swallow_the_flags_its_mode_ignores():
 #: An entry here is a claim: "this is always fixable at the point it fires, so an operator never
 #: has to live with it." Adding a line to this list is a design decision, not a formality.
 KNOWN_NO_ESCAPE: dict[str, str] = {
+    # There is no legitimate way to owe a direction and not give one, so there is nothing to
+    # record. The field is owed only where the map's OWN CODE touches a surface or a record, and a
+    # door — a role standing at a surface, a human action with no product end — is already exempt
+    # by the rule rather than by an escape. An operator who thinks a step needs no direction is
+    # telling us the step is not a crossing, and the fix is the step, not a recorded line.
+    "{} step(s) touch a surface or a record and say no `direction`":
+        "the finding IS a missing answer; the fix is to answer it, or to fix the step's endpoints",
     # A META-advisory: its subject is a recorded exception that silences nothing, so "record an
     # exception to silence it" is circular — the remedy is to delete the dead line or fix the key.
     # Unsilenceable for the same reason the suppression-COUNT line is: a silence you cannot see is

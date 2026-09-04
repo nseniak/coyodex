@@ -217,31 +217,16 @@ class EvidenceItem:
 
 
 @dataclass
-class InterfaceCrossing:
-    """One thing that crosses an interface, in ONE direction — the map's answer to "what actually
-    goes in and out of here".
-
-    `elements` names SINGLE ENTITIES (`En`), never a sub-domain: an area name ("Snapshots and
-    change") cannot answer "are the plan limits exposed?", and the grounding advisory is per record.
-    EMPTY IS LEGITIMATE and common — a log line, a fetched web page, a source file and a gateway tool
-    call are all real crossings that no stored record holds (2 of the 3 crossings on MCP Hero's
-    gateway carry none). A crossing with no `what` is the defect; a crossing with no records is not."""
-    direction: str                   # in | out (grammar.CROSSING_DIRECTIONS)
-    what: str = ""                   # one sentence, plain words — the crossing's reason to exist
-    elements: list[str] = field(default_factory=list)   # `En` ids; [] = nothing stored crosses
-    where: str = ""                  # optional bare path:line, when the crossing happens somewhere
-                                     # the interface's own `source` does not reach
-
-
-@dataclass
 class Interface:                     # T2b — the product's outside edge
     """One surface through which the product exchanges data or events with something outside itself.
 
     Two orthogonal facts, deliberately not squeezed into one word (the words "inbound"/"outbound"
     were tried and abandoned — they meant three different things at once: who starts the contact,
     which way data flows, and whose surface it is):
-    `side` is whose DESIGN it is; the overall flow is DERIVED from `carries`. Who STARTS the contact
-    is already recorded on every way in (`EntryPoint.activation`) and gets no field here."""
+    `side` is whose DESIGN it is; the overall flow is DERIVED from the `direction` its walk steps
+    carry. Who STARTS the contact is already recorded on every way in (`EntryPoint.activation`) and
+    gets no field here. THE SURFACE ITSELF AUTHORS NO DIRECTION — that was `carries[]`, and its one
+    underivable fact now lives on the step that does the crossing."""
     id: str                          # I<n>
     name: str                        # the surface in PRODUCT words ("Customer dashboard"), never a
                                      # code word ("http-route")
@@ -264,7 +249,6 @@ class Interface:                     # T2b — the product's outside edge
     #: Empty is legitimate: a `theirs` interface has none, and neither do the rows with no T4 row at
     #: all (the files a product writes, the settings an operator sets).
     ways_in: list[str] = field(default_factory=list)
-    carries: list[InterfaceCrossing] = field(default_factory=list)
     #: The one line that declares the SURFACE — the router, the command table, the file writer.
     #: Advisory, never required: `ConfigRow` carries no anchor and a Settings surface is declared in
     #: no single place (coyodex's 11 keys live in ~9, one of them in no file at all).
@@ -490,6 +474,26 @@ class FlowStep:
                                      # optional on actor steps (a human action has no call site).
     no_call_site: bool = False       # opt-out, mirroring Edge.no_call_site: this step has no single
                                      # call site (event-driven / config-wired) — `where` may be null.
+    #: WHICH WAY THE DATA MOVES, read from the product's own code: `in` it arrives, `out` it leaves,
+    #: `both` one exchange runs both ways (`grammar.STEP_DIRECTIONS`). REQUIRED on a step where the
+    #: map's OWN CODE touches a surface or a record; EMPTY everywhere else.
+    #:
+    #: TWO KINDS OF STEP OWE NOTHING. A step between two components moves nothing across anything
+    #: (1071 of the 1762 steps across the live maps). And a DOOR — a role standing at a surface —
+    #: is a human action with no product end at all: argus's operator opens the log store's own
+    #: console and nothing of ours moves. Forcing an answer on a door produced labels that
+    #: contradicted their own step's phrase, and it is the same exemption an actor step already has
+    #: from `where`.
+    #:
+    #: This is the map's ONLY statement of direction, and it is why `interfaces[].carries[]` could be
+    #: removed. Measured before that removal: direction was the one thing on a crossing row that no
+    #: step could say, its record list held 2 real independent records out of 68 references, and its
+    #: sentence repeated what the steps already said (66% of its words, at the busiest surfaces).
+    #:
+    #: It answers at a RECORD too, not only at a surface, and that is not a bonus: 83 of the 170
+    #: record steps across the two live maps sit on a component/record pair whose arrows say BOTH
+    #: read and write, so the step alone could not say which it was.
+    direction: str = ""
     subflow: str | None = None       # a REFERENCE step: "runs SFn here". src/dst stay authored (the
                                      # run's entry/exit endpoints — every unexpanded consumer keeps
                                      # working); the step carries NO where/no_call_site of its own
@@ -1020,8 +1024,6 @@ def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
     # stopped being true the moment a dep could name a surface and a surface could name a dep.
     for iface in m.interfaces:
         iface.ways_in = [r(ep) for ep in iface.ways_in]
-        for cr in iface.carries:
-            cr.elements = [r(e) for e in cr.elements]
     for d in m.deps:
         d.interfaces = [r(i) for i in d.interfaces]
     for en in m.entities:
@@ -1151,6 +1153,16 @@ _REMOVED_FIELDS: dict[str, str] = {
               "— a dependency standing on the surface, or a role the walks now put at it — and the "
               "fifteenth restates its own row's `what`. Delete the field. Anything it said that no "
               "neighbour says belongs in `what`, which is the row's own sentence."),
+    "carries": ("One sentence per direction saying what crossed a surface, authored beside the walk "
+                "steps and checked against nothing. WHAT CROSSES IS THE WALK STEPS NOW, and each of "
+                "them carries its own `direction`. Measured on the two live maps before removal: "
+                "the sentence repeated the steps (66% of its words at the surfaces with the richest "
+                "walks, and 4 rows were word-for-word copies of one step); its record list held 68 "
+                "references of which 2 were a real independent stored record, the rest wire shapes, "
+                "embedded parts and computed views; and one of its genuinely-new facts was a claim "
+                "nothing in the map backed, which is what an unanchored sentence attracts. Delete "
+                "the field and put `direction` on the steps drawn at the surface. An earlier "
+                "removal WITHOUT the step direction was reverted, and that is the difference."),
 }
 _RENAME_NOTES: dict[str, str] = {
     "label": ("It was a THREE-value word (core | supporting | platform) carrying two questions at "

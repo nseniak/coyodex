@@ -471,17 +471,25 @@ Semantics, stated on the fields:
   wears the wrong kind.
   **`ways_in`** lists the `EPn`s the surface is made of and
   travels through `reconcile` (field `ways_in`) exactly like a use case's `entry_points`, for the
-  same reason: those ids are minted at assembly. **`carries`** is one row per thing that crosses, in
-  ONE direction, each with a plain sentence and the SINGLE records (`En`) that cross — never a data
-  area; an EMPTY record list is legitimate and common (a log line, a fetched web page, a source file
-  and a tool call are real crossings no stored record holds), the sentence never is. The overall flow
-  is DERIVED as the set of directions the crossings carry, so a surface cannot claim to send while
-  listing nothing that goes out.
-  **It is NOT a summary of the walks, and it is not derivable from them.** The viewer draws it beside
-  the walk steps drawn at the surface (`interface_walk_steps`), as a pair. Replacing it with those
-  steps was built and reverted: 16 of the 39 surfaces on the three live maps have no step at all,
-  direction cannot be read off a step (a PULL points outward while its data comes back), and no step
-  names the records that cross. Read that function's docstring before proposing the merge again.
+  same reason: those ids are minted at assembly.
+  **WHAT CROSSES IS THE WALK STEPS DRAWN AT IT, and there is no field.** `carries[]` held one
+  sentence per direction and was REMOVED. Each part of it was measured on the two live maps first:
+  its sentence repeated the steps (66% of its words at the surfaces with the richest walks, and 4
+  rows were word-for-word copies of a single step); its record list held 68 references of which 2
+  were a real independent stored record, the rest wire shapes, embedded parts and computed views;
+  and one of its genuinely-new facts was a claim nothing in the map backed, which is what an
+  unanchored sentence attracts.
+  **The one thing it said that a step could not is DIRECTION, and that moved onto the step**
+  (`flows[].steps[].direction`, `subflows[].steps[].direction`) — `in`/`out`/`both`, read from the
+  PRODUCT'S OWN CODE, and owed by every step where that code touches a surface or a record. A DOOR
+  is exempt: a role standing at a surface is a human action with no product end, the same reason an
+  actor step owes no `where`. A surface's overall flow is DERIVED
+  as the set of directions its steps carry (`interface_directions`), so a surface cannot claim to
+  send while no story sends anything through it, and there is no second copy to disagree with.
+  **An earlier removal WITHOUT the step direction was built and reverted**, and that is the part
+  worth remembering: the objection then was not the sentence but the direction, since a PULL points
+  outward while its data comes back. Two other objections were closed rather than argued away —
+  coverage, by making every interface owe a use case, and the records, by measuring what they were.
   **`deps[].interfaces`** lists the surfaces a dep belongs to, on EITHER side of each: a dep can BE
   the surface, or sit on the FAR SIDE of one of ours. A LIST, because one outside system really does
   sit on several surfaces — a coding agent hosts our skill AND writes the transcript we read back,
@@ -531,7 +539,7 @@ Semantics, stated on the fields:
   **`deployment[].variants[].source`** (the manifest line grounding a variant tag; may be `""` =
   inferred), **`interfaces[].source`** (the ONE line declaring a whole surface — the router, the
   command table, the file writer; optional, since a settings surface is declared in no single place),
-  **`interfaces[].carries[].where`** (the line one crossing happens at; optional), and
+  **`flows[].steps[].where`** (the line one step happens at), and
   **`non_entity_types[].source`** all use it — `glossary[].source` and the file OR directory fields
   (`components[].source`, `entities[].source`, `non_entity_types[].source`) may also be a bare
   directory ref `path/`, and `glossary[].source` is additionally nullable (a pure product-level term

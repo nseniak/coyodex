@@ -225,9 +225,6 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
         add(_ref(iface.id, "interface", iface.source, "source"))
         for ev in iface.evidence:
             add(_ref(iface.id, "interface", ev.file, "evidence"))
-        for ci, cr in enumerate(iface.carries):
-            add(_ref(f"crossing:{iface.id}:{ci}", "interface_crossing", cr.where, "where",
-                     owner=iface.id))
     for e in model.entities:
         add(_ref(e.id, "entity", e.source, "source"))
     for n in model.non_entity_types:

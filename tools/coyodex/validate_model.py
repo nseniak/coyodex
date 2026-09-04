@@ -246,8 +246,6 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     refs: set[str] = set()
     for iface in m.interfaces:                       # kept in step with `model.remap_element_ids`
         refs.update(iface.ways_in)
-        for cr in iface.carries:
-            refs.update(cr.elements)
     for d in m.deps:
         refs.update(d.interfaces)
     for c in m.components:
@@ -409,6 +407,8 @@ def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
                         f"flow): {', '.join(dups)}")
     role_ids = {r.id for r in m.roles}
     sf_ids = {sf.id for sf in m.subflows}
+    iface_ids = {i.id for i in m.interfaces}
+    missing_direction: list[str] = []
     # flows and sub-flows share ONE per-step rulebook — a sub-flow's steps are ordinary steps
     containers: list[tuple[str, bool, list]] = (
         [(f"{f.uc} flow step", False, f.steps) for f in m.flows]
@@ -454,6 +454,45 @@ def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
                 for end in (st.src, st.dst):
                     if not grammar.is_step_id(end) and end not in role_ids:
                         problems.append(f"{tag}: actor '{end}' is not a defined Role id")
+            # WHICH WAY THE DATA MOVES. Owed by a step that touches a surface or a record, because
+            # those are the two places the map has to answer it and cannot work it out: the arrows
+            # between one component and one record say BOTH read and write on 83 of the 170 record
+            # steps across the live maps, and no arrow reaches a surface at all.
+            #
+            # A bad VALUE blocks. A MISSING one is advisory, and that split is deliberate: this
+            # field arrived with the removal of `interfaces[].carries[]`, and until a real build
+            # shows an agent filling it reliably, a gate here would wall off every rebuild. The
+            # retro-check for that removal carries the promotion to blocking.
+            # A DOOR OWES NO DIRECTION, and that exemption is not tidiness. The answer is read from
+            # the PRODUCT's own code, and a step between a ROLE and a `theirs` surface has no
+            # product end at all: argus's operator opens the log store's own console, and nothing
+            # of ours moves. Forcing an answer there produced two steps whose label contradicted
+            # their own phrase. Same shape as the `where` rule one block up, where an actor step is
+            # a human action and owes no call site.
+            ends_in_code = [e for e in (st.src, st.dst) if grammar.is_step_id(e)
+                            and e not in iface_ids and not e.startswith("E")]
+            crossing = (not st.subflow and bool(ends_in_code)
+                        and any(e in iface_ids or e.startswith("E") for e in (st.src, st.dst)))
+            if st.direction and st.direction not in grammar.STEP_DIRECTIONS:
+                problems.append(f"{tag}: direction='{st.direction}' — must be one of "
+                                f"{'/'.join(grammar.STEP_DIRECTIONS)}, read from the PRODUCT's own "
+                                f"code: `in` data arrives at it, `out` data leaves it, `both` one "
+                                f"exchange runs each way")
+            elif st.direction and not crossing:
+                problems.append(f"{tag}: carries a direction, and the map's own code is not at "
+                                f"either end of it — a step between two components crosses "
+                                f"nothing, and a DOOR (a role at a surface) is a human action with "
+                                f"no product end, so neither has a way for data to go")
+            elif crossing and not st.direction:
+                missing_direction.append(tag)
+    if missing_direction:
+        warnings.append(
+            f"{len(missing_direction)} step(s) touch a surface or a record and say no `direction`: "
+            f"{_shown(missing_direction, 8)}. It is the map's only statement of which way data "
+            f"moves — at a record `in` is a read and `out` is a write, at a surface `in` is what "
+            f"the product receives and `out` what it sends, and `both` is one exchange running "
+            f"each way. Nothing else in the map holds it: the component-to-record arrows say both "
+            f"read and write on half the record steps, and no arrow reaches a surface")
     return problems, warnings
 
 
@@ -928,26 +967,27 @@ class InterfaceWalkStep:
     container: str
     n: int                           # the step number within that container
     role: str = ""                   # the role on the far side, when the step is a door; "" otherwise
+    #: The step's own `direction`, carried through so a caller reading what happens at a surface also
+    #: reads which way it went. This is the ONE fact the removed `interfaces[].carries[]` held that
+    #: nothing else could say, which is why it is authored on the step rather than derived here.
+    direction: str = ""
 
 
 def interface_walk_steps(m: ProjectModel) -> dict[str, list[InterfaceWalkStep]]:
-    """Per interface, every walk step drawn at it — the GROUNDED half of what crosses a surface.
+    """Per interface, every walk step drawn at it — WHAT CROSSES THIS SURFACE, and which way.
 
-    IT DOES NOT REPLACE `interfaces[].carries[]`, AND AN ATTEMPT TO MAKE IT DO SO WAS REVERTED.
-    The two answer different questions and the map needs both: `carries` is the BOUNDARY statement
-    (which way data goes, which records cross, what is stripped before it leaves), and this is WHAT
-    THE STORIES SHOW HAPPENING there. Measured on the three live maps when the replacement was
-    tried, the derivation could not stand in for the field:
+    THIS REPLACED `interfaces[].carries[]`, and the field is gone. The replacement only became
+    honest once the step itself carried a `direction`; an earlier attempt without one was reverted,
+    because a step records who talks to whom and reading its polarity as direction flipped argus's
+    "Tracked web pages" from `in` to `out` on a page the product fetches. Three other objections were
+    measured and answered before the removal:
 
-      * 16 of the 39 interfaces have no step at all, so 22 authored sentences would have become
-        silence — including every one of coyodex's own 11 surfaces, whose map draws no doors, and
-        three redaction guarantees ("stripped of credentials before it leaves") that no story reaches.
-      * DIRECTION IS NOT DERIVABLE. A step records who talks to whom, not which way data goes: a
-        PULL points outward and the data comes back, and the map draws that as one step. Reading
-        polarity as direction flipped argus's "Tracked web pages" from `in` to `out` — a page the
-        product fetches — and on every disagreement across the two maps the AUTHORED value was the
-        better one. Nothing here reports a direction, and nothing downstream may infer one from it.
-      * The records that cross are on `carries[].elements` and appear nowhere in a step.
+      * COVERAGE. 5 of the 28 surfaces across the two live maps had no step. Every interface now owes
+        a use case (`_check_interfaces`), with a recorded escape for one that genuinely has none.
+      * THE RECORDS THAT CROSS. 68 references sat on `carries[].elements`; 2 of them were a real
+        independent stored record, the rest being wire shapes, embedded parts and computed views.
+      * THE SENTENCE. It repeated the steps — 66% of its words at the surfaces with the richest
+        walks, and 4 rows were word-for-word copies of a single step.
 
     NO STEP IS DROPPED. An "outer step wins" filter was tried, keeping only the steps whose far end
     is outside the product; it read well on a dashboard and silently deleted the sign-in
@@ -972,8 +1012,28 @@ def interface_walk_steps(m: ProjectModel) -> dict[str, list[InterfaceWalkStep]]:
                 seen[near].add(phrase)
                 out[near].append(InterfaceWalkStep(
                     phrase=phrase, uc=f.uc, container=container, n=st.n,
-                    role=far if far in role_ids else ""))
+                    role=far if far in role_ids else "", direction=st.direction or ""))
     return out
+
+
+def interface_directions(m: ProjectModel) -> dict[str, list[str]]:
+    """Per interface, the directions its walk steps carry, as `in`/`out` in that order.
+
+    THE SURFACE'S OWN ANSWER, and the successor to what `interfaces[].carries[]` stated by hand. A
+    `both` step votes for BOTH words, because one exchange really does run each way. An interface
+    whose steps carry nothing yet answers `[]`, which reads as "not stated" and never as "neither".
+
+    Deriving it is the whole point: an authored copy beside the steps is a second thing to disagree
+    with, and on the map this replaced, one interface's authored direction contradicted its own
+    story."""
+    out: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    for iid, steps in interface_walk_steps(m).items():
+        for st in steps:
+            if st.direction == "both":
+                out[iid] |= {"in", "out"}
+            elif st.direction in ("in", "out"):
+                out[iid].add(st.direction)
+    return {iid: [d for d in ("in", "out") if d in got] for iid, got in out.items()}
 
 
 def interface_steps_by_use_case(m: ProjectModel) -> dict[str, list[tuple[str, list[InterfaceWalkStep]]]]:
@@ -2300,6 +2360,7 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     ifs_by_id = {i.id: i for i in m.interfaces}
     actors_by_iface = interface_actors(m)
     ucs_by_iface = interface_use_cases(m)
+    dirs_by_iface = interface_directions(m)
     minted_kinds: dict[str, list[str]] = {}
     deps_by_iface: dict[str, list[str]] = {}
     for d in m.deps:
@@ -2336,35 +2397,14 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                     f"surface once" if len(owners) == 1 else
                     f"{ep} is claimed by {len(owners)} interfaces ({', '.join(owners)}) — one way "
                     f"in belongs to exactly one surface")
-        for ci, cr in enumerate(iface.carries):
-            if cr.direction not in grammar.CROSSING_DIRECTIONS:
-                problems.append(f"{iface.id} crossing {ci}: direction='{cr.direction}' — must be "
-                                f"one of {'/'.join(grammar.CROSSING_DIRECTIONS)}")
-            if not (cr.what or "").strip():
-                problems.append(f"{iface.id} crossing {ci}: no `what` — say in one sentence what "
-                                f"crosses here. (An EMPTY record list is fine; an empty sentence is "
-                                f"not: a log line and a fetched page cross without being stored.)")
-            for eid in cr.elements:
-                if eid not in ent_ids:
-                    problems.append(f"{iface.id} crossing {ci}: '{eid}' is not a defined entity — "
-                                    f"a crossing names single records (`En`), never a data area")
-        # NO ADVISORY ON A CROSSING WITH NO ANCHOR. There was one, and it was REMOVED as dead
-        # weight. Of the maps that have interfaces it failed every single one — 35 of 35 crossings
-        # empty on the map it came from, 22 of 22 on its predecessor, 11 of 15 on coyodex's own —
-        # and its own comment already said what that means: a gate that fails every existing map
-        # teaches the lead to ignore the gate. It was written to make crossings checkable after a
-        # refuted privacy fact shipped in one; the thing that actually closes that hole is `audit`
-        # putting every crossing sentence in front of a skeptic, which it does, so this asked a
-        # second time for something already answered. Do not re-add it.
-        # The crossing anchor stays a GROUNDING arm even though its advisory is gone: two of
-        # coyodex's own surfaces (Settings, Project source files) stand on nothing else, and the
-        # anchor really does prove the surface exists.
-        grounded = bool(iface.ways_in or deps_by_iface.get(iface.id) or iface.source
-                        or any(c.where for c in iface.carries))
+        # GROUNDING lost one arm with `carries[]`: a crossing's own `where`. The other three carry
+        # every live surface, and the removed arm was the weakest — it proved a line existed, not
+        # that the surface did.
+        grounded = bool(iface.ways_in or deps_by_iface.get(iface.id) or iface.source)
         if not grounded:
             problems.append(f"{iface.id} ({iface.name}) is grounded by nothing — it needs at least "
-                            f"one of: ways in, a dependency naming it, a crossing's `where`, or its "
-                            f"own `source` (the router, the command table, the file writer)")
+                            f"one of: ways in, a dependency naming it, or its own `source` (the "
+                            f"router, the command table, the file writer)")
         if not iface.facing and iface.id not in recorded:
             warnings.append(f"{iface.id} ({iface.name}) has no `facing` — say whether this surface "
                             f"serves a user or an operator, or record "
@@ -2422,8 +2462,7 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # receiving use case drives). Deriving nobody means neither was written. Deliberately NOT
         # gated on `kind`, unlike the advisory above: `file`, `settings` and `api` are all shapes a
         # product hands something over through, and none of them means a person goes anywhere.
-        hands_over_to_nobody = (iface.side == "ours"
-                                and any(c.direction == "out" for c in iface.carries)
+        hands_over_to_nobody = (iface.side == "ours" and "out" in dirs_by_iface.get(iface.id, ())
                                 and not actors_by_iface.get(iface.id) and iface.id not in recorded)
         if hands_over_to_nobody:
             warnings.append(f"{iface.id} ({iface.name}) is OUR surface and something crosses OUT of "
@@ -2434,33 +2473,31 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"a way in that a use case drives. Record '{iface.id}: <why>' under an "
                             f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if nothing on the far "
                             f"side is a role this map names")
-        # (b) The map says this surface exists FOR A PERSON, and no use case reaches it. That is the
-        # map contradicting itself: `facing: user` claims the surface serves somebody's goal, and not
-        # one story pursuing a goal goes near it, so the Interfaces page can say what crosses and
-        # never say when.
+        # (b) EVERY interface owes a use case. A surface the product meets the outside world at,
+        # that not one story goes near, leaves the map unable to say WHEN anything crosses it — and
+        # since `carries[]` was removed, unable to say WHAT crosses it either.
         #
-        # `facing: operator` IS EXEMPT, and that exemption is the whole check. Crash reporting, log
-        # shipping and an ops command line exist so the team can run the product; no use case is
-        # expected to reach them, and firing there would bury the one real case under three false
-        # ones. Measured across the two live maps: 5 of the 28 surfaces are in no use case, 4 are
-        # operator-facing and stay silent, and the single advisory is argus's paid page-reading
-        # service. Its story reaches it in PROSE only — two neighbouring steps say "paid reading
-        # allowance" and "the credits the paid reading spent" — while the step that actually leaves
-        # the product is drawn at the free readers' far side, the open web. One box behind three
-        # readers, one step written for all three, and the paid far side never named.
+        # THE `facing: operator` EXEMPTION THIS SHIPPED WITH IS GONE, and the measurement that
+        # removed it is the reason to keep it gone. It was drawn from the 5 unstoried surfaces, 4 of
+        # them operator-facing, read as "operator surfaces do not get stories". The fuller count says
+        # the opposite: 7 of the 11 operator-facing surfaces across the two live maps ALREADY have
+        # use cases. The 4 without were the outliers, and each one's own description names a person
+        # and what they do with it — "the service holding the forwarded log records an operator
+        # searches and charts". The exemption was hiding real gaps.
         #
-        # Silent when (a) already fired: both end in "draw the story", and one gap owes one line.
-        if (iface.facing == "user" and not ucs_by_iface.get(iface.id)
-                and iface.id not in recorded and not hands_over_to_nobody):
-            warnings.append(f"{iface.id} ({iface.name}) is `facing: user` and NO use case reaches "
-                            f"it — the map says this surface exists for a person, then tells no "
-                            f"story that crosses it. Draw the step where it belongs: the call, "
-                            f"fetch or hand-off goes at THIS surface, not at the one a cheaper path "
-                            f"on the same code reaches. A surface can also be reached by a use case "
-                            f"naming one of its `ways_in`, or by a step drawn at a dep standing on "
-                            f"it. Record '{iface.id}: <why no story crosses it>' under an "
-                            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading, or set "
-                            f"`facing: operator` if it serves the team rather than a person")
+        # Still ADVISORY, and the escape stays: a genuinely write-only surface that no person ever
+        # reads is a real answer, and forcing a story there would have someone invent a reader.
+        if (not ucs_by_iface.get(iface.id) and iface.id not in recorded):
+            warnings.append(f"{iface.id} ({iface.name}) is reached by NO use case — the map meets "
+                            f"the outside world here and tells no story that crosses it, so nothing "
+                            f"can say what goes through or when. Draw the step where it belongs: "
+                            f"the call, fetch or hand-off goes at THIS surface, not at the one a "
+                            f"cheaper path on the same code reaches. An OPERATOR surface owes one "
+                            f"too — the people who run the product have goals, and this surface's "
+                            f"own description usually names them. A surface can also be reached by "
+                            f"a use case naming one of its `ways_in`, or by a step drawn at a dep "
+                            f"standing on it. Record '{iface.id}: <why no story crosses it>' under "
+                            f"an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
         if iface.side == "theirs" and not iface.evidence and iface.id not in recorded:
             warnings.append(f"{iface.id} ({iface.name}) is a `theirs` surface with no evidence — "
                             f"whose data crosses is not visible at the call site (a search over the "
@@ -5266,10 +5303,6 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for iface in m.interfaces:
         if iface.source and not url.match(iface.source):
             out.append((f"{iface.id} `source`", _where_href(iface.source) or iface.source))
-        for ci, cr in enumerate(iface.carries):
-            href = _where_href(cr.where or "")
-            if href and not url.match(href):
-                out.append((f"{iface.id} crossing {ci} `where`", href))
     for u in m.use_cases:
         href = _first_link_of(u, [u.name, u.trigger_outcome])  # actors are role ids now, not a link cell
         if href and not url.match(href):

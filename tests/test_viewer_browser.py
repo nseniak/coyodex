@@ -222,7 +222,7 @@ def test_the_happy_path_draws_one_line_broken_at_every_change_of_person() -> Non
             hands: document.querySelectorAll('.walk-hand').length,
             elbows: document.querySelectorAll('.walk-elbow').length,
             hooks: document.querySelectorAll('.walk-hook').length,
-            closed: document.querySelectorAll('.walk-box.walk-closes').length,
+            closed: document.querySelectorAll('.walk-box.walk-closes').length
         })""")
         assert counts == {"steps": 14, "boxes": 11, "hands": 6,
                           "elbows": 5, "hooks": 5, "closed": 1}, counts
@@ -420,7 +420,7 @@ def test_a_lane_with_a_fixed_left_part_shadows_it_instead_of_fading_it() -> None
             const read = () => ({
                 onL: wrap.classList.contains('hfade-on-l'),
                 leftFade: getComputedStyle(wrap.querySelector('.hfade-l')).display,
-                shadow: getComputedStyle(gutter).boxShadow !== 'none',
+                shadow: getComputedStyle(gutter).boxShadow !== 'none'
             });
             const out = { start: read() };
             board.scrollLeft = 600;
@@ -504,7 +504,7 @@ def test_the_walk_offers_no_door_it_cannot_open() -> None:
                 personName: person ? person.textContent.trim() : null,
                 stepDrawn: !!step, stepIsDoor: step ? step.hasAttribute('data-uc') : null,
                 stepTitle: step ? step.getAttribute('title') : null,
-                liveButtons: document.querySelectorAll('.walk-one').length,
+                liveButtons: document.querySelectorAll('.walk-one').length
             };
         }""")
         assert seen["personDrawn"] and seen["personIsButton"] is False, seen
@@ -572,9 +572,8 @@ def _with_interface(kind: str) -> Any:
     def mutate(m: dict) -> None:
         m["interfaces"] = [{
             "id": "I1", "name": "Google sign-in", "what": "Where a person proves who they are.",
-            "side": "theirs", "facing": "user", "kind": kind,
-            "carries": [{"direction": "out", "what": "a sign-in request", "elements": []}],
-        }]
+            "side": "theirs", "facing": "user", "kind": kind
+            }]
         for d in m["deps"]:
             if d["id"] == "D4":
                 d["interfaces"] = ["I1"]
@@ -657,12 +656,11 @@ def _two_sided_interfaces() -> Any:
                 u["entry_points"] = ["EP1"]
         m["interfaces"] = [
             {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
-             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"],
-             "carries": [{"direction": "in", "what": "what the person asks for", "elements": []},
-                         {"direction": "out", "what": "the page they get back", "elements": []}]},
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"]
+             },
             {"id": "I2", "name": "Crash reporting", "what": "Where a crash is reported.",
-             "side": "theirs", "facing": "operator", "kind": "api",
-             "carries": [{"direction": "out", "what": "a crash report", "elements": []}]},
+             "side": "theirs", "facing": "operator", "kind": "api"
+             },
         ]
         for d in m["deps"]:
             if d["id"] == "D4":
@@ -717,7 +715,7 @@ def test_hovering_a_surface_lights_its_line_and_says_who_comes_and_what_for() ->
                 heads: on.flatMap(l => [...l.querySelectorAll('.ifd-elabel-dir')]
                                         .map(e => e.textContent)),
                 doors: on.flatMap(l => [...l.querySelectorAll('.ifd-elabel-uc')]
-                                        .map(e => e.textContent)),
+                                        .map(e => e.textContent))
             };
         }""")
         assert set(shown["hot"]) == {"I1"}, shown
@@ -783,7 +781,7 @@ def test_what_we_own_holds_the_product_and_our_surfaces_and_keeps_its_distance()
                     noScroll: wrap.scrollWidth === wrap.clientWidth
                            && wrap.scrollHeight === wrap.clientHeight,
                     // …and the picture still starts where the rest of the page does
-                    stageLeft: Math.round(stage.getBoundingClientRect().left),
+                    stageLeft: Math.round(stage.getBoundingClientRect().left)
                 };
             }""")
             assert m["holdsHub"], (width, m)
@@ -859,7 +857,7 @@ def test_the_picture_is_the_list_and_there_is_no_second_copy_under_it() -> None:
                 b => b.querySelector('.ifd-name').textContent),
             sentences: [...document.querySelectorAll('.ifd-box .ifd-what')].map(e => e.textContent),
             cards: document.querySelectorAll('.usecases-wrap .ecard[data-key]').length,
-            text: document.querySelector('.usecases-wrap').textContent,
+            text: document.querySelector('.usecases-wrap').textContent
         })""")
         assert sorted(got["boxes"]) == ["Crash reporting", "The dashboard"], got
         assert "Screens a person signs in to." in got["sentences"], got
@@ -886,11 +884,11 @@ def _both_shores_carry_people_and_a_pipe() -> Any:
              "source": "backend/src/mcpolis/entrypoints/app.py:1", "component": "C1"}]
         m["interfaces"] = [
             {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
-             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP900"],
-             "carries": [{"direction": "in", "what": "what the person asks for", "elements": []}]},
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP900"]
+             },
             {"id": "I2", "name": "Google sign-in", "what": "Where a person proves who they are.",
-             "side": "theirs", "facing": "user", "kind": "hosted-screen",
-             "carries": [{"direction": "out", "what": "a sign-in request", "elements": []}]},
+             "side": "theirs", "facing": "user", "kind": "hosted-screen"
+             },
         ]
         for d in m["deps"]:
             if d["id"] == "D4":
@@ -964,7 +962,7 @@ _READ_POP_JS = """
     kind: pop.querySelector('.insp-kind').textContent,
     path: pop.querySelector('.insp-path').textContent.replace('project-map.json › ', ''),
     body: pop.textContent,
-    refs: [...pop.querySelectorAll('.insp-ref')].map((r) => r.textContent),
+    refs: [...pop.querySelectorAll('.insp-ref')].map((r) => r.textContent)
   };
 }
 """
@@ -1195,7 +1193,7 @@ def test_an_item_pages_sections_each_say_what_they_are_and_what_is_in_them() -> 
         secs = page.evaluate("""() => [...document.querySelectorAll('.item-sec')].map((s) => ({
             title: s.querySelector('.item-sec-title').firstChild.textContent.trim(),
             count: s.querySelector('.item-sec-n').textContent,
-            note: s.querySelector('.item-sec-note').textContent.slice(0, 24),
+            note: s.querySelector('.item-sec-note').textContent.slice(0, 24)
         }))""")
         assert [s["title"] for s in secs] == ["Use cases", "Interfaces"], secs
         assert all(s["note"] and s["count"] != "" for s in secs), secs
@@ -1320,9 +1318,8 @@ def test_a_surface_names_the_features_that_arrive_at_an_actor_not_only_the_ones_
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
-             "side": "ours", "facing": "user", "kind": "screen",
-             "carries": [{"direction": "out", "what": "what the product tells them",
-                          "elements": []}]},
+             "side": "ours", "facing": "user", "kind": "screen"
+             },
         ]
         # UC2 is the ORG ADMIN's story. Its walk is made to hand out through the dashboard to the ORG
         # CREATOR, who drives none of it — so the only thing that can put the creator on that surface,
@@ -1373,7 +1370,7 @@ def test_an_actors_surfaces_picture_lines_each_one_up_with_what_they_reach_there
                 cardMid: Math.round(b.offsetTop + b.offsetHeight / 2),
                 featMid: box ? Math.round(box.offsetTop + box.offsetHeight / 2) : null,
                 feats: box ? [...box.querySelectorAll('.asf-feat span')].map((f) => f.textContent)
-                           : cell.textContent.trim(),
+                           : cell.textContent.trim()
               };
             });
         }""")
@@ -1471,20 +1468,20 @@ def _walk_ordered_interfaces() -> Any:
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I3", "name": "Late and staffy", "what": "Never on the walk, operator-facing.",
-             "side": "ours", "facing": "operator", "kind": "screen",
-             "carries": [{"direction": "in", "what": "a", "elements": []}]},
+             "side": "ours", "facing": "operator", "kind": "screen"
+             },
             {"id": "I2", "name": "Second", "what": "Reached later on the walk.",
-             "side": "ours", "facing": "user", "kind": "screen",
-             "carries": [{"direction": "in", "what": "b", "elements": []}]},
+             "side": "ours", "facing": "user", "kind": "screen"
+             },
             {"id": "I5", "name": "Never", "what": "Never on the walk, user-facing.",
-             "side": "ours", "facing": "user", "kind": "screen",
-             "carries": [{"direction": "in", "what": "c", "elements": []}]},
+             "side": "ours", "facing": "user", "kind": "screen"
+             },
             {"id": "I9", "name": "First", "what": "Reached at the start of the walk.",
-             "side": "ours", "facing": "user", "kind": "screen",
-             "carries": [{"direction": "in", "what": "d", "elements": []}]},
+             "side": "ours", "facing": "user", "kind": "screen"
+             },
             {"id": "I4", "name": "Theirs on the walk", "what": "Stands on the dep UC1 steps at.",
-             "side": "theirs", "facing": "user", "kind": "api",
-             "carries": [{"direction": "out", "what": "e", "elements": []}]},
+             "side": "theirs", "facing": "user", "kind": "api"
+             },
         ]
         for d in m["deps"]:
             if d["id"] == "D4":
@@ -1512,7 +1509,7 @@ def test_the_picture_reads_down_in_the_order_the_walk_touches_each_surface() -> 
         _settle(page)
         got = page.evaluate("""() => ({
             ours: [...document.querySelectorAll('.ifd-col-ours .ifd-name')].map(e => e.textContent),
-            theirs: [...document.querySelectorAll('.ifd-col-theirs .ifd-name')].map(e => e.textContent),
+            theirs: [...document.querySelectorAll('.ifd-col-theirs .ifd-name')].map(e => e.textContent)
         })""")
         assert got["ours"] == ["First", "Second", "Never", "Late and staffy"], got
         assert got["theirs"] == ["Theirs on the walk"], got
@@ -1536,7 +1533,7 @@ def test_the_people_at_a_surface_are_ordered_by_the_happy_path() -> None:
                 u["entry_points"] = ["EP1"]
         m["interfaces"] = [
             {"id": "I1", "name": "The door", "what": "One surface.", "side": "ours",
-             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"] },
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
@@ -1546,7 +1543,7 @@ def test_the_people_at_a_surface_are_ordered_by_the_happy_path() -> None:
             chips: [...document.querySelectorAll('.ifd-box[data-iface="I1"] .ifd-chip-actor')]
                      .map(e => e.textContent.trim()),
             heads: [...document.querySelectorAll('.ifd-elabel.ifd-lab-on .ifd-elabel-dir')]
-                     .map(e => e.textContent),
+                     .map(e => e.textContent)
         })""")
         # `Org admin` wins the alphabet; `Org creator` comes first on the story, and wins here.
         assert got["chips"] == ["Org creator", "Org admin"], got
@@ -1567,9 +1564,9 @@ def test_a_surface_no_use_case_reaches_is_drawn_quiet_and_sorted_last() -> None:
                 u["entry_points"] = ["EP1"]
         m["interfaces"] = [
             {"id": "I1", "name": "Untouched", "what": "No journey names it.", "side": "ours",
-             "facing": "user", "kind": "screen", "carries": []},
+             "facing": "user", "kind": "screen" },
             {"id": "I2", "name": "Used", "what": "A journey comes here.", "side": "ours",
-             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"] },
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
@@ -1580,7 +1577,7 @@ def test_a_surface_no_use_case_reaches_is_drawn_quiet_and_sorted_last() -> None:
                      .map(b => b.classList.contains('ifd-box-quiet')),
             pills: [...document.querySelectorAll('.ifd-col-ours .ifd-box')]
                      .map(b => { const e = b.querySelector('.ifd-ucs');
-                                 return e ? e.textContent : null; }),
+                                 return e ? e.textContent : null; })
         })""")
         # the used one leads, the untouched one is last and drawn quiet
         assert got["order"] == ["I2", "I1"], got
@@ -1590,21 +1587,40 @@ def test_a_surface_no_use_case_reaches_is_drawn_quiet_and_sorted_last() -> None:
         assert not page.js_errors, page.js_errors
 
 
-def test_a_surfaces_own_page_does_not_repeat_its_name_on_every_crossing() -> None:
-    """Same two verbs, and the subject is left out where the screen has already said it: a surface's
-    own page is about one surface, so naming it on every row would repeat the page's own title."""
+def test_a_surfaces_own_page_tags_each_step_with_the_way_that_one_went() -> None:
+    """The authored crossing table is gone with `interfaces[].carries[]`; each STEP now says which
+    way it went, so the direction sits on the line that shows what happened rather than in a second
+    block that could disagree with it.
+
+    Same two verbs the table used, and the subject is still left out: a surface's own page is about
+    one surface, so naming it on every line would repeat the page's own title. `both` says so
+    plainly, because one exchange really does run each way."""
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
-             "facing": "user", "kind": "screen",
-             "carries": [{"direction": "in", "what": "what is asked", "elements": []},
-                         {"direction": "out", "what": "what comes back", "elements": []}]},
+             "facing": "user", "kind": "screen"
+             },
         ]
+        for f in m["flows"]:
+            if f["uc"] == "UC1":
+                f["steps"] = [
+                    {"n": 1, "src": "R1", "dst": "I1", "direction": "in",
+                     "phrase": "types what they want", "note": "", "where": None,
+                     "no_call_site": False, "subflow": None},
+                    {"n": 2, "src": "C1", "dst": "I1", "direction": "out",
+                     "phrase": "shows them the answer", "note": "",
+                     "where": "backend/src/mcpolis/entrypoints/app.py:4",
+                     "no_call_site": False, "subflow": None},
+                    {"n": 3, "src": "C1", "dst": "I1", "direction": "both",
+                     "phrase": "trades the code for the verified email", "note": "",
+                     "where": "backend/src/mcpolis/entrypoints/app.py:9",
+                     "no_call_site": False, "subflow": None},
+                ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces&iface=I1") as page:
         _settle(page)
         got = page.evaluate(
-            "() => [...document.querySelectorAll('.if-dir')].map(e => e.textContent)")
-        assert got == ["receives", "sends"], got
+            "() => [...document.querySelectorAll('.ifs-dirtag')].map(e => e.textContent)")
+        assert got == ["receives", "sends", "both ways"], got
         assert not page.js_errors, page.js_errors
 
 
@@ -1631,8 +1647,8 @@ def test_a_surfaces_wire_reaches_its_card_and_lands_on_the_product() -> None:
                 u["entry_points"] = ["EP1"]
         m["interfaces"] = [
             {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
-             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"],
-             "carries": []},
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"]
+             },
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
@@ -1685,7 +1701,7 @@ def test_a_surface_card_has_one_door_and_it_is_the_name() -> None:
                      .filter(e => !e.classList.contains('gloss-link'))
                      .map(e => e.className),
             chips: b.querySelectorAll('.ifd-chip-actor').length,
-            provs: b.querySelectorAll('.ifd-prov').length,
+            provs: b.querySelectorAll('.ifd-prov').length
         }))""")
         assert got, got
         for card in got:
@@ -1769,9 +1785,9 @@ def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
         m["use_cases"][1]["entry_points"] = ["EP2"]
         m["interfaces"] = [
             {"id": "I1", "name": "Ours", "what": "On our shore.", "side": "ours",
-             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"] },
             {"id": "I2", "name": "Theirs", "what": "On theirs.", "side": "theirs",
-             "facing": "user", "kind": "hosted-screen", "ways_in": ["EP2"], "carries": []},
+             "facing": "user", "kind": "hosted-screen", "ways_in": ["EP2"] },
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
@@ -1796,10 +1812,8 @@ def _crossing_naming_a_record() -> Any:
     def mutate(m: dict) -> None:
         m["interfaces"] = [
             {"id": "I1", "name": "Both ways", "what": "It answers as well as asks.",
-             "side": "ours", "facing": "user", "kind": "screen",
-             "carries": [{"direction": "in", "what": "what is asked", "elements": ["E1"]},
-                         {"direction": "out", "what": "what comes back",
-                          "elements": ["E2", "E12", "E3", "E4"]}]},
+             "side": "ours", "facing": "user", "kind": "screen"
+             },
         ]
     return mutate
 
@@ -1820,7 +1834,7 @@ def test_a_use_case_on_the_box_is_a_door_and_the_rest_are_counted() -> None:
                 u["entry_points"] = ["EP1"]
         m["interfaces"] = [
             {"id": "I1", "name": "Busy", "what": "One person, many journeys.", "side": "ours",
-             "facing": "user", "kind": "screen", "ways_in": ["EP1"], "carries": []},
+             "facing": "user", "kind": "screen", "ways_in": ["EP1"] },
         ]
     with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
@@ -1922,7 +1936,7 @@ def test_the_leader_meets_its_arrow_at_a_right_angle_clear_of_the_head() -> None
         m["interfaces"] = [
             {"id": f"I{n}", "name": f"Surface {n}", "what": "One of several.",
              "side": "ours" if n % 2 else "theirs", "facing": "user", "kind": "screen",
-             "ways_in": [f"EP{n}"], "carries": []}
+             "ways_in": [f"EP{n}"] }
             # SIXTEEN, the size of the largest live map. The stage's height comes from the
             # number of cards, and the room a box has to get off its line comes from the
             # stage. Eight interfaces make a 500px picture a 300px box cannot be placed in.
@@ -1957,7 +1971,7 @@ def test_the_leader_meets_its_arrow_at_a_right_angle_clear_of_the_head() -> None
                     cosine: Math.abs((ex - qx) * dx + (ey - qy) * dy) / (len * seg),
                     along: t * seg,
                     // …and the corner it leaves from is a corner OF THE BOX
-                    onBox: Math.abs(num('--lead-x')) < 1 || Math.abs(num('--lead-x') - w) < 1,
+                    onBox: Math.abs(num('--lead-x')) < 1 || Math.abs(num('--lead-x') - w) < 1
                 };
             });
         }""")
@@ -2000,7 +2014,7 @@ def _stage_state(page: Any) -> dict:
             fittedHeight: sizes ? Math.round(sizes.height) : 0,
             zoomIsReal: Number.isFinite(zoom),
             header: (document.getElementById('zoomlevel').textContent || '').trim(),
-            paneScrolls: stage.scrollHeight > stage.clientHeight + 1,
+            paneScrolls: stage.scrollHeight > stage.clientHeight + 1
         };
     }"""))
 

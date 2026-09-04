@@ -20,7 +20,6 @@ from coyodex import balance_lib as balance_lib_mod
 from coyodex import validate_model as validate_model_mod
 from coyodex.model import (
     Interface,
-    InterfaceCrossing,
     ModelError,
     load_model,
     FORMAT,
@@ -69,6 +68,7 @@ from coyodex.validate_model import (
     check_domain_relations,
     interface_actors,
     interface_steps_by_use_case,
+    interface_directions,
     interface_walk_steps,
     validate_model,
 )
@@ -4103,9 +4103,7 @@ def make_interface_model() -> ProjectModel:
     m.deps[0].not_an_interface = "the product writes these rows and reads them back itself"
     m.interfaces = [Interface(
         id="I1", name="Command line", what="How a person runs the product.", side="ours",
-        facing="user", kind="command-line", source="src/v.py:1", ways_in=["EP1"],
-        carries=[InterfaceCrossing(direction="in", what="the command and its arguments",
-                                   elements=["E1"])])]
+        facing="user", kind="command-line", source="src/v.py:1", ways_in=["EP1"])]
     return m
 
 
@@ -4137,34 +4135,18 @@ def test_one_way_in_cannot_belong_to_two_interfaces():
     assert any("claimed by 2 interfaces" in p for p in problems_of(m))
 
 
-def test_a_crossing_needs_a_sentence_but_not_a_record():
-    # An EMPTY record list is the honest answer for a log line, a fetched page or a source file —
-    # real crossings that no stored record holds. An empty sentence is always a defect.
-    m = make_interface_model()
-    m.interfaces[0].carries[0].elements = []
-    assert not [p for p in problems_of(m) if "crossing" in p]
-    m.interfaces[0].carries[0].what = "  "
-    assert any("no `what`" in p for p in problems_of(m))
-
-
-def test_a_crossing_naming_an_unknown_record_blocks():
-    m = make_interface_model()
-    m.interfaces[0].carries[0].elements = ["E99"]
-    assert any("E99" in p and "not a defined entity" in p for p in problems_of(m))
-
-
-def test_the_walk_steps_at_a_surface_are_derived_BESIDE_the_authored_crossings():
-    """The pair, and the reason it is a pair. Deleting `carries[]` in favour of this was built and
-    reverted: the two answer different questions and neither summarises the other."""
+def test_the_walk_steps_at_a_surface_ARE_what_crosses_it():
+    """`interfaces[].carries[]` is gone and these replaced it. The removal only became honest once
+    the step itself carried a `direction`; an earlier attempt without one was reverted."""
     m = make_interface_model()
     assert interface_walk_steps(m)["I1"] == [], "no step yet, and that is a real answer"
-    assert m.interfaces[0].carries, "…while the authored rows still say what crosses"
-    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="types the command"),
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", direction="in",
+                                 phrase="types the command"),
                         FlowStep(n=2, src="I1", dst="C1", phrase="hands it to the runner",
                                  where="src/v.py:3")]
     assert [st.phrase for st in interface_walk_steps(m)["I1"]] == [
         "types the command", "hands it to the runner"]
-    assert m.interfaces[0].carries[0].what == "the command and its arguments", "untouched"
+    assert not hasattr(m.interfaces[0], "carries"), "the authored rows are gone for good"
 
 
 def test_NO_step_at_a_surface_is_dropped():
@@ -4181,18 +4163,32 @@ def test_NO_step_at_a_surface_is_dropped():
         "opens it", "asks", "trades it for the token"]
 
 
-def test_the_derivation_reports_NO_direction():
-    """A step records who talks to whom, not which way data goes: a PULL points outward while its
-    data comes back, and the map draws that as one step. Reading polarity as direction flipped
-    argus's "Tracked web pages" from `in` to `out` — a page the product FETCHES — and on every
-    disagreement across the two live maps the authored value was the better one. Direction is
-    authored on `carries[]` and nothing here may re-derive it."""
+def test_the_direction_is_CARRIED_from_the_step_never_re_derived_from_its_polarity():
+    """A PULL points outward while its data comes back, and the map draws that as ONE step. Reading
+    polarity as direction flipped argus's "Tracked web pages" from `in` to `out` on a page the
+    product FETCHES, which is why the answer is authored on the step and only relayed here."""
     m = make_interface_model()
-    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", phrase="fetches the page",
-                                 where="src/v.py:4")]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", direction="in",
+                                 phrase="fetches the page", where="src/v.py:4")]
     st = interface_walk_steps(m)["I1"][0]
-    assert not hasattr(st, "direction"), "a derived direction is the bug this test pins"
-    assert {f for f in vars(st)} == {"phrase", "uc", "container", "n", "role"}, vars(st)
+    assert st.direction == "in", "the arrow points OUT and the data comes IN — the step is right"
+    assert interface_directions(m)["I1"] == ["in"]
+
+
+def test_a_both_step_votes_for_each_direction():
+    """One exchange really does run each way — a code traded for a verified email."""
+    m = make_interface_model()
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", direction="both",
+                                 phrase="trades the code for the verified email",
+                                 where="src/v.py:4")]
+    assert interface_directions(m)["I1"] == ["in", "out"]
+
+
+def test_a_surface_no_step_reaches_states_no_direction():
+    """Not "neither" — NOT STATED. The removed field could claim a direction with no story behind
+    it; this one cannot, which is the whole gain."""
+    m = make_interface_model()
+    assert interface_directions(m)["I1"] == []
 
 
 def test_a_step_with_no_phrase_says_nothing_and_a_repeat_is_kept_once():
@@ -4232,7 +4228,6 @@ def test_an_interface_grounded_by_nothing_blocks_but_a_source_alone_is_enough():
     # — are grounded by their own declaring line, and that has to be sufficient.
     m = make_interface_model()
     m.interfaces[0].ways_in = []
-    m.interfaces[0].carries = []
     assert not [p for p in problems_of(m) if "grounded by nothing" in p]
     m.interfaces[0].source = ""
     assert any("grounded by nothing" in p for p in problems_of(m))
@@ -4266,7 +4261,6 @@ def test_one_dep_may_sit_on_SEVERAL_surfaces():
     m = make_interface_model()
     m.interfaces.append(Interface(id="I2", name="Its transcript", side="theirs", facing="operator",
                                   source="",
-                                  carries=[InterfaceCrossing(direction="in", what="its records")],
                                   evidence=[EvidenceItem(file="src/v.py:2", why="reads them")]))
     m.deps[0].not_an_interface = ""
     m.deps[0].interfaces = ["I1", "I2"]
@@ -4605,7 +4599,9 @@ def test_our_surface_that_sends_and_derives_nobody_says_the_far_side_is_unnamed(
     Fires on 2 of the 23 surfaces across the two live maps: both products' `I6`."""
     m = make_interface_model()
     m.interfaces[0].ways_in = []
-    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the map files it writes")]
+    # The surface SENDS because a step drawn at it says `out`. That used to be a `carries[]` row.
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", direction="out",
+                                 phrase="writes the map files", where="src/v.py:4")]
     fired = [w for w in warnings_of(m) if "derives nobody on the far side" in w]
     assert fired, warnings_of(m)
     assert "I1" in fired[0] and INTERFACE_EXCEPTIONS_HEADING in fired[0], fired[0]
@@ -4616,16 +4612,18 @@ def test_check_a_is_silent_once_a_flow_closes_at_that_door():
     """The fix the message asks for is a STORY, not a field — so writing the story must clear it."""
     m = make_interface_model()
     m.interfaces[0].ways_in = []
-    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the map files it writes")]
-    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", phrase="writes them", where="src/v.py:4"),
-                        FlowStep(n=2, src="I1", dst="R1", phrase="hands the reader the files")]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", direction="out", phrase="writes them",
+                                 where="src/v.py:4"),
+                        FlowStep(n=2, src="I1", dst="R1", direction="out",
+                                 phrase="hands the reader the files")]
     assert not [w for w in warnings_of(m) if "derives nobody on the far side" in w]
 
 
 def test_check_a_is_honoured_by_a_recorded_interface_id():
     m = make_interface_model()
     m.interfaces[0].ways_in = []
-    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the map files it writes")]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", direction="out",
+                                 phrase="writes the map files", where="src/v.py:4")]
     assert any("derives nobody on the far side" in w for w in warnings_of(m))
     m.extras.append(ExtraSection(heading=INTERFACE_EXCEPTIONS_HEADING,
                                  body="I1: the far side is a disk, not anybody this map names"))
@@ -4642,7 +4640,6 @@ def test_a_written_door_puts_its_role_at_the_surface_with_NO_kind_gate():
     m.interfaces.append(Interface(
         id="I2", name="Their console", what="Someone else's screen.", side="theirs",
         facing="user", kind="api", source="src/v.py:9",
-        carries=[InterfaceCrossing(direction="out", what="what we push")],
         evidence=[EvidenceItem(file="src/v.py:9", why="the call site")]))
     assert not interface_actors(m).get("I2"), "no door yet, and none is the right answer"
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
@@ -4746,7 +4743,6 @@ def test_a_person_at_a_machine_shaped_surface_is_nudged():
     m.interfaces.append(Interface(
         id="I2", name="Their log store", what="Where our log lines go.", side="theirs",
         facing="operator", kind="api", source="src/v.py:9",
-        carries=[InterfaceCrossing(direction="out", what="one line per request")],
         evidence=[EvidenceItem(file="src/v.py:9", why="the call site")]))
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
                         FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
@@ -4814,13 +4810,16 @@ def test_ONE_definition_of_an_actor_is_shared_by_the_derivation_and_the_checks()
     say a surface hands something over to nobody. Every gate stayed green."""
     m = make_interface_model()
     m.interfaces[0].ways_in = []
-    m.interfaces[0].carries = [InterfaceCrossing(direction="out", what="the files it writes")]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", direction="out",
+                                 phrase="writes the files", where="src/v.py:4")]
     fires = lambda: [w for w in warnings_of(m) if "derives nobody on the far side" in w]
     assert fires(), "with no door at all it must fire"
     m.roles.append(Role(id="R9", name="Upkeep job", kind="service", audience="internal",
                         wants="the sweep to run", drives="UC1"))
-    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", phrase="writes", where="src/v.py:4"),
-                        FlowStep(n=2, src="I1", dst="R9", phrase="hands it to its own timer")]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="I1", direction="out", phrase="writes",
+                                 where="src/v.py:4"),
+                        FlowStep(n=2, src="I1", dst="R9", direction="out",
+                                 phrase="hands it to its own timer")]
     assert not interface_actors(m)["I1"], "the product's own timer is not a far side"
     assert fires(), "and the advisory must STILL fire — a timer is not somebody"
 
@@ -4947,7 +4946,6 @@ def test_the_anchor_check_says_nothing_about_a_surface_with_no_ways_in():
     m.interfaces.append(Interface(
         id="I2", name="Their console", what="Someone else's screen.", side="theirs",
         facing="user", kind="hosted-screen", source="src/v.py:9",
-        carries=[InterfaceCrossing(direction="out", what="what we push")],
         evidence=[EvidenceItem(file="src/v.py:9", why="the call site")]))
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
                         FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
@@ -5022,25 +5020,27 @@ def make_unreached_surface_model() -> ProjectModel:
         id="I2", name="Paid reading service", what="Fetches a page we cannot get past, for a fee.",
         side="theirs", facing="user", kind="api", source="src/v.py:60",
         evidence=[EvidenceItem(file="src/v.py:60",
-                               why="hands one address to the paid service")],
-        carries=[InterfaceCrossing(direction="out", what="one address to fetch",
-                                   elements=[])]))
+                               why="hands one address to the paid service")]))
     return m
 
 
-def test_a_user_facing_surface_no_use_case_reaches_warns():
+def test_a_surface_no_use_case_reaches_warns():
     m = make_unreached_surface_model()
-    hits = [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+    hits = [w for w in warnings_of(m) if "I2" in w and "reached by NO use case" in w]
     assert len(hits) == 1, hits
-    assert "facing: operator" in hits[0]          # the other legitimate fix is offered
 
 
-def test_the_same_surface_facing_the_operator_is_silent():
-    # THE WHOLE POINT of the check. Crash reporting, log shipping and an ops command line are in no
-    # use case and never should be; firing on them would bury the one real case under false ones.
+def test_an_OPERATOR_surface_owes_a_use_case_TOO():
+    """The `facing: operator` exemption this check shipped with is GONE, and it must stay gone. It
+    was drawn from 5 unstoried surfaces, 4 of them operator-facing, read as "operator surfaces do
+    not get stories". The fuller count says the opposite: 7 of the 11 operator-facing surfaces
+    across the two live maps ALREADY have use cases, and each of the 4 without names a person in
+    its own description ("the log records an operator searches and charts")."""
     m = make_unreached_surface_model()
     m.interfaces[1].facing = "operator"
-    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+    hits = [w for w in warnings_of(m) if "I2" in w and "reached by NO use case" in w]
+    assert len(hits) == 1, hits
+    assert "OPERATOR surface owes one" in hits[0], hits[0]
 
 
 def test_a_walk_step_drawn_at_the_surface_clears_it():
@@ -5083,11 +5083,12 @@ def test_it_never_blocks():
 
 
 def test_one_gap_owes_one_line_not_two():
-    # An OURS surface that sends, reaching nobody, already draws the "hands something over and never
-    # says to whom" advisory, and its fix is the same story. Billing both would charge one gap twice.
+    """The two advisories can no longer double-bill, BY CONSTRUCTION rather than by a guard. "Hands
+    something over to nobody" now reads the directions its own STEPS carry, so a surface no story
+    reaches carries none, and only the missing-story line fires."""
     m = make_unreached_surface_model()
     m.interfaces[1].side = "ours"
     m.interfaces[1].evidence = []
     hits = [w for w in warnings_of(m) if "I2" in w]
-    assert any("never says to whom" in w for w in hits), hits
-    assert not any("NO use case reaches it" in w for w in hits), hits
+    assert any("reached by NO use case" in w for w in hits), hits
+    assert not any("never says to whom" in w for w in hits), hits

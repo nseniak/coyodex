@@ -286,8 +286,6 @@ def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tup
             yield f"{sf.id} step {step.n} note", step.note
     for iface in model.interfaces:
         yield f"{iface.id} what", iface.what
-        for crossing in iface.carries:
-            yield f"{iface.id} carries ({crossing.direction})", crossing.what
 
 
 # ── the half a counter cannot judge ───────────────────────────────────────────────────────────────

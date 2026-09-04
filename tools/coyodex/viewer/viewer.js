@@ -8103,21 +8103,22 @@ function actorSurfaceDiagramHtml(actorName, role, rows) {
       // WHAT THIS PERSON DOES HERE, in the story's own words — their own walk steps at this
       // surface, narrowed to them (see `stepGroupsOf`).
       //
-      // IT USED TO BE THE PRODUCT'S SENTENCES, not this person's: the surface's authored crossings
-      // say what crosses for the PRODUCT, so Google sign-in showed the product talking to Google on
-      // a page about a member, and neither sentence was anything that member sent or received.
-      // Those rows still lead the surface's OWN page, which is where a boundary claim belongs; this
-      // page is a person's, so its answer is a person's.
+      // IT USED TO BE THE PRODUCT'S SENTENCES, not this person's: the surface's authored crossing
+      // rows said what crosses for the PRODUCT, so Google sign-in showed the product talking to
+      // Google on a page about a member, and neither sentence was anything that member sent or
+      // received. Those rows are gone from the map entirely now, and a step was always the better
+      // answer here.
       //
-      // NO DIRECTION SPLIT. The rows on the surface's page carry `in`/`out` because a person
-      // AUTHORED it. A step cannot: it records who talks to whom, not which way data goes, and a
-      // pull points outward while its data comes back.
+      // THE DIRECTION RIDES THE STEP, so this page shows it too. It could not before, when
+      // direction was authored once per surface: one sentence cannot say which way THIS person's
+      // step went.
       const ACTOR_STEP_CAP = 2;
       const groups = stepGroupsOf(i, role.id);
       const shown = groups.flatMap((g) => g.steps.map((st) => [st, g.uc]));
       const cross = shown.length
         ? `<ul class="ifs-steps asf-steps">`
-          + shown.slice(0, ACTOR_STEP_CAP).map(([st, uc]) => stepLineHtml(st, uc, true, false)).join('')
+          + shown.slice(0, ACTOR_STEP_CAP)
+                 .map(([st, uc]) => stepLineHtml(st, uc, true, false)).join('')
           + '</ul>'
           + moreTailHtml(shown.length - ACTOR_STEP_CAP, i.id,
                          'Open this interface: every step drawn at it')
@@ -10722,11 +10723,6 @@ function wireCurveD(sx, sy, tx, ty) {
 // How far a wire's end sits from the hub's own edge. Zero, for the same reason a wire touches its
 // card: a line that stops short of the thing it points at is a line the reader has to join up.
 const IFACE_HUB_CLEARANCE = 0;
-// THE SENTENCES A SURFACE RECORDS, MERGED PER DIRECTION. A surface records as many crossings as it
-// likes, and the Interfaces picture used to draw only the FIRST in each direction — on MCP Hero's
-// dashboard that silently dropped 2 of its 4. Joining them keeps every one and still draws at most
-// two wires. Hoisted out of that picture when an actor's page began drawing the same sentences: two
-// readings of one field is how two screens come to disagree about what crosses a surface.
 // ONE TAIL FOR EVERY CAPPED LIST. There were four of them — the crossing sentences, the records
 // beside them on an actor's page, the records on an Interfaces wire label, and the entities on a
 // Features wire label — built THREE different ways (a styled span, text inside a template, a bare
@@ -10770,30 +10766,27 @@ function bindMoreTails(root) {
     }));
 }
 // WHAT A DIRECTION IS CALLED, in one place, because the picture and the surface's own page must not
-// name the same fact two ways.
+// name the same fact two ways. It is read off the STEPS now (`interface_directions`), never off a
+// field a person wrote beside them — `interfaces[].carries[]` is gone.
 //
-// THE SURFACE IS THE SUBJECT, and it took three tries to get here. `in` / `out` never said in and
-// out OF WHAT. `we receive` / `we send` left the reader asking whether "we" meant the surface or the
-// product. `the product receives` broke on the dashed box, which claims the word "product" for the
-// whole area the reader can see, surfaces included. Naming the surface asks nothing of the reader:
-// it is the title of the card the sentence belongs to.
+// IT TOOK FOUR TRIES. `in` / `out` never said in and out OF WHAT. `we receive` / `we send` left the
+// reader asking whether "we" meant the surface or the product. `the product receives` broke on the
+// dashed box, which claims the word "product" for the whole area the reader can see. Naming the
+// SURFACE fixed all three while the sentence was the surface's own — and stopped working the moment
+// the words moved onto a STEP, whose phrase is written from the product's side.
 //
-// AND THE VERB FLIPS BY SHORE, because `out` always means "leaves the product": on our shore the
-// surface is the mouth that sends it, on theirs it is the far side receiving it. Same inversion the
-// arrowheads already make, so the words and the picture cannot disagree.
-const CROSSING_DIR_VERB = { ours: { in: 'receives', out: 'sends' },
-                            theirs: { in: 'sends', out: 'receives' } };
-// `name` is left out where the screen has already said it — a surface's own page is about one
-// surface, so every row there would otherwise repeat its title.
-function crossingDirWord(dir, side, name) {
-  const verb = (CROSSING_DIR_VERB[side] || CROSSING_DIR_VERB.ours)[dir] || dir;
-  return name ? name + ' ' + verb : verb;
-}
-// WHAT THE STORIES SHOW HAPPENING AT A SURFACE — the walk steps drawn at it, grouped by the story
-// they belong to. It sits BESIDE the authored crossings above and does not replace them: a change
-// that made it the only answer was built and reverted, because 16 of the 39 surfaces across the
-// three live maps have no step at all, direction is not derivable from a step, and no step names
-// the records that cross.
+// THE VERB NO LONGER FLIPS BY SHORE, and removing that flip was a BUG FIX, not a simplification.
+// It flipped while the sentence described the SURFACE: on a `theirs` surface `out` meant the far
+// side receiving. The label now sits on a STEP, and every step phrase is written from the product's
+// side, so the flip put "receives" in front of "sends each finished record out" on argus's shipped
+// logs — a contradiction on one line. One reading, always the product's: `in` it arrives here,
+// `out` it leaves here.
+const CROSSING_DIR_VERB = { in: 'receives', out: 'sends' };
+// WHAT CROSSES A SURFACE — the walk steps drawn at it, grouped by the story they belong to, each
+// carrying its own direction. THIS IS THE WHOLE ANSWER: `interfaces[].carries[]` is removed. An
+// earlier removal was reverted because a step could not say WHICH WAY data went; the step says it
+// now, and the other two objections were closed rather than argued away (every interface owes a use
+// case, and its record list held 2 real independent records out of 68 references).
 //
 // `role` narrows to ONE PERSON'S steps, for the actor's page. THE FALLBACK IS TO THE UNATTRIBUTED
 // STEPS ONLY, never to every step: an actor reaches a surface three ways and only a door names the
@@ -10839,8 +10832,20 @@ function bindStepFroms(root) {
 // One walk step as a line: what happens, then which step said it. Shared by the surface's own page
 // and an actor's page, so the two cannot disagree about how a step reads.
 function stepLineHtml(st, uc, withName, hidden) {
-  return `<li class="ifs-step${hidden ? ' more-hidden' : ''}">${esc(String(st.phrase).trim())}`
+  // WHICH WAY THIS ONE WENT. Authored on the step, and the successor to the removed `carries[]`
+  // rows — so a reader asking what crosses a surface reads the story AND the direction in one line,
+  // where before the two sat in different blocks and could disagree.
+  const dir = st.direction
+    ? `<span class="ifs-dirtag ifs-dir-${esc(st.direction)}">`
+      + `${esc(stepDirWord(st.direction))}</span>` : '';
+  return `<li class="ifs-step${hidden ? ' more-hidden' : ''}">${dir}${esc(String(st.phrase).trim())}`
     + `<span class="ifd-what-from-line">${stepFromHtml(st, uc, withName)}</span></li>`;
+}
+// The step's direction as a WORD, the PRODUCT as the subject. `both` says so plainly: one exchange
+// really does run each way, and the alternative was splitting such a step in two.
+function stepDirWord(dir) {
+  if (dir === 'both') return 'both ways';
+  return CROSSING_DIR_VERB[dir] || dir;
 }
 function bindIfaceDiagram(root) {
   const stage = root.querySelector('#ifdstage');
@@ -11239,13 +11244,11 @@ function renderInterface(s) {
     i.facing ? `<span class="uc-caplabel">${esc(i.facing)}-facing</span>` : '',
     ifaceFlowWord(i) ? `<span class="uc-caplabel">${esc(ifaceFlowWord(i))} ${esc(IFACE_ARROW[ifaceFlowWord(i)] || '')}</span>` : '',
   ].join('');
-  // What crosses, in then out. An EMPTY record list is the honest answer for a log line, a fetched
-  // page or a source file, so the row still renders — only the sentence is required.
-  const rows = (i.crossings || []).map((c) =>
-    `<tr><td class="if-dir">`
-    + `${esc(crossingDirWord(c.direction === 'in' ? 'in' : 'out', i.side))}</td>`
-    + `<td>${esc(c.what)}</td>`
-    + `<td>${(c.elements || []).length ? mdRefs(c.elements.join(' '), GRAPH.nodes) : '<span class="feat-empty">nothing stored</span>'}</td></tr>`).join('');
+  // THE AUTHORED CROSSING TABLE IS GONE, with `interfaces[].carries[]`. What crosses is the walk
+  // steps below, each carrying its own direction. Measured before the removal: its sentence
+  // repeated the steps (66% of its words at the surfaces with the richest walks, and 4 rows were
+  // word-for-word copies of one step), its record list held 2 real independent records out of 68
+  // references, and one of its genuinely-new facts was a claim nothing in the map backed.
   // WHO is on the far side, as cards rather than one free-text line. Both halves are DERIVED, and
   // both used to be one authored id in one slot: the dependencies come from each dep's own
   // `interfaces` list, and the actors from the walks, gated on the kind.
@@ -11300,13 +11303,12 @@ function renderInterface(s) {
     + pageHeroHtml({ name: i.name, pills, desc: i.what ? mdInline(i.what) : '',
                      noDesc: 'No description recorded for this interface.' })
     + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
-    + (rows ? `<h3 class="card-group-head">What crosses</h3><table class="if-table">${rows}</table>`
-            : '<h3 class="card-group-head">What crosses</h3><p class="feat-empty">The map records nothing crossing this interface.</p>')
-    + '<h3 class="card-group-head">What the stories show here</h3>'
+    + '<h3 class="card-group-head">What crosses</h3>'
     + (storyBlocks ? `<div class="ifs-cross">${storyBlocks}</div>`
                    : '<p class="feat-empty">No step of any walk in this map is drawn at this '
-                     + 'interface, so the rows above are all the map says about it. That is normal '
-                     + 'for a service the product only reports to, such as a crash reporter.</p>')
+                     + 'interface, so the map cannot say what crosses it or when. Every interface '
+                     + 'owes a use case, including one an operator reaches, so this is a gap in '
+                     + 'the stories rather than a missing field.</p>')
     + '<h3 class="card-group-head">Features through it</h3>' + feats
     + ((i.components || []).length
         ? '<h3 class="card-group-head">The code behind it</h3>' + elementCardListHtml(i.components) : '')
@@ -11314,8 +11316,7 @@ function renderInterface(s) {
   bindElementCards(diagram);
   // The actor cards are the only `data-key` cards on this page, and their door is the actor's page.
   bindPlainCards(diagram, (rid) => go({ kind: 'actor', act: roleName(rid) }));
-  // The record chips inside "what crosses" are `sys-ref` buttons, the same shape the System tab's
-  // prose refs use — so a record named in a crossing opens where that record lives.
+  // `sys-ref` chips can still reach this page through the hero's own prose refs.
   diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) => {
     btn.addEventListener('click', () => selectFromTree(btn.getAttribute('data-id')));
   });

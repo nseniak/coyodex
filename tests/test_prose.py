@@ -278,15 +278,15 @@ def test_an_entry_point_trigger_and_an_entity_meaning_are_reader_facing():
     assert "what a headless agent signs in with" in vals, vals
 
 
-def test_an_interface_what_and_its_crossings_are_reader_facing():
-    from coyodex.model import Interface, InterfaceCrossing, ProjectModel
+def test_an_interfaces_what_is_reader_facing():
+    """Its crossing sentences went with `interfaces[].carries[]`. What crosses is a walk step now,
+    and step phrases already walk through this checker one block above."""
+    from coyodex.model import Interface, ProjectModel
     m = ProjectModel(title="D", goal="g")
     m.interfaces = [Interface(id="I1", name="The gateway", what="The one address clients use.",
-                              side="ours", facing="user",
-                              carries=[InterfaceCrossing(direction="in", what="a tool call")])]
+                              side="ours", facing="user")]
     vals = list(_walked(m).values())
     assert "The one address clients use." in vals, vals
-    assert "a tool call" in vals, vals
 
 
 def test_the_long_sentence_gate_now_sees_a_step_phrase():

@@ -291,8 +291,31 @@ INTERFACE_FACINGS = ("user", "operator")  # who it serves. AUTHORED, never deriv
                                           # payment service `internal` while its interface is
                                           # user-facing. Measured: only 8 of the 69 interfaces across
                                           # the four live maps have roles to derive from at all.
-CROSSING_DIRECTIONS = ("in", "out")       # per crossing; an interface's overall flow is DERIVED as
-                                          # the set of directions its crossings carry.
+# ── WHICH WAY THE DATA MOVES, on one walk step ───────────────────────────────────────────────────
+# Read from the point of view of the PRODUCT'S OWN CODE at that step, never from the arrow: `in` is
+# data arriving at it, `out` is data leaving it. That single reading covers both places the map
+# needs an answer, and covers them the same way:
+#
+#   at a RECORD   `in` = the product reads it        `out` = the product writes it
+#   at a SURFACE  `in` = the product receives        `out` = the product sends
+#
+# Anchoring it on the ARROW instead was tried and breaks on a PULL: `Cn → In` "fetches the markup"
+# points outward while the data comes back, which is `in`.
+#
+# A DOOR OWES NOTHING. A role standing at a surface is a human action with no product end — argus's
+# operator opens the log store's own console and nothing of ours moves — so the field stays empty
+# there, the same exemption an actor step has from `where`. Forcing an answer on a door is what put
+# the word "receives" in front of a step whose own phrase said "sends each finished record out".
+#
+# `both` is one exchange whose data runs both ways — a code traded for a verified email, an upsert
+# that returns the stored row. It exists because the alternative is splitting such a step in two,
+# which lengthens every walk that contains one to record a fact the step already knows. argus's
+# assistant sign-in has one (step 14: it sends the code and checks the answer's signature).
+#
+# THIS FIELD REPLACED `interfaces[].carries[]`, whose only underivable fact was direction. Do not
+# reintroduce a per-surface direction: an interface's directions are the SET its steps carry, and a
+# second authored copy is a second thing to disagree with.
+STEP_DIRECTIONS = ("in", "out", "both")
 
 # ── Interface KIND — WHAT a surface IS, seeded-open (mirror of the entry-point kind axis) ────────
 # `kind` says WHAT IT IS. `Dep.bucket` says WHAT IT IS FOR. A payment processor and a crash reporter

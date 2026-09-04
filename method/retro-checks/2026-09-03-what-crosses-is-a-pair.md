@@ -1,5 +1,11 @@
 # What crosses a surface is a PAIR: the authored rows, and the walk steps beside them
 
+> **SUPERSEDED ONE DAY LATER by `2026-09-05-what-crosses-is-a-step-with-a-direction.md`.**
+> `interfaces[].carries[]` IS now removed, and the checks below no longer run. Kept because the
+> reason it survived on 2026-09-03 is the reason the second removal is different: the objection was
+> never the sentence, it was DIRECTION, and the step now carries one. Read this file for what the
+> first attempt got wrong, and the newer one for what closed it.
+
 Change (2026-09-03): the viewer shows `interfaces[].carries[]` and the walk steps drawn at the same
 surface SIDE BY SIDE on that surface's own page, and an actor's page switches from the authored rows
 to that actor's OWN steps. New derivations `interface_walk_steps` and `interface_steps_by_use_case`.
@@ -7,9 +13,10 @@ The audit worklist now challenges SUB-FLOW step phrases too. The advisory demand
 every crossing is deleted · method.md, method/model.md, tools/coyodex/validate_model.py,
 features.py, audit_model.py, the viewer.
 
-**`carries[]` IS NOT REMOVED.** A change deleting it in favour of the derivation was written in full
-and then reverted after an adversarial review. Do not propose the merge again without reading the
-`interface_walk_steps` docstring first.
+**`carries[]` IS NOT REMOVED** — true on 2026-09-03, and no longer true. A change deleting it in
+favour of the derivation was written in full and then reverted after an adversarial review, because
+the derivation could not say which way data went. The 2026-09-05 change removes the field by giving
+the STEP a `direction`, which is the thing that was missing here.
 
 Escalation: if check 1 fails — a surface's page shows the two blocks saying the same thing — the
 method's "say the thing a step cannot" instruction did not land, and the field is drifting back into

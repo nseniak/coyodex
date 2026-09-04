@@ -731,9 +731,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interfaces": [],
    "not_an_interface": "",
-   "extra": {},
-   "interfaces": []
+   "extra": {}
   },
   {
    "id": "D2",
@@ -748,9 +748,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interfaces": [],
    "not_an_interface": "",
-   "extra": {},
-   "interfaces": []
+   "extra": {}
   },
   {
    "id": "D3",
@@ -765,9 +765,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interfaces": [],
    "not_an_interface": "",
-   "extra": {},
-   "interfaces": []
+   "extra": {}
   },
   {
    "id": "D4",
@@ -782,9 +782,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interfaces": [],
    "not_an_interface": "",
-   "extra": {},
-   "interfaces": []
+   "extra": {}
   },
   {
    "id": "D5",
@@ -799,9 +799,9 @@
    "package": "",
    "alternative": "",
    "evidence": [],
+   "interfaces": [],
    "not_an_interface": "",
-   "extra": {},
-   "interfaces": []
+   "extra": {}
   }
  ],
  "interfaces": [],
@@ -1273,6 +1273,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1283,6 +1284,7 @@
      "note": "",
      "where": "src/api/passthrough_controller.py:36",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1293,6 +1295,7 @@
      "note": "",
      "where": "src/api/passthrough_controller.py:37",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1303,6 +1306,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:34",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1313,6 +1317,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:36",
      "no_call_site": false,
+     "direction": "in",
      "subflow": null
     },
     {
@@ -1323,6 +1328,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     }
    ]
@@ -1339,6 +1345,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1349,6 +1356,7 @@
      "note": "",
      "where": "src/api/passthrough_controller.py:29",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1359,6 +1367,7 @@
      "note": "",
      "where": "src/api/passthrough_controller.py:30",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1369,6 +1378,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:24",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1379,6 +1389,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:25",
      "no_call_site": false,
+     "direction": "in",
      "subflow": null
     },
     {
@@ -1389,6 +1400,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     }
    ]
@@ -1405,6 +1417,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1415,6 +1428,7 @@
      "note": "",
      "where": "src/api/record_controller.py:26",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1425,6 +1439,7 @@
      "note": "",
      "where": "src/api/record_controller.py:30",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1435,6 +1450,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:43",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1445,6 +1461,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:44",
      "no_call_site": false,
+     "direction": "out",
      "subflow": null
     },
     {
@@ -1455,6 +1472,7 @@
      "note": "",
      "where": "src/store/ticket_repo.py:46",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1465,6 +1483,7 @@
      "note": "",
      "where": "src/store/ticket_repo.py:50",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1475,6 +1494,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:46",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1485,6 +1505,7 @@
      "note": "",
      "where": "src/messaging/publisher.py:41",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1495,6 +1516,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     }
    ]
@@ -1511,6 +1533,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1521,6 +1544,7 @@
      "note": "",
      "where": "src/api/record_controller.py:35",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1531,6 +1555,7 @@
      "note": "",
      "where": "src/api/record_controller.py:38",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1541,6 +1566,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:50",
      "no_call_site": false,
+     "direction": "out",
      "subflow": null
     },
     {
@@ -1551,6 +1577,7 @@
      "note": "",
      "where": "src/store/ticket_repo.py:46",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1561,6 +1588,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     }
    ]
@@ -1577,6 +1605,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1587,6 +1616,7 @@
      "note": "",
      "where": "src/api/record_controller.py:51",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1597,6 +1627,7 @@
      "note": "",
      "where": "src/api/record_controller.py:52",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1607,6 +1638,7 @@
      "note": "",
      "where": "src/services/ticket_service.py:56",
      "no_call_site": false,
+     "direction": "out",
      "subflow": null
     },
     {
@@ -1617,6 +1649,7 @@
      "note": "",
      "where": "src/store/ticket_repo.py:58",
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     },
     {
@@ -1627,6 +1660,7 @@
      "note": "",
      "where": null,
      "no_call_site": false,
+     "direction": "",
      "subflow": null
     }
    ]
