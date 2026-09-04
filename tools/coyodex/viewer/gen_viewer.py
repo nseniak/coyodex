@@ -2811,6 +2811,57 @@ def expanded_steps(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any
     return out
 
 
+#: WHAT A PERSON CAME THROUGH, said in WORDS on their own label rather than drawn beside them.
+#: A glyph was built first — a small bot head on a short line off the person's head — and it was
+#: rejected on sight: at the size these render, a figure with an object beside it reads as a SECOND
+#: CHARACTER, and an attended AI agent is a pipe, not a party. Words carry the same fact, cannot be
+#: misread as a participant, and work identically on every picture including the ones nothing has
+#: post-processed.
+#: ON ITS OWN LINE, and the phrase never splits. Run on after the name it wrapped wherever the label
+#: was narrow — "Team member · via AI" / "agent" — breaking the one phrase a reader needs whole. The
+#: `<br/>` is added OUTSIDE the label sanitisers on purpose: `_safe_msg` turns `<` into `(`, and
+#: `_safe_label` says in its own docstring that an intentional break is the caller's to add.
+#: The non-breaking space is the belt: even a renderer that ignores the break keeps "AI agent" whole.
+#: Parentheses because this is an aside about the name, not part of it.
+#: TWO SPELLINGS, BECAUSE THE TWO PICTURES SIZE A LABEL DIFFERENTLY, and each broke the other way:
+#:   * the LIFELINE picture widens an actor's column to fit its label, so ONE LINE is free and a
+#:     second line has nowhere to go — pushed up it lands on the figure's legs, pushed down it lands
+#:     on the first message. Both were tried on mcpolis UC29 and both were wrong on screen.
+#:   * the MAP picture wraps a long label inside a box sized for the name, and wrapped it mid-phrase
+#:     ("… via AI" / "agent"), so it needs the break put where a reader would want it.
+#: The non-breaking space keeps "AI agent" whole in either.
+CLIENT_LABEL_TEXT = " (via AI\u00a0agent)"          # one line — the lifeline picture, and matching
+CLIENT_LABEL_SUFFIX = "<br/>(via AI\u00a0agent)"    # its own line — the map picture
+
+
+def flow_client_roles(graph: GraphDict, steps: list[dict[str, Any]]) -> set[str]:
+    """The role names in these steps that a person reached an agent-facing surface through.
+
+    ONE ANSWER, read by the sequence picture's label, the map picture's label and `flow_actors`.
+    Three copies of this join would be three chances for one screen to say a person came through an
+    agent while another says they did not — the failure this file has already been broken by once,
+    over two copies of "who is an actor".
+
+    NEVER FOR A MACHINE ACTOR: an unattended agent reaches an MCP address alone, and saying it came
+    through an agent would be an agent behind an agent."""
+    ifkind: dict[str, str] = {}
+    for nid, n in graph["nodes"].items():
+        if str(n["kind"]) != "interface":
+            continue
+        fields = cast("dict[str, Any]", n.get("fields") or {})
+        ifkind[nid] = str(fields.get("Kind") or "")
+    roles_by_name = _roles_by_name(graph)
+    out: set[str] = set()
+    for st in steps:
+        for near, far in ((str(st["src"]), str(st["dst"])), (str(st["dst"]), str(st["src"]))):
+            if ifkind.get(far, "") not in grammar.INTERFACE_KINDS_REACHED_THROUGH_A_CLIENT:
+                continue
+            role = roles_by_name.get(near.strip().lower())
+            if role is not None and not grammar.is_machine_role(str(role["kind"])):
+                out.add(near)
+    return out
+
+
 def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     """One use case's flow as a Mermaid sequenceDiagram: the actor + the touched components/deps/
     entities as lifelines (first-appearance order), each step an ordered message. An element lifeline's
@@ -2822,6 +2873,7 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     pid: dict[str, str] = {}     # raw endpoint token -> Mermaid participant id
     decls: list[str] = []
     n_actor = 0
+    clients = flow_client_roles(graph, steps)
 
     def ensure(token: str, is_id: bool) -> None:
         nonlocal n_actor
@@ -2837,7 +2889,8 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
             aid = "FA" + str(n_actor)
             n_actor += 1
             pid[token] = aid
-            decls.append(f"  actor {aid} as {_safe_msg(token)}")
+            via = CLIENT_LABEL_TEXT if token in clients else ""   # one line: the column widens
+            decls.append(f"  actor {aid} as {_safe_msg(token)}{via}")
 
     for st in steps:
         ensure(str(st["src"]), bool(st.get("src_is_id")))
@@ -2914,6 +2967,7 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     viewer's generic node binding resolves a click to the element's panel with no special casing."""
     steps = expanded_steps(graph, flow)
     roles_by_name = _roles_by_name(graph)
+    clients = flow_client_roles(graph, steps)
     pid: dict[str, str] = {}
     decls: list[str] = []
     kinds: set[str] = set()
@@ -2949,7 +3003,17 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
             kinds.add("human")
             # The blank first line makes room for the stick figure the viewer redraws this outline as
             # (`stickFigureNode`) — the same actor glyph the Context view draws.
-            decls.append(f'  {aid}([" <br/>{_safe_label(token)}"]):::cy-{aid}')
+            #
+            # ONE BLANK LINE PER TEXT LINE BELOW IT. The label is a block of equal lines CENTRED on
+            # the node, so the name sits at the node's origin only while blanks and text are matched.
+            # Adding the client line without a second blank pulled the name half a line up, into the
+            # figure's feet — measured on mcpolis UC29: a 72px, 3-line block put the name at -12
+            # while the figure ran to -3. Two blanks and two text lines restore the name to 0, which
+            # is exactly what `stickFigureNode` assumes, so the viewer needs no change and the
+            # single-line case is untouched.
+            via = CLIENT_LABEL_SUFFIX if token in clients else ""
+            room = " <br/> <br/>" if via else " <br/>"
+            decls.append(f'  {aid}(["{room}{_safe_label(token)}{via}"]):::cy-{aid}')
             decls.append(f"  class {aid} human")
             return
         if token in pid:
@@ -3058,6 +3122,9 @@ def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
         for tok, is_id in ((str(st["src"]), bool(st.get("src_is_id"))), (str(st["dst"]), bool(st.get("dst_is_id")))):
             if is_role_endpoint(is_id):
                 order.setdefault(tok, "FA" + str(len(order)))
+    #: The people this flow took to an agent-facing surface — the SAME answer both pictures label
+    #: with, from the one function, so a lifeline and a node cannot disagree.
+    clients = flow_client_roles(graph, steps)
     out: list[dict[str, Any]] = []
     for name, aid in order.items():
         idxs = [i for i, st in enumerate(steps)
@@ -3067,6 +3134,10 @@ def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
         out.append({
             "aid": aid,
             "name": name,
+            #: What the picture actually prints for this actor — the name, plus what they came
+            #: through when that is worth saying. The viewer matches its bottom-of-diagram figure on
+            #: rendered TEXT, so it needs the label and not only the name.
+            "label": name + (CLIENT_LABEL_TEXT if name in clients else ""),
             "kind": str(role["kind"]) if role else "",
             "wants": str(role["wants"]) if role else "",
             "stepIdx": idxs,

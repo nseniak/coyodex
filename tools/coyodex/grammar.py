@@ -326,6 +326,15 @@ INTERFACE_KIND_SEEDS_OURS = (
     "command-line",   # a prompt: commands typed in a terminal
     "file",           # a document: files we write that something else opens
     "settings",       # a gear: the values a person or an operator sets
+    #: THE WIRE FACES A MACHINE AND A PERSON IS AT THE FAR END OF IT. Every other `ours` seed is a
+    #: place someone comes TO the product; this is the one where the product goes to them, and they
+    #: read it somewhere we do not own (an inbox, a phone). Added because it is the ONLY row in the
+    #: 2026-09-03 partial run where the vocabulary actively misled a careful reader: two independent
+    #: agents, on two runs, authored mcpolis's "Outgoing email" as `api`, and both gave the same
+    #: reason — `api` names the SMTP pipe, not the surface, and nothing else fit.
+    #: NOT `notification`, which says WHY. A password reset and a marketing blast are both
+    #: notifications and are not the same kind of thing; `kind` says what a surface IS.
+    "message",        # an envelope: a message we send outward to a person — email, SMS, push
 )
 INTERFACE_KIND_SEEDS_THEIRS = (
     "hosted-screen",  # a window someone else owns: a sign-in, a vendor console, a chat platform
@@ -381,6 +390,19 @@ INTERFACE_KINDS_A_PERSON_GOES_TO = ("hosted-screen", "handoff")
 # advisories and ZERO blocking problems.
 INTERFACE_KINDS_NOBODY_STANDS_AT = ("api", "content")
 
+#: THE KINDS A PERSON REACHES THROUGH A CLIENT WORTH DRAWING. The viewer hangs a small mark off a
+#: person standing at one of these, so the thing between them and the wire is not invisible.
+#:
+#: THE TEST IS AGENCY: draw the client when it can do something the person did not ask for. A browser
+#: renders what we sent; a terminal runs what was typed; a mail app shows what arrived — none of them
+#: decides anything, and drawing them would be noise on every row. An AI agent chooses which tools to
+#: call and with what, so it is the one client whose presence changes what the reader should expect.
+#: That test, not this list, is what a future kind is measured against — 2 of the 13 pass it today.
+#:
+#: NEVER FOR A MACHINE ACTOR. An unattended agent reaches an MCP address alone; hanging a client off
+#: it would draw an agent behind an agent.
+INTERFACE_KINDS_REACHED_THROUGH_A_CLIENT = ("mcp", "agent-tools")
+
 # The tiebreak, for the surfaces that are BOTH a place people act and a service we call:
 # **the kind names where the PEOPLE are — but only when the product's own flow takes them there.**
 # Slack for a product that lives in it, a sign-in redirect and a hosted checkout are `hosted-screen`;
@@ -403,7 +425,13 @@ INTERFACE_KIND_ALIASES = {
     "link-handoff": "handoff",
     "rest-api": "api", "webhook": "api", "api-call": "api",
     "store": "api", "data-sink": "api", "logs": "api", "compute": "api",
-    "message": "api", "message-out": "api", "email": "api",
+    #: THESE THREE USED TO FOLD INTO `api`, AND THAT FOLD WAS THE BUG. `message` is a seed now, so a
+    #: map that spells a person-facing message `email` or `message-out` lands on it instead of being
+    #: told its surface is one program calling another. The old fold is exactly the mistake two
+    #: independent readers made on mcpolis's "Outgoing email" in the 2026-09-03 partial run: `api`
+    #: names the SMTP pipe, not the surface.
+    "message-out": "message", "email": "message", "sms": "message", "push": "message",
+    "notification": "message",
 }
 
 _INTERFACE_KIND_CANON = {k: k for k in INTERFACE_KIND_SEEDS} | INTERFACE_KIND_ALIASES

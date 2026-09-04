@@ -49,7 +49,10 @@ let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the in
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 let HP_ACTORS;          // Happy-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
-let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors HP_ACTORS, scoped to one flow's own steps)
+let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,client,stepIdx}] flow-level actor lifelines
+                        // (mirrors HP_ACTORS, scoped to one flow's own steps). `client` = this PERSON
+                        // reached an agent-facing surface in this walk, so an AI agent carried them.
+
 let ELEMENT_TINT;       // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
 let MERMAID_LIBS;       // Context "Libraries" drill: System + the folded in-process deps
 let FOLDED_LIBS;        // [{id,name,type}] folded out of Context into the Libraries box
@@ -1205,6 +1208,7 @@ function styleSeqActor(root, aid, kind) {
     // person does; a service has no body at all and becomes one hexagon.
     if (kind === 'ai-agent') botHeadActor(g);
     else if (isMachineActor(kind)) hexagonifyActor(g);
+
     // `rect` reaches the bot's head; `:not([data-solid])` spares the antenna's tip, which is a solid
     // dot in the stroke colour and would read as a hole in the pale tint.
     for (const shape of g.querySelectorAll('circle:not([data-solid]), polygon, rect'))
@@ -2717,10 +2721,13 @@ function bindFlow(uc) {
     const selKey = 'flowactor:' + uc + ':' + a.aid;
     const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
     const life = root.querySelector('line.actor-line[data-id="' + a.aid + '"]');
-    const figB = bottoms.find((g) => (g.textContent || '').trim() === a.name) || null;
+    // Matched on the RENDERED label, not the bare name: an actor's label carries what they came
+    // through ("… · via AI agent"), and matching the name alone stopped finding the bottom figure
+    // the moment that suffix appeared.
+    const figB = bottoms.find((g) => (g.textContent || '').trim() === (a.label || a.name)) || null;
     const parts = [figT, figB, life].filter(Boolean);
     if (!parts.length) continue;
-    styleSeqActor(root, a.aid, a.kind);  // same person/service vocabulary as the Happy Path and Dependencies
+    styleSeqActor(root, a.aid, a.kind);  // same vocabulary as the Happy Path and Dependencies
     for (const el of parts) scene.dimEls.push(el);
     for (const i of a.stepIdx) (actorPartsByStep[i] || (actorPartsByStep[i] = [])).push(...parts);
     const stepEls = a.stepIdx.flatMap((i) => msgEls[i] || []);
@@ -10369,6 +10376,7 @@ const IFACE_KIND = {
   'screen': 'website', 'mobile-app': 'mobile app', 'desktop-app': 'desktop app',
   'hosted-screen': 'their website', 'command-line': 'command line', 'api': 'API',
   'agent-tools': 'agent tools', 'mcp': 'MCP', 'file': 'files', 'content': 'content', 'settings': 'settings',
+  'message': 'message',
   'handoff': 'handoff',
 };
 function ifaceKindWord(k) { return IFACE_KIND[k] || k || ''; }
@@ -10453,7 +10461,7 @@ const IFACE_GLYPH = {
   'screen': 'browser', 'hosted-screen': 'browser',
   'mobile-app': 'phone', 'desktop-app': 'desktop',
   'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench', 'mcp': 'wrench',
-  'file': 'doc', 'content': 'doc', 'settings': 'doc', 'handoff': 'exit',
+  'file': 'doc', 'content': 'doc', 'settings': 'doc', 'handoff': 'exit', 'message': 'envelope',
 };
 const IFACE_GLYPH_D = {
   browser:  '<rect x="1.5" y="2.5" width="15" height="13" rx="2"/><path d="M1.5 6.5h15"/>',
@@ -10467,6 +10475,9 @@ const IFACE_GLYPH_D = {
             + '<path d="M9.7 2v4.2h4.2"/>',
   exit:     '<path d="M11 2.5H3.4a.9.9 0 0 0-.9.9v11.2a.9.9 0 0 0 .9.9H11"/>'
             + '<path d="M8.4 9h7.1M12.6 6.1 15.5 9l-2.9 2.9"/>',
+  // The one seed where the product goes to the PERSON. An envelope, because that is what the whole
+  // family is — email, SMS, push — and because every other mark here is a place you go to.
+  envelope: '<rect x="2" y="4" width="14" height="10" rx="1.4"/><path d="m2.6 5 6.4 4.7 6.4-4.7"/>',
   // The PROVIDER mark. Deliberately generic: a box out there, with a line reaching it. It says
   // "someone else's thing", which is all the map can honestly claim about a name it holds no URL for.
   provider: '<rect x="7" y="4" width="9.5" height="10" rx="2"/><path d="M1.5 9h5.5M4.2 6.6 1.5 9l2.7 2.4"/>',

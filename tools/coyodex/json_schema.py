@@ -240,9 +240,9 @@ FIELD_META: dict[tuple[str, str], dict] = {
                             "serves. AUTHORED — `Role.audience` answers a different question (which "
                             "side of the COMPANY an actor sits on) and marks a bought payment "
                             "service 'internal' while its interface is user-facing."},
-    ("Interface", "kind"): {"description": "what SHAPE this surface is, seeded-open: "
+    ("Interface", "kind"): {"description": "WHAT THIS SURFACE IS, seeded-open: "
                             + "/".join(grammar.INTERFACE_KIND_SEEDS)
-                            + ". SHAPE, never PURPOSE — a payment processor and a crash reporter "
+                            + ". WHAT IT IS, never WHAT IT IS FOR — a payment processor and a crash reporter "
                             "are both `api`, and `Dep.bucket` already says which is which in a "
                             "richer vocabulary. A kind that answers 'what is it for' is "
                             "mis-modelled. Prefer a seed; mint only when none fits, and reuse the "

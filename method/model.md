@@ -441,7 +441,7 @@ Semantics, stated on the fields:
   the fifteenth repeated its own row's `what`. Anything genuinely unsaid goes in `what`.
   **`kind`** is WHAT THE SURFACE IS, seeded-open over
   `grammar.INTERFACE_KIND_SEEDS`: `screen`, `mobile-app`, `desktop-app`, `command-line`, `file`,
-  `settings`, `hosted-screen`, `content`, `handoff`, `api`, `agent-tools`, `mcp`. **WHAT IT IS, never
+  `settings`, `message`, `hosted-screen`, `content`, `handoff`, `api`, `agent-tools`, `mcp`. **WHAT IT IS, never
   WHAT IT IS FOR** —
   a payment processor and a crash reporter are both `api`, and `deps[].bucket` already says which is
   which in a richer vocabulary; a kind answering "what is it FOR" means the row is mis-modelled.
