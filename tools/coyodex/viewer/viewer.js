@@ -10208,7 +10208,7 @@ const IFACE_ARROW = { in: '←', out: '→', both: '↔' };
 const IFACE_KIND = {
   'screen': 'website', 'mobile-app': 'mobile app', 'desktop-app': 'desktop app',
   'hosted-screen': 'their website', 'command-line': 'command line', 'api': 'API',
-  'agent-tools': 'agent tools', 'file': 'files', 'content': 'content', 'settings': 'settings',
+  'agent-tools': 'agent tools', 'mcp': 'MCP', 'file': 'files', 'content': 'content', 'settings': 'settings',
   'handoff': 'handoff',
 };
 function ifaceKindWord(k) { return IFACE_KIND[k] || k || ''; }
@@ -10292,7 +10292,7 @@ function ifaceActorCardHtml(rid) {
 const IFACE_GLYPH = {
   'screen': 'browser', 'hosted-screen': 'browser',
   'mobile-app': 'phone', 'desktop-app': 'desktop',
-  'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench',
+  'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench', 'mcp': 'wrench',
   'file': 'doc', 'content': 'doc', 'settings': 'doc', 'handoff': 'exit',
 };
 const IFACE_GLYPH_D = {

@@ -435,7 +435,8 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   | `content` | a page | data we read that we did not write: the open web, a repo, a transcript | theirs |
   | `handoff` | an arrow out | we hand the PERSON to another program: a link, their editor | theirs |
   | `api` | a plug | one program calling another over a network, either direction, webhooks included | either |
-  | `agent-tools` | a wrench | tools an AI assistant calls, ours or theirs | either |
+  | `agent-tools` | a wrench | tools an AI assistant calls, ours or theirs, whatever protocol carries them | either |
+  | `mcp` | a wrench with a plug | an MCP address, ours or theirs | either |
 
   **THE MOST SPECIFIC SEED THAT FITS WINS, and `api` is the fallback.** `api` is a SUPERSET of
   several of the others: every `agent-tools` surface is also one program calling another over a
@@ -472,6 +473,18 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
   them on their own — and they become `hosted-screen` only where the product itself links a person
   in. Measured: this one question decides 3 of mcpolis's 16 rows and 3 of argus's 12, and two
   independent readers of this page called the pair a contradiction before it was written down.
+
+  **`mcp` IS THE ONE PROTOCOL NAME IN THIS LIST, and it is deliberate.** Every other seed says what
+  a surface IS; this one says which protocol it speaks, which is normally the ways in's job
+  (`mcp-tool` already lives there). It earns a seed because reading it off the ways in CANNOT work
+  on a surface someone else defines — one has no ways in by definition — so a derived label put MCP
+  on the three servers mcpolis publishes and stayed silent on the one it calls. And because
+  `mcp-tool` is the fourth-biggest way-in kind across the live maps (63, behind only `http-route`,
+  `cli` and `ui-route`). Use it wherever the surface really speaks MCP, on either side; use
+  `agent-tools` for agent-facing tools carried some other way, such as a skill file an agent reads.
+  **DO NOT MINT A SECOND PROTOCOL SEED BY POINTING AT THIS ONE.** If another protocol ever earns a
+  word it will be on its own evidence — measured, and underivable from the ways in — not because
+  this one is here.
 
   **`content` versus `api`: it is the FAR SIDE that decides, not the data.** Both bring back things
   we did not write, so the data cannot separate them. `content` is MATERIAL we read, with no service

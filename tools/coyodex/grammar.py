@@ -305,7 +305,23 @@ INTERFACE_KIND_SEEDS_THEIRS = (
 INTERFACE_KIND_SEEDS_EITHER = (
     "api",            # a plug: one program calling another over a network, either direction,
                       # webhooks included
-    "agent-tools",    # a wrench: tools an AI assistant calls, ours or theirs
+    "agent-tools",    # a wrench: tools an AI assistant calls, ours or theirs — the shape, whatever
+                      # protocol carries it
+    #: THE ONE PROTOCOL NAME IN THIS LIST, and it is here on purpose after being argued down twice.
+    #: Every other seed says what a surface IS; `mcp` says which protocol it speaks, which is a
+    #: different axis and is normally the ways in's job (`entry_points[].kind` already holds
+    #: `mcp-tool`). Two things overruled that:
+    #:   * READING IT OFF THE WAYS IN CANNOT WORK on a surface someone else defines, which has no
+    #:     ways in by definition. mcpolis's "Upstream MCP servers" is exactly that, so a derived
+    #:     label would have said MCP on the three servers we publish and stayed silent on the one we
+    #:     call — the same seam, moved.
+    #:   * `mcp-tool` is the FOURTH-BIGGEST way-in kind across the live maps (63, behind only
+    #:     `http-route`, `cli` and `ui-route`). A word this common in the code earns one on screen.
+    #: THE GUARD IS THE TIE-BREAK, not this comment: most specific wins, so `mcp` beats `agent-tools`
+    #: beats `api`. DO NOT mint a second protocol seed by pointing at this one. If a second protocol
+    #: ever earns a word the same way — measured, and underivable from the ways in — that is a
+    #: decision to take on its own evidence, not a precedent already set.
+    "mcp",            # a wrench with a plug: an MCP address, ours or theirs
 )
 # The side grouping is GUIDANCE for the author and for the viewer's legend — `validate` must NOT
 # enforce it. A product can host a screen someone else designed, and can publish an API someone

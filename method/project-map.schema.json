@@ -808,7 +808,7 @@
         },
         "kind": {
           "type": "string",
-          "description": "what SHAPE this surface is, seeded-open: screen/mobile-app/desktop-app/command-line/file/settings/hosted-screen/content/handoff/api/agent-tools. SHAPE, never PURPOSE \u2014 a payment processor and a crash reporter are both `api`, and `Dep.bucket` already says which is which in a richer vocabulary. A kind that answers 'what is it for' is mis-modelled. Prefer a seed; mint only when none fits, and reuse the exact spelling on rebuild."
+          "description": "what SHAPE this surface is, seeded-open: screen/mobile-app/desktop-app/command-line/file/settings/hosted-screen/content/handoff/api/agent-tools/mcp. SHAPE, never PURPOSE \u2014 a payment processor and a crash reporter are both `api`, and `Dep.bucket` already says which is which in a richer vocabulary. A kind that answers 'what is it for' is mis-modelled. Prefer a seed; mint only when none fits, and reuse the exact spelling on rebuild."
         },
         "ways_in": {
           "type": "array",
