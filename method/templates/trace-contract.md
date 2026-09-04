@@ -90,6 +90,20 @@ lead; nothing above this line goes into an agent prompt.
 > - **`n` is unique within a flow.** It identifies the step for navigation and for diff impact.
 > - **Actor steps** use the role id as `src` (`R1 → C5`). An actor step needs no `where`, though one
 >   is welcome when the handler line is clear.
+> - **Every step where YOUR CODE touches a SURFACE (`In`) or a RECORD (`En`) carries a `direction`**
+>   — `"in"`, `"out"` or `"both"`. Read it from the PRODUCT'S OWN CODE, never from the arrow:
+>     - at a RECORD, `in` is a read and `out` is a write;
+>     - at a SURFACE, `in` is what the product receives and `out` is what it sends;
+>     - `both` is one exchange running each way (a code traded for a verified email, an upsert that
+>       returns the stored row). Keep it rare: it is for a real exchange, not for indecision.
+>   **A PULL is `in` even though the arrow points outward** — `C32 → I8 : fetches the markup of the
+>   watched page` is `in`, because the data comes back. Reading the arrow instead is the one mistake
+>   this field exists around.
+>   **EMPTY on every other step, INCLUDING A DOOR.** A role standing at a surface (`R1 → I3`,
+>   `I3 → R1`) is a human action with no product end, the same reason it owes no `where`. `validate`
+>   BLOCKS a door that carries a direction, and warns on a crossing that carries none.
+>   This is the map's ONLY statement of direction. Nothing else holds it: the `C→E` arrows say both
+>   read and write on half the record steps, and no arrow reaches a surface at all.
 > - **A flow OPENS with an actor its own use case declares.** Your slice's use cases are listed
 >   above with their `actors`; step 1's `src` must be one of them. This is not the same question as
 >   "who calls this code first" — the caller at the entry point is often a client application while

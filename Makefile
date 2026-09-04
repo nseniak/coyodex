@@ -45,12 +45,15 @@ dev: venv
 
 # The gates: the FULL test run and the type checker, in that order, on the whole suite.
 #
-# `tests` is named here with no path on purpose. A path narrows collection silently — `pytest
-# tests/test_viewer_js.py` reports a clean run while skipping every other tier — so the one-word
-# command is the only one that means "the gates passed". Type errors are reported after the tests
-# rather than short-circuiting, so one run tells you everything that is wrong.
+# NO PATH AT ALL. `pytest` bare collects `testpaths` from pyproject.toml, which is `tests` AND
+# `eval/tests`. Naming `tests` here was the same silent narrowing this comment warns about, one
+# level up: it skipped all 602 eval tests, and a change that broke four of them passed the gates
+# clean. A path narrows collection without saying so — `pytest tests/test_viewer_js.py` reports a
+# clean run while skipping every other tier — so the bare command is the only one that means "the
+# gates passed", and it cannot drift from `testpaths` again. Type errors are reported after the
+# tests rather than short-circuiting, so one run tells you everything that is wrong.
 gates:
-	@$(PY) -m pytest tests -q; t=$$?; \
+	@$(PY) -m pytest -q; t=$$?; \
 	echo ""; \
 	$(PY) -m pyright tools/coyodex; p=$$?; \
 	echo ""; \

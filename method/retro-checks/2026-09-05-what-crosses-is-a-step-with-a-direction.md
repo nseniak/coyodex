@@ -79,7 +79,13 @@ anchored at the real call site.
 2. **`direction` is advisory, not blocking, when missing.** Deliberate: a gate on a brand-new
    required field walls off every rebuild before one build has shown an agent filling it. Check 1
    is what decides whether it gets promoted.
-3. **One outside service still wears two names.** argus carries the same company as dependency
+3. **Coyodex's own map is the real cost, and the headline numbers hide it.** Every measurement
+   above is from argus and mcpolis. The third map on disk draws no doors, so all 11 of its surfaces
+   had no walk step: it lost 15 authored sentences and every one of its 11 direction answers, and
+   states nothing in their place until its walks get doors. It is stale and not rebuilt, which is
+   why this was accepted rather than fixed — but "5 of 28 surfaces had no step" is the two-map
+   number, not the whole truth, and the next rebuild of coyodex's own map is where the bill lands.
+4. **One outside service still wears two names.** argus carries the same company as dependency
    "Scrapfly" and interface "Paid reading service", and no screen joins them. A viewer defect, not
    a map defect. Nitsan chose not to log it.
 
@@ -110,18 +116,24 @@ anchored at the real call site.
    preparation. Test 2 (it acts on the running service) is being skipped, and the map is filling
    with developer work.
 
-6. expect: a `direction` of `both` stays rare and is used for a real exchange (a code traded for a
+6. expect: no surface acquires `facing: operator` where the previous map said `user`, and the count
+   of `facing: user` surfaces does not fall while `operator` rises by the same amount.
+   regression sign: a straight swap. Carried from the retired 2026-09-04 check, and it matters MORE
+   now that the operator exemption is gone: re-labelling a surface no longer silences anything, so
+   a swap would be a map made less true for no gain at all.
+
+7. expect: a `direction` of `both` stays rare and is used for a real exchange (a code traded for a
    verified email, an upsert that returns the stored row).
    regression sign: `both` on a large share of steps. It is being used to avoid deciding, and the
    surface then reports both directions on everything, which says nothing.
 
-7. expect: `direction` is read from the PRODUCT, so a PULL (`Cn → In` "fetches…") is `in` even
+8. expect: `direction` is read from the PRODUCT, so a PULL (`Cn → In` "fetches…") is `in` even
    though the arrow points outward, and `In → Cn` is `in` too.
    regression sign: directions that track the ARROW instead — argus's "Tracked web pages" flipping
    to `out`. The reading has been taken from the arrow, which is the mistake this field exists
    around.
 
-8. expect: DOORS carry no direction, and the surface's own reported directions therefore describe
+9. expect: DOORS carry no direction, and the surface's own reported directions therefore describe
    what the PRODUCT sends and receives, not what a person does.
    regression sign: a door carrying one. Forcing an answer there is what put the word "receives" in
    front of a step whose own phrase said "sends each finished record out" — a label contradicting

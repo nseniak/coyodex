@@ -409,7 +409,16 @@ Semantics, stated on the fields:
   example `where`. The viewer drills the step there and the diff-impact engine hits the step directly
   (`step:<uc>:<n>` — so `n` must be unique within a flow; `validate` blocks on duplicates). Required
   on element↔element steps unless the step sets `no_call_site: true` (same escape as edges); actor
-  steps (a Role endpoint) need none. The "used in" backward view
+  steps (a Role endpoint) need none.
+  **And each step where the map's OWN CODE touches a surface or a record carries a `direction`** —
+  `in`/`out`/`both`, read from the PRODUCT: at a record `in` is a read and `out` a write, at a
+  surface `in` is what the product receives and `out` what it sends, and `both` is one exchange
+  running each way. EMPTY on every other step, a DOOR included (a role at a surface is a human
+  action with no product end, the same exemption `where` gives an actor step). This is the map's
+  only statement of direction — it replaced `interfaces[].carries[]`, and nothing else holds it:
+  the `C→E` arrows say BOTH read and write on 83 of the 170 record steps across the live maps, and
+  no arrow reaches a surface at all. NEVER read it off the arrow's polarity: a PULL points outward
+  while its data comes back. The "used in" backward view
   (element → the use cases whose flow steps touch it) is derived from these, never authored.
 - **`subflows` — named shared step sequences (T6b).** A `SubFlow {id: SFn, name, steps}` defines
   machinery shared by ≥2 flows ONCE; its steps are ordinary steps under all the ordinary rules

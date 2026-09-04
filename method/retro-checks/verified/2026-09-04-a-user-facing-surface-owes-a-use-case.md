@@ -77,3 +77,13 @@ names a `Dn` rather than the surface it is met at.
    `facing: operator` ones rises by the same amount.
    regression sign: a straight swap. Same failure as check 2, visible as a count when the individual
    rows are hard to compare.
+
+---
+
+**RETIRED 2026-09-05, SUPERSEDED AND NOT VERIFIED.** Its premise — "the `facing: operator`
+exemption IS the check" — was measured wrong and is gone one day later: 7 of the 11
+operator-facing surfaces across the two live maps already had use cases, so the exemption was
+hiding the 4 real gaps rather than sparing false ones. Every interface owes a use case now.
+Checks 1, 2 and 4 above are still worth watching and were carried into
+`2026-09-05-what-crosses-is-a-step-with-a-direction.md`; check 3 ("at most one or two per map")
+is void, since removing the exemption is what makes more of them legitimate.

@@ -49,8 +49,7 @@ _KIND_BY_PREFIX = {"C": "components", "D": "deps", "E": "entities", "S": "subsys
 _GROUP_KINDS = ("subsystems", "subdomains", "capabilities", "blocks")
 
 _KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "step": "flow_steps", "rule": "rule_sites",
-                  "crossing": "interfaces",
-                  "glossary": "glossary", "security": "security", "run": "run_commands",
+                                "glossary": "glossary", "security": "security", "run": "run_commands",
                   "net": "non_entity_types"}
 
 # `changes` severity when one element is hit several ways (a real change outranks a drift)

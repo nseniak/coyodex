@@ -108,10 +108,13 @@ the code's names.
 - **pipe** — something on the path to a far side that is not itself an interface: a
   reverse proxy, a log shipper, the library that calls a service. Name the far
   side, never the pipe.
-- **what crosses** — the list on an interface saying, in each direction, what goes
-  through it in one sentence, and which stored records. Naming no record is a
-  normal answer: a log line, a fetched web page and a source file all cross
-  without being stored.
+- **what crosses** — what goes through an interface, read off the use case walk
+  steps drawn at it. Each of those steps says which way the data went: **in** the
+  product received it, **out** it sent it, **both** one exchange ran each way.
+  There is no hand-written list any more. The field that held one was removed once
+  the step could carry the direction, which was the only thing it said that a step
+  could not. A **door** says no direction, because the product is not at either end
+  of it: a person opening someone else's console moves nothing of ours.
 - **user-facing / operator-facing** — who an interface serves. Written by hand, not
   worked out: the actor field that looks like it answers this asks a different
   question, and marks a bought payment service *internal* while its interface is

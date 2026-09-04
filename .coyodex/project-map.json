@@ -2996,7 +2996,7 @@
    "facing": "user",
    "kind": "settings",
    "ways_in": [],
-   "source": "",
+   "source": "tools/coyodex/ignorefile.py:59",
    "confidence": "verified",
    "evidence": []
   },
@@ -3008,7 +3008,7 @@
    "facing": "user",
    "kind": "content",
    "ways_in": [],
-   "source": "",
+   "source": "tools/coyodex/scope.py:72",
    "confidence": "verified",
    "evidence": [
     {

@@ -893,15 +893,22 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     # sentence wraps to a different number of lines.
     assert "style=\"grid-row:${r}\"" in surf and ".asf-stage { position: relative; display: grid;" in css
     # WHAT THIS PERSON DOES HERE — their own walk steps. It drew the surface's AUTHORED crossings,
-    # which say what crosses for the PRODUCT: on a page about a member, Google sign-in showed the
+    # which said what crosses for the PRODUCT: on a page about a member, Google sign-in showed the
     # product talking to Google, and neither sentence was anything that member sent or received.
-    # Those rows still lead the surface's own page, where a boundary claim belongs.
+    # Those rows are gone from the map entirely now; a step was always the better answer here.
     assert "stepGroupsOf(i, role.id)" in surf
     assert "crossingsOf" not in js, "the actor's page was its last caller"
-    # AND NO DIRECTION MARK. A step records who talks to whom, not which way data goes — a pull
-    # points outward while its data comes back. Direction is authored on `carries[]`, and reading it
-    # off a step flipped argus's "Tracked web pages" from `in` to `out`, a page the product FETCHES.
-    assert "asf-cross-dir" not in js and "asf-cross-dir" not in css
+    # AND THE DIRECTION RIDES THE STEP, so this page draws it too — through the SAME builder the
+    # surface's own page uses, never a second one.
+    #
+    # THIS ASSERTION USED TO NAME A DEAD CLASS. It read `"asf-cross-dir" not in js`, under a comment
+    # saying a step cannot carry a direction; `grep -c asf-cross-dir` is 0, so it passed while the
+    # page it guards started drawing exactly the mark it forbade. An adversarial review found it.
+    # A "must not come back" guard whose subject never existed proves nothing at all.
+    assert "asf-cross-dir" not in js and "asf-cross-dir" not in css, \
+        "one direction mark, and it is `ifs-dirtag` — a second class is a second look"
+    assert "stepLineHtml(st, uc, true, false)" in surf, "the same step line the surface's page draws"
+    assert "ifs-dirtag" in js and ".ifs-dirtag" in css, "and it carries the direction mark"
     # …AND THE FALLBACK IS TO UNATTRIBUTED STEPS ONLY. Falling back to every step put another named
     # person's steps on this one's page: argus told a reader that the software "Assistant" picks a
     # Google account and approves, a step belonging to the human "Visitor".

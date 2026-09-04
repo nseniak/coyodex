@@ -510,13 +510,15 @@ def make_interface_map() -> dict:
     # WHAT CROSSES IS THE STEPS. `carries[]` was removed, so a surface's directions come from the
     # steps drawn at it — `I1` receives what a person types and sends the receipt back, and the
     # charge at `D1` reaches `I2` through the dep standing on it.
-    doc["flows"][0]["steps"][-1]["direction"] = "out"
-    # A DOOR PAIR at `I1`, which is how a surface comes to carry both directions now. Deliberately
-    # a door and not `C1 → I1`: a step INTO a surface from inside the product is the feature
-    # REACHING OUT, and this fixture's `I1` is a surface the feature is entered by.
+    # A DOOR carries no direction (a role at a surface is a human action with no product end), and
+    # neither does a step at a DEP — `C2 → D1` is neither a surface nor a record. An earlier version
+    # of this fixture put a direction on both, which `validate` BLOCKS, and three assertions rested
+    # on that illegal shape: `build_index` never validates, so nothing here caught it. The test
+    # above now runs `validate` over this very fixture so it cannot happen again.
     doc["flows"][0]["steps"] += [
-        {"n": 6, "src": "R1", "dst": "I1", "phrase": "types the card details", "direction": "in"},
-        {"n": 7, "src": "I1", "dst": "R1", "phrase": "shows them the receipt", "direction": "out"}]
+        {"n": 6, "src": "R1", "dst": "I1", "phrase": "types the card details"},
+        {"n": 7, "src": "I1", "dst": "C1", "phrase": "carries the details inward",
+         "where": "src/a.py:1", "direction": "in"}]
     doc["interfaces"] = [
         {"id": "I1", "name": "Web app", "what": "Where a person pays.", "side": "ours",
          "facing": "user", "source": "src/a.py:1", "ways_in": ["EP1"]},
@@ -536,12 +538,20 @@ def test_a_surface_carries_the_walks_and_features_that_come_through_it():
     assert by_id["I2"].deps == ["D1"]
 
 
+def test_the_interface_fixture_is_a_map_VALIDATE_ACCEPTS():
+    """`build_index` never validates, so a fixture can encode a shape the product rejects and every
+    assertion resting on it passes. One did: doors carrying a direction, which `validate` blocks."""
+    from coyodex.validate_model import validate_model
+    problems, _ = validate_model(load_model(json.dumps(make_interface_map())))
+    assert not [p for p in problems if "direction" in p], problems
+
+
 def test_a_surface_flow_is_derived_from_the_DIRECTIONS_ITS_STEPS_CARRY():
     """Never authored. `interfaces[].carries[]` said it by hand beside the walks, and a surface
     could claim to send while no story sent anything through it."""
     ix = build_index(load_model(json.dumps(make_interface_map())))
     by_id = {i.id: i for i in ix.interfaces}
-    assert by_id["I1"].flow == ["in", "out"], "a door pair drawn at it, one each way"
+    assert by_id["I1"].flow == ["in"], "one step drawn at it, and it says the product received"
     # …and a surface reached only THROUGH A DEP states no direction. That is the honest answer, not
     # a gap to paper over: the step is drawn at the dependency, which is the PIPE, so nothing says
     # which way data crossed the SURFACE. The fix is to draw the step at the surface, which is

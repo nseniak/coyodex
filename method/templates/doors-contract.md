@@ -93,15 +93,17 @@ lead; nothing above this line goes into an agent prompt.
 > reading twice: the story stops mid-conversation, so say in your report whether it is traced to its
 > outcome or hands over to another use case.
 >
-> **Nothing OUTSIDE the step list changes.** A door is a STEP. The surface's own `carries` rows are
-> authored separately and are not yours to touch.
+> **Nothing OUTSIDE the step list changes.** A door is a STEP. There is no per-surface field to
+> touch: what a surface carries is read back off the steps drawn at it.
 >
-> **A door is not only a way IN, and the direction is read off the INSIDE end** — never off whose
-> surface it is. `Cn → In` and `In → Rn` are the product reaching OUT; `Rn → In` and `In → Cn` are
-> the story coming IN. Both are commonly present on one surface (a request and its answer), and
-> **neither maps to `side`**: the files a product writes are OUR surface written OUT through, and a
-> chat platform is SOMEONE ELSE'S surface stories arrive IN from. Do not read `side` to decide a
-> direction, and do not change `side` because of one.
+> **A DOOR CARRIES NO `direction`, and that is a rule, not an omission.** `direction` is read from
+> the PRODUCT'S OWN CODE, and a role standing at a surface has no product end — an operator opens a
+> log store's own console and nothing of ours moves. `validate` BLOCKS a door that carries one. The
+> step beside it does: `In → Cn` is `in` (the surface hands inward what it received), and `Cn → In`
+> is `out` unless it is a PULL ("fetches…", "asks … for…"), which is `in` because the data comes
+> back. Never read the direction off the arrow, and never off `side`: the files a product writes are
+> OUR surface written OUT through, and a chat platform is SOMEONE ELSE'S surface stories arrive IN
+> from. Do not change `side` because of a direction.
 >
 > **An actor reaching a DEPENDENCY or a stored RECORD is a crossing too** (`Rn → D7`, `Rn → E3`) and
 > takes the same treatment.

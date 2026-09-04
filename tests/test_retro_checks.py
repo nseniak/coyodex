@@ -74,8 +74,20 @@ def test_armed_check_files_are_dated_and_settleable():
         )
 
 
-def test_verified_checks_carry_their_provenance():
-    """A file in verified/ with no 'verified in' line cannot say which build proved it."""
+def test_retired_checks_say_WHY_they_stopped_running():
+    """A file under `verified/` is no longer run, and it must say which of the two doors it came
+    through — or a reader cannot tell a proven promise from an abandoned one.
+
+    THERE ARE TWO DOORS, and the second was added the day a check was superseded before any build
+    could prove it. Demanding a `verified in` line from a SUPERSEDED file would force a false
+    claim: nothing verified it. So a retired file says either what proved it, or what replaced it.
+    `2026-09-03-what-crosses-is-a-pair.md` is the case — its checks grade a field that no longer
+    exists, and one of them grades as a PASS the exact shape that made coyodex's own map stop
+    validating."""
     for path in sorted((CHECKS_DIR / "verified").glob("*.md")):
         body = path.read_text(encoding="utf-8")
-        assert "verified in" in body, f"verified/{path.name}: missing its 'verified in' line"
+        assert "verified in" in body or "SUPERSEDED AND NOT VERIFIED" in body, (
+            f"verified/{path.name}: says neither which build proved it, nor what superseded it")
+        if "SUPERSEDED AND NOT VERIFIED" in body:
+            assert "Its successor is" in body or "carried into" in body, (
+                f"verified/{path.name}: superseded, but names no successor to read instead")

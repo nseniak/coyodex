@@ -10974,11 +10974,12 @@ function bindIfaceDiagram(root) {
     const boxSide = i.side === 'ours' ? 'right' : 'left';
     const mid = box.offsetTop + box.offsetHeight / 2;
     // EVERY SURFACE GETS A LINE, and the line says only that this surface belongs to the picture.
-    // NO HEADS, NO DIRECTION. The heads carried the crossings' `in` and `out`, and once the page
-    // stopped reading the crossings there was nothing left for them to state — a head derived from
-    // the walks instead would be a guess dressed as a fact, and the walks disagree with the map's
-    // own answer on one of MCP Hero's sixteen surfaces. A plain line reads as membership, which is
-    // exactly the claim: this is one of the places the product meets the outside.
+    // NO HEADS, NO DIRECTION. The heads carried the removed crossings' `in` and `out`. A surface
+    // now states the SET of directions its steps carry — commonly both — so one arrowhead could
+    // only ever be half the answer, and a picture that draws half an answer as a fact is worse
+    // than one that draws none. A plain line reads as membership, which is exactly the claim:
+    // this is one of the places the product meets the outside. The directions themselves are on
+    // the steps, on the surface's own page, where each belongs to one line.
     const from = edge(box, boxSide);
     const to = hubPoint(from[0], from[1]);
     wire(from, to, i.id);
@@ -11272,11 +11273,9 @@ function renderInterface(s) {
     // gets its own heading rather than sitting in the same list as the people.
     + (depIds.length
         ? '<h3 class="card-group-head">Reached through</h3>' + elementCardListHtml(depIds) : '');
-  // WHAT THE STORIES SHOW HAPPENING HERE — the second half of the pair, under the authored table.
-  // The table above is the map's boundary CLAIM (which way, which records, what is stripped before
-  // it leaves); this is the grounded detail, every line a step someone drew at a real call site.
-  // Neither is a summary of the other, and a change that deleted the table in favour of this was
-  // built and reverted: 16 of the 39 surfaces across the three live maps have no step at all.
+  // WHAT CROSSES — the whole answer, now that the authored table is gone with `carries[]`. Every
+  // line is a step someone drew at a real call site, carrying its own direction, so the claim and
+  // the evidence are the same sentence rather than two blocks that could disagree.
   //
   // GROUPED BY STORY, because a step means little without the story it sits in — mcpolis's
   // dashboard draws 89 of them from 20 different walks, and read as one list they are noise.

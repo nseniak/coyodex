@@ -1293,8 +1293,16 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
             for st in steps:
                 if not (st.phrase or "").strip():
                     continue
+                # …AND ITS DIRECTION, IN THE CLAIM ITSELF. Left out at first, and an adversarial
+                # review caught it: `direction` is the one fact that justified removing
+                # `interfaces[].carries[]`, whose own claim DID carry a direction ("I1 Dashboard
+                # carries out: …"). Omitting it here moved the map's only statement of which way
+                # data goes out of every skeptic's reach — and the migration that seeded it had
+                # already labelled ten steps the wrong way round. A skeptic reading the call site
+                # can settle it; nothing else can.
+                which = f" [{st.direction}]" if st.direction else ""
                 items.append(WorkItem(
-                    claim=f"{label} step {st.n}: {st.src} → {st.dst} — {st.phrase}",
+                    claim=f"{label} step {st.n}: {st.src} → {st.dst}{which} — {st.phrase}",
                     # REPORT-ONLY, like `interface`: a phrase that misdescribes what happens is
                     # re-authored, not nudged onto another line. `apply-drift` places a correction
                     # by re-deriving an edge-shaped or claim-shaped row, and a step phrase is

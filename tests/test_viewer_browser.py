@@ -1604,8 +1604,15 @@ def test_a_surfaces_own_page_tags_each_step_with_the_way_that_one_went() -> None
         for f in m["flows"]:
             if f["uc"] == "UC1":
                 f["steps"] = [
-                    {"n": 1, "src": "R1", "dst": "I1", "direction": "in",
+                    # A DOOR, so no direction: a role at a surface is a human action with no
+                    # product end, and `validate` blocks one that carries a direction. An earlier
+                    # version of this fixture put `in` here, pinning a shape the product rejects.
+                    {"n": 1, "src": "R1", "dst": "I1",
                      "phrase": "types what they want", "note": "", "where": None,
+                     "no_call_site": False, "subflow": None},
+                    {"n": 4, "src": "I1", "dst": "C1", "direction": "in",
+                     "phrase": "carries what they typed inward", "note": "",
+                     "where": "backend/src/mcpolis/entrypoints/app.py:2",
                      "no_call_site": False, "subflow": None},
                     {"n": 2, "src": "C1", "dst": "I1", "direction": "out",
                      "phrase": "shows them the answer", "note": "",

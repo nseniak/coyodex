@@ -102,3 +102,12 @@ line that proves the value is not readable later."* Either that row earns an anc
    by a crossing's `where` still passes. coyodex's Settings and Project source files are that case.
    regression sign: either the advisory returns, or those two surfaces start failing "grounded by
    nothing" — the grounding arm was removed along with the advisory, and it must not be.
+
+---
+
+**RETIRED 2026-09-05, SUPERSEDED AND NOT VERIFIED.** `interfaces[].carries[]` is removed;
+every check above grades behaviour that no longer exists, and check 5 grades as a PASS the exact
+shape that made coyodex's own map stop validating. Kept here, not deleted, because the reason it
+survived on 2026-09-03 is the reason the second removal is different: the objection was never the
+sentence, it was DIRECTION, and the step now carries one. Its successor is
+`2026-09-05-what-crosses-is-a-step-with-a-direction.md`.

@@ -469,8 +469,11 @@ def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
             # of ours moves. Forcing an answer there produced two steps whose label contradicted
             # their own phrase. Same shape as the `where` rule one block up, where an actor step is
             # a human action and owes no call site.
-            ends_in_code = [e for e in (st.src, st.dst) if grammar.is_step_id(e)
-                            and e not in iface_ids and not e.startswith("E")]
+            # "The map's own code" is a component or a subsystem — NOT a dep, which is the PIPE and
+            # crosses nothing the map can answer for, and not a role. So `Rn → En` owes nothing
+            # either: a person does not read a row out of our store, some code does it for them.
+            ends_in_code = [e for e in (st.src, st.dst)
+                            if e.startswith(("C", "S")) and grammar.is_step_id(e)]
             crossing = (not st.subflow and bool(ends_in_code)
                         and any(e in iface_ids or e.startswith("E") for e in (st.src, st.dst)))
             if st.direction and st.direction not in grammar.STEP_DIRECTIONS:
@@ -982,8 +985,12 @@ def interface_walk_steps(m: ProjectModel) -> dict[str, list[InterfaceWalkStep]]:
     "Tracked web pages" from `in` to `out` on a page the product fetches. Three other objections were
     measured and answered before the removal:
 
-      * COVERAGE. 5 of the 28 surfaces across the two live maps had no step. Every interface now owes
-        a use case (`_check_interfaces`), with a recorded escape for one that genuinely has none.
+      * COVERAGE, and the honest number is worse than the headline. 5 of the 28 surfaces across
+        argus and mcpolis had no step; on coyodex's OWN map it was 11 of 11, because that map draws
+        no doors at all. Every interface now owes a use case (`_check_interfaces`), with a recorded
+        escape for one that genuinely has none — which is what turns the gap into a reported finding
+        instead of a field quietly carrying it. Coyodex's own map is the case to watch: its 11
+        surfaces lost 15 authored sentences and state no direction until its walks get doors.
       * THE RECORDS THAT CROSS. 68 references sat on `carries[].elements`; 2 of them were a real
         independent stored record, the rest being wire shapes, embedded parts and computed views.
       * THE SENTENCE. It repeated the steps — 66% of its words at the surfaces with the richest
@@ -2397,9 +2404,13 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                     f"surface once" if len(owners) == 1 else
                     f"{ep} is claimed by {len(owners)} interfaces ({', '.join(owners)}) — one way "
                     f"in belongs to exactly one surface")
-        # GROUNDING lost one arm with `carries[]`: a crossing's own `where`. The other three carry
-        # every live surface, and the removed arm was the weakest — it proved a line existed, not
-        # that the surface did.
+        # GROUNDING lost one arm with `carries[]`: a crossing's own `where`. THAT ARM WAS LOAD-
+        # BEARING ON TWO REAL SURFACES, and the first version of this comment claimed otherwise and
+        # was wrong: coyodex's own Settings and Project source files had no way in, no dep and no
+        # `source`, so removing the arm made its own map stop validating. The fix was to move each
+        # anchor onto the surface's `source`, which is what that field is for — the ONE line
+        # declaring a whole surface — not to keep the arm. A surface declared in no single place is
+        # exactly the case `source` is optional for, but then something else must ground it.
         grounded = bool(iface.ways_in or deps_by_iface.get(iface.id) or iface.source)
         if not grounded:
             problems.append(f"{iface.id} ({iface.name}) is grounded by nothing — it needs at least "

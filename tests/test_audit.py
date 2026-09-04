@@ -2446,15 +2446,22 @@ def test_a_use_cases_own_sentence_becomes_a_claim():
 def test_what_crosses_a_surface_becomes_a_claim():
     """It is a STEP claim now. `interfaces[].carries[]` was removed, and the sentence it held about
     the outside edge has to be a walk step, which the step arm already challenges at a call site.
-    That is what closed the hole this file's header describes, rather than a second arm."""
-    assert any("shows the page's title and its owner" in c for c in _claims(True))
+    That is what closed the hole this file's header describes, rather than a second arm.
+
+    THE WHOLE CLAIM IS ASSERTED, not a phrase substring. A bare-phrase assertion passed with the
+    interface arm deleted entirely, under this very name — an adversarial review found it. The
+    surface id and the DIRECTION are the parts a skeptic needs, and the direction is the one fact
+    that justified removing the field, so it is the last thing that may go missing here."""
+    assert any("UC1 step 2: C1 → I1 [out] — shows the page's title and its owner" == c
+               for c in _claims(True)), _claims(True)
 
 
 def test_neither_appears_at_the_default_tier():
     """The default surface is what three commands compare across builds; widening it silently
     would move numbers nobody changed."""
     text = " ".join(_claims(False))
-    assert "UC1 Rename a page:" not in text
+    assert "UC1 Rename a page:" not in text, "the use case's own sentence is opt-in"
+    assert "shows the page's title" not in text, "and so is every step phrase"
 
 
 def test_a_behavioural_worklist_is_recognised_from_its_own_themes():

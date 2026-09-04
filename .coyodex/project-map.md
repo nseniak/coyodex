@@ -317,8 +317,8 @@ why: needs the finished build's transcript, found through the stamp from HP14
 | **I4** | Agent skill | ours | agent-tools | user |  | How a coding agent is asked, in plain words, to build or update a map. | R1, R2 | 5 | D12, D13, D14 | [dispatch.md](method/dispatch.md:62) | verified |
 | **I5** | Developer skills | ours | agent-tools | operator |  | How a coyodex developer asks an agent to score a map or review a build. | R3 | 2 |  | [SKILL.md](eval/SKILL.md:28) | verified |
 | **I6** | Map files in your repo | ours | file | user |  | The map coyodex writes next to the code, which a person opens and git shows. |  |  |  | [assemble.py](tools/coyodex/assemble.py:963) | verified |
-| **I7** | Settings | ours | settings | user |  | The values the person running coyodex sets: which clone, which port, what to leave out. |  |  |  |  | verified |
-| **I8** | Project source files | theirs | content | user |  | The code being mapped. coyodex did not write it, and reading it is the whole job. |  |  |  |  | verified |
+| **I7** | Settings | ours | settings | user |  | The values the person running coyodex sets: which clone, which port, what to leave out. |  |  |  | [ignorefile.py](tools/coyodex/ignorefile.py:59) | verified |
+| **I8** | Project source files | theirs | content | user |  | The code being mapped. coyodex did not write it, and reading it is the whole job. |  |  |  | [scope.py](tools/coyodex/scope.py:72) | verified |
 | **I9** | Coding agent's build transcript | theirs | content | operator |  | The records an agent wrote while building a map, read back to review the run. |  |  | D12 |  | verified |
 | **I10** | GitHub | theirs | handoff | user |  | Where a reader continues, when they follow a code link out of the viewer. | R1 |  | D15 |  | verified |
 | **I11** | Code editor | theirs | handoff | user |  | The editor coyodex opens on the reader's own machine, at the line they clicked. | R1 |  | D16 |  | verified |

@@ -5043,43 +5043,57 @@ def test_an_OPERATOR_surface_owes_a_use_case_TOO():
     assert "OPERATOR surface owes one" in hits[0], hits[0]
 
 
+#: EVERY "…clears it" TEST BELOW ASSERTS THE ADVISORY FIRED FIRST. A filter on a string the
+#: validator does not emit is VACUOUSLY TRUE, and five of these shipped that way for one commit
+#: after the message was reworded — silently un-testing the recorded escape and the never-blocks
+#: guarantee at the very commit that made every interface owe a use case. Asserting the fire before
+#: the fix is what makes the silence mean something.
+def _unreached_hits(m) -> list[str]:
+    return [w for w in warnings_of(m) if "I2" in w and "reached by NO use case" in w]
+
+
 def test_a_walk_step_drawn_at_the_surface_clears_it():
     m = make_unreached_surface_model()
+    assert _unreached_hits(m), "the advisory must fire before the fix, or the silence proves nothing"
     m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="I2", phrase="asks the paid service",
                                      where="src/v.py:60"))
-    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+    assert not _unreached_hits(m)
 
 
 def test_a_step_drawn_at_the_dep_standing_on_it_clears_it():
     # The third arm: a story that names the outside SYSTEM, not the surface it is met at, still
     # reaches that surface. Scores zero on both live maps, and must stay for the day one does.
     m = make_unreached_surface_model()
+    assert _unreached_hits(m), "must fire before the fix"
     m.edges.append(Edge(src="C1", verb="calls", dst="D2", why="fetch", where="src/v.py:60"))
     m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="D2", phrase="asks the paid service",
                                      where="src/v.py:60"))
-    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+    assert not _unreached_hits(m)
 
 
 def test_a_use_case_naming_one_of_its_ways_in_clears_it():
     m = make_unreached_surface_model()
+    assert _unreached_hits(m), "must fire before the fix"
     m.entry_points.append(EntryPoint(id="EP9", kind="http-route", trigger="GET /paid",
                                      activation="external", source="src/v.py:60", component="C1"))
     m.interfaces[1].ways_in = ["EP9"]
     m.use_cases[0].entry_points = ["EP9"]
-    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+    assert not _unreached_hits(m)
 
 
 def test_a_recorded_line_silences_it():
     m = make_unreached_surface_model()
+    assert _unreached_hits(m), "must fire before the fix"
     m.extras = [ExtraSection(
         heading="Interface exceptions",
         body="I2: the paid reader is a fallback the stories deliberately do not branch on")]
-    assert not [w for w in warnings_of(m) if "I2" in w and "NO use case reaches it" in w]
+    assert not _unreached_hits(m)
 
 
 def test_it_never_blocks():
     m = make_unreached_surface_model()
-    assert not [p for p in problems_of(m) if "NO use case reaches it" in p]
+    assert _unreached_hits(m), "it must fire at all, or 'never blocks' is vacuous"
+    assert not [p for p in problems_of(m) if "reached by NO use case" in p]
 
 
 def test_one_gap_owes_one_line_not_two():
@@ -5092,3 +5106,129 @@ def test_one_gap_owes_one_line_not_two():
     hits = [w for w in warnings_of(m) if "I2" in w]
     assert any("reached by NO use case" in w for w in hits), hits
     assert not any("never says to whom" in w for w in hits), hits
+
+
+# ── `direction` — the map's ONE statement of which way data moved ───────────────────────────────
+#
+# All three paths below were UNTESTED when the field shipped, and the field is the whole reason
+# `interfaces[].carries[]` could be removed. An adversarial review found the gap.
+
+def make_direction_model() -> ProjectModel:
+    """One flow with a door, the surface step behind it, a record step and a plain component step —
+    the four shapes the rule has to tell apart."""
+    m = make_interface_model()
+    m.flows[0].steps = [
+        FlowStep(n=1, src="R1", dst="I1", phrase="types the command"),
+        FlowStep(n=2, src="I1", dst="C1", phrase="hands it to the runner", where="src/v.py:3",
+                 direction="in"),
+        FlowStep(n=3, src="C1", dst="E1", phrase="writes the order", where="src/v.py:4",
+                 direction="out"),
+        FlowStep(n=4, src="C1", dst="C1", phrase="checks the flag", where="src/v.py:5"),
+    ]
+    return m
+
+
+def test_a_valid_direction_model_is_clean():
+    m = make_direction_model()
+    assert not [p for p in problems_of(m) if "direction" in p], problems_of(m)
+    assert not [w for w in warnings_of(m) if "no `direction`" in w], warnings_of(m)
+
+
+def test_a_direction_outside_the_vocabulary_BLOCKS():
+    m = make_direction_model()
+    m.flows[0].steps[1].direction = "inbound"
+    hits = [p for p in problems_of(m) if "direction='inbound'" in p]
+    assert len(hits) == 1, problems_of(m)
+    assert "in/out/both" in hits[0], hits[0]
+
+
+def test_EVERY_word_in_the_vocabulary_is_accepted():
+    # Looping the grammar constant would shrink with it; naming the three literally is what keeps a
+    # silently-dropped word visible — the vacuous-test shape this suite has been bitten by before.
+    assert set(grammar.STEP_DIRECTIONS) == {"in", "out", "both"}
+    for word in ("in", "out", "both"):
+        m = make_direction_model()
+        m.flows[0].steps[1].direction = word
+        assert not [p for p in problems_of(m) if "direction" in p], (word, problems_of(m))
+
+
+def test_a_DOOR_carrying_a_direction_BLOCKS():
+    """The exemption, in the direction that matters. A role standing at a surface is a human action
+    with no product end — argus's operator opens the log store's own console and nothing of ours
+    moves. Forcing an answer there produced labels contradicting their own step's phrase."""
+    m = make_direction_model()
+    m.flows[0].steps[0].direction = "in"
+    hits = [p for p in problems_of(m) if "step 1" in p and "not at either end" in p]
+    assert len(hits) == 1, problems_of(m)
+    assert "DOOR" in hits[0], hits[0]
+
+
+def test_a_COMPONENT_TO_COMPONENT_step_carrying_a_direction_BLOCKS():
+    m = make_direction_model()
+    m.flows[0].steps[3].direction = "out"
+    assert [p for p in problems_of(m) if "step 4" in p and "not at either end" in p], problems_of(m)
+
+
+def test_a_step_at_a_DEP_carries_no_direction():
+    """A dep is the PIPE, not the surface. `Cn → Dn` crosses nothing the map can answer for, and a
+    fixture that put a direction there passed for a while because `build_index` never validates."""
+    m = make_direction_model()
+    m.flows[0].steps.append(FlowStep(n=5, src="C1", dst="D1", phrase="calls it",
+                                     where="src/v.py:6", direction="out"))
+    assert [p for p in problems_of(m) if "step 5" in p and "not at either end" in p], problems_of(m)
+
+
+def test_a_MISSING_direction_is_advisory_and_names_the_steps():
+    """Advisory, not blocking, and deliberately so: a gate on a brand-new required field walls off
+    every rebuild before one build has shown an agent filling it. The retro-check carries the
+    promotion."""
+    m = make_direction_model()
+    m.flows[0].steps[1].direction = ""
+    m.flows[0].steps[2].direction = ""
+    hits = [w for w in warnings_of(m) if "no `direction`" in w]
+    assert len(hits) == 1, warnings_of(m)
+    assert "2 step(s)" in hits[0] and "step 2" in hits[0] and "step 3" in hits[0], hits[0]
+    assert not [p for p in problems_of(m) if "no `direction`" in p], "advisory, never blocking"
+
+
+def test_the_RECORD_arm_is_covered_too():
+    """83 of the 170 record steps across the live maps sit on a component/record pair whose arrows
+    say BOTH read and write — the stated reason this field answers at a record and not only at a
+    surface."""
+    m = make_direction_model()
+    m.flows[0].steps[2].direction = ""
+    hits = [w for w in warnings_of(m) if "no `direction`" in w]
+    assert hits and "step 3" in hits[0], warnings_of(m)
+
+
+def test_a_SUB_FLOW_step_owes_one_too():
+    """A sub-flow's steps are ordinary steps under one rulebook, and a surface reached only from
+    inside an `SFn` is invisible without this."""
+    m = make_direction_model()
+    m.subflows.append(SubFlow(id="SF1", name="Read it", steps=[
+        FlowStep(n=1, src="C1", dst="I1", phrase="answers through the surface", where="src/v.py:7")]))
+    m.flows[0].steps.append(FlowStep(n=5, src="C1", dst="C1", phrase="runs it", subflow="SF1"))
+    hits = [w for w in warnings_of(m) if "no `direction`" in w]
+    assert hits and "SF1 step 1" in hits[0], warnings_of(m)
+
+
+def test_a_REFERENCE_step_owes_none():
+    """It carries no location of its own either; its endpoints are the run's entry and exit."""
+    m = make_direction_model()
+    m.subflows.append(SubFlow(id="SF1", name="Read it", steps=[
+        FlowStep(n=1, src="C1", dst="I1", phrase="answers", where="src/v.py:7", direction="out")]))
+    m.flows[0].steps.append(FlowStep(n=5, src="C1", dst="I1", phrase="", subflow="SF1"))
+    assert not [w for w in warnings_of(m) if "no `direction`" in w and "flow step 5" in w], \
+        warnings_of(m)
+
+
+def test_a_ROLE_reading_a_RECORD_owes_no_direction():
+    """"The map's own code" is a component or a subsystem, never a dep and never a role. A person
+    does not read a row out of our store — some code does it for them — so `Rn → En` is a human
+    action like any other door. The migration script and the validator disagreed here for a while;
+    no live map has the shape, which is exactly how a disagreement survives."""
+    m = make_direction_model()
+    m.flows[0].steps.append(FlowStep(n=5, src="R1", dst="E1", phrase="looks at their order"))
+    assert not [w for w in warnings_of(m) if "no `direction`" in w], warnings_of(m)
+    m.flows[0].steps[-1].direction = "in"
+    assert [p for p in problems_of(m) if "step 5" in p and "not at either end" in p], problems_of(m)

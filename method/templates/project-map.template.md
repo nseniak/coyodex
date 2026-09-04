@@ -219,16 +219,14 @@ why: needs the result of HP1
 |---|---|---|---|---|---|---|---|
 | **I1** | <surface, in product words> | ours | screen | user | <one sentence> | [file](path:1) | verified |
 
-### What crosses I1
+<!-- NO "what crosses" BLOCK. What crosses a surface is the walk steps drawn at it (T6), and each
+     of those says which way it went — see `direction` under Use-case flows below. There is no
+     per-surface direction to author, and a map that supplies one is rejected outright.
 
-<!-- One row per thing that crosses, in ONE direction. `Records` names SINGLE entities (`En`), never
-     a data area. An EMPTY record list is legitimate and common: a log line, a fetched web page, a
-     source file and a tool call are real crossings that no stored record holds. The sentence is
-     never optional. -->
-
-| Direction | What crosses | Records | Where |
-|---|---|---|---|
-| in | <one sentence> | E1, E2 | [file](path:1) |
+     EVERY INTERFACE OWES A USE CASE. Once this table exists, read down it and ask of each row which
+     use case crosses it. A surface serving a PERSON or an OPERATOR that no story reaches is a
+     missing story, not a missing field. Record `In: <why no story crosses it>` under an
+     "Interface exceptions" extras heading only for a surface nobody ever reads. -->
 
 ---
 
@@ -293,6 +291,13 @@ SOURCE: [file](path/sub:1)
      A step may go BACKWARD too: a `to` that is an earlier participant renders right-to-left. Record
      the meaningful returns — the response the actor sees, an error/fallback, a callback/event — as
      authored steps (step 5 below). Don't echo every call with a return.
+     DIRECTION (required where your code meets a surface or a record): every step whose one end is
+     an `In` or an `En` and whose other end is your own code says which way the data moved, read
+     from THE PRODUCT: `in` it arrives, `out` it leaves, `both` one exchange runs each way. At a
+     record `in` is a read and `out` a write. A PULL is `in` even though the arrow points outward
+     (`C32 → I8 : fetches the markup` — the data comes back); never read it off the arrow. EMPTY on
+     every other step, a DOOR included (`R1 → I3` is a human action with no product end), and
+     `validate` blocks a door that carries one.
      ENTITY STEPS (required): author each flow's 1-2 CENTRAL entity touches as C→E steps — the
      read/write that IS the scenario's outcome or decision (SF1 step 1 below is the shape:
      `C2 → E1 : upserts the <Entity> row @ repo.py:88`). The entity "Used in UC" view and diff

@@ -1066,8 +1066,7 @@ def _door_map(steps: str, roles: str) -> str:
   "happy_path": [{"id": "HP1", "title": "Do", "uc": "UC1"}],
   "components": [{"id": "C1", "name": "Viewer", "purpose": "shows", "entry_point": "src/v.py:1"}],
   "interfaces": [{"id": "I1", "name": "CLI", "what": "How a person runs it.", "side": "ours",
-                  "kind": "command-line", "facing": "user", "source": "src/v.py:1",
-                  "carries": [{"direction": "in", "what": "the command"}]}],
+                  "kind": "command-line", "facing": "user", "source": "src/v.py:1"}],
   "flows": [{"uc": "UC1", "title": "Do it", "steps": [%s]}]}""" % (roles, steps))
 
 
@@ -1075,8 +1074,11 @@ PERSON = '{"id": "R1", "name": "Andy", "kind": "human", "audience": "user", "wan
 TIMER = '{"id": "R1", "name": "Upkeep job", "kind": "service", "audience": "internal", "wants": "x"}'
 OPERATOR = '{"id": "R1", "name": "Operator", "kind": "human", "audience": "internal", "wants": "x"}'
 BARE = '{"n": 1, "src": "R1", "dst": "C1", "phrase": "asks"}'
+#: A door carries NO `direction` — a role at a surface is a human action with no product end. The
+#: step INTO the code does, and it is `in`: the surface hands inward what it received.
 DOORED = ('{"n": 1, "src": "R1", "dst": "I1", "phrase": "opens it"},'
-          '{"n": 2, "src": "I1", "dst": "C1", "phrase": "asks", "where": "src/v.py:3"}')
+          '{"n": 2, "src": "I1", "dst": "C1", "phrase": "asks", "where": "src/v.py:3",'
+          ' "direction": "in"}')
 
 
 def test_an_undoored_crossing_is_counted_and_a_doored_one_is_not():
