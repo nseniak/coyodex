@@ -22,10 +22,19 @@ the code's names.
 - **box** — one thing drawn on a view. **arrow** — a relation between two boxes.
 - **code link** — the `file:line` a box points at. A box without one is
   ungrounded, which is a defect.
+- **use case walk** — the numbered steps of one use case: each step says who or
+  what acts, on what, in one phrase. The use case is the GOAL; its walk is how it
+  happens. Exactly one per use case (argus 31 and 31, mcpolis 47 and 47).
+  ALWAYS SAY BOTH WORDS. "Walk" alone was used for a while and read as a stroll
+  through the map; *journey* and *story* were used for the same thing in other
+  entries, so one idea had three names and no definition.
+  A **shared walk** is a run of steps spliced into several use case walks (argus
+  10, mcpolis 14). A step therefore needs its walk AND its container to be named
+  once, since two steps under one use case can carry the same number.
 - **owner** (of a data area) — the feature the area's data exists FOR: the one
   that creates its records and runs their lifecycle. Authored, never derived.
 - **owner with no evidence** — the map says an area exists for a feature, but no
-  journey of that feature ever touches the area's records. A defect. Distinct
+  use case walk of that feature ever touches the area's records. A defect. Distinct
   from *ungrounded*, which is only ever about a missing code link.
 - **interface** — one place where the product meets something that is not the
   product. It sends data or events that the product itself does not consume, or
@@ -47,7 +56,7 @@ the code's names.
   words, the mechanism: `mcp-tool`, `http-route`), an actor's (human or software),
   a dependency's (its context group). A bare "kind" names none of them.
 - **who is on the far side** — the people the map can show standing at an interface.
-  Never written by hand: it is worked out from the walks. An interface with nobody
+  Never written by hand: it is worked out from the use case walks. An interface with nobody
   on it is a normal answer, because the product itself is what reaches most of
   the outside services.
 - **our interface / their interface** — **ours** = we design it (our command
@@ -72,11 +81,11 @@ the code's names.
   question, and marks a bought payment service *internal* while its interface is
   user-facing.
 - **door** — a crossing between an actor and the product, at an interface, in one
-  story. Narrower: an interface is a place, a door is one crossing.
-  A door works BOTH ways. A story arrives through one, and hands its result back
+  use case walk. Narrower: an interface is a place, a door is one crossing.
+  A door works BOTH ways. A walk arrives through one, and hands its result back
   through one, and the way out is drawn even when it is the same interface the
-  story came in by. EVERY crossing takes a door, not only the two ends: an
-  exchange in the middle of a story goes through one too. Two actors reaching the same goal
+  walk came in by. EVERY crossing takes a door, not only the two ends: an
+  exchange in the middle of a walk goes through one too. Two actors reaching the same goal
   through different doors are two use cases, and a gate blocks the map otherwise.
 - **change impact** — the report saying what a code change does to the map.
 - **accept** — folding a change-impact report into the baseline.
@@ -142,8 +151,8 @@ design principles these come from)
   and We use. Each card opens that interface's own page.
 - **what it reaches out to** — the block on a feature's page listing the
   interfaces that feature calls out to. It reads *not stated* on most features,
-  because a feature is linked to a service only when a step of its own walk is
-  drawn at that service.
+  because a feature is linked to a service only when a step of its own use case
+  walk is drawn at that service.
 
 **How coyodex is delivered**
 
