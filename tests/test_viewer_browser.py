@@ -22,6 +22,8 @@ from contextlib import contextmanager
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Iterator
+from urllib.parse import urlsplit
+from urllib.request import urlopen
 
 import pytest
 
@@ -82,11 +84,14 @@ def _served() -> Iterator[str]:
 
 
 @contextmanager
-def _page(url: str) -> Iterator[Any]:
+def _page(url: str, stylesheet: str | None = None) -> Iterator[Any]:
     """A Chromium page on `url`, with the first-run overlay dismissed and JS errors collected.
 
     Errors are attached as `page.js_errors`: a viewer that throws while rendering has failed, even
-    when the assertion under test would otherwise pass."""
+    when the assertion under test would otherwise pass.
+
+    `stylesheet` serves that text in place of the viewer's own, from the FIRST layout on — the only
+    way to test what the viewer does when its stylesheet cannot give the drawing room."""
     playwright = pytest.importorskip("playwright.sync_api", reason="playwright not installed")
     with playwright.sync_playwright() as p:
         try:
@@ -97,6 +102,9 @@ def _page(url: str) -> Iterator[Any]:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.js_errors = errors  # type: ignore[attr-defined]
+        if stylesheet is not None:
+            page.route("**/static/viewer.css", lambda route: route.fulfill(
+                status=200, content_type="text/css", body=stylesheet))
         page.goto(url)
         page.wait_for_selector("#crumb")
         page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
@@ -1967,4 +1975,201 @@ def test_the_leader_meets_its_arrow_at_a_right_angle_clear_of_the_head() -> None
             # it off its arrow, so it is ON the line and there is no gap to draw across.
             if g["clamped"]:
                 assert g["len"] == 0, g
+        assert not page.js_errors, page.js_errors
+
+
+def _stage_state(page: Any) -> dict:
+    """What the drawing and its pan/zoom machinery think they are, right now.
+
+    NaN and Infinity do not survive the trip out of the page intact, so every number that could be
+    one is reduced to a yes/no in the page itself."""
+    return dict(page.evaluate("""() => {
+        const stage = document.getElementById('stage');
+        const d = document.getElementById('diagram');
+        const svg = d.querySelector('svg');
+        // svgPanZoom() on an element it already owns hands back that same instance. It BUILDS one on
+        // an svg it does not own, so only ever call this where the first svg is the map itself — a
+        // card view's first svg is a decoration, and this would quietly pan-zoom that instead.
+        const pz = (svg && window.svgPanZoom) ? window.svgPanZoom(svg) : null;
+        const sizes = pz ? pz.getSizes() : null;
+        const zoom = pz ? pz.getZoom() : null;
+        return {
+            drawingHeight: Math.round(d.getBoundingClientRect().height),
+            // the pan/zoom base scale: 0 is the poisoned state, and nothing recovers from it
+            baseScaleIsReal: !!(sizes && sizes.realZoom > 0 && Number.isFinite(sizes.realZoom)),
+            fittedHeight: sizes ? Math.round(sizes.height) : 0,
+            zoomIsReal: Number.isFinite(zoom),
+            header: (document.getElementById('zoomlevel').textContent || '').trim(),
+            paneScrolls: stage.scrollHeight > stage.clientHeight + 1,
+        };
+    }"""))
+
+
+def test_a_pane_too_short_for_its_header_still_draws_the_map() -> None:
+    """A window short enough that the tabs, the trail and the feature's own heading fill the whole
+    graph pane used to leave the drawing exactly 0 tall — and 0 is worse than small. The pan/zoom
+    machinery DIVIDES BY that height with no floor of its own, so the map went blank, the zoom in the
+    title bar read "NaN%", and it never came back: widening the window again fed the same NaN into
+    every later move instead of re-fitting. Measured on this map at 529x265, the header alone was
+    218px inside a 161px pane. The drawing now keeps a floor and the pane scrolls to reach it.
+
+    This one is about the FLOOR: at the size it uses, the old code left the drawing 1px tall rather
+    than 0, so it was starved but not yet poisoned. The two tests below cover the poisoning itself."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        page.set_viewport_size({"width": 560, "height": 240})
+        _settle(page)
+        short = _stage_state(page)
+        assert short["drawingHeight"] >= 160, short      # the floor, not the 0 the header left
+        assert short["baseScaleIsReal"], short
+        assert short["zoomIsReal"], short
+        assert re.fullmatch(r"\d+%", short["header"]), short   # never "NaN%"
+        assert short["paneScrolls"], short               # …because the header no longer eats the map
+
+        # The move that used to do the poisoning: a resize while the drawing has no room. Every
+        # re-fit path in the viewer goes through this one, so a window resize covers them all.
+        page.set_viewport_size({"width": 560, "height": 210})
+        _settle(page)
+        assert _stage_state(page)["zoomIsReal"], _stage_state(page)
+
+        # …and the map comes BACK when the window does. This is the half that stayed broken before:
+        # the fit is re-measured against the new pane instead of dividing by a stale NaN.
+        page.set_viewport_size({"width": 1200, "height": 820})
+        _settle(page)
+        wide = _stage_state(page)
+        assert wide["baseScaleIsReal"], wide
+        assert abs(wide["fittedHeight"] - wide["drawingHeight"]) <= 2, wide
+        assert not wide["paneScrolls"], wide
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_graph_pane_scrolls_only_when_its_header_cannot_fit() -> None:
+    """The floor under the drawing is paid for by letting the graph pane scroll. That must cost
+    nothing at a size anybody actually uses: at a normal window the drawing is far taller than its
+    floor, so the pane has nothing below its own bottom edge and never offers a scrollbar. It had 29
+    unreachable pixels down there before, from the selection card — invisible only because the pane
+    clipped instead of scrolling, and a scrollbar on every normal window the moment it stopped."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        for width, height in ((1400, 900), (1100, 760), (960, 620)):
+            page.set_viewport_size({"width": width, "height": height})
+            _settle(page)
+            seen = _stage_state(page)
+            assert not seen["paneScrolls"], (width, height, seen)
+            assert seen["baseScaleIsReal"], (width, height, seen)
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_drawing_squeezed_to_nothing_does_not_poison_the_map_for_good() -> None:
+    """The floor is one guard, and this is the other — the one that still holds if the floor ever
+    moves. Take the floor away by hand so the drawing really does measure nothing, then resize the
+    window on top of it. The pan/zoom machinery has to SKIP that move: measuring a box with no height
+    is what set its base scale to 0, and from 0 the zoom is 0/0 and every later fit divides by that
+    NaN instead of recovering. Give the drawing its room back and the map fits again."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        page.set_viewport_size({"width": 900, "height": 700})
+        _settle(page)
+        assert _stage_state(page)["baseScaleIsReal"]
+
+        page.evaluate("() => { document.getElementById('diagwrap').style.minHeight = '0px'; }")
+        page.set_viewport_size({"width": 560, "height": 210})
+        _settle(page)
+        squeezed = _stage_state(page)
+        assert squeezed["drawingHeight"] == 0, squeezed        # the box really is gone…
+        assert squeezed["zoomIsReal"], squeezed                # …and the map is still not poisoned
+        assert re.fullmatch(r"\d+%", squeezed["header"]), squeezed
+
+        page.evaluate("() => { document.getElementById('diagwrap').style.minHeight = ''; }")
+        page.set_viewport_size({"width": 1200, "height": 820})
+        _settle(page)
+        back = _stage_state(page)
+        assert back["baseScaleIsReal"], back
+        assert abs(back["fittedHeight"] - back["drawingHeight"]) <= 2, back
+        assert not page.js_errors, page.js_errors
+
+
+def _stylesheet_with_no_room(url: str) -> str:
+    """The viewer's real stylesheet, with the floor under the drawing taken out and a header too tall
+    for any window — so the drawing measures nothing from the first layout, before anything else has
+    had a chance to render. Removing the floor alone is not enough to test this: the drawing still has
+    room at the moment the map is built, and only loses it once the feature's heading fills in."""
+    parts = urlsplit(url)
+    css = urlopen(f"{parts.scheme}://{parts.netloc}/static/viewer.css").read().decode()
+    out = css.replace("min-width: 0; min-height: 160px; display: flex;",
+                      "min-width: 0; min-height: 0; display: flex;")
+    assert out != css, "the floor rule moved — this test no longer takes it out"
+    return out + "\n#stagehead{min-height:2000px;}"
+
+
+def test_a_map_built_with_no_room_at_all_still_comes_back() -> None:
+    """The worst version of the same fault, and the one the floor alone does not cover: the map is
+    BUILT while the drawing has no room, not merely squeezed afterwards. The pan/zoom machinery
+    measures that box once, at birth, and divides by it — so a 0 there used to be permanent. Verified
+    against the old code through this exact test: the map stayed blank at "NaN%" and threw
+    "the matrix is not invertible", and making the window large again did not bring it back, because
+    every later fit divided by the NaN the first measurement produced."""
+    with _served() as url:
+        with _page(url + "#v=usecase&uc=UC1", stylesheet=_stylesheet_with_no_room(url)) as page:
+            page.wait_for_timeout(1200)
+            blind = _stage_state(page)
+            assert blind["drawingHeight"] == 0, blind          # built with nothing at all…
+            assert blind["zoomIsReal"], blind                  # …and still not poisoned
+            assert re.fullmatch(r"\d+%", blind["header"]), blind
+
+            # room back: the header stops being impossible, and the map must FIT, not stay broken
+            page.evaluate("""() => {
+                for (const sheet of document.styleSheets) {
+                    try {
+                        for (let i = sheet.cssRules.length - 1; i >= 0; i--) {
+                            if (String(sheet.cssRules[i].cssText).includes('min-height: 2000px')) {
+                                sheet.deleteRule(i);
+                            }
+                        }
+                    } catch (e) { /* a cross-origin sheet has no readable rules */ }
+                }
+            }""")
+            page.set_viewport_size({"width": 1200, "height": 820})
+            page.wait_for_timeout(1200)
+            back = _stage_state(page)
+            assert back["baseScaleIsReal"], back
+            assert abs(back["fittedHeight"] - back["drawingHeight"]) <= 2, back
+            assert not page.js_errors, page.js_errors
+
+
+def test_a_map_poisoned_behind_the_viewer_s_back_still_never_throws() -> None:
+    """The last line of defence, and the only test that reaches it. The two guards above stop the map
+    from ever being measured against a box with no room — so the code that copes with a map that WAS
+    measured that way is never reached by any normal route, and a test that only drives the viewer
+    cannot tell whether it still works. So reach past the viewer and poison the map directly, the way
+    the drawing library itself used to: re-measure and re-fit it against a box with no height. From
+    there the map's scale is 0, and dividing by it is what put an Infinity into a drawing coordinate
+    and left a shape whose position cannot be worked back — the two errors originally reported. The
+    viewer must survive it silently: nothing thrown, and the zoom still a real number."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        page.set_viewport_size({"width": 1100, "height": 760})
+        _settle(page)
+        assert _stage_state(page)["baseScaleIsReal"]
+
+        poisoned = page.evaluate("""() => {
+            document.getElementById('diagwrap').style.minHeight = '0px';
+            const svg = document.getElementById('diagram').querySelector('svg');
+            const pz = window.svgPanZoom(svg);
+            document.getElementById('stagehead').style.minHeight = '4000px';   // the drawing is now 0 tall
+            // exactly what the viewer's own re-fit does — but with its guard bypassed
+            pz.resize(); pz.fit(); pz.center();
+            return { drawingHeight: Math.round(document.getElementById('diagram')
+                                                .getBoundingClientRect().height),
+                     baseScale: pz.getSizes().realZoom };
+        }""")
+        assert poisoned["drawingHeight"] == 0, poisoned
+        assert poisoned["baseScale"] == 0, poisoned    # the map really is poisoned now
+
+        # …and now use it. Every one of these went through the coordinate maths that used to throw.
+        page.mouse.move(400, 300)
+        page.mouse.move(500, 360)
+        page.wait_for_timeout(200)
+        page.evaluate("() => window.dispatchEvent(new Event('resize'))")
+        page.set_viewport_size({"width": 900, "height": 700})
+        _settle(page)
+        # The map's own scale stays 0 — the drawing library cannot be talked out of that, and this
+        # test deliberately never gives the room back (the two tests above cover recovery). What is
+        # being asserted is the ONLY thing the viewer still owes here: it does not throw.
         assert not page.js_errors, page.js_errors

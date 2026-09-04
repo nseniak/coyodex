@@ -2349,7 +2349,20 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     # back at 24 and 868 wide and never returned. The size is read on mouseup instead and compared with
     # what applyPanelBox last WROTE.
     assert "let appliedBox = null;" in js and "appliedBox = { w: st.width, h: st.height };" in js
-    assert "ResizeObserver(() =>" not in js, "an observer cannot tell a clamp from a gesture"
+    # The ban is on watching THE CARD, not on the API. Spelled as `"ResizeObserver(() =>" not in js`
+    # it only ever caught the inline-arrow form — the two observers already in the file (a scroller
+    # each) pass a named callback and always slipped through, and the drawing's own box now needs one
+    # too (stageRoomWatch: a map built before the drawing had room must re-fit the moment it gets
+    # some, and most of the routes room arrives by call no re-fit path at all). So the check is on the
+    # TARGET and on what the callback saves, which is what the measurement above was really about.
+    rs_names = set(re.findall(r"(?:const|let|var)\s+(\w+)\s*=[^;]*?new ResizeObserver\(", js))
+    rs_targets = re.findall(r"new ResizeObserver\((?:[^()]|\([^()]*\))*\)\.observe\(\s*([^,)]+)", js)
+    rs_targets += [t for n in rs_names for t in re.findall(r"\b" + n + r"\.observe\(\s*([^,)]+)", js)]
+    assert rs_targets, "no observer target could be read — this check no longer guards anything"
+    for target in rs_targets:
+        assert "panel" not in target.lower(), f"the card's own size is watched again: {target}"
+    assert not re.search(r"new ResizeObserver\([\s\S]{0,600}?storePanelBox", js), \
+        "an observer cannot tell a clamp from a gesture"
     assert "if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;" in js
     # …and each gesture saves ONLY what it changed, or dragging a clamped card bakes the clamped width in.
     store = js[js.index("function storePanelBox(what) {"):
@@ -4659,3 +4672,17 @@ def test_a_refused_push_keeps_the_url_and_the_screen_agreeing() -> None:
     assert "'#' + urlFromState(history[hi], true)" in js
     serve = (VIEWER_DIR / "serve.py").read_text()
     assert "urlFromState" not in serve and "coy=" not in serve
+
+
+def test_the_drawing_s_floor_is_the_same_number_in_both_files() -> None:
+    """The height the drawing is never allowed to go below is written twice: as a CSS rule that
+    enforces it, and as a JS constant used as the stand-in size when a map has to be built before the
+    drawing has room. They mean the same thing, and if they drift the JS one silently stops matching
+    what the reader actually gets. Nothing but this keeps them in step."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    in_js = re.search(r"const STAGE_FLOOR_PX = (\d+);", js)
+    in_css = re.search(r"#diagwrap \{[^}]*min-height: (\d+)px", css, re.S)
+    assert in_js, "STAGE_FLOOR_PX is gone from viewer.js"
+    assert in_css, "#diagwrap lost its min-height in viewer.css"
+    assert in_js.group(1) == in_css.group(1), (in_js.group(1), in_css.group(1))

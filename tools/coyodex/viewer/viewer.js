@@ -3826,6 +3826,15 @@ function applyZoomAndCenter(el, scale) {
 // under the pointer stays put. The library's own wheel-zoom is disabled (mouseWheelZoomEnabled:false).
 function wheelNavigate(e) {
   if (!mainPz) return;
+  // A pane too short for its own header scrolls (see #stage in viewer.css), and once the reader has
+  // scrolled down to the drawing, panning it here would strand them: the wheel is the only way back up
+  // to the tab rows and the trail, and the scrollbar is an overlay one with no gutter to grab. So when
+  // #stage has anywhere to scroll, a plain vertical wheel scrolls the PANE and the map is panned by
+  // dragging instead. Before preventDefault, which is what lets the scroll actually happen. At any size
+  // the reader uses there is nothing to scroll and this never fires — measured: the pane only gains
+  // scroll extent below roughly a 340px-tall window. Ctrl/Cmd (zoom) is unaffected: it is checked below.
+  if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.deltaY && !e.deltaX
+      && stage.scrollHeight > stage.clientHeight + 1) return;
   e.preventDefault();  // stop the page from scrolling, and Ctrl+wheel from triggering browser zoom
   let dx = e.deltaX, dy = e.deltaY;
   if (e.deltaMode === 1) { dx *= 16; dy *= 16; }  // line units (some mice) -> approx pixels
@@ -3989,13 +3998,25 @@ function bindNodes(scene, onActivate) {
 // without knowing anything about svg-pan-zoom's internals, unlike the counter-scale math elsewhere in
 // this file (which has to, because it's deliberately UNDOING one specific transform, not converting
 // between spaces). Returns null if the element isn't laid out yet (detached, or a zero-size viewport).
+// The ONE invertibility test both coordinate helpers below run before calling `.inverse()`. Chrome's
+// getScreenCTM() returns a legacy `SVGMatrix` (confirmed: `SVGMatrix !== DOMMatrix` in this page), and
+// SVGMatrix.inverse() THROWS `InvalidStateError: the matrix is not invertible` on a singular matrix —
+// where DOMMatrix.inverse() would have quietly returned NaNs. A `!ctm` check does NOT cover that: the
+// matrix is a perfectly good object, its determinant is just 0. It goes singular whenever an ancestor
+// transform carries a zero (or non-finite) scale, which is exactly what a zero-area stage produces —
+// see stageHasArea. Returns null (never throws), which every caller of both helpers already handles.
+function invertibleCTM(m) {
+  if (!m) return null;
+  const det = m.a * m.d - m.b * m.c;
+  return (det && Number.isFinite(det)) ? m.inverse() : null;
+}
 function clientToLocal(referenceEl, clientX, clientY) {
   const svg = referenceEl.ownerSVGElement;
-  const ctm = svg && referenceEl.getScreenCTM();
-  if (!svg || !ctm) return null;
+  const inv = svg && invertibleCTM(referenceEl.getScreenCTM());
+  if (!svg || !inv || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
   const pt = svg.createSVGPoint();
   pt.x = clientX; pt.y = clientY;
-  const local = pt.matrixTransform(ctm.inverse());
+  const local = pt.matrixTransform(inv);
   return { x: local.x, y: local.y };
 }
 // Convert a point given in `fromEl`'s own local space (e.g. straight out of `fromEl.getBBox()`) into
@@ -4007,15 +4028,18 @@ function clientToLocal(referenceEl, clientX, clientY) {
 // placed it nowhere near the label. Routing through screen space via getScreenCTM (twice) sidesteps
 // the question of whose transform is whose entirely — it folds in every transform on both ends,
 // whatever they turn out to be, the same trick clientToLocal uses for a real cursor position.
+// x/y are checked for finiteness for the same reason the matrix is: `pt.x = Infinity` is a hard
+// `TypeError: the provided float value is non-finite` on SVGPoint, and a non-finite counter-scale used
+// to reach here through placeLabelBridge (icon._labelRef.x - gap * curIconInv()).
 function pointToHostSpace(fromEl, x, y, toEl) {
   const svg = fromEl.ownerSVGElement;
   const fromCtm = svg && fromEl.getScreenCTM();
-  const toCtm = svg && toEl.getScreenCTM();
-  if (!svg || !fromCtm || !toCtm) return null;
+  const toInv = svg && invertibleCTM(toEl.getScreenCTM());
+  if (!svg || !fromCtm || !toInv || !Number.isFinite(x) || !Number.isFinite(y)) return null;
   const pt = svg.createSVGPoint();
   pt.x = x; pt.y = y;
   const screenPt = pt.matrixTransform(fromCtm);
-  const hostPt = screenPt.matrixTransform(toCtm.inverse());
+  const hostPt = screenPt.matrixTransform(toInv);
   return { x: hostPt.x, y: hostPt.y };
 }
 // Fallback anchor for an edge's drill pill: the arrow's own midpoint, nudged off to the side (along
@@ -6991,7 +7015,19 @@ function renderChrome(s) {
 // (every icon, on a zoom change) and bindEdgeActionIcon (one icon, the moment it's repositioned to the
 // cursor) — both need the SAME factor so a freshly-moved icon doesn't render at the wrong size for the
 // instant before the next zoom event happens to re-run the loop.
-function curIconInv() { return mainPz ? 1 / mainPz.getSizes().realZoom : 1; }
+// realZoom is 0 on a zero-area stage (see stageHasArea), and 1/0 is Infinity — which then reached the
+// icon transforms as `scale(Infinity)` (singular CTM -> the throw invertibleCTM now catches) and the
+// bridge anchor as -Infinity (the SVGPoint TypeError). 1 is the same fallback the no-mainPz case uses:
+// one local unit = one CSS pixel, which is what an unscaled first paint already assumes (addLabelActionIcon).
+// "Can this scale be divided by?" — the one test for every place that does. A zero-area stage is what
+// makes a realZoom 0 (see stageHasArea), and dividing by it gives Infinity, which then reaches the SVG
+// as a non-finite coordinate or a singular matrix. Shared by curIconInv and the two camera-preserving
+// resizes, which are the only three divisions by a pan/zoom scale in this file.
+function usableScale(z) { return z > 0 && Number.isFinite(z); }
+function curIconInv() {
+  const rz = mainPz ? mainPz.getSizes().realZoom : 0;
+  return usableScale(rz) ? 1 / rz : 1;
+}
 function rescaleActionIcons() {
   const inv = curIconInv();
   for (const id in ACTION_ICONS) {
@@ -7017,9 +7053,42 @@ function updateZoomLevel() {  // reflect the current pan-zoom scale in the heade
 // changes. Both variants are coalesced to one call per animation frame (via the shared refitRaf) so a
 // drag's mousemove stream stays smooth.
 let refitRaf = 0;
+// Does the drawing have room? svg-pan-zoom DIVIDES BY this box and never clamps the result: `processCTM`
+// sets the base scale to min(width/viewBox.width, height/viewBox.height), and `resize()` re-runs it
+// straight into `originalState.zoom`. A box measuring 0 in either direction therefore pins that base at
+// 0 — and from then on getZoom() is 0/0 = NaN (the header read "NaN%"), realZoom is 0, and every
+// getScreenCTM() inside the viewport is singular, so the drawing is gone FOR GOOD: a later fit() divides
+// by the NaN instead of recovering, and the library's own oldCTM.inverse() throws before it can.
+// Measured on the mcpolis map at a 529x265 pane: #stagehead is 218px tall inside a 161px #stage, so
+// #diagram gets exactly 0 and ONE window resize was enough to poison the diagram permanently.
+// Measures the <svg>, which is what svg-pan-zoom itself measures (getBoundingClientRectNormalized).
+const STAGE_FLOOR_PX = 160;   // keep in step with #diagwrap's min-height in viewer.css
+function stageHasArea() {
+  const svgEl = diagram.querySelector('svg');
+  const r = svgEl && svgEl.getBoundingClientRect();
+  return !!(r && r.width > 0 && r.height > 0);
+}
+// Set when svg-pan-zoom had to be built on a box with no room (see render): it was fitted to a stand-in
+// size, so the FIRST frame that has real room does a full re-fit instead of whatever move asked for it
+// — a splitter drag would otherwise preserve a camera that was never set.
+// The WATCHER is what makes that a promise rather than a hope: room can come back by routes that call
+// none of the re-fit paths (a heading that rewraps, a font that finishes loading, a hidden tab shown),
+// and without it the map would sit at the stand-in size until some unrelated later move re-fitted it
+// and threw away the reader's zoom. ResizeObserver fires on the box itself, so every route is covered.
+let stageNeedsFit = false;
+const stageRoomWatch = ('ResizeObserver' in window) ? new ResizeObserver(() => {
+  if (stageNeedsFit && mainPz && stageHasArea()) refitStage();
+}) : null;
+if (stageRoomWatch) stageRoomWatch.observe(document.getElementById('diagwrap'));
 function scheduleStage(fn) {
   if (refitRaf) return;
-  refitRaf = requestAnimationFrame(() => { refitRaf = 0; if (mainPz) { fn(); updateZoomLevel(); } });
+  refitRaf = requestAnimationFrame(() => {
+    refitRaf = 0;
+    if (!mainPz || !stageHasArea()) return;   // nothing to see, and measuring it would poison the matrix
+    if (stageNeedsFit) { stageNeedsFit = false; mainPz.resize(); mainPz.fit(); mainPz.center(); }
+    else fn();
+    updateZoomLevel();
+  });
 }
 // Re-FIT: the SAME content is re-framed in the new size (zoom resets to fit, recentered). Used when the
 // whole window resizes, or the file browser is toggled on/off — a large, discrete size change where a
@@ -7032,6 +7101,7 @@ function refitStage() { scheduleStage(() => { mainPz.resize(); mainPz.fit(); mai
 function resizeStagePreserve() {
   scheduleStage(() => {
     const b = mainPz.getSizes();                          // container size + realZoom BEFORE the resize
+    if (!usableScale(b.realZoom)) { mainPz.resize(); mainPz.fit(); mainPz.center(); return; }  // nothing to preserve
     const pan = mainPz.getPan();
     const cx = (b.width / 2 - pan.x) / b.realZoom;        // SVG-space point currently under the viewport centre
     const cy = (b.height / 2 - pan.y) / b.realZoom;
@@ -11608,6 +11678,20 @@ async function renderView(sArg, transient, seq) {
     svgEl.removeAttribute('style');
     // No practical zoom cap: bounds are wide enough to act unbounded while still keeping the
     // diagram recoverable. The header zoom control (zoomctl) replaces the old overlay icons.
+    // svg-pan-zoom measures THIS element at construction and divides by it, with no floor of its own —
+    // see stageHasArea. A box with no height pins its base scale at 0, and NOTHING recovers from that:
+    // a later resize()+fit() divides by the 0/0 = NaN it produced, and the library's own
+    // oldCTM.inverse() throws first — the reported "InvalidStateError: the matrix is not invertible".
+    // Verified by serving a stylesheet with the floor removed: built on a 0-height box the map stayed
+    // blank at "NaN%" even after the window was made large again. Turning fit/center OFF here does NOT
+    // help — cacheViewBox sets the same 0 before it ever reads those options. So the box it measures is
+    // given a temporary size instead, removed on the very next line; nothing is on screen to be wrong,
+    // because a box with no area shows nothing either way, and stageNeedsFit re-fits it the moment
+    // there is room. #diagwrap's CSS floor normally makes this unreachable — this is what holds if that
+    // floor ever moves.
+    const hasArea = stageHasArea();
+    stageNeedsFit = !hasArea;
+    if (!hasArea) { svgEl.style.width = STAGE_FLOOR_PX + 'px'; svgEl.style.height = STAGE_FLOOR_PX + 'px'; }
     mainPz = svgPanZoom(svgEl, {
       controlIcons: false, fit: true, center: true, minZoom: 0.01, maxZoom: 1000,
       dblClickZoomEnabled: false,  // double-click is for selecting/reading nodes, not zooming
@@ -11615,6 +11699,7 @@ async function renderView(sArg, transient, seq) {
       onZoom: updateZoomLevel,
       onPan: () => scheduleCallout(false),   // the element end travels with the drawing; the card end does not
     });
+    if (!hasArea) { svgEl.style.width = ''; svgEl.style.height = ''; }   // back to the stylesheet's 100%/100%
     // Restore the pan/zoom this diagram was last left at (zoom first, then absolute pan). `s.vp` is the
     // exact history slot (back/forward); `vpByView` catches the same diagram reached any other way — a
     // tab, a breadcrumb crumb, or a re-drill — so it reopens where it was instead of a fresh fit.
@@ -12372,6 +12457,7 @@ window.addEventListener('resize', updateViewport);
 if (cvminimap) cvminimap.addEventListener('mousedown', (e) => {
   if (e.target.classList.contains('cvmark')) return;  // a dot handles its own click
   const rect = cvminimap.getBoundingClientRect();
+  if (!rect.height) return;   // a collapsed minimap divides to NaN and scrolls the source nowhere
   const scrub = (y) => {
     const frac = Math.max(0, Math.min(1, (y - rect.top) / rect.height));
     cvscroll.scrollTop = frac * cvscroll.scrollHeight - cvscroll.clientHeight / 2;  // centre the view on the point
@@ -13881,6 +13967,10 @@ function stageBaseline() { return mainPz ? { ...mainPz.getSizes(), pan: mainPz.g
 function stageScaleWithColumn(before) {
   if (!mainPz || !before) return;
   scheduleStage(() => {
+    // `before` is snapshotted OUTSIDE this frame (at mousedown, or before the column moves), so unlike
+    // the sizes read above it is not covered by scheduleStage's own check — a baseline taken while the
+    // drawing had no room would divide to Infinity here. A plain re-fit is the honest fallback.
+    if (!usableScale(before.realZoom)) { mainPz.resize(); mainPz.fit(); mainPz.center(); return; }
     const cx = (before.width / 2 - before.pan.x) / before.realZoom;   // SVG point at the old viewport centre
     const cy = (before.height / 2 - before.pan.y) / before.realZoom;
     mainPz.resize();

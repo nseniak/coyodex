@@ -116,12 +116,28 @@ body:not(.search-open) #sbresizer { display: none; }
    overflowing the viewport. min-width keeps the diagram usable at the shrink limit. */
 #leftcol { flex: 0 1 auto; width: 62%; min-width: 340px; display: flex; flex-direction: column; }
 body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
-#stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow: hidden; background: #fafafa;
-         display: flex; flex-direction: column; }
+/* overflow-y is AUTO, not hidden: in a pane too short for #stagehead the header would otherwise eat the
+   whole column and leave the drawing exactly 0 tall (measured on the mcpolis map at 529x265: a 218px
+   header inside a 161px stage). svg-pan-zoom DIVIDES BY that box with no lower clamp, so a 0 there pins
+   its base scale at 0 and the diagram is blank with a "NaN%" zoom for good — see stageHasArea in
+   viewer.js. Scrolling costs nothing at any normal size: #diagwrap's floor is far below the height it
+   gets there, so nothing overflows and no scrollbar appears. Wheeling over the drawing still pans it
+   (wheelNavigate preventDefaults on #diagram); only the header scrolls the stage. */
+#stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow-x: hidden; overflow-y: auto;
+         background: #fafafa; display: flex; flex-direction: column; }
 /* THE DIAGRAM AREA: everything below the tab rows. It is the positioning box for the four things that
    float over a drawing — the legend, the environment filter, the flow controls and the selection card —
    so "bottom: 12px" means the bottom of the drawing rather than the bottom of the whole column. */
-#diagwrap { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
+/* min-height is a FLOOR, not the old `0`: the drawing always keeps room, and the header scrolls instead
+   (see #stage). 160px because #overlays — the top-left column that floats over every drawing, flow
+   controls plus legend — measures 136px on the mcpolis use-case view, so anything under that leaves the
+   map with no clear pixels at all.
+   overflow is hidden HERE now that #stage scrolls: #panel is absolutely positioned and hangs 29px past
+   the bottom (measured at 1400x900), and an absolutely positioned descendant still counts towards a
+   scroll container's extent — so leaving it to #stage would have put a scrollbar on every normal window.
+   It clips the same rectangle #stage used to clip, so nothing on screen moves. */
+#diagwrap { position: relative; flex: 1 1 auto; min-width: 0; min-height: 160px; display: flex;
+            overflow: hidden; }
 /* The map fills the space LEFT UNDER the header, so the header never overlaps the fitted/centered
    diagram — the view-selector row is not part of the viewable area. #stagehead takes its natural height
    at the top; the diagram area takes the rest, and svg-pan-zoom fits/centers into that box
