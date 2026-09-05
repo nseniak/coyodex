@@ -869,6 +869,39 @@ def is_saved(e: Entity) -> bool:
     return e.store is not None and (e.store.mode or "").strip() in grammar.STORE_MODES_SAVED
 
 
+#: An entity id INSIDE a field's type — matched whole, so `E1` never matches inside `E10`.
+_ENTITY_REF_IN_TYPE = re.compile(r"\bE\d+\b")
+#: The relation verbs that mean "this record HOLDS that one". Three spellings of one idea, and they
+#: are all in the live maps.
+_CONTAINMENT_VERBS = ("contains", "embeds", "has")
+
+
+def record_parents(m: ProjectModel) -> dict[str, list[str]]:
+    """Per entity, the entities that HOLD it — the one answer to "which record is this one inside".
+
+    TWO ARMS, because a map states containment two ways and both are load-bearing:
+    a relation whose verb is one of `contains`/`embeds`/`has`, and a FIELD whose type names the
+    entity's id. `views._embedded_homes` walked exactly this to find where a nested value physically
+    lands; the saved-record rule needs the same walk to ask which stories reach it. They were written
+    twice with different definitions — one verb versus three, no field arm versus one — which is two
+    answers to one question, so this is now the only one.
+
+    Not transitive: callers walk it themselves, and must carry a `seen` set. Containment is authored,
+    and nothing stops two records naming each other."""
+    ents = {e.id for e in m.entities}
+    parents: dict[str, list[str]] = {}
+    for owner in m.entities:
+        for f in owner.fields:
+            for ref in _ENTITY_REF_IN_TYPE.findall(f.type or ""):
+                if ref in ents and owner.id not in parents.setdefault(ref, []):
+                    parents[ref].append(owner.id)
+        for r in owner.relations:
+            if r.target in ents and (r.verb or "").strip().lower() in _CONTAINMENT_VERBS:
+                if owner.id not in parents.setdefault(r.target, []):
+                    parents[r.target].append(owner.id)
+    return parents
+
+
 def subdomain_owners(m: ProjectModel) -> dict[str, list[str]]:
     """The EFFECTIVE owning feature(s) of every sub-domain: its own authored `owners`, else the
     nearest authored answer walking up `parent`. A sub-domain absent from the result is one nobody

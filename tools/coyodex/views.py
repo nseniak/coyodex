@@ -18,6 +18,7 @@ from dataclasses import asdict
 
 from coyodex import grammar, records
 from coyodex.model import (
+    record_parents,
     BusinessRule,
     Component,
     Dep,
@@ -785,7 +786,6 @@ _NP_MODE_LABELS: list[tuple[str, str, str]] = [
     ("", "outside", "Storage not stated"),
 ]
 _NP_MODE_ALIAS = {"enum": "in-code"}   # an enum is a code-level registry by another name
-_ENTITY_REF = re.compile(r"\bE\d+\b")  # an entity id INSIDE a field type — matched whole, so E1 != E10
 
 
 def _embedded_homes(m: ProjectModel) -> dict[str, dict[str, object]]:
@@ -796,16 +796,7 @@ def _embedded_homes(m: ProjectModel) -> dict[str, dict[str, object]]:
     a config inside a role inside a document), so even a deeply nested value reports where it lands.
     Resolvable for every embedded entity across the live maps."""
     ents = {e.id: e for e in m.entities}
-    parents: dict[str, list[str]] = {}
-    for owner in m.entities:
-        for f in owner.fields:
-            for ref in _ENTITY_REF.findall(f.type or ""):
-                if ref in ents and owner.id not in parents.setdefault(ref, []):
-                    parents[ref].append(owner.id)
-        for r in owner.relations:
-            if r.target in ents and r.verb.strip().lower() in ("contains", "embeds", "has"):
-                if owner.id not in parents.setdefault(r.target, []):
-                    parents[r.target].append(owner.id)
+    parents = record_parents(m)      # ONE containment answer, shared with the saved-record rule
 
     def home(eid: str, seen: set[str], depth: int = 0) -> str | None:
         """The id of the nearest ancestor holding a real store — None when the chain never reaches one."""
@@ -1298,6 +1289,11 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
                for g in m.happy_path],
         "flows": [asdict(f) for f in flows],
         "subflows": subflows,
+        # WHICH RECORD HOLDS WHICH, so the browser can answer "in use cases" for a record that is
+        # only ever reached through its container. Without it the panel said "No traced use case
+        # reaches it" on a record `validate` counts as storied — the screen and the check
+        # disagreeing about one record, which is the shape this whole change exists to end.
+        "record_parents": record_parents(m),
         # `id` rides along with the name because the DERIVED feature layer (coyodex.features)
         # keys a role by its id — `role_features` and `FeatureFacts.roles` are id lists — while
         # every other consumer here reads the name. Without it the frontend holds no way to turn

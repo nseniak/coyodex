@@ -298,6 +298,12 @@ SOURCE: [file](path/sub:1)
      (`C32 → I8 : fetches the markup` — the data comes back); never read it off the arrow. EMPTY on
      every other step, a DOOR included (`R1 → I3` is a human action with no product end), and
      `validate` blocks a door that carries one.
+     EVERY SAVED RECORD OWES A USE CASE, the same way every interface does. A record this codebase
+     KEEPS (a row of its own, or one carried inside a parent's row) that no walk step reaches leaves
+     the map unable to say what it is for. A record INSIDE another one counts as reached when its
+     holder is, so an embedded piece needs no step of its own. A read shape, a request object or a
+     set of constants is not a saved record and owes nothing. `validate` reports the unstoried ones;
+     the escape is `<En>: <why>` under a "Balance exceptions" extras heading.
      ENTITY STEPS (required): author each flow's 1-2 CENTRAL entity touches as C→E steps — the
      read/write that IS the scenario's outcome or decision (SF1 step 1 below is the shape:
      `C2 → E1 : upserts the <Entity> row @ repo.py:88`). The entity "Used in UC" view and diff

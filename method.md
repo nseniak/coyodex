@@ -903,6 +903,20 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
     **This is the map's ONLY statement of direction**, and it replaced `interfaces[].carries[]`.
     Nothing else holds it: the `C→E` arrows say BOTH read and write on 83 of the 170 record steps
     across the live maps, and no arrow reaches a surface at all.
+  - **EVERY SAVED RECORD OWES A USE CASE, the same way every interface does.** A record this
+    codebase KEEPS — `store.mode` of `collection` or `embedded` — that no walk step reaches leaves
+    the map unable to say what it is FOR: it draws a box on the Data tab whose owner nothing backs,
+    which is the "owner with no evidence" defect arrived at from the other side.
+    **A record INSIDE another one counts as reached when its holder is**, so an embedded piece needs
+    no step of its own. That is what makes the rule affordable rather than a demand for a step per
+    field: on one live map it is the difference between 17 of 35 saved records reached and 28 of 35,
+    and it hid nothing — the 7 it left were records with no holder and no story, and each of those
+    turned out to be a real gap.
+    **NOT every entity.** A read shape over rows something else owns, a request object built for one
+    call, a set of constants: the codebase saves none of them, and demanding a story for those would
+    bury every real gap under the 96 of 142 named things that owe nothing.
+    `validate` reports the unstoried ones. The escape is `<En>: <why no story keeps it>` under a
+    **"Balance exceptions"** extras heading, for a record only a migration writes.
   - **Entity steps — author the flow's CENTRAL entity touches (1–2 per flow).** The entities whose
     read/write IS the scenario's outcome or decision appear as their own steps — `C5 → E2 : upserts
     the Membership document @ repo.py:155` — not only as backbone edges: the entity `Used in UC`

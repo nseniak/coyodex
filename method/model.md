@@ -410,6 +410,14 @@ Semantics, stated on the fields:
   (`step:<uc>:<n>` — so `n` must be unique within a flow; `validate` blocks on duplicates). Required
   on element↔element steps unless the step sets `no_call_site: true` (same escape as edges); actor
   steps (a Role endpoint) need none.
+  **EVERY SAVED RECORD OWES A USE CASE** — `store.mode` of `collection` or `embedded`
+  (`model.is_saved`), reached by a step drawn at it OR by having a container that is
+  (`record_use_cases`). The twin of the rule that every interface owes one, and it closes the same
+  hole on the other half of the map's outside: a record the codebase keeps, that no story reaches,
+  cannot say what it is for. The container arm is what makes it affordable — an embedded record
+  lives in its parent's row, and requiring a step per piece would put 16 of them into one live map's
+  walks to say what one step already says. Advisory, escaped by `<En>: <why>` under
+  **"Balance exceptions"**.
   **And each step where the map's OWN CODE touches a surface or a record carries a `direction`** —
   `in`/`out`/`both`, read from the PRODUCT: at a record `in` is a read and `out` a write, at a
   surface `in` is what the product receives and `out` what it sends, and `both` is one exchange

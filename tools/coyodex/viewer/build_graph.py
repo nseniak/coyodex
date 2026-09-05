@@ -127,6 +127,11 @@ class GraphDict(TypedDict):
     flows: list[dict[str, object]]  # T6 use-case flows (one per use case): the ordered inside view
     subflows: list[dict[str, object]]  # T6b named sub-flows: {id, name, steps} — shared step
                                        # sequences a flow step references via its `subflow` field
+    #: Which record HOLDS which (`model.record_parents`): child id -> the ids that contain it. The
+    #: browser walks it so a record only ever reached THROUGH its holder still answers "in use
+    #: cases" — the panel said "No traced use case reaches it" on records `validate` counts as
+    #: storied, which is the screen and the check disagreeing about one record.
+    record_parents: dict[str, list[str]]
     roles: list[dict[str, object]]  # id/name/wants/kind/audience strings, plus `relations`
                                     # (list of {kind, role, at?}) only when the map authors them
     glossary: list[dict[str, object]]  # ubiquitous-language terms: {term, meaning, source, aliases?,

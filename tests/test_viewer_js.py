@@ -4693,3 +4693,15 @@ def test_the_drawing_s_floor_is_the_same_number_in_both_files() -> None:
     assert in_js, "STAGE_FLOOR_PX is gone from viewer.js"
     assert in_css, "#diagwrap lost its min-height in viewer.css"
     assert in_js.group(1) == in_css.group(1), (in_js.group(1), in_css.group(1))
+
+
+def test_a_record_inside_another_one_is_used_wherever_its_holder_is():
+    """The panel and the check must not disagree about one record. `validate` counts an embedded
+    record as storied when its container is reached — a record lives in its holder's row, so a story
+    that writes the holder writes the piece — and before this the panel said "No traced use case
+    reaches it" on exactly those records."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function tracedUseCasesFor(id, seen) {"):
+            js.index("\n}", js.index("function tracedUseCasesFor(id, seen) {"))]
+    assert "GRAPH.record_parents" in fn, "the holder chain must be walked, not just the node itself"
+    assert "guard.has(id)" in fn, "containment is authored; a cycle must not hang the panel"

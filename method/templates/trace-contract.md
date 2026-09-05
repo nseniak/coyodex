@@ -104,6 +104,11 @@ lead; nothing above this line goes into an agent prompt.
 >   BLOCKS a door that carries a direction, and warns on a crossing that carries none.
 >   This is the map's ONLY statement of direction. Nothing else holds it: the `C→E` arrows say both
 >   read and write on half the record steps, and no arrow reaches a surface at all.
+> - **EVERY SAVED RECORD IN YOUR SLICE OWES A STEP** — one this codebase KEEPS (a row of its own,
+>   or one carried inside a parent's row). A saved record no walk reaches cannot say what it is for.
+>   A record INSIDE another one counts when its container is reached, so an embedded piece needs no
+>   step of its own. A read shape, a request object or an enum is not a saved record and owes
+>   nothing.
 > - **A flow OPENS with an actor its own use case declares.** Your slice's use cases are listed
 >   above with their `actors`; step 1's `src` must be one of them. This is not the same question as
 >   "who calls this code first" — the caller at the entry point is often a client application while

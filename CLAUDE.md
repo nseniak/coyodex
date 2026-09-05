@@ -66,6 +66,16 @@ the code's names.
 - **owner with no evidence** — the map says an area exists for a feature, but no
   use case walk of that feature ever touches the area's records. A defect. Distinct
   from *ungrounded*, which is only ever about a missing code link.
+- **saved record** — a record the product KEEPS: a row of its own, or one carried
+  inside another record's row. Not everything the map names is one. A read shape
+  built to answer one question, a request object, a list of fixed words: those are
+  named so the map can talk about them, and the product keeps none of them. Across
+  the two live maps, 142 named things and 46 saved records.
+- **unstoried** — a saved record or an interface that no use case walk reaches. The
+  map keeps it, or meets the world through it, and cannot say what for. A defect,
+  and the same one twice: those two are the map's whole outside, and neither means
+  anything until a story says what it is for. A record inside another one counts as
+  storied when the one holding it is.
 - **interface** — one place where the product meets something that is not the
   product. It sends data or events that the product itself does not consume, or
   it receives data or events the product itself did not generate. Excluded: data

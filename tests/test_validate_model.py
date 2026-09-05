@@ -5090,7 +5090,7 @@ def test_a_recorded_line_silences_it():
     assert not _unreached_hits(m)
 
 
-def test_it_never_blocks():
+def test_an_unstoried_interface_never_blocks():
     m = make_unreached_surface_model()
     assert _unreached_hits(m), "it must fire at all, or 'never blocks' is vacuous"
     assert not [p for p in problems_of(m) if "reached by NO use case" in p]
@@ -5232,3 +5232,103 @@ def test_a_ROLE_reading_a_RECORD_owes_no_direction():
     assert not [w for w in warnings_of(m) if "no `direction`" in w], warnings_of(m)
     m.flows[0].steps[-1].direction = "in"
     assert [p for p in problems_of(m) if "step 5" in p and "not at either end" in p], problems_of(m)
+
+
+# ── every SAVED record owes a use case ─────────────────────────────────────────────────────────
+#
+# The twin of "every interface owes a use case", asking the same question about the other half of
+# the map's outside: an interface is where the product meets the world, a saved record is what it
+# keeps, and neither means anything until a story says what it is FOR.
+
+def make_saved_record_model() -> ProjectModel:
+    """One saved record no story reaches, one inside it, and one shape that is not saved at all."""
+    m = make_valid_model()
+    m.entities = [
+        make_entity("E1", "Order", source="src/order.py:1"),
+        make_entity("E2", "OrderLine", source="src/order.py:20"),
+        make_entity("E3", "OrderResponse", source="src/api.py:9"),
+    ]
+    m.entities[0].store = Store(dep="D1", container="orders", mode="collection")
+    m.entities[1].store = Store(dep="D1", container="orders", mode="embedded")
+    m.entities[2].store = Store(container="built per request", mode="transient")
+    m.entities[0].relations = [EntityRelation(verb="contains", target="E2",
+                                              src_card="1", dst_card="*", display="OrderLine")]
+    m.flows = [Flow(uc="UC1", title="View order",
+                    steps=[FlowStep(n=1, src="R1", dst="C1", phrase="opens it")])]
+    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/v.py:5"),
+               Edge(src="C1", verb="uses", dst="D1", why="query", where="src/v.py:7")]
+    return m
+
+
+def _unstoried_records(m) -> list[str]:
+    return [w for w in warnings_of(m) if "SAVED record(s) are reached by NO use case" in w]
+
+
+def test_a_saved_record_no_use_case_reaches_warns():
+    m = make_saved_record_model()
+    hits = _unstoried_records(m)
+    assert len(hits) == 1, warnings_of(m)
+    assert "E1 (Order)" in hits[0] and "E2 (OrderLine)" in hits[0], hits[0]
+
+
+def test_a_shape_the_codebase_does_not_SAVE_owes_nothing():
+    """A transient is built for one call, a projection is a read shape over rows something else
+    owns, an enum is a set of constants. Demanding a story for one would bury the real gaps: 142
+    entities across the two live maps, 46 of them saved."""
+    m = make_saved_record_model()
+    assert "E3" not in _unstoried_records(m)[0], _unstoried_records(m)
+
+
+def test_a_step_at_the_record_clears_it():
+    m = make_saved_record_model()
+    assert _unstoried_records(m), "must fire before the fix, or the silence proves nothing"
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="E1", phrase="reads the order",
+                                     where="src/v.py:5", direction="in"))
+    assert not [w for w in _unstoried_records(m) if "E1 (Order)" in w], warnings_of(m)
+
+
+def test_a_record_INSIDE_a_reached_one_counts_as_reached():
+    """The container arm, and the reason the rule is affordable. An embedded record lives in its
+    parent's row, so a story that writes the parent writes the piece; requiring its own step would
+    put 16 of them into mcpolis's walks to say what one step already says."""
+    m = make_saved_record_model()
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="E1", phrase="reads the order",
+                                     where="src/v.py:5", direction="in"))
+    assert not _unstoried_records(m), warnings_of(m)
+
+
+def test_the_container_walk_survives_a_cycle():
+    """`contains` is authored and nothing stops two records naming each other."""
+    m = make_saved_record_model()
+    m.entities[1].relations = [EntityRelation(verb="contains", target="E1",
+                                              src_card="1", dst_card="1", display="Order")]
+    assert _unstoried_records(m), "a cycle must not hide the gap, and must not hang"
+
+
+def test_a_recorded_line_silences_one_record():
+    m = make_saved_record_model()
+    m.extras.append(ExtraSection(heading="Balance exceptions",
+                                 body="E1: only the nightly migration writes this"))
+    hits = _unstoried_records(m)
+    assert hits and "E1 (Order)" not in hits[0], hits
+    assert "E2 (OrderLine)" in hits[0], "and it silences only the record it names"
+
+
+def test_an_unstoried_record_never_blocks():
+    m = make_saved_record_model()
+    assert _unstoried_records(m), "it must fire at all, or 'never blocks' is vacuous"
+    assert not [p for p in problems_of(m) if "SAVED record" in p], problems_of(m)
+
+
+def test_no_two_tests_in_this_file_share_a_name():
+    """A duplicate `def test_x` silently REPLACES the first: the earlier one stops running, and
+    nothing goes red. It happened here — `test_it_never_blocks` was written twice, once for the
+    unstoried-interface advisory and once for the unstoried-record one, and the interface guarantee
+    quietly stopped being checked. Same failure class as an assertion filtering on a string nothing
+    emits: a test that is not run and a test that cannot fail look identical from the outside."""
+    import ast
+    src = Path(__file__).read_text(encoding="utf-8")
+    names = [n.name for n in ast.parse(src).body
+             if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    assert not dupes, f"shadowed test(s): {dupes}"

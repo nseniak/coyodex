@@ -1912,12 +1912,25 @@ function runByHtml(id) {
     '<a href="#" class="procref" data-unit="' + esc(u) + '">' + esc(u) + '</a>').join(', ');
   return '<dt>Runs in</dt><dd>' + links + '</dd>';
 }
-function tracedUseCasesFor(id) {
+function tracedUseCasesFor(id, seen) {
   const n = GRAPH.nodes[id];
   const out = new Set(USES_BY_NODE[id] || []);
   if (n && (n.kind === 'subsystem' || n.kind === 'subdomain')) {
     for (const eid in USES_BY_NODE) {
       if (isAncestorOf(id, eid)) for (const uc of USES_BY_NODE[eid]) out.add(uc);
+    }
+  }
+  // A RECORD INSIDE ANOTHER ONE IS USED WHEREVER ITS HOLDER IS. It lives in its holder's row, so
+  // a story that writes the holder writes the piece — the same walk `validate` makes when it asks
+  // whether every saved record has a story, and the reason it is shared: the panel said "No traced
+  // use case reaches it" on a record the check counts as storied, which is the screen and the check
+  // disagreeing about one record. `seen` because containment is authored and nothing stops a cycle.
+  if (n && n.kind === 'entity') {
+    const guard = seen || new Set();
+    if (guard.has(id)) return out;
+    guard.add(id);
+    for (const pid of (GRAPH.record_parents || {})[id] || []) {
+      for (const uc of tracedUseCasesFor(pid, guard)) out.add(uc);
     }
   }
   return out;

@@ -2194,3 +2194,39 @@ def test_a_map_poisoned_behind_the_viewer_s_back_still_never_throws() -> None:
         # test deliberately never gives the room back (the two tests above cover recovery). What is
         # being asserted is the ONLY thing the viewer still owes here: it does not throw.
         assert not page.js_errors, page.js_errors
+
+
+def test_a_record_inside_another_one_lists_the_use_cases_that_reach_its_holder() -> None:
+    """The panel and the check must not disagree about one record.
+
+    `validate` counts an embedded record as storied when its container is reached — it lives in the
+    holder's row, so a story that writes the holder writes the piece. The panel walked no holder
+    chain, so it said "No traced use case reaches it" on exactly those records: the screen calling a
+    gap what the check calls fine, about the same record, on the same map.
+
+    E2 is embedded in E1, and only E1 is ever named by a step."""
+    def mutate(m: dict) -> None:
+        m["entities"] = [e for e in m["entities"] if e["id"] in ("E1", "E2")]
+        e1, e2 = (next(e for e in m["entities"] if e["id"] == i) for i in ("E1", "E2"))
+        e1["store"] = {"dep": "D1", "container": "orders", "mode": "collection", "notes": ""}
+        e2["store"] = {"dep": "D1", "container": "orders", "mode": "embedded", "notes": ""}
+        e1["relations"] = [{"verb": "contains", "target": "E2", "src_card": "1", "dst_card": "*",
+                            "display": e2["name"], "how": None, "keyed_by": []}]
+        e2["relations"] = []
+        for f in m["flows"]:
+            if f["uc"] == "UC1":
+                f["steps"] = [{"n": 1, "src": "C1", "dst": "E1", "phrase": "writes the record",
+                               "note": "", "where": "backend/src/mcpolis/entrypoints/app.py:1",
+                               "no_call_site": False, "subflow": None, "direction": "out"}]
+        m["subflows"] = []
+        for f in m["flows"]:
+            if f["uc"] != "UC1":
+                f["steps"] = [s for s in f["steps"] if not (s["src"].startswith("E")
+                                                            or s["dst"].startswith("E"))]
+    with _served_map(mutate) as url, _page(url + "#v=element&id=E2") as page:
+        _settle(page)
+        text = page.evaluate("() => document.body.innerText")
+        assert "IN USE CASES" in text.upper(), text[:400]
+        assert "No traced use case reaches it" not in text, \
+            "E2 is inside E1, and E1 is storied — the holder's stories are its stories"
+        assert not page.js_errors, page.js_errors

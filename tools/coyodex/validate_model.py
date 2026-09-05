@@ -64,6 +64,7 @@ from coyodex.model import (
     expanded_steps_with_container,
     group_forests,
     is_saved,
+    record_parents,
     load_model,
     subdomain_owners,
 )
@@ -920,6 +921,56 @@ def interface_walk_order(m: ProjectModel) -> dict[str, int]:
         for iid in hit:
             first.setdefault(iid, pos)
     return first
+
+
+def record_use_cases(m: ProjectModel) -> dict[str, set[str]]:
+    """Per SAVED record, the use cases that reach it. The twin of `interface_use_cases`, and asking
+    the same question about the other half of the map's outside: an interface says where the product
+    meets the world, a saved record says what it keeps, and neither means anything until a story
+    says what it is FOR.
+
+    SAVED, not every entity — `model.is_saved`, which is `collection` or `embedded`. A projection is
+    a read shape over rows something else owns, a transient is built for the length of one call, an
+    enum is a set of constants: none of the three is a record this codebase keeps, and demanding a
+    story for one would bury the real gaps. Measured across the two live maps: 142 entities, 46 of
+    them saved.
+
+    TWO ARMS.
+
+        step       -> a walk step is drawn AT the record (`Cn → En`, either way)
+        container  -> a record that HOLDS it is reached, walked up the containment chain
+                      (`model.record_parents` — a `contains`/`embeds`/`has` relation, or a field
+                      whose type names it)
+
+    The container arm is what makes the rule affordable rather than a demand for a step per field.
+    An `embedded` record lives inside its parent's row, so a story that writes the parent writes the
+    piece, and requiring its own step would put 16 of them into mcpolis's walks to say what one step
+    already says. Measured: it takes argus from 9 of 11 saved records reached to 11 of 11, and
+    mcpolis from 17 of 35 to 28 of 35. What it does NOT do is hide a gap — the 7 it leaves in
+    mcpolis are records with no parent and no story, which is the finding.
+
+    The chain is walked with a `seen` set, because `contains` is authored and nothing stops a cycle.
+    """
+    direct: set[str] = set()
+    by_uc: dict[str, set[str]] = {}
+    for f in m.flows:
+        for st in expanded_flow_steps(m, f):
+            for end in (st.src, st.dst):
+                if end.startswith("E"):
+                    direct.add(end)
+                    by_uc.setdefault(end, set()).add(f.uc)
+    holders = record_parents(m)     # ONE containment answer, shared with `views._embedded_homes`
+
+    def walk(eid: str, seen: set[str]) -> set[str]:
+        if eid in seen:
+            return set()
+        seen.add(eid)
+        got = set(by_uc.get(eid, ()))
+        for parent in holders.get(eid, ()):
+            got |= walk(parent, seen)
+        return got
+
+    return {e.id: walk(e.id, set()) for e in m.entities if is_saved(e)}
 
 
 def interface_use_cases(m: ProjectModel) -> dict[str, set[str]]:
@@ -2048,6 +2099,32 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
             "traceability, and an entity-code change can't reach a use case in impact. Author "
             "each flow's central entity touches as C→E steps (method.md, T6 entity steps), or "
             "record the literal `entity-flows` under a 'Balance exceptions' extras heading")
+    # EVERY SAVED RECORD OWES A USE CASE — the twin of the rule that every interface does, and it
+    # closes the same hole on the other half of the map's outside. A record the codebase KEEPS, that
+    # no story reaches, leaves the map unable to say what it is for: it renders as a box on the Data
+    # tab with an owner nobody can check, and an "owner with no evidence" is a defect the glossary
+    # already names. It is also where the removed `interfaces[].carries[]` used to say something —
+    # its record list named four of mcpolis's embedded records and nothing else does now.
+    #
+    # SAVED only, and reached through a CONTAINER counts. See `record_use_cases` for both, and for
+    # why the container arm is what makes this affordable rather than a step per field.
+    #
+    # Advisory with a recorded escape, like its twin: a record written by a migration that no story
+    # runs is a real answer, and forcing a story there would have someone invent one.
+    recorded_records = _recorded_ids(m, "Balance exceptions", ("E",))
+    unstoried = [eid for eid, ucs in record_use_cases(m).items()
+                 if not ucs and eid not in recorded_records]
+    if unstoried:
+        names = {e.id: e.name for e in m.entities}
+        warnings.append(
+            f"{len(unstoried)} SAVED record(s) are reached by NO use case: "
+            + _shown([f"{eid} ({names.get(eid, eid)})" for eid in unstoried], 8)
+            + ". The map keeps these and cannot say what for — a box on the Data tab whose owner "
+            "nothing backs. Author the central touch as a `Cn → En` step in the walk that reads or "
+            "writes it (method.md, T6 entity steps); a record INSIDE another one counts as reached "
+            "when its container is. Record '<En>: <why no story keeps it>' under a "
+            f"'{"Balance exceptions"}' extras heading for a record no story legitimately "
+            "reaches, such as one only a migration writes")
     # An entity step must ride a C→E backbone edge (the edge = the aggregate claim, the step =
     # this scenario's instance). `assemble` now DERIVES these edges from the step, so a surviving
     # warning here means the step reached validate without being assembled (a partial / hand-built
