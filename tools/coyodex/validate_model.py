@@ -923,6 +923,63 @@ def interface_walk_order(m: ProjectModel) -> dict[str, int]:
     return first
 
 
+def record_direction_gaps(m: ProjectModel) -> dict[str, list[str]]:
+    """Per SAVED record, the directions its ARROWS claim that no walk step ever shows.
+
+    THE MAP CONTRADICTING ITSELF, which is why this is worth a check where "written but never read"
+    is not. That one needs a judgement — maybe nothing reads the record, maybe a story is missing,
+    and only the code can say. This one needs none: an arrow saying `C31 writes E18` IS the map
+    stating that the code writes that record, so a map where no story ever writes it disagrees with
+    itself about one record, and the evidence is already inside it.
+
+    Measured across the two live maps: 2 of 46 saved records, both on argus — its sign-in records
+    and its page reading health each have a `writes` arrow and only ever appear in a story being
+    read. The third read-never-written record, mcpolis's pre-registered credentials, is correctly
+    SILENT here: its only arrow is a `reads`, because an admin puts that file there by hand.
+
+    THE ARROWS ARE THE ORACLE, NOT THE STEPS. The comparison runs one way on purpose. A step
+    direction with no matching arrow is a different finding, already reported by the unbacked-entity-
+    step check one block down, and `assemble` derives the missing arrow from the step anyway.
+
+    A GENERIC verb claims nothing (`grammar.edge_direction` answers "" for `uses`/`accesses`), so a
+    roleless edge never invents a direction here. A record reached through its HOLDER inherits the
+    holder's directions, the same walk `record_use_cases` makes."""
+    claimed: dict[str, set[str]] = {}
+    for e in m.edges:
+        if e.dst.startswith("E"):
+            d = grammar.edge_direction(e.verb)
+            if d:
+                claimed.setdefault(e.dst, set()).add(d)
+    shown: dict[str, set[str]] = {}
+    for f in m.flows:
+        for st in expanded_flow_steps(m, f):
+            if not st.direction:
+                continue
+            got = {"in", "out"} if st.direction == "both" else {st.direction}
+            for end in (st.src, st.dst):
+                if end.startswith("E"):
+                    shown.setdefault(end, set()).update(got)
+    holders = record_parents(m)
+
+    def walk(eid: str, seen: set[str]) -> set[str]:
+        if eid in seen:
+            return set()
+        seen.add(eid)
+        got = set(shown.get(eid, ()))
+        for parent in holders.get(eid, ()):
+            got |= walk(parent, seen)
+        return got
+
+    out: dict[str, list[str]] = {}
+    for e in m.entities:
+        if not is_saved(e):
+            continue
+        gap = claimed.get(e.id, set()) - walk(e.id, set())
+        if gap:
+            out[e.id] = [d for d in ("in", "out") if d in gap]
+    return out
+
+
 def record_use_cases(m: ProjectModel) -> dict[str, set[str]]:
     """Per SAVED record, the use cases that reach it. The twin of `interface_use_cases`, and asking
     the same question about the other half of the map's outside: an interface says where the product
@@ -2125,6 +2182,30 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
             "when its container is. Record '<En>: <why no story keeps it>' under a "
             f"'{"Balance exceptions"}' extras heading for a record no story legitimately "
             "reaches, such as one only a migration writes")
+    # …AND THE STORIES MUST NOT CONTRADICT THE ARROWS about which way data moved. An arrow saying
+    # `C31 writes E18` is the map stating that the code writes that record; a map where no story ever
+    # writes it disagrees with itself, and the evidence is already inside it. That is why this is a
+    # check and "written but never read" is not: the latter needs a judgement only the code can
+    # settle, this one needs none.
+    #
+    # Advisory with the same escape as the rule above, because the honest answer is sometimes "the
+    # write is real and no story runs it" — a migration, a boot-time backfill.
+    gaps = record_direction_gaps(m)
+    ungapped = {eid: dirs for eid, dirs in gaps.items() if eid not in recorded_records}
+    if ungapped:
+        names = {e.id: e.name for e in m.entities}
+        word = {"in": "reads", "out": "writes"}
+        shown_gaps = [f"{eid} ({names.get(eid, eid)}): an arrow says the code "
+                      f"{' and '.join(word[d] for d in dirs)} it, no story does"
+                      for eid, dirs in sorted(ungapped.items())]
+        warnings.append(
+            f"{len(ungapped)} saved record(s) where the map's own ARROWS claim a direction NO walk "
+            f"step shows: " + _shown(shown_gaps, 6) + ". The map contradicts itself about one "
+            "record, and it is the arrows that are the evidence — they say the code does this. "
+            "Draw the missing touch as a `Cn → En` step carrying that `direction`, in the walk "
+            "where it happens. Record '<En>: <why no story does it>' under a "
+            "'Balance exceptions' extras heading when the write is real and no story runs it, such "
+            "as a migration or a boot-time backfill")
     # An entity step must ride a C→E backbone edge (the edge = the aggregate claim, the step =
     # this scenario's instance). `assemble` now DERIVES these edges from the step, so a surviving
     # warning here means the step reached validate without being assembled (a partial / hand-built

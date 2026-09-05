@@ -717,6 +717,26 @@ ENCRYPT_VERBS = frozenset("encrypt encrypts encrypted decrypt decrypts".split())
 # drives `edge_role`, so it never changes that derivation.)
 READ_VERBS = frozenset("read reads queries query fetch fetches get gets load loads lookup lookups "
                        "select selects scan scans".split())
+def edge_direction(verb: str) -> str:
+    """A `C→E` arrow's verb as a `direction`, in the STEP's vocabulary — `in` a read, `out` a write,
+    `""` when the verb reveals neither.
+
+    THE ONE PLACE THE TWO VOCABULARIES MEET. An arrow says what a component does to a record across
+    a whole codebase; a step says which way the data moved in one story. Asking whether they AGREE
+    is the check this exists for, and it needs one mapping, not a fourth verb list beside the three
+    frozen sets above — `PERSIST_VERBS`, `WRITE_VERBS` and `READ_VERBS` already carry the membership,
+    and the C→E derivation depends on theirs being frozen.
+
+    A GENERIC verb answers "": `uses`/`accesses` reveal no direction, and guessing one from them is
+    how a roleless edge would start making claims it cannot back."""
+    v = (verb or "").strip().lower()
+    if v in READ_VERBS:
+        return "in"
+    if v in PERSIST_VERBS or v in WRITE_VERBS:
+        return "out"
+    return ""
+
+
 # An unambiguous SERVICE call — reserved for genuine call verbs (NOT queries/fetches, which are reads).
 CALL_VERBS = frozenset("call calls called request requests requested invoke invokes invoked".split())
 # Generic / ROLELESS verbs — a C→D edge using one names no role (the thing the WS2 nudge flags).

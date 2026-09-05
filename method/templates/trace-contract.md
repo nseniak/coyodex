@@ -109,6 +109,10 @@ lead; nothing above this line goes into an agent prompt.
 >   A record INSIDE another one counts when its container is reached, so an embedded piece needs no
 >   step of its own. A read shape, a request object or an enum is not a saved record and owes
 >   nothing.
+> - **YOUR STEPS MUST NOT CONTRADICT THE ARROWS.** If a `C→E` arrow in your slice says the code
+>   WRITES a record, some walk step must write it (`direction: "out"`), and the same for a `reads`.
+>   The arrow is the map's own statement that the code does this, so a story that never does it is
+>   the map disagreeing with itself about one record.
 > - **A flow OPENS with an actor its own use case declares.** Your slice's use cases are listed
 >   above with their `actors`; step 1's `src` must be one of them. This is not the same question as
 >   "who calls this code first" — the caller at the entry point is often a client application while

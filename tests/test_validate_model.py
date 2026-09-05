@@ -5332,3 +5332,90 @@ def test_no_two_tests_in_this_file_share_a_name():
              if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
     dupes = sorted({n for n in names if names.count(n) > 1})
     assert not dupes, f"shadowed test(s): {dupes}"
+
+
+# ── the stories must not contradict the arrows about which way data moved ───────────────────────
+
+def make_direction_gap_model() -> ProjectModel:
+    """A saved record with a `writes` arrow and only a READ in the story — the map disagreeing with
+    itself about one record, which is the whole point: the arrow IS the evidence."""
+    m = make_saved_record_model()
+    m.edges.append(Edge(src="C1", verb="writes", dst="E1", why="save", where="src/v.py:9"))
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="E1", phrase="reads the order",
+                                     where="src/v.py:5", direction="in"))
+    return m
+
+
+def _gap_hits(m) -> list[str]:
+    return [w for w in warnings_of(m) if "ARROWS claim a direction NO walk step shows" in w]
+
+
+def test_an_arrow_claiming_a_write_no_story_makes_warns():
+    m = make_direction_gap_model()
+    hits = _gap_hits(m)
+    assert len(hits) == 1, warnings_of(m)
+    assert "E1 (Order)" in hits[0] and "writes it, no story does" in hits[0], hits[0]
+
+
+def test_the_story_writing_it_clears_the_contradiction():
+    m = make_direction_gap_model()
+    assert _gap_hits(m), "must fire before the fix, or the silence proves nothing"
+    m.flows[0].steps.append(FlowStep(n=3, src="C1", dst="E1", phrase="writes the order",
+                                     where="src/v.py:9", direction="out"))
+    assert not _gap_hits(m), warnings_of(m)
+
+
+def test_a_BOTH_step_answers_each_direction_at_once():
+    m = make_direction_gap_model()
+    m.flows[0].steps[-1].direction = "both"
+    assert not _gap_hits(m), warnings_of(m)
+
+
+def test_a_record_with_only_a_READS_arrow_is_correctly_SILENT():
+    """mcpolis's pre-registered credentials are the live case: an admin puts that file there by
+    hand, so read-and-never-written is the truth, not a gap. The arrows say so."""
+    m = make_direction_gap_model()
+    m.edges = [e for e in m.edges if not (e.dst == "E1" and e.verb == "writes")]
+    assert not _gap_hits(m), warnings_of(m)
+
+
+def test_a_GENERIC_verb_claims_no_direction():
+    """`uses` and `accesses` reveal no role. Guessing a direction from one is how a roleless arrow
+    would start making claims it cannot back."""
+    m = make_direction_gap_model()
+    for e in m.edges:
+        if e.dst == "E1" and e.verb == "writes":
+            e.verb = "uses"
+    assert not _gap_hits(m), warnings_of(m)
+
+
+def test_the_comparison_runs_ONE_WAY_the_arrows_are_the_oracle():
+    """A step direction with no matching arrow is a DIFFERENT finding, already reported by the
+    unbacked-entity-step check — and `assemble` derives the missing arrow from the step anyway."""
+    m = make_saved_record_model()
+    m.edges = [e for e in m.edges if e.dst != "E1"]
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="E1", phrase="writes the order",
+                                     where="src/v.py:9", direction="out"))
+    assert not _gap_hits(m), "a step the arrows do not back is the other check's finding"
+
+
+def test_a_record_inherits_its_HOLDERS_directions():
+    m = make_direction_gap_model()
+    m.edges.append(Edge(src="C1", verb="writes", dst="E2", why="save", where="src/v.py:9"))
+    assert any("E2" in h for h in _gap_hits(m)), _gap_hits(m)
+    m.flows[0].steps.append(FlowStep(n=3, src="C1", dst="E1", phrase="writes the order",
+                                     where="src/v.py:9", direction="out"))
+    assert not _gap_hits(m), "writing the holder writes the piece inside it"
+
+
+def test_a_recorded_line_silences_the_contradiction():
+    m = make_direction_gap_model()
+    m.extras.append(ExtraSection(heading="Balance exceptions",
+                                 body="E1: only the nightly migration writes this"))
+    assert not _gap_hits(m), warnings_of(m)
+
+
+def test_the_contradiction_never_blocks():
+    m = make_direction_gap_model()
+    assert _gap_hits(m), "it must fire at all, or 'never blocks' is vacuous"
+    assert not [p for p in problems_of(m) if "ARROWS claim" in p], problems_of(m)

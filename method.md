@@ -917,6 +917,12 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
     bury every real gap under the 96 of 142 named things that owe nothing.
     `validate` reports the unstoried ones. The escape is `<En>: <why no story keeps it>` under a
     **"Balance exceptions"** extras heading, for a record only a migration writes.
+    **AND THE STORIES MUST NOT CONTRADICT THE ARROWS.** An arrow saying `C31 writes E18` is the map
+    stating that the code writes that record. If no walk step ever writes it, the map disagrees with
+    itself, and it is the ARROW that is the evidence. `validate` reports each one; draw the missing
+    touch as a `Cn → En` step carrying that direction, in the walk where it happens. Measured on the
+    live maps: 2 of 46 saved records, both argus's, each with a `writes` arrow and only ever read in
+    a story. A record whose only arrow is a `reads` is correctly silent — someone else writes it.
   - **Entity steps — author the flow's CENTRAL entity touches (1–2 per flow).** The entities whose
     read/write IS the scenario's outcome or decision appear as their own steps — `C5 → E2 : upserts
     the Membership document @ repo.py:155` — not only as backbone edges: the entity `Used in UC`
