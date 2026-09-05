@@ -136,8 +136,23 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    the bottom (measured at 1400x900), and an absolutely positioned descendant still counts towards a
    scroll container's extent — so leaving it to #stage would have put a scrollbar on every normal window.
    It clips the same rectangle #stage used to clip, so nothing on screen moves. */
-#diagwrap { position: relative; flex: 1 1 auto; min-width: 0; min-height: 160px; display: flex;
-            overflow: hidden; }
+/* ── THE BOARD ────────────────────────────────────────────────────────────────────────────────────
+   ONE container for every drawing in the product: white, a 1px rule, a 10px radius. A reader meets the
+   same frame on the Happy Path, on a feature's timeline, on the Interfaces picture and on a walk map,
+   so the frame stops being something to read and the drawing inside it is what they look at.
+   Stated ONCE. Three of the four had the same three declarations written out separately, and the fourth
+   — the walk map — had none at all: its drawing ran to the edge of the pane. The four selectors ARE the
+   list; a `.cy-board` class was here too and no element ever carried it. */
+.walk-board, .journey-board, .ifd-wrap, #diagwrap {
+  background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
+}
+/* The floor is 160px OF DRAWING, and it is written here and in viewer.js as the SAME number — a test
+   pins that. Everything here is `box-sizing: border-box`, so the board's own rule came out of the 160
+   and left the drawing 158; `content-box` puts the rule outside the floor instead, which keeps one
+   number meaning one thing in both files. */
+#diagwrap { position: relative; flex: 1 1 auto; box-sizing: content-box;
+            min-width: 0; min-height: 160px; display: flex;
+            overflow: hidden; margin: 8px 10px 10px; }
 /* The map fills the space LEFT UNDER the header, so the header never overlaps the fitted/centered
    diagram — the view-selector row is not part of the viewable area. #stagehead takes its natural height
    at the top; the diagram area takes the rest, and svg-pan-zoom fits/centers into that box
@@ -719,11 +734,13 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    border, the ground and the padding to the frame around it.
    NO HEIGHT CAP ANYWHERE. A picture is drawn as tall as it needs to be, so nothing on this page
    scrolls vertically inside itself; the page scrolls, once. */
-.item-sec-frame .journey-board, .item-sec-frame .hfade-wrap > .journey-board {
+.item-sec-frame .journey-board, .item-sec-frame .hfade-wrap > .journey-board,
+.item-sec-frame .ifd-wrap, .item-sec-frame .hfade-wrap > .ifd-wrap {
   background: none; border: 0; border-radius: 0; padding: 0; margin: 0;
 }
-.item-sec-frame .hfade-wrap { margin: 0; }
-.item-sec-frame .ifd-wrap { margin: 0; }
+/* …and the bleed goes with it: `.hfade-wrap:has(> .ifd-wrap)` has the SAME specificity as the rule
+   below, so source order decided and the picture bled 1px past the board above it on the same page. */
+.item-sec-frame .hfade-wrap, .item-sec-frame .hfade-wrap:has(> .ifd-wrap) { margin: 0; }
 .item-sec-frame > :last-child { margin-bottom: 0; }
 /* What the map does NOT hold. Quiet, but never blank: an empty box and "nothing recorded" are
    different facts, and only one of them is honest. */
@@ -1976,8 +1993,7 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    THE FEATURE PAGE draws the same board from the same cells, zoned by DRIVER instead of by feature
    — the mirror question, so the mirror picture. Every rule below is shared; nothing here knows
    which of the two pages it is drawing, which is the point. */
-.journey-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
-                 overflow-x: auto; padding: 22px 18px 16px 0; margin: 14px 0 6px; }
+.journey-board { overflow-x: auto; padding: 22px 18px 16px 0; margin: 14px 0 6px; }
 /* The actor heads the board, over the gutter and ABOVE both lanes: this page is everything one actor
    does, on the path and off it, and a figure drawn inside the upper lane made the lower one read as
    somebody else's use cases. Outside the rail grid on purpose — a fourth cell in row 1 would grow
@@ -2146,8 +2162,7 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* The board is a STACK of rows now, one per run of steps under one person, and it does not scroll
    sideways itself: each row does, on its own. One scroller for the whole board would tie a row of
    three steps to a row of thirteen, dragging the short ones off screen to reach the long one's end. */
-.walk-board { background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
-              padding: 6px 0 10px; margin: 10px 0 6px; }
+.walk-board { padding: 6px 0 10px; margin: 10px 0 6px; }
 .walk-row { display: flex; align-items: flex-start; position: relative; }
 /* THE WRAP. The line turns down at the row's end and comes back in from above at the next row's
    start, the way a wrapped line of text does. Both are pinned to the line the boxes draw, which
@@ -2357,7 +2372,24 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    THE TOP NEEDS IT TOO, for a short map: with two surfaces the circle is the tallest thing in the
    picture and starts at the stage's own top edge, so the box has to reach ABOVE the stage to hold
    it. */
-.ifd-wrap { margin: -16px 0 10px -16px; padding: 16px 0 16px 16px; overflow-x: auto; }
+/* THE SAME BOARD the Happy Path and a feature's timeline scroll inside: white, a 1px rule, a 10px
+   radius, and the two edge shades `bindHFade` hangs on it — shown only while there is something that
+   way to scroll to. It used to bleed to the page edge with a negative margin, which read as a picture
+   that ENDS at the window rather than one that carries on past it. The padding stays: a card's name
+   sits half above the stage's own top edge and would be clipped without it.
+
+   NO HORIZONTAL PADDING. The vertical is what the names need; the horizontal moves the stage, and the
+   WIRES ARE COMPUTED ONCE, before the board's own box has settled. 16px a side landed every wire 17px
+   short of the product's circle — a straight line to a rim that had since moved. The wires' one-shot
+   layout is the older fragility here (a window resize already left them stale); the board must not add
+   to it, so it takes its room above and below only.
+   The wrapper bleeds a single pixel so the RULE sits where the text column's edge is. */
+.ifd-wrap { margin: 4px 0 10px; padding: 16px 0; overflow-x: auto; }
+/* THE BLEED GOES ON THE WRAPPER, not on the board. `bindHFade` hangs the two edge shades off the
+   wrapper it inserts and places them against ITS box — so a board bleeding 17px past that wrapper drew
+   its shades 17px inside itself, over the cards, which reads as a stain on the content rather than an
+   edge it passes under. Bleeding the wrapper instead keeps the two boxes identical. */
+.hfade-wrap:has(> .ifd-wrap) { margin: 0 -1px; }
 /* `width: 100%` with the two card columns CAPPED rather than fixed, and the two gutters taking
    whatever is left. The caps came DOWN from 380 to buy the gutters their width: a wire to a circle
    needs room to leave the card and turn before it arrives, which a wire to a flat rule did not.
@@ -2365,6 +2397,17 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .ifd-stage { position: relative; display: grid; width: 100%; align-items: stretch;
              grid-template-columns:
                minmax(0, 320px) minmax(60px, 1fr) 160px minmax(60px, 1fr) minmax(0, 320px); }
+/* WHILE THE SOURCE COLUMN IS OPEN the picture keeps its size, and what you SEE of it narrows — every
+   other diagram behaves that way, and this one alone re-laid itself out, squeezing the gutters a wire
+   needs to leave a card and turn in. Measured on mcpolis: 1060px became 890px the moment the column
+   opened. `.ifd-wrap` already scrolls, so a floor was the whole fix.
+
+   ONLY while the column is open. The picture is also built to FIT a narrow window on its own — the
+   gutters are `1fr` for exactly that, and it is asserted down to 1024 — so an unconditional floor made
+   a 1024 window scroll for no reason. The column is what must not resize the drawing; a small screen
+   still gets the drawing sized for it. The number is the five tracks at rest: two 320 cards, two 130
+   gutters, a 160 hub. */
+body:not(.code-hidden) .ifd-stage { min-width: calc(320px + 130px + 160px + 130px + 320px); }
 svg.ifd-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* At rest EVERY wire is grey and unlabelled: the picture is for choosing, not for reading. Hover or
    pin makes one surface's wires the picture and fades the rest hard. */
@@ -2766,3 +2809,47 @@ body.insp-on { cursor: crosshair; }
 .insp-miss pre { margin: 0; padding: 8px 10px; background: #1e293b; border-radius: 6px;
                  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #e2e8f0;
                  white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* A CHIP names one person, door or record inside a collapsed shared walk. It rides IN the Mermaid node
+   label (securityLevel:'loose' renders a label as HTML), so Mermaid sizes the dashed box around it —
+   which is what no post-processed rectangle could make it do. The same markup is reused in the side
+   panel, so one row of chips looks the same wherever it appears. Not clickable anywhere: the box, and
+   the step that runs it, are the things you open. */
+.cychip { display: inline-block; padding: 0 7px; border-radius: 9px; border: 1px solid;
+          font-size: 10px; line-height: 15px; white-space: nowrap; }
+.cychip[data-k="interface"] { background: #fffbeb; border-color: #b45309; color: #78350f; }
+.cychip[data-k="entity"]    { background: #fdf4ff; border-color: #86198f; color: #581c87; }
+.cychip[data-k="actor"]     { background: #fff7ed; border-color: #c2410c; color: #7c2d12; }
+/* One chip per line, aligned down the left edge. The box's two head lines stay centred, so the name
+   reads as a title and the chips read as the list they are; centring pills of different widths left no
+   edge to read down. */
+.cychipline { display: block; text-align: left; margin-top: 3px; }
+.cysteps { font-size: 10px; color: #64748b; }
+.sfchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+
+/* A step card's title is the ACTION. When that action is running a shared walk, the title IS the link
+   to it — the same weight and colour as any other step title, so the card reads the same either way. */
+.pane-title-link { font: inherit; color: inherit; background: none; border: 0; padding: 0;
+                   cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+                   text-decoration-color: #c7d2fe; }
+.pane-title-link:hover { text-decoration-color: #4338ca; }
+
+/* The kind glyph on a door's box in a use case map. EMPTY and sized here: Mermaid measures the node
+   label before any of our code runs, so the room must come from the stylesheet, or the box is drawn
+   too narrow and the name is clipped. `fillFlowMapGlyphs` puts the drawing in afterwards.
+   NOT scoped to `#diagram`: Mermaid measures a label in its own temporary node, outside the diagram,
+   so a scoped rule does not reach it and the box comes out one glyph too narrow. Measured: the
+   Gateway box rendered as "Gatew". 18px to match the drawing's own box, which `.ifd-glyph` sizes. */
+.cyglyph { display: inline-block; width: 18px; height: 18px; vertical-align: -4px;
+           margin-right: 5px; }
+
+/* A BOX'S NAME IS A LINK, and it says so on hover — the same underline `.ifd-name` draws on the
+   Interfaces picture and `.ecard-name` draws on a card. Only on boxes whose name actually opens
+   something: an actor's box is almost all label, so its name selects rather than opens, and an
+   underline there would promise a door that is not one. */
+/* INLINE-BLOCK, so the name is ONE contiguous box. As a plain inline span a name that wraps onto two
+   lines has a bounding box covering the union of both, and the middle of that box falls between the
+   lines — the click landed on the paragraph and the name never fired. Measured on a shared walk's box,
+   whose name is the longest thing on any map. */
+#diagram .cyname { cursor: pointer; display: inline-block; }
+#diagram .cyname:hover { text-decoration: underline; text-decoration-color: #6366f1; }

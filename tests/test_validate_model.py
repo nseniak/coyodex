@@ -71,6 +71,7 @@ from coyodex.validate_model import (
     interface_directions,
     interface_walk_steps,
     validate_model,
+    walk_jumps,
 )
 from coyodex.views import model_to_markdown
 
@@ -5450,3 +5451,49 @@ def test_a_DOOR_in_a_fragment_is_still_blocked():
         FlowStep(n=1, src="R1", dst="I6", phrase="clicks sign in", direction="in")])]
     problems, _ = validate_model_mod._check_flows(m)
     assert [p for p in problems if "not at either end" in p], problems
+
+
+def test_a_walk_that_jumps_to_a_box_it_never_reached_is_flagged():
+    """A walk is a chain: each step acts from somewhere the walk has already been. A step whose `src`
+    appears for the first time as a SOURCE has no way in — the map cannot say how the story got there,
+    and the picture draws that box hanging with no incoming arrow.
+
+    Reported on mcpolis UC12: the walk runs a shared walk that ends at one component, then step 22
+    starts at "Tool catalog" with nothing joining them. The missing step was real and traceable in the
+    code (`upstream_connection_service.py:1640` calls the tool registry's refresh).
+
+    Advisory, never blocking: a walk may legitimately begin a second thread. 58 across the two live
+    maps, and the ones read by hand were omissions."""
+    m = ProjectModel(title="T", goal="G")
+    m.use_cases = [UseCase(id="UC1", name="View")]
+    m.components = [Component(id="C1", name="A", purpose="a"), Component(id="C2", name="B", purpose="b"),
+                    Component(id="C3", name="C", purpose="c")]
+    m.flows = [Flow(uc="UC1", title="View", steps=[
+        FlowStep(n=1, src="C1", dst="C2", phrase="hand it on", where="src/a.py:1"),
+        FlowStep(n=2, src="C3", dst="C1", phrase="hand it back", where="src/c.py:1"),
+    ])]
+    out = walk_jumps(m)
+    assert len(out) == 1 and "UC1 step 2 starts at C3" in out[0]
+    # …and a chain with no jump says nothing.
+    m.flows[0].steps[1].src = "C2"
+    assert walk_jumps(m) == []
+
+
+def test_a_walk_jump_sees_through_a_shared_walk():
+    """Running a shared walk really does reach what is inside it, so the check expands. The commonest
+    shape is a step right after a reference: the shared walk ends somewhere inside itself and the next
+    step starts somewhere new."""
+    m = ProjectModel(title="T", goal="G")
+    m.use_cases = [UseCase(id="UC1", name="View")]
+    m.components = [Component(id="C1", name="A", purpose="a"), Component(id="C2", name="B", purpose="b"),
+                    Component(id="C3", name="C", purpose="c")]
+    m.subflows = [SubFlow(id="SF1", name="Shared", steps=[
+        FlowStep(n=1, src="C1", dst="C3", phrase="reach C", where="src/a.py:1")])]
+    m.flows = [Flow(uc="UC1", title="View", steps=[
+        FlowStep(n=1, src="C1", dst="C2", phrase="hand it on", where="src/a.py:1"),
+        FlowStep(n=2, src="C1", dst="C3", subflow="SF1"),
+        FlowStep(n=3, src="C3", dst="C2", phrase="carry on", where="src/c.py:2"),
+    ])]
+    assert walk_jumps(m) == []          # the shared walk reached C3, so step 3 has its way in
+    m.subflows[0].steps[0].dst = "C2"   # …and now it does not
+    assert len(walk_jumps(m)) == 1 and "step 3 starts at C3" in walk_jumps(m)[0]

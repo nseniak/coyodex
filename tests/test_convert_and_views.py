@@ -36,6 +36,7 @@ from coyodex.model import (
     GlossaryRow,
     Group,
     HappyStep,
+    Interface,
     MessagingRow,
     ProjectModel,
     Role,
@@ -51,9 +52,11 @@ from coyodex.model import (
 )
 from coyodex.viewer.gen_viewer import (
     flow_actors,
+    flow_maps,
     flow_narrative,
+    flow_narratives,
+    subflow_chips,
     gen_flow_map_mermaid,
-    gen_flow_mermaid,
     hp_actors,
 )
 from coyodex.views import _store_str, model_to_graph, model_to_markdown
@@ -413,19 +416,15 @@ def test_subflow_renders_in_md_and_reaches_graph():
     assert cast("list[dict[str, object]]", sf["steps"])[0]["where"] == "src/a.py:3"
 
 
-def test_flow_narrative_expands_subflow_in_place():
-    """The reference step is REPLACED inline by the sub-flow's steps, carrying sf/sfName/sfFirst —
-    no header entries, so narrative indexes stay 1:1 with mermaid messages."""
+def test_a_reference_step_keeps_its_own_slot_and_names_the_walk_it_runs():
+    """The reference stays ONE narrative entry — never replaced by the walk's insides — so entry[i] is
+    still message[i] and the step player's counter is the walk's own length. The entry names the walk it
+    runs, which is what the panel, the map's box and the sequence column all read."""
     g = model_to_graph(make_subflow_model())
     narr = flow_narrative(g, cast("dict", g["flows"][0]))
-    assert [(s["sf"], s["n"]) for s in narr] == [(None, 1), ("SF1", 1), ("SF1", 2), (None, 3)]
-    assert narr[1]["sfFirst"] is True and narr[2]["sfFirst"] is False
-    assert narr[1]["sfName"] == "Persist the thing" and narr[1]["where"] == "src/a.py:3"
-    mm = gen_flow_mermaid(g, cast("dict", g["flows"][0]))
-    msgs = [ln for ln in mm.splitlines() if "->>" in ln]
-    assert len(msgs) == len(narr)                       # message[i] <-> narrative[i], notes excluded
-    assert "rect rgb" in mm and "Note over" in mm and "Persist the thing" in mm
-    assert mm.count("  end") == 1                       # one run -> one closed rect
+    assert [(x["sf"], x["n"]) for x in narr] == [(None, 1), ("SF1", 2), (None, 3)]
+    assert narr[1]["sfName"] == "Persist the thing" and narr[1]["sfSteps"] == 2
+    # (The sequence rendering that stood beside the map is gone; the map is the one picture of a walk.)
 
 
 def make_flow_map_model() -> ProjectModel:
@@ -460,10 +459,12 @@ def test_flow_map_draws_one_box_per_element_by_name_alone():
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
     assert mm.startswith("flowchart LR")
     assert "subgraph" not in mm                                   # leaf-only: no container frames
-    assert 'C1["Viewer"]' in mm                                   # the element's name, nothing else
+    # The name rides in its own span — that span is the click target, and the LABEL is not the name.
+    assert 'C1["<span class=cyname>Viewer</span>"]' in mm
     assert "Reading room" not in mm                               # its group name stays off the box
-    assert 'E1("Order")' in mm and 'D1[("Postgres")]' in mm        # entity and dep keep their shapes
-    assert 'FA0([" <br/>Andy"])' in mm                             # the actor, as the Context stick figure
+    assert 'E1("<span class=cyname>Order</span>")' in mm \
+        and 'D1[("<span class=cyname>Postgres</span>")]' in mm     # entity and dep keep their shapes
+    assert 'FA0([" <br/><span class=cyname>Andy</span>"])' in mm                             # the actor, as the Context stick figure
     assert mm.count("classDef") == 4                               # component / dep / entity / human
 
 
@@ -474,8 +475,7 @@ def test_flow_map_arrows_come_from_the_steps_and_carry_their_numbers():
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
     arrows = [ln.strip() for ln in mm.splitlines() if "-->" in ln]
     assert arrows == ['FA0 -->|"1"| C1', 'C1 -->|"2, 5"| C2', 'C2 -->|"3"| E1', 'C2 -->|"4"| D1']
-    seq = gen_flow_mermaid(g, cast("dict", g["flows"][0]))
-    assert "C1->>C2: 2. asks for the order" in seq and "C1->>C2: 5. asks again" in seq
+    # …and one arrow carries BOTH steps, because a pair used twice is one line with two numbers.
 
 
 def test_flow_map_ignores_the_backbone_edge_list():
@@ -499,7 +499,7 @@ def test_flow_map_draws_a_service_actor_as_a_service():
     m.roles = [Role(id="R1", name="Andy", kind="service", wants="to sync")]
     g = model_to_graph(m)
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    assert 'FA0{{"Andy"}}' in mm and "class FA0 svc" in mm    # hexagon, not the stick-figure box
+    assert 'FA0{{"<span class=cyname>Andy</span>"}}' in mm and "class FA0 svc" in mm   # hexagon
     assert "classDef svc" in mm and "classDef human" not in mm
 
 
@@ -513,12 +513,11 @@ def test_flow_map_and_flow_actors_agree_on_every_alias():
                                         where="src/x.py:1"))
     g = model_to_graph(m)
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    seq = gen_flow_mermaid(g, cast("dict", g["flows"][0]))
     roster = flow_actors(g, cast("dict", g["flows"][0]))
     assert [a["name"] for a in roster] == ["Andy"] and roster[0]["aid"] == "FA0"
-    assert 'FA0([" <br/>Andy"])' in mm and "actor FA0 as Andy" in seq   # the same alias on both drawings
-    assert 'C99["C99"]' in mm                                          # the dangling id stays an element
-    assert "FA1" not in mm and "FA1" not in seq
+    assert 'FA0([" <br/><span class=cyname>Andy</span>"])' in mm       # the roster's alias, on the map
+    assert 'C99["<span class=cyname>C99</span>"]' in mm                # the dangling id stays an element
+    assert "FA1" not in mm
 
 
 def test_actor_facts_survive_a_name_the_sanitisers_rewrite():
@@ -564,20 +563,97 @@ def test_two_roles_that_differ_only_in_stripped_characters_stay_distinct():
     assert facts([doubled, plain]) == ("human", "to watch")   # …in either table order
 
 
-def test_flow_map_expands_subflows_like_the_sequence_does():
-    """A sub-flow reference is one step in the model and several in both renderings — same expansion,
-    so the two never disagree about what the flow touches."""
+def make_chipped_subflow_model() -> ProjectModel:
+    """A shared walk that touches a person, a door and a record — the three things a chip names — plus a
+    component, which is deliberately NOT chipped."""
+    m = make_subflow_model()
+    m.roles = [Role(id="R1", name="Andy", kind="person", wants="to view")]
+    m.interfaces = [Interface(id="I1", name="Public site", side="ours", facing="user",
+                              kind="screen", source="src/web.py:1")]
+    m.entities = [Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="an order",
+                         source="src/o.py:1", fields=[EntityField(name="id", type="str")])]
+    m.subflows[0].steps += [FlowStep(n=3, src="C2", dst="E1", phrase="keeps it", where="src/a.py:9"),
+                            FlowStep(n=4, src="C2", dst="I1", phrase="shows it", where="src/a.py:11"),
+                            FlowStep(n=5, src="Andy", dst="C2", phrase="confirms", where="src/a.py:13")]
+    return m
+
+
+def test_a_use_case_walk_is_its_own_steps_not_the_shared_walks_it_runs():
+    """A use case that runs a shared walk appeared to DO that walk's work: its numbered steps included
+    steps belonging to every other use case that runs the same walk. Measured on the live maps before
+    this changed, a use case walk was 16 steps stored and 27 shown.
+
+    The reference is one step now, in every rendering — so a walk's length is its own."""
+    g = model_to_graph(make_subflow_model())
+    narr = flow_narrative(g, cast("dict", g["flows"][0]))
+    assert [n["verb"] for n in narr] == ["opens", "run", "renders the result"]
+    assert narr[1]["sf"] == "SF1" and narr[1]["sfSteps"] == 2   # the walk it runs, and how big it is
+
+
+def test_both_renderings_number_the_same_list():
+    """The map and the Sequence view are two pictures of ONE walk, and the toggle between them keeps the
+    reader's place. If one collapsed a shared walk and the other did not, the same number would name two
+    different moments and one picture would have steps the other does not."""
+    g = model_to_graph(make_subflow_model())
+    flow = cast("dict", g["flows"][0])
+    mapped = [ln for ln in gen_flow_map_mermaid(g, flow).splitlines() if "-->" in ln]
+    assert len(mapped) == len(flow_narrative(g, flow)) == 3
+    assert mapped == ['  FA0 -->|"1"| C1', '  C1 -->|"2"| SF1', '  C1 -->|"3"| C2']
+
+
+def test_a_shared_walk_is_one_dashed_box_with_nothing_drawn_out_of_it():
+    """No step in the model hands control back from a shared walk — the walk simply continues, and its
+    next step draws itself. An arrow out of the box would have to be invented, and an invented arrow
+    carries no step, no direction and no code link."""
     g = model_to_graph(make_subflow_model())
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    arrows = [ln.strip() for ln in mm.splitlines() if "-->" in ln]
-    assert arrows == ['FA0 -->|"1"| C1', 'C1 -->|"2, 4"| C2', 'C2 -->|"3"| C1']  # SF1's two steps, inline
+    assert 'SF1[["<span class=cyname>Persist the thing</span>' in mm and "class SF1 subflow" in mm
+    assert "classDef subflow" in mm and "stroke-dasharray" in mm
+    assert [ln for ln in mm.splitlines() if "-->" in ln and ln.strip().startswith("SF1 ")] == []
 
 
-def test_flow_actors_index_the_expanded_list():
+def test_the_box_says_how_big_the_walk_is_and_wears_its_people_doors_and_records():
+    """Collapsing must not bury the product's edge or its saved data — the design philosophy's own rule.
+    A COMPONENT is never a chip: a shared walk is made of components, so every box would carry the same
+    crowd and the two things worth seeing would be lost in it."""
+    g = model_to_graph(make_chipped_subflow_model())
+    chips = subflow_chips(g)["SF1"]
+    assert [(c["kind"], c["name"]) for c in chips] == [
+        ("actor", "Andy"), ("interface", "Public site"), ("entity", "Order")]  # people, doors, records
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    assert "<span class=cysteps>5 steps</span>" in mm
+    assert "<span class=cychip data-k=interface>Public site</span>" in mm
+    assert "<span class=cychip data-k=entity>Order</span>" in mm
+    assert "cychip data-k=entity>Store<" not in mm            # C2 is a component, not a chip
+
+
+def test_a_shared_walk_is_a_walk_in_its_own_right():
+    """Clicking the box opens the walk itself, so it needs the same four things a use case walk has. It
+    is stored in the same shape, so the same four generators produce them — which is what keeps the two
+    kinds of screen from drifting apart."""
+    g = model_to_graph(make_subflow_model())
+    assert sorted(flow_maps(g)) == ["SF1", "UC1", "UC2"]
+    assert sorted(flow_narratives(g)) == ["SF1", "UC1", "UC2"]
+    own = flow_narratives(g)["SF1"]
+    assert [n["verb"] for n in own] == ["hands off", "confirms"]   # numbered from 1, and its own
+    assert all(n["sf"] is None for n in own)
+
+
+def test_a_degraded_reference_stays_a_bare_step():
+    """An unresolved reference or an empty shared walk (validate blocks both, serve renders drafts) must
+    not vanish. It stays one plain step naming what it tried to run."""
+    m = make_subflow_model()
+    m.flows[0].steps[1] = FlowStep(n=2, src="C1", dst="C2", subflow="SF404")
+    g = model_to_graph(m)
+    narr = flow_narrative(g, cast("dict", g["flows"][0]))
+    assert len(narr) == 3 and narr[1]["verb"] == "run SF404" and narr[1]["sf"] is None
+
+
+def test_flow_actors_index_the_walk_s_own_list():
     g = model_to_graph(make_subflow_model())
     actors = flow_actors(g, cast("dict", g["flows"][0]))
     assert len(actors) == 1 and actors[0]["name"] == "Andy"
-    assert actors[0]["stepIdx"] == [0]                  # indexes the same 4-entry expanded list
+    assert actors[0]["stepIdx"] == [0]                  # indexes the same 3-entry own-steps list
 
 
 def test_graph_line_parses_colon_range_and_legacy_hash_anchors():

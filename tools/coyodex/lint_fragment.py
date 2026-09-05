@@ -50,6 +50,7 @@ from coyodex.validate_model import (
     duplicate_security_warnings,
     roleless_cd_verb_warnings,
     subflow_refcount_warnings,
+    walk_jumps,
 )
 
 # id-SHAPED but unknown-prefix tokens ('SEC1') can never resolve — catchable per-fragment, unlike a
@@ -441,6 +442,7 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
                                              terms=[g.term for g in m.glossary]))
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
             + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m)
+            + walk_jumps(m)
             + duplicate_security_warnings(m) + confidence_warnings(m) + prose_lines)
 
 

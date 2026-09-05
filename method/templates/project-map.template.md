@@ -286,7 +286,7 @@ SOURCE: [file](path/sub:1)
      of the operative statement in the step's `from` code (THE location; you just read it to write
      the phrase). Steps with genuinely no single site set `no_call_site` instead; actor steps
      (`<Role> → C…`) need no anchor. Add flow-specific context after `· `. Renders as a Mermaid
-     sequenceDiagram + a numbered narrative, and is the drill-down of the matching Happy Path step.
+     flowchart + a numbered narrative, and is the drill-down of the matching Happy Path step.
      Separators inside a line are `·`, never raw `|`.
      A step may go BACKWARD too: a `to` that is an earlier participant renders right-to-left. Record
      the meaningful returns — the response the actor sees, an error/fallback, a callback/event — as

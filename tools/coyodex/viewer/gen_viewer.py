@@ -2774,7 +2774,7 @@ def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, 
     if phrase:
         return phrase
     if st.get("subflow"):  # a DEGRADED reference step (unresolved/empty sub-flow — validate blocks
-        return f"runs {st['subflow']}"  # it, but serve renders drafts): name the run, never 'uses'
+        return f"run {st['subflow']}"  # it, but serve renders drafts): name the run, never 'uses'
     if st.get("src_is_id") and st.get("dst_is_id"):
         verb, why = idx.get((str(st["src"]), str(st["dst"])), ("", ""))
         if why:
@@ -2784,30 +2784,100 @@ def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, 
     return "uses"
 
 
-def expanded_steps(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
-    """The flow's ok-filtered steps with every sub-flow REFERENCE step replaced inline by the
-    referenced sub-flow's own ok steps — the ONE expansion all three per-flow views (mermaid,
-    narrative, actors) consume, so `message[i] ↔ FLOWS_NARR[uc][i] ↔ actor stepIdx` stays a single
-    index space. Expanded steps carry `sf`/`sfName` (+ `sfFirst` on the run's first step) so the
-    frontend renders the grouping FROM the entries — no header rows, every entry is message-backed.
-    An unresolved reference or an empty sub-flow (validate blocks both, but serve renders drafts)
-    degrades to the bare reference step, so nothing disappears silently."""
+def subflow_chips(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """Per shared walk, the people, doors and records inside it.
+
+    A use-case map draws a shared walk as one collapsed box, and these ride ON that box — so a reader
+    still sees where the product meets the outside world and what it keeps, without opening the walk.
+    That is the design philosophy's own rule: the critical pieces are surfaced, not buried.
+
+    Components are deliberately NOT chips. A shared walk is MADE of components, so every box would carry
+    the same crowd and the two things worth seeing would be lost in it.
+
+    Order is people, doors, records — stable, so a walk gaining one does not reshuffle the row."""
+    out: dict[str, list[dict[str, str]]] = {}
+    for sf in cast("list[dict[str, Any]]", graph.get("subflows") or []):
+        people: list[dict[str, str]] = []
+        doors: list[dict[str, str]] = []
+        recs: list[dict[str, str]] = []
+        for st in cast("list[dict[str, Any]]", sf.get("steps") or []):
+            if not st.get("ok"):
+                continue
+            for tok, is_id in ((st["src"], st.get("src_is_id")), (st["dst"], st.get("dst_is_id"))):
+                token = str(tok)
+                if is_role_endpoint(bool(is_id)):
+                    if not any(c["name"] == token for c in people):
+                        people.append({"kind": "actor", "id": "", "name": token})
+                    continue
+                node = cast("dict[str, Any] | None", graph["nodes"].get(token))
+                kind = str((node or {}).get("kind") or "")
+                bucket = doors if kind == "interface" else recs if kind == "entity" else None
+                if bucket is None or any(c["id"] == token for c in bucket):
+                    continue
+                bucket.append({"kind": kind, "id": token,
+                               "name": str((node or {}).get("name") or token)})
+        out[str(sf["id"])] = people + doors + recs
+    return out
+
+
+def own_steps(graph: GraphDict, flow: dict[str, Any],
+              chips: dict[str, list[dict[str, str]]] | None = None) -> list[dict[str, Any]]:
+    """The walk's OWN ok-filtered steps — a shared-walk reference stays ONE step.
+
+    This is what a READER walks. The four per-walk views (sequence, map, narrative, actors) all consume
+    it, so `message[i]` <-> `FLOWS_NARR[uc][i]` <-> `actor stepIdx` is still one index space, and a step
+    number still means the same moment in both renderings of the same walk.
+
+    THE INSIDE OF A SHARED WALK IS NOT THIS WALK'S BUSINESS. Expanded, a use case appeared to do work it
+    only borrows: measured on the live maps, a use case walk is 16 steps stored and 27 shown, and 12 of
+    the 21 steps of one mcpolis use case belonged to two other walks. The shared walk gets a screen of
+    its own instead, where its steps are numbered from 1 and belong to it.
+
+    What ASKS "does this use case reach that record, that door?" must keep expanding — running a shared
+    walk does reach what is inside it. `model.expanded_flow_steps` is that one, and every check already
+    uses it; nothing here changes them.
+
+    A reference step gains `sf` (the walk's id), `sfName`, `sfSteps` (how many it holds) and `sfChips`
+    (see `subflow_chips`). Its own `src` is the box that runs it; the DRAWN destination is `sf`, never
+    the authored `dst`, which names some component inside the walk. No reference step in either live map
+    carries text of its own (0 of 84), so `run` is the verb unless one is authored — imperative,
+    like every other phrase and like the walk's own name it arrives at.
+
+    An unresolved reference or an empty shared walk (validate blocks both, serve renders drafts) stays a
+    bare step, so nothing disappears silently."""
+    ch = subflow_chips(graph) if chips is None else chips
     sfs = {str(sf.get("id")): sf for sf in cast("list[dict[str, Any]]", graph.get("subflows") or [])}
     out: list[dict[str, Any]] = []
     for st in cast("list[dict[str, Any]]", flow.get("steps") or []):
         if not st.get("ok"):
             continue
         sf = sfs.get(str(st.get("subflow") or ""))
-        inner = [s for s in cast("list[dict[str, Any]]", (sf or {}).get("steps") or []) if s.get("ok")]
+        inner = [x for x in cast("list[dict[str, Any]]", (sf or {}).get("steps") or []) if x.get("ok")]
         if sf is None or not inner:
             out.append(st)
             continue
-        for k, s in enumerate(inner):
-            e = dict(s)
-            e["sf"] = str(sf["id"])
-            e["sfName"] = str(sf.get("name") or sf["id"])
-            e["sfFirst"] = k == 0
-            out.append(e)
+        e = dict(st)
+        e["sf"] = str(sf["id"])
+        e["sfName"] = str(sf.get("name") or sf["id"])
+        e["sfSteps"] = len(inner)
+        e["sfChips"] = ch.get(str(sf["id"]), [])
+        # `run`, not `runs`: a phrase is imperative, like the walk's own name it arrives at.
+        e["phrase"] = str(st.get("phrase") or "").strip() or "run"
+        out.append(e)
+    return out
+
+
+def all_walks(graph: GraphDict) -> list[dict[str, Any]]:
+    """Every walk the viewer can draw: the use case walks, plus each SHARED walk as a walk in its own
+    right.
+
+    A shared walk is stored in the same shape a use case walk is — a title and an ordered list of steps
+    — so the four per-walk generators take it unchanged. That is what gives a shared walk its own
+    screen without a second set of generators to keep in step with the first."""
+    out: list[dict[str, Any]] = list(graph["flows"])
+    for sf in cast("list[dict[str, Any]]", graph.get("subflows") or []):
+        out.append({"uc": str(sf["id"]), "title": str(sf.get("name") or sf["id"]),
+                    "steps": sf.get("steps") or []})
     return out
 
 
@@ -2862,77 +2932,33 @@ def flow_client_roles(graph: GraphDict, steps: list[dict[str, Any]]) -> set[str]
     return out
 
 
-def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
-    """One use case's flow as a Mermaid sequenceDiagram: the actor + the touched components/deps/
-    entities as lifelines (first-appearance order), each step an ordered message. An element lifeline's
-    participant id IS its node id, so the viewer's id→node bridge resolves a click to its panel.
-    A sub-flow's expanded run is wrapped in a tinted `rect` named by a `Note` — notes render as
-    `.noteText`, never `.messageText`, so the positional message↔narrative pairing is untouched."""
-    idx = _edge_index(graph)
-    steps = expanded_steps(graph, flow)
-    pid: dict[str, str] = {}     # raw endpoint token -> Mermaid participant id
-    decls: list[str] = []
-    n_actor = 0
-    clients = flow_client_roles(graph, steps)
-
-    def ensure(token: str, is_id: bool) -> None:
-        nonlocal n_actor
-        if token in pid:
-            return
-        if not is_role_endpoint(is_id):            # an element endpoint: a real node -> its name; an
-            # unknown id (the validator blocks the build on it) -> the raw id, still a participant, so a
-            # missing element never mis-reads as a person (see is_role_endpoint).
-            label = _safe_msg(str(graph["nodes"][token]["name"])) if token in graph["nodes"] else token
-            pid[token] = token
-            decls.append(f"  participant {token} as {label}")
-        else:                                      # a Role name (actor step) — no node behind it
-            aid = "FA" + str(n_actor)
-            n_actor += 1
-            pid[token] = aid
-            via = CLIENT_LABEL_TEXT if token in clients else ""   # one line: the column widens
-            decls.append(f"  actor {aid} as {_safe_msg(token)}{via}")
-
-    for st in steps:
-        ensure(str(st["src"]), bool(st.get("src_is_id")))
-        ensure(str(st["dst"]), bool(st.get("dst_is_id")))
-    lines = ["sequenceDiagram"] + decls
-    # Prefix each arrow with its 1-based position so the diagram is self-numbered — the same number the
-    # side-panel narrative shows (a plain <ol>) and the step player's "Step n / N" counter uses. The index
-    # is over this same expanded, ok-filtered list, so message n <-> FLOWS_NARR[uc][n-1] <-> panel item n
-    # line up. A sub-flow run opens a rect (+ its naming Note) and closes it when the run ends.
-    open_sf: str | None = None
-    for i, st in enumerate(steps):
-        sf = cast("str | None", st.get("sf"))
-        if sf != open_sf or (sf is not None and st.get("sfFirst") and i > 0 and steps[i - 1].get("sf") == sf):
-            if open_sf is not None:
-                lines.append("  end")
-            if sf is not None:
-                lines.append("  rect rgb(238, 242, 255)")
-                lines.append(f"  Note over {pid[str(st['src'])]}: ⟨{_safe_msg(str(st.get('sfName') or sf))}⟩")
-            open_sf = sf
-        lines.append(f"  {pid[str(st['src'])]}->>{pid[str(st['dst'])]}: {i + 1}. {_safe_msg(_flow_step_label(idx, st))}")
-    if open_sf is not None:
-        lines.append("  end")
-    return "\n".join(lines)
-
-
-# ── the flow MAP (the second rendering of one use case) ────────────────────────────────────────────
-# The sequence diagram answers "in what order"; the map answers "what does this use case touch", in the
-# structural views' own visual language — one kind-coloured box per element, entities and dependencies
-# included. Same scenario, same element set, same step numbers: two renderings of one source, so they
-# can never disagree.
+# ── the walk MAP — the ONE picture of a use case ───────────────────────────────────────────────────
+# It answers both questions a reader has: what does this use case touch, and in what order. The order is
+# on the arrows, as the step numbers the side panel and the step player count in.
+#
+# A SEQUENCE DIAGRAM stood beside it and was removed. Two renderings of one walk meant every rule had to
+# be written twice and kept in step — and the map answers strictly more: it draws the element kinds in
+# the structural views' own colours and shapes, which lifelines cannot.
 FLOW_MAP_SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]'), "entity": ('("', '")'),
                   "subsystem": ('["', '"]'), "subdomain": ('("', '")'),
                   # A DOOR is drawn as a stadium — the one shape nothing else on this map uses, so
                   # the place a story crosses the product's edge is never read as a component.
                   "interface": ('(["', '"])')}
+#: A SHARED WALK collapsed to one box on a use-case map. The subroutine shape (`[[…]]`) is the
+#: flowchart's own symbol for "a process defined elsewhere", which is exactly what a shared walk is,
+#: and the dashed container border repeats the map's existing "there is more inside this" signal.
+#: Slate, because the box is not an element of the product — it is a piece of ANOTHER use case's story
+#: — so it must not wear any element colour.
+SUBFLOW_SHAPE = ('[["', '"]]')
+SUBFLOW_STYLE = f"fill:#f8fafc,stroke:#475569,color:#0f172a,{_CONTAINER_BORDER}"
 FLOW_MAP_STYLE = {"component": COMPONENT_STYLE, "dep": DEP_STYLE, "entity": ENTITY_STYLE,
                   "subsystem": SUBSYSTEM_STYLE, "subdomain": SUBDOMAIN_STYLE,
                   "interface": INTERFACE_STYLE,
                   # An AI agent wears the PROGRAM colour and the person's node shape; the viewer
                   # re-paths that shape into a bot figure. Missing this entry is a KeyError at the
                   # classDef loop, not a silent miss, which is the failure mode to prefer.
-                  "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE, "agent": ACTOR_SVC_STYLE}
+                  "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE, "agent": ACTOR_SVC_STYLE,
+                  "subflow": SUBFLOW_STYLE}
 
 
 def _flow_map_arrow_label(ns: list[int]) -> str:
@@ -2946,26 +2972,53 @@ def _flow_map_arrow_label(ns: list[int]) -> str:
     return ", ".join(str(n) for n in ns)
 
 
-def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
-    """One use case's flow as a LEAF-ONLY map: a box per touched element (component / dependency /
-    entity / the driving actor) and one arrow per ordered pair, labelled with the step numbers that
-    ride it. Sub-flow runs are expanded exactly as the sequence view expands them.
+#: One chip on a collapsed shared-walk box. `securityLevel: "loose"` + htmlLabels means a node label is
+#: rendered as HTML, so the chip is a real styled element (see `.cychip` in viewer.css) rather than a
+#: post-processed rectangle — and Mermaid sizes the box around it, which no post-process could make it do.
+#: Attribute values are unquoted on purpose: the whole label is already inside Mermaid's own quotes.
+#: Each chip sits in a block of its own so it LEFT-ALIGNS. The label as a whole is centred (the walk's
+#: name and its step count read as a title), but a centred stack of pills of different widths reads as
+#: rubble — a list aligns down one edge.
+#: THE NAME, IN ITS OWN SPAN. A box's name opens the thing it names, and the LABEL is not the name: an
+#: actor's label carries a blank line holding the stick figure, and a shared walk's carries its step
+#: count and its chips. Targeting the label made the whole box a link — on an actor, 94% of it — leaving
+#: no room to select. Targeting this span leaves every one of those extra lines to selection.
+def _name_html(name: str) -> str:
+    return f"<span class=cyname>{_safe_label(name)}</span>"
 
-    Two deliberate choices:
+
+def _chip_html(chip: dict[str, str]) -> str:
+    return (f"<span class=cychipline><span class=cychip data-k={chip['kind']}>"
+            f"{_safe_label(chip['name'])}</span></span>")
+
+
+def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
+    """One walk as a LEAF-ONLY map: a box per touched element (component / dependency / entity / the
+    driving actor) and one arrow per ordered pair, labelled with the step numbers that ride it.
+
+    A SHARED WALK is one dashed box, and the arrow into it carries that reference's single step number —
+    the walk's insides are not this walk's steps. The box wears the people, doors and records inside it
+    as chips, so collapsing never buries the product's edge or its saved data.
+
+    Three deliberate choices:
 
     * **No subsystem / subdomain frames.** Scoped to one use case, a container frames one or two
       members and reads as noise. The box carries just the element's name — the group lives in the
       element's own panel, a click away. (A group-name second line was tried and removed: on a live
       map 94% of boxes carried one, each group repeating on ~2 boxes, so it widened every box while
       almost never showing a cluster.)
-    * **Arrows come from THIS FLOW'S STEPS, never the backbone edge list.** A step is what the
+    * **Arrows come from THIS WALK'S STEPS, never the backbone edge list.** A step is what the
       scenario does; a backbone edge is the aggregate of every scenario. Drawing edges here would
       show relationships this use case never exercises — so the map is a re-rendering of the same
       data the sequence diagram draws, and can never contradict it.
+    * **Nothing is drawn OUT of a shared walk's box.** No step in the model hands control back; the
+      walk simply continues, and its next step draws itself. Measured before this was built: an arrow
+      out of the box would have to be invented for 64 of 83 runs, and an invented arrow carries no
+      step, no direction and no code link.
 
-    A box's mermaid id IS its node id (an actor gets the sequence view's `FAn` alias), so the
-    viewer's generic node binding resolves a click to the element's panel with no special casing."""
-    steps = expanded_steps(graph, flow)
+    A box's mermaid id IS its element id (an actor gets the sequence view's `FAn` alias, a shared walk
+    its `SFn`), so the viewer's generic node binding resolves a click with no special casing."""
+    steps = own_steps(graph, flow)
     roles_by_name = _roles_by_name(graph)
     clients = flow_client_roles(graph, steps)
     pid: dict[str, str] = {}
@@ -2992,12 +3045,12 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
             # that figure is drawn in, exactly as for a person.
             if rkind == "ai-agent":
                 kinds.add("agent")
-                decls.append(f'  {aid}([" <br/>{_safe_label(token)}"]):::cy-{aid}')
+                decls.append(f'  {aid}([" <br/>{_name_html(token)}"]):::cy-{aid}')
                 decls.append(f"  class {aid} agent")
                 return
             if role is not None and grammar.is_machine_role(rkind):
                 kinds.add("svc")
-                decls.append(f'  {aid}{{{{"{_safe_label(token)}"}}}}:::cy-{aid}')   # hexagon = service
+                decls.append(f'  {aid}{{{{"{_name_html(token)}"}}}}:::cy-{aid}')   # hexagon = service
                 decls.append(f"  class {aid} svc")
                 return
             kinds.add("human")
@@ -3013,7 +3066,7 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
             # single-line case is untouched.
             via = CLIENT_LABEL_SUFFIX if token in clients else ""
             room = " <br/> <br/>" if via else " <br/>"
-            decls.append(f'  {aid}(["{room}{_safe_label(token)}{via}"]):::cy-{aid}')
+            decls.append(f'  {aid}(["{room}{_name_html(token)}{via}"]):::cy-{aid}')
             decls.append(f"  class {aid} human")
             return
         if token in pid:
@@ -3027,48 +3080,86 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
         kind = str((node or {}).get("kind") or "component")
         if kind not in FLOW_MAP_SHAPE:
             kind = "component"
-        label = _safe_label(str((node or {}).get("name") or token))
+        label = _name_html(str((node or {}).get("name") or token))
+        # A DOOR wears the same glyph the Interfaces picture draws for its kind — a browser, a
+        # terminal, a wrench. The map had no way to say WHAT KIND of door this is: shape and colour
+        # said "a door", and the reader went to the legend for the rest.
+        #
+        # An EMPTY span, sized by CSS, filled by the viewer (`fillFlowMapGlyphs`). Mermaid measures the
+        # label before any of our code runs, so the room has to come from the stylesheet; and the eleven
+        # drawings live in viewer.js already, so copying them here would be a second copy to keep in
+        # step. The generator ships the KIND, the viewer owns the picture.
+        if kind == "interface":
+            gk = str(((node or {}).get("fields") or {}).get("Kind") or "").strip()
+            if gk:
+                label = f"<span class=cyglyph data-k={_safe_label(gk)}></span>{label}"
         open_b, close_b = FLOW_MAP_SHAPE[kind]
         pid[token] = token
         kinds.add(kind)
         decls.append(f"  {token}{open_b}{label}{close_b}:::cy-{token}")
         decls.append(f"  class {token} {kind}")
 
+    def ensure_sf(st: dict[str, Any]) -> None:
+        sid = str(st["sf"])
+        if sid in pid:
+            return
+        pid[sid] = sid
+        kinds.add("subflow")
+        n = int(cast("int", st.get("sfSteps") or 0))
+        chips = cast("list[dict[str, str]]", st.get("sfChips") or [])
+        # Name, then how big the detour is, then one chip per line. One per line rather than a wrapped
+        # row: the widest chip then sets the box width, so nothing is ever clipped, and the tallest real
+        # case is 4 chips on 1 of the 24 shared walks across both live maps.
+        head = [_name_html(str(st.get("sfName") or sid)),
+                f"<span class=cysteps>{n} step{'' if n == 1 else 's'}</span>"]
+        # The chips carry their own line breaks (each is a block), so only the two centred head lines
+        # are joined with `<br/>` — a `<br/>` before a block would add an empty line above the list.
+        open_b, close_b = SUBFLOW_SHAPE
+        label = "<br/>".join(head) + "".join(_chip_html(c) for c in chips)
+        decls.append(f"  {sid}{open_b}{label}{close_b}:::cy-{sid}")
+        decls.append(f"  class {sid} subflow")
+
+    def box_of(st: dict[str, Any]) -> str:
+        return str(st["sf"]) if st.get("sf") else pid[str(st["dst"])]
+
     for st in steps:
         ensure(str(st["src"]), bool(st.get("src_is_id")))
-        ensure(str(st["dst"]), bool(st.get("dst_is_id")))
+        if st.get("sf"):
+            ensure_sf(st)
+        else:
+            ensure(str(st["dst"]), bool(st.get("dst_is_id")))
     # One arrow per ORDERED pair, in first-appearance order; a return-direction step is its own arrow,
     # so a call and its response stay two arrows rather than collapsing into one ambiguous line.
     pairs: dict[tuple[str, str], list[int]] = {}
     for i, st in enumerate(steps):
-        pairs.setdefault((pid[str(st["src"])], pid[str(st["dst"])]), []).append(i + 1)
+        pairs.setdefault((pid[str(st["src"])], box_of(st)), []).append(i + 1)
     lines = ["flowchart LR", *decls]
     for (a, b), ns in pairs.items():
         lines.append(f"  {a} -->|{_edge_label(_flow_map_arrow_label(ns))}| {b}")
     for kind in ("component", "dep", "entity", "subsystem", "subdomain", "interface",
-                 "human", "svc", "agent"):
+                 "human", "svc", "agent", "subflow"):
         if kind in kinds:
             lines.append(f"  classDef {kind} {FLOW_MAP_STYLE[kind]};")
     return "\n".join(lines)
 
 
 def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
-    """The readable numbered steps for the side panel — the SAME source as gen_flow_mermaid. Each step
+    """The readable numbered steps for the side panel — the SAME source the map draws from. Each step
     carries its from/to display names + (clickable) node ids, its own action text, and any note. The panel
     describes the step from the step alone — it does NOT pull the shared backbone-edge description, since
     a pair used by several steps has one edge label that can't be right for all of them. `why` stays empty
     for a normal step; the edge lookup is only a safety net for a legacy step with no authored text."""
     idx = _edge_index(graph)
     out: list[dict[str, Any]] = []
-    for st in expanded_steps(graph, flow):
+    for st in own_steps(graph, flow):
         src, dst = str(st["src"]), str(st["dst"])
         src_id = src if (st.get("src_is_id") and src in graph["nodes"]) else None
         dst_id = dst if (st.get("dst_is_id") and dst in graph["nodes"]) else None
         phrase = str(st.get("phrase") or "").strip()
         verb, why = phrase, ""
         if not phrase:                             # safety net: a legacy step that left its text empty
-            if st.get("subflow"):                  # a degraded reference step — name the run
-                verb = f"runs {st['subflow']}"
+            if st.get("subflow"):                  # a degraded reference — name the walk it runs
+                verb = f"run {st['subflow']}"
             elif st.get("src_is_id") and st.get("dst_is_id"):
                 v, w = idx.get((src, dst), ("", ""))
                 verb, why = (v or "uses"), w
@@ -3080,31 +3171,27 @@ def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any
             "dstId": dst_id, "dst": str(graph["nodes"][dst]["name"]) if dst_id else dst,
             "verb": verb, "why": why, "note": str(st.get("note") or "").strip(),
             "where": str(st.get("where") or "") or None,  # the step's own call site (THE location)
-            # sub-flow grouping metadata (None/False for a plain step): the frontend renders the
-            # group header/indent from these — entries stay 1:1 with mermaid messages
-            "sf": st.get("sf"), "sfName": st.get("sfName"), "sfFirst": bool(st.get("sfFirst")),
+            # A step that RUNS A SHARED WALK (None on every other step). `sf` is the walk this step
+            # goes into, and it is also the box the map draws the arrow to — so the panel, the map and
+            # the sequence column all name the same thing from this one field.
+            "sf": st.get("sf"), "sfName": st.get("sfName"),
+            "sfSteps": st.get("sfSteps"), "sfChips": st.get("sfChips") or [],
         })
     return out
 
 
-def flow_mermaids(graph: GraphDict) -> dict[str, str]:
-    """{uc_id: sequenceDiagram} for every T6 flow — the use-case view and the GP-step drill-down both
-    look a flow up here by its use case id."""
-    return {str(f["uc"]): gen_flow_mermaid(graph, f) for f in graph["flows"]}
-
-
 def flow_maps(graph: GraphDict) -> dict[str, str]:
     """{uc_id: flowchart} for every T6 flow — the map rendering the use-case view toggles to."""
-    return {str(f["uc"]): gen_flow_map_mermaid(graph, f) for f in graph["flows"]}
+    return {str(f["uc"]): gen_flow_map_mermaid(graph, f) for f in all_walks(graph)}
 
 
 def flow_narratives(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
-    """{uc_id: [narrative step, …]} for every T6 flow — the readable companion to flow_mermaids."""
-    return {str(f["uc"]): flow_narrative(graph, f) for f in graph["flows"]}
+    """{uc_id: [narrative step, …]} for every walk — the readable companion to flow_maps."""
+    return {str(f["uc"]): flow_narrative(graph, f) for f in all_walks(graph)}
 
 
 def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
-    """Per-actor (Role) participants in one use-case flow, in the SAME `FAn` alias order gen_flow_mermaid
+    """Per-actor (Role) participants in one use-case flow, in the SAME `FAn` alias order the map
     assigns them, so the viewer's actor lifeline lines up with its rendered `data-id`. Mirrors hp_actors
     for the Happy Path, scoped to this one flow: each actor links back to its Roles-table entry (kind +
     wants) and lists which of THIS flow's own steps it drives — `stepIdx` indexes the SAME filtered,
@@ -3114,7 +3201,7 @@ def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
     the ones the two diagram generators draw. (This used to be a local predicate that also treated a
     DANGLING id as a role; the diagrams never did, so on a draft map carrying one, every alias after it
     named a different participant here than on the diagram — see is_role_endpoint.)"""
-    steps = expanded_steps(graph, flow)  # the SAME index space as flow_narrative / gen_flow_mermaid
+    steps = own_steps(graph, flow)  # the SAME index space as flow_narrative and the map
 
     roles_by_name = _roles_by_name(graph)
     order: dict[str, str] = {}  # role display name -> alias (FAn), first-appearance order
@@ -3147,7 +3234,7 @@ def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
 
 def flow_actors_map(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
     """{uc_id: [actor, …]} for every T6 flow — the flow-level companion to hp_actors, one list per flow."""
-    return {str(f["uc"]): flow_actors(graph, f) for f in graph["flows"]}
+    return {str(f["uc"]): flow_actors(graph, f) for f in all_walks(graph)}
 
 
 def merged_graph(graph: GraphDict, diff: DiffDict | None) -> dict[str, Any]:
@@ -3256,8 +3343,7 @@ class ViewBundle(TypedDict):
     hasDeployment: bool
     hasBusinessRules: bool         # the map states at least one business rule (T7) — gates the tab
     hasInterfaces: bool            # the map records at least one interface (T2b) — gates the tab
-    flowsMm: dict[str, str]
-    flowsMap: dict[str, str]      # the same flows as leaf-only maps — the use-case view's second rendering
+    flowsMap: dict[str, str]      # uc-id (and SFn) -> its walk map — the ONE picture of a walk
     flowsNarr: dict[str, list[dict[str, Any]]]
     hpActors: list[dict[str, Any]]
     flowActors: dict[str, list[dict[str, Any]]]
@@ -3379,7 +3465,6 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
         hasInterfaces=bool(model is not None and model.interfaces),
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so
         # they come from graph["flows"] directly (empty when the map has no T6 section).
-        flowsMm=flow_mermaids(graph),
         flowsMap=flow_maps(graph),
         flowsNarr=flow_narratives(graph),
         hpActors=hp_actors(graph) if hp else [],

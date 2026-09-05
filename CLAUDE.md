@@ -58,9 +58,11 @@ the code's names.
   ALWAYS SAY BOTH WORDS. "Walk" alone was used for a while and read as a stroll
   through the map; *journey* and *story* were used for the same thing in other
   entries, so one idea had three names and no definition.
-  A **shared walk** is a run of steps spliced into several use case walks (argus
-  10, mcpolis 14). A step therefore needs its walk AND its container to be named
-  once, since two steps under one use case can carry the same number.
+  A **shared walk** is a run of steps that several use case walks RUN (argus 10,
+  mcpolis 14). It is not spliced in: a use case walk's numbers are its own, and
+  running a shared walk is one of them. On a use case map a shared walk is one
+  dashed box wearing its chips; it has a screen of its own, where its steps are
+  numbered from 1 and belong to it.
 - **owner** (of a data area) — the feature the area's data exists FOR: the one
   that creates its records and runs their lifecycle. Authored, never derived.
 - **owner with no evidence** — the map says an area exists for a feature, but no
@@ -106,6 +108,10 @@ the code's names.
   retired: two words for one idea, and the screens said one while the glossary
   said the other. *Surface* survives only in its security sense, as in attack
   surface, which is a different word.
+- **chip** — a small named tag on the dashed box of a shared walk, one per
+  person, door or record inside it. It is what stops collapsing the walk from
+  burying the product's edge and its saved data. Never clickable: the box is
+  what you open. Not a *type pill*, which says what KIND a thing is.
 - **way in** — one address, command or tool an interface is made of. An
   interface groups many; coyodex's own command line is 32 ways in.
 - **far side** — who or what is on the other side of an interface.

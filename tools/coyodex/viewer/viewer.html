@@ -205,8 +205,8 @@
            the player walks the SAME steps whichever rendering is on screen. Same place and reason as the
            two pickers above: they change what the diagram says, so they sit beside it rather than in a
            pane that vanishes the moment something is selected. Shown only on a use-case flow view.
-           `#flowmode` is rebuilt by syncFlowPicker; `#flowplayer` is static markup the player shows/hides,
-           so a re-render of the mode switch can never destroy the player's buttons. -->
+           `#flowplayer` is static markup the player shows/hides. `#flowmode` held a Map/Sequence switch
+           and is now empty: the map is the one rendering of a walk. -->
       <div id="flowpicker" hidden>
         <div id="flowmode"></div>
         <div id="flowplayer" hidden>

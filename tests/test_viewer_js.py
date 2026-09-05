@@ -225,7 +225,7 @@ def test_flow_step_keeps_relationship_navigation_on_the_arrow() -> None:
 def test_flow_arrows_locate_all_backbone_relationships_in_structural_views() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     locate = js[js.index("function relationshipLocateTarget"):js.index("function decorateActionIcons")]
-    sequence = js[js.index("function bindFlow(uc)"):js.index("// --- use-case flow step player")]
+    sequence = ""   # the sequence rendering was removed; the map is the one picture of a walk
     flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function syncEnvPicker")]
     edge_action = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
 
@@ -238,8 +238,11 @@ def test_flow_arrows_locate_all_backbone_relationships_in_structural_views() -> 
     assert "relationshipLocateTarget(dstId, srcId)" in locate
     assert "kind: 'locate'" in locate
     assert "title: 'Locate in ' + tab" in locate
-    assert "relationshipLocateAction(st.srcId, st.dstId)" in sequence
-    assert "relationshipLocateAction(m[1], m[2])" in flow_map
+    # …but NOT a walk arrow on the MAP. Selecting a step already opens its own code, so a drill there
+    # could only repeat the click that got you here — and what it used to do instead was leave the story
+    # for the aggregate arrow between the same two elements, in another view.
+    assert "relationshipLocateAction(m[1], m[2])" not in flow_map
+    assert "opts: {}," in flow_map
     assert "const action = { kind: 'drill'" not in edge_action
     assert "action || (onDrill ? { kind: 'drill'" in js
     assert "'edge:' + e.src + '>' + e.dst + ':' + m[3]" in js
@@ -248,7 +251,7 @@ def test_flow_arrows_locate_all_backbone_relationships_in_structural_views() -> 
 def test_only_direct_diagram_clicks_pin_selection_action_icons() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     selection = js[js.index("function selApply"):js.index("// The full click-gesture handler")]
-    sequence = js[js.index("function bindFlow(uc)"):js.index("// --- use-case flow step player")]
+    sequence = ""   # the sequence rendering was removed; the map is the one picture of a walk
     edge_action = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
     glow_edge = js[js.index("function glowEdge"):js.index("// EVERY ARROW IS DRAWN THE SAME")]
     hp_glow = js[js.index("function hpGlow"):js.index("// Glow a set of elements")]
@@ -260,7 +263,6 @@ def test_only_direct_diagram_clicks_pin_selection_action_icons() -> None:
     assert "selToggle(scene, desc, true)" in selection
     assert "selReplace(scene, desc, true)" in selection
     assert "function selRevealsAction" in selection
-    assert "selRevealsAction(scene, selKey)" in sequence
     assert "glowEdge(p, label, revealAction = true)" in glow_edge
     assert "p._actionIcon._selected = !!revealAction" in glow_edge
     assert "hpGlow(el, revealAction = true)" in hp_glow
@@ -339,8 +341,10 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "title: 'Locate in ' + tab" in locate_code
     assert "sel: 'node:' + t.selectId" in locate_code
     assert "pendingCenter = t.selectId" in locate_code
-    assert "s.kind === 'usecase' && FLOW_VIEW === 'map'" in locate_code
-    assert "locating ? locateActionFor(id) : primaryActionFor(id)" in locate_code
+    assert "if (isWalkState(s)) return;" in locate_code   # no icons at all on a walk
+    # No icons on a walk at all — the box's NAME opens what it names. Off a walk, the icon is the
+    # element's own primary action.
+    assert "const action = primaryActionFor(id);" in locate_code
     assert "if (locate && isDrillClick(ev)) { locate.run(); return; }" in js
     assert "action-icon is-' + action.kind" in js
     assert "Lucide LocateFixed" in js
@@ -371,16 +375,22 @@ def test_all_action_icons_render_in_the_foreground_overlay() -> None:
     assert "clientToLocal(parent, ev.clientX, ev.clientY)" in edge
 
 
-def test_use_case_flow_opens_as_map_and_lists_map_first() -> None:
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    start = js.index("function syncFlowPicker(s)")
-    end = js.index("\n// `flowMapToken`", start)
-    picker = js[start:end]
-
-    assert "let FLOW_VIEW = 'map'" in js
-    assert "${btn('map', 'Map')}${btn('sequence', 'Sequence')}" in picker
-    assert picker.index("btn('map', 'Map')") < picker.index("btn('sequence', 'Sequence')")
-
+def test_a_walk_has_one_rendering_and_it_is_the_map() -> None:
+    """A sequence diagram stood beside the map behind a "Flow as" switch. Two renderings of one walk
+    meant every rule written twice and kept in step — the step numbers, the actor aliases, what a
+    collapsed shared walk shows — and the map answers strictly more: it draws each element in the
+    structural views' own colour and shape, which lifelines cannot."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    for gone in ("FLOW_VIEW", "FLOWS_MM", "function bindFlow(uc)", "syncFlowPicker", "EMPTY_FLOW_MM"):
+        assert gone not in js, f"{gone} is part of the removed sequence rendering"
+    assert "return FLOWS_MAP[uc] || EMPTY_FLOW_MAP;" in js
+    gen = (VIEWER_DIR / "gen_viewer.py").read_text(encoding="utf-8")
+    for gone in ("def gen_flow_mermaid", "def flow_mermaids", "flowsMm"):
+        assert gone not in gen, f"{gone} is part of the removed sequence rendering"
+    # …and the step player, which shared the switch's card, is still there.
+    assert "function syncFlowCard(s) {" in js
+    html = (VIEWER_DIR / "viewer.html").read_text(encoding="utf-8")
+    assert 'id="flowplayer"' in html and 'id="flowpicker"' in html
 
 def test_flow_player_suspends_and_resumes_within_one_visit() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
@@ -394,9 +404,10 @@ def test_flow_player_suspends_and_resumes_within_one_visit() -> None:
     assert "flownext.title" not in player
     assert "flowPlay.active = false" in player
     assert "flowGoto(flowPlay.cur >= 0 ? flowPlay.cur : 0)" in player
-    assert "flowResume = null" in player
-    assert "if (switched && flowPlay.active) { flowGoto(flowPlay.cur); return; }" in player
-    assert "flowResume = { cur: flowPlay.cur, active: flowPlay.active }" in js
+
+    # (The live hand-off across the Map/Sequence switch is gone with the switch; the history
+    # point's own snapshot is what restores a suspended step.)
+    # (The Map/Sequence switch that needed a resume is gone; a walk has one rendering.)
     assert "flowSuspend();" in js[js.index("function selClear"):js.index("function selReplace")]
 
 
@@ -409,7 +420,7 @@ def test_flow_player_state_is_captured_and_restored_with_history() -> None:
     assert "history[hi].flow = flowSnapshot()" in capture
     assert "flow: c.flow" in js[js.index("function pushContentPoint"):js.index("function go(state")]
     assert "restoreFlowSnapshot(to.flow)" in transition
-    assert "const saved = switched || (s && s.flow)" in js
+    assert "if (restoreFlowSnapshot(s && s.flow)) return;" in js
     assert "flowInit(s)" in js
     assert 'id="flowprev" aria-label="Previous step"' in html
     assert 'id="flownext" aria-label="Next step"' in html
@@ -922,7 +933,7 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     # EVERY LINE ENDS IN THE STEP THAT MAKES THE CLAIM, and `(container, n)` is what identifies it:
     # a sub-flow's steps keep their own numbering when spliced in, so `(uc, n)` alone lands the
     # reader on a different step.
-    assert "flowStepIndex(uc, st.container || uc, st.n)" in js
+    assert "const i = flowStepIndex(uc, container, st.n);" in js
     assert js.count("bindStepFroms(") == 3, "the binder, the actor's page, and the surface's page"
     # ONE TAIL COMPONENT, for every capped list in the viewer. They were built three ways and drawn
     # in two looks, and the two a reader meets in the same box were the two that differed.
@@ -1119,8 +1130,8 @@ def test_no_control_outlives_the_view_that_drew_it() -> None:
     slot cleared on every render, which is the mechanism the floating flow picker also needs — and that
     one still does, because it floats over the diagram rather than living in it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    render = js[js.index("  const fp = document.getElementById('flowpicker');"):]
-    assert "if (fp) fp.hidden = true;" in render[:400], "the floating picker is still hidden up front"
+    render = js[js.index("  syncFlowCard(s);"):]
+    assert "syncFlowCard(s);" in render[:400], "the step player's card is settled up front"
     assert "uc-groupby-why" not in js
     assert "function viewQuestion(view) {" in js
 
@@ -1586,11 +1597,17 @@ def test_the_panel_has_two_shapes_and_the_reader_picks_one() -> None:
     assert 'id="drawerbtn"' not in html, "the choice lives in Settings, not in a header button"
     assert 'id="setPanel"' in html and 'value="drawer"' in html and 'value="card"' in html
     assert "drawer: 'coyodex.drawer'," in js
-    # THE DRAWER IS THE DEFAULT: anything but an explicit '0' is the drawer, so a reader who has never
-    # opened Settings gets it. '0' rather than an empty string, since unset has to mean the default.
-    assert "setDrawerMode(lsGet(LS.drawer) !== '0');" in js
-    assert "lsSet(LS.drawer, drawerMode ? '1' : '0');" in js
-    fn = js[js.index("function setDrawerMode(on) {"): js.index("\n}", js.index("function setDrawerMode(on) {"))]
+    # THE CARD IS THE DEFAULT, and the boot must NOT write that down. The old line wrote the default it
+    # had just computed, so every reader who ever opened the viewer had "drawer" stored whether they
+    # chose it or never opened Settings — and flipping the default then reached a brand-new browser and
+    # nobody else. The key is written only from a CHOICE, so unset really does mean unset. A reader who has never
+    # opened Settings gets the card.
+    assert "setDrawerMode(lsGet(LS.panel) === 'drawer', false);" in js
+    assert "setDrawerMode(setPanel.value === 'drawer', true)" in js   # …and only a pick writes it
+    assert "if (chose) lsSet(LS.panel," in js
+    assert "if (chose) lsSet(LS.panel, drawerMode ? 'drawer' : 'card');" in js
+    fn = js[js.index("function setDrawerMode(on, chose) {"):
+            js.index("\n}", js.index("function setDrawerMode(on, chose) {"))]
     assert "document.body.classList.toggle('card-drawer', drawerMode)" in fn
     assert "st.left = st.top = st.right = st.width = st.height = '';" in fn, \
         "the other shape's inline box must not leak into this one"
@@ -1783,7 +1800,7 @@ def test_the_panel_shape_is_chosen_in_settings() -> None:
     assert "setPanelRow.hidden = !!firstUse;" in op, "first use is about one source link, nothing else"
     assert "firstUse ? 'How should source links open?' : 'Settings'" in op
     save = js[js.index("function saveSettings() {"): js.index("\n}", js.index("function saveSettings() {"))]
-    assert "setDrawerMode(setPanel.value === 'drawer')" in save, \
+    assert "setDrawerMode(setPanel.value === 'drawer', true)" in save, \
         "applied through the one function, so it takes effect on what is already on screen"
     assert "!setPanelRow.hidden" in save, "…and a first-use save leaves the shape alone"
 
@@ -2254,7 +2271,7 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
-    fn = js[js.index("function syncCodePane(_s) {"): js.index("\n}", js.index("function syncCodePane(_s) {"))]
+    fn = js[js.index("function syncCodePane(s) {"): js.index("\n}", js.index("function syncCodePane(s) {"))]
     assert "TEXT_PAGES" not in fn, "a diagram's column is optional too"
     assert "document.body.classList.toggle('code-hidden', !codePaneOpen());" in fn
     assert "close.hidden = false;" in fn, "the way out is offered everywhere the column can be open"
@@ -2303,7 +2320,7 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "resyncCodePane(); codePaneResized();" in slide, "…and no motion still lands in the end state"
     # The rule that hides the column must not fire mid-slide: every render passes through syncCodePane,
     # and one landing between the slide's two frames would snap the column to its end width.
-    sync = js[js.index("function syncCodePane(_s) {"): js.index("\n}", js.index("function syncCodePane(_s) {"))]
+    sync = js[js.index("function syncCodePane(s) {"): js.index("\n}", js.index("function syncCodePane(s) {"))]
     assert "if (srcSliding) return;" in sync
     assert sync.index("if (srcSliding) return;") < sync.index("classList.toggle('code-hidden'")
     # TWO CLASSES, and the split is the whole trick. `code-sliding` PUTS the three widths at the start of
@@ -2722,7 +2739,7 @@ def test_a_feature_board_wears_no_section_frame() -> None:
         "the one push left is the no-board fallback's"
     assert "${board}${index}" in ren, "the board leads the page, the chip bar indexes what follows"
     # …and the board keeps its own frame, because there is no section around it to be the card.
-    assert ".journey-board { background: #fff; border: 1px solid" in css
+    assert ".walk-board, .journey-board, .ifd-wrap, #diagwrap {" in css
 
 
 def test_a_side_stop_hangs_under_the_actor_who_drives_it() -> None:
@@ -2808,7 +2825,7 @@ def test_the_rail_keeps_the_marks_the_cards_carried() -> None:
     marks = js[js.index("function journeyMarksHtml(ucId) {"):
                js.index("\nfunction ", js.index("function journeyMarksHtml(ucId) {") + 10)]
     assert "mode === 'diff' && hasDiff() && usecaseDiffState(ucId)" in marks
-    assert "(FLOWS_MM && FLOWS_MM[ucId]) ? ''" in marks
+    assert "(FLOWS_NARR && FLOWS_NARR[ucId]) ? ''" in marks
     zone = js[js.index("function journeyZoneHtml(z, opts) {"):
               js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
     assert "${journeyMarksHtml(s.uc)}" in zone and "${journeyMarksHtml(uc.id)}" in zone, \
@@ -4689,7 +4706,9 @@ def test_the_drawing_s_floor_is_the_same_number_in_both_files() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     in_js = re.search(r"const STAGE_FLOOR_PX = (\d+);", js)
-    in_css = re.search(r"#diagwrap \{[^}]*min-height: (\d+)px", css, re.S)
+    # ANCHORED to #diagwrap's OWN rule. The shared board rule's selector list ends in `#diagwrap {`
+    # too, and a `min-height` added there would silently make this read the wrong number.
+    in_css = re.search(r"\n#diagwrap \{[^}]*min-height: (\d+)px", css, re.S)
     assert in_js, "STAGE_FLOOR_PX is gone from viewer.js"
     assert in_css, "#diagwrap lost its min-height in viewer.css"
     assert in_js.group(1) == in_css.group(1), (in_js.group(1), in_css.group(1))
@@ -4737,7 +4756,7 @@ def test_a_use_case_map_arrow_resolves_to_its_WALK_STEPS():
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     fn = js[js.index("function inspFlowArrow(el, handle) {"):js.index("// One step of a walk.")]
     assert "flowMapSteps(uc, m[1], m[2])" in fn, "the picture's own lookup, not a second one"
-    assert "here.kind === 'usecase'" in fn, \
+    assert "isWalkState(here)" in fn, \
         "guarded to the use case map: a stale uc would answer for a backbone arrow"
     assert "parts.length === 1) return parts[0]" in fn, \
         "one step answers as itself; several answer as all of them"
@@ -4816,3 +4835,240 @@ def test_a_path_that_names_nothing_is_not_drawn_as_a_trail():
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     fn = js[js.index("function inspTrailHtml(path, cls) {"):js.index("function inspGoPath(prefix)")]
     assert "if (!parts.length) return" in fn, "no segments, no trail — print the text as it stands"
+
+
+def test_a_step_that_runs_a_shared_walk_is_drawn_to_that_walk_s_box() -> None:
+    """A use case map draws a shared walk as ONE box and never its insides, so the step that runs it goes
+    to that box — not to its own `dst`, which names a component inside the walk that this map does not
+    draw at all. Both consumers must agree: the arrow's own lookup, and the step player's.
+
+    Get it wrong and the step lights nothing and the player scrolls to a box that is not on screen."""
+    snippet = """
+globalThis.FLOW_ACTORS = { UC1: [] };
+globalThis.FLOWS_NARR = { UC1: [
+  { srcId: 'C1', dstId: 'C2', src: 'Viewer', dst: 'Store' },
+  { srcId: 'C1', dstId: 'C9', src: 'Viewer', dst: 'Inside', sf: 'SF1', sfName: 'N', sfSteps: 6 },
+  { srcId: 'C1', dstId: 'C2', src: 'Viewer', dst: 'Store' },
+] };
+console.log(JSON.stringify({
+  onWalkBox:  flowMapSteps('UC1', 'C1', 'SF1').map((x) => x.i),
+  onPlainPair: flowMapSteps('UC1', 'C1', 'C2').map((x) => x.i),
+  notItsOwnDst: flowMapSteps('UC1', 'C1', 'C9').map((x) => x.i),
+  arrowOfRefStep: flowMapStepArrow('UC1', 1, FLOWS_NARR.UC1[1]),
+  arrowOfPlainStep: flowMapStepArrow('UC1', 0, FLOWS_NARR.UC1[0]),
+  boxes: flowMapSubflows('UC1').map((st) => st.sf),
+}));
+"""
+    got = json.loads(_run_js_region("function flowMapToken(uc, mid) {",
+                                    "function showFlowPair(uc, a, b) {", snippet))
+    assert got["onWalkBox"] == [1]
+    assert got["onPlainPair"] == [0, 2]      # the walk's own steps, and only those
+    assert got["notItsOwnDst"] == []         # nothing is drawn to the component inside the walk
+    assert got["arrowOfRefStep"] == ["C1", "SF1"]
+    assert got["arrowOfPlainStep"] == ["C1", "C2"]
+    assert got["boxes"] == ["SF1"]
+
+
+def test_the_same_shared_walk_run_twice_is_one_box_carrying_both_numbers() -> None:
+    """One shared walk is one box on the map, however many times the walk runs it — the map draws one box
+    per thing, and the arrow's label lists every step riding it, exactly as it does for any other pair."""
+    snippet = """
+globalThis.FLOW_ACTORS = { UC1: [] };
+globalThis.FLOWS_NARR = { UC1: [
+  { srcId: 'C1', dstId: 'C9', src: 'A', dst: 'X', sf: 'SF1', sfName: 'N' },
+  { srcId: 'C1', dstId: 'C2', src: 'A', dst: 'B' },
+  { srcId: 'C1', dstId: 'C9', src: 'A', dst: 'X', sf: 'SF1', sfName: 'N' },
+] };
+console.log(JSON.stringify({
+  both: flowMapSteps('UC1', 'C1', 'SF1').map((x) => x.i),
+  boxes: flowMapSubflows('UC1').map((st) => st.sf),
+}));
+"""
+    got = json.loads(_run_js_region("function flowMapToken(uc, mid) {",
+                                    "function showFlowPair(uc, a, b) {", snippet))
+    assert got["both"] == [0, 2] and got["boxes"] == ["SF1"]
+
+
+def test_one_function_says_which_arrow_a_step_is_on() -> None:
+    """`flowMapStepArrow` is the ONE door from a step to the map arrow that carries it, because a use-case
+    map no longer draws every step's own endpoints — a step inside a collapsed shared walk rides the arrow
+    into that walk's box instead. Anything re-deriving the pair from `st.srcId`/`st.dstId` disagrees with
+    the drawing: it glows nothing, or it scrolls to a box that is not there.
+
+    Both regressions were real. The step player lit no arrow for a collapsed step, and `flowReveal`
+    scrolled to endpoints with nothing on screen. Pinning the call sites is what keeps the next caller
+    from re-deriving it a third time."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    callers = [ln.strip() for ln in js.splitlines()
+               if "flowMapBoxId(" in ln and not ln.startswith("function flowMapBoxId")]
+    # The two that are NOT re-derivations: a shared walk's box shows the run behind it, on click and on
+    # hover, and both need the box the run was called from.
+    assert callers == ["return [flowMapBoxId(uc, st.srcId, st.src),",
+                       "st.sf || flowMapBoxId(uc, st.dstId, st.dst)];",
+                       "show: () => showFlowPair(uc, flowMapBoxId(uc, ref.srcId, ref.src), sid) });",
+                       "previewOnHover(scene, el, () => showFlowPair(uc, flowMapBoxId(uc, ref.srcId, "
+                       "ref.src), sid));"], \
+        f"call flowMapStepArrow instead of re-deriving the pair: {callers}"
+
+
+def test_only_an_actor_s_card_gets_an_actor_s_words() -> None:
+    """`isMachineActor` answers "anything that is not a person", which is right INSIDE the actor
+    vocabulary and wrong as a test of what kind of ELEMENT a card is about. Asked about element kinds it
+    called a component, an entity, a door and a dependency machine actors, and two things followed for
+    every one of them — 735 cards across the two live maps:
+
+      * a second pill in the SERVICE-ACTOR colour repeating the card's own type word ("component"
+        twice), or, for kinds the actor table has no English for, printing the CODE word (`dep`,
+        `usecase`) — the one thing that table exists to prevent;
+      * the description run through the actor sentence and returned prefixed "Goal:", so a component's
+        purpose read as an actor's wants.
+
+    `elementLabel` is the one table that says which kinds read as "actor", so it decides."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function cardFacts(id) {"):js.index("\n}", js.index("function cardFacts(id) {"))]
+    assert "const isActor = elementLabel(n.kind) === 'actor';" in fn
+    assert "if (isActor) desc = wantsSentence(desc);" in fn
+    assert "if (isActor) for (const p of actorSidePills(" in fn
+    # …and the loose predicate is never the one that decides it
+    assert "isMachineActor(n.kind)) desc" not in fn
+
+
+def test_a_door_on_a_use_case_map_wears_the_kind_glyph_the_interfaces_picture_draws() -> None:
+    """The map said "a door" with a shape and a colour, and left WHICH KIND of door to the legend. It
+    draws the kind now — the same eight drawings the Interfaces picture uses, from the same table, so
+    the two pictures cannot draw one door's kind differently.
+
+    THE SLOT IS SIZED IN CSS AND NOT SCOPED TO `#diagram`. Mermaid measures a node label in its own
+    temporary node, outside the diagram, so a scoped rule never reaches the measurement and the box comes
+    out one glyph too narrow — measured, the Gateway box rendered as "Gatew"."""
+    gen = (VIEWER_DIR / "gen_viewer.py").read_text(encoding="utf-8")
+    assert 'if kind == "interface":' in gen and "<span class=cyglyph data-k=" in gen
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fill = js[js.index("function fillFlowMapGlyphs(root) {"):
+              js.index("\n}", js.index("function fillFlowMapGlyphs(root) {"))]
+    assert "IFACE_GLYPH[slot.getAttribute('data-k')]" in fill   # ONE table, shared with Interfaces
+    assert "ifaceGlyphSvg(" in fill and "'currentColor'" in fill
+    assert "fillFlowMapGlyphs(scene.root);" in js               # …run on every flow-map bind
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    assert "\n.cyglyph {" in css, "not scoped to #diagram, or Mermaid measures the box too narrow"
+    assert "#diagram .cyglyph" not in css
+
+
+def test_the_first_walk_a_reader_opens_shows_them_the_code_column() -> None:
+    """A use case map is the one screen whose every box and arrow points at a place in the code, and the
+    rail that opens the column is a thin strip on the far edge. Once, remembered, and never argued with
+    after the reader closes it.
+
+    DECIDED IN `syncCodePane`, not at the navigation: `SERVED` is settled by a fetch still in flight at
+    boot, and syncCodePane is the one place that runs again once it lands. Deciding it at the navigation
+    left the column shut on the very first walk — the one arrival the rule exists for."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function openCodeOnFirstWalk(s) {"):
+            js.index("\n}", js.index("function openCodeOnFirstWalk(s) {"))]
+    assert "if (!SERVED || !isWalkState(s)) return;" in fn        # a walk, on a served map
+    # ARRIVING IS THE EVENT, open or not. Returning early on an already-open column left the flag
+    # unset, so the reader's × — which comes back through here — met a shut column and an unset flag
+    # and forced it open again. The × was dead for anyone who had ever left the column open.
+    assert "if (!codePaneOpen()) setCodeOpen(true);" in fn
+    assert "lsGet(LS.walkCode) === '1'" in fn and "lsSet(LS.walkCode, '1')" in fn
+    sync = js[js.index("function syncCodePane(s) {"):js.index("\n}", js.index("function syncCodePane(s) {"))]
+    assert "openCodeOnFirstWalk(s);" in sync, "decided where SERVED is re-read, not at the navigation"
+
+
+def test_the_name_is_the_words_and_every_box_s_name_opens_a_page() -> None:
+    """A box's LABEL is not its name. An actor's carries a blank line holding the stick figure, a shared
+    walk's carries its step count and its chips, a door's carries its kind glyph. Targeting the label
+    made the whole box a link — 94% of an actor's — and left nothing to select on. The generator wraps
+    the words in `.cyname`, and that span is what a click and the hover underline read.
+
+    INLINE-BLOCK, so the span is ONE contiguous box: a name wrapping onto two lines has a bounding box
+    spanning both, and the middle of it falls in the gap between them. Measured on a shared walk, whose
+    name is the longest thing on any map: the click landed on the paragraph and the name never fired.
+
+    And all four kinds open something: an element opens its own page, an actor theirs, a shared walk its
+    own screen. Before this an actor's box could not be opened from a map at all."""
+    gen = (VIEWER_DIR / "gen_viewer.py").read_text(encoding="utf-8")
+    assert 'return f"<span class=cyname>{_safe_label(name)}</span>"' in gen
+    assert gen.count("_name_html(") >= 6, "every box kind wraps its name, actors and shared walks too"
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert "t.closest('.cyname')" in js
+    assert "if (nameClick(ev)) { drillInto(id); return; }" in js                    # an element
+    assert "if (nameClick(ev)) { go({ kind: 'actor', act: a.name }); return; }" in js  # an actor
+    assert "if (open && (nameClick(ev) || isDrillClick(ev)))" in js                 # a shared walk
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    assert "#diagram .cyname { cursor: pointer; display: inline-block; }" in css
+    assert "#diagram .cyname:hover { text-decoration: underline;" in css
+
+
+def test_a_walk_draws_no_corner_icons() -> None:
+    """The icon floating in a box's corner was the older way of saying "this opens something", in a
+    language no other screen speaks. The name says it now, and it says it the way a card's title does."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function decorateActionIcons(scene, s) {"):
+            js.index("\n}", js.index("function decorateActionIcons(scene, s) {"))]
+    assert "if (isWalkState(s)) return;" in fn
+    assert "addActionIcon(el, sid, open)" not in js, "the shared walk's box lost its icon too"
+
+
+def test_hovering_a_box_shows_its_card_and_leaving_puts_back_what_was_there() -> None:
+    """Clicking every box to find out what it is, is the older way. A short delay so crossing a box on
+    the way somewhere else flashes nothing, and leaving restores the selection — so a card you PINNED
+    with a click survives the pointer passing over its neighbours.
+
+    The LINE follows the pointer too: it would otherwise point at the last thing clicked while the card
+    described something else."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function previewOnHover(scene, els, show, anchor) {"):
+            js.index("\n}", js.index("function previewOnHover(scene, els, show, anchor) {"))]
+    assert "HOVER_CARD_MS" in fn and "if (panelDrag || srcSliding) return;" in fn
+    # A DELAYED leave, cancelled by a re-enter: moving from an arrow's line onto its own number fires
+    # leave-then-enter, and restoring in between blinked the card on a pointer that never left.
+    assert "HOVER_LEAVE_MS" in fn and "clearTimeout(outTimer); outTimer = null;" in fn
+    assert "paneSync();" in fn, "writing the HTML is not enough — one rule decides if the card shows"
+    assert "selApply(scene);" in fn and "hoverPreview = null;" in fn
+    sole = js[js.index("function soleSelectedEl() {"):js.index("\n}", js.index("function soleSelectedEl() {"))]
+    assert "if (hoverPreview && hoverPreview.isConnected) return hoverPreview;" in sole
+
+
+def test_hovering_a_step_shows_its_card_too() -> None:
+    """A box answers on hover; so does an arrow. THE WHOLE ARROW is the target — its transparent hit
+    clones and its number — and the line points at the drawn path, not at whichever clone the pointer
+    happens to be over.
+
+    The clones are findable only because the path keeps them: every edge's clones are appended into the
+    SAME parent group, so a sibling query would return the other arrows' clones as well.
+
+    And a hover renders the card ALONE. `showFlowStep` also moves the code viewer to the step's own
+    line, which is right for a click and wrong for a pointer crossing a map — the column would jump on
+    every arrow it passed."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert "p.__cyHits = hits;" in js and "h.classList.add('cy-edgehit')" in js
+    assert "previewOnHover(scene, [...(p.__cyHits || []), label]," in js
+    prev = js[js.index("function previewFlowStep(uc, i) {"):
+              js.index("\n}", js.index("function previewFlowStep(uc, i) {"))]
+    assert "flowStepInfoHtml(uc, i)" in prev and "bindFlowStepInfo(panel, uc, i)" in prev
+    assert "syncCodeView(" not in prev, "a hover must not drag the code viewer across the map"
+
+
+def test_the_interfaces_picture_scrolls_in_the_same_board_the_other_two_do() -> None:
+    """One board, one behaviour: a white card with a 1px rule and a 10px radius, and an edge shade shown
+    only while there is something that way to scroll to. The Interfaces picture bled to the page edge on
+    a negative margin instead, which reads as a picture that ENDS at the window rather than one carrying
+    on past it — and it had no shades at all, so nothing said there was more."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert "'.walk-strip, .journey-board, .story-wrap, .ifd-wrap'" in js
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    wrap = css[css.index(".ifd-wrap { margin: 4px"):]
+    wrap = wrap[:wrap.index("}")]
+    # THE LOOK IS STATED ONCE, for every drawing in the product — see `.cy-board`.
+    assert ".walk-board, .journey-board, .ifd-wrap, #diagwrap {" in css
+    assert "background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;" in css
+    assert "overflow-x: auto" in wrap
+    # VERTICAL padding only. A card's name sits half above the stage and would be clipped without it —
+    # but horizontal padding MOVES the stage, and the wires are computed once, before the board's own
+    # box has settled. 16px a side landed every wire 17px short of the product's circle.
+    assert "padding: 16px 0" in wrap
+    # THE BLEED IS ON THE WRAPPER, not on the board. `bindHFade` places the two shades against the
+    # wrapper it inserts, so a board wider than that wrapper drew its own shades inside itself, over the
+    # cards — a stain on the content instead of an edge the content passes under.
+    assert ".hfade-wrap:has(> .ifd-wrap) { margin: 0 -1px; }" in css

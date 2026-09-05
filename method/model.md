@@ -400,8 +400,11 @@ Semantics, stated on the fields:
   backbone edge — the edge is the aggregate claim, the step this scenario's instance; `validate`
   warns on an entity step no edge backs (matched undirected, so a return-direction `E → C` step
   rides the same edge). Every step
-  carries its own `phrase` — a short action describing what happens at that point — which the flow arrow
-  and narrative render from. A step does NOT reuse the backbone edge's label: one element pair can appear
+  carries its own `phrase` — a short action describing what happens at that point, written in the
+  IMPERATIVE ("return the verified email"), never the third person — which the flow arrow and narrative
+  render from. The viewer titles the step with the phrase ALONE, so it carries no subject; a use case's
+  name and a shared walk's name are written the same way, and that is what lets one line title a plain
+  step and a step that runs a shared walk. A step does NOT reuse the backbone edge's label: one element pair can appear
   in several steps meaning different things, so a shared edge label can't describe each; the step
   describes itself (`coyodex validate` requires a non-empty `phrase`). For the same reason each
   element↔element step carries its own **`where` — THE location**: a step is exactly ONE interaction,

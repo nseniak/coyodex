@@ -64,7 +64,7 @@ lead; nothing above this line goes into an agent prompt.
 > ```json
 > { "flows":    [ {"uc": "UC7", "title": "<the use case's name>",
 >                  "steps": [ {"n": 1, "src": "R1", "dst": "C5",
->                              "phrase": "POSTs the new upstream",
+>                              "phrase": "POST the new upstream",
 >                              "where": "frontend/src/pages/Upstreams.tsx:212"} ]} ],
 >   "subflows": [ {"id": "SF12", "name": "<one goal, no \"and\">", "steps": [ … ]} ],
 >   "edges":    [ {"src": "C5", "verb": "persists", "dst": "E2",
@@ -80,8 +80,12 @@ lead; nothing above this line goes into an agent prompt.
 >
 > ## Steps
 >
-> - **Every step carries a `phrase`** — what happens at that point, present tense, an ACTION
->   ("returns the verified email"). A condition or qualifier belongs in `note`, never in `phrase`.
+> - **Every step carries a `phrase`** — what happens at that point, as an ACTION, in the IMPERATIVE
+>   ("return the verified email"), never the third person ("returns the verified email"). The viewer
+>   shows the phrase ON ITS OWN as the step's title, with no subject in front of it, so a third-person
+>   verb there reads as a sentence missing its start. It is also the form a use case's name and a
+>   shared walk's name already take, which is what lets one line title either kind of step.
+>   A condition or qualifier belongs in `note`, never in `phrase`.
 > - **Every element↔element step carries its own `where`** — the `path:line` in the `src` side's code
 >   where THIS step's action fires. Not the callee's definition. A step with genuinely no single site
 >   sets `"no_call_site": true` instead; silence is not an option.
@@ -135,7 +139,7 @@ lead; nothing above this line goes into an agent prompt.
 > The entities whose read or write IS this scenario's outcome or decision appear as their own steps:
 >
 > ```
-> {"n": 6, "src": "C5", "dst": "E2", "phrase": "upserts the Membership document",
+> {"n": 6, "src": "C5", "dst": "E2", "phrase": "upsert the Membership document",
 >  "where": "backend/repo.py:155"}
 > ```
 >

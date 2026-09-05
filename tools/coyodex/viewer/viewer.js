@@ -45,8 +45,8 @@ let DEPLOY_ENVS;           // declared deployment environments (variant names), 
 let DEPLOY_ENV = null;     // the selected environment (null = All); persists across the session
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let REPO_STATE = 'ok';    // 'ok' | 'no-repo' | 'no-commit' — whether the server can read this map's code
-let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
+let SUBFLOW_BY_ID = {};   // SFn -> the shared walk itself, for its name and its own screen
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 let HP_ACTORS;          // Happy-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
 let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,client,stepIdx}] flow-level actor lifelines
@@ -103,8 +103,10 @@ function applyBundle(b) {
   DEPLOY_ENVS = b.deploymentEnvironments || [];
   DEPLOYMENT_EDGES = b.deploymentEdges || {}; DEPLOYMENT_INFRA_EDGES = b.deploymentInfraEdges || {};
   DEPLOYMENT_CALL_EDGES = b.deploymentCallEdges || {};
-  FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
+  FLOWS_NARR = b.flowsNarr;
   FLOWS_MAP = b.flowsMap || {};
+  SUBFLOW_BY_ID = {};
+  for (const sf of (GRAPH.subflows || [])) SUBFLOW_BY_ID[sf.id] = sf;
   HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
   MERMAID_BY_BUCKETFOLD = b.mermaidByBucketFold || {}; FOLDED_BUCKETS = b.foldedBuckets || [];
@@ -178,7 +180,6 @@ const DIM = '0.15';  // opacity for non-focused elements
 const EMPTY_PANEL = '<p class="empty">Nothing recorded for this.</p>';
 // Shown when a use case has no T6 flow yet, so the flow view still renders (the panel explains it)
 // instead of degrading to the generic "could not be rendered" card.
-const EMPTY_FLOW_MM = 'sequenceDiagram\n  participant System\n  Note over System: No T6 flow recorded';
 
 // `class.hideEmptyMembersBox`: a member-less class renders as a plain box (no empty UML compartments),
 // so the subdomain card's collapsed neighbour boxes (subsystems/subdomains) read as simple boxes, like
@@ -498,7 +499,7 @@ if (HAS_GLOSSARY && GLOSS_MATCHER.maxWords) {
 }
 
 // Happy Path step lookup 'HP1' -> step record (id, title, uc, why). The step IS a use case; its
-// detailed actions live in that use case's T6 flow (FLOWS_MM / FLOWS_NARR), opened when the step drills.
+// detailed actions live in that use case's walk (FLOWS_NARR), opened when the step drills.
 const HP_BY_ID = {};
 for (const s of GRAPH.happy_path || []) HP_BY_ID[s.id] = s;
 // Happy Path actor lookups: by participant id (HPA0) and by the step it drives (HP1 -> actor records).
@@ -703,8 +704,18 @@ function cardFacts(id) {
   // A map that gives a rule no short name of its own uses the whole statement as the title, and the
   // description field then holds the same words. One copy, not two.
   if (desc.trim() === (n.name || '').trim()) desc = '';
+  // IS THIS CARD AN ACTOR'S? `isMachineActor` answers "anything that is not a person", which is the
+  // right rule INSIDE the actor vocabulary and wrong as a test of what kind of ELEMENT this is: it
+  // called a component, an entity, a door and a dependency machine actors. `elementLabel` is the one
+  // table that says which kinds read as "actor", so it is what decides here.
+  //
+  // Both things below were wrong for every non-actor card — 735 of them across the two live maps.
+  // A component's Purpose was printed as an actor's wants, prefixed "Goal:", and a second pill in the
+  // service-actor colour repeated the card's own type word ("component" twice) — or printed the CODE
+  // word for kinds the actor table has no English for ("dep", "usecase").
+  const isActor = elementLabel(n.kind) === 'actor';
   // An actor's sentence says what they are AFTER, and says so in words — see wantsSentence.
-  if (n.kind === 'human' || isMachineActor(n.kind)) desc = wantsSentence(desc);
+  if (isActor) desc = wantsSentence(desc);
   const pills = [];
   // A feature's audience, an actor's nature and a dependency's kind each change how the rest of the
   // card reads, so each rides beside the type pill rather than eating the description. A feature can
@@ -716,7 +727,7 @@ function cardFacts(id) {
     }
   }
   // An actor's nature and its SIDE, in one pill each — see actorSidePills for the four readings.
-  for (const p of actorSidePills(n.kind, n.audience)) pills.push(p);
+  if (isActor) for (const p of actorSidePills(n.kind, n.audience)) pills.push(p);
   if (n.kind === 'dep' && f.Kind) pills.push({ text: f.Kind, cls: '' });
   return { id, kind: n.kind, name: n.name || id, type: elementLabel(n.kind), desc, pills };
 }
@@ -960,7 +971,11 @@ let flowPlay = null;
 // it's rebuilt on every render. Focus/select/reset all operate on it.
 let mainScene = null;
 
+// Bumped every time a diagram is rebuilt, so anything armed against the OLD one can tell.
+let sceneGen = 0;
 function makeScene(root, defaultPanel) {
+  sceneGen++;
+  hoverPreview = null;   // nothing on the new drawing is being previewed yet
   // dimEls: a flat list of extra focusable elements (the Happy Path's actor figures, lifelines and
   // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
   // selection: the ordered list of selected-element DESCRIPTORS (click order = card/stack order; the LAST
@@ -1766,6 +1781,14 @@ function hideIcon(icon) { if (icon) { icon.style.removeProperty('opacity'); icon
 // inside) get their icon from bindFrameDrill instead, which already knows which frames are drillable —
 // that runs INSIDE bindFor, before this, so ACTION_ICONS is reset once in render() before bindFor, not
 // here (resetting here would wipe the cluster icons bindFrameDrill just registered).
+// The action a collapsed shared-walk box offers: open the walk itself. It is the one box on a use case
+// map whose drill LEAVES the use case, and that is the point — a shared walk belongs to every use case
+// that runs it, so it gets a screen of its own instead of a home inside this one.
+function subflowOpenAction(sid, uc) {
+  if (!SUBFLOW_BY_ID[sid]) return null;
+  return { kind: 'locate', title: 'Open the shared walk',
+           run: () => go({ kind: 'subflow', sf: sid, uc }) };
+}
 function locateActionFor(id) {
   const t = selectTargetFor(id);
   if (!t || !t.selectId) return null;  // excludes actor aliases and anything without a structural home
@@ -1838,10 +1861,12 @@ function relationshipLocateAction(srcId, dstId) {
   return { kind: 'locate', title: 'Locate in ' + tab, run: () => go(target) };
 }
 function decorateActionIcons(scene, s) {
-  const locating = s.kind === 'usecase' && FLOW_VIEW === 'map';
+  // NO ICONS ON A WALK. Every box's NAME opens what it names now, and the icon was the older way of
+  // saying so — a control floating in the corner of a box, in a language no other screen speaks.
+  if (isWalkState(s)) return;
   for (const id in scene.nodeEls) {
     if (scene.noAction.has(id)) continue;  // the box you're already zoomed into — no self-drill icon
-    const action = locating ? locateActionFor(id) : primaryActionFor(id);
+    const action = primaryActionFor(id);
     if (action) addActionIcon(scene.nodeEls[id], id, action);
   }
 }
@@ -2653,184 +2678,10 @@ function leftAlignMessageLabels(texts, lines) {
     text.setAttribute('text-anchor', 'start');
   });
 }
-function bindFlow(uc) {
-  const scene = mainScene, root = scene.root;
-  const steps = FLOWS_NARR[uc] || [];
-
-  // Each participant's DOM parts (top box / lifeline / bottom mirror / label), keyed by the Mermaid
-  // `name` attribute (== the participant id) — the one key BOTH box participants and the actor figure
-  // carry (data-id sits only on the figure + lifelines). Labels carry no name, so match them by text.
-  const elementIds = new Set();
-  for (const st of steps) { if (st.srcId) elementIds.add(st.srcId); if (st.dstId) elementIds.add(st.dstId); }
-  const labelEls = [...root.querySelectorAll('text.actor-box, text.actor-man')];
-  const partsById = {};
-  for (const id of elementIds) {
-    if (!GRAPH.nodes[id]) continue;
-    const sel = '[name="' + id + '"]';
-    const parts = [root.querySelector('.actor-top' + sel), root.querySelector('line.actor-line' + sel),
-                   root.querySelector('.actor-bottom' + sel)].filter(Boolean);
-    for (const t of labelEls) if ((t.textContent || '').trim() === GRAPH.nodes[id].name) parts.push(t);
-    if (!parts.length) continue;
-    partsById[id] = parts;
-    for (const el of parts) scene.dimEls.push(el);
-    // colour the box by kind — every Mermaid `participant` is the same default box, so without this an
-    // entity reads like a component. Top/bottom are <rect> (boxes); the lifeline <line> stays neutral.
-    for (const el of parts) if (el.tagName === 'rect') applyTint(el, GRAPH.nodes[id].kind);
-  }
-
-  // messages: the i-th label (text[i]) + the i-th arrow (line[i]) pair with steps[i] — same pairing as
-  // Pair POSITIONALLY (document order), NOT by Mermaid's `data-id="i<n>"`: that <n> is a global
-  // element counter that also advances for every sub-flow `rect` and its naming `Note`, so once the first
-  // sub-box appears the arrow ids develop gaps (…i4, i7, i8…) and an id-keyed lookup would slide every
-  // later label onto the wrong arrow's column. Notes/rects emit no `.messageText`/`.messageLine`, so the
-  // DOM order of these two selectors is exactly the message order.
-  const texts = [...root.querySelectorAll('text.messageText')];
-  const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
-  leftAlignMessageLabels(texts, lines);
-  scene.focusUnion = focusUnionEls;  // this is a sequence diagram — union selections dim by DOM-part set
-  const msgEls = steps.map((_, i) => [texts[i], lines[i]].filter(Boolean));
-  for (const els of msgEls) for (const el of els) scene.dimEls.push(el);
-
-  // element participants: select (focus to its messages + their other ends) / ⌥-open source / tooltip.
-  for (const id of Object.keys(partsById)) {
-    const parts = partsById[id], selKey = 'node:' + id;
-    const myMsg = steps.map((st, i) => (st.srcId === id || st.dstId === id) ? i : -1).filter((i) => i >= 0);
-    const stepEls = myMsg.flatMap((i) => msgEls[i] || []);
-    const glowEls = [...parts, ...stepEls];
-    const keep = new Set(glowEls);
-    for (const i of myMsg) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
-    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls, false),
-                   focus: { els: keep }, show: () => showNode(id) };
-    scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward can restore this participant selection
-    const on = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = HOVER; };
-    const off = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
-    for (const el of parts) {
-      el.style.cursor = 'pointer';
-      markOpenSrc(el, id);  // </> cursor on a component/entity leaf with a source ref, like the other diagrams
-      el.addEventListener('mouseenter', on);
-      el.addEventListener('mouseleave', off);
-      attachTip(el, () => actionTipNode(id));  // ⌥-hover shows the open-source action
-      el.addEventListener('click', (e) => {
-        if (isDrag(e)) return;
-        e.stopPropagation();
-        if (openSrcClick(id, e)) return;  // ⌥-click opens source (component/entity), consistent with the rest
-        if (e.shiftKey) { frameArrow(parts[0]); return; }  // shift-click is a pure camera move — frame the participant, never select
-        pickSel(scene, desc, e);  // ⌘-click toggles into the multi-selection, a plain click replaces
-      });
-    }
-  }
-
-  // role (actor) participants: same "select -> highlight my messages, dim the rest" as an element
-  // participant above, just addressed differently — a Role has no graph node of its own, so
-  // FLOW_ACTORS (gen_viewer.flow_actors) hands us its Mermaid alias (data-id) instead of a node id.
-  // The actor loop, over the same DOM shape Mermaid draws (stick figure + lifeline).
-  const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
-  // A step's endpoint that is a Role has no node id (srcId/dstId are null), so it can't be found via
-  // partsById. Index each actor's DOM parts by the steps it drives (a.stepIdx) so selecting a step can
-  // keep its actor endpoints lit, the same way partsById keeps its element endpoints. Without this, the
-  // first step (typically actor -> component) dims its actor.
-  const actorPartsByStep = {};
-  for (const a of (FLOW_ACTORS[uc] || [])) {
-    const selKey = 'flowactor:' + uc + ':' + a.aid;
-    const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
-    const life = root.querySelector('line.actor-line[data-id="' + a.aid + '"]');
-    // Matched on the RENDERED label, not the bare name: an actor's label carries what they came
-    // through ("… · via AI agent"), and matching the name alone stopped finding the bottom figure
-    // the moment that suffix appeared.
-    const figB = bottoms.find((g) => (g.textContent || '').trim() === (a.label || a.name)) || null;
-    const parts = [figT, figB, life].filter(Boolean);
-    if (!parts.length) continue;
-    styleSeqActor(root, a.aid, a.kind);  // same vocabulary as the Happy Path and Dependencies
-    for (const el of parts) scene.dimEls.push(el);
-    for (const i of a.stepIdx) (actorPartsByStep[i] || (actorPartsByStep[i] = [])).push(...parts);
-    const stepEls = a.stepIdx.flatMap((i) => msgEls[i] || []);
-    const glowEls = [...parts, ...stepEls];
-    const keep = new Set(glowEls);
-    for (const i of a.stepIdx) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
-    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls, false),
-                   focus: { els: keep }, show: () => showFlowActor(uc, a) };
-    scene.selectors[selKey] = () => selAdd(scene, desc);
-    const on = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = HOVER; };
-    const off = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
-    const click = (e) => { if (isDrag(e)) return; e.stopPropagation();
-      if (e.shiftKey) { frameArrow(parts[0]); return; }  // shift-click frames the actor, never selects
-      pickSel(scene, desc, e); };
-    for (const el of parts) {
-      if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
-      el.style.cursor = 'pointer';
-      el.addEventListener('click', click);
-      el.addEventListener('mouseenter', on);
-      el.addEventListener('mouseleave', off);
-    }
-    if (life) attachEdgeHandlers(life, null, click, on, off, null);
-  }
-
-  // messages: select (the step's OWN panel — showFlowStep grounds it via the step's `where`) / locate
-  // the backbone relationship from the arrow's action / focus / tooltip (the why). A step's arrow +
-  // label glow together; focus keeps them + both endpoints' columns.
-  steps.forEach((st, i) => {
-    const els = msgEls[i];
-    if (!els.length) return;
-    const text = texts[i] || null, line = lines[i] || null;
-    const selKey = 'flowstep:' + uc + ':' + i;
-    const keep = new Set(els);
-    for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
-    for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
-    const desc = { key: selKey,
-                   glow: (reveal) => hpHighlight(scene, els, reveal),
-                   focus: { els: keep },
-                   show: () => { flowSyncCur(i); showFlowStep(uc, i); } };
-    scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward + the step player can restore this flow-step selection
-    const onClick = (ev) => {
-      if (isDrag(ev)) return;
-      ev.stopPropagation();
-      if (ev.shiftKey) { frameArrow(line || text); return; }  // shift-click is a pure camera move — frame, no select, no counter move
-      flowSyncCur(i);  // clicking a step's arrow directly moves the player's counter to it
-      pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
-    };
-    const on = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = HOVER; };
-    const off = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
-    const locate = relationshipLocateAction(st.srcId, st.dstId);
-    if (line) attachEdgeHandlers(line, text, onClick, on, off, null, null,
-      () => selRevealsAction(scene, selKey), locate);
-    else {
-      text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important');
-      if (locate) {
-        addLabelActionIcon(text, 'flowloc:' + uc + ':' + i, locate);
-        const icon = text._actionIcon;
-        const showLocate = () => showIcon(icon);
-        const hideLocate = () => {
-          if (!selRevealsAction(scene, selKey)) hideIcon(icon);
-        };
-        text.addEventListener('mouseenter', showLocate);
-        text.addEventListener('mouseleave', hideLocate);
-        icon.addEventListener('mouseenter', showLocate);
-        icon.addEventListener('mouseleave', hideLocate);
-        if (icon._bridge) {
-          icon._bridge.addEventListener('mouseenter', showLocate);
-          icon._bridge.addEventListener('mouseleave', hideLocate);
-        }
-      }
-      text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off);
-    }
-  });
-
-  // Hand the step player everything it needs to walk this flow: the ordered steps, each step's arrow+label
-  // DOM (msgEls) and its endpoint columns (partsById). A fresh visit is inactive with no remembered step;
-  // its first Next lands on step 1. No flow -> null, so the strip stays hidden.
-  flowPlay = steps.length
-    ? { uc, kind: 'sequence', steps, msgEls, partsById, cur: -1, active: false }
-    : null;
-}
-// --- use-case flow step player --------------------------------------------------
-// Walk a flow's actions one at a time. Each step is selected exactly as a click on its arrow would —
-// the same info pane, code viewer, glow and focus — then scrolled into view (only if it isn't already
-// fully shown). The step player is just a driver over the arrows' own click selection, so stepping and
-// clicking never diverge.
-// Pan (not zoom) the diagram by (dx,dy) screen px with an ease-out — a short "scroll" so the eye can
-// follow the jump between steps instead of teleporting. panBy is relative, so each frame applies only
-// the delta since the last one; a new call cancels the in-flight one (rapid stepping recomputes from the
-// current position in flowReveal, so it self-corrects).
+// The in-flight pan animation's frame handle, so a second step cancels the first rather than racing it.
+// It was declared inside the block the SEQUENCE binder lived in, and went out with it — leaving four
+// uses of an undeclared binding in a module, which is strict mode, so the step player threw on the very
+// first Next and the camera never moved.
 let flowPanRAF = 0;
 function flowAnimatePanBy(dx, dy) {
   if (flowPanRAF) { cancelAnimationFrame(flowPanRAF); flowPanRAF = 0; }
@@ -2920,11 +2771,11 @@ function flowReveal(els, i) {
   // full height would always overflow); a map endpoint is a box, which is exactly what should be in view.
   const map = flowPlay.kind === 'map';
   const items = els.map((el) => ({ el, xOnly: false }));
-  // On the map an actor endpoint is a drawn box like any other, so it is addressed by its `FAn` alias;
-  // in the sequence view actor parts live outside partsById (see bindFlow), so only element ids apply.
-  const ends = map
-    ? [flowMapBoxId(flowPlay.uc, st.srcId, st.src), flowMapBoxId(flowPlay.uc, st.dstId, st.dst)]
-    : [st.srcId, st.dstId];
+  // On the map an actor endpoint is a drawn box like any other, so it is addressed by its `FAn` alias,
+  // and a step inside a COLLAPSED shared walk is addressed by the two boxes its arrow actually joins —
+  // its own endpoints are inside the collapsed box and have nothing on screen to scroll to. In the
+  // sequence view actor parts live outside partsById (see bindFlow), so only element ids apply.
+  const ends = map ? flowMapStepArrow(flowPlay.uc, i, st) : [st.srcId, st.dstId];
   for (const end of ends)
     for (const el of (flowPlay.partsById[end] || []))
       if (map) items.push({ el, xOnly: false });
@@ -3040,22 +2891,26 @@ function flowStepBy(d) {
 }
 // Called from render() once svg-pan-zoom exists. Shows the strip. A back/forward revisit that restored a
 // selected step starts there; a fresh drill is inactive with no memory, so its first Next selects step 1.
-// A Map/Sequence switch is not a fresh drill: it preserves both the remembered index and active state.
+// THE STEP PLAYER'S CARD. It used to share this card with a Map/Sequence switch, which is why the card
+// was rebuilt on every render; the switch is gone, so all that is left is showing the card on a walk and
+// hiding it everywhere else.
+function syncFlowCard(s) {
+  const card = document.getElementById('flowpicker');
+  const mode = document.getElementById('flowmode');
+  if (!card) return;
+  card.hidden = !isWalkState(s);
+  if (mode) mode.innerHTML = '';
+}
 function flowInit(s) {
-  const switched = flowResume;
-  flowResume = null;   // consumed either way: a pending resume must never outlive the render it was set for
   if (!flowPlay || !flowPlay.steps.length) { flowplayer.hidden = true; return; }
   flowplayer.hidden = false;
   const m = (mainScene.selectedKey || '').match(/^flowstep:.*:(\d+)$/);
   flowPlay.cur = m ? +m[1] : -1;
   flowPlay.active = !!m;
-  // A rendering switch carries the live state directly. Otherwise use the history point's snapshot,
-  // which restores selected and suspended step numbers alike after Back/Forward navigation.
-  const saved = switched || (s && s.flow);
-  if (restoreFlowSnapshot(saved)) {
-    if (switched && flowPlay.active) { flowGoto(flowPlay.cur); return; }
-    return;
-  }
+  // The history point's snapshot, which restores selected and suspended step numbers alike after
+  // Back/Forward navigation. (It also carried a live hand-off across the Map/Sequence switch, which is
+  // gone: a walk has one rendering.)
+  if (restoreFlowSnapshot(s && s.flow)) return;
   flowCounter();
 }
 // One flow step's complete information. The sequence message and a single-step map arrow render this
@@ -3073,15 +2928,32 @@ function flowStepInfoHtml(uc, i) {
   // owns structural navigation, so the pane stays focused on the step's authored facts and call site.
   // The Step pill is on EVERY card, not just a bundled arrow's sections: it is the one line tying the
   // card to the diagram's numbers and the "Step n / N" counter, single-step selections included.
-  const stepBadge = '<span class="badge edge">Step ' + (i + 1) + '</span>';
-  // The title names the doer, then the action in italics: "Team member *clicks Connect…*" — one
-  // phrase, the emphasis carrying the split. On a big flow the lit arrow's endpoints
-  // can sit outside the current framing, and then the card is the only place the step's subject exists
-  // at all. A plain name, deliberately not a link: the pane stays step-specific, and structural
-  // navigation belongs to the drawn arrow. (The receiver rides the action sentence itself.)
-  return '<div class="pane-title"><h2>' + esc(st.src) + ' <em>' + (st.verb ? mdInline(st.verb) : 'step') + '</em></h2>' + stepBadge + '</div>'
-    + (st.sf ? '<dl><dt>Part of sub-flow</dt><dd>&#10216;' + esc(st.sfName || st.sf)
-       + '&#10217; <span class="muted">(' + esc(st.sf) + ' — a shared sequence this flow includes)</span></dd></dl>' : '')
+  const stepBadge = '<span class="ecard-pill">step ' + (i + 1) + '</span>';
+  // The title is the ACTION and nothing else — see below. It used to name the doer first, back when a
+  // phrase was written in the third person and needed a subject to hang on.
+  // THE TITLE IS THE ACTION, and nothing else. A step's phrase and a shared walk's name are written the
+  // same way — imperative — so one line serves both, and a step that runs a shared walk finally says
+  // WHAT it runs instead of the empty "runs".
+  const title = st.sf
+    ? '<button type="button" class="pane-title-link" data-gosf="' + esc(st.sf) + '"'
+      + ' title="Open the shared walk">' + esc(st.sfName || st.sf) + '</button>'
+    : (st.verb ? mdInline(st.verb) : 'step');
+  // THE SAME SHELL AN ELEMENT'S CARD USES. Select a box and you got a card with a type word on it;
+  // select an arrow and you got a bare heading — two designs on one screen, and only one of them said
+  // what kind of thing you had clicked. The word is `walk step`, and it is plain: a step has no home
+  // view to show it in, so a live-looking control would go nowhere.
+  return '<article class="ecard ecard-step">'
+    + '<div class="ecard-head">'
+    + '<span class="ecard-name"><em>' + title + '</em></span>'
+    + '<span class="ecard-type ecard-type-plain">walk step</span>'
+    + stepBadge
+    + '</div></article>'
+    + (st.sf ? '<dl><dt>Shared walk</dt><dd>' + (st.sfSteps || 0) + ' steps of its own'
+       + ((st.sfChips || []).length
+          ? '<div class="sfchips">' + st.sfChips.map((c) =>
+              '<span class="cychip" data-k="' + esc(c.kind) + '">' + esc(c.name) + '</span>').join('') + '</div>'
+          : '')
+       + '</dd></dl>' : '')
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
     + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '')
     + srcRow
@@ -3097,12 +2969,25 @@ function flowStepInfoHtml(uc, i) {
 // contract on the comment alone — it is a plain substring check.)
 function stepRulesHtml(uc, st) {
   if (!HAS_RULES) return '';
-  const key = uc + ':' + (st.sf || uc) + ':' + st.n;
-  const ids = ((RULES_VIEW.byStep || {})[key]) || [];
-  if (!ids.length) return '';
-  const byId = new Map((RULES_VIEW.rules || []).map((r) => [r.id, r]));
-  const links = ids.map((rid) => byId.get(rid)).filter(Boolean).map((r) => {
-    const link = (r.steps || []).find((l) => l.uc === uc && l.container === (st.sf || uc) && l.n === st.n);
+  // WHICH WALK AUTHORED THIS STEP. It is the walk being DRAWN — `uc` — on both kinds of screen. A
+  // reference step's `sf` names the walk it RUNS, not the walk it belongs to, and reading it here put
+  // 172 rule links on the wrong step and lost 299 others. On a SHARED WALK's own screen the links are
+  // filed under every use case that runs it, so the use case is not part of the question there; on a
+  // use case's screen it is, or one shared walk's step would answer for every use case at once.
+  const shared = !!SUBFLOW_BY_ID[uc];
+  const seen = new Set();
+  const found = [];
+  for (const r of (RULES_VIEW.rules || [])) {
+    for (const l of (r.steps || [])) {
+      if (l.container !== uc || String(l.n) !== String(st.n)) continue;
+      if (!shared && l.uc !== uc) continue;
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      found.push([r, l]);
+    }
+  }
+  if (!found.length) return '';
+  const links = found.map(([r, link]) => {
     // "this exact step" and "inside the same function as this step" are different claims; saying so
     // is the difference between a readout and a pretended proof.
     const near = link && link.strength !== 'exact'
@@ -3118,12 +3003,26 @@ function bindFlowStepInfo(host, uc, i) {
   host.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
+  // The step that runs a shared walk opens it, carrying the use case the reader came through so the
+  // walk's trail can lead back the way they arrived.
+  host.querySelectorAll('[data-gosf]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    go({ kind: 'subflow', sf: b.getAttribute('data-gosf'), uc });
+  }));
 }
 // A flow step's side panel — EVERY step shows ITSELF (its phrase, note, and its own call
 // site), never the backbone arrow's text: one element pair appears in several steps meaning different
 // things, so the shared arrow description can't be right for each — and the arrow's `where` is only an
 // example site, while the step's `where` is THE location. Structural navigation belongs to the Locate
 // action on the drawn arrow, where it remains available without repeating the endpoints in this pane.
+// The step's card ALONE. `showFlowStep` also moves the code viewer to the step's own line, which is
+// right for a click and wrong for a pointer crossing the map: the column would jump on every arrow.
+function previewFlowStep(uc, i) {
+  const st = (FLOWS_NARR[uc] || [])[i];
+  if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
+  panel.innerHTML = flowStepInfoHtml(uc, i);
+  bindFlowStepInfo(panel, uc, i);
+}
 function showFlowStep(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
@@ -3668,7 +3567,7 @@ function applyDiffOverlay(s) {
 // A use case "contains changes" when any element its T6 flow touches is changed (FLOWS_NARR × DIFF_STATE)
 // — the behavioural layer of the diff, DERIVED from the element changes, not a separate source.
 function usecaseDiffState(uc) {
-  for (const st of (FLOWS_NARR[uc] || [])) {
+  for (const st of walkStepsDeep(uc)) {
     for (const id of [st.srcId, st.dstId]) {
       if (id && DIFF_STATE[id] && DIFF_STATE[id] !== 'rippled') return 'modified';
     }
@@ -4138,6 +4037,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
     h.style.setProperty('fill', 'none', 'important');
     h.style.setProperty('marker-end', 'none', 'important');
     h.style.pointerEvents = 'stroke'; h.style.cursor = 'pointer';
+    h.classList.add('cy-edgehit');   // findable: an arrow's real hit area is these clones, not the path
     if (onDrill) h.classList.add('drill');  // ⌘-held cursor affordance
     h.addEventListener('click', onClick);
     h.addEventListener('mouseenter', hoverOn);
@@ -4153,6 +4053,10 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
     label.addEventListener('mouseenter', hoverOn);
     label.addEventListener('mouseleave', hoverOff);
   }
+  // THE ARROW'S REAL HIT AREA, kept on the drawn path. A caller that wants to listen on the whole arrow
+  // cannot find these otherwise: every edge's clones are appended into the SAME parent group, so a
+  // sibling query returns the other arrows' clones too.
+  p.__cyHits = hits;
   if (actionFn) { for (const h of hits) attachTip(h, actionFn); if (label) attachTip(label, actionFn); }
   const edgeAction = action || (onDrill ? { kind: 'drill', run: onDrill } : null);
   if (edgeAction) bindEdgeActionIcon(p, hits, label, edgeAction, isSelected);
@@ -4427,11 +4331,12 @@ const tabLast = {};
 // Every field `stateKey` distinguishes states by. Anything added here is automatically carried by
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
-const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
+const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sf', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
                       'bkid', 'cap', 'act', 'gid', 'sys', 'epk', 'iface', 'id'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
-    + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
+    + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sf ? ':' + s.sf : '')
+    + (s.sd ? ':' + s.sd : '')
     + (s.unit ? ':' + s.unit : '')  // deploymentUnit cards are keyed by unit name (else they collide)
     + (s.store ? ':' + s.store : '')  // Data-view cross-links focus a store pane — key on it so a
     + (s.entity ? '#' + s.entity : '')  // store→store / row jump actually re-renders (not a no-op)
@@ -5269,12 +5174,10 @@ function applyEnvDim(scene) {
 // Map is the default because it preserves the structural vocabulary used by the rest of the viewer;
 // the choice is sticky across navigation (like DEPLOY_ENV), so a reader who switches to Sequence keeps
 // it while drilling from use case to use case.
-let FLOW_VIEW = 'map';   // 'map' | 'sequence'
-let flowResume = null;        // {cur, active} carried only across a Map/Sequence rendering switch
 const EMPTY_FLOW_MAP = 'flowchart LR\n  NOFLOW["No T6 flow recorded"]';
 
 function flowMermaidFor(uc) {
-  return FLOW_VIEW === 'map' ? (FLOWS_MAP[uc] || EMPTY_FLOW_MAP) : (FLOWS_MM[uc] || EMPTY_FLOW_MM);
+  return FLOWS_MAP[uc] || EMPTY_FLOW_MAP;
 }
 
 // The card. Floats bottom-left over the diagram like the environment and capability pickers, and for
@@ -5289,49 +5192,14 @@ function flowMermaidFor(uc) {
 // Only the MODE half is rebuilt here — the step player is
 // static markup inside the same card, shown and driven by flowInit/flowCounter, so re-rendering the
 // switch can never tear out the player's buttons.
-function syncFlowPicker(s) {
-  const card = document.getElementById('flowpicker'), el = document.getElementById('flowmode');
-  if (!card || !el) return;
-  const on = !!(s && s.kind === 'usecase');
-  card.hidden = !on;
-  if (!on) { el.innerHTML = ''; return; }
-  const btn = (v, label) =>
-    `<button type="button" data-fv="${v}"${FLOW_VIEW === v ? ' class="on"' : ''}>${label}</button>`;
-  el.innerHTML = '<label class="cappick-lbl">Flow as</label>'
-    + `<span class="uc-seg">${btn('map', 'Map')}${btn('sequence', 'Sequence')}</span>`;
-  el.querySelectorAll('.uc-seg button').forEach((b) => b.addEventListener('click', () => {
-    const v = b.getAttribute('data-fv');
-    if (v === FLOW_VIEW) return;
-    FLOW_VIEW = v;
-    // Keep the reader's place: the two renderings walk the SAME steps, so switching mid-walk lands on
-    // the same step in the other drawing rather than resetting to the start. flowInit consumes this.
-    // `render()` nulls flowPlay synchronously but repaints asynchronously, so a second click while the
-    // repaint is in flight must not overwrite a pending position with "unstarted".
-    if (flowPlay) flowResume = { cur: flowPlay.cur, active: flowPlay.active };
-    // Same view identity, a completely different layout (lifelines vs a box graph), so the camera
-    // remembered for this view would frame the new drawing wrongly — drop it and let the new
-    // rendering fit fresh. (`resetTab` drops it the same way for the same reason.)
-    const cur = history[hi];
-    if (cur) { delete vpByView[stateKey(cur)]; delete cur.vp; }
-    render();          // same state, the other rendering of the same flow
-  }));
+function isWalkState(s) { return !!(s && (s.kind === 'usecase' || s.kind === 'subflow')); }
+function walkIdOf(s) { return s.kind === 'subflow' ? s.sf : s.uc; }
+function subflowName(sid) { return (SUBFLOW_BY_ID[sid] || {}).name || sid; }
+// THE NAME OF A WALK, whichever kind it is. A use case is a graph node; a shared walk is not, so a
+// single `GRAPH.nodes` lookup printed a raw `SFn` wherever the two kinds meet.
+function walkName(id) {
+  return SUBFLOW_BY_ID[id] ? subflowName(id) : ((GRAPH.nodes[id] && GRAPH.nodes[id].name) || id);
 }
-
-// A map box's Mermaid id IS its element id — except an actor, which carries an `FAn` alias (a Role has
-// no node, so there is no id to use). These two helpers cross that boundary in both directions:
-// `flowMapToken` turns a drawn box id into the token a narrative step carries as its endpoint, and
-// `flowMapBoxId` goes the other way — the direction the step player needs.
-//
-// Both go through FLOW_ACTORS, which is the ONE table in the RAW name space the narrative steps use.
-// Two rejected alternatives, each of which was tried:
-//   * trusting the roster's numbering while the generators numbered by a different rule — the two
-//     disagreed on a draft map carrying a dangling element id. Fixed at the source instead: the
-//     generators and `flow_actors` now share `is_role_endpoint`, so one alias means one participant,
-//     and a test pins that agreement (test_flow_map_and_flow_actors_agree_on_every_alias).
-//   * reading the names off the DRAWN boxes, which sounds authoritative but is not: a box label is
-//     `_safe_label(name)`, so a role named `Ops|Team` is drawn `Ops/Team` and would never match the
-//     step's raw token — its box goes inert and its steps lose their arrows.
-// The lesson both times: cross the alias boundary in ONE text space, and it must be the authored one.
 function flowMapToken(uc, mid) {
   if (!/^FA\d+$/.test(mid)) return mid;
   const a = (FLOW_ACTORS[uc] || []).find((x) => x.aid === mid);
@@ -5385,7 +5253,40 @@ function flowMapSteps(uc, a, b) {
   const ta = flowMapToken(uc, a), tb = flowMapToken(uc, b);
   const out = [];
   (FLOWS_NARR[uc] || []).forEach((st, i) => {
-    if ((st.srcId || st.src) === ta && (st.dstId || st.dst) === tb) out.push({ st, i });
+    // A step that RUNS A SHARED WALK is drawn to that walk's box, never to its own `dst` — the dst
+    // names some component inside the walk, which this map does not draw at all.
+    const dst = st.sf || (st.dstId || st.dst);
+    if ((st.srcId || st.src) === ta && dst === tb) out.push({ st, i });
+  });
+  return out;
+}
+// The map arrow a given step rides — the ONE place that answers it. Re-deriving the pair from the
+// step's own endpoints looks right and is wrong for a step that runs a shared walk: its `dst` is inside
+// the collapsed box, so the glow lands on nothing and the player scrolls to a box that is not there.
+function flowMapStepArrow(uc, i, st) {
+  return [flowMapBoxId(uc, st.srcId, st.src),
+          st.sf || flowMapBoxId(uc, st.dstId, st.dst)];
+}
+// WHAT A WALK TOUCHES, with its shared walks opened — as against FLOWS_NARR, which is what a reader
+// WALKS. Running a shared walk does reach what is inside it, so every "does this use case touch X?"
+// question asks this one, and every "how long is this walk / which step am I on" question asks the
+// other. The map's own checks make exactly this split, for exactly this reason.
+function walkStepsDeep(uc, seen) {
+  const been = seen || new Set();
+  if (been.has(uc)) return [];      // a shared walk cannot run itself, but never loop on a bad map
+  been.add(uc);
+  const out = [];
+  for (const st of (FLOWS_NARR[uc] || [])) {
+    out.push(st);
+    if (st.sf) out.push(...walkStepsDeep(st.sf, been));
+  }
+  return out;
+}
+// The shared walks one walk runs, in step order — what bindFlowMap needs to bind their boxes.
+function flowMapSubflows(uc) {
+  const seen = new Set(), out = [];
+  (FLOWS_NARR[uc] || []).forEach((st) => {
+    if (st.sf && !seen.has(st.sf)) { seen.add(st.sf); out.push(st); }
   });
   return out;
 }
@@ -5406,8 +5307,28 @@ function showFlowPair(uc, a, b) {
   setTreeSelection(null);
   highlightTreePath(null);
 }
+// Put the KIND DRAWING into every door's box on a use case map. The generator ships an empty, sized
+// slot carrying the kind; the eleven drawings and the kind→drawing table live here, beside the
+// Interfaces picture that already uses them — so the two pictures can never draw a door's kind
+// differently. `currentColor` keeps the glyph in the box's own text colour.
+function fillFlowMapGlyphs(root) {
+  root.querySelectorAll('.cyglyph[data-k]').forEach((slot) => {
+    if (slot.firstChild) return;
+    slot.innerHTML = ifaceGlyphSvg(IFACE_GLYPH[slot.getAttribute('data-k')] || 'doc', 'currentColor');
+  });
+}
+// Was the click ON THE NAME — the words themselves, not the label around them? The generator wraps
+// every box's name in `.cyname` for exactly this. The LABEL is not the name: an actor's carries a blank
+// line holding the stick figure, a shared walk's carries its step count and its chips, a door's carries
+// its kind glyph. Targeting the label made the whole box a link — 94% of an actor's — and left nothing
+// to select on. Targeting the words leaves every one of those extra lines to selection.
+function nameClick(ev) {
+  const t = ev && ev.target;
+  return !!(t && t.closest && t.closest('.cyname'));
+}
 function bindFlowMap(uc) {
   const scene = mainScene;
+  fillFlowMapGlyphs(scene.root);
   const steps = FLOWS_NARR[uc] || [];
 
   // Every element box selects exactly as it does in any other diagram (glow, neighbourhood dim, its own
@@ -5418,8 +5339,18 @@ function bindFlowMap(uc) {
   bindNodes(scene, (id, el, ev) => {
     const locate = locateActionFor(id);
     if (locate && isDrillClick(ev)) { locate.run(); return; }
+    // A PLAIN CLICK ON THE NAME OPENS THE THING, the gesture Features and Interfaces already use — a
+    // card's title is what you click there, and a box's name is the same word in the same role. The
+    // rest of the box still selects, so the two acts stay separate: the name goes somewhere, the box
+    // stays here and tells you about itself.
+    if (nameClick(ev)) { drillInto(id); return; }
     selectNodeFromCanvas(el, id, ev);
   });
+  scene.root.querySelectorAll('g.node').forEach((el) => {
+    const id = idOf(el);
+    if (id && GRAPH.nodes[id]) previewOnHover(scene, el, () => showNode(id));
+  });
+
   scene.root.querySelectorAll('g.node').forEach((el) => {
     const aid = idOf(el);
     if (!aid || !/^FA\d+$/.test(aid)) return;
@@ -5438,10 +5369,37 @@ function bindFlowMap(uc) {
                           focus: nodeFocus(scene, aid), show: () => showFlowActor(uc, a) });
     scene.selectors['node:' + aid] = () => selAdd(scene, desc());
     bindHoverGlow(scene, el, aid);
+    previewOnHover(scene, el, () => showFlowActor(uc, a));
     el.addEventListener('click', (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
+      if (nameClick(ev)) { go({ kind: 'actor', act: a.name }); return; }  // the name opens their page
       pickSelBox(scene, desc(), el, ev);   // shift=frame, ⌘=toggle, plain=replace — as any box
+    });
+  });
+
+  // A COLLAPSED SHARED WALK's box, which like an actor has no GRAPH node for bindNodes to find. A plain
+  // click selects it and shows the step that runs it; a DRILL (⌥-click / double-click, and the corner
+  // icon) opens the shared walk's own screen, where its steps are numbered from 1 and belong to it.
+  const sfHere = flowMapSubflows(uc);
+  scene.root.querySelectorAll('g.node').forEach((el) => {
+    const sid = idOf(el);
+    const ref = sid && sfHere.find((st) => st.sf === sid);
+    if (!ref) return;
+    scene.nodeEls[sid] = el;
+    el.style.cursor = 'pointer';
+    const open = subflowOpenAction(sid, uc);
+    const desc = () => ({ key: 'node:' + sid, glow: (reveal) => glowNode(el, reveal),
+                          focus: nodeFocus(scene, sid),
+                          show: () => showFlowPair(uc, flowMapBoxId(uc, ref.srcId, ref.src), sid) });
+    scene.selectors['node:' + sid] = () => selAdd(scene, desc());
+    bindHoverGlow(scene, el, sid);
+    previewOnHover(scene, el, () => showFlowPair(uc, flowMapBoxId(uc, ref.srcId, ref.src), sid));
+    el.addEventListener('click', (ev) => {
+      if (isDrag(ev)) return;
+      ev.stopPropagation();
+      if (open && (nameClick(ev) || isDrillClick(ev))) { open.run(); return; }
+      pickSelBox(scene, desc(), el, ev);
     });
   });
 
@@ -5455,7 +5413,12 @@ function bindFlowMap(uc) {
     if (!on.length) return null;
     return { e: { src: m[1], dst: m[2] },
              selKey: 'flowpair:' + uc + ':' + key,
-             opts: { action: relationshipLocateAction(m[1], m[2]) },
+             // NO ACTION ON A WALK ARROW. Selecting a step already opens its own code (showFlowStep
+             // syncs the viewer), so a drill offering "open the code" would repeat the click that got
+             // you here. What the drill used to do was locate the STRUCTURAL arrow between the same two
+             // elements, in another view — it left the story to show an aggregate of every story, which
+             // is why it read as useless. A box still locates: that is a different question.
+             opts: {},
              // A one-step arrow is that step, exactly like a sequence message. A bundle is not one
              // particular step: show every step and leave the inactive player's saved index untouched.
              showFn: () => {
@@ -5470,6 +5433,13 @@ function bindFlowMap(uc) {
       label,
       stepIdx: flowMapSteps(uc, m[1], m[2]).map((x) => x.i),
     };
+    // A STEP ANSWERS ON HOVER TOO. The whole arrow is the target — its transparent hit clones and its
+    // number — and the line points at the drawn path, not at whichever clone the pointer is over.
+    const on = flowMapSteps(uc, m[1], m[2]);
+    if (!on.length) return;
+    previewOnHover(scene, [...(p.__cyHits || []), label],
+                   () => (on.length === 1 ? previewFlowStep(uc, on[0].i)
+                                          : showFlowPair(uc, m[1], m[2])), p);
   });
 
   // One selector per STEP, keyed exactly as the sequence view keys its own (`flowstep:<uc>:<i>`), so the
@@ -5478,7 +5448,7 @@ function bindFlowMap(uc) {
   // its two boxes — the map's equivalent of lighting one message and its two lifelines.
   const msgEls = [];
   steps.forEach((st, i) => {
-    const a = flowMapBoxId(uc, st.srcId, st.src), b = flowMapBoxId(uc, st.dstId, st.dst);
+    const [a, b] = flowMapStepArrow(uc, i, st);
     const arrow = arrows[a + '>' + b];
     msgEls[i] = arrow ? [...edgeSegs(arrow.path), arrow.label].filter(Boolean) : [];
     if (!arrow) return;                    // a step whose pair was not drawn: no glow, but it still counts
@@ -5938,7 +5908,7 @@ function mermaidFor(s) {
   if (s.kind === 'deployment') return MERMAID_DEPLOYMENT;  // one diagram; the env dims, never filters
   if (s.kind === 'deploymentGroup') return DEPLOYMENT_GROUP_CARDS[s.gid];
   if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
-  if (s.kind === 'usecase') return flowMermaidFor(s.uc);  // Sequence or Map — the flow picker's choice
+  if (isWalkState(s)) return flowMermaidFor(walkIdOf(s));  // Sequence or Map — the flow picker's choice
   if (s.kind === 'libs') return MERMAID_LIBS;
   if (s.kind === 'bucketfold') return MERMAID_BY_BUCKETFOLD[s.bkid];
   // component: the baked report ships a diff-styled diagram (MERMAID_DIFF); a live diff has none, so it
@@ -6003,7 +5973,26 @@ function syncInfoPane(_s, transient) {
 // settings, long after this point, and reading them here would run before they exist.
 let codeOpen = false;
 function codePaneOpen() { return codeOpen; }
-function syncCodePane(_s) {
+// THE FIRST WALK YOU OPEN SHOWS THE CODE. A use case map is the one screen whose every box and every
+// arrow points at a place in the code, and a reader who has never opened the column does not know it is
+// there — the rail on the right edge is a thin strip, and nothing on the map says the two are joined.
+// Once only, and remembered: a reader who then shuts it is not argued with, on this screen or any other.
+function openCodeOnFirstWalk(s) {
+  if (!SERVED || !isWalkState(s)) return;
+  if (lsGet(LS.walkCode) === '1') return;
+  // ARRIVING ON A WALK IS THE EVENT, whether or not the column had to be opened. Returning early on an
+  // ALREADY-OPEN column left the flag unset, so the reader's × — which comes back through here — met a
+  // shut column and an unset flag and forced it open again. The × was dead for every reader who had
+  // ever left the column open.
+  lsSet(LS.walkCode, '1');
+  if (!codePaneOpen()) setCodeOpen(true);
+}
+function syncCodePane(s) {
+  // HERE, not at the render that navigated. `SERVED` is decided by a fetch that is still in flight at
+  // boot, and this is the one place that runs again once it lands (initServerMode -> resyncCodePane) —
+  // the same reason the rail's own state is read here. Deciding it at the navigation left the column
+  // shut on the very first walk, which is the one arrival the rule exists for.
+  openCodeOnFirstWalk(s);
   const close = document.getElementById('cvclose');
   if (close) close.hidden = false;   // the column is optional everywhere, so × is offered everywhere
   // MID-SLIDE the column owns its own layout (slideCodePane), and a re-render must not take it back:
@@ -6394,9 +6383,68 @@ function rectsOverlap(a, b) {
 // THE ONE ELEMENT the card is about, when there is exactly one. `.is-selected` is put on a box by
 // glowNode and on an arrow by glowEdge, so this one query covers both. More than one, or none, and
 // there is no single subject to point at.
+// THE BOX THE CARD IS ABOUT: whichever one the pointer is previewing, else the one selected. Hovering
+// shows a card before you commit to a click, so the line has to follow the pointer or it would point at
+// the last thing you clicked while describing something else.
+let hoverPreview = null;
 function soleSelectedEl() {
+  if (hoverPreview && hoverPreview.isConnected) return hoverPreview;
   const els = diagram.querySelectorAll('.is-selected');
   return els.length === 1 ? els[0] : null;
+}
+// HOVER SHOWS THE CARD. On a walk, a reader scanning the boxes wants to know what each one is, and
+// clicking every one of them to find out is the older way. A short delay, so crossing a box on the way
+// somewhere else does not flash a card; and leaving puts back whatever was there, so a card you PINNED
+// with a click survives the pointer passing over its neighbours.
+const HOVER_CARD_MS = 160;
+const HOVER_LEAVE_MS = 90;
+// `els` is everything that counts as hovering this thing — a box is one element, an ARROW is its
+// transparent hit clones plus its label. `anchor` is what the line points at, which for an arrow is the
+// drawn path rather than whichever clone the pointer happens to be over.
+//
+// The leave is DELAYED, and a re-enter cancels it: moving from an arrow's line onto its own number fires
+// leave-then-enter, and restoring in between made the card blink on a pointer that never left.
+function previewOnHover(scene, els, show, anchor) {
+  const list = (Array.isArray(els) ? els : [els]).filter(Boolean);
+  const at = anchor || list[0];
+  // THE SCREEN THIS PREVIEW BELONGS TO. A hover started just before a click fires its timer AFTER the
+  // click has navigated, and wrote the old screen's card onto the new one — measured, a 160ms window,
+  // and the card then named a step number the new screen does not have. The timer carries the
+  // generation it was armed in and drops itself when the diagram has been rebuilt since.
+  const gen = sceneGen;
+  let inTimer = null;
+  let outTimer = null;
+  const enter = () => {
+    clearTimeout(outTimer); outTimer = null;
+    inTimer = setTimeout(() => {
+      if (gen !== sceneGen || !at.isConnected) return;
+      if (panelDrag || srcSliding) return;   // not while the reader is moving the card or the column
+      // A PIN BEATS A HOVER. Once the reader has clicked something they have asked for that card and
+      // said so; a pointer crossing a neighbour on its way somewhere else has asked for nothing. The
+      // Interfaces picture has always worked this way (`if (!pinned) show(iid)`), and this is the same
+      // rule for every diagram — hover ANSWERS a question, a click SETTLES one.
+      if (scene.selection && scene.selection.length) return;
+      hoverPreview = at;
+      panel = PANEL_HOST;
+      show();
+      paneSync();     // THE one rule for whether the card is on screen — writing the HTML is not enough
+      syncCallout();
+    }, HOVER_CARD_MS);
+  };
+  const leave = () => {
+    clearTimeout(inTimer); inTimer = null;
+    if (gen !== sceneGen || hoverPreview !== at) return;
+    outTimer = setTimeout(() => {
+      hoverPreview = null;
+      selApply(scene);     // the selection's card again, or this view's default
+      paneSync();
+      syncCallout();
+    }, HOVER_LEAVE_MS);
+  };
+  for (const el of list) {
+    el.addEventListener('mouseenter', enter);
+    el.addEventListener('mouseleave', leave);
+  }
 }
 // IF THE CARD COVERS WHAT IT DESCRIBES, MOVE THE CARD. The card is the thing that can move: the element
 // is where the drawing put it, and shifting the drawing instead would move everything else with it.
@@ -6479,11 +6527,11 @@ function syncCallout() {
 // remembered box and nothing to step aside from. The line to the selected element stays, and matters
 // more here than it did for the card, since the drawer sits at the far edge from most of the drawing.
 let drawerMode = false;
-function setDrawerMode(on) {
+function setDrawerMode(on, chose) {
   drawerMode = !!on;
-  // '0' for the card, not an empty string: unset has to mean the DRAWER, which is the default, and an
-  // empty value is indistinguishable from never having chosen.
-  lsSet(LS.drawer, drawerMode ? '1' : '0');
+  // Written only from `chose`, never from the boot default — see LS.panel. A default that writes
+  // itself down is a default nobody can ever change.
+  if (chose) lsSet(LS.panel, drawerMode ? 'drawer' : 'card');
   document.body.classList.toggle('card-drawer', drawerMode);
   // Switching shape drops whatever the OTHER shape had written on the element: the card's remembered
   // box is inline left/top/width/height, and the drawer's is a class. Neither may leak into the other.
@@ -6640,7 +6688,7 @@ function bindFor(s) {
   else if (s.kind === 'domsub') bindDomainSub(s.sd);  // neighbourhood: framed entities + collapsed neighbour boxes + cross arrows
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
-  else if (s.kind === 'usecase') (FLOW_VIEW === 'map' ? bindFlowMap : bindFlow)(s.uc);
+  else if (isWalkState(s)) bindFlowMap(walkIdOf(s));
   else if (s.kind === 'deployment') bindDeployment();
   else if (s.kind === 'deploymentUnit') bindDeployment(s.unit);  // same binder; the focal process (s.unit) drills nowhere further
   else if (s.kind === 'libs') bindLibs();
@@ -6664,7 +6712,7 @@ function topView(kind, id) {  // which top-level button a state lives under (con
   // the page is the drill out of that card. The Actors tab it used to live under is gone — the cast
   // column already showed every actor with more context, so the tab was the same answer twice.
   if (kind === 'actor') return 'usecases';
-  if (kind === 'usecases' || kind === 'capability' || kind === 'usecase') return 'usecases';
+  if (kind === 'usecases' || kind === 'capability' || kind === 'usecase' || kind === 'subflow') return 'usecases';
   if (kind === 'rule') return 'rules';  // one rule's page lives under the Business rules list, as a flow does under Use Cases
   if (kind === 'interfaces' || kind === 'interface') return 'interfaces';  // one surface's page is the drill out of the Interfaces list
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup' || kind === 'depedge') return 'deployment';  // a process/container card, and one arrow's page, live under the Deployment tab
@@ -6774,6 +6822,7 @@ function stateTitle(s) {
   if (s.kind === 'bridge') return elName(s.sid) + ' → ' + elName(s.sd);
   if (s.kind === 'hp') return 'Happy Path';
   if (s.kind === 'usecase') return elName(s.uc);
+  if (s.kind === 'subflow') return subflowName(s.sf);
   if (s.kind === 'libs') return 'Libraries';
   if (s.kind === 'bucketfold') return bucketFoldName(s.bkid);
   if (s.kind === 'subsystem') return elName(s.sid);
@@ -6839,6 +6888,15 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     const cap = HAS_CAPABILITIES ? (CAP_OF_UC[s.uc] ? CAP_OF_UC[s.uc].id : '-') : '';
     return cap ? [{ kind: 'usecases' }, { kind: 'capability', cap }, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
+  }
+  // A SHARED WALK belongs to every use case that runs it, so it has no home of its own. Its trail is the
+  // trail of the use case the reader came THROUGH, with the walk as the last crumb — the same "your own
+  // path picks the parent" rule a use case reached from an actor already follows. Opened without one
+  // (a pasted link), it hangs directly under the use case list rather than guessing a parent.
+  if (s.kind === 'subflow') {
+    const crumb = { kind: 'subflow', sf: s.sf, uc: s.uc };
+    return s.uc ? [...ancestors({ kind: 'usecase', uc: s.uc, act: s.act }), crumb]
+                : [{ kind: 'usecases' }, crumb];
   }
   if (s.kind === 'deployment') return [{ kind: 'deployment' }];
   if (s.kind === 'deploymentGroup') return [{ kind: 'deployment' }, { kind: 'deploymentGroup', gid: s.gid }];
@@ -7589,7 +7647,7 @@ function renderUseCases(sel) {
       : useCaseFeatureFootHtml(id);
     const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(id))
       ? '<span class="badge modified">changed</span>' : '';
-    const untraced = FLOWS_MM && FLOWS_MM[id] ? ''
+    const untraced = FLOWS_NARR && FLOWS_NARR[id] ? ''
       : '<span class="uc-untraced" title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
     // The type pill goes only where the screen holds nothing but use cases: a role's list, the flat
     // catalog, the use cases in no feature. A FEATURE'S PAGE keeps it, because rules, entities and
@@ -8051,7 +8109,7 @@ function actorSurfacesHtml(actorName) {
 // NAMING NONE IS STILL A REAL ANSWER — a surface whose use cases neither name this actor nor door
 // onto them has nothing to report, and says so rather than borrowing somebody else's list.
 function actorSurfaceFeatures(actorName, iface) {
-  const doorsOnto = (uc) => (FLOWS_NARR[uc] || []).some((st) =>
+  const doorsOnto = (uc) => walkStepsDeep(uc).some((st) =>
     (st.srcId === iface.id && !st.dstId && st.dst === actorName)
     || (st.dstId === iface.id && !st.srcId && st.src === actorName));
   // …AND HOW MANY OF THIS ACTOR'S USE CASES GO THROUGH IT, per feature. The column named features and
@@ -8236,12 +8294,12 @@ function actorPageHeroHtml(actorName) {
 // REPLACED those cards on a feature's page, and it took both marks with it: in change-impact mode the
 // page could no longer say which use cases changed, and an untraced use case stopped being
 // distinguishable from a phantom one. Both pages get them, because both pages replaced the same cards.
-// Read from the SAME two sources the card reads (usecaseDiffState, FLOWS_MM), so a card and a station
+// Read from the SAME two sources the card reads (usecaseDiffState, FLOWS_NARR), so a card and a station
 // can never disagree about one use case.
 function journeyMarksHtml(ucId) {
   const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(ucId))
     ? '<span class="journey-mark journey-mark-changed">changed</span>' : '';
-  const untraced = (FLOWS_MM && FLOWS_MM[ucId]) ? ''
+  const untraced = (FLOWS_NARR && FLOWS_NARR[ucId]) ? ''
     : '<span class="journey-mark journey-mark-untraced" '
       + 'title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
   return (changed || untraced) ? `<span class="journey-marks">${changed}${untraced}</span>` : '';
@@ -8660,7 +8718,7 @@ function roleKindOfName(name) {
 // inside a scroll box scrolls away with the content, and the whole point is that it does not move.
 // Building the wrapper here rather than in each board's markup is what lets the three call sites
 // stay as they are — one function owns both the shape and the behaviour.
-const HFADE_SCROLLERS = '.walk-strip, .journey-board, .story-wrap';
+const HFADE_SCROLLERS = '.walk-strip, .journey-board, .story-wrap, .ifd-wrap';
 function bindHFades(root) {
   for (const el of (root || document).querySelectorAll(HFADE_SCROLLERS)) bindHFade(el);
 }
@@ -10283,7 +10341,12 @@ function renderTests() {
 // ONE lookup, used to LABEL a chip and to act on it, so the number a reader clicks and the step
 // they land on can never disagree.
 function flowStepIndex(uc, container, n) {
-  return (FLOWS_NARR[uc] || []).findIndex((st) => st.n === n && (st.sf || uc) === container);
+  // `container` is the walk that AUTHORED the step — the use case for its own steps, a shared walk for
+  // the steps inside one. Both have their own narration, and an `n` is unique inside one walk, so the
+  // number shown is the number that walk's own screen counts to. (Before shared walks were collapsed
+  // this had to hunt the step inside the host's spliced-in run, matching on the (sf, n) pair.)
+  const walk = container || uc;
+  return (FLOWS_NARR[walk] || []).findIndex((st) => st.n === n);
 }
 // The drill state carries a rule ID (the way a use-case drill carries `uc`), so both levels — and the
 // breadcrumb that titles the page — look the rule up in ONE place.
@@ -10428,7 +10491,7 @@ function ruleStepChip(l) {
   // landed on "Step 18 / 24" was promising a number the diagram never shows.
   const i = flowStepIndex(l.uc, l.container, l.n);
   const where = i >= 0 ? ` step ${i + 1}` : '';
-  return `<button type="button" class="br-step${exact ? '' : ' br-near'}" data-uc="${esc(l.uc)}" `
+  return `<button type="button" class="br-step${exact ? '' : ' br-near'}" data-uc="${esc(l.container || l.uc)}" `
     + `data-i="${esc(String(i))}" `
     + `title="${exact ? 'this exact step' : 'inside the same function as this step'}">`
     + `${esc(l.ucName)}${where}${via}</button>`;
@@ -10824,10 +10887,18 @@ function stepGroupsOf(i, role) {
 // saying "step 6" that landed on "Step 18 / 24" would promise a number the picture never shows.
 // This is why the model carries the CONTAINER beside the number: `(container, n)` is the only
 // unique step identity once a sub-flow is spliced in.
+// A CHIP NAMES WHERE IT GOES. The step number is counted in the walk that AUTHORED the step, and the
+// click opens that walk — so when the step was written inside a shared walk, naming only the use case
+// promised one screen and delivered another, with a number that belongs to neither.
 function stepFromHtml(st, uc, withName) {
-  const i = flowStepIndex(uc, st.container || uc, st.n);
-  const nm = withName ? ((GRAPH.nodes[uc] || {}).name || uc) + (i >= 0 ? ' · ' : '') : '';
-  return `<button type="button" class="ifd-what-from" data-uc="${esc(uc)}" `
+  const container = st.container || uc;
+  const i = flowStepIndex(uc, container, st.n);
+  const shared = container !== uc && !!SUBFLOW_BY_ID[container];
+  const parts = [];
+  if (withName) parts.push(walkName(uc));
+  if (shared) parts.push('\u27e8' + walkName(container) + '\u27e9');
+  const nm = parts.length ? parts.join(' \u00b7 ') + (i >= 0 ? ' \u00b7 ' : '') : '';
+  return `<button type="button" class="ifd-what-from" data-uc="${esc(container)}" `
     + `data-i="${esc(String(i))}" title="Open this walk at the step that says it">`
     + `${esc(nm)}${i >= 0 ? esc(`step ${i + 1}`) : ''}</button>`;
 }
@@ -11521,12 +11592,10 @@ async function renderView(sArg, transient, seq) {
   const s = sArg || history[hi];
   syncInfoPane(s, transient);   // every navigation starts with no card (one rule, before any return)
   syncCodePane(s);   // …and no source pane either, until the reader asks for a file
-  // Hide the floating over-the-diagram control HERE, before the HTML-tab early returns below.
-  // syncFlowPicker runs at the END of render, which the table views (Glossary / Use Cases / System /
-  // Data / Tests) and the degraded "could not render" branch never reach — so a control shown on a
-  // diagram would otherwise still be floating over the table you switched to.
-  const fp = document.getElementById('flowpicker');
-  if (fp) fp.hidden = true;
+  // The step player's card, HERE, before the HTML-tab early returns below: the table views and the
+  // degraded "could not render" branch never reach the end of render, so a card shown on a walk would
+  // otherwise still be floating over the table you switched to.
+  syncFlowCard(s);
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
@@ -11664,7 +11733,6 @@ async function renderView(sArg, transient, seq) {
   // The capability overlay re-applies on EVERY render, so it survives a drill, a dive, back/forward
   // and a tab restore — unlike the environment filter, which is re-applied from its own screen only
   // because it is scoped to that screen. A scope the reader chose should not evaporate on navigation.
-  syncFlowPicker(s);
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
   // pendingMatchTextId: a node reached this way ALWAYS gets the zoom-to-match-sidebar-text-size move
@@ -12688,7 +12756,11 @@ function stepsByPath() {
 // Navigate to use case `uc` and select step `i`. stateKey ignores `sel`, so a plain go() to the same
 // use case we're already viewing would no-op — select in place then (mirrors selectFromTree's fallback).
 function selectFlowStep(uc, i, frame = false) {
-  const state = { kind: 'usecase', uc: uc, sel: 'flowstep:' + uc + ':' + i };
+  // A shared walk has a screen of its own, so a step inside one opens THERE — not inside whichever use
+  // case happens to run it. Its steps are numbered from 1 and belong to it.
+  const state = SUBFLOW_BY_ID[uc]
+    ? { kind: 'subflow', sf: uc, sel: 'flowstep:' + uc + ':' + i }
+    : { kind: 'usecase', uc: uc, sel: 'flowstep:' + uc + ':' + i };
   const cur = history[hi];
   if (cur && stateKey(cur) === stateKey(state) && mainScene && mainScene.selectors[state.sel]) {
     selClear(mainScene); mainScene.selectors[state.sel]();  // select this one step in place (replace)
@@ -12742,12 +12814,20 @@ function codeItemsForPath(path) {
     for (const s of byLine[ln]) {
       if (seen.has(s.uc)) continue;  // several steps of ONE use case on the line -> one entry (its first step)
       seen.add(s.uc);
-      choices.push({ name: (GRAPH.nodes[s.uc] && GRAPH.nodes[s.uc].name) || s.uc,
+      // A SHARED WALK IS NOT A USE CASE, and it has no graph node — so the old lookup fell through to
+      // its raw id and printed `SF20` on the line, under a pill reading "use case". Two wrongs: an
+      // element id on screen, which nothing in this product does, and a word that names the wrong kind
+      // of thing. `walkName` answers for both kinds.
+      choices.push({ name: walkName(s.uc), shared: !!SUBFLOW_BY_ID[s.uc],
         select: () => { suppressCodeScroll = true; selectFlowStep(s.uc, s.i); } });
     }
+    // The WORD follows what is on the line: two shared walks are "2 shared walks", a mix is "2 walks".
+    const kinds = new Set(choices.map((c) => (c.shared ? 'shared walk' : 'use case')));
+    const one = kinds.size === 1 ? [...kinds][0] : 'walk';
+    const many = one === 'shared walk' ? 'shared walks' : one === 'use case' ? 'use cases' : 'walks';
     const name = choices.length === 1 ? choices[0].name
-      : choices.length + ' use cases: ' + choices.map((c) => c.name).join(', ');
-    items.push({ line: +ln, kind: 'usecase', name: name, label: 'use case',
+      : choices.length + ' ' + many + ': ' + choices.map((c) => c.name).join(', ');
+    items.push({ line: +ln, kind: 'usecase', name: name, label: one,
       choices: choices, select: choices[0].select });
   }
   return items;
@@ -13322,7 +13402,14 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
 const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
-  searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
+  searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW',
+  walkCode: 'coyodex.walkCode',
+  // A NEW KEY, because the old one cannot be read. `coyodex.drawer` was WRITTEN AT EVERY BOOT with
+  // whatever the default then was, so every reader who ever opened the viewer has '1' stored whether
+  // they chose the drawer or never opened Settings. Flipping the default left all of them on the
+  // drawer — the change reached a brand-new browser and nobody else. This key is written ONLY when a
+  // reader picks a shape, so unset really does mean unset.
+  panel: 'coyodex.panelShape' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
 // A single global key let a root saved while viewing one repo's map open files from the WRONG repo in
@@ -13522,7 +13609,7 @@ function saveSettings() {
   lsSet(LS.repo, ghRepoVal); lsSet(LS.ok, '1');
   // Applied through the same function the boot call uses, so switching here re-places whatever is on
   // screen rather than waiting for the next selection.
-  if (setPanel && !setPanelRow.hidden) setDrawerMode(setPanel.value === 'drawer');
+  if (setPanel && !setPanelRow.hidden) setDrawerMode(setPanel.value === 'drawer', true);  // a CHOICE
   const n = pendingSrc;
   closeSettings();
   if (n && id !== 'native') doOpenSource(n);   // first-use: continue the open the user asked for
@@ -13542,9 +13629,10 @@ const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
 document.getElementById('coachok').addEventListener('click', dismissCoach);
 document.getElementById('helpbtn').addEventListener('click', () => { coach.hidden = false; });
 legendbtn.addEventListener('click', () => setLegendOpen(!legendOpen()));
-// THE DRAWER IS THE DEFAULT, so anything but an explicit '0' is the drawer — a reader who has never
-// opened Settings gets it. Remembered like the legend and the source column.
-setDrawerMode(lsGet(LS.drawer) !== '0');
+// THE CARD IS THE DEFAULT, and this boot does NOT write that down: only a reader picking a shape in
+// Settings does. The drawer held the default while the card was the newer shape; it is the older one
+// now, and every other screen in the product puts what it is describing beside what you clicked.
+setDrawerMode(lsGet(LS.panel) === 'drawer', false);
 coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
 if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once
@@ -14205,17 +14293,12 @@ function gotoImpactEid(id) {
   if (rid) { selectFromTree(rid); return; }
   const st = parseStepEid(id);
   if (st) {
-    // The synthetic id carries the authored `n` WITHIN its container (a flow, or a sub-flow whose
-    // steps are expanded inline into every referencing flow). Host `n`s and sub-flow `n`s can
-    // collide in one expanded narrative, so the mapping matches on the (sf, n) PAIR, never n alone.
-    if (st.uc.startsWith('SF')) {  // step:SF…: land on the FIRST referencing flow's expanded run
-      for (const uc in FLOWS_NARR) {
-        const i = FLOWS_NARR[uc].findIndex((s) => s.sf === st.uc && String(s.n) === st.n);
-        if (i >= 0) { selectFlowStep(uc, i); return; }
-      }
-      return;  // referenced by no flow (validate warns) — nowhere to land
-    }
-    const i = (FLOWS_NARR[st.uc] || []).findIndex((s) => !s.sf && String(s.n) === st.n);
+    // The synthetic id carries the authored `n` WITHIN its container — a use case walk, or a shared
+    // walk. Each has a screen of its own now, and an `n` is unique inside one walk, so the step opens
+    // on ITS walk: no hunting for a use case that happens to run it, and no landing on somebody
+    // else's numbering. (It used to need the (sf, n) PAIR, because a shared walk's steps were spliced
+    // into every walk that ran one and the two sets of `n`s collided.)
+    const i = (FLOWS_NARR[st.uc] || []).findIndex((s) => String(s.n) === st.n);
     if (i >= 0) selectFlowStep(st.uc, i);
     else go({ kind: 'usecase', uc: st.uc });  // step missing from the narrative — open its flow
     return;
@@ -14579,7 +14662,7 @@ function inspFlowArrow(el, handle) {
   const holder = el.closest && el.closest('[data-uc]');
   const here = history[hi];
   const uc = (holder && holder.getAttribute('data-uc'))
-    || (here && here.kind === 'usecase' ? here.uc : '');
+    || (isWalkState(here) ? walkIdOf(here) : '');
   if (!uc || !FLOWS_NARR[uc]) return null;
   // `flowMapSteps` IS THE LOOKUP — call it, never re-implement it. A first version compared the
   // arrow's ends to the narration's directly and always missed, because the two are in different
@@ -14596,15 +14679,18 @@ function inspFlowArrow(el, handle) {
            note: `This arrow carries ${parts.length} steps of the walk, all of them below.`,
            parts: parts.map((x) => ({ path: x.path, rec: x.rec })) };
 }
-// One step of a walk. The narration FLATTENS a shared walk into its caller, so its own index is not
-// the stored one — the step's `sf` and `n` are, and they name the stored slot exactly.
+// One step of a walk. WHICH walk is the question: a use case's steps are stored under `flows`, a shared
+// walk's under `subflows`, and the screen you are on says which — the narration no longer flattens one
+// into the other, so a step belongs to exactly the walk being drawn.
 function inspFlowStep(el, i) {
   const holder = el.closest('[data-uc]');
-  const uc = (holder && holder.getAttribute('data-uc')) || (history[hi] && history[hi].uc);
+  const here = history[hi];
+  const uc = (holder && holder.getAttribute('data-uc')) || (isWalkState(here) ? walkIdOf(here) : '');
   const st = uc && (FLOWS_NARR[uc] || [])[i];
   if (!st) return null;
-  const list = st.sf ? 'subflows' : 'flows';
-  const j = (RAW[list] || []).findIndex((f) => (st.sf ? f.id === st.sf : f.uc === uc));
+  const shared = !!SUBFLOW_BY_ID[uc];
+  const list = shared ? 'subflows' : 'flows';
+  const j = (RAW[list] || []).findIndex((f) => (shared ? f.id === uc : f.uc === uc));
   if (j < 0) return null;
   const k = ((RAW[list][j] || {}).steps || []).findIndex((s) => String(s.n) === String(st.n));
   if (k < 0) return null;

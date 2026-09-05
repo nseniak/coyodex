@@ -538,6 +538,37 @@ def subflow_refcount_warnings(m: ProjectModel) -> list[str]:
     return out
 
 
+def walk_jumps(m: ProjectModel) -> list[str]:
+    """Steps that START at a box the walk has never arrived at — a break in the story.
+
+    A walk is a chain: each step acts on something, and the next step acts FROM somewhere the walk has
+    already been. A step whose `src` appears for the first time as a source has no way in, and the map
+    cannot say how the story got there. On the picture the box simply hangs with no incoming arrow, and
+    a reader reads it as an interruption — which is exactly what it is.
+
+    Sub-flow references are expanded, because running a shared walk really does reach what is inside it.
+    The most common shape is a step right after a reference: the shared walk ends somewhere inside
+    itself and the next step starts somewhere new, with nothing joining them.
+
+    Advisory, not blocking: a legitimate walk can begin a second thread (a background job the first half
+    set going). But 52 of them across the two reference maps were plain omissions, so the default
+    reading is a missing step, and the fix is to write it.
+    """
+    out: list[str] = []
+    for f in m.flows:
+        reached: set[str] = set()
+        for i, st in enumerate(expanded_flow_steps(m, f)):
+            src = str(st.src)
+            if i and src not in reached:
+                out.append(f"{f.uc} step {st.n} starts at {src}, which no earlier step reaches — "
+                           "the walk jumps. Write the step that gets there, or record "
+                           f"'{f.uc}: <why this begins a new thread>' under a 'Walk jumps' extras "
+                           "heading")
+            reached.add(src)
+            reached.add(str(st.dst))
+    return out
+
+
 # ── use-case granularity (advisory) — the flow analog of the diagram fan-out band ────────────────
 # The RULE (one use case = one actor goal) lives in method.md; these are its teeth. Kept apart from
 # `_check_flows` so `lint-fragment` can surface them WITHOUT failing a fragment (an authoring agent
@@ -5909,6 +5940,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(flow_problems)
     warnings.extend(flow_warnings)
     warnings.extend(subflow_refcount_warnings(m))
+    warnings.extend(walk_jumps(m))
     warnings.extend(_granularity_warnings(m))
     warnings.extend(_duplicate_component_names(m))
     warnings.extend(_duplication_warnings(m))

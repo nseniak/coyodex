@@ -3491,20 +3491,16 @@ def test_both_interchangeable_actors_drive_the_shared_step() -> None:
     assert by_aid["HPA1"]["kind"] == "human" and by_aid["HPA1"]["wants"] == "moderate"
 
 
-def test_flow_mermaid_sequence_from_use_case() -> None:
-    # A use case's flow renders as a sequenceDiagram: the actor + the touched elements as lifelines,
-    # each step a message whose label is the step's own authored phrase. (make_gp_map's element steps
-    # leave the phrase empty, so they exercise the legacy backstop: the edge's descriptive Why.)
-    mm = gen_viewer.flow_mermaids(parse_map(make_gp_map()))
+def test_flow_map_from_use_case() -> None:
+    # A use case's walk renders as ONE picture: a box per touched element (the actor included) and an
+    # arrow per ordered pair, labelled with the step numbers riding it.
+    mm = gen_viewer.flow_maps(parse_map(make_gp_map()))
     s1 = mm["UC1"]
-    assert s1.startswith("sequenceDiagram")
-    assert "actor FA0 as Andy" in s1                      # the actor lifeline
-    assert "participant C1 as Gateway" in s1 and "participant C2 as Engine" in s1
-    # Each arrow is prefixed with its 1-based step number (aligns with the panel narrative + step player).
-    assert "FA0->>C1: 1. submits the order" in s1        # step with a phrase -> the authored phrase
-    assert "C1->>C2: 2. reach engine" in s1              # phrase-less step -> the edge's Why (backstop)
-    s2 = mm["UC2"]
-    assert "C2->>D1: 2. cache" in s2
+    assert s1.startswith("flowchart LR")
+    assert '<span class=cyname>Andy</span>' in s1        # the actor's box
+    assert '<span class=cyname>Gateway</span>' in s1 and '<span class=cyname>Engine</span>' in s1
+    assert 'FA0 -->|"1"| C1' in s1 and 'C1 -->|"2"| C2' in s1
+    assert 'C2 -->|"2"| D1' in mm["UC2"]
 
 
 def test_flow_element_step_phrase_wins_on_arrow() -> None:
@@ -3513,9 +3509,6 @@ def test_flow_element_step_phrase_wins_on_arrow() -> None:
     md = make_gp_map().replace(
         '"src": "C1",\n          "dst": "C2",\n          "phrase": "",',
         '"src": "C1",\n          "dst": "C2",\n          "phrase": "hands the order to the engine",')
-    s1 = gen_viewer.flow_mermaids(parse_map(md))["UC1"]
-    assert "C1->>C2: 2. hands the order to the engine" in s1   # the step's own phrase
-    assert "reach engine" not in s1                            # not the shared edge Why
     step2 = next(s for s in gen_viewer.flow_narratives(parse_map(md))["UC1"] if s["n"] == 2)
     assert step2["verb"] == "hands the order to the engine" and step2["why"] == ""
 
@@ -3528,12 +3521,12 @@ def test_flow_narrative_backstop_derives_from_edge() -> None:
     assert step2["verb"] == "calls" and step2["why"] == "reach engine"
 
 
-def test_flow_arrow_backstop_prefers_why_over_verb() -> None:
-    # Backstop for a phrase-less step: the arrow shows the edge's descriptive Why, never the terse verb —
+def test_flow_narrative_backstop_prefers_why_over_verb() -> None:
+    # Backstop for a phrase-less step: the card shows the edge's descriptive Why, never the terse verb —
     # for a sharp verb (reads) just as for the catch-all (uses). The step's own phrase is the normal path.
-    s2 = gen_viewer.flow_mermaids(parse_map(make_gp_map()))["UC2"]
-    assert "C2->>D1: 2. cache" in s2          # sharp verb 'reads' -> still the Why on the arrow
-    assert "C2->>D1: 2. reads" not in s2      # the verb never shows when a Why exists
+    step2 = next(s for s in gen_viewer.flow_narratives(parse_map(make_gp_map()))["UC2"] if s["n"] == 2)
+    assert step2["why"] == "cache"            # sharp verb 'reads' -> still the Why beside it
+    assert step2["verb"] == "reads"
 
 
 def test_bundle_carries_gp_data() -> None:
@@ -3543,17 +3536,17 @@ def test_bundle_carries_gp_data() -> None:
     b = bundle_of(make_gp_map())
     assert [s["title"] for s in b["graph"]["happy_path"]] == ["Submit order", "Approve order"]
     assert [a["name"] for a in b["hpActors"]] == ["Andy", "Adam"]
-    assert "sequenceDiagram" in " ".join(b["flowsMm"].values())
+    assert "flowchart LR" in " ".join(b["flowsMap"].values())
 
 
-def test_bundle_carries_both_flow_renderings() -> None:
-    # Every flow ships twice — as the leaf-only map the view opens on and as the sequence the "Flow as"
-    # switch shows — over the SAME use-case keys, so the switch can never land on a missing drawing.
+def test_bundle_carries_one_drawing_per_walk() -> None:
+    # ONE picture per walk. A sequence diagram shipped beside it and was removed: two renderings of one
+    # walk meant every rule written twice and kept in step, and the map answers strictly more.
     b = bundle_of(make_gp_map())
-    assert set(b["flowsMap"]) == set(b["flowsMm"])
+    assert "flowsMm" not in b
+    assert set(b["flowsMap"]) == set(b["flowsNarr"])
     assert b["flowsMap"]["UC1"].startswith("flowchart LR")
-    # The step numbers are shared: step 1 labels the actor's arrow in both renderings.
-    assert 'FA0 -->|"1"| C1' in b["flowsMap"]["UC1"] and "FA0->>C1: 1. " in b["flowsMm"]["UC1"]
+    assert 'FA0 -->|"1"| C1' in b["flowsMap"]["UC1"]
 
 
 def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> str:

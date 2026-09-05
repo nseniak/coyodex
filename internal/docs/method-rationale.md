@@ -64,7 +64,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R05 — The dropped prose Journey table
 - **Where**: `method.md`
-- **Anchor**: `drawn as a sequence diagram and read as a numbered narrative.`
+- **Anchor**: `drawn as a walk map and read as a numbered narrative.`
 - **Evidence**: A separate prose "Journey" table existed in earlier method versions. It duplicated the flows at prose level, the model had no field for it, and builders rightly skipped it — dropped.
 
 ### R06 — Flattening the environment axis loses information

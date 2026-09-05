@@ -387,7 +387,7 @@ its `SOURCE` link) so both link directions are clickable. Each touch inherits it
 
 One use case has two faces: **outside** — what the actor does and sees, carried by the use case's
 `Trigger → Outcome` cell — and **inside = T6 flow** (the ordered interactions among
-components/deps/entities), drawn as a sequence diagram and read as a numbered narrative.
+components/deps/entities), drawn as a walk map and read as a numbered narrative.
 
 ---
 
@@ -854,8 +854,10 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
 - **T6 Use-case flows** *(the inside view of each use case — a block, not a table)*: one block per
   use case, `**UCn — <title>**` + **numbered step lines**. Each step is an ordered interaction
   `from → to`: **every step** — element↔element and actor steps alike — carries a short authored phrase
-  saying what happens at that point (an action, present tense: "POSTs the new upstream", "returns the
-  verified email"), which is what the arrow shows. Don't lean on the backbone edge for it: the same
+  saying what happens at that point, as an action in the IMPERATIVE ("POST the new upstream", "return
+  the verified email"), never the third person, which is what the arrow shows. The viewer titles the
+  step with the phrase ALONE, with no subject in front of it, and a use case's name and a shared walk's
+  name are written the same way — one form for every action the map states. Don't lean on the backbone edge for it: the same
   element pair can appear in several steps that do different things, and one shared edge label can't
   describe each; the step describes itself. A phrase is **pure action** — a condition or qualifier
   ("when the baseline needs a paid read…") goes in the `· note`, not the phrase (the
@@ -866,9 +868,9 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
     callback — remove those steps and the story breaks); where it is merely a prerequisite state
     (an admin must be signed in before creating the org), it is the use case's **trigger**, not
     steps. One machinery, two roles — mechanism in one flow, precondition in another — is correct,
-    not an inconsistency. Renders as a Mermaid `sequenceDiagram` — the actor plus the
-  touched components/deps/entities as lifelines, the steps as ordered messages — **and** as a numbered
-  narrative below it. Drilling a Happy Path step opens its use case's flow here. The viewer also draws
+    not an inconsistency. Renders as a Mermaid `flowchart` — one box per touched element (the actor
+  included), one arrow per ordered pair, labelled with the step numbers riding it — **and** as a numbered
+  narrative beside it. Drilling a Happy Path step opens its use case's flow here. The viewer also draws
   the same steps as a **leaf-only map** (a box per touched element, no container frames) for the
   "what does this use case touch?" reading — a second *rendering* of the one step list, never a second
   authored thing ([diagrams](method/diagrams.md)).
@@ -955,14 +957,14 @@ components/deps/entities), drawn as a sequence diagram and read as a numbered na
     sequence rides several flows (an event fan-out, a persistence pipeline), extract it into a
     sub-flow — `**SFn — <name>**` + ordinary step lines under all the ordinary rules (phrase,
     `where` anchors, unique `n`) — and reference it from each flow with a step whose `subflow`
-    names it: `k. C1 → C2 ⟨runs SF1 — <name>⟩` (src/dst are the run's entry/exit endpoints; the
+    names it: `k. C1 → C2 ⟨run SF1 — <name>⟩` (src/dst are the run's entry/exit endpoints; the
     phrase may be omitted — it defaults to the sub-flow's name; the reference carries NO `where` of
     its own). One level only — a sub-flow's step may not reference another sub-flow (`validate`
     blocks). A sub-flow with fewer than 2 reference STEPS across the map is pointless indirection
     (`validate` warns — it counts reference steps, so two references inside one flow do not warn). The payoff is CONSISTENCY: without it, each flow retells the shared machinery at
-    whatever depth its author picked — the viewer expands the reference inline (a tinted block
-    named after the sub-flow) and the diff-impact engine reaches every referencing use case from a
-    changed sub-flow line.
+    whatever depth its author picked — the viewer draws the reference as ONE dashed box named after
+    the sub-flow, opening onto the sub-flow's own screen, and the diff-impact engine reaches every
+    referencing use case from a changed sub-flow line.
   - **The step band: 3–15 steps per flow** (advisory; a sub-flow reference counts as **1** — the
     reward for extracting). Over 15 means one of four things, in the order to try them: **split a
     fused goal** (two use cases were stapled together), **compress step altitude** (protocol

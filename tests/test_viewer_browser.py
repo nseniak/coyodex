@@ -2230,3 +2230,204 @@ def test_a_record_inside_another_one_lists_the_use_cases_that_reach_its_holder()
         assert "No traced use case reaches it" not in text, \
             "E2 is inside E1, and E1 is storied — the holder's stories are its stories"
         assert not page.js_errors, page.js_errors
+
+
+def _with_shared_walk(m: Any) -> None:
+    """UC1 runs a shared walk that keeps a record — the shape the committed fixture has none of."""
+    m["subflows"] = [{
+        "id": "SF1", "name": "Keep the organization",
+        "steps": [{"n": 1, "src": "C101", "dst": "E1", "phrase": "writes the organization",
+                   "note": "", "where": None, "no_call_site": False, "subflow": None},
+                  {"n": 2, "src": "E1", "dst": "C101", "phrase": "hands back what it stored",
+                   "note": "", "where": None, "no_call_site": False, "subflow": None}],
+    }]
+    steps = m["flows"][0]["steps"]
+    steps[2:2] = [{"n": 99, "src": "C101", "dst": "C15", "phrase": "", "note": "", "where": None,
+                   "no_call_site": False, "subflow": "SF1"}]
+
+
+def test_a_use_case_walk_counts_its_own_steps_not_the_shared_walk_s() -> None:
+    """A use case that runs a shared walk used to count that walk's steps as its own — so the counter,
+    the numbers on the map and the numbers in the Sequence view all described a walk longer than the one
+    the map stores. The reference is one step now, and BOTH pictures say so: they are read against each
+    other by number, so a disagreement would make the toggle between them land somewhere else."""
+    with _served_map(_with_shared_walk) as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const chips = [...document.querySelectorAll('#diagram .cychip')].map((c) =>
+              ({ t: c.textContent, k: c.dataset.k }));
+            const box = [...document.querySelectorAll('#diagram g.node')]
+              .find((n) => /SF1/.test(n.id));
+            return { counter: document.querySelector('.flowplay-count, .stepcount, .flow-count')?.textContent
+                       || document.body.innerText.match(/Step\\s*[-–]?\\s*\\/\\s*(\\d+)/)?.[1],
+                     chips, hasBox: !!box,
+                     steps: [...document.querySelectorAll('#diagram .cysteps')].map((e) => e.textContent),
+                     arrows: [...document.querySelectorAll('#diagram .edgeLabel')]
+                       .map((e) => e.textContent.trim()).filter(Boolean) };
+        }""")
+        assert seen["hasBox"], "the shared walk is drawn as its own box"
+        assert seen["chips"] == [{"t": "Organization", "k": "entity"}], seen["chips"]
+        assert seen["steps"] == ["2 steps"], seen["steps"]
+        # 12 = the fixture's own 11 steps plus the one reference. Expanded it would have read 13.
+        assert seen["counter"] == "12", seen
+        assert "3" in seen["arrows"] and "13" not in seen["arrows"], seen["arrows"]
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_shared_walk_s_box_opens_the_walk_itself() -> None:
+    """A shared walk belongs to every use case that runs it, so it has a screen of its own rather than a
+    home inside one of them. Drilling the box opens it: its steps numbered from 1, its own two pictures,
+    and a trail that still leads back the way the reader came."""
+    with _served_map(_with_shared_walk) as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        page.evaluate("""() => {
+            const box = [...document.querySelectorAll('#diagram g.node')].find((n) => /SF1/.test(n.id));
+            box.dispatchEvent(new MouseEvent('click', { bubbles: true, altKey: true }));
+        }""")
+        page.wait_for_function("() => location.hash.includes('subflow')")
+        _settle(page)
+        seen = page.evaluate("""() => ({
+            hash: location.hash,
+            crumbs: [...document.querySelectorAll('#crumb *')].map((e) => e.textContent.trim())
+                      .filter(Boolean),
+            counter: document.body.innerText.match(/Step\\s*[-–]?\\s*\\/\\s*(\\d+)/)?.[1],
+        })""")
+        assert "v=subflow" in seen["hash"] and "sf=SF1" in seen["hash"], seen["hash"]
+        assert seen["counter"] == "2", seen           # its own two steps, numbered from 1
+        assert seen["crumbs"][-1] == "Keep the organization", seen["crumbs"]
+        assert "SF1" not in " ".join(seen["crumbs"]), "an id must never reach the screen"
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_first_walk_opens_the_code_column_and_then_leaves_it_alone() -> None:
+    """The rail that opens the source column is a thin strip on the far edge, and nothing on a use case
+    map says the two are joined — while every box and every arrow on it points at a place in the code.
+    So the first walk opens it. ONCE: a reader who then shuts it is not argued with on the next walk.
+
+    A source test cannot see this. The rule is decided inside `syncCodePane`, and whether it fires at all
+    depends on a fetch that is still in flight when the first render runs."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        assert page.evaluate("() => !document.body.classList.contains('code-hidden')"), \
+            "the first walk shows the reader the column exists"
+        page.evaluate("() => document.getElementById('cvclose').click()")
+        page.wait_for_timeout(600)
+        page.goto(url + "#v=usecase&uc=UC2")
+        _settle(page)
+        assert page.evaluate("() => document.body.classList.contains('code-hidden')"), \
+            "closed once is closed for good — the rule fires on the FIRST walk only"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_selected_box_gets_a_card_with_a_line_to_it_not_a_drawer() -> None:
+    """Every other screen puts what it is describing beside what you clicked. The map put it in a band
+    across the bottom, because the drawer held the default from when the card was the newer shape. The
+    card is the default now, and it draws a leader line to the box it describes."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        assert not page.evaluate("() => document.body.classList.contains('card-drawer')")
+        page.evaluate("""() => {
+            const n = [...document.querySelectorAll('#diagram g.node')][1];
+            n.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        }""")
+        page.wait_for_timeout(800)
+        assert page.evaluate("() => !document.getElementById('callout').hasAttribute('hidden')"), \
+            "the card points at what it describes"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_box_s_name_opens_it_and_the_box_around_the_name_selects_it() -> None:
+    """Features and Interfaces open a thing by clicking its title. On the map that gesture existed only
+    one step removed — click the box, then click the card that appears — while the box itself offered a
+    corner icon that does something else entirely (locate this element in a structural view).
+
+    The name opens it now, in one click. The box AROUND the name still selects, so the two acts stay
+    apart: the name goes somewhere, the box stays here and tells you about itself. Measured on mcpolis
+    UC30, a component's name is a quarter to a half of its box, so both targets are real."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        spot = page.evaluate("""() => {
+            const n = [...document.querySelectorAll('#diagram g.node')].find((x) => /C15/.test(x.id));
+            const b = n.getBoundingClientRect();
+            const l = n.querySelector('.cyname').getBoundingClientRect();
+            return { nameX: l.left + l.width / 2, nameY: l.top + l.height / 2,
+                     edgeX: b.left + 4, edgeY: b.top + b.height / 2 };
+        }""")
+        page.mouse.click(spot["nameX"], spot["nameY"])
+        page.wait_for_function("() => location.hash.includes('v=element')")
+        assert "id=C15" in page.evaluate("() => location.hash")
+        page.goto(url + "#v=usecase&uc=UC1")
+        _settle(page)
+        page.mouse.click(spot["edgeX"], spot["edgeY"])
+        page.wait_for_timeout(700)
+        seen = page.evaluate("""() => ({ hash: location.hash,
+                                         card: !!document.querySelector('#panel .ecard[data-id]') })""")
+        assert "v=usecase" in seen["hash"] and "node%3AC15" in seen["hash"], seen
+        assert seen["card"], "the box around the name still selects and shows its card"
+        assert not page.js_errors, page.js_errors
+
+
+def test_hovering_a_box_shows_its_card_with_a_line_to_it() -> None:
+    """A reader scanning a walk wants to know what each box is. Hover answers, with the same card a
+    click pins and the same leader line pointing at the box — and leaving takes it away again.
+
+    Only a browser can see this: the card's visibility is decided by one rule after the HTML is written,
+    and writing the HTML alone left the card rendered but hidden."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        spot = page.evaluate("""() => {
+            const n = [...document.querySelectorAll('#diagram g.node')].find((x) => /C15/.test(x.id));
+            const c = n.querySelector('.cyname').getBoundingClientRect();
+            return { x: c.left + c.width / 2, y: c.top + c.height / 2 };
+        }""")
+        page.mouse.move(spot["x"], spot["y"])
+        page.wait_for_timeout(600)
+        seen = page.evaluate("""() => ({
+            card: !document.getElementById('panel').hidden,
+            line: !document.getElementById('callout').hasAttribute('hidden'),
+        })""")
+        assert seen == {"card": True, "line": True}, seen
+        page.mouse.move(4, 4)
+        page.wait_for_timeout(600)
+        assert page.evaluate("() => document.getElementById('panel').hidden"), \
+            "leaving puts back what was there — nothing was selected, so nothing shows"
+        assert not page.js_errors, page.js_errors
+
+
+def test_opening_the_source_narrows_what_you_see_of_the_interfaces_picture_not_the_picture() -> None:
+    """Every other diagram keeps its size when the source column opens, and the area around it shrinks.
+    The Interfaces picture alone re-laid itself out: measured on mcpolis, 1060px wide became 890px the
+    moment the column opened, squeezing the gutters the wires need room to turn in.
+
+    Its wrapper already scrolled, so a floor under the stage was all it took. The floor is the five
+    tracks at rest: two 320px cards, two 130px gutters, a 160px hub.
+
+    ONLY while the column is open — the picture is also built to FIT a narrow window on its own, which
+    `test_what_we_own_holds_the_product_and_our_surfaces_and_keeps_its_distance` asserts down to 1024.
+    An unconditional floor made that window scroll for no reason. The column is what must not resize
+    the drawing; a small screen still gets a drawing sized for it."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.evaluate("""() => { if (document.body.classList.contains('code-hidden'))
+                                   document.getElementById('srcrail').click(); }""")
+        page.wait_for_timeout(1200)
+        opened = page.evaluate("""() => {
+            const s = document.getElementById('ifdstage'), w = s.closest('.ifd-wrap');
+            const wrap = w.parentElement, cs = getComputedStyle(w);
+            return { stage: Math.round(s.getBoundingClientRect().width),
+                     scrolls: w.scrollWidth > w.clientWidth + 1,
+                     board: { radius: cs.borderTopLeftRadius, border: cs.borderTopWidth },
+                     shadeRight: wrap.classList.contains('hfade-on-r'),
+                     shadeLeft: wrap.classList.contains('hfade-on-l') };
+        }""")
+        page.evaluate("() => { const c = document.getElementById('cvclose'); if (c) c.click(); }")
+        page.wait_for_timeout(1200)
+        closed = page.evaluate("""() => Math.round(
+            document.getElementById('ifdstage').getBoundingClientRect().width)""")
+        assert opened["stage"] == closed, f"the picture must not resize: {opened['stage']} vs {closed}"
+        assert opened["scrolls"], "…and what you see of it scrolls instead"
+        # …in the SAME board the Happy Path and a feature's timeline scroll in: a rule, a radius, and
+        # the edge shade that says there is more that way. Only the right one, having not scrolled yet.
+        assert opened["board"] == {"radius": "10px", "border": "1px"}, opened
+        assert opened["shadeRight"] and not opened["shadeLeft"], opened
+        assert not page.js_errors, page.js_errors

@@ -1899,17 +1899,23 @@ def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
 
 
 def test_a_step_chip_is_numbered_by_POSITION_the_way_the_diagram_is() -> None:
-    """The chip said "step 6" and landed on "Step 18 / 24". `(container, n)` is a step's IDENTITY,
-    but a sub-flow's steps are spliced into every referencing flow keeping their OWN numbering — on
-    this repo's map UC9's narrative runs 1..24 over authored ns `[1,2,3,1,2,3,4,…]`. Every other
-    surface counts positions, so the chip must too. ONE lookup labels the chip AND acts on it, so
+    """The chip said "step 6" and landed on "Step 18 / 24". `(container, n)` is still a step's
+    IDENTITY, and the chip must show the POSITION every other surface counts to — the arrow badge, the
+    sequence list, the step counter.
+
+    The container is the walk that AUTHORED the step: the use case for its own, a shared walk for the
+    steps inside one. Each has its own screen and its own numbering now, so the position is counted
+    THERE and the chip opens THERE. (It used to hunt the step inside the host's spliced-in run, which
+    is why the lookup once matched on the (sf, n) pair.) ONE lookup labels the chip AND acts on it, so
     the number a reader clicks and the step they land on cannot disagree."""
     body = _js_function("ruleStepChip")
     assert "flowStepIndex(l.uc, l.container, l.n)" in body
     assert "step ${i + 1}" in body
     assert "data-i=" in body and "data-n=" not in body     # the click reads the resolved index
+    assert 'data-uc="${esc(l.container || l.uc)}"' in body  # …and opens the walk that authored it
     lookup = _js_function("flowStepIndex")
-    assert "(st.sf || uc) === container" in lookup          # identity is (container, n), not (uc, n)
+    assert "const walk = container || uc;" in lookup        # identity is (container, n), not (uc, n)
+    assert "(FLOWS_NARR[walk] || []).findIndex((st) => st.n === n)" in lookup
 
 
 def test_the_two_views_number_steps_differently_on_purpose() -> None:
@@ -2204,7 +2210,14 @@ def test_the_flow_step_pane_uses_a_new_class_and_keys_by_container() -> None:
     start = VIEWER_JS.index("function flowStepInfoHtml(uc, i)")
     pane = VIEWER_JS[start:VIEWER_JS.index("\n// One actor's card", start)]
     assert "stepRulesHtml(uc, st)" in pane
-    assert "(st.sf || uc)" in pane            # the AUTHORING container, not the use case
+    # THE CONTAINER IS THE WALK BEING DRAWN, on both kinds of screen. Reading the step's `sf` here was
+    # right while a shared walk's steps were spliced into their host — a reference step's `sf` names the
+    # walk it RUNS, not the one it belongs to, and reading it put 172 rule links on the wrong step and
+    # lost 299 others. On a shared walk's own screen the links are filed under every use case that runs
+    # it, so the use case is not part of the question there.
+    assert "if (l.container !== uc || String(l.n) !== String(st.n)) continue;" in pane
+    assert "const shared = !!SUBFLOW_BY_ID[uc];" in pane
+    assert "if (!shared && l.uc !== uc) continue;" in pane
     assert 'class="brref"' in pane            # a new class name
     # The same four the viewer-js negative contract names, matched in their RENDERED form.
     for forbidden in ('class="flowpairref"', 'class="endpoints"', "ridesref", 'class="flowref"'):
