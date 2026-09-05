@@ -473,10 +473,18 @@ def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
             # "The map's own code" is a component or a subsystem — NOT a dep, which is the PIPE and
             # crosses nothing the map can answer for, and not a role. So `Rn → En` owes nothing
             # either: a person does not read a row out of our store, some code does it for them.
+            # READ BOTH ENDS BY ID SHAPE, never by membership in a list. The record arm always
+            # did (`startswith("E")`); the surface arm asked `in iface_ids`, and the two sat in one
+            # expression. A TRACE FRAGMENT carries flows, sub-flows and edges and NO `interfaces`
+            # list, by its own contract — so that set was empty, every `Cn → In` step looked like a
+            # DOOR, and a real partial run had three correct directions REFUSED and stripped out to
+            # return a clean fragment. An `In` that resolves to nothing is a different defect, and
+            # the id-resolution check already reports it.
             ends_in_code = [e for e in (st.src, st.dst)
                             if e.startswith(("C", "S")) and grammar.is_step_id(e)]
             crossing = (not st.subflow and bool(ends_in_code)
-                        and any(e in iface_ids or e.startswith("E") for e in (st.src, st.dst)))
+                        and any(e.startswith(("I", "E")) and grammar.is_step_id(e)
+                                for e in (st.src, st.dst)))
             if st.direction and st.direction not in grammar.STEP_DIRECTIONS:
                 problems.append(f"{tag}: direction='{st.direction}' — must be one of "
                                 f"{'/'.join(grammar.STEP_DIRECTIONS)}, read from the PRODUCT's own "

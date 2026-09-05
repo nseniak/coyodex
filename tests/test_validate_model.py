@@ -5419,3 +5419,34 @@ def test_the_contradiction_never_blocks():
     m = make_direction_gap_model()
     assert _gap_hits(m), "it must fire at all, or 'never blocks' is vacuous"
     assert not [p for p in problems_of(m) if "ARROWS claim" in p], problems_of(m)
+
+
+def test_a_TRACE_FRAGMENT_may_carry_a_direction_at_a_surface():
+    """A fragment holds flows, sub-flows and edges and NO `interfaces` list, by its own contract.
+
+    The surface arm asked `in iface_ids` while the record arm read the id SHAPE, in one expression.
+    On a fragment that set is empty, so every `Cn → In` step looked like a DOOR and its direction
+    was BLOCKED. A real partial run hit it: three correct directions were refused and stripped out
+    so the agent could return a clean fragment, and the lint said nothing about why. `validate` on
+    the assembled map would then report the very steps that had been silenced.
+
+    An `In` that resolves to nothing is a different defect, and the id-resolution check reports it."""
+    m = ProjectModel(title="frag", goal="g")
+    m.flows = [Flow(uc="UC1", title="Sign in", steps=[
+        FlowStep(n=1, src="C63", dst="I6", phrase="sends the person to the sign-in screen",
+                 where="src/a.py:1", direction="out"),
+        FlowStep(n=2, src="C1", dst="E1", phrase="writes the record",
+                 where="src/a.py:2", direction="out")])]
+    assert not m.interfaces and not m.entities, "the shape a trace fragment really has"
+    problems, _ = validate_model_mod._check_flows(m)
+    assert not [p for p in problems if "not at either end" in p], problems
+
+
+def test_a_DOOR_in_a_fragment_is_still_blocked():
+    """The fix reads the id shape; it must not become 'anything goes when the list is empty'. A role
+    at a surface is a human action wherever it is authored."""
+    m = ProjectModel(title="frag", goal="g")
+    m.flows = [Flow(uc="UC1", title="Sign in", steps=[
+        FlowStep(n=1, src="R1", dst="I6", phrase="clicks sign in", direction="in")])]
+    problems, _ = validate_model_mod._check_flows(m)
+    assert [p for p in problems if "not at either end" in p], problems
