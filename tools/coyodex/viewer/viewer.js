@@ -14500,9 +14500,25 @@ function inspResolve(target) {
 }
 function inspAt(el) {
   if (!el.getAttribute) return null;
-  // An arrow. Mermaid names its edge `<diagram>-L_<src>_<dst>_<nth>`, the same spelling `eachEdge`
-  // reads, so the nth arrow between one pair picks the nth stored edge between that same pair.
-  if (el.classList && el.classList.contains('flowchart-link')) return inspEdge(el);
+  // AN ARROW, REACHED THROUGH ITS HIT PATH. `attachEdgeHandlers` lays a wide transparent clone over
+  // every visible edge and STRIPS its class and id, so the thing a click actually lands on is not a
+  // `.flowchart-link` and is a SIBLING of the one that is — and this resolver climbs ANCESTORS. So
+  // every arrow answered "nothing under the cursor is an element of the stored map", on every
+  // diagram, for every click. The clone keeps `data-id`, which is the same `L_<src>_<dst>_<nth>`
+  // handle, so read that first and fall back to the element's own id.
+  //
+  // MATCH ON THE HANDLE'S SHAPE, not on a type marker beside it. A first fix keyed on
+  // `data-et="edge"`, which the hit path carries and the LABEL's group does not — so the line
+  // answered and its own number still did not. `L_<src>_<dst>_<nth>` is the shape, and only an
+  // arrow has it.
+  const arrowId = [el.getAttribute('data-id'), el.id]
+    .find((v) => v && INSP_ARROW_RE.test(v)) || '';
+  if (arrowId) {
+    // A USE CASE MAP's arrow is not a backbone `edges[]` row: its ends can be an actor or a surface,
+    // which no edge has. It stands for the WALK STEPS between those two boxes, and those are stored.
+    // Try that first, then the backbone row — an arrow is one or the other, never both.
+    return inspFlowArrow(el, arrowId) || inspEdgeById(arrowId);
+  }
   // A step of a walk, keyed by its position in the narration rather than by an id.
   const step = el.getAttribute('data-step');
   if (step && /^\d+$/.test(step)) return inspFlowStep(el, +step);
@@ -14535,13 +14551,47 @@ function inspAt(el) {
   const m = (el.id || '').match(INSP_MM_RE);
   return m ? inspById(m[1]) : null;
 }
-function inspEdge(pathEl) {
-  const m = (pathEl.id || '').match(/L_(U_\d+|[^_]+)_(U_\d+|[^_]+)_(\d+)$/);
+//: The handle Mermaid gives an arrow, on the visible path's `id` and on every clone's `data-id`.
+const INSP_ARROW_RE = /L_(U_\d+|[^_]+)_(U_\d+|[^_]+)_(\d+)$/;
+function inspEdge(pathEl) { return inspEdgeById(pathEl.id || ''); }
+// The backbone arrow a `L_<src>_<dst>_<nth>` handle names — the nth stored edge between that pair.
+function inspEdgeById(handle) {
+  const m = (handle || '').match(INSP_ARROW_RE);
   if (!m) return null;
   const slots = [];
   (RAW.edges || []).forEach((e, i) => { if (e.src === m[1] && e.dst === m[2]) slots.push(i); });
   const i = slots.length ? (slots[+m[3]] !== undefined ? slots[+m[3]] : slots[0]) : -1;
   return i < 0 ? null : { path: `edges[${i}]`, rec: RAW.edges[i], kind: 'arrow', id: null };
+}
+// AN ARROW ON A USE CASE MAP, which stands for the walk steps between two boxes rather than for a
+// stored edge. Its ends are flow-map TOKENS (an actor, a surface, a component), and `FLOWS_NARR`
+// carries the same tokens on each step, so the pair matches directly.
+//
+// ONE ARROW CAN CARRY SEVERAL STEPS — the label says so ("3, 20"). The inspector shows ONE record,
+// so it shows the first and SAYS how many there are, rather than picking one silently.
+function inspFlowArrow(el, handle) {
+  const m = (handle || '').match(INSP_ARROW_RE);
+  if (!m) return null;
+  // ONLY ON A USE CASE MAP. Falling back to `history[hi].uc` without checking WHICH view is open
+  // would let a stale use case answer for a backbone arrow: a Subsystems `L_C1_C2_0` would find a
+  // real walk step between the same pair and report it as that arrow's record, which is a wrong
+  // answer wearing the shape of a right one.
+  const holder = el.closest && el.closest('[data-uc]');
+  const here = history[hi];
+  const uc = (holder && holder.getAttribute('data-uc'))
+    || (here && here.kind === 'usecase' ? here.uc : '');
+  if (!uc || !FLOWS_NARR[uc]) return null;
+  // `flowMapSteps` IS THE LOOKUP — call it, never re-implement it. A first version compared the
+  // arrow's ends to the narration's directly and always missed, because the two are in different
+  // spaces: a box id is `FA0` and the narration holds that actor's NAME, and `flowMapToken` is what
+  // bridges them. The picture's own click handler has used this function all along.
+  const steps = flowMapSteps(uc, m[1], m[2]);
+  if (!steps.length) return null;
+  const first = inspFlowStep(el, steps[0].i);
+  if (!first) return null;
+  return steps.length === 1 ? first
+    : { ...first, note: `This arrow carries ${steps.length} steps of the walk; the record above is `
+        + `the first. The arrow's own label lists their numbers.` };
 }
 // One step of a walk. The narration FLATTENS a shared walk into its caller, so its own index is not
 // the stored one — the step's `sf` and `n` are, and they name the stored slot exactly.
@@ -14573,7 +14623,11 @@ function inspEntryPoint(comp, idx) {
 // resolver gap below then reads as the second one. So a miss is an answer too — what the click landed
 // on, and the handles it carried, which is exactly what extending the resolver needs.
 function inspMiss(target) {
-  const arrow = target && target.closest && target.closest('path.flowchart-link');
+  // AN ARROW IS RECOGNISED BY ITS HANDLE, not by a class. The thing a click lands on is the wide
+  // transparent clone, whose class was stripped, so `closest('.flowchart-link')` never matched and
+  // every arrow got the generic line instead of the one that says why it has no record.
+  const arrow = target && target.getAttribute
+    && [target.getAttribute('data-id'), target.id].some((v) => v && INSP_ARROW_RE.test(v));
   const why = arrow
     ? 'An arrow between boxes that are not components. The map stores arrows between COMPONENTS only '
       + '(every `edges[].src` is a C-id), so an arrow drawn between subsystems, subdomains or '
@@ -14623,8 +14677,12 @@ function inspRender(hit) {
     + `<span class="insp-acts">${back}${onScreen}`
     + `<button type="button" class="insp-x" title="Close">×</button></span></div>`
     + `<code class="insp-path">project-map.json › ${esc(hit.path)}</code></div>`
+    // A NOTE RIDES WITH A RECORD TOO, and it used to be dropped whenever one was present. One arrow
+    // on a use case map can carry several steps ("3, 20" on its label), and the popup shows ONE — so
+    // without this line it showed the first and let the reader take it for the whole arrow.
     + (hit.rec !== null && hit.rec !== undefined
-      ? `<pre class="insp-json">${inspVal(hit.rec, '')}</pre>`
+      ? (hit.note ? `<p class="insp-note">${esc(hit.note)}</p>` : '')
+        + `<pre class="insp-json">${inspVal(hit.rec, '')}</pre>`
       : `<div class="insp-miss"><p>${esc(hit.note || '')}</p>`
         + (hit.handles && hit.handles.length
           ? `<p class="insp-misslead">What the click landed on:</p><pre>${esc(hit.handles.join('\n'))}</pre>` : '')

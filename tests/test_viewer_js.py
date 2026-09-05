@@ -4705,3 +4705,50 @@ def test_a_record_inside_another_one_is_used_wherever_its_holder_is():
             js.index("\n}", js.index("function tracedUseCasesFor(id, seen) {"))]
     assert "GRAPH.record_parents" in fn, "the holder chain must be walked, not just the node itself"
     assert "guard.has(id)" in fn, "containment is authored; a cycle must not hang the panel"
+
+
+def test_the_inspector_finds_an_arrow_through_its_HIT_PATH():
+    """Every arrow answered "nothing under the cursor is an element of the stored map", on every
+    diagram, for every click.
+
+    `attachEdgeHandlers` lays a wide transparent clone over each visible edge and STRIPS its class
+    and id — so what a click lands on is not a `.flowchart-link`, and it is a SIBLING of the one
+    that is, while the resolver climbs ANCESTORS. Nitsan reported it as "I can't inspect a link".
+
+    Matched on the HANDLE'S SHAPE, not on a type marker: a first fix keyed on `data-et="edge"`,
+    which the hit path carries and the label's group does not, so the line answered and its own
+    number still did not."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    at = js[js.index("function inspAt(el) {"):js.index("function inspEdge(pathEl)")]
+    assert "INSP_ARROW_RE" in at, "the arrow is recognised by its handle, not by a class"
+    assert "data-id" in at.split("INSP_ARROW_RE")[0][-200:], "the clone's handle is read first"
+    miss = js[js.index("function inspMiss(target) {"):js.index("function inspHandles(target)")]
+    assert "INSP_ARROW_RE" in miss, \
+        "the miss message must recognise an arrow the same way, or it never explains one"
+
+
+def test_a_use_case_map_arrow_resolves_to_its_WALK_STEPS():
+    """An arrow there is not a backbone `edges[]` row — its ends can be an actor or a surface, which
+    no edge has. It stands for the walk steps between those two boxes, and those are stored.
+
+    It must call `flowMapSteps`, never re-implement it: a first version compared the arrow's ends to
+    the narration's directly and always missed, because a box id is `FA0` and the narration holds
+    that actor's NAME."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function inspFlowArrow(el, handle) {"):js.index("// One step of a walk.")]
+    assert "flowMapSteps(uc, m[1], m[2])" in fn, "the picture's own lookup, not a second one"
+    assert "here.kind === 'usecase'" in fn, \
+        "guarded to the use case map: a stale uc would answer for a backbone arrow"
+    assert "steps.length === 1 ? first" in fn, "one arrow can carry several steps, and must say so"
+
+
+def test_the_inspector_shows_a_note_BESIDE_a_record():
+    """It only rendered `note` when there was no record, so the multi-step note vanished exactly
+    where it was needed — the popup showed the first step and let it read as the whole arrow."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    body = js[js.index("inspPop.innerHTML = `<div class=\"insp-head\">"):]
+    head = body[:body.index("inspPop.hidden = false;")]
+    assert "insp-note" in head and head.index("insp-note") < head.index("insp-json"), \
+        "the note leads the record it qualifies"
+    assert ".insp-note" in css, "and it is styled"
