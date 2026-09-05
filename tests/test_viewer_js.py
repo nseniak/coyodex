@@ -4765,3 +4765,54 @@ def test_the_popup_renders_EVERY_record_an_arrow_carries():
     assert "hit.parts && hit.parts.length ? ''" in head, "and the head drops its duplicate path"
     for cls in (".insp-note", ".insp-sep", ".insp-subpath"):
         assert cls in css, f"{cls} is styled"
+
+
+def test_the_inspector_path_is_a_TRAIL_you_can_walk():
+    """`project-map.json › flows[7].steps[7]` reads like an address and was inert text. Every prefix
+    of it names a real value in the file, so each segment opens what it names: `flows` the list,
+    `[7]` that walk, `steps` its steps.
+
+    An INDEX, never the full JSON, for a list or the whole map — `flows` alone runs to thousands of
+    lines and the map to tens of thousands, so a naive drill would hang the popup on the first
+    click."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    trail = js[js.index("function inspTrailHtml(path, cls) {"):js.index("function inspGoPath(prefix)")]
+    assert 'data-path=""' in trail, "the root is a segment too — it opens the whole map"
+    assert "inspPathParts(path)" in trail, "one parser, shared with the walker"
+    go = js[js.index("function inspGoPath(prefix) {"):js.index("function inspOpen(hit)")]
+    assert "Array.isArray(v) || !prefix" in go, "a list and the root open as an index"
+    assert "index: v" in go and "rec: v" in go, "a list carries `index`, a record carries `rec`"
+    body = js[js.index("inspPop.innerHTML = `<div class=\"insp-head\">"):]
+    head = body[:body.index("inspPop.hidden = false;")]
+    assert "inspIndexHtml(hit.path, hit.index)" in head, "and the index is rendered before the JSON branch"
+    assert "'.insp-seg, .insp-row'" in js, "a path segment and an index row share one handler"
+    for cls in (".insp-seg", ".insp-index", ".insp-row", ".insp-row-lead"):
+        assert cls in css, f"{cls} is styled"
+
+
+def test_an_index_row_is_named_the_way_the_map_names_it():
+    """`[7]` alone is unreadable. A row carries the record's own id and title, so a list of 32 walks
+    reads as the walks rather than as 32 numbers."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function inspRowLabel(x) {"):js.index("function inspVal(v, pad)")]
+    for field in ("x.id", "x.uc", "x.name", "x.title", "x.term"):
+        assert field in fn, f"{field} is one of the names a row can take"
+
+
+def test_the_path_walker_and_the_path_parser_read_the_SAME_shape():
+    """Two readings of one grammar is how a trail comes to point somewhere the walker cannot reach."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert js.count("INSP_SEG_RE") >= 3, "one regex, used by the parser, the walker and the kind label"
+    walk = js[js.index("function inspWalk(prefix) {"):js.index("function inspPathKind(prefix, v)")]
+    assert "INSP_SEG_RE.lastIndex = 0" in walk, \
+        "a /g regex keeps its cursor between calls; not resetting it makes every other walk miss"
+
+
+def test_a_path_that_names_nothing_is_not_drawn_as_a_trail():
+    """A miss carries `—`, which parses to no segments. Walking it printed `project-map.json ›` and
+    then silence, so the panel read as a path that got CUT OFF rather than one that does not exist.
+    Caught by a browser test asserting the literal `—`, not by the source tests here."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fn = js[js.index("function inspTrailHtml(path, cls) {"):js.index("function inspGoPath(prefix)")]
+    assert "if (!parts.length) return" in fn, "no segments, no trail — print the text as it stands"

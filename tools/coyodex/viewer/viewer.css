@@ -2725,6 +2725,23 @@ body.insp-on { cursor: crosshair; }
    walk steps shows the first, and this is where it says so. */
 /* One arrow, several records: a rule between them, and each under its own path line. The sub-path
    is dimmer than the head's, which names the arrow itself. */
+/* THE PATH IS A TRAIL, so each segment is a button that still reads as part of one line: the code
+   face, the inherited colour, no chrome until you point at it. It used to be inert text. */
+.insp-seg { font: inherit; color: inherit; background: none; border: 0; padding: 0 1px; cursor: pointer;
+            border-radius: 2px; }
+.insp-seg:hover { color: #c7d2fe; background: #1e293b; text-decoration: underline; }
+.insp-seg:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+/* A LIST IS AN INDEX, one row per entry: the position, then what the map calls it. The full JSON of
+   `flows` alone is thousands of lines, and of the whole map tens of thousands. */
+.insp-index { display: flex; flex-direction: column; padding: 6px 6px 10px; max-height: 60vh;
+              overflow: auto; }
+.insp-row { display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left;
+            font: inherit; font-size: 12px; color: #e2e8f0; background: none; border: 0;
+            padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+.insp-row:hover { background: #1e293b; }
+.insp-row:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+.insp-row-lead { color: #818cf8; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.insp-row-label { color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .insp-sep { border: 0; border-top: 1px solid #334155; margin: 10px 12px; }
 .insp-subpath { display: block; padding: 0 12px; color: #94a3b8; font-size: 11px; }
 .insp-note { margin: 0; padding: 8px 12px 0; color: #cbd5e1; font-size: 12px; line-height: 1.5; }

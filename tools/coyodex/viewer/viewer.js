@@ -14665,6 +14665,30 @@ inspBadge.textContent = INSP_GESTURE + ' — map inspector: click any element';
 inspBadge.hidden = true;
 document.body.appendChild(inspBadge);
 
+//: `project-map.json › flows[7].steps[7]`, with every segment a step you can stop at.
+function inspTrailHtml(path, cls) {
+  const parts = inspPathParts(path);
+  // A PATH THAT NAMES NOTHING IS NOT A TRAIL. A miss carries `—`, which parses to no segments, and
+  // walking it would print `project-map.json ›` followed by silence — the panel then reads as a
+  // path that got cut off rather than as one that does not exist.
+  if (!parts.length) return `<code class="insp-path ${cls || ''}">project-map.json › ${esc(path)}</code>`;
+  return `<code class="insp-path ${cls || ''}">`
+    + `<button type="button" class="insp-seg" data-path="">project-map.json</button> › `
+    + parts.map((x) => (x.dot ? '.' : '')
+      + `<button type="button" class="insp-seg" data-path="${esc(x.prefix)}">${esc(x.text)}</button>`)
+      .join('') + '</code>';
+}
+// Open the value a path names. A LIST or the whole map is shown as an index — its full JSON is
+// thousands of lines, and nobody asked for that.
+function inspGoPath(prefix) {
+  const v = inspWalk(prefix);
+  if (v === undefined) return;
+  const kind = inspPathKind(prefix, v);
+  const asIndex = Array.isArray(v) || !prefix;
+  inspOpen(asIndex
+    ? { path: prefix || '', kind, id: null, rec: null, index: v }
+    : { path: prefix, kind, id: (v && v.id) || null, rec: v });
+}
 function inspOpen(hit) { inspStack.push(hit); inspRender(hit); }
 function inspRender(hit) {
   const onScreen = hit.id && GRAPH.nodes[hit.id]
@@ -14681,19 +14705,20 @@ function inspRender(hit) {
     + `<button type="button" class="insp-x" title="Close">×</button></span></div>`
     // NO HEAD PATH WHEN THERE ARE PARTS: each carries its own below, and printing the first one up
     // here too made the same line appear twice, reading as if it were the arrow's own record.
-    + (hit.parts && hit.parts.length ? ''
-       : `<code class="insp-path">project-map.json › ${esc(hit.path)}</code>`) + `</div>`
+    + (hit.parts && hit.parts.length ? '' : inspTrailHtml(hit.path)) + `</div>`
     // A NOTE RIDES WITH A RECORD TOO, and it used to be dropped whenever one was present.
     //
     // AND `parts` SHOWS EVERY RECORD, each under its own path. One arrow on a use case map carries
     // several steps ("3, 20" on its label), and this showed the FIRST with a note saying so — which
     // is the inspector answering "here is some of it". A reader who asks what an arrow is wants
     // what it is, not a sample and a count.
-    + (hit.parts && hit.parts.length
+    + (hit.index !== undefined && hit.index !== null
+      ? inspIndexHtml(hit.path, hit.index)
+      : hit.parts && hit.parts.length
       ? (hit.note ? `<p class="insp-note">${esc(hit.note)}</p>` : '')
         + hit.parts.map((part, k) =>
           (k ? '<hr class="insp-sep">' : '')
-          + `<code class="insp-path insp-subpath">project-map.json › ${esc(part.path)}</code>`
+          + inspTrailHtml(part.path, 'insp-subpath')
           + `<pre class="insp-json">${inspVal(part.rec, '')}</pre>`).join('')
       : hit.rec !== null && hit.rec !== undefined
       ? (hit.note ? `<p class="insp-note">${esc(hit.note)}</p>` : '')
@@ -14708,6 +14733,9 @@ function inspRender(hit) {
   if (b) b.addEventListener('click', () => { inspStack.pop(); inspRender(inspStack[inspStack.length - 1]); });
   const g = inspPop.querySelector('.insp-goto');
   if (g) g.addEventListener('click', () => selectFromTree(g.getAttribute('data-goto')));
+  // A segment of the path, and a row of an index: both are "open what this names".
+  inspPop.querySelectorAll('.insp-seg, .insp-row').forEach((el) =>
+    el.addEventListener('click', () => inspGoPath(el.getAttribute('data-path'))));
   // An id inside the JSON opens THAT record here, in place. A plain click is enough once the popup is
   // open — the modifier is what finds an element on a crowded page, and there is nothing else a click
   // on an id in this pane could mean.
@@ -14721,6 +14749,62 @@ function inspClose() { inspPop.hidden = true; inspStack = []; }
 // Render one JSON value as HTML. Written out rather than regexed over `JSON.stringify` output so the
 // escaping happens once, on the raw text, and an id can never be found inside markup this same pass
 // just wrote.
+// ── the path as a trail you can walk ─────────────────────────────────────────────────────────────
+// `flows[7].steps[7]` reads like an address and was inert text. Every prefix of it names a real
+// value in the file, so each segment is a step you can stop at: `flows` the list, `[7]` that walk,
+// `steps` its steps, `[7]` the one you clicked.
+const INSP_SEG_RE = /([A-Za-z_]\w*)|\[(\d+)\]/g;
+//: Every segment of a path, with the PREFIX that names it — `[{text, prefix, dot}]`.
+function inspPathParts(path) {
+  const out = [];
+  let m, prefix = '';
+  INSP_SEG_RE.lastIndex = 0;
+  while ((m = INSP_SEG_RE.exec(path || ''))) {
+    const key = m[1] !== undefined;
+    prefix = key ? (prefix ? prefix + '.' + m[1] : m[1]) : prefix + '[' + m[2] + ']';
+    out.push({ text: key ? m[1] : '[' + m[2] + ']', prefix, dot: key && out.length > 0 });
+  }
+  return out;
+}
+//: The value a prefix names, or `undefined`. '' is the whole map.
+function inspWalk(prefix) {
+  let v = RAW, m;
+  INSP_SEG_RE.lastIndex = 0;
+  while ((m = INSP_SEG_RE.exec(prefix || ''))) {
+    if (v === null || typeof v !== 'object') return undefined;
+    v = m[1] !== undefined ? v[m[1]] : v[+m[2]];
+  }
+  return v;
+}
+//: What to call the value at a prefix, in the map's own words where it has one.
+function inspPathKind(prefix, v) {
+  if (!prefix) return 'the whole map';
+  const parts = inspPathParts(prefix);
+  const lastKey = [...parts].reverse().find((x) => !x.text.startsWith('['));
+  const key = lastKey ? lastKey.text : '';
+  if (Array.isArray(v)) return `${key} — ${v.length}`;
+  return INSP_KIND[key] || key || 'record';
+}
+// A LIST IS SHOWN AS AN INDEX, never as its full JSON: `flows` alone is thousands of lines, and the
+// whole map is tens of thousands. One row per entry, named the way the map names it, and each row
+// is itself a step further in.
+function inspIndexHtml(prefix, v) {
+  const rows = Array.isArray(v)
+    ? v.map((x, i) => ({ seg: `${prefix}[${i}]`, lead: `[${i}]`, label: inspRowLabel(x) }))
+    : Object.keys(v).map((k) => ({ seg: prefix ? `${prefix}.${k}` : k, lead: k,
+        label: Array.isArray(v[k]) ? `${v[k].length} rows`
+          : v[k] === null || typeof v[k] !== 'object' ? String(v[k]) : '' }));
+  return `<div class="insp-index">` + rows.map((r) =>
+    `<button type="button" class="insp-row" data-path="${esc(r.seg)}">`
+    + `<span class="insp-row-lead">${esc(r.lead)}</span>`
+    + `<span class="insp-row-label">${esc(r.label)}</span></button>`).join('') + '</div>';
+}
+//: One row's name, in the map's own words — an id and a title where there is one.
+function inspRowLabel(x) {
+  if (x === null || typeof x !== 'object') return String(x);
+  const bits = [x.id, x.uc, x.name || x.title || x.term || x.key || x.unit].filter(Boolean);
+  return bits.length ? [...new Set(bits)].join(' · ') : Object.keys(x).slice(0, 3).join(', ');
+}
 function inspVal(v, pad) {
   if (v === null) return '<span class="insp-null">null</span>';
   if (typeof v === 'boolean') return `<span class="insp-bool">${v}</span>`;
