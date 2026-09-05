@@ -14587,11 +14587,14 @@ function inspFlowArrow(el, handle) {
   // bridges them. The picture's own click handler has used this function all along.
   const steps = flowMapSteps(uc, m[1], m[2]);
   if (!steps.length) return null;
-  const first = inspFlowStep(el, steps[0].i);
-  if (!first) return null;
-  return steps.length === 1 ? first
-    : { ...first, note: `This arrow carries ${steps.length} steps of the walk; the record above is `
-        + `the first. The arrow's own label lists their numbers.` };
+  const parts = steps.map(({ i }) => inspFlowStep(el, i)).filter(Boolean);
+  if (!parts.length) return null;
+  if (parts.length === 1) return parts[0];
+  // EVERY step, each under its own path. `path` on the wrapper stays the first, because the head
+  // line is what a reader copies to find the arrow in the file.
+  return { path: parts[0].path, kind: `${parts.length} walk steps`, id: null, rec: null,
+           note: `This arrow carries ${parts.length} steps of the walk, all of them below.`,
+           parts: parts.map((x) => ({ path: x.path, rec: x.rec })) };
 }
 // One step of a walk. The narration FLATTENS a shared walk into its caller, so its own index is not
 // the stored one — the step's `sf` and `n` are, and they name the stored slot exactly.
@@ -14676,11 +14679,23 @@ function inspRender(hit) {
     + `<div class="insp-top"><span class="insp-kind">${esc(hit.kind || 'record')}</span>`
     + `<span class="insp-acts">${back}${onScreen}`
     + `<button type="button" class="insp-x" title="Close">×</button></span></div>`
-    + `<code class="insp-path">project-map.json › ${esc(hit.path)}</code></div>`
-    // A NOTE RIDES WITH A RECORD TOO, and it used to be dropped whenever one was present. One arrow
-    // on a use case map can carry several steps ("3, 20" on its label), and the popup shows ONE — so
-    // without this line it showed the first and let the reader take it for the whole arrow.
-    + (hit.rec !== null && hit.rec !== undefined
+    // NO HEAD PATH WHEN THERE ARE PARTS: each carries its own below, and printing the first one up
+    // here too made the same line appear twice, reading as if it were the arrow's own record.
+    + (hit.parts && hit.parts.length ? ''
+       : `<code class="insp-path">project-map.json › ${esc(hit.path)}</code>`) + `</div>`
+    // A NOTE RIDES WITH A RECORD TOO, and it used to be dropped whenever one was present.
+    //
+    // AND `parts` SHOWS EVERY RECORD, each under its own path. One arrow on a use case map carries
+    // several steps ("3, 20" on its label), and this showed the FIRST with a note saying so — which
+    // is the inspector answering "here is some of it". A reader who asks what an arrow is wants
+    // what it is, not a sample and a count.
+    + (hit.parts && hit.parts.length
+      ? (hit.note ? `<p class="insp-note">${esc(hit.note)}</p>` : '')
+        + hit.parts.map((part, k) =>
+          (k ? '<hr class="insp-sep">' : '')
+          + `<code class="insp-path insp-subpath">project-map.json › ${esc(part.path)}</code>`
+          + `<pre class="insp-json">${inspVal(part.rec, '')}</pre>`).join('')
+      : hit.rec !== null && hit.rec !== undefined
       ? (hit.note ? `<p class="insp-note">${esc(hit.note)}</p>` : '')
         + `<pre class="insp-json">${inspVal(hit.rec, '')}</pre>`
       : `<div class="insp-miss"><p>${esc(hit.note || '')}</p>`

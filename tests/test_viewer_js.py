@@ -4739,16 +4739,29 @@ def test_a_use_case_map_arrow_resolves_to_its_WALK_STEPS():
     assert "flowMapSteps(uc, m[1], m[2])" in fn, "the picture's own lookup, not a second one"
     assert "here.kind === 'usecase'" in fn, \
         "guarded to the use case map: a stale uc would answer for a backbone arrow"
-    assert "steps.length === 1 ? first" in fn, "one arrow can carry several steps, and must say so"
+    assert "parts.length === 1) return parts[0]" in fn, \
+        "one step answers as itself; several answer as all of them"
+    # EVERY step an arrow carries, not the first with a count. A reader asking what an arrow is
+    # wants what it is — and the second step is often in a different container entirely, so the
+    # first is not even a representative sample of it.
+    assert "parts: parts.map(" in fn, "every step, not the first with a count"
 
 
-def test_the_inspector_shows_a_note_BESIDE_a_record():
-    """It only rendered `note` when there was no record, so the multi-step note vanished exactly
-    where it was needed — the popup showed the first step and let it read as the whole arrow."""
+def test_the_popup_renders_EVERY_record_an_arrow_carries():
+    """`note` used to render only when there was NO record, and the multi-step case then showed the
+    first step with a line saying there were more — the inspector answering "here is some of it".
+
+    Each part gets its OWN path line, and the head loses its: printing the first part's path twice
+    read as if it were the arrow's own record."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
     body = js[js.index("inspPop.innerHTML = `<div class=\"insp-head\">"):]
     head = body[:body.index("inspPop.hidden = false;")]
     assert "insp-note" in head and head.index("insp-note") < head.index("insp-json"), \
-        "the note leads the record it qualifies"
-    assert ".insp-note" in css, "and it is styled"
+        "the note leads the records it qualifies"
+    assert "hit.parts.map(" in head, "every part is rendered, not just the first"
+    assert "insp-subpath" in head and "insp-sep" in head, \
+        "each part under its own path, ruled off from the next"
+    assert "hit.parts && hit.parts.length ? ''" in head, "and the head drops its duplicate path"
+    for cls in (".insp-note", ".insp-sep", ".insp-subpath"):
+        assert cls in css, f"{cls} is styled"

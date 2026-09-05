@@ -2723,6 +2723,10 @@ body.insp-on { cursor: crosshair; }
 .insp-x { width: 26px; padding: 5px 0 !important; font-size: 15px !important; }
 /* A note ABOVE the record, for what the record alone does not say — an arrow carrying several
    walk steps shows the first, and this is where it says so. */
+/* One arrow, several records: a rule between them, and each under its own path line. The sub-path
+   is dimmer than the head's, which names the arrow itself. */
+.insp-sep { border: 0; border-top: 1px solid #334155; margin: 10px 12px; }
+.insp-subpath { display: block; padding: 0 12px; color: #94a3b8; font-size: 11px; }
 .insp-note { margin: 0; padding: 8px 12px 0; color: #cbd5e1; font-size: 12px; line-height: 1.5; }
 .insp-json { margin: 0; padding: 10px 12px; overflow: auto; flex: 1 1 auto;
              font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
