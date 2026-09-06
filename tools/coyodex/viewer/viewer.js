@@ -929,7 +929,8 @@ const ITEM_VARIANT = {
   card:    { what: true,  facts: true,  band: true,  clamp: 0, word: true },
 };
 // `spec` is what a thing IS, with no view in it:
-//   { id, k, name, word, ikind, what, pills:[{text,cls}], facts:[[label,value]], band:[text],
+//   { id, k, name, word, ikind, what, pills:[{text,cls}], facts:[[label,value,valueIsHtml?]],
+//     band:[text],
 //     chips:[{name,kind}], edge, dashed }
 // `opts`: { tinted, name (override), what (override the sentence), extra (caller HTML on the pill
 // row), nameLink, nameCls (an extra class on the NAME — a long title sets its own weight), cls
@@ -978,8 +979,12 @@ function itemBoxHtml(spec, variant, opts) {
       + `${mdInline(what)}</span>`);
   }
   if (v.facts) {
-    for (const [lbl, val] of spec.facts || []) {
-      out.push(`<span class="ibox-fact"><span class="ibox-lbl">${esc(lbl)}</span> ${esc(val)}</span>`);
+    // A fact's value is TEXT unless the third slot says otherwise. A step's source line is the code
+    // pill every code link in the product wears, which is markup — and it belongs in the same slot a
+    // record's "Stored" line uses, not under the box in a shape of its own.
+    for (const [lbl, val, isHtml] of spec.facts || []) {
+      out.push(`<span class="ibox-fact"><span class="ibox-lbl">${esc(lbl)}</span> `
+        + `${isHtml ? val : esc(val)}</span>`);
     }
   }
   if (v.band) {
@@ -988,9 +993,14 @@ function itemBoxHtml(spec, variant, opts) {
       // collapsed shared walk the chips are the only thing saying the product's edge and its saved
       // data are inside, and the mark says which is which without spending a word on it. The chip
       // itself stays a plain box: see the note where the per-kind rules are injected.
-      + (spec.chips || []).map((c) =>
-        `<span class="ibox-chip ibox-k-${esc(itemKind(c.kind))} ${esc(c.cls || '')}">`
-        + `${c.glyph || ''}${esc(c.name)}</span>`).join('');
+      + (spec.chips || []).map((c) => {
+        // THE MARK IS BUILT HERE, not by whoever assembled the chips. A caller that forgot to build
+        // one shipped a chip with no mark at all — which is what a shared walk's box did on the use
+        // case map, beside an interface's box whose chips had theirs. One place decides.
+        const ck = itemKind(c.kind);
+        return `<span class="ibox-chip ibox-k-${esc(ck)} ${esc(c.cls || '')}">`
+          + `${itemGlyphSvg(ck, '')}${esc(c.name)}</span>`;
+      }).join('');
     if (bits) out.push(`<span class="ibox-band">${bits}</span>`);
   }
   // The THING's own last line before the CALLER's: a provider belongs to the door wherever it is
@@ -1032,8 +1042,7 @@ function ifaceSpecFacts(spec, id) {
   // themselves are sorted by, not alphabetically and not by how busy each one is.
   spec.chips = ifaceActorRows(i).map(({ role: rid }) => {
     const r = ROLE_BY_ID[rid] || {};
-    const k = String(r.kind || 'human').trim().toLowerCase();
-    return { name: r.name || rid, kind: k, cls: '', glyph: itemGlyphSvg(itemKind(k), '') };
+    return { name: r.name || rid, kind: String(r.kind || 'human').trim().toLowerCase(), cls: '' };
   });
   // The PROVIDER is the pipe this door is reached through, never the far side — the rule the whole
   // section is built on. Last line of the box, and the tooltip says what a provider IS, which is the
@@ -1106,7 +1115,7 @@ function slotRulerEl() {
 function slotSpec(k, id) {
   if (k === 'subflow') {
     const sf = SUBFLOW_BY_ID[id] || {};
-    return { id, k: 'subflow', name: sf.name || id, word: 'shared walk', dashed: true,
+    return { id, k: 'subflow', name: sf.name || id, word: 'shared sub-use case', dashed: true,
              pills: [], facts: [], band: [], chips: SUBFLOW_CHIPS[id] || [] };
   }
   if (k === 'role') return itemSpecRole(id);
@@ -2261,7 +2270,7 @@ function hideIcon(icon) { if (icon) { icon.style.removeProperty('opacity'); icon
 // that runs it, so it gets a screen of its own instead of a home inside this one.
 function subflowOpenAction(sid, uc) {
   if (!SUBFLOW_BY_ID[sid]) return null;
-  return { kind: 'locate', title: 'Open the shared walk',
+  return { kind: 'locate', title: 'Open the shared sub-use case',
            run: () => go({ kind: 'subflow', sf: sid, uc }) };
 }
 function locateActionFor(id) {
@@ -2359,6 +2368,12 @@ function resetScene(scene) {  // clear selection + focus, restore the scene's de
   scene.defaultPanel();
   highlightTreePath(null);  // drop the file-browser highlight too
   setBrowsing(true);        // nothing selected -> the code slot defaults to the file browser
+  // …AND THE ADDRESS SAYS SO. Selecting restates the address in place (see selApply), and deselecting
+  // has to as well or the two disagree: the box looks let go, the link still names it, and a reload —
+  // or a copied link — brings it back selected. `selClear` deliberately touches neither the panel nor
+  // the address, because `selReplace` calls it on its way to a new selection; this is the path that
+  // ends with nothing selected, so it is the one that owes the address an answer.
+  if (scene === mainScene && !renderingTransient) refreshUrl();
 }
 
 // A click whose pointer moved far from its mousedown is the tail of a drag-pan — ignore it,
@@ -3169,6 +3184,12 @@ function flowAnimatePanBy(dx, dy) {
     mainPz.panBy({ x: (e - done) * dx, y: (e - done) * dy });
     done = e;
     flowPanRAF = e < 1 ? requestAnimationFrame(step) : 0;
+    // AND THE CARD COMES AGAIN WHEN THE PAN LANDS. This is the step player's ordinary path — the zoom
+    // is already right and only the drawing slides — and it is a rAF animation, not a CSS transition,
+    // so `easeCameraMove`'s timer never covered it. The card was placed against where the step's boxes
+    // were BEFORE the slide, two frames into a 260ms move, and then sat there while they travelled out
+    // from under it. Placed again at the end, against where they actually are.
+    if (!flowPanRAF && !PANEL_HOST.hidden) placeCard();
   };
   flowPanRAF = requestAnimationFrame(step);
 }
@@ -3270,11 +3291,33 @@ function flowReveal(els, i) {
     // applyZoomAndCenter uses (which prefers-reduced-motion disables) — a frame of zoom anchored on
     // the centre with the pan still pending would flash the step somewhere it is not.
     if (flowPanRAF) { cancelAnimationFrame(flowPanRAF); flowPanRAF = 0; }
-    const vp = diagram.querySelector('.svg-pan-zoom_viewport');
-    if (vp) { vp.classList.add('pan-anim'); setTimeout(() => vp.classList.remove('pan-anim'), 300); }
+    easeCameraMove();
     mainPz.zoom(mainPz.getZoom() * scale);
     if (dx || dy) mainPz.panBy({ x: dx, y: dy });
   } else if (dx || dy) flowAnimatePanBy(dx, dy);   // already fully visible -> stay put
+}
+// A CAMERA MOVE THE APP MADE, eased by a brief transition on the pan/zoom transform (svg-pan-zoom
+// sets it via inline `style.transform`), toggled on JUST for this programmatic move — never left on
+// during a drag-pan, or every mousemove frame would visibly lag behind the cursor. Disabled under
+// prefers-reduced-motion by the matching viewer.css rule.
+//
+// AND THE CARD COMES AGAIN WHEN IT LANDS. The step player pans the drawing to bring a step's arrow and
+// its two boxes into view — so those boxes end up somewhere new, under a card that was placed against
+// where they used to be. `onPan` cannot do this: it fires on every frame of a reader's own drag too,
+// and a card hopping about under their hand is worse than one left where they put it. This fires once,
+// after a move the APP made.
+function easeCameraMove() {
+  const vp = diagram.querySelector('.svg-pan-zoom_viewport');
+  if (!vp) return;
+  vp.classList.add('pan-anim');
+  // A TIMER, never `transitionend`: with motion turned off the stylesheet runs no transition and that
+  // event never fires — the same lesson the drawer's own slide already carries. And `onPan` cannot
+  // serve either: the library sets the transform ONCE and the stylesheet animates it, so onPan has
+  // already fired while the drawing is still travelling. 420 clears the 300ms transition with room.
+  setTimeout(() => {
+    vp.classList.remove('pan-anim');
+    if (!PANEL_HOST.hidden) placeCard();
+  }, 420);
 }
 // `cur` remembers the last step reached during THIS visit; `active` says whether that step is selected
 // now. Inactive shows an honest dash, disables Previous and leaves Next available. With no remembered
@@ -3287,7 +3330,7 @@ function flowCounter() {
   // blank. The counter keeps the two numbers, which is all it was ever good at.
   if (flowlabel) {
     flowlabel.textContent = 'Step through this '
-      + (SUBFLOW_BY_ID[flowPlay.uc] ? 'shared walk' : 'use case');
+      + (SUBFLOW_BY_ID[flowPlay.uc] ? 'shared sub-use case' : 'use case');
   }
   flowcount.textContent = (active ? i + 1 : '\u2013') + ' / ' + n;
   flowprev.disabled = !active;
@@ -3403,40 +3446,56 @@ function flowStepInfoHtml(uc, i) {
   // print the raw `path/to/file.py:47` as its own hand-rolled link, which made the most-read card in
   // the product the one place a code link looked different. The folder is not lost: opening the link
   // shows the whole path in the code pane's header.
-  const srcRow = st.where ? '<dl><dt>Source</dt><dd>' + srcCell(st.where) + '</dd></dl>' : '';
-  // The step's action is the title (a full sentence for actor steps — too long for a pill). Its arrow
-  // owns structural navigation, so the pane stays focused on the step's authored facts and call site.
-  // The Step pill is on EVERY card, not just a bundled arrow's sections: it is the one line tying the
-  // card to the diagram's numbers and the "Step n / N" counter, single-step selections included.
-  const stepBadge = '<span class="ecard-pill">step ' + (i + 1) + '</span>';
-  // The title is the ACTION and nothing else — see below. It used to name the doer first, back when a
-  // phrase was written in the third person and needed a subject to hang on.
-  // THE TITLE IS THE ACTION, and nothing else. A step's phrase and a shared walk's name are written the
-  // same way — imperative — so one line serves both, and a step that runs a shared walk finally says
-  // WHAT it runs instead of the empty "runs".
-  const title = st.sf
+  // A STEP'S CARD IS THE ITEM BOX, filled the way every other card is. It used to be the box's HEAD
+  // and nothing else: its sentence, its note, its call site and the shared walk it runs all hung
+  // BELOW the box as definition lists and a paragraph, in shapes nothing else in the product uses.
+  // Same four slots as a record's card now — a sentence, labelled facts, a band of counts and chips —
+  // so a reader who has learnt one card has learnt this one.
+  //
+  // ONLY THE RULES stay outside it. They are a list of other elements, not a fact about this step.
+  const runsShared = !!st.sf;
+  // THE TITLE IS THE ACTION, and nothing else. A step's phrase and a shared walk's name are written
+  // the same way — imperative — so one line serves both, and a step that runs a shared walk says WHAT
+  // it runs instead of the empty "runs". No italic: the view's question is the one italic in this app,
+  // and a second one stops it meaning anything.
+  // A CAPITAL FIRST LETTER. A step's phrase is authored as an imperative fragment ("name a value and
+  // mark it a password") and reads as a sentence here, at the head of its own card. Done to the TEXT,
+  // not with `text-transform: capitalize`, which would raise every word.
+  const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+  const title = runsShared
     ? '<button type="button" class="pane-title-link" data-gosf="' + esc(st.sf) + '"'
-      + ' title="Open the shared walk">' + esc(st.sfName || st.sf) + '</button>'
-    : (st.verb ? mdInline(st.verb) : 'step');
-  // THE SAME SHELL AN ELEMENT'S CARD USES. Select a box and you got a card with a type word on it;
-  // select an arrow and you got a bare heading — two designs on one screen, and only one of them said
-  // what kind of thing you had clicked. The word is `walk step`, and it is plain: a step has no home
-  // view to show it in, so a live-looking control would go nowhere.
-  return itemBoxHtml({ k: '', name: '', pills: [], facts: [], band: [], chips: [] }, 'card', {
-    nameHtml: '<em>' + title + '</em>',
+      + ' title="Open the shared sub-use case">' + esc(capFirst(st.sfName || st.sf)) + '</button>'
+    : (st.verb ? mdInline(capFirst(st.verb)) : 'Step');
+  const facts = [];
+  if (st.note) facts.push(['Note', mdInline(st.note), true]);
+  // The call site wears the SAME pill every other code link in the product wears (`srcCell`: name +
+  // line, a `.srclink` button the delegated pane listener already serves).
+  if (st.where) facts.push(['Source', srcCell(st.where), true]);
+  // WHICH STEP THIS IS rides beside the name, in the slot every card's type word uses. It is what
+  // ties the card to the numbers on the drawing and to the "6 / 17" counter, so it belongs at the
+  // head rather than down in the band with the counts.
+  //
+  // AND `walk step` IS GONE. The card only ever opens from a step — a number on an arrow, the step
+  // player, a link in the pane — so naming the kind said what the reader had just clicked. `Step 6`
+  // says the kind AND which one, in the same room.
+  // EVERY STEP'S CARD IS A STEP'S CARD, including one that runs a shared walk. That card used to
+  // borrow the WALK's — its mark, how many steps it holds, the people and records inside it — and so
+  // answered a question the reader had not asked: they clicked a step, and got the thing it runs.
+  // The walk's own screen is one click away, through the name, and everything about it lives there.
+  return itemBoxHtml({ k: '', name: '', pills: [],
+                       what: st.why || '', facts, band: [], chips: [] }, 'card', {
+    nameHtml: title,
+    // No mark: a step is not one of the kinds the map has one for, and the component's gear would
+    // say it is a component.
     glyph: false,
-    wordHtml: '<span class="ecard-type ecard-type-plain">walk step</span>' + stepBadge,
+    // PLAIN, like every type word whose click would go nowhere: a step has no home view to show it in.
+    wordHtml: '<span class="ecard-type ecard-type-plain">step ' + (i + 1) + '</span>',
+    // NO FRAME OF ITS OWN. This card only ever appears inside the floating card or the info pane, and
+    // there the box IS the surface — a frame inside a frame reads as two objects. Same option every
+    // other card in that position takes.
+    bare: true,
     cls: 'ecard ecard-step',
   })
-    + (st.sf ? '<dl><dt>Shared walk</dt><dd>' + (st.sfSteps || 0) + ' steps of its own'
-       + ((st.sfChips || []).length
-          ? '<div class="sfchips">' + st.sfChips.map((c) =>
-              '<span class="cychip" data-k="' + esc(c.kind) + '">' + esc(c.name) + '</span>').join('') + '</div>'
-          : '')
-       + '</dd></dl>' : '')
-    + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
-    + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '')
-    + srcRow
     + stepRulesHtml(uc, st);
 }
 // The T7 rules enforced at THIS step. Keyed by `(use case, authoring container, n)` — a step's `n`
@@ -4030,12 +4089,7 @@ function applyZoomAndCenter(el, scale) {
   const dx = stageCx - elCx;
   const dy = stageCy - elCy;
   if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;  // already centered — skip the no-op pan (+ its animation)
-  const vp = diagram.querySelector('.svg-pan-zoom_viewport');
-  // A brief transition on the pan/zoom transform (svg-pan-zoom sets it via inline `style.transform`),
-  // toggled on JUST for this programmatic move — never left on during a drag-pan, or every mousemove
-  // frame would visibly lag behind the cursor. Disabled under prefers-reduced-motion by the matching
-  // viewer.css rule, the same way flashIcon's own animation already is.
-  if (vp) { vp.classList.add('pan-anim'); setTimeout(() => vp.classList.remove('pan-anim'), 300); }
+  easeCameraMove();
   mainPz.panBy({ x: dx, y: dy });
 }
 
@@ -13556,9 +13610,10 @@ function codeItemsForPath(path) {
         select: () => { suppressCodeScroll = true; selectFlowStep(s.uc, s.i); } });
     }
     // The WORD follows what is on the line: two shared walks are "2 shared walks", a mix is "2 walks".
-    const kinds = new Set(choices.map((c) => (c.shared ? 'shared walk' : 'use case')));
+    const kinds = new Set(choices.map((c) => (c.shared ? 'shared sub-use case' : 'use case')));
     const one = kinds.size === 1 ? [...kinds][0] : 'walk';
-    const many = one === 'shared walk' ? 'shared walks' : one === 'use case' ? 'use cases' : 'walks';
+    const many = one === 'shared sub-use case' ? 'shared sub-use cases'
+      : one === 'use case' ? 'use cases' : 'walks';
     const name = choices.length === 1 ? choices[0].name
       : choices.length + ' ' + many + ': ' + choices.map((c) => c.name).join(', ');
     items.push({ line: +ln, kind: 'usecase', name: name, label: one,
@@ -15245,7 +15300,7 @@ const INSP_GESTURE = 'Ctrl+Shift';
 const INSP_KIND = {
   roles: 'actor', capabilities: 'feature', use_cases: 'use case', happy_path: 'happy-path step',
   subsystems: 'subsystem', components: 'component', deps: 'dependency', entry_points: 'way in',
-  subdomains: 'subdomain', entities: 'record type', flows: 'walk', subflows: 'shared walk',
+  subdomains: 'subdomain', entities: 'record type', flows: 'walk', subflows: 'shared sub-use case',
   rules: 'business rule', blocks: 'rule block', interfaces: 'interface', glossary: 'glossary term',
   tests: 'test row', deployment: 'process', config: 'setting', observability: 'signal',
   run_commands: 'command', non_entity_types: 'not a record type', extras: 'extra section',

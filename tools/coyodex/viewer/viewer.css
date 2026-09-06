@@ -2906,17 +2906,7 @@ body.insp-on { cursor: crosshair; }
    which is what no post-processed rectangle could make it do. The same markup is reused in the side
    panel, so one row of chips looks the same wherever it appears. Not clickable anywhere: the box, and
    the step that runs it, are the things you open. */
-.cychip { display: inline-block; padding: 0 7px; border-radius: 9px; border: 1px solid;
-          font-size: 10px; line-height: 15px; white-space: nowrap; }
-.cychip[data-k="interface"] { background: #fffbeb; border-color: #b45309; color: #78350f; }
-.cychip[data-k="entity"]    { background: #fdf4ff; border-color: #86198f; color: #581c87; }
-.cychip[data-k="actor"]     { background: #fff7ed; border-color: #c2410c; color: #7c2d12; }
-/* One chip per line, aligned down the left edge. The box's two head lines stay centred, so the name
-   reads as a title and the chips read as the list they are; centring pills of different widths left no
-   edge to read down. */
-.cychipline { display: block; text-align: left; margin-top: 3px; }
 .cysteps { font-size: 10px; color: #64748b; }
-.sfchips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
 
 /* A step card's title is the ACTION. When that action is running a shared walk, the title IS the link
    to it — the same weight and colour as any other step title, so the card reads the same either way. */

@@ -401,7 +401,7 @@ def test_flow_player_suspends_and_resumes_within_one_visit() -> None:
     # A LABEL LEADS THE CONTROL and says what pressing an arrow would do; the counter keeps the two
     # numbers. Alone, the counter read "Step – / 20" before anything was picked, and a dash where a
     # number goes is a blank.
-    assert "(SUBFLOW_BY_ID[flowPlay.uc] ? 'shared walk' : 'use case')" in player \
+    assert "(SUBFLOW_BY_ID[flowPlay.uc] ? 'shared sub-use case' : 'use case')" in player \
         and "flowlabel.textContent = 'Step through this '" in player
     assert "flowcount.textContent = (active ? i + 1 : '\\u2013') + ' / ' + n;" in player
     html = (VIEWER_DIR / "viewer.html").read_text(encoding="utf-8")
@@ -1561,6 +1561,29 @@ def test_everything_that_floats_over_the_drawing_states_its_layer() -> None:
         layers[sel] = int(block.split("z-index:")[1].split(";")[0].strip())
     assert layers["#callout"] < layers["#panel"], "the line ends at the card's edge, never across its face"
     assert layers["#callout"] < layers["#envpicker"], "…and never across a floater's face either"
+
+
+def test_letting_go_of_a_selection_says_so_in_the_address() -> None:
+    """Selecting restates the address in place; deselecting has to as well, or the two disagree — the
+    box looks let go, the link still names it, and a reload or a copied link brings it back selected.
+
+    `selClear` deliberately touches neither the panel nor the address, because `selReplace` calls it on
+    its way to a NEW selection and the address would then be written twice. `resetScene` is the path
+    that ends with nothing selected — an empty-canvas click, Escape, a back/forward with no selection
+    to replay — so it is the one that owes the address an answer.
+
+    Verified in the app on argus UC5: selecting a box put `&sel=node:I4` in the address, and a click on
+    the empty canvas took it away with nothing left selected."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    reset = js[js.index("function resetScene(scene) {"): js.index("\n}", js.index("function resetScene(scene) {"))]
+    assert "if (scene === mainScene && !renderingTransient) refreshUrl();" in reset
+    # The same guard `selApply` uses: never during a drill animation's throwaway scene, which IS
+    # `mainScene` while it is on screen.
+    apply_ = js[js.index("function selApply(scene"): js.index("\nfunction selAdd")]
+    assert "if (scene === mainScene && !renderingTransient) refreshUrl();" in apply_
+    # …and selClear stays silent, or a plain click on a new box would write the address twice.
+    clear = js[js.index("function selClear(scene) {"): js.index("\n}", js.index("function selClear(scene) {"))]
+    assert "refreshUrl" not in clear
 
 
 def test_the_card_comes_to_what_you_picked_and_stays_put_while_it_can() -> None:
