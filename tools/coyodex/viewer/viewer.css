@@ -140,10 +140,10 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    ONE container for every drawing in the product: white, a 1px rule, a 10px radius. A reader meets the
    same frame on the Happy Path, on a feature's timeline, on the Interfaces picture and on a walk map,
    so the frame stops being something to read and the drawing inside it is what they look at.
-   Stated ONCE. Three of the four had the same three declarations written out separately, and the fourth
-   — the walk map — had none at all: its drawing ran to the edge of the pane. The four selectors ARE the
-   list; a `.cy-board` class was here too and no element ever carried it. */
-.walk-board, .journey-board, .ifd-wrap, #diagwrap {
+   Stated ONCE. Three of the five had the same three declarations written out separately, and two —
+   the walk map and the Features picture — had none at all: their drawing ran to the edge of the pane.
+   The five selectors ARE the list; a `.cy-board` class was here too and no element ever carried it. */
+.walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {
   background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
 }
 /* The floor is 160px OF DRAWING, and it is written here and in viewer.js as the SAME number — a test
@@ -153,6 +153,16 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #diagwrap { position: relative; flex: 1 1 auto; box-sizing: content-box;
             min-width: 0; min-height: 160px; display: flex;
             overflow: hidden; margin: 8px 10px 10px; }
+/* …but NOT when it holds a page of text and cards. The frame is the DRAWING's frame: a map page puts
+   its drawing straight inside it, so the white ground and the rule are that drawing's own. A page
+   like Features, Happy Path or Interfaces puts a scrolling column inside it instead, and that column
+   already carries its own ground and its own framed board — so the reader met a frame around a frame
+   around a frame, and the outermost one drew a rounded box around the whole page for nothing. */
+/* The MARGIN goes with the frame. It was the air around a framed board; with no frame it became a bare
+   strip of the pane between the header and the page, and the header's shadow landed on that strip
+   instead of on the page — which reads as a solid band lying over the content rather than as an edge
+   the content passes under. */
+#diagwrap:has(.usecases-wrap) { background: none; border: 0; border-radius: 0; margin: 0; }
 /* The map fills the space LEFT UNDER the header, so the header never overlaps the fitted/centered
    diagram — the view-selector row is not part of the viewable area. #stagehead takes its natural height
    at the top; the diagram area takes the rest, and svg-pan-zoom fits/centers into that box
@@ -1827,7 +1837,10 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    The wrap's box then has to HOLD everything, because hidden clips what leaves it: the padding is
    the raised panel's shadow room, and nothing inside may use a negative margin to sit above the
    stage. */
-.story-wrap { overflow-x: auto; overflow-y: hidden; margin: 0 0 8px; padding: 10px 0 22px; }
+/* The side room is the board's, not the stage's: the stage is `position: relative` and its wires are
+   placed against its padding box, so padding there would slide every card 20px off its own wire.
+   Same 20px the Interfaces picture keeps, so a drawing meets its frame the same way on both. */
+.story-wrap { overflow-x: auto; overflow-y: hidden; margin: 0 0 8px; padding: 10px 20px 22px; }
 /* The page that carries the diagram earns a wider measure than a card list's 1100px: the stage is
    1250px with all three columns up, and clipping it into its own scrollbar on a window that has
    the room hides the data column. Narrower windows still scroll the wrap alone.
@@ -1836,7 +1849,7 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    same measure — matched on the child only, a feature's rail lost 360px and clipped its last
    station into a scrollbar on a window with the room for it. */
 .usecases-wrap:has(.story-wrap), .usecases-wrap:has(.journey-board),
-.usecases-wrap:has(.walk-board) { max-width: 1440px; }
+.usecases-wrap:has(.walk-board), .usecases-wrap:has(.ifd-wrap) { max-width: 1440px; }
 /* THREE columns, read left to right as one sentence: the people, what they do, the data it keeps.
    Every arrow on this page flows the same way, which is why the actors moved left — a stake label
    on a right-to-left wire read backwards on every one of them.
@@ -1881,7 +1894,13 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    panel gets its own indigo ground, a visible border and a real drop shadow; the cards on it stay
    pure white with a full shadow, so they lift off that ground; and the side columns' cards give up
    their shadow and take a paler border, so they read as notes in the margin. */
-.story-col-spine { grid-column: 3; background: #eceffb; border: 1px solid #c9d0f0;
+/* `align-self: start` so the PANEL ENDS AT ITS LAST FEATURE. A grid item stretches to the row by
+   default, so the pillar took the height of whichever side column ran longest — on the coyodex map
+   that left 275px of empty indigo under the last feature, a raised panel saying nothing. The side
+   columns may now run past its bottom, and that is the truth of the map: this one keeps more data
+   areas than it has features. The pillar is the widest and the raised one; it was never the tallest. */
+.story-col-spine { grid-column: 3; align-self: start;
+                   background: #eceffb; border: 1px solid #c9d0f0;
                    border-radius: 16px; padding: 14px 16px 16px;
                    box-shadow: 0 6px 22px rgba(40,44,90,.13), 0 1px 3px rgba(40,44,90,.08); }
 .story-col-spine > .story-colhead { color: #3730a3; font-size: 11.5px; letter-spacing: .08em; }
@@ -2248,7 +2267,12 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* `flex-start`, the same rule `.journey-track` carries. Stretched, every step button is as tall as
    the tallest, and a BUTTON centres its content box inside itself — which put the bullet of a step
    with a short title 8px below the line, measured on Meerbot's steps 14, 17 and 20. */
-.walk-line { display: flex; align-items: flex-start; position: relative; margin-top: 4px; }
+/* `stretch`, so a picked step's box is the height of the LANE rather than the height of its own
+   title — a two-line step and a one-line step next to it drew two different boxes. The step is
+   itself a column flex box for the same reason `align-items: flex-start` used to be here: a
+   BUTTON centres its content, so a step made taller than its text dropped its bullet off the
+   line. Saying where the content goes is what lets the box grow without moving anything. */
+.walk-line { display: flex; align-items: stretch; position: relative; margin-top: 4px; }
 .walk-line::before { content: ''; position: absolute; left: var(--walk-l, -7px);
                      right: var(--walk-r, -7px);
                      top: 19.5px; height: 3px; background: #4f46e5; border-radius: 2px; }
@@ -2266,9 +2290,14 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    faded, and a reader who looked away lost the step they came for. The border is transparent at rest,
    so the board still reads as one line of steps rather than as a wall of boxes, and it is the SAME
    box in all three states: nothing moves when it lights. */
+/* THE BOX IS INSET FROM ITS COLUMN, so two picked steps side by side keep clear air between their
+   rings instead of sharing an edge. The COLUMN is still 150px — 142 of box and 4 either side — so
+   the bullets down a row stay on their pitch and `WALK_STEP_W` is unchanged. The bottom margin is
+   what keeps the box off the floor of the band it stands in. */
 .walk-step { font: inherit; background: none; border: 0; text-align: left; color: inherit;
-             display: block; width: 150px; flex: none; position: relative;
-             padding: 0 16px 6px 14px; cursor: pointer; border-radius: 8px;
+             display: flex; flex-direction: column; justify-content: flex-start;
+             width: 142px; margin: 0 4px 6px; flex: none; position: relative;
+             padding: 0 12px 6px 10px; cursor: pointer; border-radius: 8px;
              transition: box-shadow .12s, background .12s; }
 
 /* PICKED, and it stays picked: the reader asked for this step and nothing but another click takes it
@@ -2286,7 +2315,10 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    whose subject it is, so here it stays. */
 .walk-n { display: block; font-size: 10px; font-weight: 700; color: #8a90a4; }
 .walk-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; margin-top: 1px; }
-.walk-step:hover .walk-t { color: #4f46e5; }
+.walk-step:hover .walk-t { color: #4f46e5; text-decoration: underline;
+                           text-decoration-color: #6366f1; }
+/* …and a step whose use case the map never recorded opens nothing, so it says nothing. */
+.walk-step-dead:hover .walk-t { text-decoration: none; }
 /* Measured once per render by `levelWalkBoxes`: the tallest line of steps anywhere sets a floor for
    all of them, so a row whose titles are all short does not draw a band half the height of the one
    above it. On the LINE, never on the step: a button centres its own content box, so a step given a
@@ -2389,9 +2421,9 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 
    NO HORIZONTAL PADDING. The vertical is what the names need; the horizontal moves the stage, and the
    WIRES ARE COMPUTED ONCE, before the board's own box has settled. 16px a side landed every wire 17px
-   short of the product's circle — a straight line to a rim that had since moved. The wires' one-shot
-   layout is the older fragility here (a window resize already left them stale); the board must not add
-   to it, so it takes its room above and below only.
+   short of the product's circle — a straight line to a rim that had since moved. That fragility is
+   gone: the wire pass is re-runnable and a ResizeObserver on the picture's own box re-runs it, so the
+   drawing may now take room at its sides like the other two boards do.
    The wrapper bleeds a single pixel so the RULE sits where the text column's edge is. */
 .ifd-wrap { margin: 4px 0 10px; padding: 16px 0; overflow-x: auto; }
 /* THE BLEED GOES ON THE WRAPPER, not on the board. `bindHFade` hangs the two edge shades off the
@@ -2399,11 +2431,36 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    its shades 17px inside itself, over the cards, which reads as a stain on the content rather than an
    edge it passes under. Bleeding the wrapper instead keeps the two boxes identical. */
 .hfade-wrap:has(> .ifd-wrap) { margin: 0 -1px; }
+/* THE FRAME IS AS WIDE AS THE DRAWING, never as wide as the pane. Both of these pictures have a
+   natural width, so on a wide window the frame ran on past the last card and left a slab of empty
+   white beside it — a frame saying the drawing carries on when it does not. The happy path and the
+   walk map are NOT here: their content has no natural width, and hugging it would take away the
+   sideways scroll the strip is built on.
+   The hug goes on the WRAPPER, because that is the box `bindHFade` places its edge shades against —
+   see the note above. `max-width: 100%` is what keeps the scroll: past it the wrapper stops growing
+   and the board scrolls inside it. */
+.hfade-wrap:has(> .story-wrap) { width: max-content; max-width: 100%; }
+/* The Interfaces picture is hugged by its NUMBER, not by `max-content`. Its two gutters are `1fr` so
+   that a narrow window can squeeze them, and under max-content sizing an `1fr` track collapses to its
+   own 60px minimum — the frame hugged a drawing 100px narrower than the one it draws at rest, taking
+   from the gutters the room a wire needs to leave a card and turn. The rest width is the same
+   `--ifd-stage-w` the stage is capped and floored by, plus the board's own rule on each side. */
+.hfade-wrap:has(> .ifd-wrap) { width: calc(var(--ifd-stage-w) + 2px); max-width: 100%; }
 /* `width: 100%` with the two card columns CAPPED rather than fixed, and the two gutters taking
    whatever is left. The caps came DOWN from 380 to buy the gutters their width: a wire to a circle
    needs room to leave the card and turn before it arrives, which a wire to a flat rule did not.
    320 + 160 for the hub leaves 130 a side at a 1440 window and stays whole at 1280. */
+/* ROOM AT THE SIDES, the same as the other two boards give their content: the cards sat hard against
+   the frame here and nowhere else. It goes on the STAGE rather than the wrapper, because the wrapper
+   is the box `bindHFade` measures its edge shades against — see the note above it. */
+/* THE FIVE TRACKS AT REST, named once and used twice below: the drawing may not grow past this, and
+   while the source column is open it may not shrink below it either. Written out twice, the cap and
+   the floor were one edit away from disagreeing, and a stage that can pass its own floor is a picture
+   that resizes when the column opens — the exact bug the floor exists to stop. */
+:root { --ifd-stage-w: calc(320px + 130px + 160px + 130px + 320px); }
 .ifd-stage { position: relative; display: grid; width: 100%; align-items: stretch;
+             max-width: var(--ifd-stage-w);
+             padding: 0 20px; box-sizing: border-box;
              grid-template-columns:
                minmax(0, 320px) minmax(60px, 1fr) 160px minmax(60px, 1fr) minmax(0, 320px); }
 /* WHILE THE SOURCE COLUMN IS OPEN the picture keeps its size, and what you SEE of it narrows — every
@@ -2415,8 +2472,12 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    gutters are `1fr` for exactly that, and it is asserted down to 1024 — so an unconditional floor made
    a 1024 window scroll for no reason. The column is what must not resize the drawing; a small screen
    still gets the drawing sized for it. The number is the five tracks at rest: two 320 cards, two 130
-   gutters, a 160 hub. */
-body:not(.code-hidden) .ifd-stage { min-width: calc(320px + 130px + 160px + 130px + 320px); }
+   gutters, a 160 hub.
+   THE STAGE'S SIDE ROOM IS NOT ADDED TO IT. The floor is a border-box width, so adding the 40px of
+   padding to it made the picture WIDER when the column opened than it is at rest — the opposite of
+   what the floor is for. The side room comes out of the gutters instead, which have 60px of their
+   own to give. */
+body:not(.code-hidden) .ifd-stage { min-width: var(--ifd-stage-w); }
 svg.ifd-wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 /* At rest EVERY wire is grey and unlabelled: the picture is for choosing, not for reading. Hover or
    pin makes one surface's wires the picture and fades the rest hard. */
@@ -2443,7 +2504,11 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    One tension remains and is accepted: 3 of the 10 surfaces under "We use" have a PERSON standing at
    them (a hosted sign-in, a code-hosting site, an editor), and it is the person who goes, not us.
    "We use" is still true — the product is what chose that surface and built the way to it. */
+/* A CARD FILLS ITS COLUMN. The item box's `full` variant is 320px wide, and these two columns are
+   `minmax(0, 320px)` — they shrink on a narrow window, and a fixed card then hung 14px past the one
+   on the right. The column decides the width here, as it does on the Features picture. */
 .ifd-col { display: flex; flex-direction: column; gap: 14px; }
+.ifd-col > .ifd-box { width: auto; }
 /* EVERY ITEM NAMES ITS ROW. Auto-placement will not let a later item overlap an earlier one, so the
    ownership box spanning tracks 1-4 would otherwise push the columns onto a second row. */
 .ifd-col-ours { grid-column: 1; grid-row: 1; }
@@ -2519,7 +2584,9 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    and a 15px icon renders 400px tall. The story cards' glyphs carry the same `#diagram`-scoped
    guard for the same reason. */
 #diagram .ifd-glyph { width: 15px; height: 15px; flex: 0 0 auto; display: block; }
-#diagram .ibox-chip .ibox-gly { width: 11px; height: 11px; }
+/* THE SMALL MARK, at ONE size wherever a name is tagged with its kind: on a chip, and on the person
+   heading the interface box. Two numbers here would drift the moment one of them was tuned. */
+#diagram .ibox-chip .ibox-gly, #diagram .ifd-elabel-dir .ibox-gly { width: 11px; height: 11px; }
 #diagram .ifd-prov .ibox-gly { width: 14px; height: 14px; }
 /* WHO STANDS HERE, inside the box. This was a column of its own with a wire to every surface: 13
    wires and 240px of width to say what these chips say. A chip carries no sentence and cannot be
@@ -2607,7 +2674,9 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    It headed a DIRECTION when the box listed what data crossed; the box lists who comes and what for
    now, so the heading names them. Darker than the text it heads, because a heading lighter than its
    content is not read as a heading. */
-.ifd-elabel-dir { display: block; margin-bottom: 4px;
+/* A FLEX ROW, not a block, so the person's mark sits on the name's own line and the name still wraps
+   under itself rather than under the mark. */
+.ifd-elabel-dir { display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
                   color: #3f4660; font-variant: small-caps; letter-spacing: .04em;
                   font-weight: 700; }
 /* THE LEADER, joining the box to its own arrow. PERPENDICULAR to the arrow and a constant 14px, and
@@ -2915,7 +2984,9 @@ body.insp-on { cursor: crosshair; }
             color: #9ca3af; }
 /* NO RULE ABOVE IT. The gap is already the separator; a hairline as well said the same thing twice. */
 .ibox-band { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
-.ibox-count { font-size: 10.5px; color: #6b7280; }
+/* NOTHING HERE ABOUT ITS COLOUR OR ITS SIZE. This line used to set both, and being later in the file
+   it beat the measured green above while leaving that green's FILL and BORDER standing — so every
+   count in the product was a green pill with grey text, which nobody chose. One count, one look. */
 .ibox-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px;
              border-radius: 9px; font-size: 10px; border: 1px solid #dfe2ec;
              background: #fbfbfe; color: #4b5563; }

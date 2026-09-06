@@ -963,9 +963,10 @@ function itemBoxHtml(spec, variant, opts) {
   }
   if (v.band) {
     const bits = (spec.band || []).map((b) => `<span class="ibox-count">${esc(b)}</span>`).join('')
-      // A CHIP CARRIES ITS OWN KIND'S COLOUR. On a collapsed shared walk the chips are the only thing
-      // saying the product's edge and its saved data are inside, and the colour says which is which
-      // without spending a word on it.
+      // A CHIP CARRIES ITS OWN KIND'S GLYPH, and that glyph is the only coloured thing on it. On a
+      // collapsed shared walk the chips are the only thing saying the product's edge and its saved
+      // data are inside, and the mark says which is which without spending a word on it. The chip
+      // itself stays a plain box: see the note where the per-kind rules are injected.
       + (spec.chips || []).map((c) =>
         `<span class="ibox-chip ibox-k-${esc(itemKind(c.kind))} ${esc(c.cls || '')}">`
         + `${c.glyph || ''}${esc(c.name)}</span>`).join('');
@@ -1116,8 +1117,11 @@ function injectItemTintCss() {
     out.push(`.ibox-tinted:where(.ibox-k-${k})`
       + `{border-color:color-mix(in srgb, ${t.stroke} 34%, #fff)}`);
     out.push(`.ibox-k-${k} .ibox-pill{background:${t.fill};color:${t.stroke}}`);
-    out.push(`.ibox-chip.ibox-k-${k}{background:${t.fill};color:${t.stroke};`
-      + `border-color:color-mix(in srgb, ${t.stroke} 30%, #fff)}`);
+    // NO RULE FOR THE CHIP. A chip is a plain box with a grey hairline, and its GLYPH is the only
+    // thing on it wearing the kind's colour — `itemGlyphSvg` strokes that in, so the identity costs
+    // one small mark instead of a coloured block. These pictures already carry a rotating colour per
+    // interface and per feature; a coloured block per name was more colour on top of that, saying
+    // something the mark beside it already said.
     out.push(`.ibox-idedge.ibox-k-${k}{border-left-color:${t.stroke}}`);
   }
   el.textContent = out.join('\n');
@@ -4803,9 +4807,17 @@ function liveSelKeys() {
   const k = storyPinKey(storyPinNow);
   return k ? [k] : [];
 }
+// The word a LINK carries is the word on the tab. `usecases` is this kind's name in some forty places
+// in this file and in the class name every page wrapper uses, so renaming it to reach the address bar
+// is a large change for a small one. ONE table maps the two directions instead.
+// The INTERNAL name is not a link word: `v=usecases` names no screen, and lands where any other
+// unknown word does. There is one word per screen, so a link cannot be read two ways.
+const URL_WORD = { usecases: 'features' };
+const URL_KIND = Object.fromEntries(Object.entries(URL_WORD).map(([k, w]) => [w, k]));
+function kindFromWord(w) { return URL_KIND[w] || (URL_WORD[w] ? null : w); }
 function urlFromState(s, live) {
   const q = new URLSearchParams();
-  q.set('v', s.kind);
+  q.set('v', URL_WORD[s.kind] || s.kind);
   for (const f of STATE_FIELDS) {
     const v = s[f];
     if (v !== undefined && v !== null && v !== '') q.set(f, String(v));
@@ -4831,7 +4843,9 @@ function stateFromUrl(hash) {
   const raw = String(hash || '').replace(/^#/, '');
   if (!raw) return null;
   const q = new URLSearchParams(raw);
-  const kind = idFromUrl(q.get('v'));
+  const word = idFromUrl(q.get('v'));
+  if (!word) return null;
+  const kind = kindFromWord(word);
   if (!kind) return null;
   const s = { kind };
   for (const f of STATE_FIELDS) { const v = idFromUrl(q.get(f)); if (v) s[f] = v; }
@@ -9481,7 +9495,9 @@ function renderHappyPath() {
   const n = (GRAPH.happy_path || []).length;
   const of = (allFeats && allFeats !== feats) ? ` of ${allFeats}` : '';
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + `<p class="block-lbl">${n} step${n === 1 ? '' : 's'}, `
+    // "25 steps THROUGH 10 features". The comma made two counts of unrelated things standing side
+    // by side; the word says what the walk actually does with them, which is pass through each one.
+    + `<p class="block-lbl">${n} step${n === 1 ? '' : 's'} through `
     + `${feats}${of} feature${(of ? allFeats : feats) === 1 ? '' : 's'}</p>`
     + `<div class="walk-board">${html}</div></div>`;
   levelWalkBoxes(diagram);
@@ -9882,9 +9898,27 @@ function storyDiagramHtml() {
        : '')
     + '</div></div>';
 }
+// The two side columns SPREAD over the PILLAR's height, not the grid row's. Both comments in the
+// stylesheet already said "the spine's height"; CSS could only say "the row", and the row is as tall
+// as the longest column — so on this project's own map four actors spread over 1130px beside a pillar
+// 856px tall, every wire fanned downwards and the last actor sat well below the last feature.
+// A column whose own content does NOT fit in that room keeps its own height, so nothing is clipped.
+// Called before any wire is measured: the wires are read off the settled card positions.
+function fitSideColumnsToPillar(stage) {
+  const spine = stage.querySelector('.story-col-spine');
+  if (!spine) return;
+  const room = spine.offsetHeight;
+  for (const col of stage.querySelectorAll('.story-col-cast, .story-col-areas')) {
+    col.style.height = '';                 // its own content height is what decides
+    col.style.alignSelf = 'start';
+    if (col.scrollHeight <= room) col.style.height = room + 'px';
+    else col.style.alignSelf = '';         // taller than the pillar: back to the row
+  }
+}
 function bindStoryDiagram(root) {
   const stage = root.querySelector('#storystage');
   if (!stage) return;
+  fitSideColumnsToPillar(stage);
   const st = FEATURES.story || {};
   const svg = stage.querySelector('svg.story-wires');
   // Geometry is measured off the REAL cards after layout, not computed from the data: the columns
@@ -11541,12 +11575,16 @@ function bindIfaceDiagram(root) {
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
     lab.dataset.wire = ends.join(' ');
-    const sec = (headText, ucs, cap) => {
+    const sec = (headText, ucs, cap, glyph) => {
       const row = document.createElement('div');
       row.className = 'ifd-elabel-row';
       const h = document.createElement('span');
       h.className = 'ifd-elabel-dir';
-      h.textContent = headText;
+      // THE PERSON'S OWN MARK, before their name — the same 11px glyph their chip on the card wears,
+      // from the same one builder. A section headed by a name alone made the reader carry the kind
+      // over from the card; the mark says human, AI agent or software service where the name is.
+      // The section with NO person passes no glyph, because there is nobody to draw.
+      h.innerHTML = (glyph || '') + esc(headText);
       row.appendChild(h);
       ucs.slice(0, cap).forEach((u) => {
         const it = document.createElement('button');
@@ -11573,7 +11611,8 @@ function bindIfaceDiagram(root) {
     if (rows.length) {
       for (const r of rows) {
         const nm = (ROLE_BY_ID[r.role] || {}).name || r.role;
-        sec(`${nm} · ${r.ucs.length} use case${r.ucs.length === 1 ? '' : 's'}`, r.ucs, UC_CAP);
+        sec(`${nm} · ${r.ucs.length} use case${r.ucs.length === 1 ? '' : 's'}`, r.ucs, UC_CAP,
+            itemGlyphSvg(itemSpecRole(nm).k));
       }
     } else {
       // NOBODY AT THE FAR SIDE is a normal answer, not a gap — 5 of MCP Hero's 16 are reached by the

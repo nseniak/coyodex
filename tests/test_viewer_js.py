@@ -2739,7 +2739,7 @@ def test_a_feature_board_wears_no_section_frame() -> None:
         "the one push left is the no-board fallback's"
     assert "${board}${index}" in ren, "the board leads the page, the chip bar indexes what follows"
     # …and the board keeps its own frame, because there is no section around it to be the card.
-    assert ".walk-board, .journey-board, .ifd-wrap, #diagwrap {" in css
+    assert ".walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
 
 
 def test_a_side_stop_hangs_under_the_actor_who_drives_it() -> None:
@@ -3955,6 +3955,82 @@ def test_the_three_columns_read_left_to_right_with_the_features_in_the_middle() 
     # once there is a column on each side of it.
     spine = css[css.index(".story-col-spine {"):]
     assert "background:" in spine[:spine.index("}")]
+    # The pillar ends at its LAST FEATURE — a grid item stretches to the row by default, so it took the
+    # height of whichever side column ran longest and left a slab of empty indigo under the last card.
+    assert "align-self: start" in spine[:spine.index("}")]
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    # …and the two side columns then spread over the PILLAR's height, not the grid row's, which is what
+    # both comments beside them always claimed. Measured, because only the browser knows either height.
+    assert "function fitSideColumnsToPillar(stage) {" in js
+    bind = js[js.index("function bindStoryDiagram(root) {"):]
+    bind = bind[:bind.index("const st = FEATURES.story")]
+    assert "fitSideColumnsToPillar(stage);" in bind, "run it BEFORE any wire is measured off a card"
+
+
+def test_the_outer_frame_is_the_drawing_s_and_a_page_of_cards_does_not_get_one() -> None:
+    """The frame is the DRAWING's frame. A map page puts its drawing straight inside `#diagwrap`, so
+    the white ground and the 1px rule are that drawing's own. A page of text and cards puts a scrolling
+    column in there instead, and that column already carries its own ground and its own framed board —
+    so Features, Happy Path and Interfaces drew a rounded box around the whole page for nothing, and
+    the reader met a frame inside a frame inside a frame."""
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    assert ("#diagwrap:has(.usecases-wrap) { background: none; border: 0; border-radius: 0; margin: 0; }" in css)
+    # The MARGIN goes with the frame: bare, it left a strip of the pane under the header for the
+    # header's shadow to land on, which reads as a solid band over the page rather than an edge.
+    # It is still ON the shared board rule: a map page is exactly where it earns the frame.
+    assert ".walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
+
+
+def test_a_name_wears_its_kind_as_one_small_mark_and_never_as_a_block() -> None:
+    """A chip is a plain box with a grey hairline, and its GLYPH is the only thing on it carrying the
+    kind. The chip used to be filled and outlined in that kind's colour, on pictures that already
+    rotate a colour per interface and per feature — a coloured block per name, saying what the mark
+    beside it already said.
+
+    The same mark leads the person heading an interface's box, at the same 11px, from the same one
+    builder — so a section headed by a name says human, AI agent or software service without the
+    reader carrying the kind over from the card."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    # No per-kind rule for the chip: the injected sheet styles the tinted box, the kind pill and the
+    # identity edge, and stops there.
+    assert ".ibox-chip.ibox-k-" not in css and "`.ibox-chip.ibox-k-" not in js
+    assert "`.ibox-k-${k} .ibox-pill{background:${t.fill};color:${t.stroke}}`" in js, \
+        "the KIND pill keeps its colour — that is the one tag whose job IS the kind"
+    # The glyph colours itself with an attribute, not `currentColor`, so a neutral chip keeps its mark.
+    gly = js[js.index("function itemGlyphSvg(k, ikind) {"):]
+    assert 'stroke="${esc(t.stroke)}"' in gly[:gly.index("\nfunction ")]
+    # …and the person heading the interface box takes that same builder.
+    assert "itemGlyphSvg(itemSpecRole(nm).k));" in js
+    # ONE size for the small mark, stated once for both places it appears.
+    assert ("#diagram .ibox-chip .ibox-gly, #diagram .ifd-elabel-dir .ibox-gly "
+            "{ width: 11px; height: 11px; }") in css
+
+
+def test_a_picture_with_a_natural_width_is_framed_at_that_width() -> None:
+    """The frame is as wide as the DRAWING, never as wide as the pane. Both of these pictures have a
+    natural width, so on a wide window the white board ran on past the last card and left a slab of
+    empty white beside it, saying the drawing carried on when it did not. The happy path and the walk
+    map are deliberately NOT hugged: their content has no natural width, and hugging it would take away
+    the sideways scroll the strip is built on.
+
+    The hug goes on the WRAPPER `bindHFade` inserts, because that is the box it places its edge shades
+    against — a board narrower than that wrapper draws its shades out over the page instead of on its
+    own edge."""
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    assert ".hfade-wrap:has(> .story-wrap) { width: max-content; max-width: 100%; }" in css
+    # NOT max-content for the Interfaces picture: its gutters are `1fr` so a narrow window can squeeze
+    # them, and under max-content sizing an `1fr` track collapses to its own 60px minimum.
+    assert ".hfade-wrap:has(> .ifd-wrap) { width: calc(var(--ifd-stage-w) + 2px); max-width: 100%; }" in css
+    # ONE number for the drawing's rest width: the stage may not grow past it, and while the source
+    # column is open it may not shrink below it either.
+    assert ":root { --ifd-stage-w: calc(320px + 130px + 160px + 130px + 320px); }" in css
+    assert "max-width: var(--ifd-stage-w);" in css
+    assert "body:not(.code-hidden) .ifd-stage { min-width: var(--ifd-stage-w); }" in css
+    # …and the Interfaces page earns the same measure as the other picture pages, so the page's own
+    # ground runs the width of the pane behind the hugged board instead of stopping in bare white.
+    assert (".usecases-wrap:has(.walk-board), .usecases-wrap:has(.ifd-wrap) { max-width: 1440px; }"
+            in css)
 
 
 def test_every_wire_flows_left_to_right_through_one_drawer() -> None:
@@ -4065,7 +4141,8 @@ def test_the_story_block_scrolls_sideways_only_and_never_clips_the_pillar() -> N
     wrap = css[css.index(".story-wrap {"):]
     wrap = wrap[:wrap.index("}")]
     assert "overflow-x: auto" in wrap and "overflow-y: hidden" in wrap
-    assert "padding: 10px 0 22px" in wrap, "the raised panel's shadow needs room inside the clip"
+    assert "padding: 10px 20px 22px" in wrap, \
+        "the raised panel's shadow needs room inside the clip, and its cards need room off the rule"
     spine = css[css.index(".story-col-spine {"):]
     spine = spine[:spine.index("}")]
     assert "margin:" not in spine, "a negative margin here is clipped away by the wrap"
@@ -4430,7 +4507,7 @@ def test_the_url_carries_every_field_that_names_a_screen_and_reads_it_back() -> 
     every = "Object.fromEntries([['kind', 'rules']].concat(STATE_FIELDS.map((f) => [f, 'X_' + f])))"
     got = json.loads(_run_js_regions(
         [("const STATE_FIELDS = [", "function stateKey(s) {"),
-         ("function urlFromState(s, live) {", "// `history` (the app's own stack) SHADOWS")],
+         ("const URL_WORD = {", "// `history` (the app's own stack) SHADOWS")],
         """
 const trip = (s) => stateFromUrl('#' + urlFromState(s, false));
 console.log(JSON.stringify({
@@ -4441,10 +4518,16 @@ console.log(JSON.stringify({
   one: trip({ kind: 'container', sel: 'C9' }),
   every: trip(""" + every + """),
   odd: trip({ kind: 'actor', act: 'Owner & friend / other' }),
+  word: urlFromState({ kind: 'usecases' }, false),
+  internalName: stateFromUrl('#v=usecases'),
   nohash: stateFromUrl(''),
   junk: stateFromUrl('#nothing=here'),
 }));
 """))
+    # The LINK says `features`, the word on the tab; the kind keeps its internal name. That internal
+    # name is NOT a link word: one word per screen, so a link cannot be read two ways.
+    assert got["word"] == "v=features"
+    assert got["internalName"] is None
     assert got["plain"] == {"kind": "usecases"}
     assert got["drill"] == {"kind": "subsystem", "sid": "SUB_A"}
     assert got["edge"] == {"kind": "edge", "a": "C1", "b": "C2"}
@@ -4670,7 +4753,7 @@ def test_a_url_value_can_never_be_an_inherited_property_name() -> None:
     sites today and forgotten at the fifth tomorrow."""
     got = json.loads(_run_js_regions(
         [("const STATE_FIELDS = [", "function stateKey(s) {"),
-         ("function idFromUrl(v)", "// `history` (the app's own stack) SHADOWS")],
+         ("const URL_WORD = {", "// `history` (the app's own stack) SHADOWS")],
         """
 console.log(JSON.stringify({
   proto: stateFromUrl('#v=__proto__'),
@@ -5135,7 +5218,7 @@ def test_the_interfaces_picture_scrolls_in_the_same_board_the_other_two_do() -> 
     wrap = css[css.index(".ifd-wrap { margin: 4px"):]
     wrap = wrap[:wrap.index("}")]
     # THE LOOK IS STATED ONCE, for every drawing in the product — see `.cy-board`.
-    assert ".walk-board, .journey-board, .ifd-wrap, #diagwrap {" in css
+    assert ".walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
     assert "background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;" in css
     assert "overflow-x: auto" in wrap
     # VERTICAL padding only. A card's name sits half above the stage and would be clipped without it —

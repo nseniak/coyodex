@@ -163,7 +163,7 @@ def test_back_after_an_address_bar_paste_walks_the_real_screens() -> None:
             page.go_back()
             _settle(page)
             walked.append(page.evaluate("() => location.hash"))
-        assert walked == ["#v=tests", "#v=glossary", "#v=usecases"], walked
+        assert walked == ["#v=tests", "#v=glossary", "#v=features"], walked
         assert "Features" in _crumb(page)
         assert not page.js_errors, page.js_errors
 
@@ -558,7 +558,7 @@ def test_the_walk_counts_the_features_it_touches_out_of_all_there_are() -> None:
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
         label = page.evaluate("() => document.querySelector('.block-lbl').textContent")
-        assert re.fullmatch(r"14 steps, \d+ of \d+ features", label), label
+        assert re.fullmatch(r"14 steps through \d+ of \d+ features", label), label
         touched, total = (int(x) for x in re.findall(r"(\d+) of (\d+)", label)[0])
         assert touched < total, label
         assert not page.js_errors, page.js_errors
@@ -985,7 +985,7 @@ def _inspect(page: Any, selector: str) -> dict:
 def test_the_inspector_answers_with_the_record_the_map_stores() -> None:
     """The whole point: the popup says WHICH slot of the stored file drew this box, and what that
     slot holds — not what the view bundle made of it."""
-    with _served() as url, _page(url + "#v=usecases") as page:
+    with _served() as url, _page(url + "#v=features") as page:
         _settle(page)
         got = _inspect(page, ".story-card.story-feature[data-sfeat]")
         assert got["open"], got
@@ -998,7 +998,7 @@ def test_the_inspector_answers_with_the_record_the_map_stores() -> None:
 def test_a_click_without_both_keys_is_an_ordinary_click() -> None:
     """The inspector overlaps two bindings that already exist (⌘ multi-selects, Shift frames), so
     the one thing it must never do is change what a plain click means."""
-    with _served() as url, _page(url + "#v=usecases") as page:
+    with _served() as url, _page(url + "#v=features") as page:
         _settle(page)
         page.click(".story-card.story-feature[data-sfeat] button")
         _settle(page)
@@ -1058,7 +1058,7 @@ def test_an_id_inside_a_record_opens_that_record_and_back_returns() -> None:
 def test_a_click_on_something_the_map_does_not_store_says_so() -> None:
     """Silence is the one answer a debug tool must not give: it makes a resolver gap and a broken
     tool look identical. A miss reports what the click landed on instead."""
-    with _served() as url, _page(url + "#v=usecases") as page:
+    with _served() as url, _page(url + "#v=features") as page:
         _settle(page)
         got = _inspect(page, "#crumb")
         assert got["open"], got
@@ -1082,7 +1082,7 @@ def test_the_secondary_click_opens_it_too_and_no_native_menu_appears() -> None:
     """macOS makes Control-click the SECONDARY click: the system turns it into a context menu and no
     ordinary click is ever produced. Held to `click` alone, the gesture opened the browser's own menu
     and nothing else — on the one platform this tool is written for."""
-    with _served() as url, _page(url + "#v=usecases") as page:
+    with _served() as url, _page(url + "#v=features") as page:
         _settle(page)
         prevented = page.evaluate("""
             () => {
@@ -1119,7 +1119,7 @@ def test_while_the_two_keys_are_held_the_page_itself_is_deaf() -> None:
           el.dispatchEvent(new WheelEvent('wheel', { ...o, deltaY: -240 }));
           return window.__seen.slice();
         }"""
-    with _served() as url, _page(url + "#v=usecases") as page:
+    with _served() as url, _page(url + "#v=features") as page:
         _settle(page)
         page.evaluate(probe)
         held = page.evaluate(fire, True)
