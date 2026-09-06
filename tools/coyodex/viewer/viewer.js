@@ -780,7 +780,7 @@ function cardPillsHtml(pills) {
 //
 // THE TYPE WORD IS DROPPED on the small variants: the fill and the glyph already say the kind and the
 // word only repeats them. AN INTERFACE KEEPS ITS WORD EVERYWHERE, because every door is the same amber
-// and one glyph serves two kinds (a browser is a website and their website, a wrench is MCP and agent
+// and one glyph serves two kinds (a globe is a website and their website, a wrench is MCP and agent
 // tools) — `MCP` is the only thing on that box saying which door it is.
 const ITEM_KIND = {
   capability: 'feature', usecase: 'usecase',
@@ -990,6 +990,9 @@ function itemBoxHtml(spec, variant, opts) {
         + `${c.glyph || ''}${esc(c.name)}</span>`).join('');
     if (bits) out.push(`<span class="ibox-band">${bits}</span>`);
   }
+  // The THING's own last line before the CALLER's: a provider belongs to the door wherever it is
+  // drawn, and only the variants that show facts have the room for it.
+  if (v.facts && spec.foot) out.push(spec.foot);
   if (o.foot) out.push(o.foot);
   const cls = ['ibox', 'ibox-' + variant, 'ibox-k-' + esc(spec.k)];
   if (o.tinted) cls.push('ibox-tinted');
@@ -1002,6 +1005,42 @@ function itemBoxHtml(spec, variant, opts) {
   const idAttr = spec.id ? ` data-id="${esc(spec.id)}"` : '';
   return `<span class="${cls.join(' ')}"${idAttr}${style}${o.attrs || ''}>${out.join('')}</span>`;
 }
+// WHAT THE MAP RECORDS ABOUT ONE INTERFACE, on the SPEC rather than in the Interfaces page. The page
+// used to work these five facts out itself and hand them straight to the box, so nothing else that
+// draws an interface had them: the same door said `website · 3 use cases · Visitor, Page owner · via
+// Meerbot's own pages` on that page and just its name and a sentence in the card you got by clicking
+// it on a walk. On the spec, every picture has them, and each one drops what it already draws — the
+// rule the glossary states.
+function ifaceSpecFacts(spec, id) {
+  const i = ifaceById(id);
+  if (!i) return;
+  spec.ikind = i.kind || spec.ikind;
+  spec.what = i.what || spec.what;
+  // Who it serves, and only when that is `staff`: a user-facing door shows nothing at all, which is
+  // the silence features already keep.
+  spec.pills = i.facing === 'operator' ? [{ text: 'staff', cls: 'ibox-pill-staff' }] : [];
+  // HOW MUCH OF THE PRODUCT'S WORK COMES THROUGH HERE, as one number. Sixteen doors with nothing to
+  // separate them read as sixteen equal things, and they are not. NONE SHOWS NOTHING: a pill reading
+  // "no use case" is a label for an absence, and the box is already drawn quiet for it.
+  const n = (i.useCases || []).length;
+  spec.band = n ? [`${n} use case${n === 1 ? '' : 's'}`] : [];
+  // THE PEOPLE ON THE FAR SIDE, in the order the story brings them — the same rule the doors
+  // themselves are sorted by, not alphabetically and not by how busy each one is.
+  spec.chips = ifaceActorRows(i).map(({ role: rid }) => {
+    const r = ROLE_BY_ID[rid] || {};
+    const k = String(r.kind || 'human').trim().toLowerCase();
+    return { name: r.name || rid, kind: k, cls: '', glyph: itemGlyphSvg(itemKind(k), '') };
+  });
+  // The PROVIDER is the pipe this door is reached through, never the far side — the rule the whole
+  // section is built on. Last line of the box, and the tooltip says what a provider IS, which is the
+  // one thing the line itself cannot.
+  spec.foot = (i.deps || []).map((d) => {
+    const nm = (GRAPH.nodes[d] || {}).name || d;
+    return '<span class="ifd-prov" '
+      + `title="${esc(nm)} — the pipe this interface is reached through, not the far side">`
+      + `${itemGlyphSvg('dep', '')}${esc(nm)}</span>`;
+  }).join('');
+}
 // The spec of a map ELEMENT, built from the same `cardFacts` the list card reads, so a thing cannot
 // read one way in a list and another on a picture.
 function itemSpecOf(id) {
@@ -1010,7 +1049,10 @@ function itemSpecOf(id) {
   const n = GRAPH.nodes[id] || {};
   const spec = { id, k: itemKind(n.kind), name: c.name, word: c.type, what: c.desc,
                  pills: c.pills || [], facts: [], band: [], chips: [] };
-  if (n.kind === 'interface') spec.ikind = String((n.fields || {}).Kind || '').trim();
+  if (n.kind === 'interface') {
+    spec.ikind = String((n.fields || {}).Kind || '').trim();
+    ifaceSpecFacts(spec, id);
+  }
   // WHERE A RECORD IS KEPT — the one fact about a record a reader wants without opening anything,
   // and the same line `cardExtraHtml` prints on the list card.
   if (n.kind === 'entity' && n.store) {
@@ -1177,10 +1219,15 @@ function elementCardHtml(id, opts) {
   //     click would ring the card the reader's finger is still on.
   // A control that looks live and does nothing teaches a reader to distrust the ones that work, and
   // it costs a keyboard stop per card.
+  const spec = itemSpecOf(id);
+  // THE WORD THE BOX SAYS. `c.type` is the element's own label, which for an interface is the word
+  // `interface` — while every picture that draws one says which KIND of door it is. The card said
+  // `interface` where the map beside it said `website`, about the same thing, one click apart.
+  const word = (spec && itemWord(spec)) || c.type;
   const typeHtml = (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))
-    ? `<span class="ecard-type ecard-type-plain">${esc(c.type)}</span>`
+    ? `<span class="ecard-type ecard-type-plain">${esc(word)}</span>`
     : `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
-      + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`;
+      + `title="Show this ${esc(c.type)} in context">${esc(word)}</button>`;
   // THE SAME BUILDER EVERY PICTURE DRAWS WITH. The card was the last shape on this viewer keeping its
   // own markup, so "how a card looks" and "how a box looks" were two answers to one question — and the
   // card was the one without the kind's mark on it, the only place an element appeared unlabelled.
@@ -1192,7 +1239,7 @@ function elementCardHtml(id, opts) {
   // about the element — which feature a use case belongs to, who drives it. It used to ride the title
   // line as a bare pill, and there `CONVERSATIONAL ASSISTANCE` sat beside `use case` in the same grey
   // at the same size, with nothing saying one was what the thing IS and the other a feature's name.
-  return itemBoxHtml(itemSpecOf(id), 'card', {
+  return itemBoxHtml(spec, 'card', {
     name: nm,
     nameLink: false,
     glyph: itemHasGlyph(c.kind) ? undefined : false,
@@ -11152,18 +11199,23 @@ function ifaceActorCardHtml(rid) {
 // lot of page for one word.
 //
 // EIGHT GLYPHS for eleven kinds. A reader cannot learn eleven, and three of the groupings are
-// genuinely one thing: `screen` and `hosted-screen` are both a browser window (the map defines
+// genuinely one thing: `screen` and `hosted-screen` are both the web (the map defines
 // `screen` as "anything served to a browser"), and `file`, `content` and `settings` are all a
 // document read and written. The kind WORD is gone from the card — the glyph carries it, and the
 // word is on the surface's own page.
 const IFACE_GLYPH = {
-  'screen': 'browser', 'hosted-screen': 'browser',
+  'screen': 'web', 'hosted-screen': 'web',
   'mobile-app': 'phone', 'desktop-app': 'desktop',
   'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench', 'mcp': 'wrench',
   'file': 'doc', 'content': 'doc', 'settings': 'doc', 'handoff': 'exit', 'message': 'envelope',
 };
 const IFACE_GLYPH_D = {
-  browser:  '<rect x="1.5" y="2.5" width="15" height="13" rx="2"/><path d="M1.5 6.5h15"/>',
+  // A GLOBE, not a browser window. The window was a rounded rect with one line near its top, which is
+  // the record's own mark at a slightly different size — two kinds wearing one drawing, told apart only
+  // by colour. The globe leaves the box behind entirely, so the two can no longer be confused, and it
+  // is the one shape a reader already reads as "the web".
+  web:      '<circle cx="9" cy="9" r="7"/><ellipse cx="9" cy="9" rx="3.1" ry="7"/>'
+            + '<path d="M2.3 6.6h13.4M2.3 11.4h13.4"/>',
   phone:    '<rect x="4.5" y="1.5" width="9" height="15" rx="2"/><path d="M7.6 14.2h2.8"/>',
   desktop:  '<rect x="1.5" y="2.5" width="15" height="10" rx="1.6"/><path d="M6 15.5h6M9 12.5v3"/>',
   terminal: '<rect x="1.5" y="2.5" width="15" height="13" rx="2"/><path d="M4.6 6.6 7.4 9l-2.8 2.4M9.4 11.6h4"/>',
@@ -11197,46 +11249,23 @@ function ifaceBoxHtml(i, me) {
   // An interface is the ONE kind whose type word survives on every variant, for exactly this reason.
   const spec = itemSpecOf(i.id) || { id: i.id, k: 'interface', name: i.name, word: 'interface',
                                      pills: [], facts: [], band: [], chips: [] };
-  spec.ikind = i.kind || '';
-  spec.what = i.what || spec.what;
-  spec.pills = i.facing === 'operator' ? [{ text: 'staff', cls: 'ibox-pill-staff' }] : [];
-  // HOW MUCH OF THE PRODUCT'S WORK COMES THROUGH HERE, as one number. Sixteen cards with nothing to
-  // separate them read as sixteen equal things, and they are not: MCP Hero's dashboard carries 32
-  // use cases and its command line carries none.
-  // NONE SHOWS NOTHING. A pill reading "no use case" was a label for an absence, and the card is
-  // already drawn dashed for it — the quiet is the statement.
+  // EVERYTHING THIS BOX SAYS NOW COMES FROM THE SPEC — see `ifaceSpecFacts`. What is left here is
+  // about this PICTURE and nothing else: which wash it wears, whether it is drawn quiet, and the
+  // class and attribute the wire geometry, the pinning and the click handling address it by.
+  //
+  // ONE CHIP MAY BE MARKED, and only on an actor's page: every box there is present BECAUSE that
+  // actor stands at it, and the other people at the same door are context worth keeping — so the
+  // chips stay as they are and the reader's own actor is lit, rather than the rest being dropped.
+  if (me) {
+    spec.chips = (spec.chips || []).map((c) => (
+      (ROLE_BY_ID[me] || {}).name === c.name ? { ...c, cls: 'ibox-chip-me' } : c));
+  }
   const n = (i.useCases || []).length;
-  spec.band = n ? [`${n} use case${n === 1 ? '' : 's'}`] : [];
-  // ONE DOOR PER CARD, AND IT IS THE NAME. The people and the providers are FACTS about this surface,
-  // not places to go — they were buttons opening an actor's page and a dependency in the tree, which
-  // put three kinds of target on one small card and made a fact read as somewhere to click.
-  // ONE CHIP MAY BE MARKED. On an actor's page every card is there BECAUSE that actor stands at it,
-  // and the other people at the same surface are context worth keeping — so the chips stay as they
-  // are and the reader's own actor is lit, rather than the rest being dropped.
-  // IN THE ORDER THE STORY BRINGS THEM, not alphabetically and not by how busy each one is. On MCP
-  // Hero's dashboard that is Visitor, then Organization admin, then Team member — the sequence the
-  // product's own happy path takes, which is the same rule the surfaces themselves are sorted by.
-  spec.chips = ifaceActorRows(i).map(({ role: rid }) => {
-    const r = ROLE_BY_ID[rid] || {};
-    const k = String(r.kind || 'human').trim().toLowerCase();
-    return { name: r.name || rid, kind: k,
-             cls: rid === me ? 'ibox-chip-me' : '',
-             glyph: itemGlyphSvg(itemKind(k), '') };
-  });
-  // The PROVIDER is the pipe this interface is reached through, never the far side — the rule the
-  // whole section is built on. It sits under the band as the card's last line, and the tooltip stays:
-  // it says what a provider IS, which is the one thing the line cannot.
-  const prov = (i.deps || []).map((d) => {
-    const nm = (GRAPH.nodes[d] || {}).name || d;
-    return '<span class="ifd-prov" '
-      + `title="${esc(nm)} — the pipe this interface is reached through, not the far side">`
-      + `${itemGlyphSvg('dep', '')}${esc(nm)}</span>`;
-  }).join('');
-  // THE CARD ROTATES ITS COLOUR, it does not wear the door's amber. On a high-level picture the one
+  // THE BOX ROTATES ITS COLOUR, it does not wear the door's amber. On a high-level picture the one
   // kind the picture is ABOUT is the only thing coloured, and every box on this one is a door — so
   // amber everywhere said nothing and made a column of sixteen a wall. A rotating wash is what lets
   // the eye walk down it. WHICH door it is is still said, in the kind word beside the name.
-  return itemBoxHtml(spec, 'full', { fill: ifaceTint(i.id), foot: prov,
+  return itemBoxHtml(spec, 'full', { fill: ifaceTint(i.id),
                                      cls: 'ifd-box' + (n ? '' : ' ifd-box-quiet'),
                                      attrs: ` data-iface="${esc(i.id)}" tabindex="0"` });
 }
