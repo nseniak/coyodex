@@ -416,7 +416,7 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 // file path (`.gloss-plain`), pills (labels, not prose), headings and card names (a title is a
 // label too — measured on the MCP Hero map, linking titles underlined half of every card list's
 // name column), and the Glossary view itself (the one page that IS the definitions).
-const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ecard-name, .tb-trig, '
+const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ibox-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
   + '.dv-kindpill, .dv-coll, .ibox-name, .ibox-pill, .ibox-count, .ibox-chip, '
   + '.story-pill, .story-colhead, '
@@ -791,6 +791,11 @@ const ITEM_KIND = {
   actor: 'human', role: 'human',
 };
 function itemKind(k) { return ITEM_KIND[k] || 'component'; }
+// …but ONLY these kinds have a MARK. The fallback above is a colour fallback, and a colour that lands
+// near a component's is harmless; a GLYPH that lands on the component's gear is not — it tells the
+// reader a decision area, a business rule, a test or a process IS a component. Everything outside the
+// vocabulary goes unmarked instead, which says nothing rather than something untrue.
+function itemHasGlyph(k) { return Object.prototype.hasOwnProperty.call(ITEM_KIND, k); }
 // The kind's colour, from the ONE table the diagrams already paint themselves with (gen_viewer's
 // ELEMENT_TINT, shipped in the bundle). A kind the table has no entry for falls back to the shared
 // walk's neutral slate rather than to a colour that would claim something.
@@ -917,14 +922,24 @@ const ITEM_VARIANT = {
   // glyph leads and the name sits under it. Still this function's output, so the person is not the
   // one box kind that escapes the shared code.
   figure:  { what: false, facts: false, band: false, clamp: 0, word: false },
+  // A CARD IN A LIST. Same slots as `full` and the same builder, so a thing cannot read one way in a
+  // list and another on a picture — but its own reading SIZE, set in the stylesheet: a list is read
+  // and a picture is scanned, and the card's 14px name has to survive being stacked twenty deep.
+  card:    { what: true,  facts: true,  band: true,  clamp: 0, word: true },
 };
 // `spec` is what a thing IS, with no view in it:
 //   { id, k, name, word, ikind, what, pills:[{text,cls}], facts:[[label,value]], band:[text],
 //     chips:[{name,kind}], edge, dashed }
-// `opts`: { tinted, name (override), extra (caller HTML on the pill row), nameLink, cls (extra
-// classes the CALLER needs on the box — a picture that positions or wires it), attrs (extra
+// `opts`: { tinted, name (override), what (override the sentence), extra (caller HTML on the pill
+// row), nameLink, nameCls (an extra class on the NAME — a long title sets its own weight), cls
+// (extra classes the CALLER needs on the box — a picture that positions or wires it), attrs (extra
 // attributes, same reason), nameAttrs (extra attributes on the NAME, for a picture that binds
 // its own door), word (force the type word on or off — the page may already say the kind),
+// wordHtml (the caller's OWN type pill, replacing the default one: a card's is a button that shows
+// the element in its home view, and only the card knows when that click would go nowhere),
+// nameHtml (the caller's own NAME markup, for the one name that is not plain text: a walk step's
+// title can be a door to the shared walk it runs),
+// glyph (false leaves the mark off, for a card that stands for no map element at all),
 // fill (a background of the caller's own, for the ONE kind whose colour belongs to the thing
 // rather than to its type: a feature, whose wash exists so two of them side by side read as
 // two), foot (caller HTML after the band) }
@@ -937,22 +952,27 @@ function itemBoxHtml(spec, variant, opts) {
   // every row. An interface still keeps its word by default, for the reason above.
   const word = o.word === false ? ''
     : (o.word === true || v.word || spec.k === 'interface') ? itemWord(spec) : '';
-  const pills = (word ? `<span class="ibox-pill">${esc(word)}</span>` : '')
+  const pills = (o.wordHtml !== undefined ? o.wordHtml
+                 : word ? `<span class="ibox-pill">${esc(word)}</span>` : '')
     + (spec.pills || []).map((p) =>
       `<span class="ibox-pill ibox-pill-alt ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('')
     + (o.extra || '');
   // THE NAME IS THE DOOR and the rest of the box is the pin — the split every card on this viewer
   // already makes. `.ibox-name` is what a click test looks for, exactly as `.cyname` was.
   const nm = esc(o.name || spec.name || '');
-  const name = o.nameLink === false ? `<span class="ibox-name">${nm}</span>`
-    : `<button type="button" class="ibox-name"${o.nameAttrs || ''} `
+  const ncls = 'ibox-name' + (o.nameCls ? ' ' + o.nameCls : '');
+  const name = o.nameHtml !== undefined ? `<span class="${ncls}">${o.nameHtml}</span>`
+    : o.nameLink === false ? `<span class="${ncls}">${nm}</span>`
+    : `<button type="button" class="${ncls}"${o.nameAttrs || ''} `
       + `title="Open ${nm}">${nm}</button>`;
-  const out = [`<span class="ibox-head"><span class="ibox-glybox">`
-    + `${itemGlyphSvg(spec.k, spec.ikind)}</span>`
+  const gly = o.glyph === false ? ''
+    : `<span class="ibox-glybox">${itemGlyphSvg(spec.k, spec.ikind)}</span>`;
+  const out = [`<span class="ibox-head">${gly}`
     + `<span class="ibox-title">${name}${pills}</span></span>`];
-  if (v.what && spec.what) {
+  const what = o.what !== undefined ? o.what : spec.what;
+  if (v.what && what) {
     out.push(`<span class="ibox-what${v.clamp === 2 ? ' ibox-clamp2' : ''}">`
-      + `${mdInline(spec.what)}</span>`);
+      + `${mdInline(what)}</span>`);
   }
   if (v.facts) {
     for (const [lbl, val] of spec.facts || []) {
@@ -1161,36 +1181,47 @@ function elementCardHtml(id, opts) {
     ? `<span class="ecard-type ecard-type-plain">${esc(c.type)}</span>`
     : `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
       + `title="Show this ${esc(c.type)} in context">${esc(c.type)}</button>`;
-  return `<article class="ecard" data-id="${esc(id)}" tabindex="0">`
-    + '<div class="ecard-head">'
-    + `<span class="ecard-name${nm.length > 70 ? ' ecard-name-long' : ''}">${esc(nm)}</span>`
-    + typeHtml
-    + cardPillsHtml(c.pills) + (o.extra || '')
-    + '</div>'
-    + (desc ? `<p class="ecard-desc">${mdInline(desc)}</p>` : '')
-    + cardExtraHtml(id)
-    // A LABELLED line under the sentence, for a fact that is about this card's CONTEXT rather than about
-    // the element — which feature a use case belongs to, who drives it. It used to ride the title line as
-    // a bare pill, and there `CONVERSATIONAL ASSISTANCE` sat beside `use case` in the same grey at the
-    // same size: nothing said one was what the thing IS and the other a feature's name. Measured: the two
-    // differed by 4% of background and nothing else. The label is what makes the word readable, and it
-    // only fits below, so this is the line it earns.
-    + (o.foot || '')
-    + '</article>';
+  // THE SAME BUILDER EVERY PICTURE DRAWS WITH. The card was the last shape on this viewer keeping its
+  // own markup, so "how a card looks" and "how a box looks" were two answers to one question — and the
+  // card was the one without the kind's mark on it, the only place an element appeared unlabelled.
+  // What the card keeps of its own: its reading size (in the stylesheet), its type pill (a button
+  // going somewhere only the card can know about), and the whole card as the door rather than the
+  // name — a list is a set of things to open, and a name-sized target in a stack is a smaller one.
+  //
+  // `o.foot` is a LABELLED line under the sentence, for a fact about this card's CONTEXT rather than
+  // about the element — which feature a use case belongs to, who drives it. It used to ride the title
+  // line as a bare pill, and there `CONVERSATIONAL ASSISTANCE` sat beside `use case` in the same grey
+  // at the same size, with nothing saying one was what the thing IS and the other a feature's name.
+  return itemBoxHtml(itemSpecOf(id), 'card', {
+    name: nm,
+    nameLink: false,
+    glyph: itemHasGlyph(c.kind) ? undefined : false,
+    nameCls: nm.length > 70 ? 'ecard-name-long' : '',
+    what: desc,
+    wordHtml: typeHtml,
+    extra: cardPillsHtml(c.pills) + (o.extra || ''),
+    foot: o.foot || '',
+    cls: 'ecard',
+    attrs: ' tabindex="0"',
+  });
 }
 
 // A card for something that is NOT a map element: a System collection, a kind of way in, the use cases
 // belonging to no feature. Same shape and same look as the element card, because a reader should not
 // have to learn two card designs — but no type pill and no element actions, because it has neither.
 function plainCardHtml(o) {
-  return `<article class="ecard" data-key="${esc(o.key)}" tabindex="0">`
-    + '<div class="ecard-head">'
-    + `<span class="ecard-name">${esc(o.name)}</span>`
-    + (o.pill || '')
-    + (o.count ? `<span class="ecard-pill">${esc(o.count)}</span>` : '')
-    + '</div>'
-    + (o.desc ? `<p class="ecard-desc">${esc(o.desc)}</p>` : '')
-    + '</article>';
+  // NO MARK unless the caller names a kind. A System collection or a kind of way in is not an element,
+  // so there is no kind for a mark to say — and an actor's card, which IS a person, passes `k` and
+  // gets the same figure their chip and their box wear.
+  return itemBoxHtml({ k: o.k || '', name: o.name, what: o.desc || '', pills: [], facts: [], band: [],
+                       chips: [] },
+                     'card', {
+    nameLink: false,
+    glyph: !o.k ? false : undefined,
+    wordHtml: (o.pill || '') + (o.count ? `<span class="ecard-pill">${esc(o.count)}</span>` : ''),
+    cls: 'ecard',
+    attrs: ` data-key="${esc(o.key)}" tabindex="0"`,
+  });
 }
 function bindPlainCards(root, onOpen) {
   root.querySelectorAll('.ecard[data-key]').forEach((card) => {
@@ -3328,12 +3359,12 @@ function flowStepInfoHtml(uc, i) {
   // select an arrow and you got a bare heading — two designs on one screen, and only one of them said
   // what kind of thing you had clicked. The word is `walk step`, and it is plain: a step has no home
   // view to show it in, so a live-looking control would go nowhere.
-  return '<article class="ecard ecard-step">'
-    + '<div class="ecard-head">'
-    + '<span class="ecard-name"><em>' + title + '</em></span>'
-    + '<span class="ecard-type ecard-type-plain">walk step</span>'
-    + stepBadge
-    + '</div></article>'
+  return itemBoxHtml({ k: '', name: '', pills: [], facts: [], band: [], chips: [] }, 'card', {
+    nameHtml: '<em>' + title + '</em>',
+    glyph: false,
+    wordHtml: '<span class="ecard-type ecard-type-plain">walk step</span>' + stepBadge,
+    cls: 'ecard ecard-step',
+  })
     + (st.sf ? '<dl><dt>Shared walk</dt><dd>' + (st.sfSteps || 0) + ' steps of its own'
        + ((st.sfChips || []).length
           ? '<div class="sfchips">' + st.sfChips.map((c) =>
@@ -6417,14 +6448,13 @@ function stampPanelBar() {
     + 'title="Close \u00b7 the selection stays; click it again to reopen">\u00d7</button></div>');
 }
 // --- where the card sits, and how big ---------------------------------------------
-// The card floats, so the one place it lands cannot be right for every reader on every map: a wide
-// Subsystems overview wants it out of the middle, a tall sequence wants it short. So it is draggable by
-// its bar and resizable from its corner, and both are remembered.
+// A SIZE, and nothing else. The card is resizable from its corner and that size is remembered — a wide
+// Subsystems overview wants it wide, a tall sequence wants it short. WHERE it sits is not remembered
+// and cannot be: the card comes to whatever you selected (see placeCardNear), so a place written down
+// would be a place the very next click overrules.
 //
-// Stored as a plain box in the DIAGRAM AREA's own pixels, and clamped on every restore rather than on
-// save: the window it was dragged in is not the window it comes back to, and a card whose bar is off the
-// edge cannot be dragged back. Nothing stored = the top-right default, which is where a card that has
-// never been moved belongs.
+// Clamped on every apply rather than on save: the window it was sized in is not the window it comes
+// back to, and a card wider than the drawing cannot be reached.
 function panelBox() { try { return JSON.parse(lsGet(LS.panelBox) || 'null') || null; } catch (_) { return null; } }
 function savePanelBox(b) { lsSet(LS.panelBox, b ? JSON.stringify(b) : ''); }
 // The last inline size applyPanelBox WROTE. A clamp is not a gesture: when the column opens and the card
@@ -6446,10 +6476,6 @@ function applyPanelBox() {
   const W = wrap.clientWidth, H = wrap.clientHeight;
   if (b.w) st.width = Math.min(b.w, Math.max(240, W - 24)) + 'px';
   if (b.h) st.height = Math.min(b.h, Math.max(90, H - 24)) + 'px';
-  const r = PANEL_HOST.getBoundingClientRect();
-  st.right = 'auto';
-  st.left = Math.max(0, Math.min(b.left, W - Math.min(r.width, W) )) + 'px';
-  st.top = Math.max(0, Math.min(b.top, H - Math.min(r.height, H))) + 'px';
   appliedBox = { w: st.width, h: st.height };
 }
 // ── THE PAGE HERO ────────────────────────────────────────────────────────────────────────────────
@@ -6675,29 +6701,131 @@ function previewOnHover(scene, els, show, anchor) {
 // NOT SAVED. The reader's stored position is where THEY put it; a dodge is the app getting out of the
 // way for one selection, and remembering it would slowly walk the card around the screen. Same rule as
 // the width clamp in applyPanelBox: a clamp is not a gesture.
-function dodgeCard(el) {
+// ── WHERE THE CARD GOES ──────────────────────────────────────────────────────────────────────────
+// THE CARD COMES TO WHAT YOU PICKED. It used to open in the top-right corner whatever you clicked, and
+// only stepped aside when it happened to land ON the thing — so on a wide map the line ran the width of
+// the screen and the reader's eye made that trip on every click.
+//
+// Four rules, in this order:
+//   1. as close to the thing as it can get, and never closer than one short line
+//   2. never over the thing itself — for a step, never over its arrow or either box it joins
+//   3. up and to the right of the point the line lands on, unless a rule above says otherwise
+//   4. if where it already stands still passes 1 and 2 and its line is not too long, it stays there
+// The fourth is what stops the card hopping around the screen while a reader clicks along a walk.
+const CARD_MIN_LINE = 24;    // shorter than this and the line is a smudge rather than a line
+const CARD_MAX_LINE = 220;   // longer than this and the card is not BESIDE the thing any more, so it moves
+const CARD_EDGE = 12;        // it never comes closer than this to the drawing's own edge
+const CARD_RING = 26;        // each ring of candidates stands this much further out than the last
+// The eight ways a card can stand beside a point, in the order they are tried. Each pair says which way
+// the CARD lies from the point, so [1,-1] — the first, and the default — puts the point at the card's
+// bottom-left corner and the card up and to the right of it.
+const CARD_DIRS = [[1, -1], [1, 0], [0, -1], [1, 1], [-1, -1], [0, 1], [-1, 0], [-1, 1]];
+// Where the card stands NOW, in the drawing's own pixels. This session only, and never written down:
+// the card's place belongs to what you have selected, not to the reader. Dragging it writes here, so a
+// card you moved by hand stays where you put it for as long as rules 1 and 2 still allow.
+let lastCardPlace = null;
+// THE TWO BOXES AN ARROW JOINS, found from the arrow's own ends rather than from its id. Mermaid names
+// an edge `L_<from>_<to>_<n>` and a node id may itself hold an underscore, so the name cannot be split
+// back into two ids without guessing. The drawn ends can: each sits on the border of the box it leaves.
+function edgeEndRects(el) {
+  const segs = (el && el._segs) || [el];
+  const out = [];
+  for (const [sg, end] of [[segs[0], false], [segs[segs.length - 1], true]]) {
+    let pt = null;
+    try {
+      const L = sg && sg.getTotalLength ? sg.getTotalLength() : 0;
+      if (!L) continue;
+      const q = sg.getPointAtLength(end ? L : 0), m = sg.getScreenCTM();
+      if (q && m) pt = { x: q.x * m.a + q.y * m.c + m.e, y: q.x * m.b + q.y * m.d + m.f };
+    } catch (_) { continue; }
+    if (!pt) continue;
+    let best = null, bd = Infinity;
+    for (const n of diagram.querySelectorAll('.node')) {
+      const r = n.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      const dx = Math.max(r.left - pt.x, 0, pt.x - r.right);
+      const dy = Math.max(r.top - pt.y, 0, pt.y - r.bottom);
+      const d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; best = r; }
+    }
+    if (best && bd <= 900) out.push(best);   // within 30px of the arrow's end
+  }
+  return out;
+}
+// What the card may not cover: the thing itself, and for a step the two boxes its arrow joins.
+function cardKeepClear(el) {
+  const own = rectOf(el);
+  return arrowMidpoint(el) ? [own, ...edgeEndRects(el)] : [own];
+}
+// THE LINE THAT WILL ACTUALLY BE DRAWN, not a stand-in for it: `syncCallout` runs it from the card's
+// border to the arrow's middle, or to the border of the box you picked. Measuring to a box's CENTRE
+// instead counted the box's own half-width as line, and a card sitting 12px off a wide box passed a
+// 24px floor while the reader saw a smudge.
+function cardLineLen(box, a, e) {
+  const from = borderPoint(box, a);
+  const bc = { x: (box.left + box.right) / 2, y: (box.top + box.bottom) / 2 };
+  const to = e ? borderPoint(e, bc) : a;
+  return Math.hypot(from.x - to.x, from.y - to.y);
+}
+function cardBoxOk(box, w, keep, a, e) {
+  if (box.left < w.left + CARD_EDGE || box.top < w.top + CARD_EDGE
+      || box.right > w.right - CARD_EDGE || box.bottom > w.bottom - CARD_EDGE) return false;
+  for (const r of keep) if (rectsOverlap(box, r)) return false;
+  return cardLineLen(box, a, e) >= CARD_MIN_LINE;
+}
+function cardRectAt(left, top, W, H) {
+  return { left, top, right: left + W, bottom: top + H, width: W, height: H };
+}
+function placeCardNear(el) {
   const wrap = document.getElementById('diagwrap');
   if (!wrap || !el || PANEL_HOST.hidden) return;
   const w = wrap.getBoundingClientRect();
   const p = PANEL_HOST.getBoundingClientRect();
-  const e = rectOf(el);
-  if (!rectsOverlap(p, e)) return;
-  const M = 12;   // the same margin the card's default position keeps from the edge
-  const moves = [
-    { d: e.left - M - p.right,  x: true },   // left of the element
-    { d: e.right + M - p.left,  x: true },   // right of it
-    { d: e.top - M - p.bottom,  x: false },  // above it
-    { d: e.bottom + M - p.top,  x: false },  // below it
-  ].filter((m) => {
-    const l = p.left + (m.x ? m.d : 0), t = p.top + (m.x ? 0 : m.d);
-    return l >= w.left && l + p.width <= w.right && t >= w.top && t + p.height <= w.bottom;
-  }).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
-  if (!moves.length) return;   // nowhere it fits — a line to a covered element still beats a card off-screen
-  const m = moves[0];
-  const st = PANEL_HOST.style;
-  st.right = 'auto';
-  st.left = Math.round(p.left - w.left + (m.x ? m.d : 0)) + 'px';
-  st.top = Math.round(p.top - w.top + (m.x ? 0 : m.d)) + 'px';
+  const W = p.width, H = p.height;
+  if (!W || !H) return;
+  // WHERE THE LINE LANDS: an arrow's own middle, or the box's centre. The card is not placed yet, so a
+  // box's real border point is not known — its centre is the same answer for every candidate, which is
+  // what makes "as close as possible" a comparison between them rather than a moving target.
+  const mid = arrowMidpoint(el);
+  const own = rectOf(el);
+  const a = mid || { x: (own.left + own.right) / 2, y: (own.top + own.bottom) / 2 };
+  // A BOX's line ends on its border, an arrow's on the arrow itself — `e` is null for an arrow so the
+  // length is measured to the middle the line really meets.
+  const e = mid ? null : own;
+  const keep = cardKeepClear(el);
+  const put = (left, top) => {
+    const st = PANEL_HOST.style;
+    st.right = 'auto';
+    st.left = Math.round(left - w.left) + 'px';
+    st.top = Math.round(top - w.top) + 'px';
+    lastCardPlace = { left: Math.round(left - w.left), top: Math.round(top - w.top) };
+  };
+  // RULE 4 FIRST: a card already standing somewhere that works stays there, so clicking along a walk
+  // does not send it round the screen. The cap is what stops "stays there" turning into "never moves".
+  if (lastCardPlace) {
+    const box = cardRectAt(w.left + lastCardPlace.left, w.top + lastCardPlace.top, W, H);
+    if (cardBoxOk(box, w, keep, a, e) && cardLineLen(box, a, e) <= CARD_MAX_LINE) {
+      put(box.left, box.top); return;
+    }
+  }
+  // …then rings, growing outwards, each one tried in the eight directions in their own order. The first
+  // hit is the closest one that clears everything, and the order makes the first ring's up-and-right the
+  // default it lands on when nothing is in the way.
+  const far = Math.max(w.width, w.height) + CARD_RING;
+  for (let d = CARD_MIN_LINE; d <= far; d += CARD_RING) {
+    for (const [ux, uy] of CARD_DIRS) {
+      const left = a.x + d * ux - (ux < 0 ? W : ux > 0 ? 0 : W / 2);
+      const top = a.y + d * uy - (uy < 0 ? H : uy > 0 ? 0 : H / 2);
+      const box = cardRectAt(left, top, W, H);
+      if (cardBoxOk(box, w, keep, a, e)) { put(left, top); return; }
+    }
+  }
+  // NOWHERE CLEARS EVERYTHING — a card as big as the drawing, or a box in every corner. It goes up and
+  // to the right anyway and is pushed back inside the edges: a card covering something still beats a
+  // card off screen, and the line still says which thing it is about.
+  const left = Math.min(Math.max(a.x + CARD_MIN_LINE, w.left + CARD_EDGE), w.right - CARD_EDGE - W);
+  const top = Math.min(Math.max(a.y - CARD_MIN_LINE - H, w.top + CARD_EDGE), w.bottom - CARD_EDGE - H);
+  put(left, top);
 }
 // Draw it, or take it away. Called wherever either end can have moved: the card being placed, dragged or
 // resized, and the diagram being panned, zoomed or refitted.
@@ -6835,7 +6963,7 @@ function scheduleCallout(alsoDodge) {
   calloutRaf = requestAnimationFrame(() => requestAnimationFrame(() => {
     calloutRaf = 0;
     const dodge = calloutRedodge; calloutRedodge = false;
-    if (dodge) dodgeCard(soleSelectedEl());
+    if (dodge) placeCardNear(soleSelectedEl());
     syncCallout();
   }));
 }
@@ -6857,7 +6985,7 @@ function placeCard() {
   // width and its edge sits directly below whatever was clicked.
   if (drawerMode) { hideCallout(); applyDrawerMax(); return; }
   applyPanelBox();
-  dodgeCard(soleSelectedEl());
+  placeCardNear(soleSelectedEl());
   syncCallout();
   scheduleCallout(true);
 }
@@ -13755,7 +13883,10 @@ const endPanelDrag = () => {
   const moved = panelDrag.moved;
   panelDrag = null;
   document.body.classList.remove('panel-dragging');
-  if (moved) storePanelBox('position');
+  // NOTHING IS WRITTEN DOWN. A drag moves the card here and now, and `placeCardNear` reads where it
+  // ended up: the card stays there for as long as it still clears the thing and its line is short
+  // enough, and the next selection that breaks either rule moves it. See lastCardPlace.
+  if (moved) noteCardPlace();
 };
 PANEL_HOST.addEventListener('pointerup', endPanelDrag);
 PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
@@ -13765,6 +13896,7 @@ PANEL_HOST.addEventListener('dblclick', (ev) => {
   if (drawerMode) return;   // it never left its corner
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelbar')) return;
   savePanelBox(null);
+  lastCardPlace = null;
   placeCard();
 });
 // The corner grip is the browser's own (CSS `resize: both`), which writes the size straight onto the
@@ -13795,6 +13927,7 @@ document.addEventListener('mouseup', () => {
   if (!w && !h) return;
   if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;
   storePanelBox('size');
+  noteCardPlace();   // a resize moved the card's far edges, so where it stands changed too
   syncCallout();   // a resize moved the card's edges, and the line meets one of them
 });
 // EACH GESTURE SAVES WHAT IT CHANGED, and nothing else. A drag saves where the card sits; a resize saves
@@ -13803,18 +13936,17 @@ document.addEventListener('mouseup', () => {
 // and their own width never came back when the column closed.
 function storePanelBox(what) {
   const wrap = document.getElementById('diagwrap');
-  if (!wrap || PANEL_HOST.hidden) return;
-  const r = PANEL_HOST.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+  if (!wrap || PANEL_HOST.hidden || what === 'position') return;
+  const r = PANEL_HOST.getBoundingClientRect();
   const st = PANEL_HOST.style;
-  const prev = panelBox() || {};
-  const moved = what !== 'size';
-  const resized = what !== 'position';
-  savePanelBox({
-    left: moved ? Math.round(r.left - w.left) : (prev.left || 0),
-    top: moved ? Math.round(r.top - w.top) : (prev.top || 0),
-    w: resized ? (st.width ? Math.round(r.width) : 0) : (prev.w || 0),
-    h: resized ? (st.height ? Math.round(r.height) : 0) : (prev.h || 0),
-  });
+  savePanelBox({ w: st.width ? Math.round(r.width) : 0, h: st.height ? Math.round(r.height) : 0 });
+}
+// Where the card stands after a drag or a resize, so the next selection can decide whether to leave it.
+function noteCardPlace() {
+  const wrap = document.getElementById('diagwrap');
+  if (!wrap || PANEL_HOST.hidden) { lastCardPlace = null; return; }
+  const r = PANEL_HOST.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+  lastCardPlace = { left: Math.round(r.left - w.left), top: Math.round(r.top - w.top) };
 }
 PANEL_HOST.addEventListener('click', (ev) => {
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;

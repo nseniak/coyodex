@@ -1425,7 +1425,7 @@ def test_a_line_joins_the_card_to_the_one_element_it_describes() -> None:
     assert "scheduleCallout(false);" in zoom
     drag = js[js.index("PANEL_HOST.addEventListener('pointermove'"):
               js.index("});", js.index("PANEL_HOST.addEventListener('pointermove'"))]
-    assert "syncCallout();" in drag and "dodgeCard" not in drag, \
+    assert "syncCallout();" in drag and "placeCardNear" not in drag, \
         "the line follows a drag directly; the dodge must not fight the hand that is dragging"
     # The card end is pure DOM and needs no wait, which is why the drag calls syncCallout straight.
     pane = js[js.index("function syncInfoPane(_s, transient) {"):
@@ -1481,7 +1481,7 @@ def test_a_camera_move_is_measured_after_it_is_painted() -> None:
              js.index("\n}", js.index("function scheduleCallout(alsoDodge) {"))]
     assert sch.count("requestAnimationFrame") == 2, "one frame still lands before the library paints"
     assert "if (calloutRaf) return;" in sch, "coalesced to one pass per burst of camera events"
-    assert "if (dodge) dodgeCard(soleSelectedEl());" in sch and "syncCallout();" in sch
+    assert "if (dodge) placeCardNear(soleSelectedEl());" in sch and "syncCallout();" in sch
     place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
     assert "scheduleCallout(true);" in place, "…so a refit scheduled beside this one is caught too"
 
@@ -1491,14 +1491,14 @@ def test_a_click_on_the_cards_bar_is_not_a_drag() -> None:
     bar saved wherever the card happened to be — and after a dodge that is not where the reader put it.
 
     Measured: six taps on the bar, each after selecting a covered box, walked the stored position from
-    top 60 to top 275 and left 300 to left 394. Exactly the accumulation `dodgeCard` refuses to cause,
+    top 60 to top 275 and left 300 to left 394. Exactly the accumulation `placeCardNear` refuses to cause,
     arriving through the one path that does save."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     move = js[js.index("PANEL_HOST.addEventListener('pointermove'"):
               js.index("});", js.index("PANEL_HOST.addEventListener('pointermove'"))]
     assert "d.moved = true;" in move, "only an actual move marks the gesture as one"
     end = js[js.index("const endPanelDrag = () => {"): js.index("\n};", js.index("const endPanelDrag = () => {"))]
-    assert "const moved = panelDrag.moved;" in end and "if (moved) storePanelBox('position');" in end
+    assert "const moved = panelDrag.moved;" in end and "if (moved) noteCardPlace();" in end
 
 
 def test_the_line_points_at_an_arrows_own_middle_not_its_boxs() -> None:
@@ -1554,30 +1554,41 @@ def test_everything_that_floats_over_the_drawing_states_its_layer() -> None:
     assert layers["#callout"] < layers["#envpicker"], "…and never across a floater's face either"
 
 
-def test_the_card_steps_aside_when_it_covers_its_own_element() -> None:
-    """A card that hides the thing it describes answers a question by covering it. The card is the half
-    that can move: the element is where the drawing put it, and shifting the drawing would move everything
-    else with it.
+def test_the_card_comes_to_what_you_picked_and_stays_put_while_it_can() -> None:
+    """The card used to open in the top-right corner whatever you clicked, and only stepped aside when it
+    happened to land ON the thing. On a wide map that made the line run the width of the screen, and the
+    reader's eye made that trip on every click.
 
-    It slides along ONE axis, to whichever of the four sides has room, preferring the smallest move — so a
-    card that is nearly clear steps aside rather than jumping across the diagram. Verified in the app: a
-    card parked over a box at y 291-331 moved to y 342, which is that box's bottom plus the 12px margin.
+    Four rules, in order: as close as it can get and never closer than one short line; never over the
+    thing itself, nor — for a step — over its arrow or either box it joins; up and to the right of the
+    point the line lands on unless a rule above says otherwise; and where it already stands wins while
+    it still passes those and its line is not too long. The fourth is what stops the card hopping around
+    the screen while a reader clicks along a walk.
 
-    NOT SAVED. The reader's stored position is where THEY put it; a dodge is the app getting out of the
-    way for one selection, and remembering it would slowly walk the card around the screen. The same rule
-    the width clamp follows — a clamp is not a gesture."""
+    NOT SAVED, EVER. The card's place belongs to what you selected, not to the reader, so a place written
+    down would be one the very next click overrules. A drag writes only to `lastCardPlace`, which rule
+    four then honours for as long as it holds."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    fn = js[js.index("function dodgeCard(el) {"): js.index("\n}", js.index("function dodgeCard(el) {"))]
-    assert "if (!rectsOverlap(p, e)) return;" in fn, "a card that covers nothing is left alone"
-    assert "sort((a, b) => Math.abs(a.d) - Math.abs(b.d))" in fn, "the smallest move that clears it"
-    assert "if (!moves.length) return;" in fn, "nowhere to go beats a card pushed off screen"
-    assert "storePanelBox" not in fn and "savePanelBox" not in fn, "a dodge is not a gesture"
+    fn = js[js.index("function placeCardNear(el) {"): js.index("\n}", js.index("function placeCardNear(el) {"))]
+    assert "if (cardBoxOk(box, w, keep, a, e) && cardLineLen(box, a, e) <= CARD_MAX_LINE)" in fn, \
+        "rule four, and it is tried FIRST"
+    # The floor is on the line that will actually be DRAWN — to a box's border, an arrow's middle.
+    ln = js[js.index("function cardLineLen(box, a, e) {"):
+            js.index("\n}", js.index("function cardLineLen(box, a, e) {"))]
+    assert "const to = e ? borderPoint(e, bc) : a;" in ln
+    assert "for (let d = CARD_MIN_LINE; d <= far; d += CARD_RING)" in fn, "rings, closest first"
+    assert "for (const [ux, uy] of CARD_DIRS)" in fn
+    assert "const CARD_DIRS = [[1, -1], [1, 0], [0, -1], [1, 1], [-1, -1], [0, 1], [-1, 0], [-1, 1]];" in js, \
+        "up-and-right is the first direction tried, so it is the default"
+    assert "storePanelBox" not in fn and "savePanelBox" not in fn, "a placement is not a gesture"
+    # A step keeps its arrow AND both boxes clear; anything else keeps only itself.
+    keep = js[js.index("function cardKeepClear(el) {"): js.index("\n}", js.index("function cardKeepClear(el) {"))]
+    assert "arrowMidpoint(el) ? [own, ...edgeEndRects(el)] : [own]" in keep
     # The three steps happen in one order, from one function, so no caller can do them out of turn. Read
-    # from the CARD branch, which starts after the drawer's early return — a drawer has one place, so it
-    # applies no box and steps aside from nothing.
+    # from the CARD branch, which starts after the drawer's early return — a drawer has one place.
     place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
     card = place[place.index("applyPanelBox();"):]   # the card branch, past the drawer's early return
-    assert card.index("dodgeCard(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
+    assert card.index("placeCardNear(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
 
 
 def test_the_panel_has_two_shapes_and_the_reader_picks_one() -> None:
@@ -2354,7 +2365,7 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     # element it describes, then redraws the line to it. One order, so no caller can do them out of turn.
     place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
     card = place[place.index("applyPanelBox();"):]   # the card branch, past the drawer's early return
-    assert card.index("dodgeCard(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
+    assert card.index("placeCardNear(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
     # FIT TO SCREEN has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and pan
     # back to the values svg-pan-zoom recorded when it was CONSTRUCTED, so on any view whose box has since
     # changed size — a column opened, a window resized — it restored a stale fit rather than computing a
@@ -2386,11 +2397,14 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert not re.search(r"new ResizeObserver\([\s\S]{0,600}?storePanelBox", js), \
         "an observer cannot tell a clamp from a gesture"
     assert "if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;" in js
-    # …and each gesture saves ONLY what it changed, or dragging a clamped card bakes the clamped width in.
+    # …and only a SIZE is ever saved. A drag used to save a position too, which is how dragging a card
+    # that had been clamped narrower baked that width in as if the reader had chosen it; and the card's
+    # place is not the reader's to keep any more — it comes to whatever they selected.
     store = js[js.index("function storePanelBox(what) {"):
                js.index("\n}", js.index("function storePanelBox(what) {"))]
-    assert "const moved = what !== 'size';" in store and "const resized = what !== 'position';" in store
-    assert "storePanelBox('position');" in js and "storePanelBox('size');" in js
+    assert "what === 'position') return;" in store, "a drag writes no box at all"
+    assert "left:" not in store and "top:" not in store, "and no place is written down anywhere"
+    assert "storePanelBox('size');" in js
     # The two visible ways out, and the one visible way in.
     # ONE × for the whole column, in the ONE header above both panes, so it is in the same place whichever
     # pane is showing. It used to live in the code viewer's header only, and browsing hides the code viewer
@@ -3214,9 +3228,12 @@ def test_a_cards_name_takes_the_whole_first_line_everywhere() -> None:
     business rule's name is a whole sentence. Thirteen gained a line, and every card in the app now has
     one title height."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert ".ecard-name { flex-basis: 100%; }" in css
+    assert ".ecard .ibox-name { flex-basis: 100%; }" in css
     assert ".ecard-grid .ecard-name" not in css, "not a grid rule any more"
-    head = css[css.index(".ecard-head {"): css.index("}", css.index(".ecard-head {"))]
+    # The row the name sits in is the item box's own title row, shared with every picture.
+    # line-anchored: the card states its own baseline alignment in a `.ecard .ibox-title` rule above.
+    at = css.index("\n.ibox-title {") + 1
+    head = css[at: css.index("}", at)]
     assert "flex-wrap: wrap" in head, "the pills still wrap among themselves when there are many"
 
 
@@ -3249,7 +3266,11 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     assert js.count("useCaseFeatureFootHtml(") == 4, "one definition, three callers"
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\n}", js.index("function elementCardHtml(id, opts) {"))]
-    assert "(o.foot || '')" in card and card.index("o.foot") > card.index("ecard-desc"), \
+    assert "foot: o.foot || ''," in card, "the card hands its labelled line to the one builder"
+    # …which puts it after the sentence, once, for every box in the product.
+    box = js[js.index("function itemBoxHtml(spec, variant, opts) {"):
+             js.index("\nfunction ", js.index("function itemBoxHtml(spec, variant, opts) {") + 10)]
+    assert box.index("if (o.foot) out.push(o.foot);") > box.index('class="ibox-what'), \
         "the labelled line comes after the sentence"
     grid = css[css.index(".ecard-grid .ecard {"):]
     grid = grid[: grid.index("\n\n")] if "\n\n" in grid else grid[:600]
@@ -3374,7 +3395,7 @@ def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\nfunction ", js.index("function elementCardHtml(id, opts) {") + 10)]
     assert "const typeHtml = (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))" in card
-    assert "+ typeHtml" in card
+    assert "wordHtml: typeHtml," in card, "the card's own pill replaces the box's default word"
     # The four are exactly the kinds whose `selectTargetFor` and `drillInto` answer the same page.
     assert "const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process']);" in js
     assert 'class="ecard-type ecard-type-plain"' in card, "same word, same slot"
@@ -4344,7 +4365,7 @@ def test_a_card_name_is_the_door_that_does_not_steal_the_pin() -> None:
         card = _story_fn(js, fn)
         assert "nameAttrs:" in card, f"{fn}: the name is the door"
         # The item box writes the title on every name it draws, so the card no longer says it.
-        assert '`<button type="button" class="ibox-name"' in js \
+        assert '`<button type="button" class="${ncls}"' in js \
             and 'title="Open ${nm}"' in js, "the name says where it goes"
         link = card[card.index("nameAttrs:"):]
         assert attr in link[:200], f"{fn}: the name carries the id its branch reads"
@@ -5152,7 +5173,7 @@ def test_the_name_is_the_words_and_every_box_s_name_opens_a_page() -> None:
     assert "if (nameClick(ev)) { go({ kind: 'actor', act: a.name }); return; }" in js  # an actor
     assert "if (open && (nameClick(ev) || isDrillClick(ev)))" in js                 # a shared walk
     # THE NAME IS A BUTTON, so it is a keyboard stop and it says on hover that it is a door.
-    assert '<button type="button" class="ibox-name"' in js
+    assert '`<button type="button" class="${ncls}"' in js
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
     assert ".ibox-name:hover { text-decoration: underline;" in css
     assert ".ibox-name:focus-visible {" in css

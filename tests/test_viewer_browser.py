@@ -625,7 +625,7 @@ def test_a_surface_a_person_goes_to_draws_the_person_and_one_we_merely_call_draw
             _page(url + "#v=interfaces&iface=I1") as page:
         _settle(page)
         names = page.evaluate(
-            "() => [...document.querySelectorAll('.ecard[data-key] .ecard-name')]"
+            "() => [...document.querySelectorAll('.ecard[data-key] .ibox-name')]"
             ".map(e => e.textContent)")
         assert "Org creator" in names, names
         assert not page.js_errors, page.js_errors
@@ -633,7 +633,7 @@ def test_a_surface_a_person_goes_to_draws_the_person_and_one_we_merely_call_draw
             _page(url + "#v=interfaces&iface=I1") as page:
         _settle(page)
         names = page.evaluate(
-            "() => [...document.querySelectorAll('.ecard[data-key] .ecard-name')]"
+            "() => [...document.querySelectorAll('.ecard[data-key] .ibox-name')]"
             ".map(e => e.textContent)")
         assert names == [], names
         text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
