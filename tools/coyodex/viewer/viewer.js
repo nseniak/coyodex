@@ -46,7 +46,7 @@ let DEPLOY_ENV = null;     // the selected environment (null = All); persists ac
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let REPO_STATE = 'ok';    // 'ok' | 'no-repo' | 'no-commit' — whether the server can read this map's code
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
-let SUBFLOW_BY_ID = {};   // SFn -> the shared walk itself, for its name and its own screen
+let SUBFLOW_BY_ID = {};   // SFn -> the shared sub-use case itself, for its name and its own screen
 let SUBFLOW_CHIPS = {};   // SFn -> the people, doors and records inside it, for its collapsed box
 // Feature id -> its slot in the two feature palettes. Declared HERE, with the other module
 // state, because `applyBundle` resets it and runs before the palettes' own block is reached.
@@ -788,7 +788,7 @@ const ITEM_KIND = {
   human: 'human', service: 'svc', 'ai-agent': 'agent',
   component: 'component', subsystem: 'subsystem', entity: 'entity', subdomain: 'subdomain',
   dep: 'dep', interface: 'interface',
-  // A shared walk's chips name their kind as the map does — `actor` for a person.
+  // A shared sub-use case's chips name their kind as the map does — `actor` for a person.
   actor: 'human', role: 'human',
 };
 function itemKind(k) { return ITEM_KIND[k] || 'component'; }
@@ -826,7 +826,7 @@ function itemCogPath(cx, cy, ro, ri, teeth) {
   return 'M' + pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' L') + ' Z';
 }
 // A USE CASE is one person's goal reached through numbered steps, so its mark carries the FIGURE and
-// the STEPS. A SHARED WALK is steps too, but it belongs to several use cases and so to several
+// the STEPS. A SHARED SUB-USE CASE is steps too, but it belongs to several use cases and so to several
 // people: same idea, figure removed, a bare route. The difference between the two marks is exactly
 // the difference between the two things.
 //
@@ -940,7 +940,7 @@ const ITEM_VARIANT = {
 // wordHtml (the caller's OWN type pill, replacing the default one: a card's is a button that shows
 // the element in its home view, and only the card knows when that click would go nowhere),
 // nameHtml (the caller's own NAME markup, for the one name that is not plain text: a walk step's
-// title can be a door to the shared walk it runs),
+// title can be a door to the shared sub-use case it runs),
 // glyph (false leaves the mark off, for a card that stands for no map element at all),
 // fill (a background of the caller's own, for the ONE kind whose colour belongs to the thing
 // rather than to its type: a feature, whose wash exists so two of them side by side read as
@@ -990,12 +990,12 @@ function itemBoxHtml(spec, variant, opts) {
   if (v.band) {
     const bits = (spec.band || []).map((b) => `<span class="ibox-count">${esc(b)}</span>`).join('')
       // A CHIP CARRIES ITS OWN KIND'S GLYPH, and that glyph is the only coloured thing on it. On a
-      // collapsed shared walk the chips are the only thing saying the product's edge and its saved
+      // collapsed shared sub-use case the chips are the only thing saying the product's edge and its saved
       // data are inside, and the mark says which is which without spending a word on it. The chip
       // itself stays a plain box: see the note where the per-kind rules are injected.
       + (spec.chips || []).map((c) => {
         // THE MARK IS BUILT HERE, not by whoever assembled the chips. A caller that forgot to build
-        // one shipped a chip with no mark at all — which is what a shared walk's box did on the use
+        // one shipped a chip with no mark at all — which is what a shared sub-use case's box did on the use
         // case map, beside an interface's box whose chips had theirs. One place decides.
         const ck = itemKind(c.kind);
         return `<span class="ibox-chip ibox-k-${esc(ck)} ${esc(c.cls || '')}">`
@@ -1111,7 +1111,7 @@ function slotRulerEl() {
   return slotRuler;
 }
 // A slot's box, built from the map's own data. `k` is the kind the generator recorded, `id` the
-// element (or a shared walk's `SFn`, or an actor's name), `v` the variant that picture wants.
+// element (or a shared sub-use case's `SFn`, or an actor's name), `v` the variant that picture wants.
 function slotSpec(k, id) {
   if (k === 'subflow') {
     const sf = SUBFLOW_BY_ID[id] || {};
@@ -2266,7 +2266,7 @@ function hideIcon(icon) { if (icon) { icon.style.removeProperty('opacity'); icon
 // that runs INSIDE bindFor, before this, so ACTION_ICONS is reset once in render() before bindFor, not
 // here (resetting here would wipe the cluster icons bindFrameDrill just registered).
 // The action a collapsed shared-walk box offers: open the walk itself. It is the one box on a use case
-// map whose drill LEAVES the use case, and that is the point — a shared walk belongs to every use case
+// map whose drill LEAVES the use case, and that is the point — a shared sub-use case belongs to every use case
 // that runs it, so it gets a screen of its own instead of a home inside this one.
 function subflowOpenAction(sid, uc) {
   if (!SUBFLOW_BY_ID[sid]) return null;
@@ -3266,7 +3266,7 @@ function flowReveal(els, i) {
   const map = flowPlay.kind === 'map';
   const items = els.map((el) => ({ el, xOnly: false }));
   // On the map an actor endpoint is a drawn box like any other, so it is addressed by its `FAn` alias,
-  // and a step inside a COLLAPSED shared walk is addressed by the two boxes its arrow actually joins —
+  // and a step inside a COLLAPSED shared sub-use case is addressed by the two boxes its arrow actually joins —
   // its own endpoints are inside the collapsed box and have nothing on screen to scroll to. In the
   // sequence view actor parts live outside partsById (see bindFlow), so only element ids apply.
   const ends = map ? flowMapStepArrow(flowPlay.uc, i, st) : [st.srcId, st.dstId];
@@ -3447,15 +3447,15 @@ function flowStepInfoHtml(uc, i) {
   // the product the one place a code link looked different. The folder is not lost: opening the link
   // shows the whole path in the code pane's header.
   // A STEP'S CARD IS THE ITEM BOX, filled the way every other card is. It used to be the box's HEAD
-  // and nothing else: its sentence, its note, its call site and the shared walk it runs all hung
+  // and nothing else: its sentence, its note, its call site and the shared sub-use case it runs all hung
   // BELOW the box as definition lists and a paragraph, in shapes nothing else in the product uses.
   // Same four slots as a record's card now — a sentence, labelled facts, a band of counts and chips —
   // so a reader who has learnt one card has learnt this one.
   //
   // ONLY THE RULES stay outside it. They are a list of other elements, not a fact about this step.
   const runsShared = !!st.sf;
-  // THE TITLE IS THE ACTION, and nothing else. A step's phrase and a shared walk's name are written
-  // the same way — imperative — so one line serves both, and a step that runs a shared walk says WHAT
+  // THE TITLE IS THE ACTION, and nothing else. A step's phrase and a shared sub-use case's name are written
+  // the same way — imperative — so one line serves both, and a step that runs a shared sub-use case says WHAT
   // it runs instead of the empty "runs". No italic: the view's question is the one italic in this app,
   // and a second one stops it meaning anything.
   // A CAPITAL FIRST LETTER. A step's phrase is authored as an imperative fragment ("name a value and
@@ -3478,7 +3478,7 @@ function flowStepInfoHtml(uc, i) {
   // AND `walk step` IS GONE. The card only ever opens from a step — a number on an arrow, the step
   // player, a link in the pane — so naming the kind said what the reader had just clicked. `Step 6`
   // says the kind AND which one, in the same room.
-  // EVERY STEP'S CARD IS A STEP'S CARD, including one that runs a shared walk. That card used to
+  // EVERY STEP'S CARD IS A STEP'S CARD, including one that runs a shared sub-use case. That card used to
   // borrow the WALK's — its mark, how many steps it holds, the people and records inside it — and so
   // answered a question the reader had not asked: they clicked a step, and got the thing it runs.
   // The walk's own screen is one click away, through the name, and everything about it lives there.
@@ -3510,9 +3510,9 @@ function stepRulesHtml(uc, st) {
   if (!HAS_RULES) return '';
   // WHICH WALK AUTHORED THIS STEP. It is the walk being DRAWN — `uc` — on both kinds of screen. A
   // reference step's `sf` names the walk it RUNS, not the walk it belongs to, and reading it here put
-  // 172 rule links on the wrong step and lost 299 others. On a SHARED WALK's own screen the links are
+  // 172 rule links on the wrong step and lost 299 others. On a SHARED SUB-USE CASE's own screen the links are
   // filed under every use case that runs it, so the use case is not part of the question there; on a
-  // use case's screen it is, or one shared walk's step would answer for every use case at once.
+  // use case's screen it is, or one shared sub-use case's step would answer for every use case at once.
   const shared = !!SUBFLOW_BY_ID[uc];
   const seen = new Set();
   const found = [];
@@ -3542,7 +3542,7 @@ function bindFlowStepInfo(host, uc, i) {
   host.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
-  // The step that runs a shared walk opens it, carrying the use case the reader came through so the
+  // The step that runs a shared sub-use case opens it, carrying the use case the reader came through so the
   // walk's trail can lead back the way they arrived.
   host.querySelectorAll('[data-gosf]').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
@@ -5566,7 +5566,7 @@ function flowMermaidFor(uc) {
 function isWalkState(s) { return !!(s && (s.kind === 'usecase' || s.kind === 'subflow')); }
 function walkIdOf(s) { return s.kind === 'subflow' ? s.sf : s.uc; }
 function subflowName(sid) { return (SUBFLOW_BY_ID[sid] || {}).name || sid; }
-// THE NAME OF A WALK, whichever kind it is. A use case is a graph node; a shared walk is not, so a
+// THE NAME OF A WALK, whichever kind it is. A use case is a graph node; a shared sub-use case is not, so a
 // single `GRAPH.nodes` lookup printed a raw `SFn` wherever the two kinds meet.
 function walkName(id) {
   return SUBFLOW_BY_ID[id] ? subflowName(id) : ((GRAPH.nodes[id] && GRAPH.nodes[id].name) || id);
@@ -5644,7 +5644,7 @@ function flowMapSteps(uc, a, b) {
   const ta = flowMapToken(uc, a), tb = flowMapToken(uc, b);
   const out = [];
   (FLOWS_NARR[uc] || []).forEach((st, i) => {
-    // A step that RUNS A SHARED WALK is drawn to that walk's box, never to its own `dst` — the dst
+    // A step that RUNS A SHARED SUB-USE CASE is drawn to that walk's box, never to its own `dst` — the dst
     // names some component inside the walk, which this map does not draw at all.
     const dst = st.sf || (st.dstId || st.dst);
     if ((st.srcId || st.src) === ta && dst === tb) out.push({ st, i });
@@ -5652,19 +5652,19 @@ function flowMapSteps(uc, a, b) {
   return out;
 }
 // The map arrow a given step rides — the ONE place that answers it. Re-deriving the pair from the
-// step's own endpoints looks right and is wrong for a step that runs a shared walk: its `dst` is inside
+// step's own endpoints looks right and is wrong for a step that runs a shared sub-use case: its `dst` is inside
 // the collapsed box, so the glow lands on nothing and the player scrolls to a box that is not there.
 function flowMapStepArrow(uc, i, st) {
   return [flowMapBoxId(uc, st.srcId, st.src),
           st.sf || flowMapBoxId(uc, st.dstId, st.dst)];
 }
-// WHAT A WALK TOUCHES, with its shared walks opened — as against FLOWS_NARR, which is what a reader
-// WALKS. Running a shared walk does reach what is inside it, so every "does this use case touch X?"
+// WHAT A WALK TOUCHES, with its shared sub-use cases opened — as against FLOWS_NARR, which is what a reader
+// WALKS. Running a shared sub-use case does reach what is inside it, so every "does this use case touch X?"
 // question asks this one, and every "how long is this walk / which step am I on" question asks the
 // other. The map's own checks make exactly this split, for exactly this reason.
 function walkStepsDeep(uc, seen) {
   const been = seen || new Set();
-  if (been.has(uc)) return [];      // a shared walk cannot run itself, but never loop on a bad map
+  if (been.has(uc)) return [];      // a shared sub-use case cannot run itself, but never loop on a bad map
   been.add(uc);
   const out = [];
   for (const st of (FLOWS_NARR[uc] || [])) {
@@ -5673,7 +5673,7 @@ function walkStepsDeep(uc, seen) {
   }
   return out;
 }
-// The shared walks one walk runs, in step order — what bindFlowMap needs to bind their boxes.
+// The shared sub-use cases one walk runs, in step order — what bindFlowMap needs to bind their boxes.
 function flowMapSubflows(uc) {
   const seen = new Set(), out = [];
   (FLOWS_NARR[uc] || []).forEach((st) => {
@@ -5704,7 +5704,7 @@ function showFlowPair(uc, a, b) {
 // differently. `currentColor` keeps the glyph in the box's own text colour.
 // Was the click ON THE NAME — the words themselves, not the label around them? The generator wraps
 // every box's name in `.cyname` for exactly this. The LABEL is not the name: an actor's carries a blank
-// line holding the stick figure, a shared walk's carries its step count and its chips, a door's carries
+// line holding the stick figure, a shared sub-use case's carries its step count and its chips, a door's carries
 // its kind glyph. Targeting the label made the whole box a link — 94% of an actor's — and left nothing
 // to select on. Targeting the words leaves every one of those extra lines to selection.
 // TWO CLASSES, ONE QUESTION. `.ibox-name` is the item box's name; `.cyname` is what the generators
@@ -5765,9 +5765,9 @@ function bindFlowMap(uc) {
     });
   });
 
-  // A COLLAPSED SHARED WALK's box, which like an actor has no GRAPH node for bindNodes to find. A plain
+  // A COLLAPSED SHARED SUB-USE CASE's box, which like an actor has no GRAPH node for bindNodes to find. A plain
   // click selects it and shows the step that runs it; a DRILL (⌥-click / double-click, and the corner
-  // icon) opens the shared walk's own screen, where its steps are numbered from 1 and belong to it.
+  // icon) opens the shared sub-use case's own screen, where its steps are numbered from 1 and belong to it.
   const sfHere = flowMapSubflows(uc);
   scene.root.querySelectorAll('g.node').forEach((el) => {
     const sid = idOf(el);
@@ -7451,7 +7451,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     return cap ? [{ kind: 'usecases' }, { kind: 'capability', cap }, { kind: 'usecase', uc: s.uc }]
                : [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];
   }
-  // A SHARED WALK belongs to every use case that runs it, so it has no home of its own. Its trail is the
+  // A SHARED SUB-USE CASE belongs to every use case that runs it, so it has no home of its own. Its trail is the
   // trail of the use case the reader came THROUGH, with the walk as the last crumb — the same "your own
   // path picks the parent" rule a use case reached from an actor already follows. Opened without one
   // (a pasted link), it hangs directly under the use case list rather than guessing a parent.
@@ -11108,9 +11108,9 @@ function renderTests() {
 // ONE lookup, used to LABEL a chip and to act on it, so the number a reader clicks and the step
 // they land on can never disagree.
 function flowStepIndex(uc, container, n) {
-  // `container` is the walk that AUTHORED the step — the use case for its own steps, a shared walk for
+  // `container` is the walk that AUTHORED the step — the use case for its own steps, a shared sub-use case for
   // the steps inside one. Both have their own narration, and an `n` is unique inside one walk, so the
-  // number shown is the number that walk's own screen counts to. (Before shared walks were collapsed
+  // number shown is the number that walk's own screen counts to. (Before shared sub-use cases were collapsed
   // this had to hunt the step inside the host's spliced-in run, matching on the (sf, n) pair.)
   const walk = container || uc;
   return (FLOWS_NARR[walk] || []).findIndex((st) => st.n === n);
@@ -11608,7 +11608,7 @@ function stepGroupsOf(i, role) {
 // This is why the model carries the CONTAINER beside the number: `(container, n)` is the only
 // unique step identity once a sub-flow is spliced in.
 // A CHIP NAMES WHERE IT GOES. The step number is counted in the walk that AUTHORED the step, and the
-// click opens that walk — so when the step was written inside a shared walk, naming only the use case
+// click opens that walk — so when the step was written inside a shared sub-use case, naming only the use case
 // promised one screen and delivered another, with a number that belongs to neither.
 function stepFromHtml(st, uc, withName) {
   const container = st.container || uc;
@@ -13544,7 +13544,7 @@ function stepsByPath() {
 // Navigate to use case `uc` and select step `i`. stateKey ignores `sel`, so a plain go() to the same
 // use case we're already viewing would no-op — select in place then (mirrors selectFromTree's fallback).
 function selectFlowStep(uc, i, frame = false) {
-  // A shared walk has a screen of its own, so a step inside one opens THERE — not inside whichever use
+  // A shared sub-use case has a screen of its own, so a step inside one opens THERE — not inside whichever use
   // case happens to run it. Its steps are numbered from 1 and belong to it.
   const state = SUBFLOW_BY_ID[uc]
     ? { kind: 'subflow', sf: uc, sel: 'flowstep:' + uc + ':' + i }
@@ -13602,14 +13602,14 @@ function codeItemsForPath(path) {
     for (const s of byLine[ln]) {
       if (seen.has(s.uc)) continue;  // several steps of ONE use case on the line -> one entry (its first step)
       seen.add(s.uc);
-      // A SHARED WALK IS NOT A USE CASE, and it has no graph node — so the old lookup fell through to
+      // A SHARED SUB-USE CASE IS NOT A USE CASE, and it has no graph node — so the old lookup fell through to
       // its raw id and printed `SF20` on the line, under a pill reading "use case". Two wrongs: an
       // element id on screen, which nothing in this product does, and a word that names the wrong kind
       // of thing. `walkName` answers for both kinds.
       choices.push({ name: walkName(s.uc), shared: !!SUBFLOW_BY_ID[s.uc],
         select: () => { suppressCodeScroll = true; selectFlowStep(s.uc, s.i); } });
     }
-    // The WORD follows what is on the line: two shared walks are "2 shared walks", a mix is "2 walks".
+    // The WORD follows what is on the line: two shared sub-use cases are "2 shared sub-use cases", a mix is "2 walks".
     const kinds = new Set(choices.map((c) => (c.shared ? 'shared sub-use case' : 'use case')));
     const one = kinds.size === 1 ? [...kinds][0] : 'walk';
     const many = one === 'shared sub-use case' ? 'shared sub-use cases'
@@ -15076,7 +15076,7 @@ function gotoImpactEid(id) {
     // The synthetic id carries the authored `n` WITHIN its container — a use case walk, or a shared
     // walk. Each has a screen of its own now, and an `n` is unique inside one walk, so the step opens
     // on ITS walk: no hunting for a use case that happens to run it, and no landing on somebody
-    // else's numbering. (It used to need the (sf, n) PAIR, because a shared walk's steps were spliced
+    // else's numbering. (It used to need the (sf, n) PAIR, because a shared sub-use case's steps were spliced
     // into every walk that ran one and the two sets of `n`s collided.)
     const i = (FLOWS_NARR[st.uc] || []).findIndex((s) => String(s.n) === st.n);
     if (i >= 0) selectFlowStep(st.uc, i);

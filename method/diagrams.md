@@ -57,7 +57,7 @@ show/hide toggle. The element-keyed deltas are the data.
   frames, since scoped to one use case a subsystem frame holds one or two members and reads as noise;
   each box names its area instead). The map's arrows are the flow's own steps, deduplicated per pair
   and labelled with the step numbers riding them, never the backbone edge list — so it cannot draw a
-  relationship this scenario does not exercise. The step player walks it. A shared walk is drawn as ONE
+  relationship this scenario does not exercise. The step player walks it. A shared sub-use case is drawn as ONE
   dashed box, wearing a chip per person, door or record inside it, and opens onto its own screen.
   Navigated as a back/forward history (header arrows,
   ⌘/⌥+←/→, breadcrumb) with pan/zoom and click→panel. A change-impact report adds a baseline⇄diff

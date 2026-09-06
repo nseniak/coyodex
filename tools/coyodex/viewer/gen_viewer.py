@@ -715,7 +715,7 @@ ELEMENT_TINT = {
     # ── the kinds the ITEM BOX draws that no diagram had a colour for ────────────────────────────
     # An AI agent wears the program colour and the person's stance; the viewer draws the bot figure.
     "agent": {"fill": "#eef2ff", "stroke": "#4338ca"},
-    # A SHARED WALK is not an element of the product, it is a piece of another use case's story, so
+    # A SHARED SUB-USE CASE is not an element of the product, it is a piece of another use case's story, so
     # it wears no element colour. Slate, and the dashed border every "there is more inside" box has.
     "subflow": {"fill": "#f8fafc", "stroke": "#475569", "strokeWidth": "2.5px",
                 "strokeDasharray": "6 3"},
@@ -2805,13 +2805,13 @@ def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, 
 
 
 def subflow_chips(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
-    """Per shared walk, the people, doors and records inside it.
+    """Per shared sub-use case, the people, doors and records inside it.
 
-    A use-case map draws a shared walk as one collapsed box, and these ride ON that box — so a reader
+    A use-case map draws a shared sub-use case as one collapsed box, and these ride ON that box — so a reader
     still sees where the product meets the outside world and what it keeps, without opening the walk.
     That is the design philosophy's own rule: the critical pieces are surfaced, not buried.
 
-    Components are deliberately NOT chips. A shared walk is MADE of components, so every box would carry
+    Components are deliberately NOT chips. A shared sub-use case is MADE of components, so every box would carry
     the same crowd and the two things worth seeing would be lost in it.
 
     Order is people, doors, records — stable, so a walk gaining one does not reshuffle the row."""
@@ -2848,9 +2848,9 @@ def own_steps(graph: GraphDict, flow: dict[str, Any],
     it, so `message[i]` <-> `FLOWS_NARR[uc][i]` <-> `actor stepIdx` is still one index space, and a step
     number still means the same moment in both renderings of the same walk.
 
-    THE INSIDE OF A SHARED WALK IS NOT THIS WALK'S BUSINESS. Expanded, a use case appeared to do work it
+    THE INSIDE OF A SHARED SUB-USE CASE IS NOT THIS WALK'S BUSINESS. Expanded, a use case appeared to do work it
     only borrows: measured on the live maps, a use case walk is 16 steps stored and 27 shown, and 12 of
-    the 21 steps of one mcpolis use case belonged to two other walks. The shared walk gets a screen of
+    the 21 steps of one mcpolis use case belonged to two other walks. The shared sub-use case gets a screen of
     its own instead, where its steps are numbered from 1 and belong to it.
 
     What ASKS "does this use case reach that record, that door?" must keep expanding — running a shared
@@ -2863,7 +2863,7 @@ def own_steps(graph: GraphDict, flow: dict[str, Any],
     carries text of its own (0 of 84), so `run` is the verb unless one is authored — imperative,
     like every other phrase and like the walk's own name it arrives at.
 
-    An unresolved reference or an empty shared walk (validate blocks both, serve renders drafts) stays a
+    An unresolved reference or an empty shared sub-use case (validate blocks both, serve renders drafts) stays a
     bare step, so nothing disappears silently."""
     ch = subflow_chips(graph) if chips is None else chips
     sfs = {str(sf.get("id")): sf for sf in cast("list[dict[str, Any]]", graph.get("subflows") or [])}
@@ -2891,8 +2891,8 @@ def all_walks(graph: GraphDict) -> list[dict[str, Any]]:
     """Every walk the viewer can draw: the use case walks, plus each SHARED walk as a walk in its own
     right.
 
-    A shared walk is stored in the same shape a use case walk is — a title and an ordered list of steps
-    — so the four per-walk generators take it unchanged. That is what gives a shared walk its own
+    A shared sub-use case is stored in the same shape a use case walk is — a title and an ordered list of steps
+    — so the four per-walk generators take it unchanged. That is what gives a shared sub-use case its own
     screen without a second set of generators to keep in step with the first."""
     out: list[dict[str, Any]] = list(graph["flows"])
     for sf in cast("list[dict[str, Any]]", graph.get("subflows") or []):
@@ -2999,7 +2999,7 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
 
     * the PERSON keeps the stick figure it has always had here, so the actor is still the biggest mark
       on the drawing (`figure`);
-    * a SHARED WALK is a full box (`full`) — it is the one box a reader cannot see inside, so it has to
+    * a SHARED SUB-USE CASE is a full box (`full`) — it is the one box a reader cannot see inside, so it has to
       wear its people, doors and records as chips or collapsing it buries the product's edge;
     * everything else is `tight`: a glyph, a name, and the kind said by the box's own colour. What a
       tight box leaves out is one click away in the floating card, which is the same box in full.
@@ -3016,11 +3016,11 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     * **Arrows come from THIS WALK'S STEPS, never the backbone edge list.** A step is what the
       scenario does; a backbone edge is the aggregate of every scenario. Drawing edges here would
       show relationships this use case never exercises.
-    * **Nothing is drawn OUT of a shared walk's box.** No step in the model hands control back; the
+    * **Nothing is drawn OUT of a shared sub-use case's box.** No step in the model hands control back; the
       walk simply continues, and its next step draws itself. Measured before this was built: an arrow
       out of the box would have to be invented for 64 of 83 runs.
 
-    A box's mermaid id IS its element id (an actor gets the `FAn` alias, a shared walk its `SFn`), so
+    A box's mermaid id IS its element id (an actor gets the `FAn` alias, a shared sub-use case its `SFn`), so
     the viewer's generic node binding resolves a click with no special casing."""
     steps = own_steps(graph, flow)
     clients = flow_client_roles(graph, steps)
@@ -3115,7 +3115,7 @@ def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any
             "dstId": dst_id, "dst": str(graph["nodes"][dst]["name"]) if dst_id else dst,
             "verb": verb, "why": why, "note": str(st.get("note") or "").strip(),
             "where": str(st.get("where") or "") or None,  # the step's own call site (THE location)
-            # A step that RUNS A SHARED WALK (None on every other step). `sf` is the walk this step
+            # A step that RUNS A SHARED SUB-USE CASE (None on every other step). `sf` is the walk this step
             # goes into, and it is also the box the map draws the arrow to — so the panel, the map and
             # the sequence column all name the same thing from this one field.
             "sf": st.get("sf"), "sfName": st.get("sfName"),
@@ -3292,7 +3292,7 @@ class ViewBundle(TypedDict):
     hpActors: list[dict[str, Any]]
     flowActors: dict[str, list[dict[str, Any]]]
     elementTint: dict[str, dict[str, str]]
-    #: {SFn: [chip, …]} — the people, doors and records inside each shared walk, so the
+    #: {SFn: [chip, …]} — the people, doors and records inside each shared sub-use case, so the
     #: viewer can wear them on that walk's collapsed box without re-deriving the join.
     subflowChips: dict[str, list[dict[str, str]]]
     mermaidLibs: str

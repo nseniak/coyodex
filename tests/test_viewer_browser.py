@@ -2364,7 +2364,7 @@ def test_a_record_inside_another_one_lists_the_use_cases_that_reach_its_holder()
 
 
 def _with_shared_walk(m: Any) -> None:
-    """UC1 runs a shared walk that keeps a record — the shape the committed fixture has none of."""
+    """UC1 runs a shared sub-use case that keeps a record — the shape the committed fixture has none of."""
     m["subflows"] = [{
         "id": "SF1", "name": "Keep the organization",
         "steps": [{"n": 1, "src": "C101", "dst": "E1", "phrase": "writes the organization",
@@ -2378,7 +2378,7 @@ def _with_shared_walk(m: Any) -> None:
 
 
 def test_a_use_case_walk_counts_its_own_steps_not_the_shared_walk_s() -> None:
-    """A use case that runs a shared walk used to count that walk's steps as its own — so the counter,
+    """A use case that runs a shared sub-use case used to count that walk's steps as its own — so the counter,
     the numbers on the map and the numbers in the Sequence view all described a walk longer than the one
     the map stores. The reference is one step now, and BOTH pictures say so: they are read against each
     other by number, so a disagreement would make the toggle between them land somewhere else."""
@@ -2397,9 +2397,9 @@ def test_a_use_case_walk_counts_its_own_steps_not_the_shared_walk_s() -> None:
                      arrows: [...document.querySelectorAll('#diagram .edgeLabel')]
                        .map((e) => e.textContent.trim()).filter(Boolean) };
         }""")
-        assert seen["hasBox"], "the shared walk is drawn as its own box"
+        assert seen["hasBox"], "the shared sub-use case is drawn as its own box"
         assert seen["chips"] == [{"t": "Organization", "k": "entity"}], seen["chips"]
-        # HOW MANY STEPS THE SHARED WALK HOLDS IS NOT ON ITS BOX. The box is a door to the walk's own
+        # HOW MANY STEPS THE SHARED SUB-USE CASE HOLDS IS NOT ON ITS BOX. The box is a door to the walk's own
         # screen, where its steps are numbered from 1 and belong to it; a count here answered a
         # question this picture is not about, and it was the one number on a box that carries chips.
         assert seen["steps"] == [], seen["steps"]
@@ -2410,7 +2410,7 @@ def test_a_use_case_walk_counts_its_own_steps_not_the_shared_walk_s() -> None:
 
 
 def test_the_shared_walk_s_box_opens_the_walk_itself() -> None:
-    """A shared walk belongs to every use case that runs it, so it has a screen of its own rather than a
+    """A shared sub-use case belongs to every use case that runs it, so it has a screen of its own rather than a
     home inside one of them. Drilling the box opens it: its steps numbered from 1, its own two pictures,
     and a trail that still leads back the way the reader came."""
     with _served_map(_with_shared_walk) as url, _page(url + "#v=usecase&uc=UC1") as page:

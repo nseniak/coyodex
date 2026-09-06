@@ -1903,7 +1903,7 @@ def test_a_step_chip_is_numbered_by_POSITION_the_way_the_diagram_is() -> None:
     IDENTITY, and the chip must show the POSITION every other surface counts to — the arrow badge, the
     sequence list, the step counter.
 
-    The container is the walk that AUTHORED the step: the use case for its own, a shared walk for the
+    The container is the walk that AUTHORED the step: the use case for its own, a shared sub-use case for the
     steps inside one. Each has its own screen and its own numbering now, so the position is counted
     THERE and the chip opens THERE. (It used to hunt the step inside the host's spliced-in run, which
     is why the lookup once matched on the (sf, n) pair.) ONE lookup labels the chip AND acts on it, so
@@ -2211,9 +2211,9 @@ def test_the_flow_step_pane_uses_a_new_class_and_keys_by_container() -> None:
     pane = VIEWER_JS[start:VIEWER_JS.index("\n// One actor's card", start)]
     assert "stepRulesHtml(uc, st)" in pane
     # THE CONTAINER IS THE WALK BEING DRAWN, on both kinds of screen. Reading the step's `sf` here was
-    # right while a shared walk's steps were spliced into their host — a reference step's `sf` names the
+    # right while a shared sub-use case's steps were spliced into their host — a reference step's `sf` names the
     # walk it RUNS, not the one it belongs to, and reading it put 172 rule links on the wrong step and
-    # lost 299 others. On a shared walk's own screen the links are filed under every use case that runs
+    # lost 299 others. On a shared sub-use case's own screen the links are filed under every use case that runs
     # it, so the use case is not part of the question there.
     assert "if (l.container !== uc || String(l.n) !== String(st.n)) continue;" in pane
     assert "const shared = !!SUBFLOW_BY_ID[uc];" in pane

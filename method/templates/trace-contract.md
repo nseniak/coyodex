@@ -84,7 +84,7 @@ lead; nothing above this line goes into an agent prompt.
 >   ("return the verified email"), never the third person ("returns the verified email"). The viewer
 >   shows the phrase ON ITS OWN as the step's title, with no subject in front of it, so a third-person
 >   verb there reads as a sentence missing its start. It is also the form a use case's name and a
->   shared walk's name already take, which is what lets one line title either kind of step.
+>   shared sub-use case's name already take, which is what lets one line title either kind of step.
 >   A condition or qualifier belongs in `note`, never in `phrase`.
 > - **Every element↔element step carries its own `where`** — the `path:line` in the `src` side's code
 >   where THIS step's action fires. Not the callee's definition. A step with genuinely no single site

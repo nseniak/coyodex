@@ -17,7 +17,7 @@ authored separately; no gate joined them.
 
 **One live case, and it is the whole evidence.** argus I7 "Paid reading service" — the anti-bot
 service the product pays when its own readers get blocked — is `facing: user`, is carried a second
-time as dependency D3 "Scrapfly", and is reached by no use case at all. Its shared walk "Read a page
+time as dependency D3 "Scrapfly", and is reached by no use case at all. Its shared sub-use case "Read a page
 and store its clean text" mentions paid reading twice in PROSE (step 3 "checks the account still has
 paid reading allowance", step 7 "charges the account for the credits the paid reading spent") while
 step 5, the one that actually leaves the product, is drawn at I8 "Tracked web pages", the open web.

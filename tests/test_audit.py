@@ -2418,7 +2418,7 @@ def test_a_far_side_claim_names_the_way_in_THAT_ROLE_drives_not_the_first_one():
 
 def test_a_SUB_FLOW_step_phrase_is_challenged_too_and_exactly_once():
     """The hole an adversarial review found: the step loop read `f.steps`, so a phrase living inside
-    a shared walk reached readers — in the flow picture and at an interface — with no skeptic on it.
+    a shared sub-use case reached readers — in the flow picture and at an interface — with no skeptic on it.
     195 phrases across the three live maps (coyodex 59, argus 65, mcpolis 71).
 
     ONCE, under its OWN container id, however many walks run it. Expanding instead would raise one

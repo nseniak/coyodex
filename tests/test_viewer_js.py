@@ -378,7 +378,7 @@ def test_all_action_icons_render_in_the_foreground_overlay() -> None:
 def test_a_walk_has_one_rendering_and_it_is_the_map() -> None:
     """A sequence diagram stood beside the map behind a "Flow as" switch. Two renderings of one walk
     meant every rule written twice and kept in step — the step numbers, the actor aliases, what a
-    collapsed shared walk shows — and the map answers strictly more: it draws each element in the
+    collapsed shared sub-use case shows — and the map answers strictly more: it draws each element in the
     structural views' own colour and shape, which lifelines cannot."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     for gone in ("FLOW_VIEW", "FLOWS_MM", "function bindFlow(uc)", "syncFlowPicker", "EMPTY_FLOW_MM"):
@@ -5035,7 +5035,7 @@ def test_a_path_that_names_nothing_is_not_drawn_as_a_trail():
 
 
 def test_a_step_that_runs_a_shared_walk_is_drawn_to_that_walk_s_box() -> None:
-    """A use case map draws a shared walk as ONE box and never its insides, so the step that runs it goes
+    """A use case map draws a shared sub-use case as ONE box and never its insides, so the step that runs it goes
     to that box — not to its own `dst`, which names a component inside the walk that this map does not
     draw at all. Both consumers must agree: the arrow's own lookup, and the step player's.
 
@@ -5067,7 +5067,7 @@ console.log(JSON.stringify({
 
 
 def test_the_same_shared_walk_run_twice_is_one_box_carrying_both_numbers() -> None:
-    """One shared walk is one box on the map, however many times the walk runs it — the map draws one box
+    """One shared sub-use case is one box on the map, however many times the walk runs it — the map draws one box
     per thing, and the arrow's label lists every step riding it, exactly as it does for any other pair."""
     snippet = """
 globalThis.FLOW_ACTORS = { UC1: [] };
@@ -5088,7 +5088,7 @@ console.log(JSON.stringify({
 
 def test_one_function_says_which_arrow_a_step_is_on() -> None:
     """`flowMapStepArrow` is the ONE door from a step to the map arrow that carries it, because a use-case
-    map no longer draws every step's own endpoints — a step inside a collapsed shared walk rides the arrow
+    map no longer draws every step's own endpoints — a step inside a collapsed shared sub-use case rides the arrow
     into that walk's box instead. Anything re-deriving the pair from `st.srcId`/`st.dstId` disagrees with
     the drawing: it glows nothing, or it scrolls to a box that is not there.
 
@@ -5098,7 +5098,7 @@ def test_one_function_says_which_arrow_a_step_is_on() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     callers = [ln.strip() for ln in js.splitlines()
                if "flowMapBoxId(" in ln and not ln.startswith("function flowMapBoxId")]
-    # The two that are NOT re-derivations: a shared walk's box shows the run behind it, on click and on
+    # The two that are NOT re-derivations: a shared sub-use case's box shows the run behind it, on click and on
     # hover, and both need the box the run was called from.
     assert callers == ["return [flowMapBoxId(uc, st.srcId, st.src),",
                        "st.sf || flowMapBoxId(uc, st.dstId, st.dst)];",
@@ -5186,13 +5186,13 @@ def test_the_name_is_the_words_and_every_box_s_name_opens_a_page() -> None:
     still wrap a name in on the pictures that have not moved onto the item box yet. `nameClick` is the
     one place that asks, so neither can drift into a second answer.
 
-    And all three kinds open something: an element opens its own page, an actor theirs, a shared walk
+    And all three kinds open something: an element opens its own page, an actor theirs, a shared sub-use case
     its own screen. Before this an actor's box could not be opened from a map at all."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     assert "t.closest('.ibox-name, .cyname')" in js
     assert "if (nameClick(ev)) { drillInto(id); return; }" in js                    # an element
     assert "if (nameClick(ev)) { go({ kind: 'actor', act: a.name }); return; }" in js  # an actor
-    assert "if (open && (nameClick(ev) || isDrillClick(ev)))" in js                 # a shared walk
+    assert "if (open && (nameClick(ev) || isDrillClick(ev)))" in js                 # a shared sub-use case
     # THE NAME IS A BUTTON, so it is a keyboard stop and it says on hover that it is a door.
     assert '`<button type="button" class="${ncls}"' in js
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
@@ -5207,7 +5207,7 @@ def test_a_walk_draws_no_corner_icons() -> None:
     fn = js[js.index("function decorateActionIcons(scene, s) {"):
             js.index("\n}", js.index("function decorateActionIcons(scene, s) {"))]
     assert "if (isWalkState(s)) return;" in fn
-    assert "addActionIcon(el, sid, open)" not in js, "the shared walk's box lost its icon too"
+    assert "addActionIcon(el, sid, open)" not in js, "the shared sub-use case's box lost its icon too"
 
 
 def test_hovering_a_box_shows_its_card_and_leaving_puts_back_what_was_there() -> None:

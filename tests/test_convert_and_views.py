@@ -579,7 +579,7 @@ def test_two_roles_that_differ_only_in_stripped_characters_stay_distinct():
 
 
 def make_chipped_subflow_model() -> ProjectModel:
-    """A shared walk that touches a person, a door and a record — the three things a chip names — plus a
+    """A shared sub-use case that touches a person, a door and a record — the three things a chip names — plus a
     component, which is deliberately NOT chipped."""
     m = make_subflow_model()
     m.roles = [Role(id="R1", name="Andy", kind="person", wants="to view")]
@@ -594,7 +594,7 @@ def make_chipped_subflow_model() -> ProjectModel:
 
 
 def test_a_use_case_walk_is_its_own_steps_not_the_shared_walks_it_runs():
-    """A use case that runs a shared walk appeared to DO that walk's work: its numbered steps included
+    """A use case that runs a shared sub-use case appeared to DO that walk's work: its numbered steps included
     steps belonging to every other use case that runs the same walk. Measured on the live maps before
     this changed, a use case walk was 16 steps stored and 27 shown.
 
@@ -607,7 +607,7 @@ def test_a_use_case_walk_is_its_own_steps_not_the_shared_walks_it_runs():
 
 def test_both_renderings_number_the_same_list():
     """The map and the Sequence view are two pictures of ONE walk, and the toggle between them keeps the
-    reader's place. If one collapsed a shared walk and the other did not, the same number would name two
+    reader's place. If one collapsed a shared sub-use case and the other did not, the same number would name two
     different moments and one picture would have steps the other does not."""
     g = model_to_graph(make_subflow_model())
     flow = cast("dict", g["flows"][0])
@@ -617,12 +617,12 @@ def test_both_renderings_number_the_same_list():
 
 
 def test_a_shared_walk_is_one_dashed_box_with_nothing_drawn_out_of_it():
-    """No step in the model hands control back from a shared walk — the walk simply continues, and its
+    """No step in the model hands control back from a shared sub-use case — the walk simply continues, and its
     next step draws itself. An arrow out of the box would have to be invented, and an invented arrow
     carries no step, no direction and no code link."""
     g = model_to_graph(make_subflow_model())
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    # A SHARED WALK IS A FULL BOX — the one box a reader cannot see inside, so it wears its people,
+    # A SHARED SUB-USE CASE IS A FULL BOX — the one box a reader cannot see inside, so it wears its people,
     # doors and records as chips or collapsing it buries the product's edge.
     assert 'SF1["<span class=cyslot data-k=subflow data-v=full data-id=SF1></span>"]' in mm
     assert "class SF1 itembox" in mm
@@ -631,7 +631,7 @@ def test_a_shared_walk_is_one_dashed_box_with_nothing_drawn_out_of_it():
 
 def test_the_box_says_how_big_the_walk_is_and_wears_its_people_doors_and_records():
     """Collapsing must not bury the product's edge or its saved data — the design philosophy's own rule.
-    A COMPONENT is never a chip: a shared walk is made of components, so every box would carry the same
+    A COMPONENT is never a chip: a shared sub-use case is made of components, so every box would carry the same
     crowd and the two things worth seeing would be lost in it."""
     g = model_to_graph(make_chipped_subflow_model())
     chips = subflow_chips(g)["SF1"]
@@ -659,7 +659,7 @@ def test_a_shared_walk_is_a_walk_in_its_own_right():
 
 
 def test_a_degraded_reference_stays_a_bare_step():
-    """An unresolved reference or an empty shared walk (validate blocks both, serve renders drafts) must
+    """An unresolved reference or an empty shared sub-use case (validate blocks both, serve renders drafts) must
     not vanish. It stays one plain step naming what it tried to run."""
     m = make_subflow_model()
     m.flows[0].steps[1] = FlowStep(n=2, src="C1", dst="C2", subflow="SF404")

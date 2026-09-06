@@ -109,11 +109,11 @@ def test_subflow_title_alias_loads_as_name():
     # The loader accepts the alias (canonical stays `name` — renaming would break today's maps).
     m = make_model()
     j = to_canonical_json(m)
-    j2 = j.replace('"edges": [', '"subflows": [{"id": "SF1", "title": "Shared walk", "steps": []}],\n  "edges": [')
+    j2 = j.replace('"edges": [', '"subflows": [{"id": "SF1", "title": "Shared sub-use case", "steps": []}],\n  "edges": [')
     m2 = load_model(j2)
-    assert m2.subflows[0].name == "Shared walk"
+    assert m2.subflows[0].name == "Shared sub-use case"
     # round-trips canonically as `name`
-    assert '"title"' not in to_canonical_json(m2) or m2.subflows[0].name == "Shared walk"
+    assert '"title"' not in to_canonical_json(m2) or m2.subflows[0].name == "Shared sub-use case"
 
 
 def test_empty_string_store_loads_as_null():

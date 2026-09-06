@@ -2608,7 +2608,7 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    read backwards, and the backwards question — which surfaces does one actor stand at — is answered
    in full on that actor's own page.
    THE CHIP IS THE ITEM BOX'S CHIP, and it takes its colour from the person's or the program's own
-   tint, the same way a chip on a collapsed shared walk does. */
+   tint, the same way a chip on a collapsed shared sub-use case does. */
 /* THE PROVIDER, on its own line under a hairline. It was a pill in a count band and read as one more
    small grey fact. It is not that: it is who is actually out there.
    NO BRAND LOGO. The map records a dependency's name, kind and purpose, and no URL or domain to take
@@ -2901,14 +2901,14 @@ body.insp-on { cursor: crosshair; }
                  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #e2e8f0;
                  white-space: pre-wrap; overflow-wrap: anywhere; }
 
-/* A CHIP names one person, door or record inside a collapsed shared walk. It rides IN the Mermaid node
+/* A CHIP names one person, door or record inside a collapsed shared sub-use case. It rides IN the Mermaid node
    label (securityLevel:'loose' renders a label as HTML), so Mermaid sizes the dashed box around it —
    which is what no post-processed rectangle could make it do. The same markup is reused in the side
    panel, so one row of chips looks the same wherever it appears. Not clickable anywhere: the box, and
    the step that runs it, are the things you open. */
 .cysteps { font-size: 10px; color: #64748b; }
 
-/* A step card's title is the ACTION. When that action is running a shared walk, the title IS the link
+/* A step card's title is the ACTION. When that action is running a shared sub-use case, the title IS the link
    to it — the same weight and colour as any other step title, so the card reads the same either way. */
 .pane-title-link { font: inherit; color: inherit; background: none; border: 0; padding: 0;
                    cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
@@ -2921,7 +2921,7 @@ body.insp-on { cursor: crosshair; }
    underline there would promise a door that is not one. */
 /* INLINE-BLOCK, so the name is ONE contiguous box. As a plain inline span a name that wraps onto two
    lines has a bounding box covering the union of both, and the middle of that box falls between the
-   lines — the click landed on the paragraph and the name never fired. Measured on a shared walk's box,
+   lines — the click landed on the paragraph and the name never fired. Measured on a shared sub-use case's box,
    whose name is the longest thing on any map. */
 #diagram .cyname { cursor: pointer; display: inline-block; }
 #diagram .cyname:hover { text-decoration: underline; text-decoration-color: #6366f1; }

@@ -58,11 +58,12 @@ the code's names.
   ALWAYS SAY BOTH WORDS. "Walk" alone was used for a while and read as a stroll
   through the map; *journey* and *story* were used for the same thing in other
   entries, so one idea had three names and no definition.
-  A **shared walk** is a run of steps that several use case walks RUN (argus 10,
-  mcpolis 14). It is not spliced in: a use case walk's numbers are its own, and
-  running a shared walk is one of them. On a use case map a shared walk is one
+  A **shared sub-use case** is a run of steps that several use case walks RUN
+  (argus 10, mcpolis 14). It is not spliced in: a use case walk's numbers are its
+  own, and running one of these is one of them. On a use case map it is one
   dashed box wearing its chips; it has a screen of its own, where its steps are
-  numbered from 1 and belong to it.
+  numbered from 1 and belong to it. It was called a *shared walk* until the
+  screen said otherwise: one word, one thing.
 - **owner** (of a data area) — the feature the area's data exists FOR: the one
   that creates its records and runs their lifecycle. Authored, never derived.
 - **owner with no evidence** — the map says an area exists for a feature, but no
@@ -118,7 +119,7 @@ the code's names.
   removal is a stated reason on one screen.
   Why the rule exists: on the Features page the actors are a whole column joined
   by wires, so naming them again on the feature card says it twice.
-- **chip** — a small named tag on the dashed box of a shared walk, one per
+- **chip** — a small named tag on the dashed box of a shared sub-use case, one per
   person, door or record inside it. It is what stops collapsing the walk from
   burying the product's edge and its saved data. Never clickable: the box is
   what you open. Not a *type pill*, which says what KIND a thing is.
