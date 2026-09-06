@@ -1281,6 +1281,87 @@ def test_every_map_section_the_validator_checks_is_in_the_BUILD_ORDER():
         assert table in order, f"{table} is documented but never sequenced in the build order"
 
 
+def test_the_build_and_test_pipeline_is_kept_out_of_the_entry_points_at_harvest():
+    """T2b already says the pipeline that builds and tests the product is not a product interface.
+    That rule reaches the agent that GROUPS surfaces and nobody else, so one live map harvested its
+    test runners, type checker, icon generators and local start/stop scripts as ways in, grouped 32
+    of them into a 36-way "Command line" surface, and then drew 31 "no use case" advisories on rows
+    that were never product behaviour. 15 of them already had a `run_commands` row citing the same
+    `path:line`, so the map recorded the same command twice.
+
+    The cut has to be stated where the rows are MINTED, and a harvest agent reads its contract,
+    never method.md — so both files carry it or neither does. The anti-delete clause is pinned with
+    it: a rule that says a row does not belong here, without naming where it does belong, is read as
+    permission to drop the command from the map entirely."""
+    # Whitespace-flattened: both files wrap these clauses across lines, and a raw substring search
+    # would pass or fail on where the line happened to break.
+    def flat(path: Path) -> str:
+        # Strip the blockquote marker first: the contract is one long `> ` quote, and joining on
+        # whitespace alone leaves a stray `>` inside every clause that wraps across lines.
+        lines = [ln[2:] if ln.startswith("> ") else ln.lstrip(">")
+                 for ln in path.read_text(encoding="utf-8").splitlines()]
+        return " ".join(" ".join(lines).split())
+
+    method = flat(REPO_ROOT / "method.md")
+    contract = flat(REPO_ROOT / "method" / "templates" / "harvest-contract.md")
+    for name, text in (("method.md", method), ("harvest-contract.md", contract)):
+        assert "acts on the DEPLOYED product" in text, (
+            f"{name} no longer states the T4 cut, or no longer states it as a test about what the "
+            f"command ACTS ON")
+        assert "Being a test exempts nothing" in text, (
+            f"{name} lost the tie-breaker. The first draft banned a test outright AND said what the "
+            f"command acts on decides; a release smoke test against the live site satisfies both, "
+            f"and two fresh agents each dropped that row and named the pair")
+        assert "Move it, never drop it" in text, (
+            f"{name} states the cut without naming where the command DOES belong — that reads as "
+            f"permission to drop it from the map")
+        # The three cuts, each one a row a partial run got wrong.
+        assert "is not a NEW entry point" in text or "is not a NEW way in" in text, (
+            f"{name} lost the cut for a command that merely CALLS one of the product's own "
+            f"addresses — without it a caller is minted as a duplicate of the address")
+        assert "wrapper and the command it wraps" in text, (
+            f"{name} lost the wrapper cut — two readers then disagree on the row count")
+        assert "declares for ITSELF" in text, (
+            f"{name} lost the cut for what a container declares for itself — those produced 2 of "
+            f"one run's 9 rows")
+        assert "a command wherever it is written down" in text, (
+            f"{name} lost the guard on that cut. Read broadly it eats a real deploy command written "
+            f"as a comment inside the compose file, which on one live map was its ONLY launch")
+        assert "what was there BEFORE the command ran" in text, (
+            f"{name} lost the precedence line. Both sides fire on a dev launcher whose stack a "
+            f"public tunnel exposes, and on a deploy that builds an image and replaces the site")
+        assert "Reading" in text and "counts" in text, (
+            f"{name} no longer says whether reading live data counts")
+    # The destination is named in each file's own vocabulary: the lead's prose says T3, the
+    # harvesting agent's contract says the array it actually authors.
+    assert "T3 row and only a T3 row" in method
+    assert "`run_commands` row when" in contract
+    # …and the invitation that produced the rows no longer offers a bare "a command".
+    assert "a command that acts on the running product" in contract
+
+
+def test_the_app_shell_routes_have_a_surface_to_belong_to():
+    """The "every way in belongs to a surface" advisory fired on both live maps with no fix that
+    would ever satisfy it: the built-asset route and the single-page catch-all were treated as
+    plumbing that could belong nowhere. Neither carries a `kind` of its own, so no filter could
+    exclude them either. A check nobody can clear is a check people stop reading.
+
+    Both halves are pinned. method.md must say where the two rows GO, and the validator's plumbing
+    set must not grow a claim that they belong nowhere: the old comment there said they "can never
+    belong to one", which is what sent the advisory into a loop it could not leave."""
+    method = " ".join((REPO_ROOT / "method.md").read_text(encoding="utf-8").split())
+    assert "belong to the web surface they serve" in method, (
+        "method.md no longer says where the built-asset route and the single-page catch-all go, so "
+        "the advisory that flags them has no fix that satisfies it")
+    guard = (REPO_ROOT / "tools" / "coyodex"
+             / "validate_model.py").read_text(encoding="utf-8")
+    at = guard.index("_PLUMBING_EP_KINDS = frozenset(")
+    note = " ".join(guard[at:at + 1400].split())
+    assert "can never belong to one" not in note or "used to name them here was the defect" in note, (
+        "the plumbing note claims the app-shell routes can belong to no surface again — that claim "
+        "is what method.md's T2b now contradicts")
+
+
 def test_the_absence_of_an_outside_edge_is_reported_not_silent():
     """The other half of the same bug. Every interface check is gated on `m.interfaces` being
     non-empty — correct, since they need one to check — which made a WHOLLY ABSENT section the one

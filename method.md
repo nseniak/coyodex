@@ -446,6 +446,35 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   inventory is complete or a sample — one line per kind under an **"Entry-point coverage"** extras
   heading, `<kind>: complete|sampled|partial — <how it was enumerated>` (e.g. `http-route: complete
   — walked FastAPI app.routes`). An unstated kind draws one aggregated `validate` advisory.
+  **A command is an entry point ONLY when it acts on the DEPLOYED product — otherwise it is a T3
+  row and only a T3 row.** What the command acts on decides, and nothing else: not its name, not
+  what it is for. The deployed product means the live site, a live account at a provider the product
+  runs on, the stored data, an instance somebody else depends on; **reading it counts**, since an
+  operator who prints production data crossed the same door as one who changes it. A copy the
+  command owns is not: a stack it starts and stops itself, a test database, a build output, the
+  source, a fake server a test launches. **Being a test exempts nothing** — a release smoke test that
+  signs into the live site IS an entry point, and a suite that starts its own stack is not. **When
+  both sides fire, ask what was there BEFORE the command ran**: a thing the command creates and can
+  destroy is a copy it owns, however publicly that copy can be reached, and a thing already there
+  and still there afterwards is the deployed product. Three cuts settle the rest: a command that
+  CALLS one of the product's own addresses is not a NEW entry point (the address is, and the slice
+  holding it records it); a wrapper and the command it wraps are ONE entry point, recorded at the
+  command that acts; what a container declares for ITSELF (its own argv, a healthcheck, a sidecar)
+  is not a command anybody types and gets no row in either table, while **a command a PERSON runs is
+  a command wherever it is written down**, a comment inside the compose file included.
+  **Move it, never drop it** — if T3 carries no row for that command, write the T3 row; the map
+  still records every way to run and test this product, in the one table that owns them.
+
+  This is the rule T2b already states — "the pipeline that builds and tests the product is not a
+  product interface" — moved to the step that MINTS the rows, because a row that is never harvested
+  cannot be grouped onto a surface afterwards. Measured on a live map: its "Command line" surface
+  held 36 ways in, 32 of them the build and test pipeline, 31 of those reached by no use case, and
+  15 already carrying a T3 row that cited the same `path:line`. The surface read as a product edge,
+  and the use-case advisory fired 31 times on rows that were never product behaviour. **Every clause
+  above the evidence paragraph is a row a reader actually got wrong**: two fresh agents ran the
+  first draft over two repos, and the draft's unconditional "a test is never an entry point" fought
+  its own "what it acts on decides" on a smoke test against production. Both agents named that pair
+  unprompted, and between them reported 16 places the wording did not decide.
   For every **self-activated** entry point, also record its `cadence` — WHEN it runs (a cron expr,
   `every 30s`, `on-boot`, `continuous`) — with `cadence_source` anchoring the line that declares
   the schedule (the beat/cron config or the loop's sleep, often not the entry point's own line).
@@ -466,6 +495,12 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   IS a surface, a store only the product reads back is not. **Name the far side, never the pipe**: a
   log shipper and a reverse proxy are pipes, the log store and the dashboard are the surfaces; mark
   the SERVICE, never the library that calls it.
+  **The route that serves the built app, and the catch-all that serves its shell, belong to the web
+  surface they serve.** A browser fetching the shell IS the product meeting a person, so those two
+  rows go on the screen surface the person ends up looking at, exactly like the addresses that
+  surface's pages call. They were treated as plumbing that could belong nowhere, which left the
+  "every way in belongs to a surface" advisory firing on both live maps with no fix that would ever
+  satisfy it: a check nobody can clear is a check people stop reading.
   Deliberately NOT a criterion: **who runs the machine**. A self-hosted database and a hosted one are
   the same thing to a reader; what separates a database from a log store is whether the product ever
   reads the data back.
@@ -856,7 +891,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   `from → to`: **every step** — element↔element and actor steps alike — carries a short authored phrase
   saying what happens at that point, as an action in the IMPERATIVE ("POST the new upstream", "return
   the verified email"), never the third person, which is what the arrow shows. The viewer titles the
-  step with the phrase ALONE, with no subject in front of it, and a use case's name and a shared walk's
+  step with the phrase ALONE, with no subject in front of it, and a use case's name and a shared sub-use case's
   name are written the same way — one form for every action the map states. Don't lean on the backbone edge for it: the same
   element pair can appear in several steps that do different things, and one shared edge label can't
   describe each; the step describes itself. A phrase is **pure action** — a condition or qualifier

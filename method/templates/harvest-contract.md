@@ -85,11 +85,45 @@ lead; nothing above this line goes into an agent prompt.
 > | array | yours when |
 > |---|---|
 > | `components` | always |
-> | `entry_points` | a file here is a trigger surface (a route, a command, a job) |
+> | `entry_points` | a file here is a trigger surface (a route, a job, a command that acts on the running product) |
 > | `deps` | a third-party system is reached from a file here |
 > | `observability` | a logging / crash / analytics adapter lives here |
 > | `config` | a settings key is read literally in a file here |
 > | `deployment`, `run_commands` | a manifest, compose file or command declaration lives here |
+>
+>
+> **A command is a way in ONLY when it acts on the DEPLOYED product.** What it acts on decides, and
+> nothing else: not its name, not what it is for. **Being a test exempts nothing** — a release smoke
+> test that signs into the live site IS a way in, and a suite that starts its own stack is not.
+>
+> | it acts on | which is | verdict |
+> |---|---|---|
+> | the deployed product, the one other people use | the live site; a live account at a provider the product runs on; the stored data; an instance somebody else depends on | a way in |
+> | a copy this command owns | a stack it starts and stops itself; a test database; a build output; the source; a fake server a test launches | not a way in |
+>
+> **Reading counts.** An operator who prints production data crossed the same door as one who
+> changes it.
+>
+> **When both rows fire, ask what was there BEFORE the command ran.** A thing the command creates
+> and can destroy is a copy it owns, however publicly that copy can be reached. A thing that was
+> already there and is still there afterwards is the deployed product. A dev launcher whose stack a
+> matching stop script kills owns it, even behind a public tunnel; a deploy that builds an image AND
+> replaces the live site is a way in, because the site outlived it at both ends.
+>
+> Three cuts, each one a row a reader got wrong:
+>
+> - **A command that CALLS one of the product's own addresses is not a NEW way in.** The address is,
+>   and the slice holding it records it. A script that posts to the live admin API adds nothing here.
+> - **A wrapper and the command it wraps are ONE way in**, recorded once, at the command that acts.
+>   A `make` target calling `scripts/clear_db.py` is one row, not two.
+> - **What a container declares for ITSELF is not a command anybody types**: its own argv, a
+>   healthcheck, a sidecar. Those are the deployment's business, so they get no `entry_points` row
+>   and no `run_commands` row either. **A command a PERSON runs is a command wherever it is written
+>   down**, a comment inside the compose file included: one live map's only deploy command lives
+>   there, and a reader who took this cut broadly would have dropped it.
+>
+> **Move it, never drop it**: no `entry_points` row, and a `run_commands` row when that command has
+> none yet.
 >
 > **`entities` is NOT yours** unless your brief carries the T5 addendum. Neither is any array not
 > listed above.

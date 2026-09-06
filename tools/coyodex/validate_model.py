@@ -546,8 +546,8 @@ def walk_jumps(m: ProjectModel) -> list[str]:
     cannot say how the story got there. On the picture the box simply hangs with no incoming arrow, and
     a reader reads it as an interruption — which is exactly what it is.
 
-    Sub-flow references are expanded, because running a shared walk really does reach what is inside it.
-    The most common shape is a step right after a reference: the shared walk ends somewhere inside
+    Sub-flow references are expanded, because running a shared sub-use case really does reach what is inside it.
+    The most common shape is a step right after a reference: the shared sub-use case ends somewhere inside
     itself and the next step starts somewhere new, with nothing joining them.
 
     Advisory, not blocking: a legitimate walk can begin a second thread (a background job the first half
@@ -2034,13 +2034,34 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
         reinstating eleven written records.
 
     `capabilities_untraced` is the empty-capability signal — a whole part of the product nobody
-    traced, which today is invisible."""
+    traced, which today is invisible.
+
+    **`entry_points_covered_by_component_only` is the LOOSE half of entry-point coverage**, and it
+    is a number here for the same reason trace debt is: the honest answer is "you cannot tell from
+    a warning". A way in counts as reached when a use case NAMES it or when any walk touches the
+    component that owns it, and the second arm is coarse by design (a per-way-in test reported 16
+    of argus's 61 rows as missing a use case, which is why the derived arm carries the check). The
+    cost of that coarseness was invisible: a component a story touches marks EVERY way in it owns
+    as covered, including ones no walk goes near. Counting them says how much of the coverage is
+    real without adding an advisory to a check whose signal is already thin."""
     traced = set(flow_endpoint_ids_by_uc(m))
     cap_of = {u.id: (u.capability or "").strip() for u in m.use_cases}
     labels = {c.id: (c.happy_path or "").strip().lower() for c in m.capabilities}
     on_spine = {g.uc for g in m.happy_path if g.uc}
     ext = external_entry_points(m)
+    # The two arms of claiming, counted apart. Same guards as `unclaimed_external_entry_points`:
+    # a row with no owning component, or a dangling one, is neither arm's business (each has its
+    # own check) and is left out of both counts rather than silently swelling one.
+    triggered = triggered_entry_point_ids(m)
+    touched = flow_endpoint_ids(m)
+    comp_ids = {c.id for c in m.components}
+    named = [ep for ep in ext if ep.id and ep.id in triggered]
+    loose = [ep for ep in ext
+             if (comp := ep.component.strip()) and comp in comp_ids and comp in touched
+             and not (ep.id and ep.id in triggered)]
     return {
+        "entry_points_named_by_use_case": len(named),
+        "entry_points_covered_by_component_only": len(loose),
         "use_cases": len(m.use_cases),
         "use_cases_traced": len([u for u in m.use_cases if u.id in traced]),
         "use_cases_untraced": len([u for u in m.use_cases if u.id not in traced]),
@@ -2489,9 +2510,15 @@ def _check_actors(m: ProjectModel) -> list[str]:
 INTERFACE_EXCEPTIONS_HEADING = "Interface exceptions"
 
 _PLUMBING_EP_KINDS = frozenset({"middleware"})
-#: Ways in that are not a surface and can never belong to one: request middleware, the built-asset
-#: route and the catch-all that serves a single-page app. Meerbot has 3, MCP Hero 18, Mio Coworker 2
-#: — so the "belongs to no interface" advisory must exclude them or it can never reach zero.
+#: Request middleware: it runs on the way to a way in and is not one itself, so the "belongs to no
+#: interface" advisory excludes it. Meerbot has 3 of these, MCP Hero 18, Mio Coworker 2.
+#:
+#: THE BUILT-ASSET ROUTE AND THE SINGLE-PAGE CATCH-ALL ARE NOT IN THIS SET, and the comment that
+#: used to name them here was the defect, not the filter. It read "not a surface and can never
+#: belong to one", which is false: a browser fetching the app shell is the product meeting a
+#: person, and both rows belong on the screen surface that person ends up looking at. Neither
+#: carries a `kind` of its own, so no filter could have excluded them anyway; the advisory fired on
+#: both live maps with no fix that would ever satisfy it. method.md's T2b now says where they go.
 
 
 def _external_ways_in(m: ProjectModel) -> list[EntryPoint]:
@@ -6223,6 +6250,31 @@ def _inventory(m: ProjectModel) -> str:
     return out
 
 
+def _entry_point_coverage_line(m: ProjectModel) -> str:
+    """The entry-point coverage SPLIT, as one line a reader sees — never a warning.
+
+    "Reached by a use case" hides two very different facts. A way in a use case NAMES is claimed on
+    purpose; one reached only because some walk happens to touch its owning component is claimed by
+    a rule that cannot tell a real door from a sibling row in the same file. Both count as covered,
+    and until this line existed nothing said how the total split. On a live map the loose half was
+    the large half, and a reader had no way to know.
+
+    Empty when the map has no externally activated way in — there is nothing to split."""
+    c = completeness_counts(m)
+    total = c["entry_points_external"]
+    if not total:
+        return ""
+    named = c["entry_points_named_by_use_case"]
+    loose = c["entry_points_covered_by_component_only"]
+    unclaimed = c["entry_points_unclaimed_external"]
+    rest = total - named - loose - unclaimed
+    line = (f"Entry-point coverage — {total} external way(s) in: {named} named by a use case, "
+            f"{loose} reached only through the component a walk touches, {unclaimed} unclaimed")
+    # The remainder is the rows with no owning component or a dangling one. Each has its own check;
+    # naming the count here keeps the four numbers adding up, which is what makes the line readable.
+    return line + (f", {rest} with no owning component" if rest else "")
+
+
 def _checked_summary(stats: dict[str, int], check_sources: bool, check_coverage: bool) -> str:
     """One phrase naming what the repo-reading flags read, or "" when neither flag ran."""
     parts: list[str] = []
@@ -6386,11 +6438,18 @@ def _run(argv: list[str] | None = None) -> int:
     checked = _checked_summary(vstats, check_sources, check_coverage)
     if as_json:
         json.dump({"problems": problems, "warnings": warnings,
-                   "inventory": _inventory(m), "checked": checked or None,
+                   "inventory": _inventory(m),
+                   # The split, not just the total: a machine reader tracking coverage over
+                   # rebuilds needs to see the loose half move, which one number hides.
+                   "entry_point_coverage": _entry_point_coverage_line(m) or None,
+                   "checked": checked or None,
                    "checked_counts": vstats}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 1 if problems else 0
     print(f"Inventory — {_inventory(m)}")
+    coverage = _entry_point_coverage_line(m)
+    if coverage:
+        print(coverage)
     if checked:
         print(f"Checked — {checked}")
     if warnings:

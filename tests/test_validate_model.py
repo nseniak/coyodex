@@ -123,6 +123,41 @@ def test_bucket_cap_exceeded_is_advisory_not_gating() -> None:
     assert not any("purpose buckets" in p for p in problems_of(m))
 
 
+
+def test_entry_point_coverage_splits_the_two_arms_of_claiming():
+    """"Reached by a use case" hides two different facts, and the loose one was invisible. A way in
+    a use case NAMES is claimed on purpose; one reached only because a walk touches its owning
+    component is claimed by a rule that cannot tell a real door from a sibling row in the same file.
+    On a live map the loose half was the LARGE half. This is a number, never an advisory: the
+    unclaimed check's signal is already thin, and the fix for coarseness is not more warnings."""
+    from coyodex.model import Component, EntryPoint, Flow, FlowStep, ProjectModel, UseCase
+    m = ProjectModel(title="T", goal="G")
+    m.components = [Component(id="C1", name="Doors", purpose="p", source="a.py:1")]
+    m.entry_points = [
+        EntryPoint(id="EP1", kind="http-route", activation="external", component="C1",
+                   trigger="named by the use case", source="a.py:1"),
+        EntryPoint(id="EP2", kind="http-route", activation="external", component="C1",
+                   trigger="covered only because C1 is touched", source="a.py:2"),
+    ]
+    m.use_cases = [UseCase(id="UC1", name="Do it", entry_points=["EP1"])]
+    m.flows = [Flow(uc="UC1", title="Do it",
+                    steps=[FlowStep(n=1, src="C1", dst="C1", phrase="does it")])]
+    counts = validate_model_mod.completeness_counts(m)
+    assert counts["entry_points_named_by_use_case"] == 1
+    assert counts["entry_points_covered_by_component_only"] == 1
+    assert counts["entry_points_unclaimed_external"] == 0
+    line = validate_model_mod._entry_point_coverage_line(m)
+    assert "2 external way(s) in" in line and "1 named by a use case" in line
+    assert "1 reached only through the component a walk touches" in line
+    # A row with no owning component belongs to neither arm — it has its own check — so it is
+    # named as the remainder rather than swelling either half and breaking the arithmetic.
+    m.entry_points.append(EntryPoint(id="EP3", kind="http-route", activation="external",
+                                     component="", trigger="ownerless", source="a.py:3"))
+    assert "1 with no owning component" in validate_model_mod._entry_point_coverage_line(m)
+    # No externally activated way in: nothing to split, so the line stays off.
+    assert validate_model_mod._entry_point_coverage_line(ProjectModel(title="T", goal="G")) == ""
+
+
 def test_bucket_non_seed_is_an_advisory_nudge_not_a_gate() -> None:
     m = make_valid_model()
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL", bucket="Datastores")]
@@ -5458,7 +5493,7 @@ def test_a_walk_that_jumps_to_a_box_it_never_reached_is_flagged():
     appears for the first time as a SOURCE has no way in — the map cannot say how the story got there,
     and the picture draws that box hanging with no incoming arrow.
 
-    Reported on mcpolis UC12: the walk runs a shared walk that ends at one component, then step 22
+    Reported on mcpolis UC12: the walk runs a shared sub-use case that ends at one component, then step 22
     starts at "Tool catalog" with nothing joining them. The missing step was real and traceable in the
     code (`upstream_connection_service.py:1640` calls the tool registry's refresh).
 
@@ -5480,8 +5515,8 @@ def test_a_walk_that_jumps_to_a_box_it_never_reached_is_flagged():
 
 
 def test_a_walk_jump_sees_through_a_shared_walk():
-    """Running a shared walk really does reach what is inside it, so the check expands. The commonest
-    shape is a step right after a reference: the shared walk ends somewhere inside itself and the next
+    """Running a shared sub-use case really does reach what is inside it, so the check expands. The commonest
+    shape is a step right after a reference: the shared sub-use case ends somewhere inside itself and the next
     step starts somewhere new."""
     m = ProjectModel(title="T", goal="G")
     m.use_cases = [UseCase(id="UC1", name="View")]
@@ -5494,6 +5529,6 @@ def test_a_walk_jump_sees_through_a_shared_walk():
         FlowStep(n=2, src="C1", dst="C3", subflow="SF1"),
         FlowStep(n=3, src="C3", dst="C2", phrase="carry on", where="src/c.py:2"),
     ])]
-    assert walk_jumps(m) == []          # the shared walk reached C3, so step 3 has its way in
+    assert walk_jumps(m) == []          # the shared sub-use case reached C3, so step 3 has its way in
     m.subflows[0].steps[0].dst = "C2"   # …and now it does not
     assert len(walk_jumps(m)) == 1 and "step 3 starts at C3" in walk_jumps(m)[0]
