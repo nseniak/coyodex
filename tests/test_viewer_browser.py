@@ -1401,6 +1401,62 @@ def test_an_actors_surfaces_picture_lines_each_one_up_with_what_they_reach_there
         assert any(count == 2 for count, _c, _f in wired), "the fixture exercises the full shape"
         assert not page.js_errors, page.js_errors
 
+def _actor_wires_meet_their_cells(page: Any) -> dict:
+    """How far the worst wire on an actor's page is from the two cells it joins, on screen NOW.
+
+    Both ends of every wire, because both are read off the settled layout: the left one leaves what
+    this person does at the surface, the right one arrives at the features they get through it."""
+    return dict(page.evaluate("""() => {
+        const st = document.getElementById('asfstage');
+        const R = (el) => [el.offsetLeft + el.offsetWidth, el.offsetTop + el.offsetHeight / 2];
+        const L = (el) => [el.offsetLeft, el.offsetTop + el.offsetHeight / 2];
+        let worst = 0, wires = 0;
+        for (const box of st.querySelectorAll('.ifd-box')) {
+          const iid = box.dataset.iface, want = [];
+          const c = st.querySelector('.asf-crosscell[data-iface="' + CSS.escape(iid) + '"] .asf-cross');
+          if (c) want.push([R(c), L(box)]);
+          const f = st.querySelector('.asf-featcell[data-iface="' + CSS.escape(iid) + '"] .asf-feats');
+          if (f) want.push([R(box), L(f)]);
+          const got = [...st.querySelectorAll(
+              'svg.ifd-wires path[data-iface="' + CSS.escape(iid) + '"]')];
+          for (let k = 0; k < want.length && k < got.length; k++) {
+            const n = got[k].getAttribute('d').match(/-?[0-9.]+/g).map(Number);
+            const d = Math.max(Math.hypot(n[0] - want[k][0][0], n[1] - want[k][0][1]),
+                               Math.hypot(n[n.length - 2] - want[k][1][0],
+                                          n[n.length - 1] - want[k][1][1]));
+            if (d > worst) worst = d;
+            wires++;
+          }
+        }
+        return { wires, offCell: +worst.toFixed(1), stage: st.offsetWidth };
+    }"""))
+
+
+def test_an_actors_wires_meet_their_cells_in_a_narrow_window_and_after_a_RESIZE() -> None:
+    """The same one-shot layout the Interfaces picture had, and the same two ways of being wrong:
+    a stage that had not settled when the page first drew (18px off at 900px), and nothing at all
+    recomputing afterwards (45px after a drag, and 445px on MCP Hero's widest actor).
+
+    Here a wire runs cell to cell rather than to a circle, so BOTH of its ends are the claim: a line
+    that starts beside what the person does and ends beside what they get is the only thing joining
+    the three columns into one row."""
+    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
+            _page(url + "#v=actor&act=Org creator") as page:
+        page.set_viewport_size({"width": 900, "height": 900})
+        page.reload()                    # a FRESH layout at the narrow width, not a resize
+        page.wait_for_selector("#crumb")
+        _settle(page)
+        fresh = _actor_wires_meet_their_cells(page)
+        assert fresh["wires"] >= 2, fresh
+        assert fresh["offCell"] <= 1, fresh
+        for width in (1900, 1152, 1024, 900):
+            page.set_viewport_size({"width": width, "height": 900})
+            _settle(page)
+            got = _actor_wires_meet_their_cells(page)
+            assert got["wires"] == fresh["wires"], (width, got, fresh)
+            assert got["offCell"] <= 1, (width, got)
+        assert not page.js_errors, page.js_errors
+
 
 def test_an_actors_page_never_shows_ANOTHER_named_persons_steps() -> None:
     """The blocking finding of an adversarial review. The cell falls back when the walks name no
@@ -1687,6 +1743,78 @@ def test_a_surfaces_wire_reaches_its_card_and_lands_on_the_product() -> None:
         # …and the picked card really is wearing the shared 2px edge, so the single line above is
         # leaving from inside the span that used to close the bracket.
         assert got["borderW"] == "2px", got
+        assert not page.js_errors, page.js_errors
+
+def _wire_ends_on_the_product(page: Any) -> dict:
+    """How far the worst wire's far end is from the product's rim, in the layout on screen NOW.
+
+    ONLY the wires. The same drawing holds the picture's own frame, and measuring that against a
+    circle it was never aimed at reports a number in the hundreds that means nothing at all."""
+    return dict(page.evaluate("""() => {
+        const st = document.getElementById('ifdstage');
+        const hub = document.getElementById('ifdhub');
+        const cx = hub.offsetLeft + hub.offsetWidth / 2;
+        const cy = hub.offsetTop + hub.offsetHeight / 2;
+        const r = hub.offsetWidth / 2;
+        let worst = 0, wires = 0;
+        for (const p of st.querySelectorAll('svg.ifd-wires path[data-iface]')) {
+          const n = p.getAttribute('d').match(/-?[0-9.]+/g).map(Number);
+          const d = Math.abs(Math.hypot(n[n.length - 2] - cx, n[n.length - 1] - cy) - r);
+          if (d > worst) worst = d;
+          wires++;
+        }
+        return { wires, offCircle: +worst.toFixed(1), stage: st.offsetWidth };
+    }"""))
+
+
+def test_a_surfaces_wire_lands_on_the_product_in_a_NARROW_window() -> None:
+    """The picture was laid out ONCE, against a stage that had not finished settling.
+
+    `#srcrail` is a 30px button the page unhides AFTER the view has rendered, so that one pass
+    measured a stage 30px wider than the one the reader ends up looking at, and every wire ended
+    that far off the circle: 35px at a 900px window, 14px at 1024. From 1152 up the stage is at its
+    width cap in both layouts, which is why the picture looked right on the machine it was built on
+    and wrong on a laptop.
+
+    A RELOAD, not a resize: the defect is in the first layout, and only a fresh document has one.
+    And only a browser has one at all, which is why no source test caught this."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        page.set_viewport_size({"width": 900, "height": 900})
+        page.reload()
+        page.wait_for_selector("#crumb")
+        _settle(page)
+        got = _wire_ends_on_the_product(page)
+        assert got["wires"] == 2, got
+        assert got["offCircle"] <= 1, got
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_surfaces_wire_follows_the_product_when_the_WINDOW_RESIZES() -> None:
+    """Nothing recomputed on a resize at all — the wires stayed where the opening width put them.
+    Measured on MCP Hero, opened at 1400 and dragged narrower: 25px off at 1100, 63px at 1024, 135px
+    at 900, which is a spoke pointing into open space beside a circle it never touches.
+
+    AND THE PICK SURVIVES IT. The re-layout builds the wires and the boxes fresh, so a surface the
+    reader had picked has to be lit again on the new ones. Otherwise widening the window puts their
+    pick out, and the picture answers for nothing while a card still wears the picked edge."""
+    with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
+        page.wait_for_timeout(300)
+        for width in (1900, 1152, 1024, 900):
+            page.set_viewport_size({"width": width, "height": 900})
+            _settle(page)
+            got = _wire_ends_on_the_product(page)
+            assert got["wires"] == 2, (width, got)
+            assert got["offCircle"] <= 1, (width, got)
+        lit = page.evaluate("""() => {
+            const st = document.getElementById('ifdstage');
+            const ids = (sel) => [...st.querySelectorAll(sel)].map((e) => e.dataset.iface).sort();
+            return { hot: ids('svg.ifd-wires path.ifd-hot'),
+                     cold: ids('svg.ifd-wires path.ifd-cold'),
+                     labelled: ids('.ifd-elabel.ifd-lab-on') };
+        }""")
+        assert lit == {"hot": ["I1"], "cold": ["I2"], "labelled": ["I1"]}, lit
         assert not page.js_errors, page.js_errors
 
 

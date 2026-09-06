@@ -8247,15 +8247,44 @@ function bindActorSurfaces(root, actorName) {
     path.dataset.iface = iid;
     svg.appendChild(path); paths.push(path);
   };
-  for (const box of stage.querySelectorAll('.ifd-box')) {
-    const iid = box.dataset.iface;
-    // WHAT CROSSES -> the surface it crosses at -> what this actor does there. Each wire is drawn
-    // only when the thing at its far end exists: a line into a sentence saying nothing is a line
-    // that promises an answer.
-    const cross = stage.querySelector(`.asf-crosscell[data-iface="${CSS.escape(iid)}"] .asf-cross`);
-    if (cross) wire(rightMid(cross), leftMid(box), iid);
-    const feats = stage.querySelector(`.asf-featcell[data-iface="${CSS.escape(iid)}"] .asf-feats`);
-    if (feats) wire(rightMid(box), leftMid(feats), iid);
+  // LAID OUT AGAIN WHENEVER THE STAGE'S BOX CHANGES, for the reason the Interfaces picture is: the
+  // first pass runs before the layout has settled — the source rail is a 30px button unhidden after
+  // the view renders — and nothing recomputed on a resize at all. Both left the wires drawn against
+  // a stage this page is no longer in: 18px off on a fresh 900px load, 45px after a resize.
+  // `paths` is REFILLED IN PLACE because the pick gesture below closes over it, and whatever was lit
+  // is re-lit afterwards, because these wires are the only thing a pick lights here.
+  const layout = () => {
+    const hot = paths.find((pth) => pth.classList.contains('ifd-hot'));
+    const lit = hot ? hot.dataset.iface : null;
+    for (const pth of paths) pth.remove();   // ours only: the arrowhead marker lives in the same svg
+    paths.length = 0;
+    for (const box of stage.querySelectorAll('.ifd-box')) {
+      const iid = box.dataset.iface;
+      // WHAT CROSSES -> the surface it crosses at -> what this actor does there. Each wire is drawn
+      // only when the thing at its far end exists: a line into a sentence saying nothing is a line
+      // that promises an answer.
+      const cross = stage.querySelector(`.asf-crosscell[data-iface="${CSS.escape(iid)}"] .asf-cross`);
+      if (cross) wire(rightMid(cross), leftMid(box), iid);
+      const feats = stage.querySelector(`.asf-featcell[data-iface="${CSS.escape(iid)}"] .asf-feats`);
+      if (feats) wire(rightMid(box), leftMid(feats), iid);
+    }
+    if (lit) {
+      for (const pth of paths) pth.classList.add(pth.dataset.iface === lit ? 'ifd-hot' : 'ifd-cold');
+    }
+  };
+  layout();
+  // One watcher on the stage's own box covers every route a re-layout could be needed by, and is
+  // skipped when the box has not moved. See the twin on the Interfaces picture.
+  if (window.ResizeObserver) {
+    let lastW = stage.offsetWidth, lastH = stage.offsetHeight;
+    const obs = new ResizeObserver(() => {
+      if (!stage.isConnected) { obs.disconnect(); return; }   // a re-render left this stage behind
+      const w = stage.offsetWidth, h = stage.offsetHeight;
+      if (w === lastW && h === lastH) return;
+      lastW = w; lastH = h;
+      layout();
+    });
+    obs.observe(stage);
   }
   // The same pick gesture the Interfaces view has, from the one function both call. No labels here.
   bindSurfacePick(stage, paths, []);
@@ -11038,161 +11067,206 @@ function bindIfaceDiagram(root) {
     lab.addEventListener('click', (ev) => ev.stopPropagation());
     stage.appendChild(lab); labels.push(lab);
   };
-  // THE PRODUCT'S CIRCLE, in stage space: centre and radius. The radius is read from the laid-out
-  // element rather than hard-coded beside the stylesheet's, so the two can never drift apart.
-  const hcx = hub.offsetLeft + hub.offsetWidth / 2;
-  const hcy = hub.offsetTop + hub.offsetHeight / 2;
-  const hr = hub.offsetWidth / 2 + IFACE_HUB_CLEARANCE;
-  // WHERE ON THE CIRCLE a card's wire lands: straight out from the centre towards the card, so every
-  // wire arrives along a radius and no two of them cross inside the shape. A card sitting exactly on
-  // the centre would divide by zero, which cannot happen (the columns are either side of the hub)
-  // but is guarded anyway so a degenerate layout draws a line rather than throwing.
-  const hubPoint = (tx, ty) => {
-    const dx = tx - hcx, dy = ty - hcy;
-    const d = Math.hypot(dx, dy) || 1;
-    return [hcx + (dx / d) * hr, hcy + (dy / d) * hr];
-  };
-  for (const i of ifaceList()) {
-    const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(i.id)}"]`);
-    if (!box) continue;
-    const boxSide = i.side === 'ours' ? 'right' : 'left';
-    const mid = box.offsetTop + box.offsetHeight / 2;
-    // EVERY SURFACE GETS A LINE, and the line says only that this surface belongs to the picture.
-    // NO HEADS, NO DIRECTION. The heads carried the removed crossings' `in` and `out`. A surface
-    // now states the SET of directions its steps carry — commonly both — so one arrowhead could
-    // only ever be half the answer, and a picture that draws half an answer as a fact is worse
-    // than one that draws none. A plain line reads as membership, which is exactly the claim:
-    // this is one of the places the product meets the outside. The directions themselves are on
-    // the steps, on the surface's own page, where each belongs to one line.
-    const from = edge(box, boxSide);
-    const to = hubPoint(from[0], from[1]);
-    wire(from, to, i.id);
-    // …and the line's two ends go ON the box, because the placement pass has to know where the line
-    // actually runs before it can put the box beside it. Passed in rather than written afterwards:
-    // an interface nothing reaches gets no box at all, and reaching back for "the one just made"
-    // then found the PREVIOUS interface's — or nothing, on the first.
-    label(from[0], mid, i.side, i, [from[0], from[1], to[0], to[1]]);
-  }
-  // WHERE THE BOX GOES, and it is ONE rule now: the box hangs off its own arrow at a right angle, a
-  // fixed distance out, from a point far enough along the arrow to leave the head alone. The leader
-  // is that offset drawn. Placement and connector stopped being two decisions that had to agree.
+  // THE PICTURE IS LAID OUT AGAIN WHENEVER THE STAGE'S BOX CHANGES, and every number below is why:
+  // each one is read off the settled layout, and the layout is NOT settled when this binder first
+  // runs. The source rail is a 30px button the app unhides AFTER the view has rendered, so the first
+  // pass measured a stage 30px wider than the one the reader ends up looking at, and every wire
+  // ended that far off the circle — 35px at a 900px window. A window resize was worse, because
+  // nothing recomputed at all: 135px at that width, which is a spoke pointing into open space.
   //
-  // A CONSTANT PERPENDICULAR DISTANCE, not a constant vertical one. The gap used to be 14px measured
-  // straight down whatever the arrow was doing, and these arrows run from nearly flat to very steep
-  // (slopes 0.05 to 2.34 on MCP Hero), so the gap a reader actually SEES ranged 5.5px to 14px across
-  // sixteen surfaces. Boxes on steep arrows looked glued on and boxes on flat ones looked loose.
+  // REFILLED IN PLACE, never replaced. `paths` and `labels` are handed to the pick gesture below,
+  // which closes over those two arrays; handing it new ones would leave the picture lit through
+  // arrays nothing on screen draws.
   //
-  // AND CLEAR OF THE TIP. The anchor used to be wherever box and arrow came closest, which on four
-  // of those sixteen was within 2px of the arrow's end at the card — a leader landing on the very
-  // arrowhead the box was moved aside to protect.
-  //
-  // THE ANCHOR IS THE FREE VARIABLE, and the box follows it: the corner facing the arrow sits at the
-  // end of the offset. Scanned rather than solved, because the box's height comes from its content,
-  // the two shores mirror, and the arrow may re-cross the box further along whatever the anchor is —
-  // that last one is a constraint no closed form was going to catch quietly.
-  //
-  // TWO THINGS BOUND IT. Sideways the box stays between its own card and the far column, so it
-  // covers a card on neither shore. Up and down it stays inside the picture: a sentence half outside
-  // the scroll area is a sentence the reader has to hunt for. Among everything that fits, the one
-  // nearest the arrow's tip wins — that tip is what the reader is looking at.
-  //
-  // MEASURED WITH THE LABEL LAID OUT. A `display: none` element has no box at all, so `offsetHeight`
-  // reads 0 and every box would be placed as if it were empty. `visibility: hidden` lays it out
-  // without painting.
-  const LABEL_GAP = 4, LEAD_LEN = 14, TIP_CLEAR = 28, SCAN_STEP = 4;
-  const colOurs = stage.querySelector('.ifd-col-ours');
-  const colTheirs = stage.querySelector('.ifd-col-theirs');
-  // WHERE THE OWNERSHIP BOX'S TOP EDGE GOES: below the two column headings and clear of the first
-  // card. Stretched to the whole row it ran straight through `We define`, and took its own title
-  // above the top of what the page will paint. Measured from the first card rather than added up
-  // from the heading's type, so a change to that type cannot leave the border sitting on it.
-  const firstCard = stage.querySelector('.ifd-box');
-  //
-  // …AND CLEAR OF THE CIRCLE, which is the binding one on a SHORT map: with two surfaces the circle
-  // is the tallest thing in the picture and starts at the stage's own top edge, so an inset measured
-  // only from the cards cuts straight through the product. Allowed to go negative for that case —
-  // `.ifd-wrap` carries the padding to draw in. The clamp is -6 rather than the full -16 because the
-  // box's NAME sits 8px above its top border and has to stay inside that padding too.
-  if (firstCard) {
-    stage.style.setProperty('--own-top',
-      Math.max(-6, Math.min(firstCard.offsetTop, hub.offsetTop) - 12) + 'px');
-  }
-  const gutterFrom = colOurs ? colOurs.offsetLeft + colOurs.offsetWidth : 0;
-  const gutterTo = colTheirs ? colTheirs.offsetLeft : stage.offsetWidth;
-  for (const lab of labels) {
-    lab.style.visibility = 'hidden'; lab.style.display = 'block';
-    const h = lab.offsetHeight, w = lab.offsetWidth;
-    lab.style.display = ''; lab.style.visibility = '';
-    const ours = lab.dataset.side === 'ours';
-    const anchor = parseFloat(lab.dataset.anchor);
-    const [wx0, wy0, wx1, wy1] = String(lab.dataset.wire).split(' ').map(Number);
-    const dx = wx1 - wx0, dy = wy1 - wy0, seg = Math.hypot(dx, dy) || 1;
-    const at = (x) => wy0 + dy * (x - wx0) / dx;
-    const wLo = Math.min(wx0, wx1), wHi = Math.max(wx0, wx1);
-    const minL = ours ? anchor + LABEL_GAP : gutterFrom;
-    const maxL = ours ? gutterTo - w : anchor - LABEL_GAP - w;
-    // Does the arrow cross this box anywhere? The offset only guarantees the corner; a diagonal can
-    // come back through the far end of a 300px box, and that is the thing the whole rule is for.
-    const hits = (bl, bt) => {
-      const lo = Math.max(wLo, bl), hi = Math.min(wHi, bl + w);
-      if (hi < lo || dx === 0) return false;
-      const a = at(lo), b = at(hi);
-      return Math.max(a, b) >= bt && Math.min(a, b) <= bt + h;
+  // AND THE PICK SURVIVES IT. Both the wires and the boxes are built fresh, so whatever was lit is
+  // re-lit from the id the old wires were carrying. Otherwise a reader who picks a surface and then
+  // widens the window watches their pick go out.
+  const layout = () => {
+    const hot = paths.find((pth) => pth.classList.contains('ifd-hot'));
+    const lit = hot ? hot.dataset.iface : null;
+    for (const pth of paths) pth.remove();
+    for (const lbl of labels) lbl.remove();
+    // The dashed product frame lives in the same `svg`, so only OUR paths go — never the whole svg.
+    paths.length = 0; labels.length = 0;
+    // THE PRODUCT'S CIRCLE, in stage space: centre and radius. The radius is read from the laid-out
+    // element rather than hard-coded beside the stylesheet's, so the two can never drift apart.
+    const hcx = hub.offsetLeft + hub.offsetWidth / 2;
+    const hcy = hub.offsetTop + hub.offsetHeight / 2;
+    const hr = hub.offsetWidth / 2 + IFACE_HUB_CLEARANCE;
+    // WHERE ON THE CIRCLE a card's wire lands: straight out from the centre towards the card, so every
+    // wire arrives along a radius and no two of them cross inside the shape. A card sitting exactly on
+    // the centre would divide by zero, which cannot happen (the columns are either side of the hub)
+    // but is guarded anyway so a degenerate layout draws a line rather than throwing.
+    const hubPoint = (tx, ty) => {
+      const dx = tx - hcx, dy = ty - hcy;
+      const d = Math.hypot(dx, dy) || 1;
+      return [hcx + (dx / d) * hr, hcy + (dy / d) * hr];
     };
-    // …and how far the box would sit from the arrow's tip at the card, which is what we minimise.
-    const away = (bl, bt) => Math.hypot(Math.max(bl - wx0, 0, wx0 - (bl + w)),
-                                        Math.max(bt - wy0, 0, wy0 - (bt + h)));
-    let best = null;
-    for (let along = Math.min(TIP_CLEAR, seg); along <= seg + 0.5; along += SCAN_STEP) {
-      const t = Math.min(along / seg, 1);
-      const px = wx0 + dx * t, py = wy0 + dy * t;
-      // the two unit normals of the arrow: the box hangs off one side or the other
-      for (const sgn of [1, -1]) {
-        const nx = sgn * -dy / seg, ny = sgn * dx / seg;
-        const qx = px + nx * LEAD_LEN, qy = py + ny * LEAD_LEN;
-        // the corner facing the arrow IS that point: left or right by which way the box grows, top
-        // or bottom by which side of the arrow it landed on.
-        const bl = ours ? qx : qx - w;
-        const bt = ny < 0 ? qy - h : qy;
-        if (bl < minL || bl > maxL) continue;
-        if (bt < 0 || bt + h > stage.offsetHeight) continue;
-        if (hits(bl, bt)) continue;
-        const d = away(bl, bt);
-        if (!best || d < best.d) best = { d, bl, bt, px, py, qx, qy, ny };
+    for (const i of ifaceList()) {
+      const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(i.id)}"]`);
+      if (!box) continue;
+      const boxSide = i.side === 'ours' ? 'right' : 'left';
+      const mid = box.offsetTop + box.offsetHeight / 2;
+      // EVERY SURFACE GETS A LINE, and the line says only that this surface belongs to the picture.
+      // NO HEADS, NO DIRECTION. The heads carried the removed crossings' `in` and `out`. A surface
+      // now states the SET of directions its steps carry — commonly both — so one arrowhead could
+      // only ever be half the answer, and a picture that draws half an answer as a fact is worse
+      // than one that draws none. A plain line reads as membership, which is exactly the claim:
+      // this is one of the places the product meets the outside. The directions themselves are on
+      // the steps, on the surface's own page, where each belongs to one line.
+      const from = edge(box, boxSide);
+      const to = hubPoint(from[0], from[1]);
+      wire(from, to, i.id);
+      // …and the line's two ends go ON the box, because the placement pass has to know where the line
+      // actually runs before it can put the box beside it. Passed in rather than written afterwards:
+      // an interface nothing reaches gets no box at all, and reaching back for "the one just made"
+      // then found the PREVIOUS interface's — or nothing, on the first.
+      label(from[0], mid, i.side, i, [from[0], from[1], to[0], to[1]]);
+    }
+    // WHERE THE BOX GOES, and it is ONE rule now: the box hangs off its own arrow at a right angle, a
+    // fixed distance out, from a point far enough along the arrow to leave the head alone. The leader
+    // is that offset drawn. Placement and connector stopped being two decisions that had to agree.
+    //
+    // A CONSTANT PERPENDICULAR DISTANCE, not a constant vertical one. The gap used to be 14px measured
+    // straight down whatever the arrow was doing, and these arrows run from nearly flat to very steep
+    // (slopes 0.05 to 2.34 on MCP Hero), so the gap a reader actually SEES ranged 5.5px to 14px across
+    // sixteen surfaces. Boxes on steep arrows looked glued on and boxes on flat ones looked loose.
+    //
+    // AND CLEAR OF THE TIP. The anchor used to be wherever box and arrow came closest, which on four
+    // of those sixteen was within 2px of the arrow's end at the card — a leader landing on the very
+    // arrowhead the box was moved aside to protect.
+    //
+    // THE ANCHOR IS THE FREE VARIABLE, and the box follows it: the corner facing the arrow sits at the
+    // end of the offset. Scanned rather than solved, because the box's height comes from its content,
+    // the two shores mirror, and the arrow may re-cross the box further along whatever the anchor is —
+    // that last one is a constraint no closed form was going to catch quietly.
+    //
+    // TWO THINGS BOUND IT. Sideways the box stays between its own card and the far column, so it
+    // covers a card on neither shore. Up and down it stays inside the picture: a sentence half outside
+    // the scroll area is a sentence the reader has to hunt for. Among everything that fits, the one
+    // nearest the arrow's tip wins — that tip is what the reader is looking at.
+    //
+    // MEASURED WITH THE LABEL LAID OUT. A `display: none` element has no box at all, so `offsetHeight`
+    // reads 0 and every box would be placed as if it were empty. `visibility: hidden` lays it out
+    // without painting.
+    const LABEL_GAP = 4, LEAD_LEN = 14, TIP_CLEAR = 28, SCAN_STEP = 4;
+    const colOurs = stage.querySelector('.ifd-col-ours');
+    const colTheirs = stage.querySelector('.ifd-col-theirs');
+    // WHERE THE OWNERSHIP BOX'S TOP EDGE GOES: below the two column headings and clear of the first
+    // card. Stretched to the whole row it ran straight through `We define`, and took its own title
+    // above the top of what the page will paint. Measured from the first card rather than added up
+    // from the heading's type, so a change to that type cannot leave the border sitting on it.
+    const firstCard = stage.querySelector('.ifd-box');
+    //
+    // …AND CLEAR OF THE CIRCLE, which is the binding one on a SHORT map: with two surfaces the circle
+    // is the tallest thing in the picture and starts at the stage's own top edge, so an inset measured
+    // only from the cards cuts straight through the product. Allowed to go negative for that case —
+    // `.ifd-wrap` carries the padding to draw in. The clamp is -6 rather than the full -16 because the
+    // box's NAME sits 8px above its top border and has to stay inside that padding too.
+    if (firstCard) {
+      stage.style.setProperty('--own-top',
+        Math.max(-6, Math.min(firstCard.offsetTop, hub.offsetTop) - 12) + 'px');
+    }
+    const gutterFrom = colOurs ? colOurs.offsetLeft + colOurs.offsetWidth : 0;
+    const gutterTo = colTheirs ? colTheirs.offsetLeft : stage.offsetWidth;
+    for (const lab of labels) {
+      lab.style.visibility = 'hidden'; lab.style.display = 'block';
+      const h = lab.offsetHeight, w = lab.offsetWidth;
+      lab.style.display = ''; lab.style.visibility = '';
+      const ours = lab.dataset.side === 'ours';
+      const anchor = parseFloat(lab.dataset.anchor);
+      const [wx0, wy0, wx1, wy1] = String(lab.dataset.wire).split(' ').map(Number);
+      const dx = wx1 - wx0, dy = wy1 - wy0, seg = Math.hypot(dx, dy) || 1;
+      const at = (x) => wy0 + dy * (x - wx0) / dx;
+      const wLo = Math.min(wx0, wx1), wHi = Math.max(wx0, wx1);
+      const minL = ours ? anchor + LABEL_GAP : gutterFrom;
+      const maxL = ours ? gutterTo - w : anchor - LABEL_GAP - w;
+      // Does the arrow cross this box anywhere? The offset only guarantees the corner; a diagonal can
+      // come back through the far end of a 300px box, and that is the thing the whole rule is for.
+      const hits = (bl, bt) => {
+        const lo = Math.max(wLo, bl), hi = Math.min(wHi, bl + w);
+        if (hi < lo || dx === 0) return false;
+        const a = at(lo), b = at(hi);
+        return Math.max(a, b) >= bt && Math.min(a, b) <= bt + h;
+      };
+      // …and how far the box would sit from the arrow's tip at the card, which is what we minimise.
+      const away = (bl, bt) => Math.hypot(Math.max(bl - wx0, 0, wx0 - (bl + w)),
+                                          Math.max(bt - wy0, 0, wy0 - (bt + h)));
+      let best = null;
+      for (let along = Math.min(TIP_CLEAR, seg); along <= seg + 0.5; along += SCAN_STEP) {
+        const t = Math.min(along / seg, 1);
+        const px = wx0 + dx * t, py = wy0 + dy * t;
+        // the two unit normals of the arrow: the box hangs off one side or the other
+        for (const sgn of [1, -1]) {
+          const nx = sgn * -dy / seg, ny = sgn * dx / seg;
+          const qx = px + nx * LEAD_LEN, qy = py + ny * LEAD_LEN;
+          // the corner facing the arrow IS that point: left or right by which way the box grows, top
+          // or bottom by which side of the arrow it landed on.
+          const bl = ours ? qx : qx - w;
+          const bt = ny < 0 ? qy - h : qy;
+          if (bl < minL || bl > maxL) continue;
+          if (bt < 0 || bt + h > stage.offsetHeight) continue;
+          if (hits(bl, bt)) continue;
+          const d = away(bl, bt);
+          if (!best || d < best.d) best = { d, bl, bt, px, py, qx, qy, ny };
+        }
       }
+      // NOWHERE CLEAR? Then the picture is too short to hold this box off this arrow anywhere, and
+      // staying INSIDE the picture beats staying off the line: a sentence the reader cannot scroll to
+      // is worse than one with a line across it. NO LEADER in that case — the box is ON the arrow, so
+      // there is no gap to draw across, and a stub of dashes going nowhere was the old tail's mistake.
+      if (!best) {
+        const mid = wy0;
+        const bt = Math.max(0, Math.min(stage.offsetHeight - h,
+                                        mid < stage.offsetHeight / 2 ? mid + LEAD_LEN : mid - LEAD_LEN - h));
+        best = { bl: Math.max(minL, Math.min(maxL, minL)), bt, clamped: true };
+        // SAID OUT LOUD, so nobody reads a covered arrow as the placement working, and so a test
+        // asserting "never lands on its arrow" can name the one case that is exempt.
+        lab.dataset.clamped = '1';
+      }
+      lab.style.left = best.bl + 'px';
+      lab.style.top = best.bt + 'px';
+      // WHICH SIDE the box ended up, kept as a class for the diagnostics and the tests to read. It
+      // carries no style of its own any more: the box is placed by its real top-left corner now, so
+      // nothing has to be shifted after the fact.
+      lab.classList.add(best.clamped || best.ny >= 0 ? 'ifd-tail-up' : 'ifd-tail-down');
+      // THE LEADER: the offset itself, drawn. It starts at the box's own corner and runs back down the
+      // normal to the arrow, so it is exactly perpendicular and exactly LEAD_LEN long. Expressed as an
+      // origin and a rotation, so a stylesheet can draw it with one dashed border — see the rules for
+      // `.ifd-elabel::after`. A clamped box has no gap and gets no leader.
+      if (best.clamped) { lab.style.setProperty('--lead-len', '0px'); continue; }
+      lab.style.setProperty('--lead-x', (best.qx - best.bl) + 'px');
+      lab.style.setProperty('--lead-y', (best.qy - best.bt) + 'px');
+      lab.style.setProperty('--lead-len', LEAD_LEN + 'px');
+      // A line drawn straight down from the corner, turned until it points at the anchor. CSS rotates
+      // clockwise with y running down, so (0, len) maps to (-len sin r, len cos r).
+      // Solving (0, len) rotated by r == (px - qx, py - qy): sin r = (qx - px)/len, cos r = (py - qy)/len.
+      lab.style.setProperty('--lead-rot',
+        (Math.atan2(best.qx - best.px, best.py - best.qy) * 180 / Math.PI) + 'deg');
     }
-    // NOWHERE CLEAR? Then the picture is too short to hold this box off this arrow anywhere, and
-    // staying INSIDE the picture beats staying off the line: a sentence the reader cannot scroll to
-    // is worse than one with a line across it. NO LEADER in that case — the box is ON the arrow, so
-    // there is no gap to draw across, and a stub of dashes going nowhere was the old tail's mistake.
-    if (!best) {
-      const mid = wy0;
-      const bt = Math.max(0, Math.min(stage.offsetHeight - h,
-                                      mid < stage.offsetHeight / 2 ? mid + LEAD_LEN : mid - LEAD_LEN - h));
-      best = { bl: Math.max(minL, Math.min(maxL, minL)), bt, clamped: true };
-      // SAID OUT LOUD, so nobody reads a covered arrow as the placement working, and so a test
-      // asserting "never lands on its arrow" can name the one case that is exempt.
-      lab.dataset.clamped = '1';
+    if (lit) {
+      for (const pth of paths) pth.classList.add(pth.dataset.iface === lit ? 'ifd-hot' : 'ifd-cold');
+      for (const lbl of labels) lbl.classList.toggle('ifd-lab-on', lbl.dataset.iface === lit);
     }
-    lab.style.left = best.bl + 'px';
-    lab.style.top = best.bt + 'px';
-    // WHICH SIDE the box ended up, kept as a class for the diagnostics and the tests to read. It
-    // carries no style of its own any more: the box is placed by its real top-left corner now, so
-    // nothing has to be shifted after the fact.
-    lab.classList.add(best.clamped || best.ny >= 0 ? 'ifd-tail-up' : 'ifd-tail-down');
-    // THE LEADER: the offset itself, drawn. It starts at the box's own corner and runs back down the
-    // normal to the arrow, so it is exactly perpendicular and exactly LEAD_LEN long. Expressed as an
-    // origin and a rotation, so a stylesheet can draw it with one dashed border — see the rules for
-    // `.ifd-elabel::after`. A clamped box has no gap and gets no leader.
-    if (best.clamped) { lab.style.setProperty('--lead-len', '0px'); continue; }
-    lab.style.setProperty('--lead-x', (best.qx - best.bl) + 'px');
-    lab.style.setProperty('--lead-y', (best.qy - best.bt) + 'px');
-    lab.style.setProperty('--lead-len', LEAD_LEN + 'px');
-    // A line drawn straight down from the corner, turned until it points at the anchor. CSS rotates
-    // clockwise with y running down, so (0, len) maps to (-len sin r, len cos r).
-    // Solving (0, len) rotated by r == (px - qx, py - qy): sin r = (qx - px)/len, cos r = (py - qy)/len.
-    lab.style.setProperty('--lead-rot',
-      (Math.atan2(best.qx - best.px, best.py - best.qy) * 180 / Math.PI) + 'deg');
+  };
+  layout();
+  // The stage's own box is what every number above is measured against, so the box is what we watch:
+  // the rail arriving, the window resizing, the source column sliding in, a font finishing — one
+  // watcher covers every route, and there is no route that calls a re-layout by hand.
+  // Skipped when the box has not actually changed, so the labels this appends — absolutely
+  // positioned, and unable to move the stage — can never feed the watcher its own work.
+  if (window.ResizeObserver) {
+    let lastW = stage.offsetWidth, lastH = stage.offsetHeight;
+    const obs = new ResizeObserver(() => {
+      // A re-render builds a NEW stage and leaves this one detached. Dropping the watch here is what
+      // stops every visit to this view leaving another one behind, holding a dead picture alive.
+      if (!stage.isConnected) { obs.disconnect(); return; }
+      const w = stage.offsetWidth, h = stage.offsetHeight;
+      if (w === lastW && h === lastH) return;
+      lastW = w; lastH = h;
+      layout();
+    });
+    obs.observe(stage);
   }
   bindSurfacePick(stage, paths, labels);
   bindMoreTails(stage);
