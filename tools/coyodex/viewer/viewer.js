@@ -220,8 +220,6 @@ const PANEL_HOST = panel;
   const wn = whereNode(btn.getAttribute('data-where'));
   openInCodeViewer(wn.file, wn.line);
 }));
-const legend = document.getElementById('legend');
-const legendbtn = document.getElementById('legendbtn');
 const envpicker = document.getElementById('envpicker');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
@@ -3099,7 +3097,7 @@ const FLOW_PAD = 36;
 // its messages at ~4px, and a step player that pans an unreadable label into view shows nothing.
 const FLOW_READABLE = 0.8;
 // What the reader can actually SEE of the diagram: the diagram's box minus the overlays that float
-// over its edges — the flow controls card (top-left), the legend (left) and the info pane when it is
+// over its edges — the flow controls card (top-left) and the info pane when it is
 // the bottom drawer. They all live INSIDE the diagram's rect, so "pan the step into the diagram"
 // could park it exactly under one of them and call it visible. Each overlay only shrinks the rect
 // when it really overlaps (a hidden card and a side-by-side pane cost nothing), and never past the
@@ -3111,8 +3109,6 @@ function flowVisibleRect() {
     && q.right > left && q.left < right && q.bottom > top && q.top < bottom;
   const fp = document.getElementById('flowpicker').getBoundingClientRect();
   if (overlaps(fp)) top = Math.min(fp.bottom, top + (bottom - top) / 2);
-  const lg = legend.classList.contains('on') ? legend.getBoundingClientRect() : null;
-  if (overlaps(lg)) left = Math.min(lg.right, left + (right - left) / 2);
   const pr = panel.getBoundingClientRect();
   if (overlaps(pr)) bottom = Math.max(pr.top, top + (bottom - top) / 2);
   return { left, top, right, bottom, width: right - left, height: bottom - top };
@@ -3143,7 +3139,7 @@ function flowReveal(els, i) {
   // svg-pan-zoom paints zoom() only on the NEXT frame (see applyZoomAndCenter), so re-measuring after
   // zooming would read the old geometry. One shared path then pans the union of the arrow, its label
   // and BOTH endpoint boxes into the unobstructed area, so the endpoints are steered clear of the
-  // legend and the pane in the zoomed case exactly as in the plain one.
+  // pane in the zoomed case exactly as in the plain one.
   const onPx = onScreenFontPx(stepLabel);
   const panePx = parseFloat(getComputedStyle(panel).fontSize);
   const scale = (onPx && panePx && onPx < FLOW_READABLE * panePx) ? panePx / onPx : 1;
@@ -3547,15 +3543,14 @@ function actionTipHP(hpId) {
   return '<div class="tt">Open step</div>' + (s && s.title ? '<div class="tm">' + esc(s.title) + '</div>' : '');
 }
 
-// --- diff badges + legend -------------------------------------------------------
+// --- diff badges ------------------------------------------------------------------
 // The diff badge is the drill/open action icon's TWIN: same plate construction (a white halo of
 // ACTION_ICON_R so it sits cleanly over a dashed container border + a disc + a glyph), the same
 // paintImportant styling (to beat Mermaid's id-scoped !important box rules), and the same
 // constant-on-screen sizing (built at the origin; addBadge/rescaleDiffBadges position it with
 // `translate(corner) scale(curIconInv())`). It differs only in what an action icon must NOT be: a
 // SOLID colour-filled disc + a +/✎/× glyph (the change state), and it sits on the RIGHT corner where
-// the drill icon takes the LEFT — so a box can carry both without collision. Used by the legend too,
-// so the key and the diagram badge are pixel-identical.
+// the drill icon takes the LEFT — so a box can carry both without collision.
 const BADGE_R = 13;   // disc radius — matches the action icon's circle (addActionIcon)
 function makeBadge(state) {
   const g = document.createElementNS(SVGNS, 'g');
@@ -3611,7 +3606,7 @@ function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a 
   const inv = curIconInv();
   for (const g of DIFF_BADGES) if (g && g._anchor) g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${inv})`);
 }
-// --- view captions, the map legend, and empty-state notes -------------------------
+// --- view captions and empty-state notes ------------------------------------------
 // The question each view answers, shown in the info pane's top-level state. Keyed by the top-level view
 // id (topView), so a drilled card keeps its tab's caption.
 // The five GROUPS of the view switcher's top row. Eleven flat tabs did not fit — at a 1280px window
@@ -3652,79 +3647,16 @@ const VIEW_Q = {
   rules: 'What does this product DECIDE, and where is each decision enforced?',
   interfaces: 'Where does this product meet the outside world?',
 };
-// ONE legend for the whole map, not a guess per view. The per-view lists this replaced were hardcoded
-// and therefore wrong wherever a view's content is data-dependent: the Dependencies view draws bare
-// dependency boxes on a small map but only folded groups on a large one; the Deployment view has no
-// infrastructure lane when nothing is shared; the Happy Path is a sequence diagram that uses none of
-// these styles at all. A single, complete vocabulary is right on every map by construction — the reader
-// looks up what they see, and simply never meets the rows their map has no use for.
-//
-// Rows are GROUPED BY THE VIEW THAT DRAWS THEM, because that is how they are looked up: the reader is
-// on one view, meets one shape, and scans for the heading naming the view they are already on. A flat
-// "Boxes" list made them read every row to find the one that applies. Sections are keyed by VIEW ID and
-// titled from the tab's own label (VIEW_LABEL), so a heading can never drift from the tab it names.
-// Sections run in TAB ORDER, so scanning the legend and scanning the view switcher are the same scan.
-// Each shape is listed ONCE, under the first view that draws it: the vocabulary is shared across views
-// by design (a person is the same figure everywhere), and repeating a row under every view that uses it
-// turned the legend into a list with the same swatch three times over.
-//
-// [view ids, [[tint kind, shape, label], …]]. Colours come from ELEMENT_TINT — the SAME styles the
-// generators paint the boxes with — and the shape mirrors the generators' SHAPE map, so a swatch cannot
-// claim a look the diagrams never draw. A row whose shape belongs to no diagram would go under a
-// trailing ['', …] section (rendered as "Boxes"); today every shape has a home view, so there is none.
-const LEGEND_SECTIONS = [
-  // The two sequence views. Both draw a Role as a lifeline, and the kind is the whole point of the
-  // pair: a person acts, a service actor (a scheduled job, a poller, an inbound caller) starts on its
-  // own. The Happy Path also draws the System, in the same dark box the Dependencies view gives it.
-  [['hp', 'usecases'], [
-    ['system', 'rect', 'the system'],
-    ['human', 'man', 'a person'],
-    ['svc', 'hex', 'a service actor'],
-    // The DOOR: a flow map draws it, the legend is open on that map by default, and it was the one
-    // shape on screen the legend did not name.
-    ['interface', 'rect', 'a door in or out of the product'],
-  ]],
-  [['container'], [
-    ['subsystem', 'rect', 'subsystem'],
-    ['component', 'rect', 'component'],
-  ]],
-  [['domain'], [
-    ['subdomain', 'rect', 'subdomain'],
-    ['entity', 'rect', 'entity'],
-  ]],
-  // The system + both actor shapes are drawn here too — listed above, under the first view that draws
-  // them, so this section holds only what is new when you arrive at it.
-  [['context'], [
-    ['dep', 'cyl', 'dependency'],
-    ['bucketfold', 'rect', 'a collapsed group'],
-  ]],
-  // The infrastructure rows keep the wording of the lanes they label ("Used as a message bus"), which
-  // states what the band measures — a dep's DERIVED role — rather than claiming it as an identity.
-  [['deployment'], [
-    ['process', 'rect', 'process'],
-    ['infraBus', 'cyl', 'used as a message bus'],
-    ['infraStore', 'cyl', 'used as a data store'],
-    ['infraSvc', 'cyl', 'used as a service'],
-    ['infraSec', 'cyl', 'used for security'],
-  ]],
-];
-// The two stroke conventions. They carry meaning no colour can, and are the most misread part of the
-// language: "dashed" reads as provisional to most people, when here it means "there is more inside".
-const LEGEND_STROKES = [
-  ['box', 'dashed border = collapsed; open it'],
-
-];
-// The hexagon outline as polygon points for a box — ONE definition, shared by the legend swatch and the
-// sequence-diagram service-actor figure, so the two can't drift into drawing different hexagons for the
-// same meaning. The notch is a fifth of the width (capped at half the height, so a squat box stays a
+// The hexagon outline as polygon points for a box — ONE definition for the sequence-diagram
+// service-actor figure, so nothing can drift into drawing a different hexagon for the same meaning. The notch is a fifth of the width (capped at half the height, so a squat box stays a
 // hexagon instead of collapsing into a rhombus).
 function hexPoints(x, y, w, h) {
   const n = Math.min(w * 0.2, h / 2), my = y + h / 2;
   return [[x + n, y], [x + w - n, y], [x + w, my], [x + w - n, y + h], [x + n, y + h], [x, my]]
     .map((p) => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ');
 }
-// The stick figure as ONE path `d`, centred on `cx` and filling `h` downward from `top` — shared by the
-// legend swatch and the Dependencies view's human actor, so the two can't drift. Every limb is a single
+// The stick figure as ONE path `d`, centred on `cx` and filling `h` downward from `top` — the
+// Dependencies view's human actor, drawn from one definition so nothing can drift from it. Every limb is a single
 // straight subpath, which encloses no area: the path can therefore take a fill (it lands on the head
 // alone, like every other box's fill) without the limbs smearing into filled wedges. Proportions are
 // fractions of the height, so the same call draws a 13-unit swatch and a 27-unit node figure.
@@ -3754,62 +3686,6 @@ function botFigurePath(cx, top, h) {
     + `M${n(cx - 0.30 * h)},${n(arm)}L${n(cx + 0.30 * h)},${n(arm)}`
     + `M${n(cx - 0.26 * h)},${n(top + h)}L${n(cx)},${n(hip)}`
     + `M${n(cx)},${n(hip)}L${n(cx + 0.26 * h)},${n(top + h)}`;
-}
-function legendSwatch(kind, shape) {
-  const t = (ELEMENT_TINT || {})[kind] || {};
-  const svg = document.createElementNS(SVGNS, 'svg');
-  svg.setAttribute('width', 22); svg.setAttribute('height', 15); svg.setAttribute('viewBox', '0 0 22 15');
-  const paint = (el) => {
-    el.setAttribute('fill', t.fill || '#fff');
-    el.setAttribute('stroke', t.stroke || '#9ca3af');
-    el.setAttribute('stroke-width', t.strokeWidth ? '1.8' : '1.25');
-    if (t.strokeDasharray) el.setAttribute('stroke-dasharray', '3.5 2');
-    return el;
-  };
-  if (shape === 'hex') {
-    const el = document.createElementNS(SVGNS, 'polygon');
-    el.setAttribute('points', hexPoints(1, 1.5, 20, 12));
-    svg.appendChild(paint(el));
-  } else if (shape === 'man') {
-    const el = document.createElementNS(SVGNS, 'path');
-    el.setAttribute('d', stickFigurePath(11, 1, 13));
-    svg.appendChild(paint(el));
-  } else if (shape === 'cyl') {
-    const body = document.createElementNS(SVGNS, 'rect');
-    body.setAttribute('x', 3); body.setAttribute('y', 3.5); body.setAttribute('width', 16);
-    body.setAttribute('height', 9); body.setAttribute('rx', 1);
-    svg.appendChild(paint(body));
-    const lid = document.createElementNS(SVGNS, 'ellipse');
-    lid.setAttribute('cx', 11); lid.setAttribute('cy', 3.5); lid.setAttribute('rx', 8); lid.setAttribute('ry', 2.4);
-    svg.appendChild(paint(lid));
-  } else {
-    const el = document.createElementNS(SVGNS, 'rect');
-    el.setAttribute('x', 1.5); el.setAttribute('y', 1.5); el.setAttribute('width', 19);
-    el.setAttribute('height', 12); el.setAttribute('rx', shape === 'stadium' ? 6 : 2);
-    svg.appendChild(paint(el));
-  }
-  return svg;
-}
-function strokeSwatch(kind) {
-  const svg = document.createElementNS(SVGNS, 'svg');
-  svg.setAttribute('width', 22); svg.setAttribute('height', 15); svg.setAttribute('viewBox', '0 0 22 15');
-  const el = document.createElementNS(SVGNS, kind === 'box' ? 'rect' : 'line');
-  if (kind === 'box') {
-    el.setAttribute('x', 1.5); el.setAttribute('y', 1.5); el.setAttribute('width', 19);
-    el.setAttribute('height', 12); el.setAttribute('rx', 2); el.setAttribute('fill', 'none');
-  } else {
-    el.setAttribute('x1', 1); el.setAttribute('y1', 7.5); el.setAttribute('x2', 21); el.setAttribute('y2', 7.5);
-  }
-  el.setAttribute('stroke', '#475569'); el.setAttribute('stroke-width', '2');
-  el.setAttribute('stroke-dasharray', '3.5 2');
-  svg.appendChild(el);
-  return svg;
-}
-function legendRow(swatch, label) {
-  const row = document.createElement('div'); row.className = 'row';
-  const span = document.createElement('span'); span.textContent = label;
-  row.appendChild(swatch); row.appendChild(span);
-  return row;
 }
 // Why this view looks EMPTY, when it does. A lane a rule found nothing for looks exactly like one
 // nobody recorded anything for, and only the view itself can tell them apart — so it says so, in its
@@ -3847,74 +3723,15 @@ function viewIntroHtml(view) {
     + (notes.length ? `<div class="viewnotes">${notes.map((t) => `<span class="vnote">${esc(t)}</span>`).join('')}</div>` : '')
     + EMPTY_PANEL;
 }
-// Build the one legend. The change badges join it as a section in diff mode, so there is still exactly
-// one place to look up what anything on screen means.
-function buildLegend() {
-  const frag = document.createDocumentFragment();
-  const close = document.createElement('button');
-  close.id = 'legendclose'; close.type = 'button'; close.textContent = '\u00d7';
-  close.title = 'Hide the legend (reopen with ? beside the views)';
-  close.setAttribute('aria-label', 'Hide the legend');
-  close.addEventListener('click', () => setLegendOpen(false));
-  frag.appendChild(close);
-  for (const [views, rows] of LEGEND_SECTIONS) {
-    // The heading IS the tab's own label (the same read as viewIntroHtml's title), so the reader looks
-    // up the word they clicked. A section naming no view holds the shapes no diagram owns — "Boxes".
-    const title = views.map((v) => VIEW_LABEL[v] || v).join(' & ') || 'Boxes';
-    const h = document.createElement('div'); h.className = 'lgh'; h.textContent = title;
-    frag.appendChild(h);
-    for (const [kind, shape, label] of rows) frag.appendChild(legendRow(legendSwatch(kind, shape), label));
-  }
-  const h2 = document.createElement('div'); h2.className = 'lgh'; h2.textContent = 'Lines';
-  frag.appendChild(h2);
-  for (const [kind, label] of LEGEND_STROKES) frag.appendChild(legendRow(strokeSwatch(kind), label));
-  if (mode === 'diff') {
-    const h3 = document.createElement('div'); h3.className = 'lgh'; h3.textContent = 'Changes';
-    frag.appendChild(h3);
-    const states = IMPACT ? ['added', 'modified', 'deleted', 'drifted', 'rippled']
-                          : ['added', 'modified', 'deleted', 'rippled'];
-    const d = 2 * ACTION_ICON_R + 2;
-    for (const st of states) {
-      const svg = document.createElementNS(SVGNS, 'svg');
-      svg.setAttribute('width', 22); svg.setAttribute('height', 15);
-      svg.setAttribute('viewBox', `${-d / 2} ${-d / 2} ${d} ${d}`);
-      svg.appendChild(makeBadge(st));
-      frag.appendChild(legendRow(svg, BADGE[st][2]));
-    }
-  }
-  legend.innerHTML = ''; legend.appendChild(frag);
-  legend.dataset.mode = mode;
-}
-// Open/closed is the reader's choice and persists. Closed = shown NOWHERE; open = shown on every view
-// that actually draws a diagram (a colour key over a table of text explains nothing).
-let LEGEND_OPEN = null;
-function legendOpen() {
-  if (LEGEND_OPEN === null) LEGEND_OPEN = lsGet(LS.legend) !== 'off';
-  return LEGEND_OPEN;
-}
-function setLegendOpen(on) {
-  LEGEND_OPEN = on;
-  lsSet(LS.legend, on ? 'on' : 'off');
-  syncLegend(history[hi]);
-}
-// Everything in the title bar that acts on a DIAGRAM: the legend, and the three zoom controls. A card
-// list, a card grid or a details page draws no shapes, so a colour key explains nothing there and the
-// zoom buttons have nothing to zoom. Both read TEXT_PAGES — the ONE list answering "is this page prose",
+// The three zoom controls act on a DIAGRAM. A card list, a card grid or a details page draws no shapes,
+// so they have nothing to zoom. It reads TEXT_PAGES — the ONE list answering "is this page prose",
 // shared with the info pane (syncInfoPane) and the source column (syncCodePane).
 //
-// The list this replaced was a second one, keyed by TOP-LEVEL VIEW, and it had drifted from what the
-// views actually draw. It named `usecases`, so the legend was suppressed on a use-case FLOW — a diagram
-// of boxes, cylinders and an actor figure that happens to live under the Features tab. And it never
-// learned about `actors`, so on Mio Coworker the legend opened over the actor cards and hid two of them.
-// One question, one answer, in one place.
-function syncLegend(s) {
+// A COLOUR KEY USED TO HANG OFF THIS SAME QUESTION. It floated over the drawing naming every shape the
+// map's vocabulary has, and it went: the shapes carry their meaning on the boxes themselves now, and a
+// panel a reader has to close before they can see what is under it costs more than it explains.
+function syncZoomControls(s) {
   const text = !s || TEXT_PAGES.has(s.kind);
-  const on = legendOpen() && !text;
-  legend.classList.toggle('on', on);
-  legendbtn.classList.toggle('on', legendOpen());
-  legendbtn.setAttribute('aria-pressed', String(legendOpen()));
-  legendbtn.disabled = text;
-  if (on && legend.dataset.mode !== mode) buildLegend();   // rebuilt only when the diff section changes
   // Measured: on 7 of the 12 tabs clicking + moved nothing and the reading stayed at 100%, because
   // mainPz is null on a page that renders HTML. A control that looks live and does nothing teaches the
   // reader to distrust the ones that work, so it is dimmed and out of the tab order instead.
@@ -4296,7 +4113,7 @@ function bindNodes(scene, onActivate) {
     });
     // Diff badges are NOT added here: applyDiffOverlay() owns them, so they appear only on the
     // Subsystems-family views (and the dormant Components view) — never as strays in Context/Libraries
-    // where bindNodes also runs but the diff legend is hidden.
+    // where bindNodes also runs but no diff badge belongs.
   });
 }
 
@@ -6326,11 +6143,11 @@ function topLevelView(s) {
 // The views that are TEXT, not a diagram: a card list, a grid of cards, or an element's details. Per
 // the spec these carry no info pane — they put their title and their question at the top of the page
 // itself, and the pane beside a page of prose only ever repeated it.
-// THE list: the info pane (below), the source column (syncCodePane) and the legend + zoom controls
-// (syncLegend) all read it, so "is this page prose" has one answer. It is keyed by STATE KIND, never by
-// top-level view: a use-case FLOW lives under the Features tab and IS a diagram, while its sibling
-// states under the same tab are pages. The legend used to keep a second list, keyed by view, and that
-// distinction is exactly what it got wrong — see the comment on syncLegend.
+// THE list: the info pane (below), the source column (syncCodePane) and the zoom controls
+// (syncZoomControls) all read it, so "is this page prose" has one answer. It is keyed by STATE KIND,
+// never by top-level view: a use-case FLOW lives under the Features tab and IS a diagram, while its
+// sibling states under the same tab are pages. The colour key that used to hang off this same question
+// kept a SECOND list, keyed by view, and that distinction is exactly what it got wrong.
 const TEXT_PAGES = new Set(['usecases', 'capability', 'actor', 'hp',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge']);
 // A CARD BELONGS TO THE PAGE THAT IS ON SCREEN. Every navigation therefore starts with no card, and the
@@ -7352,7 +7169,7 @@ function renderChrome(s) {
   // first item is the one answer to which view a page hangs under, however it was reached.
   const chain = ancestors(s);
   const tv = topView(chain[0].kind, chain[0].id);
-  syncLegend(s);
+  syncZoomControls(s);
   syncEnvPicker(s);
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
@@ -11575,7 +11392,7 @@ function bindIfaceDiagram(root) {
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
     lab.dataset.wire = ends.join(' ');
-    const sec = (headText, ucs, cap, glyph) => {
+    const sec = (headText, ucs, cap, glyph, who) => {
       const row = document.createElement('div');
       row.className = 'ifd-elabel-row';
       const h = document.createElement('span');
@@ -11583,8 +11400,17 @@ function bindIfaceDiagram(root) {
       // THE PERSON'S OWN MARK, before their name — the same 11px glyph their chip on the card wears,
       // from the same one builder. A section headed by a name alone made the reader carry the kind
       // over from the card; the mark says human, AI agent or software service where the name is.
-      // The section with NO person passes no glyph, because there is nobody to draw.
-      h.innerHTML = (glyph || '') + esc(headText);
+      // The section with NO person passes no glyph and no door, because there is nobody to draw.
+      //
+      // AND THE NAME IS A DOOR to that person's own page — the same treatment the use cases beside it
+      // already had. Only the NAME: the count after it is a fact about this interface, not about them.
+      h.innerHTML = (glyph || '')
+        + (who ? `<button type="button" class="ifd-elabel-who">${esc(who)}</button>` : '')
+        + esc(headText);
+      if (who) {
+        h.querySelector('.ifd-elabel-who')
+          .addEventListener('click', (ev) => { ev.stopPropagation(); go({ kind: 'actor', act: who }); });
+      }
       row.appendChild(h);
       ucs.slice(0, cap).forEach((u) => {
         const it = document.createElement('button');
@@ -11611,8 +11437,8 @@ function bindIfaceDiagram(root) {
     if (rows.length) {
       for (const r of rows) {
         const nm = (ROLE_BY_ID[r.role] || {}).name || r.role;
-        sec(`${nm} · ${r.ucs.length} use case${r.ucs.length === 1 ? '' : 's'}`, r.ucs, UC_CAP,
-            itemGlyphSvg(itemSpecRole(nm).k));
+        sec(`· ${r.ucs.length} use case${r.ucs.length === 1 ? '' : 's'}`, r.ucs, UC_CAP,
+            itemGlyphSvg(itemSpecRole(nm).k), nm);
       }
     } else {
       // NOBODY AT THE FAR SIDE is a normal answer, not a gap — 5 of MCP Hero's 16 are reached by the
@@ -14048,7 +13874,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW',
   walkCode: 'coyodex.walkCode',
   // A NEW KEY, because the old one cannot be read. `coyodex.drawer` was WRITTEN AT EVERY BOOT with
@@ -14275,7 +14101,6 @@ const coach = document.getElementById('coach');
 const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
 document.getElementById('coachok').addEventListener('click', dismissCoach);
 document.getElementById('helpbtn').addEventListener('click', () => { coach.hidden = false; });
-legendbtn.addEventListener('click', () => setLegendOpen(!legendOpen()));
 // THE CARD IS THE DEFAULT, and this boot does NOT write that down: only a reader picking a shape in
 // Settings does. The drawer held the default while the card was the newer shape; it is the older one
 // now, and every other screen in the product puts what it is describing beside what you clicked.
@@ -14801,13 +14626,11 @@ if (lsGet(LS.searchOpen) === '1') setSearchOpen(true);  // collapsed by default;
 buildFileTree();
 initServerMode();  // probe for `coyodex serve`; on success reveal + wire the file browser and code viewer
 
-// The intro's title IS the tab's label — read it off the button so the two can never disagree. Read
-// BEFORE the legend is built: its section headings name views from the same map.
+// The intro's title IS the tab's label — read it off the button so the two can never disagree.
 viewsw.querySelectorAll('button[data-view]').forEach((b) => {
   VIEW_LABEL[b.dataset.view] = b.textContent.trim();
   GROUP_OF_VIEW[b.dataset.view] = b.dataset.group;
 });
-buildLegend();  // one legend, built once; syncLegend decides where it shows
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }

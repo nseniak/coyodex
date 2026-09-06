@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 /* Flex column so `main` fills the real space left under the header (whatever its height) — a fixed
    `calc(100vh - …)` undercounts it and pushes the stage bottom (and anything pinned there: the diagram
-   hint, the diff legend) below the fold. The breadcrumb bar lives inside #stage now (see #stagehead),
+   hint, the diff badges) below the fold. The breadcrumb bar lives inside #stage now (see #stagehead),
    not at page level, so it no longer factors into this. */
 body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #111;
        height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -126,12 +126,12 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow-x: hidden; overflow-y: auto;
          background: #fafafa; display: flex; flex-direction: column; }
 /* THE DIAGRAM AREA: everything below the tab rows. It is the positioning box for the four things that
-   float over a drawing — the legend, the environment filter, the flow controls and the selection card —
-   so "bottom: 12px" means the bottom of the drawing rather than the bottom of the whole column. */
+   float over a drawing — the environment filter, the flow controls and the selection card — so
+   "bottom: 12px" means the bottom of the drawing rather than the bottom of the whole column. */
 /* min-height is a FLOOR, not the old `0`: the drawing always keeps room, and the header scrolls instead
-   (see #stage). 160px because #overlays — the top-left column that floats over every drawing, flow
-   controls plus legend — measures 136px on the mcpolis use-case view, so anything under that leaves the
-   map with no clear pixels at all.
+   (see #stage). 160px because #overlays — the top-left column that floats over every drawing —
+   measured 136px on the mcpolis use-case view, so anything under that leaves the map with no clear
+   pixels at all.
    overflow is hidden HERE now that #stage scrolls: #panel is absolutely positioned and hangs 29px past
    the bottom (measured at 1400x900), and an absolutely positioned descendant still counts towards a
    scroll container's extent — so leaving it to #stage would have put a scrollbar on every normal window.
@@ -290,12 +290,11 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
             border: 1px solid #c7d2fe; border-radius: 6px; background: #fff; color: #4338ca; }
 .feat-all:hover { background: #eef2ff; }
 /* Deployment environment picker (variants) — sits atop the deployment info panel. */
-/* The picker floats over the diagram at bottom-left, mirroring #legend at bottom-right. */
-/* THE OVERLAY COLUMN: whichever of the legend, the environment filter and the flow player a view shows,
-   stacked at the TOP-LEFT. They used to sit along the bottom edge, which the drawer takes whole — so each
-   had to step up by the drawer's height on every selection, and three unrelated things moved every time
-   the reader clicked a box. Measured over four views, a legend-sized box covers 17 of the drawn shapes at
-   the bottom-right and 10 at the top-left, so this is the cheaper corner as well as the still one.
+/* THE OVERLAY COLUMN: whichever of the environment filter and the flow player a view shows, stacked at
+   the TOP-LEFT. They used to sit along the bottom edge, which the drawer takes whole — so each had to
+   step up by the drawer's height on every selection, and unrelated things moved every time the reader
+   clicked a box. Measured over four views, a box this size covers 17 of the drawn shapes at the
+   bottom-right and 10 at the top-left, so this is the cheaper corner as well as the still one.
    A flex column, so no coordinate depends on another control's height. The column itself catches no
    clicks — only the controls in it do — or its empty space would swallow clicks on the drawing. */
 #overlays { position: absolute; left: 12px; top: 12px; z-index: 5; display: flex; flex-direction: column;
@@ -1065,8 +1064,8 @@ body.tree-browsing #codeview { display: none; }
    one selected shape held 67-184px, so about three quarters of it stood empty nearly all the time. The
    diagram was left with 447px of an 860px window, which is 32% of the screen for the thing the page is
    about. It is now hidden until something is selected, and the diagram keeps the whole area.
-   TOP-RIGHT: the other two floaters own the bottom corners already (#envpicker bottom-left, #legend
-   bottom-right), and a card that covered either of them would hide a control rather than a shape.
+   TOP-RIGHT: the other floaters own the bottom-left corner already (#envpicker), and a card that
+   covered one of them would hide a control rather than a shape.
    Capped and scrollable, because a few states run long: a process with its threads, an actor with every
    step it drives, an arrow standing for 33 calls. */
 /* `resize: both` is the browser's own corner grip, and it needs a non-visible overflow to appear.
@@ -1105,7 +1104,7 @@ body.card-drawer #panel {
   transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .24s;
   /* ABOVE the other floaters, which the card at 4 never had to be: the card sits top-right and they sit
      along the bottom, so they never met. A drawer lands on all three. It is the thing the reader just
-     summoned, so it wins — and its × has to be reachable, which behind the legend it was not. */
+     summoned, so it wins — and its × has to be reachable, which behind a floater it was not. */
   z-index: 7;
 }
 /* Nothing steps out of its way any more: every control that used to line the bottom edge now lives in
@@ -1155,7 +1154,7 @@ body.panel-dragging #panelbar { cursor: grabbing; }
 body.panel-dragging { user-select: none; }
 /* Three dots' worth of texture, centred: enough to read as a handle, quiet enough not to be a control. */
 #panelbar .grip { width: 34px; height: 4px; border-radius: 2px; background: #e2e8f0; }
-/* The close button, in the same corner idiom as the legend's, riding the bar so the two never overlap. */
+/* The close button, in the corner idiom every floater uses, riding the bar so the two never overlap. */
 #panelclose { position: absolute; top: 50%; transform: translateY(-50%); right: 4px; border: 0;
               background: transparent; font-size: 17px; line-height: 1; color: #9ca3af; cursor: pointer;
               padding: 2px 4px; }
@@ -1388,25 +1387,11 @@ body.altmod .opensrc, body.altmod .opensrc * {
             padding: 0 3px; border-radius: 3px; }
 
 /* bottom-RIGHT of the canvas so it never collides with the informational hint in the bottom-left */
-/* z-index 5, with the other things that float over the drawing (#envpicker 5, #flowpicker 6, #panel 4).
-   It had none, so the callout layer at 3 won by DOM order and drew its line straight across the legend's
-   rows. Everything that floats needs a stated place in the stack, or the last one added decides. */
-#legend { z-index: 5; background: #fff; border: 1px solid #e5e7eb;
-          border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: none; }
-#legend.on { display: block; }
-/* One legend for the whole map: it can get tall, so cap it and let it scroll rather than overrun the
-   canvas. The close button sits in its top-right corner; the `?` beside the views brings it back. */
-#legend { max-height: 62%; overflow-y: auto; padding-right: 22px; }
-#legend .lgh { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-               color: #9ca3af; margin: 8px 0 3px; }
-#legend .lgh:first-of-type { margin-top: 0; }
-#legendclose { position: absolute; top: 4px; right: 5px; border: 0; background: transparent;
-               color: #9ca3af; font-size: 15px; line-height: 1; padding: 2px 4px; cursor: pointer; }
-#legendclose:hover { color: #374151; }
-/* Same: a title-bar utility, with an ON state because the legend it toggles stays on screen. */
-#legendbtn.on { background: rgba(255,255,255,.22); color: #fff; }
-#legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
-#legend svg { display: block; flex: 0 0 auto; }
+/* Everything that floats over the drawing states its place in the stack (#envpicker 5, #flowpicker 6,
+   #panel 4), or the last one added decides: a floater with no z-index lost to the callout layer at 3,
+   which drew its line straight across it. A COLOUR KEY used to stand here naming every shape the map's
+   vocabulary has. The shapes carry their meaning on the boxes themselves now, and a panel a reader has
+   to close before they can see what is under it costs more than it explains. */
 
 /* Step player for use-case flow views. It lives INSIDE #flowpicker (one card for "how is this flow
    drawn" + "where am I in it"), so it is laid out inline here and carries only the divider that separates
@@ -2676,6 +2661,13 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    content is not read as a heading. */
 /* A FLEX ROW, not a block, so the person's mark sits on the name's own line and the name still wraps
    under itself rather than under the mark. */
+/* THE NAME IS THE DOOR, and it takes the heading's own type so the line still reads as one heading
+   rather than as a control dropped into it. Underline on hover, the same answer `.ibox-name` gives
+   everywhere else a name opens something. */
+.ifd-elabel-who { font: inherit; color: inherit; background: none; border: 0; padding: 0;
+                  cursor: pointer; text-align: left; }
+.ifd-elabel-who:hover { text-decoration: underline; text-decoration-color: #6366f1; }
+.ifd-elabel-who:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px; border-radius: 3px; }
 .ifd-elabel-dir { display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
                   color: #3f4660; font-variant: small-caps; letter-spacing: .04em;
                   font-weight: 700; }

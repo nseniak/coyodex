@@ -108,6 +108,16 @@ the code's names.
   retired: two words for one idea, and the screens said one while the glossary
   said the other. *Surface* survives only in its security sense, as in attack
   surface, which is a different word.
+- **a box does not repeat its picture** — the rule for what a box shows. A box
+  always offers every tag it has; the PICTURE it is drawn on may drop one, and
+  only one it draws itself. Two conditions, both needed: the fact is in the SAME
+  picture, and the drawing JOINS it to this box (a wire, a lane, a column
+  position). Being present somewhere on the page is not enough. The short form:
+  the same picture draws it, and says it is this box's. A picture may never ADD
+  a tag no other picture has, so a box stays one thing everywhere and each
+  removal is a stated reason on one screen.
+  Why the rule exists: on the Features page the actors are a whole column joined
+  by wires, so naming them again on the feature card says it twice.
 - **chip** — a small named tag on the dashed box of a shared walk, one per
   person, door or record inside it. It is what stops collapsing the walk from
   burying the product's edge and its saved data. Never clickable: the box is

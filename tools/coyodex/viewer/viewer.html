@@ -40,11 +40,6 @@
   <button id="searchbtn" title="Search the map (press /)" aria-label="Search the map">&#128269;</button>
   <button id="helpbtn" title="How to get around the map" aria-label="How to get around the map">?</button>
   <button id="setbtn" title="Source link settings (editor + repo root)" aria-label="Source link settings">&#9881;</button>
-  <!-- The legend toggle sits with the other utilities rather than in the group row, which now holds
-       nothing but the groups. Its own glyph, not a second "?": two identical question marks side by
-       side named two different things. -->
-  <button id="legendbtn" type="button" aria-pressed="true" aria-label="Show or hide the legend"
-          title="Show or hide the legend — what the shapes and colours mean">&#9636;</button>
   <!-- Impact explorer (design: impact-and-update-design.md): project ANY diff — any base/target,
        including ranges that don't touch the map's commit — onto the map, with typed ripple.
        HIDDEN FOR NOW: the feature works but is not good enough to advertise, so the whole control is
@@ -188,12 +183,12 @@
       <div id="diagram"></div>
       <!-- THE OVERLAY CONTROLS, in ONE column at the TOP-LEFT. They used to sit along the bottom edge,
            which the drawer takes whole — so each of them had to step up by the drawer's height on every
-           selection, and three unrelated things moved every time the reader clicked a box.
-           Top-left is also the cheaper corner. Measured over four views, a legend-sized box covers 17 of
-           the drawn shapes at the bottom-right where the legend used to live, and 10 at the top-left. The
-           top-right is emptier still (7) but the card lives there, and this column has to work in both
-           shapes. A flex column, so whichever of them a view shows simply stack — no coordinate depends
-           on another control's height. A CONTROL you act on sits above a KEY you read. -->
+           selection, and unrelated things moved every time the reader clicked a box.
+           Top-left is also the cheaper corner. Measured over four views, a box this size covers 17 of
+           the drawn shapes at the bottom-right, and 10 at the top-left. The top-right is emptier still
+           (7) but the card lives there, and this column has to work in both shapes. A flex column, so
+           whichever of them a view shows simply stack — no coordinate depends on another control's
+           height. -->
       <div id="overlays">
       <!-- Deployment environment filter. Floats over the diagram (in the #overlays column) rather
            than living in the info pane: it filters what the DIAGRAM draws, so it belongs beside it — and
@@ -215,7 +210,6 @@
           <button id="flownext" aria-label="Next step">&#9654;</button>
         </div>
       </div>
-      <div id="legend"></div>
       </div>
       <!-- WHAT YOU SELECTED, as a card floating over the drawing. It used to be a 300px band under the
            diagram, present whether or not anything was selected. Measured over 60 states on the three
@@ -259,9 +253,8 @@
           <button id="srcsw-files" type="button" title="Show the file browser">&#9776; Files</button>
         </div>
         <button id="treediffonly" type="button" hidden title="Show only changed files">Changed only</button>
-        <!-- A CHEVRON, not a ×. This does not close a thing in place, the way the card's × and the
-             legend's × do: it folds a whole column back to the edge it came from, and the rail is waiting
-             there. A right-pointing chevron says which way it goes, and the pair teaches itself. -->
+        <!-- A CHEVRON, not a ×. This does not close a thing in place, the way the card's × does: it
+             folds a whole column back to the edge it came from, and the rail is waiting there. A right-pointing chevron says which way it goes, and the pair teaches itself. -->
         <button id="cvclose" type="button" title="Fold the source back to the edge" aria-label="Fold the source back to the edge">&#8250;</button>
       </div>
       <!-- The FILE, on a row of its own and at the full width: its name first, then its folder muted
@@ -313,7 +306,7 @@
          over the drawing with a line to the element it describes. Two shapes for ONE panel, not two
          panels — the drawer is #panel restyled, so every card, list and stack it can hold is built by the
          same code either way. It led the dialog because it is about the MAP; everything below it is about
-         source links. It was a header button first, which sat beside the legend's looking like it. -->
+         source links. It was a header button first, up among the title-bar utilities. -->
     <label class="modal-row" id="setPanelRow">Selected element shown in
       <select id="setPanel">
         <option value="drawer">A drawer at the bottom</option>

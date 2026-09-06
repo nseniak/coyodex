@@ -1538,12 +1538,12 @@ def test_the_sequence_views_get_a_line_too() -> None:
 
 
 def test_everything_that_floats_over_the_drawing_states_its_layer() -> None:
-    """The legend had no z-index at all, so the callout layer at 3 won by DOM order and drew its line
-    straight across the legend's rows. Everything that floats over the drawing needs a stated place in
-    the stack, or the last one added decides."""
+    """A floater with no z-index at all lost to the callout layer at 3, which drew its line straight
+    across it. Everything that floats over the drawing needs a stated place in the stack, or the last
+    one added decides."""
     css = (VIEWER_DIR / "viewer.css").read_text()
     layers = {}
-    for sel in ("#callout", "#panel", "#legend", "#envpicker", "#flowpicker"):
+    for sel in ("#callout", "#panel", "#envpicker", "#flowpicker"):
         # line-anchored: the drawer restyles several of these under `body.card-drawer`, and those rules
         # come earlier in the file. The layer belongs to the element itself, not to one of its shapes.
         at = css.index("\n" + sel + " {") + 1
@@ -1551,7 +1551,7 @@ def test_everything_that_floats_over_the_drawing_states_its_layer() -> None:
         assert "z-index" in block, sel
         layers[sel] = int(block.split("z-index:")[1].split(";")[0].strip())
     assert layers["#callout"] < layers["#panel"], "the line ends at the card's edge, never across its face"
-    assert layers["#callout"] < layers["#legend"], "…and never across the legend's rows"
+    assert layers["#callout"] < layers["#envpicker"], "…and never across a floater's face either"
 
 
 def test_the_card_steps_aside_when_it_covers_its_own_element() -> None:
@@ -1590,7 +1590,7 @@ def test_the_panel_has_two_shapes_and_the_reader_picks_one() -> None:
     height would refit and rescale the whole diagram on every click, which is the most frequent thing
     anyone does here.
 
-    The choice is the reader's, so it is remembered, like the legend and the source column."""
+    The choice is the reader's, so it is remembered, like the source column."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
@@ -1695,7 +1695,7 @@ def test_the_drawer_is_as_tall_as_what_is_in_it() -> None:
         "a ceiling the reader can drag, defaulting to two thirds until they do"
     assert "height:" not in drawer.replace("min-height:", "").replace("max-height:", ""), \
         "no fixed height anywhere — the content is what sets it"
-    assert "--drawer-h" not in css, "the legend no longer shares the bottom edge with it"
+    assert "--drawer-h" not in css, "nothing shares the bottom edge with it any more"
 
 
 def test_the_drawer_draws_no_line_and_the_controls_left_the_bottom_edge() -> None:
@@ -1709,18 +1709,17 @@ def test_the_drawer_draws_no_line_and_the_controls_left_the_bottom_edge() -> Non
     card — 275px against 338px in the middle, 568 against 832 at worst — because the drawer runs the full
     width, so its edge sits directly below whatever was clicked.
 
-    AND THE CONTROLS LEFT THE BOTTOM EDGE. The legend, the environment filter and the flow player used to
-    line the bottom, which the drawer takes whole, so each stepped up by the drawer's height on every
-    selection: three unrelated things moving on every click. They share one flex column at the top-left
-    now, so no coordinate depends on another's height, and a click moves ONE thing.
+    AND THE CONTROLS LEFT THE BOTTOM EDGE. The environment filter and the flow player used to line the
+    bottom, which the drawer takes whole, so each stepped up by the drawer's height on every selection:
+    unrelated things moving on every click. They share one flex column at the top-left now, so no
+    coordinate depends on another's height, and a click moves ONE thing.
 
-    The top-left is also the cheaper corner. Measured over four views, a legend-sized box covers 17 of the
-    drawn shapes at the bottom-right where the legend used to live, and 10 at the top-left. The top-right
-    is emptier still, at 7, but the card lives there and this column has to work in both shapes.
+    The top-left is also the cheaper corner. Measured over four views, a box this size covers 17 of the
+    drawn shapes at the bottom-right, and 10 at the top-left. The top-right is emptier still, at 7, but
+    the card lives there and this column has to work in both shapes.
 
     Verified in the app: card mode draws the line, switching to the drawer takes it away, selecting and
-    zooming in the drawer leave it away, switching back brings it. On the Deployment view and on a flow
-    the picker sits at 12,12 and the legend at 12,62, with no overlap."""
+    zooming in the drawer leave it away, switching back brings it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
@@ -1728,16 +1727,15 @@ def test_the_drawer_draws_no_line_and_the_controls_left_the_bottom_edge() -> Non
     assert "hideCallout();   // this shape draws no line" in pane, "cleared when the shape is decided"
     draw = js[js.index("function syncCallout() {"): js.index("\n}", js.index("function syncCallout() {"))]
     assert "if (drawerMode) { hideCallout(); return; }" in draw, "…and a camera move cannot bring it back"
-    # ONE column, and the three controls are in it rather than anchored to corners of their own.
-    wrap = html[html.index('<div id="overlays">'): html.index("</div>", html.index('<div id="legend"></div>'))]
-    for cid in ('id="envpicker"', 'id="flowpicker"', 'id="legend"'):
+    # ONE column, and the controls are in it rather than anchored to corners of their own.
+    wrap = html[html.index('<div id="overlays">'): html.index("</div>", html.index('id="flowpicker"'))]
+    for cid in ('id="envpicker"', 'id="flowpicker"'):
         assert cid in wrap, cid
-    assert wrap.index('id="flowpicker"') < wrap.index('id="legend"'), "a control you act on above a key you read"
     col = css[css.index("#overlays {"): css.index("}", css.index("#overlays {"))]
     assert "left: 12px; top: 12px;" in col and "flex-direction: column" in col
     assert "pointer-events: none;" in col, "its empty space must not swallow clicks on the drawing"
     assert "#overlays > * { position: relative; pointer-events: auto; }" in css
-    for sel in ("\n#legend {", "\n#envpicker {", "\n#flowpicker {"):
+    for sel in ("\n#envpicker {", "\n#flowpicker {"):
         block = css[css.index(sel) + 1: css.index("}", css.index(sel))]
         assert "bottom:" not in block and "position: absolute" not in block, sel
 
@@ -2149,7 +2147,7 @@ def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_sa
     # It floats over the drawing, and #diagwrap is what it floats in.
     pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
     assert "position: absolute" in pane and "top: 12px" in pane and "right: 12px" in pane, \
-        "top-right: #envpicker owns bottom-left and #legend bottom-right"
+        "top-right: #envpicker owns the bottom-left corner"
     assert "max-height" in pane, "a few states run long and must scroll rather than fill the screen"
     assert '<div id="diagwrap">' in (VIEWER_DIR / "viewer.html").read_text()
     # The 300px band, its drag handle and its stored height are gone, not merely hidden.
@@ -2193,8 +2191,8 @@ def test_a_deployment_arrow_has_a_page_like_every_other_arrow() -> None:
     arrows in the three maps stand for more than three calls — the worst for 25.
 
     It gets a page now, and the page is PROSE, not a diagram: the thing it shows is a list. That is why
-    `depedge` joins TEXT_PAGES, which is also what takes the floating card, the legend and the zoom
-    controls off it.
+    `depedge` joins TEXT_PAGES, which is also what takes the floating card and the zoom controls
+    off it.
 
     ONE function builds the rows for both the card and the page. They were written twice before, for the
     two arrow shapes a Deployment view draws (process to process, process to infrastructure), and the two
@@ -2433,22 +2431,22 @@ def test_a_page_and_its_title_share_one_left_edge() -> None:
     assert "margin: 0 auto" not in css, "a capped wrapper centred away from the breadcrumb is back"
 
 def test_a_diagram_control_is_dead_on_a_page_with_no_diagram() -> None:
-    """The legend and the three zoom controls act on the diagram's pan-zoom, which a page of HTML has
-    none of. Measured on Mio Coworker: on 7 of the 12 tabs clicking + moved nothing and the reading
-    stayed at 100%, while the legend button lit and unlit with nothing happening. A control that looks
-    live and does nothing teaches the reader to distrust the ones that work, and costs a keyboard stop.
+    """The three zoom controls act on the diagram's pan-zoom, which a page of HTML has none of. Measured
+    on Mio Coworker: on 7 of the 12 tabs clicking + moved nothing and the reading stayed at 100%. A
+    control that looks live and does nothing teaches the reader to distrust the ones that work, and
+    costs a keyboard stop.
 
     They were kept apart by a SECOND list of "which views are prose", keyed by top-level view, and it had
-    drifted both ways. It named `usecases`, so a use-case FLOW — boxes, cylinders and an actor figure,
-    under the Features tab — drew no legend. It never learned about `actors`, so the legend opened over
-    the actor cards and hid two of them. One question deserves one answer: everything now reads
-    TEXT_PAGES, the same list the info pane and the source column read."""
+    drifted both ways — it named `usecases`, so a use-case FLOW (boxes, cylinders and an actor figure,
+    under the Features tab) counted as prose, and it never learned about `actors` at all. One question
+    deserves one answer: everything now reads TEXT_PAGES, the same list the info pane and the source
+    column read."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "TEXT_VIEWS" not in js, "the second list of text views is back"
-    fn = js[js.index("function syncLegend(s) {"): js.index("\n\n", js.index("function syncLegend(s) {"))]
-    assert "TEXT_PAGES.has(s.kind)" in fn, "the legend must read the one list, keyed by state kind"
-    assert "legendbtn.disabled = text;" in fn
+    fn = js[js.index("function syncZoomControls(s) {"):
+            js.index("\n\n", js.index("function syncZoomControls(s) {"))]
+    assert "TEXT_PAGES.has(s.kind)" in fn, "it must read the one list, keyed by state kind"
     assert "for (const b of [zoomout, zoomlevel, zoomin]) if (b) b.disabled = text;" in fn
     assert "header button:disabled { opacity: .35; cursor: default; }" in css
 
@@ -3560,10 +3558,10 @@ def test_the_path_starts_at_the_view_and_never_at_a_level_inside_it() -> None:
     assert 'class="brand"' in html
 
 def test_the_title_bar_holds_every_utility_and_wraps_before_it_clips() -> None:
-    """Seven controls, all of them things you do to the map rather than places you go: the three zoom
-    controls, search, help, settings and the legend toggle. Search and the legend toggle used to sit in
-    the group row, which made that row two things at once. They are quiet icon buttons on the navy
-    ground — filled chips would read as destinations.
+    """Six controls, all of them things you do to the map rather than places you go: the three zoom
+    controls, search, help and settings. Search used to sit in the group row, which made that row two
+    things at once. They are quiet icon buttons on the navy ground — filled chips would read as
+    destinations.
 
     Back and Forward are NOT here. The bar carried its own ◀ ▶ pair from before the URL named the
     screen; the browser's own buttons do that walk now, and a second pair could only disagree with them.
@@ -3572,7 +3570,7 @@ def test_the_title_bar_holds_every_utility_and_wraps_before_it_clips() -> None:
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     head = html[html.index("<header>"): html.index("</header>")]
-    for control in ("zoomout", "zoomlevel", "zoomin", "searchbtn", "helpbtn", "setbtn", "legendbtn"):
+    for control in ("zoomout", "zoomlevel", "zoomin", "searchbtn", "helpbtn", "setbtn"):
         assert f'id="{control}"' in head, control
     assert "stageheadutil" not in html and "stageheadutil" not in css
     btn = css[css.index("header button {"): css.index("}", css.index("header button {"))]
@@ -4001,7 +3999,10 @@ def test_a_name_wears_its_kind_as_one_small_mark_and_never_as_a_block() -> None:
     gly = js[js.index("function itemGlyphSvg(k, ikind) {"):]
     assert 'stroke="${esc(t.stroke)}"' in gly[:gly.index("\nfunction ")]
     # …and the person heading the interface box takes that same builder.
-    assert "itemGlyphSvg(itemSpecRole(nm).k));" in js
+    assert "itemGlyphSvg(itemSpecRole(nm).k), nm);" in js
+    # …and that name is a DOOR to the person's own page, the same treatment the use cases beside it have.
+    assert 'class="ifd-elabel-who"' in js and "go({ kind: 'actor', act: who })" in js
+    assert ".ifd-elabel-who:hover { text-decoration: underline;" in css
     # ONE size for the small mark, stated once for both places it appears.
     assert ("#diagram .ibox-chip .ibox-gly, #diagram .ifd-elabel-dir .ibox-gly "
             "{ width: 11px; height: 11px; }") in css

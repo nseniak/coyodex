@@ -108,11 +108,6 @@ def _page(url: str, stylesheet: str | None = None) -> Iterator[Any]:
         page.goto(url)
         page.wait_for_selector("#crumb")
         page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
-        # …and the LEGEND, which is an overlay pinned over the diagram. It sat clear of the old
-        # Interfaces picture and covers the top-left card of the new one, so a hover in a test
-        # resolved the element and then timed out on "another element intercepts pointer events".
-        # Closed here rather than per test: any page whose content reaches the top-left has it.
-        page.evaluate("() => { const b = document.getElementById('legendclose'); if (b) b.click(); }")
         try:
             yield page
         finally:
@@ -1607,7 +1602,9 @@ def test_the_people_at_a_surface_are_ordered_by_the_happy_path() -> None:
         })""")
         # `Org admin` wins the alphabet; `Org creator` comes first on the story, and wins here.
         assert got["chips"] == ["Org creator", "Org admin"], got
-        assert [h.split(" ·")[0] for h in got["heads"]] == ["Org creator", "Org admin"], got
+        # The name is its own button now, so the space before the dot is a flex gap rather than a
+        # character: split on the dot itself.
+        assert [h.split("·")[0].strip() for h in got["heads"]] == ["Org creator", "Org admin"], got
         assert not page.js_errors, page.js_errors
 
 
