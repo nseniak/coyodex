@@ -596,14 +596,16 @@ def test_a_surface_card_says_what_shape_it_is() -> None:
                 const b = document.querySelector('.ifd-box[data-iface="I1"]');
                 const g = b.querySelector('.ibox-head .ibox-gly');
                 const v = await (await fetch('api/view')).json();
-                return { d: [...g.querySelectorAll('rect, path')].map(e =>
-                            e.getAttribute('d') || 'rect').join('|'),
+                return { d: [...g.querySelectorAll('circle, ellipse, rect, path')].map(e =>
+                            e.getAttribute('d') || e.tagName.toLowerCase()).join('|'),
                          w: g.getBoundingClientRect().width,
                          word: b.querySelector('.ibox-pill:not(.ibox-pill-alt)').textContent,
                          kind: v.features.interfaces.find(x => x.id === 'I1').kind };
             }""")
-            # the browser-window drawing: a rounded rect with one line across it, near the top
-            assert box["d"] == "rect|M1.5 6.5h15", box
+            # the GLOBE drawing: a circle, the meridian ellipse across it, and two lines of latitude.
+            # It replaced a browser window — a rounded rect with one line near its top, which is the
+            # record's own mark at another size, so the two kinds were told apart by colour alone.
+            assert box["d"] == "circle|ellipse|M2.3 6.6h13.4M2.3 11.4h13.4", box
             assert 12 <= box["w"] <= 18, box       # sized by CSS, not by the tag's attributes
             # …and the WORD beside it, which is where the glyph stops being enough. `screen` shows as
             # WEBSITE: the map defines the kind as "anything served to a browser", so that is what it
