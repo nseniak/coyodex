@@ -548,8 +548,9 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 
 /* The info pane holds ONE card — the same card a list holds. The pane's own padding already frames it,
    so the card drops its border there and reads as the pane's content rather than as a box in a box. */
-#panel .pane-card .ecard { border-color: transparent; padding: 0; background: transparent; }
-#panel .pane-card .ecard:hover { background: transparent; box-shadow: none; border-color: transparent; }
+/* NO RULE HERE ANY MORE. The frameless look is `bare`, an option ON the box (see itemBoxHtml), not
+   three declarations reaching in from its container — reaching in is how the same box came to read
+   one way on one screen and another on the next. */
 #panel .pane-card .ecard:hover .ibox-name { text-decoration: underline; }
 /* No size bump. It was set when the pane was a 300px band under the diagram and the card in it was the
    only thing there; now the card floats and a reader meets the SAME use case in a grid and over a
@@ -660,18 +661,15 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 /* A CARD LIST reads down the page; a CARD GRID is for choosing between groups, across then down. */
 .ecard-list { display: flex; flex-direction: column; gap: 8px; }
 .ecard-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-/* THE NAME TAKES THE WHOLE FIRST LINE, on every card, everywhere.
-   It began as a GRID rule: cards there are read across, so if the name took only the width of its own
-   words the pills sat beside a short name and under a long one, and one card in a row grew a line and
-   stood taller than the four beside it.
-   It is not a grid rule any more, because the same use case is met in a grid AND in the card that floats
-   over a diagram, and a two-line title in one place against a one-line title in the other is a difference
-   a reader can see. Measured before removing the prefix: the title block was 47px in a grid and 22px in
-   the popup, for the same card.
-   The cost is small, because a long name already forced the wrap: of the 40 cards on the two card lists
-   that still exist (a feature's page, a decision area), 27 already wrapped — a business rule's name is a
-   whole sentence. Thirteen gained a line, and every card in the app now has one title height. */
-.ecard .ibox-name { flex-basis: 100%; }
+/* NO `flex-basis: 100%` ON THE NAME. It used to sit here, breaking the pills onto their own line under
+   the name on every card. It was written for a card GRID, where cards are read across a row and a pill
+   sitting a line lower on one of them reads as ragged — and it was then extended to "every card,
+   everywhere". It never got there: the same door drawn on the Interfaces picture and drawn as the card
+   you get by clicking it on a walk are ONE box out of one builder, differing only in which variant is
+   asked for, and this rule hung off the card's class alone. So the name sat beside its pill in one
+   place and above it in the other, for the same thing, one click apart.
+   What is left of the original argument is small: a card grid is a CSS grid, so every cell in a row is
+   already the same height, and only the pill's own y still varies. */
 /* …and so does the labelled line at the FOOT. Cards in a row are already the same height, but their
    sentences are not the same length, so the line under them landed at a different y in every card and
    the row read as ragged. Pushed to the bottom, `IN FEATURE` starts at one height across the row, which
@@ -1076,11 +1074,17 @@ body.tree-browsing #codeview { display: none; }
    covered one of them would hide a control rather than a shape.
    Capped and scrollable, because a few states run long: a process with its threads, an actor with every
    step it drives, an arrow standing for 33 calls. */
-/* `resize: both` is the browser's own corner grip, and it needs a non-visible overflow to appear.
-   min-width/min-height keep a card from being dragged down to a stub with nothing readable in it. */
+/* AS TALL AS WHAT IS IN IT, and no taller. The floor used to be 90px, which padded a short card with
+   empty white; there is no shortest card worth having, only the content there is.
+   THE CEILING IS NOT THE WHOLE DRAWING. `calc(100% - 24px)` let one card cover the map it is drawn
+   over — measured on argus, an actor's card ran 362px of a 736px drawing and a busier one goes further.
+   55% leaves the drawing the larger half whatever the window, with a floor so a short pane still shows
+   a usable card; past it the card scrolls inside itself. */
 #panel { position: absolute; top: 12px; right: 12px; z-index: 4; width: 380px; max-width: calc(100% - 24px);
-         max-height: calc(100% - 24px); min-width: 260px; min-height: 90px;
-         padding: 14px 16px; overflow: auto; resize: both;
+         max-height: max(200px, 55%); min-width: 260px;
+/* NO `resize`. A corner grip sets a HEIGHT, and a height set on one card is empty white under the
+   next one on every selection after it. The width is the one number above; the height is the content. */
+         padding: 14px 16px; overflow: auto;
          background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
          box-shadow: 0 6px 22px rgba(15, 23, 42, .16); }
 #panel[hidden] { display: none; }
@@ -1199,6 +1203,16 @@ body.panel-dragging { user-select: none; }
 #panel a.ucref:hover, #panel a.alsoref:hover, #panel a.flowref:hover { text-decoration: underline; }
 /* On a selected multi-step flow-map arrow, leave the current number full-strength and recede the rest. */
 #diagram .flow-other-step { opacity: .25; }
+/* A NUMBER IS A THING YOU CAN POINT AT. Each one is its own step: hover it and its card answers, click
+   it and it is what you picked, and the line from the card lands on that number rather than on the
+   arrow's middle — a middle names every step the arrow carries and therefore none of them. */
+/* NOTHING HERE MAY CHANGE THE NUMBER'S WIDTH. The engine measured this label from its text and sized
+   the box it draws in; padding on each number, or a heavier weight when one is picked, pushes the row
+   past that box and the last number is clipped — measured, "7, 12" lost half its 12. So the lit patch
+   is painted OUTSIDE the box with a spread shadow, which takes no space at all. */
+#diagram .flow-step-num { border-radius: 4px; }
+#diagram .flow-step-num:hover { background: #eef2ff; box-shadow: 0 0 0 2px #eef2ff; color: #3730a3; }
+#diagram .flow-step-picked { background: #e0e7ff; box-shadow: 0 0 0 2px #e0e7ff; color: #3730a3; }
 /* A bundled map arrow repeats the ordinary sequence-step pane once per step. A firm divider keeps the
    full records distinct without wrapping each one in another card. */
 #panel .flow-step-separator { border-top: 2px solid #d1d5db; margin: 18px 0; }
@@ -1414,7 +1428,11 @@ body.altmod .opensrc, body.altmod .opensrc * {
    because it wraps around. Only a truly inert control (unstarted Prev) uses the real :disabled attr. */
 #flowplayer button:disabled, #flowplayer button.flowend { background: #e5e7eb; color: #9ca3af; }
 #flowplayer button:disabled { cursor: default; }
-#flowcount { font-size: 12px; color: #374151; font-variant-numeric: tabular-nums; min-width: 78px;
+/* The LABEL leads, then a divider, then the control. It is the sentence the counter could not be:
+   "– / 20" says nothing about what pressing an arrow would do. */
+#flowlabel { font-size: 12px; color: #4b5563; padding-right: 9px; margin-right: 2px;
+             border-right: 1px solid #e5e7eb; white-space: nowrap; }
+#flowcount { font-size: 12px; color: #374151; font-variant-numeric: tabular-nums; min-width: 46px;
              text-align: center; padding: 0 2px; }
 
 /* Source-link settings modal + first-run navigation guide (#coach). The [hidden] attr toggles from JS. */
@@ -2959,6 +2977,11 @@ body.insp-on { cursor: crosshair; }
 .ibox-figure .ibox-pill { display: inline-block; margin-top: 3px; }
 /* "There is more inside this" — the dashed border every container on this viewer already wears. */
 .ibox-dashed { border-style: dashed; }
+/* THE BOX IS THE SURFACE IT SITS ON. Inside the floating card and inside the info pane the box is the
+   whole content, so a frame of its own would be a frame inside a frame — two objects where there is
+   one. It keeps its states: hover and picked still say what they say. */
+.ibox-bare { border-color: transparent; background: transparent; padding: 0; }
+.ibox-bare:hover { border-color: transparent; background: transparent; box-shadow: none; }
 .ibox-head { display: flex; align-items: flex-start; gap: 6px; }
 .ibox-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0;
               flex: 1 1 auto; }

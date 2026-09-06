@@ -3496,7 +3496,7 @@ def test_flow_map_from_use_case() -> None:
     # arrow per ordered pair, labelled with the step numbers riding it.
     mm = gen_viewer.flow_maps(parse_map(make_gp_map()))
     s1 = mm["UC1"]
-    assert s1.startswith("flowchart LR")
+    assert s1.startswith("%%{init: {'flowchart': {'padding': 2}}}%%\nflowchart LR")
     # Each box is an empty SLOT naming its element and the variant this picture wants; the viewer
     # builds the box itself, so no name reaches the drawing's source.
     assert "data-k=role data-v=figure data-id=Andy" in s1        # the actor's box
@@ -3548,7 +3548,7 @@ def test_bundle_carries_one_drawing_per_walk() -> None:
     b = bundle_of(make_gp_map())
     assert "flowsMm" not in b
     assert set(b["flowsMap"]) == set(b["flowsNarr"])
-    assert b["flowsMap"]["UC1"].startswith("flowchart LR")
+    assert b["flowsMap"]["UC1"].startswith("%%{init: {'flowchart': {'padding': 2}}}%%\nflowchart LR")
     assert 'FA0 -->|"1"| C1' in b["flowsMap"]["UC1"]
 
 

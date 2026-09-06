@@ -2969,6 +2969,8 @@ def flow_client_roles(graph: GraphDict, steps: list[dict[str, Any]]) -> set[str]
 #: unquoted attributes, no angle brackets and no quotes of ours. `data-id` is URL-encoded because an
 #: actor's is a NAME, and a name may hold anything.
 FLOW_MAP_SLOT_CLASSDEF = "  classDef itembox fill:none,stroke:none;"
+# 2, not 0: an arrowhead lands ON the border at 0 and its point sits inside the box's own rule.
+FLOW_MAP_INIT = "%%{init: {'flowchart': {'padding': 2}}}%%"
 
 
 def _slot(kind: str, variant: str, ident: str, pill: str = "") -> str:
@@ -3072,7 +3074,13 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     pairs: dict[tuple[str, str], list[int]] = {}
     for i, st in enumerate(steps):
         pairs.setdefault((pid[str(st["src"])], box_of(st)), []).append(i + 1)
-    lines = ["flowchart LR", *decls]
+    # NO NODE PADDING ON THIS MAP. Every box here is an ITEM BOX carrying its own padding, and the
+    # engine's default wraps another 30 units of nothing round its sides and 15 above and below —
+    # measured: a 208x40 box inside a 268x70 invisible rectangle. Arrows stop on THAT rectangle, so
+    # every arrowhead ended 30 units short of the box it points at, and the drawing paid the width for
+    # the gap. Set for this diagram alone, in its own source: on every other map a label is plain text
+    # and needs the padding to stand off its border.
+    lines = [FLOW_MAP_INIT, "flowchart LR", *decls]
     for (a, b), ns in pairs.items():
         lines.append(f"  {a} -->|{_edge_label(_flow_map_arrow_label(ns))}| {b}")
     lines.append(FLOW_MAP_SLOT_CLASSDEF)

@@ -2391,7 +2391,7 @@ def test_a_use_case_walk_counts_its_own_steps_not_the_shared_walk_s() -> None:
             const box = [...document.querySelectorAll('#diagram g.node')]
               .find((n) => /SF1/.test(n.id));
             return { counter: document.querySelector('.flowplay-count, .stepcount, .flow-count')?.textContent
-                       || document.body.innerText.match(/Step\\s*[-–]?\\s*\\/\\s*(\\d+)/)?.[1],
+                       || document.getElementById('flowcount')?.textContent.match(/\\/\\s*(\\d+)/)?.[1],
                      chips, hasBox: !!box,
                      steps: [...document.querySelectorAll('#diagram .ibox-count')].map((e) => e.textContent),
                      arrows: [...document.querySelectorAll('#diagram .edgeLabel')]
@@ -2425,7 +2425,7 @@ def test_the_shared_walk_s_box_opens_the_walk_itself() -> None:
             hash: location.hash,
             crumbs: [...document.querySelectorAll('#crumb *')].map((e) => e.textContent.trim())
                       .filter(Boolean),
-            counter: document.body.innerText.match(/Step\\s*[-–]?\\s*\\/\\s*(\\d+)/)?.[1],
+            counter: document.getElementById('flowcount')?.textContent.match(/\\/\\s*(\\d+)/)?.[1],
         })""")
         assert "v=subflow" in seen["hash"] and "sf=SF1" in seen["hash"], seen["hash"]
         assert seen["counter"] == "2", seen           # its own two steps, numbered from 1

@@ -236,6 +236,7 @@ const flowplayer = document.getElementById('flowplayer');
 const flowprev = document.getElementById('flowprev');
 const flownext = document.getElementById('flownext');
 const flowcount = document.getElementById('flowcount');
+const flowlabel = document.getElementById('flowlabel');
 document.getElementById('meta').innerHTML = META;
 // Escape for HTML output. Covers BOTH contexts esc() feeds: text content AND double/single-quoted
 // attributes (e.g. data-term="${esc(...)}"). Quotes must be escaped so a value can't break out of an
@@ -942,7 +943,9 @@ const ITEM_VARIANT = {
 // glyph (false leaves the mark off, for a card that stands for no map element at all),
 // fill (a background of the caller's own, for the ONE kind whose colour belongs to the thing
 // rather than to its type: a feature, whose wash exists so two of them side by side read as
-// two), foot (caller HTML after the band) }
+// two), bare (no frame of its own — the box IS the surface it sits on, which is what the floating
+// card and the info pane are: a frame inside a frame reads as two objects), foot (caller HTML after
+// the band) }
 function itemBoxHtml(spec, variant, opts) {
   if (!spec) return '';
   const v = ITEM_VARIANT[variant] || ITEM_VARIANT.full;
@@ -996,6 +999,7 @@ function itemBoxHtml(spec, variant, opts) {
   if (o.foot) out.push(o.foot);
   const cls = ['ibox', 'ibox-' + variant, 'ibox-k-' + esc(spec.k)];
   if (o.tinted) cls.push('ibox-tinted');
+  if (o.bare) cls.push('ibox-bare');
   if (spec.dashed) cls.push('ibox-dashed');
   if (spec.edge) cls.push('ibox-idedge');
   if (o.cls) cls.push(o.cls);
@@ -1203,6 +1207,10 @@ function elementCardHtml(id, opts) {
   const c = cardFacts(id);
   if (!c) return '';
   const o = opts || {};
+  // `bare` travels straight through to the box. It used to be three declarations in the stylesheet
+  // aimed AT the card from its container — the kind of reach-in that made the same box read one way
+  // on one screen and another on the next. A variant of the box is the box's own business.
+  
   const desc = o.desc !== undefined ? o.desc : c.desc;
   // A title over about a line long is a SENTENCE, not a label — one live map names none of its rules,
   // so each card's title is its whole statement. Thirty words set bold is a wall, so a long title drops
@@ -1248,6 +1256,7 @@ function elementCardHtml(id, opts) {
     wordHtml: typeHtml,
     extra: cardPillsHtml(c.pills) + (o.extra || ''),
     foot: o.foot || '',
+    bare: o.bare,
     cls: 'ecard',
     attrs: ' tabindex="0"',
   });
@@ -2779,7 +2788,7 @@ function showNode(id) {
   // The pane shows the element's CARD — the same card a list shows, so a reader meets one design and
   // one pair of actions wherever an element appears. Everything deeper is on the card's own page, which
   // the card itself opens. `.pane-card` only marks the context; the card inside it is unchanged.
-  panel.innerHTML = `<div class="pane-card">${elementCardHtml(id)}</div>`;
+  panel.innerHTML = `<div class="pane-card">${elementCardHtml(id, { bare: true })}</div>`;
   bindElementCards(panel);
   bindNodeDetailHandlers(panel);
   // Source buttons in the pane need binding too. `bindNodeDetailHandlers` wires the navigation
@@ -3102,7 +3111,7 @@ function showUseCaseSummary(uc) {
   //
   // The foot line names the FEATURE, not the actor. On both sequence views the actor is already drawn as
   // a participant on the diagram behind this card, and the feature is the fact that is nowhere on screen.
-  panel.innerHTML = `<div class="pane-card">${elementCardHtml(uc, { foot: useCaseFeatureFootHtml(uc) })}</div>`;
+  panel.innerHTML = `<div class="pane-card">${elementCardHtml(uc, { bare: true, foot: useCaseFeatureFootHtml(uc) })}</div>`;
   bindElementCards(panel);
 }
 // The `In feature …` line, wherever a use-case card is drawn away from a feature's own page. One builder,
@@ -3273,7 +3282,14 @@ function flowReveal(els, i) {
 function flowCounter() {
   if (!flowPlay) return;
   const n = flowPlay.steps.length, i = flowPlay.cur, active = flowPlay.active;
-  flowcount.textContent = 'Step ' + (active ? i + 1 : '\u2013') + ' / ' + n;
+  // THE LABEL SAYS WHAT THE CONTROL IS FOR, and it says it whether or not a step is showing — the
+  // counter alone read "Step – / 20" before anything was picked, and a dash where a number goes is a
+  // blank. The counter keeps the two numbers, which is all it was ever good at.
+  if (flowlabel) {
+    flowlabel.textContent = 'Step through this '
+      + (SUBFLOW_BY_ID[flowPlay.uc] ? 'shared walk' : 'use case');
+  }
+  flowcount.textContent = (active ? i + 1 : '\u2013') + ' / ' + n;
   flowprev.disabled = !active;
   flownext.disabled = false;
   // Grey (but still clickable) at the ends: Prev on step 1, Next on the last step — the old end-of-list look.
@@ -3515,7 +3531,7 @@ function actorPanelHtml(a, drives) {
   // actor drives. That is real extra content, and it needed no second card design to hold it — a process
   // already answers the same shape of question the same way, card first, its own detail under it.
   const id = actorNodeId(a.name);
-  if (id) return `<div class="pane-card">${elementCardHtml(id)}</div>` + driveRows;
+  if (id) return `<div class="pane-card">${elementCardHtml(id, { bare: true })}</div>` + driveRows;
   // An actor a sequence view names but the graph has no node for: no card to draw, so the name and the
   // sentence stand in for one rather than inventing a second card shape for the exception.
   const wants = a.wants ? '<p class="uc-wants">' + mdInline(wantsSentence(a.wants)) + '</p>' : '';
@@ -5516,25 +5532,45 @@ function flowMapBoxId(uc, id, name) {
 // shared arrow says which of its several moments is current without changing the number format.
 // Rebuilding the numeric paragraph is safe: these are generated integers, and the click handlers live
 // on the enclosing Mermaid edge-label group, not on this paragraph.
+// EACH NUMBER IS ITS OWN THING. An arrow can carry several steps, and every one of them is a step you
+// can hover, pick and draw a line to — so the numbers are separate elements carrying which step they
+// are, not one string of text.
+//
+// BUILT ONCE, then only re-dressed. This used to replace the whole row on every repaint, which threw
+// away the listeners bound to each number: the second time the emphasis changed, hovering a number did
+// nothing. The row is rebuilt only when the steps riding the arrow actually change.
+function stepNumEl(label, i) {
+  return label ? label.querySelector(`[data-fstep="${i}"]`) : null;
+}
 function flowMapPaintStepLabel(label, stepIdx, current) {
   const p = label && label.querySelector('foreignObject p');
   if (!p) return;
+  const want = stepIdx.join(',');
+  if (p.dataset.fsteps !== want) {
+    const parts = [];
+    stepIdx.forEach((i, k) => {
+      if (k) {
+        const separator = document.createElement('span');
+        separator.className = 'flow-step-sep';
+        separator.textContent = ', ';
+        parts.push(separator);
+      }
+      const number = document.createElement('span');
+      number.className = 'flow-step-num';
+      number.dataset.fstep = String(i);
+      number.textContent = String(i + 1);
+      parts.push(number);
+    });
+    p.replaceChildren(...parts);
+    p.dataset.fsteps = want;
+  }
   const active = stepIdx.length > 1 && stepIdx.includes(current);
-  const parts = [];
-  stepIdx.forEach((i, k) => {
-    if (k) {
-      const separator = document.createElement('span');
-      separator.textContent = ', ';
-      if (active) separator.className = 'flow-other-step';
-      parts.push(separator);
-    }
-    const number = document.createElement('span');
-    number.textContent = String(i + 1);
-    if (active && i !== current) number.className = 'flow-other-step';
-    if (active && i === current) number.setAttribute('aria-current', 'step');
-    parts.push(number);
-  });
-  p.replaceChildren(...parts);
+  for (const el of p.children) {
+    const i = el.dataset.fstep === undefined ? null : +el.dataset.fstep;
+    el.classList.toggle('flow-other-step', active && i !== current);
+    if (active && i === current) el.setAttribute('aria-current', 'step');
+    else el.removeAttribute('aria-current');
+  }
 }
 // Only an actively selected STEP controls the emphasis. Selecting a bundled pair outside the stepper
 // must leave every number neutral; its pane describes all of them and none is artificially current.
@@ -5730,13 +5766,23 @@ function bindFlowMap(uc) {
       label,
       stepIdx: flowMapSteps(uc, m[1], m[2]).map((x) => x.i),
     };
-    // A STEP ANSWERS ON HOVER TOO. The whole arrow is the target — its transparent hit clones and its
-    // number — and the line points at the drawn path, not at whichever clone the pointer is over.
     const on = flowMapSteps(uc, m[1], m[2]);
     if (!on.length) return;
-    previewOnHover(scene, [...(p.__cyHits || []), label],
-                   () => (on.length === 1 ? previewFlowStep(uc, on[0].i)
-                                          : showFlowPair(uc, m[1], m[2])), p);
+    // EVERY NUMBER IS ITS OWN TARGET. Hovering one of them answers about THAT step and draws its line
+    // to that number — a row of numbers is a row of things, not one thing with several names.
+    flowMapPaintStepLabel(label, arrows[key].stepIdx, -1);
+    for (const num of (label ? label.querySelectorAll('[data-fstep]') : [])) {
+      const i = +num.dataset.fstep;
+      // The number knows its own arrow, so the card can keep clear of the arrow and both its boxes
+      // even though the line only points at these few pixels of text — see cardKeepClear.
+      num.__cyArrow = p;
+      previewOnHover(scene, [num], () => previewFlowStep(uc, i), num);
+    }
+    // THE ARROW ITSELF ELECTS THE FIRST STEP IT CARRIES. Its transparent hit clones are the target —
+    // the numbers above have their own — and the line goes to that first number, so hovering the line
+    // and hovering its leading number answer the same and point at the same place.
+    previewOnHover(scene, [...(p.__cyHits || [])], () => previewFlowStep(uc, on[0].i),
+                   stepNumEl(label, on[0].i) || p);
   });
 
   // One selector per STEP, keyed exactly as the sequence view keys its own (`flowstep:<uc>:<i>`), so the
@@ -5744,16 +5790,45 @@ function bindFlowMap(uc) {
   // door they drive the sequence through. Selecting step i glows the arrow that carries it and dims to
   // its two boxes — the map's equivalent of lighting one message and its two lifelines.
   const msgEls = [];
+  const stepDesc = [];
   steps.forEach((st, i) => {
     const [a, b] = flowMapStepArrow(uc, i, st);
     const arrow = arrows[a + '>' + b];
     msgEls[i] = arrow ? [...edgeSegs(arrow.path), arrow.label].filter(Boolean) : [];
     if (!arrow) return;                    // a step whose pair was not drawn: no glow, but it still counts
     const desc = { key: 'flowstep:' + uc + ':' + i,
-                   glow: (reveal) => glowEdge(arrow.path, arrow.label, reveal),
+                   // …and the line goes to THIS step's number, not to the arrow's middle. On an arrow
+                   // carrying one step the two are the same answer; on one carrying three, the middle
+                   // names all three and therefore none.
+                   glow: (reveal) => {
+                     const off = glowEdge(arrow.path, arrow.label, reveal);
+                     const num = stepNumEl(arrow.label, i);
+                     if (num) { num.classList.add('flow-step-picked'); setStepAnchor(num); }
+                     return () => {
+                       if (num) num.classList.remove('flow-step-picked');
+                       if (stepAnchorEl === num) setStepAnchor(null);
+                       if (off) off();
+                     };
+                   },
                    focus: { nodes: new Set([a, b]), edge: (e) => e.src === a && e.dst === b },
                    show: () => { flowSyncCur(i); showFlowStep(uc, i); } };
     scene.selectors[desc.key] = () => selAdd(scene, desc);
+    stepDesc[i] = desc;
+  });
+  // A NUMBER IS A DOOR TO ITS OWN STEP. Bound here rather than beside the hover above, because a plain
+  // click REPLACES the selection and that needs the step's own descriptor — which does not exist until
+  // the loop above has built it.
+  steps.forEach((st, i) => {
+    const [a, b] = flowMapStepArrow(uc, i, st);
+    const arrow = arrows[a + '>' + b];
+    const num = arrow && stepNumEl(arrow.label, i);
+    if (!num || !stepDesc[i]) return;
+    num.style.cursor = 'pointer';
+    num.addEventListener('click', (ev) => {
+      if (isDrag(ev)) return;
+      ev.stopPropagation();
+      pickSel(scene, stepDesc[i], ev);   // shift=frame, ⌘=toggle, plain=replace — as any box
+    });
   });
 
   // Hand the player the same shape the sequence view hands it: the ordered steps, each step's arrow DOM,
@@ -6494,37 +6569,11 @@ function stampPanelBar() {
     + '<button id="panelclose" type="button" '
     + 'title="Close \u00b7 the selection stays; click it again to reopen">\u00d7</button></div>');
 }
-// --- where the card sits, and how big ---------------------------------------------
-// A SIZE, and nothing else. The card is resizable from its corner and that size is remembered — a wide
-// Subsystems overview wants it wide, a tall sequence wants it short. WHERE it sits is not remembered
-// and cannot be: the card comes to whatever you selected (see placeCardNear), so a place written down
-// would be a place the very next click overrules.
-//
-// Clamped on every apply rather than on save: the window it was sized in is not the window it comes
-// back to, and a card wider than the drawing cannot be reached.
-function panelBox() { try { return JSON.parse(lsGet(LS.panelBox) || 'null') || null; } catch (_) { return null; } }
-function savePanelBox(b) { lsSet(LS.panelBox, b ? JSON.stringify(b) : ''); }
-// The last inline size applyPanelBox WROTE. A clamp is not a gesture: when the column opens and the card
-// no longer fits, the card is made smaller to stay on screen, and that must not be mistaken for the reader
-// resizing it — see the mouseup handler below.
-let appliedBox = null;
-function applyPanelBox() {
-  const wrap = document.getElementById('diagwrap');
-  const b = panelBox();
-  const st = PANEL_HOST.style;
-  if (!wrap || !b) {
-    st.left = st.top = st.width = st.height = ''; st.right = '';
-    appliedBox = { w: '', h: '' };
-    return;
-  }
-  // A hidden card measures zero, and clamping against a zero width would pin it to the right edge and
-  // leave it there when it comes back. Nothing to place until there is a card on screen.
-  if (PANEL_HOST.hidden) return;
-  const W = wrap.clientWidth, H = wrap.clientHeight;
-  if (b.w) st.width = Math.min(b.w, Math.max(240, W - 24)) + 'px';
-  if (b.h) st.height = Math.min(b.h, Math.max(90, H - 24)) + 'px';
-  appliedBox = { w: st.width, h: st.height };
-}
+// --- how big the card is -----------------------------------------------------------
+// NOTHING TO SET AND NOTHING TO REMEMBER. The card was resizable from a corner grip and that size was
+// written down, which is a contradiction now that its height is its CONTENT's: an explicit height set
+// on one card is empty white under the next one, on every selection, until the reader finds the grip
+// again. The width is one number in the stylesheet and the height is whatever is in it, capped.
 // ── THE PAGE HERO ────────────────────────────────────────────────────────────────────────────────
 // A page you have DRILLED into is ABOUT one element, and that element used to be shown by filling the
 // floating selection card with it whenever nothing was selected. One floating card then carried two
@@ -6679,8 +6728,25 @@ function rectsOverlap(a, b) {
 // shows a card before you commit to a click, so the line has to follow the pointer or it would point at
 // the last thing you clicked while describing something else.
 let hoverPreview = null;
+// THE ONE NUMBER A PICKED STEP'S LINE POINTS AT. An arrow carries several steps and its middle names
+// all of them, so a line to the middle says which ARROW you picked and never which step. Set by the
+// step's own glow and cleared when it goes.
+let stepAnchorEl = null;
+function setStepAnchor(el) { stepAnchorEl = (el && el.isConnected) ? el : null; }
+// WHERE THE POINTER IS. `placeCardNear` keeps the card off it, so a card arriving beside what you
+// hovered cannot arrive UNDER your hand — which is the other half of the blink above.
+let pointerAt = null;
+document.addEventListener('pointermove', (e) => { pointerAt = { x: e.clientX, y: e.clientY }; },
+                          { passive: true, capture: true });
+function pointerInCard() {
+  if (!pointerAt || PANEL_HOST.hidden) return false;
+  const r = PANEL_HOST.getBoundingClientRect();
+  return pointerAt.x >= r.left && pointerAt.x <= r.right
+      && pointerAt.y >= r.top && pointerAt.y <= r.bottom;
+}
 function soleSelectedEl() {
   if (hoverPreview && hoverPreview.isConnected) return hoverPreview;
+  if (stepAnchorEl && stepAnchorEl.isConnected) return stepAnchorEl;
   const els = diagram.querySelectorAll('.is-selected');
   return els.length === 1 ? els[0] : null;
 }
@@ -6727,12 +6793,29 @@ function previewOnHover(scene, els, show, anchor) {
     clearTimeout(inTimer); inTimer = null;
     if (gen !== sceneGen || hoverPreview !== at) return;
     outTimer = setTimeout(() => {
+      // THE POINTER IS STANDING IN THE CARD. Leaving the thing does not mean leaving its answer: the
+      // card comes to what you hovered, so it can arrive under the pointer — and then hiding it puts
+      // the pointer back on the thing, which shows it again, which hides it again. Measured as an
+      // endless blink on a step arrow. While the pointer is inside the card, the card stays; the
+      // pointer leaving the card runs this again and it goes then.
+      if (pointerInCard()) { outTimer = null; return; }
       hoverPreview = null;
       selApply(scene);     // the selection's card again, or this view's default
       paneSync();
       syncCallout();
     }, HOVER_LEAVE_MS);
   };
+  // …and it is the card's own mouseleave that finishes the job, once per preview.
+  if (!PANEL_HOST.__cyHoverOut) {
+    PANEL_HOST.__cyHoverOut = true;
+    PANEL_HOST.addEventListener('mouseleave', () => {
+      if (!hoverPreview) return;
+      hoverPreview = null;
+      if (mainScene) selApply(mainScene);
+      paneSync();
+      syncCallout();
+    });
+  }
   for (const el of list) {
     el.addEventListener('mouseenter', enter);
     el.addEventListener('mouseleave', leave);
@@ -6799,10 +6882,32 @@ function edgeEndRects(el) {
   }
   return out;
 }
-// What the card may not cover: the thing itself, and for a step the two boxes its arrow joins.
-function cardKeepClear(el) {
-  const own = rectOf(el);
-  return arrowMidpoint(el) ? [own, ...edgeEndRects(el)] : [own];
+// WHAT THE CARD MAY NOT COVER: the thing the line points at, and — when that thing is a step — its
+// arrow and BOTH boxes the arrow joins. A step's line points at its NUMBER, which is a few pixels of
+// text, so keeping clear of the number alone let the card sit squarely over the box the step comes
+// from. The number carries its own arrow (`__cyArrow`) for exactly this.
+const CARD_CLEAR = 6;   // it keeps OFF these shapes, not merely off them by nothing
+function grow(r, by) {
+  return { left: r.left - by, top: r.top - by, right: r.right + by, bottom: r.bottom + by,
+           width: r.width + 2 * by, height: r.height + 2 * by };
+}
+// THREE SETS, TRIED IN ORDER, each one giving up less than a bare corner would. Nothing fits every
+// rule on a crowded map — a 380x345 card, a wide arrow and two boxes in a 910x736 drawing — and the
+// answer to that used to be "clamp it up and to the right and give up on all of it", which is how a
+// step's card came to sit squarely over the box its step comes from.
+//   1. the number, the arrow, both its boxes
+//   2. …without the ARROW's box, which for a curve is a rectangle far bigger than the line inside it
+//   3. …the two BOXES alone, which is the part a reader actually loses when it is covered
+// The pointer's own square rides with 1 and 2 and is dropped at 3: a card under the hand blinks, but a
+// card over the box the step comes from is worse.
+function cardKeepSets(el) {
+  const own = el ? [rectOf(el)] : [];
+  const arrow = (el && el.__cyArrow) || el;
+  const isArrow = arrow && arrowMidpoint(arrow);
+  const ends = isArrow ? edgeEndRects(arrow) : [];
+  const g = (list) => list.map((r) => grow(r, CARD_CLEAR));
+  if (!isArrow) return [g(own)];
+  return [g([...own, rectOf(arrow), ...ends]), g([...own, ...ends]), g(ends)];
 }
 // THE LINE THAT WILL ACTUALLY BE DRAWN, not a stand-in for it: `syncCallout` runs it from the card's
 // border to the arrow's middle, or to the border of the box you picked. Measuring to a box's CENTRE
@@ -6839,7 +6944,13 @@ function placeCardNear(el) {
   // A BOX's line ends on its border, an arrow's on the arrow itself — `e` is null for an arrow so the
   // length is measured to the middle the line really meets.
   const e = mid ? null : own;
-  const keep = cardKeepClear(el);
+  const sets = cardKeepSets(el);
+  // The reader's own hand is a shape to keep clear of, the same as the thing itself — but the first
+  // sets only. By the last one there is barely room for the card at all.
+  const hand = pointerAt
+    ? { left: pointerAt.x - 14, top: pointerAt.y - 14, right: pointerAt.x + 14,
+        bottom: pointerAt.y + 14, width: 28, height: 28 }
+    : null;
   const put = (left, top) => {
     const st = PANEL_HOST.style;
     st.right = 'auto';
@@ -6849,9 +6960,10 @@ function placeCardNear(el) {
   };
   // RULE 4 FIRST: a card already standing somewhere that works stays there, so clicking along a walk
   // does not send it round the screen. The cap is what stops "stays there" turning into "never moves".
+  const keep0 = hand ? [...sets[0], hand] : sets[0];
   if (lastCardPlace) {
     const box = cardRectAt(w.left + lastCardPlace.left, w.top + lastCardPlace.top, W, H);
-    if (cardBoxOk(box, w, keep, a, e) && cardLineLen(box, a, e) <= CARD_MAX_LINE) {
+    if (cardBoxOk(box, w, keep0, a, e) && cardLineLen(box, a, e) <= CARD_MAX_LINE) {
       put(box.left, box.top); return;
     }
   }
@@ -6859,12 +6971,15 @@ function placeCardNear(el) {
   // hit is the closest one that clears everything, and the order makes the first ring's up-and-right the
   // default it lands on when nothing is in the way.
   const far = Math.max(w.width, w.height) + CARD_RING;
-  for (let d = CARD_MIN_LINE; d <= far; d += CARD_RING) {
-    for (const [ux, uy] of CARD_DIRS) {
-      const left = a.x + d * ux - (ux < 0 ? W : ux > 0 ? 0 : W / 2);
-      const top = a.y + d * uy - (uy < 0 ? H : uy > 0 ? 0 : H / 2);
-      const box = cardRectAt(left, top, W, H);
-      if (cardBoxOk(box, w, keep, a, e)) { put(left, top); return; }
+  for (let s = 0; s < sets.length; s++) {
+    const keep = (hand && s < 2) ? [...sets[s], hand] : sets[s];
+    for (let d = CARD_MIN_LINE; d <= far; d += CARD_RING) {
+      for (const [ux, uy] of CARD_DIRS) {
+        const left = a.x + d * ux - (ux < 0 ? W : ux > 0 ? 0 : W / 2);
+        const top = a.y + d * uy - (uy < 0 ? H : uy > 0 ? 0 : H / 2);
+        const box = cardRectAt(left, top, W, H);
+        if (cardBoxOk(box, w, keep, a, e)) { put(left, top); return; }
+      }
     }
   }
   // NOWHERE CLEARS EVERYTHING — a card as big as the drawing, or a box in every corner. It goes up and
@@ -7031,7 +7146,6 @@ function placeCard() {
   // card (275px against 338px in the middle, 568 against 832 at worst), because the drawer runs the full
   // width and its edge sits directly below whatever was clicked.
   if (drawerMode) { hideCallout(); applyDrawerMax(); return; }
-  applyPanelBox();
   placeCardNear(soleSelectedEl());
   syncCallout();
   scheduleCallout(true);
@@ -13924,7 +14038,6 @@ PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
 PANEL_HOST.addEventListener('dblclick', (ev) => {
   if (drawerMode) return;   // it never left its corner
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelbar')) return;
-  savePanelBox(null);
   lastCardPlace = null;
   placeCard();
 });
@@ -13950,27 +14063,8 @@ document.addEventListener('scroll', () => {
   syncCallout();
 }, { capture: true, passive: true });
 
-document.addEventListener('mouseup', () => {
-  if (drawerMode || PANEL_HOST.hidden || panelDrag) return;   // a drawer has no corner grip to read
-  const w = PANEL_HOST.style.width, h = PANEL_HOST.style.height;
-  if (!w && !h) return;
-  if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;
-  storePanelBox('size');
-  noteCardPlace();   // a resize moved the card's far edges, so where it stands changed too
-  syncCallout();   // a resize moved the card's edges, and the line meets one of them
-});
-// EACH GESTURE SAVES WHAT IT CHANGED, and nothing else. A drag saves where the card sits; a resize saves
-// how big it is. Saving both from either one lets a CLAMP leak into the reader's choice: dragging a card
-// that had been shrunk to fit the narrowed drawing baked that smaller size in as if they had chosen it,
-// and their own width never came back when the column closed.
-function storePanelBox(what) {
-  const wrap = document.getElementById('diagwrap');
-  if (!wrap || PANEL_HOST.hidden || what === 'position') return;
-  const r = PANEL_HOST.getBoundingClientRect();
-  const st = PANEL_HOST.style;
-  savePanelBox({ w: st.width ? Math.round(r.width) : 0, h: st.height ? Math.round(r.height) : 0 });
-}
-// Where the card stands after a drag or a resize, so the next selection can decide whether to leave it.
+// NO RESIZE HANDLER. There is no grip to read: see "how big the card is".
+// Where the card stands after a drag, so the next selection can decide whether to leave it.
 function noteCardPlace() {
   const wrap = document.getElementById('diagwrap');
   if (!wrap || PANEL_HOST.hidden) { lastCardPlace = null; return; }
@@ -14035,7 +14129,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', leftW: 'coyodex.leftW', panelBox: 'coyodex.panelBox', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', leftW: 'coyodex.leftW', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW',
   walkCode: 'coyodex.walkCode',
   // A NEW KEY, because the old one cannot be read. `coyodex.drawer` was WRITTEN AT EVERY BOOT with

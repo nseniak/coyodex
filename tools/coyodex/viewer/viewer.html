@@ -205,8 +205,12 @@
       <div id="flowpicker" hidden>
         <div id="flowmode"></div>
         <div id="flowplayer" hidden>
+          <!-- WHAT THIS CONTROL IS FOR, before the control itself. The counter alone read "Step - / 20"
+               before anything was picked: a dash where a number goes is a blank, and a reader met a
+               counter counting nothing rather than an invitation. -->
+          <span id="flowlabel">Step through this use case</span>
           <button id="flowprev" aria-label="Previous step">&#9664;</button>
-          <span id="flowcount">Step 1 / 1</span>
+          <span id="flowcount">&#8211; / 1</span>
           <button id="flownext" aria-label="Next step">&#9654;</button>
         </div>
       </div>

@@ -461,7 +461,9 @@ def test_flow_map_draws_one_empty_slot_per_element():
     wants."""
     g = model_to_graph(make_flow_map_model())
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    assert mm.startswith("flowchart LR")
+    # NO NODE PADDING ON THIS MAP: every box carries its own, and the engine's default wrapped 30
+    # units of nothing round each box's sides — which is where the arrows stopped, short of the box.
+    assert mm.startswith("%%{init: {'flowchart': {'padding': 2}}}%%\nflowchart LR")
     assert "subgraph" not in mm                                   # leaf-only: no container frames
     assert '  C1["<span class=cyslot data-k=component data-v=tight data-id=C1></span>"]:::cy-C1' in mm
     assert "class C1 itembox" in mm

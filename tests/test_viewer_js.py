@@ -267,7 +267,7 @@ def test_only_direct_diagram_clicks_pin_selection_action_icons() -> None:
     assert "p._actionIcon._selected = !!revealAction" in glow_edge
     assert "hpGlow(el, revealAction = true)" in hp_glow
     assert "el._actionIcon._selected = !!revealAction" in hp_glow
-    assert "glow: (reveal) => glowEdge" in flow_map
+    assert "const off = glowEdge(arrow.path, arrow.label, reveal);" in flow_map
     assert "flowPlay.showLocate" not in js
     assert "showLocate:" not in js
     assert "const pinOnSelect" not in edge_action
@@ -398,7 +398,16 @@ def test_flow_player_suspends_and_resumes_within_one_visit() -> None:
     end = js.index("\n// A flow step's side panel", start)
     player = js[start:end]
 
-    assert "active ? i + 1 : '\\u2013'" in player
+    # A LABEL LEADS THE CONTROL and says what pressing an arrow would do; the counter keeps the two
+    # numbers. Alone, the counter read "Step – / 20" before anything was picked, and a dash where a
+    # number goes is a blank.
+    assert "(SUBFLOW_BY_ID[flowPlay.uc] ? 'shared walk' : 'use case')" in player \
+        and "flowlabel.textContent = 'Step through this '" in player
+    assert "flowcount.textContent = (active ? i + 1 : '\\u2013') + ' / ' + n;" in player
+    html = (VIEWER_DIR / "viewer.html").read_text(encoding="utf-8")
+    body = html[html.index('<div id="flowplayer"'): html.index("</div>", html.index('id="flownext"'))]
+    assert body.index('id="flowlabel"') < body.index('id="flowprev"') < body.index('id="flowcount"'), \
+        "the label comes before the control it names"
     assert "flowprev.disabled = !active" in player
     assert "flownext.disabled = false" in player
     assert "flownext.title" not in player
@@ -1570,8 +1579,8 @@ def test_the_card_comes_to_what_you_picked_and_stays_put_while_it_can() -> None:
     four then honours for as long as it holds."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     fn = js[js.index("function placeCardNear(el) {"): js.index("\n}", js.index("function placeCardNear(el) {"))]
-    assert "if (cardBoxOk(box, w, keep, a, e) && cardLineLen(box, a, e) <= CARD_MAX_LINE)" in fn, \
-        "rule four, and it is tried FIRST"
+    assert "if (cardBoxOk(box, w, keep0, a, e) && cardLineLen(box, a, e) <= CARD_MAX_LINE)" in fn, \
+        "rule four, and it is tried FIRST — against the strictest set"
     # The floor is on the line that will actually be DRAWN — to a box's border, an arrow's middle.
     ln = js[js.index("function cardLineLen(box, a, e) {"):
             js.index("\n}", js.index("function cardLineLen(box, a, e) {"))]
@@ -1582,12 +1591,19 @@ def test_the_card_comes_to_what_you_picked_and_stays_put_while_it_can() -> None:
         "up-and-right is the first direction tried, so it is the default"
     assert "storePanelBox" not in fn and "savePanelBox" not in fn, "a placement is not a gesture"
     # A step keeps its arrow AND both boxes clear; anything else keeps only itself.
-    keep = js[js.index("function cardKeepClear(el) {"): js.index("\n}", js.index("function cardKeepClear(el) {"))]
-    assert "arrowMidpoint(el) ? [own, ...edgeEndRects(el)] : [own]" in keep
+    keep = js[js.index("function cardKeepSets(el) {"): js.index("\n}", js.index("function cardKeepSets(el) {"))]
+    # A step's line points at its NUMBER, a few pixels of text — so the number carries its arrow, or
+    # keeping clear of the number alone lets the card sit over the box the step comes from.
+    assert "const arrow = (el && el.__cyArrow) || el;" in keep and "num.__cyArrow = p;" in js
+    # THREE SETS, tried in order: nothing fits every rule on a crowded map, and the answer to that used
+    # to be a bare corner with every rule dropped at once — which is how a card came to cover the very
+    # box its step comes from. The BOXES are what survives to the last set.
+    assert "return [g([...own, rectOf(arrow), ...ends]), g([...own, ...ends]), g(ends)];" in keep
+    assert "for (let s = 0; s < sets.length; s++) {" in fn
     # The three steps happen in one order, from one function, so no caller can do them out of turn. Read
     # from the CARD branch, which starts after the drawer's early return — a drawer has one place.
     place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
-    card = place[place.index("applyPanelBox();"):]   # the card branch, past the drawer's early return
+    card = place[place.index("placeCardNear("):]   # the card branch, past the drawer's early return
     assert card.index("placeCardNear(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
 
 
@@ -1632,9 +1648,7 @@ def test_the_panel_has_two_shapes_and_the_reader_picks_one() -> None:
     # A drawer cannot be moved, resized by the corner grip, or sent back to its corner. The BAR still
     # takes a drag there, but it drags the ceiling — see
     # test_the_drawers_ceiling_is_dragged_and_is_a_maximum_not_a_height.
-    for guard in ("if (drawerMode || PANEL_HOST.hidden || panelDrag) return;",
-                  "PANEL_HOST.addEventListener('dblclick', (ev) => {\n  if (drawerMode) return;"):
-        assert guard in js, guard
+    assert "PANEL_HOST.addEventListener('dblclick', (ev) => {\n  if (drawerMode) return;" in js
     down = js[js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"):
               js.index("});", js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"))]
     assert "if (drawerMode) {" in down and "drawerSizing = {" in down, \
@@ -1865,8 +1879,8 @@ def test_the_drawers_ceiling_is_dragged_and_is_a_maximum_not_a_height() -> None:
     618px and the drawer grows to it, still scrolling; and one card is 121px again under that same raised
     ceiling.
 
-    Stored in pixels and clamped on every apply rather than on save — the window it was dragged in is not
-    the window it comes back to, which is the rule applyPanelBox already follows."""
+    Stored in pixels and clamped on every apply rather than on save — the window it was dragged in is
+    not the window it comes back to."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     drawer = css[css.index("body.card-drawer #panel {"): css.index("}", css.index("body.card-drawer #panel {"))]
@@ -2225,34 +2239,30 @@ def test_a_deployment_arrow_has_a_page_like_every_other_arrow() -> None:
         "the trail reads Deployment > A to B; an arrow joins two processes and belongs under neither"
     assert "kind === 'depedge') return 'deployment'" in js, "and it lives under the Deployment tab"
 
-def test_the_selection_card_can_be_moved_and_resized_and_remembers_it() -> None:
-    """The card floats, so one landing spot cannot suit every reader on every map: a wide Subsystems
-    overview wants it out of the middle, a tall sequence wants it short. It is dragged by its bar and
-    resized from its corner, and both survive a reload.
+def test_the_card_is_dragged_by_its_bar_and_sized_by_nothing() -> None:
+    """The card is dragged by its BAR, and by nothing else: dragging on its own text would fight
+    selecting that text, and a reader copying a call site out of a row should be able to. A
+    double-click on the bar puts it home, because a floating thing needs a way back or one bad drag on
+    a small window loses it.
 
-    The BAR is the only grab handle. Dragging on the card's own text would fight selecting that text, and
-    a reader copying a call site out of a row should be able to.
-
-    The box is stored in the diagram area's own pixels and CLAMPED on restore, not on save: the window it
-    was dragged in is not the window it comes back to, and a card whose bar sits off the edge cannot be
-    dragged back. A double-click on the bar puts it home, because a floating thing needs a way back or one
-    bad drag on a small window loses it.
-
-    The resize watcher must ignore CONTENT changes — every new card is a height change — or a card nobody
-    ever touched would pin itself wherever the stylesheet first put it and stop following the stylesheet.
-    An inline width or height is the only proof a reader dragged the corner."""
+    IT HAS NO SIZE TO SET. A corner grip and a remembered box used to live here, and both became a
+    contradiction the moment the card's height became its CONTENT's: a height set on one card is empty
+    white under the next one, on every selection after it, until the reader finds the grip again. The
+    width is one number in the stylesheet; the height is whatever is in it, capped so a tall card cannot
+    cover the drawing it floats over."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "panelBox: 'coyodex.panelBox'" in js
-    assert "function applyPanelBox() {" in js and "placeCard();" in js[js.index("function paneSync() {"):
-                                                                          js.index("\n}", js.index("function paneSync() {"))]
     assert "closest('#panelbar')" in js, "the bar is the handle"
-    assert "  if (!w && !h) return;" in js, \
-        "a card the reader never touched keeps following the stylesheet"
-    assert "savePanelBox(null);" in js, "double-click puts the card home"
+    assert "panelBox" not in js and "appliedBox" not in js, "the remembered box is back"
+    assert "coyodex.panelBox" not in js, "…and so is the key it was written under"
     pane = css[css.index("#panel {"): css.index("}", css.index("#panel {"))]
-    assert "resize: both" in pane and "overflow: auto" in pane, "the corner grip needs a clipped overflow"
-    assert "min-width" in pane and "min-height" in pane, "it must not shrink to an unreadable stub"
+    assert "resize:" not in pane, "the corner grip is back"
+    assert "overflow: auto" in pane, "a card past its ceiling scrolls inside itself"
+    assert "min-width" in pane, "it must not shrink to an unreadable stub sideways"
+    # NO min-height. It was 90px, which padded a short card with empty white; a card is as tall as
+    # what is in it, and the ceiling is what stops a tall one covering the drawing.
+    assert "min-height" not in pane
+    assert "max-height: max(200px, 55%);" in pane, "the drawing keeps the larger half"
     bar = css[css.index("#panelbar { position: sticky"): css.index("}", css.index("#panelbar { position: sticky"))]
     assert "position: sticky" in bar, "the handle and the close button stay reachable in a scrolled card"
 
@@ -2361,10 +2371,10 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
         assert "body.code-slide-go " + sel in reduced, sel
     assert "codePaneResized();" in js
     assert "window.addEventListener('resize', placeCard);" in js, "so does the window itself"
-    # `placeCard` IS applyPanelBox plus the two steps that depend on where the card landed — it dodges the
-    # element it describes, then redraws the line to it. One order, so no caller can do them out of turn.
+    # `placeCard` is the three steps that depend on where the card landed: it comes to the element it
+    # describes, then redraws the line to it. One order, so no caller can do them out of turn.
     place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
-    card = place[place.index("applyPanelBox();"):]   # the card branch, past the drawer's early return
+    card = place[place.index("placeCardNear("):]   # the card branch, past the drawer's early return
     assert card.index("placeCardNear(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
     # FIT TO SCREEN has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and pan
     # back to the values svg-pan-zoom recorded when it was CONSTRUCTED, so on any view whose box has since
@@ -2373,15 +2383,8 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     # the button left it there; it now comes back at 101%.
     assert "zoomlevel.addEventListener('click', () => { if (mainPz) refitStage(); });" in js
     assert "mainPz.reset()" not in js, "reset restores the fit from construction time, not the current one"
-    box = js[js.index("function applyPanelBox() {"): js.index("\n}", js.index("function applyPanelBox() {"))]
-    assert "if (PANEL_HOST.hidden) return;" in box, \
-        "a hidden card measures zero, and clamping against zero pins it to the edge"
-    # A CLAMP IS NOT A GESTURE. Opening the column takes 547px of the drawing, and a card wider than what
-    # is left is shrunk to stay on screen. A ResizeObserver could not tell that shrink from a resize and
-    # saved it, so the reader's own box was overwritten: measured, a card parked at 459 and 950 wide came
-    # back at 24 and 868 wide and never returned. The size is read on mouseup instead and compared with
-    # what applyPanelBox last WROTE.
-    assert "let appliedBox = null;" in js and "appliedBox = { w: st.width, h: st.height };" in js
+    # NOTHING WATCHES THE CARD'S OWN SIZE, and there is no size to watch: it has no grip and no
+    # remembered box, so its height is its content's and its width is one number in the stylesheet.
     # The ban is on watching THE CARD, not on the API. Spelled as `"ResizeObserver(() =>" not in js`
     # it only ever caught the inline-arrow form — the two observers already in the file (a scroller
     # each) pass a named callback and always slipped through, and the drawing's own box now needs one
@@ -2394,17 +2397,9 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert rs_targets, "no observer target could be read — this check no longer guards anything"
     for target in rs_targets:
         assert "panel" not in target.lower(), f"the card's own size is watched again: {target}"
-    assert not re.search(r"new ResizeObserver\([\s\S]{0,600}?storePanelBox", js), \
-        "an observer cannot tell a clamp from a gesture"
-    assert "if (appliedBox && w === appliedBox.w && h === appliedBox.h) return;" in js
-    # …and only a SIZE is ever saved. A drag used to save a position too, which is how dragging a card
-    # that had been clamped narrower baked that width in as if the reader had chosen it; and the card's
-    # place is not the reader's to keep any more — it comes to whatever they selected.
-    store = js[js.index("function storePanelBox(what) {"):
-               js.index("\n}", js.index("function storePanelBox(what) {"))]
-    assert "what === 'position') return;" in store, "a drag writes no box at all"
-    assert "left:" not in store and "top:" not in store, "and no place is written down anywhere"
-    assert "storePanelBox('size');" in js
+    # …and NOTHING about the card is saved any more. Its place comes from what you selected and its
+    # height from what is in it, so a saved box could only be one the very next click overrules.
+    assert "savePanelBox" not in js and "storePanelBox" not in js
     # The two visible ways out, and the one visible way in.
     # ONE × for the whole column, in the ONE header above both panes, so it is in the same place whichever
     # pane is showing. It used to live in the code viewer's header only, and browsing hides the code viewer
@@ -3214,28 +3209,27 @@ def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
          "itself. `of its own` is the guard that still matters: no hand-built pill list here")
 
 
-def test_a_cards_name_takes_the_whole_first_line_everywhere() -> None:
-    """It began as a GRID rule. Cards in a grid are read ACROSS, so a name taking only the width of its
-    own words put the pills beside a short name and under a long one: one card in a row grew a line and
-    stood taller than the four beside it, with its pill at a different height.
+def test_a_name_sits_beside_its_pill_wherever_the_box_is_drawn() -> None:
+    """One box, one answer. `.ecard .ibox-name { flex-basis: 100% }` used to break the pills onto their
+    own line under the name — on the card list, the card grid and the card that floats over a diagram,
+    and nowhere else. It was written for a GRID, where cards are read across a row and a pill sitting a
+    line lower on one of them reads as ragged, and then extended to "every card, everywhere".
 
-    It is not a grid rule any more. The same use case is met in a grid AND in the card that floats over a
-    diagram, and there the card was outside the grid, so the same card had a 47px title block in one place
-    and a 22px one in the other. A reader can see that, and did.
+    It never got there. The Interfaces picture's box and the card you get by clicking that same door on
+    a walk are ONE box out of ONE builder, differing only in which variant is asked for — and the rule
+    hung off the card's class alone. So the same door had its name beside its pill in one place and
+    above it in the other, one click apart.
 
-    The cost of dropping the prefix is small, because a long name already forced the wrap: of the 40 cards
-    on the two card lists that remain — a feature's page and a decision area — 27 already wrapped, since a
-    business rule's name is a whole sentence. Thirteen gained a line, and every card in the app now has
-    one title height."""
+    What was left of the original argument is small: a card grid is a CSS grid, so every cell in a row
+    is already the same height; only the pill's own y still varies."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    assert ".ecard .ibox-name { flex-basis: 100%; }" in css
-    assert ".ecard-grid .ecard-name" not in css, "not a grid rule any more"
-    # The row the name sits in is the item box's own title row, shared with every picture.
-    # line-anchored: the card states its own baseline alignment in a `.ecard .ibox-title` rule above.
+    assert ".ecard .ibox-name { flex-basis: 100%; }" not in css, "the split is back"
+    assert ".ecard-grid .ecard-name" not in css, "and it is not a grid rule either"
+    # The pills still wrap AMONG THEMSELVES when there are many — that is the title row's own doing,
+    # shared with every picture. Line-anchored: the card states its own baseline alignment above.
     at = css.index("\n.ibox-title {") + 1
     head = css[at: css.index("}", at)]
-    assert "flex-wrap: wrap" in head, "the pills still wrap among themselves when there are many"
-
+    assert "flex-wrap: wrap" in head
 
 def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     """A use-case card carries the OTHER axis: which feature it belongs to on an actor's page, who drives
@@ -3315,7 +3309,11 @@ def test_one_card_design_reaches_the_card_that_floats_over_a_diagram() -> None:
     assert "badge kind" not in uc and "class=\"explain\"" not in uc, "the hand-built design is gone"
     ap = js[js.index("function actorPanelHtml(a, drives) {"):
             js.index("\n}", js.index("function actorPanelHtml(a, drives) {"))]
-    assert "elementCardHtml(id)" in ap and "pane-card" in ap
+    assert "elementCardHtml(id, { bare: true })" in ap and "pane-card" in ap
+    # `bare` is an OPTION on the box, never three declarations reaching in from its container.
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".ibox-bare { border-color: transparent; background: transparent; padding: 0; }" in css
+    assert "#panel .pane-card .ecard {" not in css
     assert "Drives" in ap and ap.index("driveRows") < ap.index("elementCardHtml"), \
         "what it drives here is a block under the card, not a second card design"
     # The pane must not resize the card either: one card, one size, wherever a reader meets it.
@@ -5210,9 +5208,13 @@ def test_hovering_a_box_shows_its_card_and_leaving_puts_back_what_was_there() ->
 
 
 def test_hovering_a_step_shows_its_card_too() -> None:
-    """A box answers on hover; so does an arrow. THE WHOLE ARROW is the target — its transparent hit
-    clones and its number — and the line points at the drawn path, not at whichever clone the pointer
-    happens to be over.
+    """A box answers on hover; so does an arrow. But an arrow can carry SEVERAL steps, and every number
+    on it is its own thing to hover, pick and point a line at — so each number is a target of its own,
+    and its line goes to that number.
+
+    THE ARROW ITSELF elects the first step it carries. Its transparent hit clones are that target (the
+    numbers have their own), and its line goes to the first number too, so hovering the line and
+    hovering its leading number answer the same and point at the same place.
 
     The clones are findable only because the path keeps them: every edge's clones are appended into the
     SAME parent group, so a sibling query would return the other arrows' clones as well.
@@ -5222,7 +5224,11 @@ def test_hovering_a_step_shows_its_card_too() -> None:
     every arrow it passed."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     assert "p.__cyHits = hits;" in js and "h.classList.add('cy-edgehit')" in js
-    assert "previewOnHover(scene, [...(p.__cyHits || []), label]," in js
+    assert "previewOnHover(scene, [num], () => previewFlowStep(uc, i), num);" in js, \
+        "one number, one target, and the line points at it"
+    assert ("previewOnHover(scene, [...(p.__cyHits || [])], () => previewFlowStep(uc, on[0].i),\n"
+            "                   stepNumEl(label, on[0].i) || p);") in js, \
+        "the arrow elects its first step and points at that step's number"
     prev = js[js.index("function previewFlowStep(uc, i) {"):
               js.index("\n}", js.index("function previewFlowStep(uc, i) {"))]
     assert "flowStepInfoHtml(uc, i)" in prev and "bindFlowStepInfo(panel, uc, i)" in prev
