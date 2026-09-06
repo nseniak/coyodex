@@ -3056,7 +3056,8 @@ def test_an_actors_goal_keeps_the_grammar_its_author_wrote() -> None:
     # label added per screen is a label one screen forgets.
     assert "return 'Goal: ' + s;" in fn
     assert "replace(" not in fn and "toUpperCase" not in fn, "the sentence is the author's, untouched"
-    assert js.count("wantsSentence(") == 7, "the function, and the six screens that draw a goal"
+    assert js.count("wantsSentence(") == 8, \
+        "the function, the six screens that draw a goal, and the item box's own spec builder"
     # …and the hero's own lead-word slot went with it: it had exactly one user, and it applied the
     # word to the recorded-nothing case too — "Goal: This map does not say what this actor wants."
     assert "descLbl" not in js and "page-hero-lead" not in js
@@ -4038,7 +4039,13 @@ def test_a_record_named_on_a_reference_arrow_is_a_door() -> None:
     assert "story-elabel-ent" in fill
     # An id the graph does not hold draws its name as TEXT — a button opening nothing is worse
     # than a word.
-    assert "if (!GRAPH.nodes[id]) { lab.appendChild(document.createTextNode(name)); return; }" in fill
+    assert "if (!GRAPH.nodes[id]) { line.textContent = name; lab.appendChild(line); return; }" in fill
+    # ONE RECORD PER LINE, and no commas. They ran as a comma-separated sentence, which hides where
+    # one name ends and the next begins — and every one of them is a door, so a reader had to find a
+    # name's edges before they could click it. The tail joins the list as its own last line.
+    assert 'line.className = "story-elabel-line"'.replace('"', "'") in fill
+    assert "', '" not in fill, "no comma between two records"
+    assert '<span class="story-elabel-line">${tail}</span>' in fill
     # …and its tail comes from the ONE tail component, with NO door: no single page holds the rest of
     # the entities a feature touches in a data area, and a tail that leads nowhere should not look
     # like one that leads somewhere.
@@ -4166,17 +4173,66 @@ def test_a_wire_arrives_flat_however_far_it_has_to_climb() -> None:
     assert "const dx = 60;" not in bind
 
 
-def test_a_feature_card_wears_the_same_colour_it_wears_on_the_journey_board() -> None:
-    """ONE hash, two screens. `featureTint` already tints each feature's band on an actor's journey;
-    the pillar card reuses it, so a reader carries the association across instead of meeting a
-    feature as a white box here and a coloured one there."""
+def test_a_feature_s_colour_is_for_reading_not_for_naming() -> None:
+    """A feature's wash has ONE job: two features drawn NEXT TO EACH OTHER must read as two things —
+    down the Features column, and along the happy path where a run of steps in one feature is a band
+    of colour. It is not a name. Two features at opposite ends of a board may share a wash.
+
+    THAT IS WHAT MAKES FIVE ENOUGH, and sixteen were needed only while the colour was trying to be a
+    name — which it could not be: every wash pale enough to read a sentence on sits within 20 of a
+    kind colour, because the pale band is a narrow slice of the colour space. Colouring the NEIGHBOUR
+    GRAPH needs 4 on MCP Hero (10 features, 14 bands) and 3 on argus and on coyodex.
+
+    SO FEATURES STAY PALE, and the rule the rest of the map keeps is untouched: a deeper wash means a
+    CONTAINER (a subsystem at 0.888 lightness, a data area at 0.906) and a very pale one a leaf.
+
+    ONE FEATURE IS ONE COLOUR ON ONE BOARD. The happy path draws some features twice, so the colour
+    is a property of the feature and never of the position — the greedy colouring runs once per map."""
     js = (VIEWER_DIR / "viewer.js").read_text()
+    assert js.count("const ROTATING_TINTS = [") == 1, "one palette, not a second copy"
+    tints = js[js.index("const ROTATING_TINTS = ["):js.index("]", js.index("const ROTATING_TINTS = ["))]
+    assert tints.count("#") == 10, "ten washes — as many as the pale band holds"
+    assert "FEATURE_EDGES" not in js and "FEATURE_TINTS" not in js, \
+        "the saturated companion is gone with the edge it was for, and the palette is shared now"
+    # WHO IS NEXT TO WHOM: the Features column, and two runs of the happy path that follow each other.
+    nb = js[js.index("function featureNeighbours() {"):js.index("\n}", js.index("function featureNeighbours() {"))]
+    assert "(FEATURES.story || {}).column" in nb and "GRAPH.happy_path" in nb
+    # SEPARATION IS A FLOOR, NOT A TARGET, and both ways of getting that backwards were tried and
+    # measured: the plain greedy colouring piled 7 of MCP Hero's 10 features onto two washes, and
+    # maximising the distance from a neighbour drove every pick to the palette's extremes for the
+    # same result. A modest bar plus "the least-used that clears it" uses all 10 on all 10.
+    hue = js[js.index("function rotateTints(order, adj) {"):
+              js.index("\n}", js.index("function rotateTints(order, adj) {"))]
+    assert "const ROTATE_GAP_STEPS = [45," in js, "one modest bar, then relaxations"
+    assert "used[b] < used[a]" in hue, "the least-used wash that clears the bar"
+    # A FRESH COLOUR BEATS A LOWER BAR: every bar is tried against the unused washes first. Without
+    # that pass a board of eight features spent seven washes and repeated one while two sat unused.
+    assert "(!fresh || used[i] === 0)" in hue
+    assert "FEATURE_COLOUR_OF = null;" in js, "recoloured when a new map arrives"
+    # THE CARD wears it as its BACKGROUND, and carries no stripe.
     card = _story_fn(js, "storyFeatureCardHtml")
-    assert "style=\"background:${featureTint(id)}\"" in card
-    assert js.count("const FEATURE_TINTS = [") == 1, "one palette, not a second copy"
-    # ...and every LABEL on the page wears the same colour as the feature it belongs to, both hops.
+    assert "fill: featureTint(id)" in card and "edge:" not in card
+    # …and the two columns BESIDE it are white. Painting every box its kind's colour was one rule too
+    # many for this picture: the headings already say what each column is, and the fills then
+    # competed with the one colour that carries information here. The kind still says itself in the
+    # glyph and the pills, and the fill stays the kind's on every other picture.
+    for fn in ("storyActorCardHtml", "storyAreaCardHtml"):
+        assert "tinted" not in _story_fn(js, fn), f"{fn}: white, not its kind's wash"
+    # THE INTERFACES PICTURE ROTATES TOO, off the same palette and the same picker. Every box there
+    # is a door, so the door's amber said nothing and made a column of sixteen a wall; the kind word
+    # beside the name still says WHICH door it is. The rule both pictures now follow: on a high-level
+    # picture only the one kind the picture is ABOUT carries a colour, and it rotates.
+    assert "fill: ifaceTint(i.id)" in _story_fn(js, "ifaceBoxHtml")
+    assert "function rotateTints(order, adj) {" in js, "one picker, not two"
+    assert js.count("const ROTATE_GAP_STEPS = [") == 1 \
+        and js.count("const ROTATING_TINTS = [") == 1, "one palette and one ladder, not two"
+    for fn in ("featureHue", "ifaceTint"):
+        assert "rotateTints(" in _story_fn(js, fn), f"{fn} asks the shared picker"
+    # …and so does every LABEL that belongs to that feature, which is what makes a lit card's several
+    # labels read as that feature's voice rather than as one anonymous pill repeated.
     bind = _story_fn(js, "bindStoryDiagram")
     assert "if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);" in bind
+    assert "story-elabel-feat" not in js and "story-elabel-feat" not in (VIEWER_DIR / "viewer.css").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "background: #fff" not in css[css.index(".story-col-spine > .story-card"):
                                          css.index(".story-col-spine > .story-card") + 200], \
@@ -4202,15 +4258,17 @@ def test_a_card_name_is_the_door_that_does_not_steal_the_pin() -> None:
     handler serves all three columns, branching on which id the name carries."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    name = bind[bind.index(".story-namelink"):]
+    name = bind[bind.index(".story-card .ibox-name"):]
     assert "ev.stopPropagation();" in name
     assert "if (cap) go({ kind: 'capability', cap });" in name
     assert "go({ kind: 'actor', act: b.getAttribute('data-actor') });" in name
     for fn, attr in (("storyFeatureCardHtml", "data-cap"), ("storyActorCardHtml", "data-actor")):
         card = _story_fn(js, fn)
-        assert 'class="story-name story-namelink"' in card, f"{fn}: the name is the door"
-        assert 'title="Open the details page of' in card, f"{fn}: the name says where it goes"
-        link = card[card.index("story-namelink"):]
+        assert "nameAttrs:" in card, f"{fn}: the name is the door"
+        # The item box writes the title on every name it draws, so the card no longer says it.
+        assert '`<button type="button" class="ibox-name"' in js \
+            and 'title="Open ${nm}"' in js, "the name says where it goes"
+        link = card[card.index("nameAttrs:"):]
         assert attr in link[:200], f"{fn}: the name carries the id its branch reads"
 
 
@@ -4223,21 +4281,33 @@ def test_no_count_under_a_story_card_is_a_door() -> None:
     for cls in ("story-ucpill", "story-rulespill"):
         assert cls not in js and cls not in css, f"{cls}: the door class is gone, not shadowed"
     for fn in ("storyFeatureCardHtml", "storyActorCardHtml"):
-        pills = _story_fn(js, fn).split("story-pills")[1]
-        assert "<button" not in pills, f"{fn}: no count is a button"
-        assert 'class="story-pill"' in pills, f"{fn}: the count still draws as a pill"
-    assert ".story-pill:hover" not in css, "a label offers no hover affordance"
+        src = _story_fn(js, fn)
+        # A COUNT IS A STRING THE CARD HANDS THE BOX, never markup it writes itself. The card writes
+        # NO control at all now: the item box draws the one door, on the name, so a count cannot
+        # become a control on one card and a label on the next.
+        assert "<button" not in src, f"{fn}: the card writes no control of its own"
+        assert "use case${" in src, f"{fn}: the card still states its count"
+    assert '<span class="ibox-count">' in js and ".ibox-count:hover" not in css, \
+        "a count is a plain label and offers no hover affordance"
 
 
-def test_a_stake_label_is_a_door_to_the_happy_path_named_by_title_never_by_number() -> None:
-    """A label with a happy-path step opens the Happy Path view with that step selected (the same
-    one-shot `sel` restore a flow drill uses); one without says so and stays put. No step NUMBER
-    appears anywhere on this view — the tooltip names the step by its title."""
+def test_a_stake_label_names_its_step_and_is_not_a_door() -> None:
+    """A stake label was a door: it opened the Happy Path with this edge's first step selected. What
+    it cost was the picture — a reader hovering a card to read its stakes was one stray click from
+    losing the page they were reading. The step is still reachable and still selectable on the Happy
+    Path itself, which is the view whose subject that is.
+
+    It still NAMES the step, by title and never by number: no step number appears on this view. And a
+    click on it is swallowed rather than ignored, or it would clear the pinned card underneath."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
-    assert "go({ kind: 'hp', sel: 'hpstep:' + hp.id });" in bind
-    assert "'Open the Happy Path: ' + (hp.title" in bind
+    assert "go({ kind: 'hp'" not in bind, "the label leaves the page no more"
+    assert "lab.title = hp ? (hp.title || 'On the happy path')" in bind
     assert "'Not on the happy path'" in bind
+    assert "lab.addEventListener('click', (ev) => ev.stopPropagation());" in bind
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "story-elabel-live" not in css and "story-elabel-live" not in js, \
+        "the door class is gone, not shadowed"
 
 
 def test_a_pin_stays_on_the_page_and_never_opens_the_drawer() -> None:
@@ -4282,7 +4352,8 @@ def test_story_chrome_never_term_links_but_card_prose_does() -> None:
     sentences (purpose, wants) stay linkable like every other card's."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     skip = js[js.index("const GLOSS_SKIP ="): js.index(";", js.index("const GLOSS_SKIP ="))]
-    for cls in (".story-name", ".story-pill", ".story-colhead", ".story-elabel"):
+    for cls in (".ibox-name", ".ibox-pill", ".ibox-count", ".ibox-chip",
+                ".story-pill", ".story-colhead", ".story-elabel"):
         assert cls in skip, f"{cls} must not term-link"
     assert ".story-desc" not in skip, "card prose participates in term-linking"
 
@@ -4337,10 +4408,10 @@ def test_a_feature_card_counts_its_joined_rules_and_hides_a_zero() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = _story_fn(js, "storyFeatureCardHtml")
     assert "const nr = (f.rules || []).length;" in card
-    assert "nr ? " in card and "rule${nr === 1 ? '' : 's'}</span>" in card
+    assert "nr ? " in card and "rule${nr === 1 ? '' : 's'}" in card
     assert "story-rulespill" not in js
     assert "story-rulespill" not in (VIEWER_DIR / "viewer.css").read_text()
-    assert "<button" not in card.split("story-pills")[1], "no count pill is a button"
+    assert "<button" not in card.split("band:")[1], "no count pill is a button"
     bind = _story_fn(js, "bindStoryDiagram")
     assert "featsec-rules" not in bind, "no count opens a section of the feature page"
     assert "'featsec-' + key" in js, "the feature page's section ids are untouched"
@@ -4933,25 +5004,30 @@ def test_only_an_actor_s_card_gets_an_actor_s_words() -> None:
     assert "isMachineActor(n.kind)) desc" not in fn
 
 
-def test_a_door_on_a_use_case_map_wears_the_kind_glyph_the_interfaces_picture_draws() -> None:
-    """The map said "a door" with a shape and a colour, and left WHICH KIND of door to the legend. It
-    draws the kind now — the same eight drawings the Interfaces picture uses, from the same table, so
-    the two pictures cannot draw one door's kind differently.
+def test_every_box_wears_one_glyph_from_one_function() -> None:
+    """FIVE glyph functions drew the marks on this viewer, and two of them drew the SAME stick figure
+    in two hands — the code said so in its own comment. `itemGlyphSvg` is the one that is left, and
+    every box on every picture reads it.
 
-    THE SLOT IS SIZED IN CSS AND NOT SCOPED TO `#diagram`. Mermaid measures a node label in its own
-    temporary node, outside the diagram, so a scoped rule never reaches the measurement and the box comes
-    out one glyph too narrow — measured, the Gateway box rendered as "Gatew"."""
-    gen = (VIEWER_DIR / "gen_viewer.py").read_text(encoding="utf-8")
-    assert 'if kind == "interface":' in gen and "<span class=cyglyph data-k=" in gen
+    TWO PAIRS, and the pairing is the meaning: one gear is a component and two are a subsystem, one
+    class box is a record and two are a data area. "One, and several" reads without a caption.
+
+    THE GLYPH IS SIZED TWICE, AND BOTH ARE NEEDED. `#diagram svg { width: 100% }` sizes the drawing
+    canvas and reaches every inline SVG under it, so an unscoped rule loses inside a diagram and a 17px
+    mark renders 400px tall. But a box is MEASURED off-screen, outside `#diagram`, where only the
+    unscoped rule applies. The two must agree or every box is laid out at one size and drawn at
+    another."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
-    fill = js[js.index("function fillFlowMapGlyphs(root) {"):
-              js.index("\n}", js.index("function fillFlowMapGlyphs(root) {"))]
-    assert "IFACE_GLYPH[slot.getAttribute('data-k')]" in fill   # ONE table, shared with Interfaces
-    assert "ifaceGlyphSvg(" in fill and "'currentColor'" in fill
-    assert "fillFlowMapGlyphs(scene.root);" in js               # …run on every flow-map bind
+    assert "function itemGlyphSvg(k, ikind) {" in js
+    assert "IFACE_GLYPH_D[IFACE_GLYPH[ikind] || 'doc']" in js   # ONE door table, shared with Interfaces
+    mark = js[js.index("function itemMarkD(k, fill) {"):js.index("function itemGlyphSvg(")]
+    assert "itemCogPath(9, 9, 7.4, 5.2, 6)" in mark              # a component: one gear
+    assert mark.count("itemCogPath(") == 3                       # …and a subsystem: two of them
+    assert "if (k === 'entity') return" in mark and "const box = (x, y) =>" in mark  # one box, and two
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
-    assert "\n.cyglyph {" in css, "not scoped to #diagram, or Mermaid measures the box too narrow"
-    assert "#diagram .cyglyph" not in css
+    assert "\n.ibox-gly { width: 17px; height: 17px;" in css     # for the off-screen measurement
+    assert "#diagram .ibox-gly { width: 17px; height: 17px; }" in css   # …and inside a diagram
+    assert "#diagram .ibox-figure .ibox-gly { width: 46px; height: 46px; }" in css
 
 
 def test_the_first_walk_a_reader_opens_shows_them_the_code_column() -> None:
@@ -4976,28 +5052,26 @@ def test_the_first_walk_a_reader_opens_shows_them_the_code_column() -> None:
 
 
 def test_the_name_is_the_words_and_every_box_s_name_opens_a_page() -> None:
-    """A box's LABEL is not its name. An actor's carries a blank line holding the stick figure, a shared
-    walk's carries its step count and its chips, a door's carries its kind glyph. Targeting the label
-    made the whole box a link — 94% of an actor's — and left nothing to select on. The generator wraps
-    the words in `.cyname`, and that span is what a click and the hover underline read.
+    """A box's LABEL is not its name. An item box carries a glyph, a type word, a sentence and a band of
+    chips beside it; targeting the label made the whole box a link and left nothing to select on. The
+    NAME is its own control, and that control is what a click and the hover underline read.
 
-    INLINE-BLOCK, so the span is ONE contiguous box: a name wrapping onto two lines has a bounding box
-    spanning both, and the middle of it falls in the gap between them. Measured on a shared walk, whose
-    name is the longest thing on any map: the click landed on the paragraph and the name never fired.
+    TWO CLASSES, ONE QUESTION. `.ibox-name` is the item box's name; `.cyname` is what the generators
+    still wrap a name in on the pictures that have not moved onto the item box yet. `nameClick` is the
+    one place that asks, so neither can drift into a second answer.
 
-    And all four kinds open something: an element opens its own page, an actor theirs, a shared walk its
-    own screen. Before this an actor's box could not be opened from a map at all."""
-    gen = (VIEWER_DIR / "gen_viewer.py").read_text(encoding="utf-8")
-    assert 'return f"<span class=cyname>{_safe_label(name)}</span>"' in gen
-    assert gen.count("_name_html(") >= 6, "every box kind wraps its name, actors and shared walks too"
+    And all three kinds open something: an element opens its own page, an actor theirs, a shared walk
+    its own screen. Before this an actor's box could not be opened from a map at all."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
-    assert "t.closest('.cyname')" in js
+    assert "t.closest('.ibox-name, .cyname')" in js
     assert "if (nameClick(ev)) { drillInto(id); return; }" in js                    # an element
     assert "if (nameClick(ev)) { go({ kind: 'actor', act: a.name }); return; }" in js  # an actor
     assert "if (open && (nameClick(ev) || isDrillClick(ev)))" in js                 # a shared walk
+    # THE NAME IS A BUTTON, so it is a keyboard stop and it says on hover that it is a door.
+    assert '<button type="button" class="ibox-name"' in js
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
-    assert "#diagram .cyname { cursor: pointer; display: inline-block; }" in css
-    assert "#diagram .cyname:hover { text-decoration: underline;" in css
+    assert ".ibox-name:hover { text-decoration: underline;" in css
+    assert ".ibox-name:focus-visible {" in css
 
 
 def test_a_walk_draws_no_corner_icons() -> None:

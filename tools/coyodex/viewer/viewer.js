@@ -47,6 +47,11 @@ let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit pr
 let REPO_STATE = 'ok';    // 'ok' | 'no-repo' | 'no-commit' — whether the server can read this map's code
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
 let SUBFLOW_BY_ID = {};   // SFn -> the shared walk itself, for its name and its own screen
+let SUBFLOW_CHIPS = {};   // SFn -> the people, doors and records inside it, for its collapsed box
+// Feature id -> its slot in the two feature palettes. Declared HERE, with the other module
+// state, because `applyBundle` resets it and runs before the palettes' own block is reached.
+let FEATURE_COLOUR_OF = null;
+let IFACE_COLOUR_OF = null;
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 let HP_ACTORS;          // Happy-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
 let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,client,stepIdx}] flow-level actor lifelines
@@ -107,6 +112,7 @@ function applyBundle(b) {
   FLOWS_MAP = b.flowsMap || {};
   SUBFLOW_BY_ID = {};
   for (const sf of (GRAPH.subflows || [])) SUBFLOW_BY_ID[sf.id] = sf;
+  SUBFLOW_CHIPS = b.subflowChips || {};
   HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
   MERMAID_BY_BUCKETFOLD = b.mermaidByBucketFold || {}; FOLDED_BUCKETS = b.foldedBuckets || [];
@@ -118,6 +124,7 @@ function applyBundle(b) {
                                       // code-pane elements are bound.
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
+  injectItemTintCss();   // the item box's per-kind colours, from the ONE table above (see below)
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
   // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
   COMPLETENESS = GRAPH.completeness || {};
@@ -125,6 +132,8 @@ function applyBundle(b) {
   FEATURES = b.features || {};
   FEAT_BY_ID = {};
   for (const f of (FEATURES.features || [])) FEAT_BY_ID[f.id] = f;
+  FEATURE_COLOUR_OF = null;   // recoloured on demand from THIS map's neighbour graph
+  IFACE_COLOUR_OF = null;
   FEAT_COVERAGE = FEATURES.coverage || {};
   COMP_FEATURES = FEATURES.componentFeatures || {};
   ENTITY_OWNERS = FEATURES.entityOwners || {};
@@ -184,8 +193,12 @@ const EMPTY_PANEL = '<p class="empty">Nothing recorded for this.</p>';
 // `class.hideEmptyMembersBox`: a member-less class renders as a plain box (no empty UML compartments),
 // so the subdomain card's collapsed neighbour boxes (subsystems/subdomains) read as simple boxes, like
 // the flowchart cards — only real entities (with attributes) keep the class compartments.
+// `flowchart.wrappingWidth`: the engine caps every node label at 200px by default, with its own
+// wrapper element. An ITEM BOX may be 300px wide, so the cap squeezed it, wrapped its name and made
+// the box taller than the size the engine had just been told — the box and its own node disagreed.
+// 320 is the widest box plus its border, so the cap never bites and the measurement always holds.
 mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default',
-  flowchart: { curve: 'basis' }, class: { hideEmptyMembersBox: true } });
+  flowchart: { curve: 'basis', wrappingWidth: 320 }, class: { hideEmptyMembersBox: true } });
 
 const diagram = document.getElementById('diagram');
 const stage = document.getElementById('stage');
@@ -407,7 +420,8 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 // name column), and the Glossary view itself (the one page that IS the definitions).
 const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ecard-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
-  + '.dv-kindpill, .dv-coll, .story-name, .story-pill, .story-colhead, '
+  + '.dv-kindpill, .dv-coll, .ibox-name, .ibox-pill, .ibox-count, .ibox-chip, '
+  + '.story-pill, .story-colhead, '
   + '.story-elabel, .journey-zkind, .journey-gutter';
 // A page about one element is not decorated with a link to itself: the page's subject is the
 // breadcrumb's last item (the trail names the page — one source of truth), folded the same way the
@@ -745,6 +759,378 @@ function cardExtraHtml(id) {
 function cardPillsHtml(pills) {
   return (pills || []).map((p) =>
     `<span class="ecard-pill ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('');
+}
+
+// ── THE ITEM BOX ─────────────────────────────────────────────────────────────────────────────────
+// ONE box for one thing, drawn wherever a thing is drawn. It replaces eleven separate builders in
+// five different designs: the card list's card, the Interfaces picture's box, the Features picture's
+// three cards, the journey board's box, and the labels the map generator wrote in Python. Measured
+// before this existed: the NAME alone was set in three different sizes, and the same stick figure was
+// drawn twice in two hands, with a comment in the code saying so.
+//
+// FOUR SLOTS, and a variant only says which of them are drawn:
+//   head    glyph · name · the pills that say what the thing IS
+//   what    one sentence
+//   facts   labelled lines (Stored …)
+//   band    counts and chips
+//
+// WHAT SAYS THE KIND depends on where the box is, and this is the rule the whole design turns on:
+//   on a PICTURE   the box's FILL says it, which is what the map has always done and what carries
+//                  furthest at a glance;
+//   in a LIST      the type pill says it and the box stays white, because a list is read.
+// `tinted` is the caller's one flag for that. It is not a second design.
+//
+// THE TYPE WORD IS DROPPED on the small variants: the fill and the glyph already say the kind and the
+// word only repeats them. AN INTERFACE KEEPS ITS WORD EVERYWHERE, because every door is the same amber
+// and one glyph serves two kinds (a browser is a website and their website, a wrench is MCP and agent
+// tools) — `MCP` is the only thing on that box saying which door it is.
+const ITEM_KIND = {
+  capability: 'feature', usecase: 'usecase',
+  human: 'human', service: 'svc', 'ai-agent': 'agent',
+  component: 'component', subsystem: 'subsystem', entity: 'entity', subdomain: 'subdomain',
+  dep: 'dep', interface: 'interface',
+  // A shared walk's chips name their kind as the map does — `actor` for a person.
+  actor: 'human', role: 'human',
+};
+function itemKind(k) { return ITEM_KIND[k] || 'component'; }
+// The kind's colour, from the ONE table the diagrams already paint themselves with (gen_viewer's
+// ELEMENT_TINT, shipped in the bundle). A kind the table has no entry for falls back to the shared
+// walk's neutral slate rather than to a colour that would claim something.
+function itemTint(k) {
+  return (ELEMENT_TINT && ELEMENT_TINT[k]) || { fill: '#f8fafc', stroke: '#475569' };
+}
+// The word a box's type pill carries. An interface says WHICH DOOR (`MCP`, `website`); everything
+// else says its element type, in the reader's word.
+function itemWord(spec) {
+  return spec.k === 'interface' ? ifaceKindWord(spec.ikind || '') : (spec.word || '');
+}
+
+// ── the marks ────────────────────────────────────────────────────────────────────────────────────
+// ONE hand: an 18×18 box, closed shapes, stroked at 1.4 in the kind's own stroke colour. Two of them
+// are PAIRS, and the pairing is the meaning: one gear is a component and two are a subsystem, one
+// class box is a record and two are a data area. "One, and several" reads without a caption.
+function itemCogPath(cx, cy, ro, ri, teeth) {
+  // Six teeth. At 18px a seventh closes the gaps between them and the whole mark reads as a disc.
+  const step = (2 * Math.PI) / teeth, tip = step * 0.24, valley = step * 0.20, pts = [];
+  for (let i = 0; i < teeth; i++) {
+    const a = i * step, b = a + step / 2;
+    pts.push([cx + ro * Math.cos(a - tip), cy + ro * Math.sin(a - tip)],
+             [cx + ro * Math.cos(a + tip), cy + ro * Math.sin(a + tip)],
+             [cx + ri * Math.cos(b - valley), cy + ri * Math.sin(b - valley)],
+             [cx + ri * Math.cos(b + valley), cy + ri * Math.sin(b + valley)]);
+  }
+  return 'M' + pts.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' L') + ' Z';
+}
+// A USE CASE is one person's goal reached through numbered steps, so its mark carries the FIGURE and
+// the STEPS. A SHARED WALK is steps too, but it belongs to several use cases and so to several
+// people: same idea, figure removed, a bare route. The difference between the two marks is exactly
+// the difference between the two things.
+//
+// FOOTPRINTS WERE CONSIDERED AND DROPPED. "Walk" on its own already read as a stroll through the map,
+// which is why the glossary insists on both words every time; a pair of footprints would put that
+// reading back into the one mark a reader cannot argue with. They also turn to mush at 18px.
+//
+// EVERY STATION IS DRAWN THE SAME. The last one was filled at first, to say a walk ends somewhere;
+// one odd dot in three reads as an accent rather than as a meaning.
+const ITEM_FIGURE_D = '<circle cx="3.9" cy="3.5" r="1.7"/>'
+  + '<path d="M3.9 5.4 V10.2 M1.6 7.3 H6.2 M2.1 14.4 L3.9 10.2 L5.7 14.4"/>';
+function itemMarkD(k, fill) {
+  if (k === 'component') {
+    return `<path d="${itemCogPath(9, 9, 7.4, 5.2, 6)}" stroke-linejoin="round"/>`
+      + '<circle cx="9" cy="9" r="2.3"/>';
+  }
+  if (k === 'subsystem') {
+    // The FRONT gear is filled with the kind's own pale tint so it occludes the one behind it — the
+    // same trick the data area's two boxes use.
+    return `<path d="${itemCogPath(11.3, 6.9, 5.9, 4.1, 6)}" stroke-linejoin="round"/>`
+      + '<circle cx="11.3" cy="6.9" r="1.8"/>'
+      + `<path d="${itemCogPath(6.6, 12.2, 5.1, 3.5, 6)}" stroke-linejoin="round" `
+      + `style="fill:${fill}"/>`
+      + '<circle cx="6.6" cy="12.2" r="1.6"/>';
+  }
+  if (k === 'entity') return '<rect x="3" y="3" width="12" height="12" rx="1.8"/><path d="M3 6.6h12"/>';
+  if (k === 'subdomain') {
+    const box = (x, y) => `<rect x="${x}" y="${y}" width="10" height="8.2" rx="1.6" `
+      + `style="fill:${fill}"/><path d="M${x} ${y + 2.9} h10"/>`;
+    return box(5.8, 2.9) + box(2.2, 6.9);
+  }
+  if (k === 'dep') {
+    return '<ellipse cx="9" cy="4.6" rx="6" ry="2.4"/>'
+      + '<path d="M3 4.6v8.8c0 1.3 2.7 2.4 6 2.4s6-1.1 6-2.4V4.6"/>';
+  }
+  if (k === 'usecase') {
+    let rows = ITEM_FIGURE_D;
+    for (const y of [4.4, 9.0, 13.6]) {
+      rows += `<circle cx="9.5" cy="${y}" r="1.35" style="fill:${fill}"/>`
+        + `<path d="M12.4 ${y} H16.4"/>`;
+    }
+    return rows;
+  }
+  if (k === 'subflow') {
+    return '<path d="M3.4 12.6 L9 6.2 L14.6 11.4"/>'
+      + `<circle cx="3.4" cy="12.6" r="1.9" style="fill:${fill}"/>`
+      + `<circle cx="9" cy="6.2" r="1.9" style="fill:${fill}"/>`
+      + `<circle cx="14.6" cy="11.4" r="1.9" style="fill:${fill}"/>`;
+  }
+  // A FEATURE keeps the THREE sparkles it already wears on the Features picture — one large, two
+  // small off its upper and lower right. One alone reads as a star or a compass rose; the companions
+  // are what say "sparkle". Drawn in a 20-unit box like the original and scaled into this hand's 18.
+  if (k === 'feature') {
+    return '<g transform="scale(0.9)">'
+      + `<path d="${sparklePath(8, 11.7, 7.1)}" style="fill:${fill}" stroke-linejoin="round"/>`
+      + `<path d="${sparklePath(16.4, 4.4, 3.3)}" style="fill:currentColor" stroke="none"/>`
+      + `<path d="${sparklePath(16.7, 15.6, 2.5)}" style="fill:currentColor" stroke="none"/>`
+      + '</g>';
+  }
+  if (k === 'agent') {
+    return '<path d="M9 2.1V1.1"/>'
+      + '<circle cx="9" cy="0.75" r="0.75" style="fill:currentColor" stroke="none"/>'
+      + '<rect x="5.2" y="2.1" width="7.6" height="4.8" rx="1.6"/>'
+      + '<path d="M9 6.9v4.5M5.4 8.5h7.2M6.4 15.5 9 11.4l2.6 4.1"/>';
+  }
+  if (k === 'svc') return '<polygon points="4.5,3.2 13,3.2 16.5,9 13,14.8 4.5,14.8 1.5,9"/>';
+  if (k === 'human') {
+    return '<circle cx="9" cy="4" r="2.1"/>'
+      + '<path d="M9 6.2v5.2M5.4 8.2h7.2M6.4 15.5 9 11.4l2.6 4.1"/>';
+  }
+  return '';   // interface: drawn from IFACE_GLYPH_D below
+}
+// THE ONE GLYPH FUNCTION. It replaces five (`storyGlyphSvg`, `storyFeatureGlyphSvg`,
+// `storyAreaGlyphSvg`, `ifaceGlyphSvg`, `ifaceActorGlyphSvg`) plus the map's own two paths.
+// SIZED IN CSS, never by attribute: `#diagram svg { width: 100% }` reaches every inline SVG under it,
+// so a width attribute loses and a 17px mark renders 400px tall.
+function itemGlyphSvg(k, ikind) {
+  const t = itemTint(k);
+  const d = k === 'interface'
+    ? (IFACE_GLYPH_D[IFACE_GLYPH[ikind] || 'doc'] || IFACE_GLYPH_D.doc)
+    : itemMarkD(k, t.fill);
+  return `<svg class="ibox-gly" viewBox="0 0 18 18" fill="none" stroke="${esc(t.stroke)}" `
+    + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + `${d}</svg>`;
+}
+
+// ── the box ──────────────────────────────────────────────────────────────────────────────────────
+const ITEM_VARIANT = {
+  full:    { what: true,  facts: true,  band: true,  clamp: 0, word: true },
+  map:     { what: true,  facts: false, band: true,  clamp: 2, word: true },
+  compact: { what: false, facts: false, band: true,  clamp: 0, word: false },
+  tight:   { what: false, facts: false, band: false, clamp: 0, word: false },
+  // The PERSON on a use case map, at the size the stick figure has always been drawn there: the
+  // glyph leads and the name sits under it. Still this function's output, so the person is not the
+  // one box kind that escapes the shared code.
+  figure:  { what: false, facts: false, band: false, clamp: 0, word: false },
+};
+// `spec` is what a thing IS, with no view in it:
+//   { id, k, name, word, ikind, what, pills:[{text,cls}], facts:[[label,value]], band:[text],
+//     chips:[{name,kind}], edge, dashed }
+// `opts`: { tinted, name (override), extra (caller HTML on the pill row), nameLink, cls (extra
+// classes the CALLER needs on the box — a picture that positions or wires it), attrs (extra
+// attributes, same reason), nameAttrs (extra attributes on the NAME, for a picture that binds
+// its own door), word (force the type word on or off — the page may already say the kind),
+// fill (a background of the caller's own, for the ONE kind whose colour belongs to the thing
+// rather than to its type: a feature, whose wash exists so two of them side by side read as
+// two), foot (caller HTML after the band) }
+function itemBoxHtml(spec, variant, opts) {
+  if (!spec) return '';
+  const v = ITEM_VARIANT[variant] || ITEM_VARIANT.full;
+  const o = opts || {};
+  // `o.word === false` turns it off wherever the PAGE already says the kind — the Features
+  // picture's three columns are labelled, so a word on every card is the heading repeated on
+  // every row. An interface still keeps its word by default, for the reason above.
+  const word = o.word === false ? ''
+    : (o.word === true || v.word || spec.k === 'interface') ? itemWord(spec) : '';
+  const pills = (word ? `<span class="ibox-pill">${esc(word)}</span>` : '')
+    + (spec.pills || []).map((p) =>
+      `<span class="ibox-pill ibox-pill-alt ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('')
+    + (o.extra || '');
+  // THE NAME IS THE DOOR and the rest of the box is the pin — the split every card on this viewer
+  // already makes. `.ibox-name` is what a click test looks for, exactly as `.cyname` was.
+  const nm = esc(o.name || spec.name || '');
+  const name = o.nameLink === false ? `<span class="ibox-name">${nm}</span>`
+    : `<button type="button" class="ibox-name"${o.nameAttrs || ''} `
+      + `title="Open ${nm}">${nm}</button>`;
+  const out = [`<span class="ibox-head"><span class="ibox-glybox">`
+    + `${itemGlyphSvg(spec.k, spec.ikind)}</span>`
+    + `<span class="ibox-title">${name}${pills}</span></span>`];
+  if (v.what && spec.what) {
+    out.push(`<span class="ibox-what${v.clamp === 2 ? ' ibox-clamp2' : ''}">`
+      + `${mdInline(spec.what)}</span>`);
+  }
+  if (v.facts) {
+    for (const [lbl, val] of spec.facts || []) {
+      out.push(`<span class="ibox-fact"><span class="ibox-lbl">${esc(lbl)}</span> ${esc(val)}</span>`);
+    }
+  }
+  if (v.band) {
+    const bits = (spec.band || []).map((b) => `<span class="ibox-count">${esc(b)}</span>`).join('')
+      // A CHIP CARRIES ITS OWN KIND'S COLOUR. On a collapsed shared walk the chips are the only thing
+      // saying the product's edge and its saved data are inside, and the colour says which is which
+      // without spending a word on it.
+      + (spec.chips || []).map((c) =>
+        `<span class="ibox-chip ibox-k-${esc(itemKind(c.kind))} ${esc(c.cls || '')}">`
+        + `${c.glyph || ''}${esc(c.name)}</span>`).join('');
+    if (bits) out.push(`<span class="ibox-band">${bits}</span>`);
+  }
+  if (o.foot) out.push(o.foot);
+  const cls = ['ibox', 'ibox-' + variant, 'ibox-k-' + esc(spec.k)];
+  if (o.tinted) cls.push('ibox-tinted');
+  if (spec.dashed) cls.push('ibox-dashed');
+  if (spec.edge) cls.push('ibox-idedge');
+  if (o.cls) cls.push(o.cls);
+  const css = (spec.edge ? `border-left-color:${esc(spec.edge)};` : '')
+    + (o.fill ? `background:${esc(o.fill)};` : '');
+  const style = css ? ` style="${css}"` : '';
+  const idAttr = spec.id ? ` data-id="${esc(spec.id)}"` : '';
+  return `<span class="${cls.join(' ')}"${idAttr}${style}${o.attrs || ''}>${out.join('')}</span>`;
+}
+// The spec of a map ELEMENT, built from the same `cardFacts` the list card reads, so a thing cannot
+// read one way in a list and another on a picture.
+function itemSpecOf(id) {
+  const c = cardFacts(id);
+  if (!c) return null;
+  const n = GRAPH.nodes[id] || {};
+  const spec = { id, k: itemKind(n.kind), name: c.name, word: c.type, what: c.desc,
+                 pills: c.pills || [], facts: [], band: [], chips: [] };
+  if (n.kind === 'interface') spec.ikind = String((n.fields || {}).Kind || '').trim();
+  // WHERE A RECORD IS KEPT — the one fact about a record a reader wants without opening anything,
+  // and the same line `cardExtraHtml` prints on the list card.
+  if (n.kind === 'entity' && n.store) {
+    const where = [(GRAPH.nodes[n.store.dep] || {}).name, n.store.container].filter(Boolean).join(' · ');
+    if (where) spec.facts.push(['Stored', where]);
+  }
+  // A CONTAINER SAYS HOW MUCH IT HOLDS. It is the one number that makes "there is more inside this"
+  // a quantity rather than a hint.
+  if (n.kind === 'subsystem' || n.kind === 'subdomain') {
+    const kids = Object.values(GRAPH.nodes).filter((x) => x.parent === id).length;
+    if (kids) spec.band.push(kids + (n.kind === 'subsystem' ? ' components' : ' records'));
+  }
+  return spec;
+}
+// ── THE SLOT: how an item box gets onto a drawing ───────────────────────────────────────────────
+// The map generator writes the SHAPE of a drawing — which boxes, which arrows, which step numbers —
+// and it has no business writing what a box says: that is `itemBoxHtml`, and a second copy of it in
+// Python is exactly the drift this change removes. So the generator emits an empty SLOT per box and
+// the viewer fills it.
+//
+// THE ORDER MATTERS, and it is the whole reason this is three steps rather than one. The drawing
+// engine measures a node's label before any of our code runs, so a slot with no size makes every box
+// come out empty and the arrows land on nothing. So:
+//   1. build each box's HTML, and MEASURE it off-screen;
+//   2. rewrite the slot to an empty span carrying that exact width and height, and let the engine lay
+//      the drawing out around boxes the right size;
+//   3. after the drawing is in the page, swap the real box into each slot.
+// The label the engine parses therefore holds NO markup of ours beyond one sized span — no quotes, no
+// angle brackets, nothing its own label syntax could choke on.
+const SLOT_RE = /<span class=cyslot data-k=([a-zA-Z-]*) data-v=([a-z]+) data-id=([^ >]*)(?: data-pill=([^ >]*))?><\/span>/g;
+let slotBoxes = [];        // [{html}] — index is the `data-i` written into the sized span
+// The off-screen node boxes are measured in. It is a plain absolutely-positioned div, NOT inside
+// `#diagram`: a box measured under the diagram's own rules would pick up its font sizing and come out
+// a different size from the one finally drawn.
+let slotRuler = null;
+function slotRulerEl() {
+  if (slotRuler && slotRuler.isConnected) return slotRuler;
+  slotRuler = document.createElement('div');
+  slotRuler.setAttribute('aria-hidden', 'true');
+  slotRuler.style.cssText = 'position:absolute;left:-99999px;top:0;width:max-content;'
+    + 'visibility:hidden;pointer-events:none';
+  document.body.appendChild(slotRuler);
+  return slotRuler;
+}
+// A slot's box, built from the map's own data. `k` is the kind the generator recorded, `id` the
+// element (or a shared walk's `SFn`, or an actor's name), `v` the variant that picture wants.
+function slotSpec(k, id) {
+  if (k === 'subflow') {
+    const sf = SUBFLOW_BY_ID[id] || {};
+    return { id, k: 'subflow', name: sf.name || id, word: 'shared walk', dashed: true,
+             pills: [], facts: [], band: [], chips: SUBFLOW_CHIPS[id] || [] };
+  }
+  if (k === 'role') return itemSpecRole(id);
+  return itemSpecOf(id) || { id, k: itemKind(k), name: id, word: '', pills: [], facts: [],
+                             band: [], chips: [] };
+}
+// Step 1 and 2: every slot in a drawing's source becomes a sized empty span, and its real HTML is
+// parked in `slotBoxes` for step 3.
+function expandItemSlots(src) {
+  slotBoxes = [];
+  if (!src || src.indexOf('cyslot') < 0) return src;
+  const ruler = slotRulerEl();
+  const built = [];
+  const out = String(src).replace(SLOT_RE, (_m, k, v, id, pill) => {
+    const spec = slotSpec(k, decodeURIComponent(id));
+    // A pill the PICTURE knows and the thing itself does not — today only `via AI agent`, which is
+    // true of a person in one walk and not in the next, so it cannot live on the role.
+    if (pill) spec.pills = (spec.pills || []).concat([{ text: decodeURIComponent(pill), cls: '' }]);
+    const html = itemBoxHtml(spec, v, { tinted: true });
+    const i = built.length;
+    built.push(html);
+    return `<span class=cyslot data-i=${i}></span>`;
+  });
+  if (!built.length) return src;
+  // ONE reflow for the whole drawing, not one per box: every box is written into the ruler together
+  // and then all of them are read, so the browser lays out once instead of once per measurement.
+  ruler.innerHTML = built.map((h) => `<div class="ibox-measure">${h}</div>`).join('');
+  const sizes = [...ruler.querySelectorAll('.ibox-measure > .ibox')].map((el) => {
+    const r = el.getBoundingClientRect();
+    return [Math.ceil(r.width), Math.ceil(r.height)];
+  });
+  ruler.innerHTML = '';
+  slotBoxes = built.map((html, i) => ({ html, w: (sizes[i] || [0, 0])[0], h: (sizes[i] || [0, 0])[1] }));
+  return out.replace(/<span class=cyslot data-i=(\d+)><\/span>/g, (_m, i) => {
+    const b = slotBoxes[+i] || { w: 0, h: 0 };
+    return `<span class=cyslot data-i=${i} style='display:inline-block;`
+      + `width:${b.w}px;height:${b.h}px'></span>`;
+  });
+}
+// Step 3: the drawing is in the page, so each sized span becomes the box it was standing in for.
+function fillItemSlots(root) {
+  (root || document).querySelectorAll('span.cyslot[data-i]').forEach((slot) => {
+    const b = slotBoxes[+slot.getAttribute('data-i')];
+    if (!b) return;
+    slot.outerHTML = b.html;
+  });
+}
+
+// THE PER-KIND COLOURS, WRITTEN ONCE, FROM THE TABLE THE DIAGRAMS PAINT THEMSELVES WITH. They are
+// generated into a stylesheet at boot rather than typed into viewer.css, because typing them there
+// would be a second copy of `gen_viewer.ELEMENT_TINT` and the two would drift the first time a colour
+// moved — the exact failure this whole change exists to end.
+//
+// `color-mix` for the border: the pale fill needs an outline a shade of its own stroke, and mixing it
+// here means the table still holds one colour per kind rather than two.
+function injectItemTintCss() {
+  const el = document.getElementById('iboxtint') || document.createElement('style');
+  el.id = 'iboxtint';
+  const out = [];
+  for (const k in (ELEMENT_TINT || {})) {
+    const t = ELEMENT_TINT[k] || {};
+    if (!t.fill || !t.stroke) continue;
+    // TWO RULES, AND THEY WEIGH DIFFERENTLY ON PURPOSE.
+    // The FILL says what kind of thing this is, so it is stated at full strength and nothing on a
+    // page overrides it.
+    // The BORDER is only a resting default. Every picture states its own border for hover and for
+    // the picked card, and this block is injected AFTER the stylesheet, so at equal weight it beat
+    // all of them: a picked card's indigo border never applied, and the border a reader saw was the
+    // hover rule alone — so it appeared on the way in and vanished on the way out. `:where` costs
+    // the selector one class, which is what puts every state rule back in front of it.
+    out.push(`.ibox-tinted.ibox-k-${k}{background:${t.fill}}`);
+    out.push(`.ibox-tinted:where(.ibox-k-${k})`
+      + `{border-color:color-mix(in srgb, ${t.stroke} 34%, #fff)}`);
+    out.push(`.ibox-k-${k} .ibox-pill{background:${t.fill};color:${t.stroke}}`);
+    out.push(`.ibox-chip.ibox-k-${k}{background:${t.fill};color:${t.stroke};`
+      + `border-color:color-mix(in srgb, ${t.stroke} 30%, #fff)}`);
+    out.push(`.ibox-idedge.ibox-k-${k}{border-left-color:${t.stroke}}`);
+  }
+  el.textContent = out.join('\n');
+  if (!el.parentNode) document.head.appendChild(el);
+}
+
+// An ACTOR has no graph node of its own, so its spec is built from the role.
+function itemSpecRole(name) {
+  const r = ROLE_BY_NAME[String(name || '').trim().toLowerCase()];
+  if (!r) return { k: 'human', name: String(name || ''), word: 'actor', pills: [], facts: [], band: [], chips: [] };
+  return { id: r.id, k: itemKind(String(r.kind || 'human').trim().toLowerCase()),
+           name: r.name || name, word: 'actor', what: wantsSentence(r.wants || ''),
+           pills: actorSidePills(r.kind, r.audience), facts: [], band: [], chips: [] };
 }
 
 // One card. `extra` is caller HTML appended to the pill row (a Happy-Path jump, a diff badge) — the few
@@ -3657,6 +4043,11 @@ function shapeOf(el) { return el.querySelector('rect, polygon, path, circle') ||
 function glowNode(el, revealAction = true) {
   shapeOf(el).style.filter = HILITE;
   el.classList.add('is-selected');
+  // …and the ITEM BOX inside it takes the same picked look every other box on this viewer takes.
+  // The node's own shape is invisible where a box is drawn, so the filter above lights nothing there
+  // and this class is what the reader actually sees.
+  const box = el.querySelector('.ibox');
+  if (box) box.classList.add('ibox-picked');
   // Keep the box's corner pill visible after the cursor leaves it while it's the selection. The pill now
   // lives in the front overlay (not this group), so this is a JS flag rather than the old `.is-selected`
   // descendant CSS rule; `_actionIcon` is set by addActionIcon for every box/cluster pill.
@@ -3664,6 +4055,7 @@ function glowNode(el, revealAction = true) {
   if (icon) { icon._selected = !!revealAction; refreshPillReveal(icon); }
   return () => {
     shapeOf(el).style.filter = ''; el.classList.remove('is-selected');
+    if (box) box.classList.remove('ibox-picked');
     if (icon) { icon._selected = false; refreshPillReveal(icon); }
   };
 }
@@ -5311,24 +5703,20 @@ function showFlowPair(uc, a, b) {
 // slot carrying the kind; the eleven drawings and the kind→drawing table live here, beside the
 // Interfaces picture that already uses them — so the two pictures can never draw a door's kind
 // differently. `currentColor` keeps the glyph in the box's own text colour.
-function fillFlowMapGlyphs(root) {
-  root.querySelectorAll('.cyglyph[data-k]').forEach((slot) => {
-    if (slot.firstChild) return;
-    slot.innerHTML = ifaceGlyphSvg(IFACE_GLYPH[slot.getAttribute('data-k')] || 'doc', 'currentColor');
-  });
-}
 // Was the click ON THE NAME — the words themselves, not the label around them? The generator wraps
 // every box's name in `.cyname` for exactly this. The LABEL is not the name: an actor's carries a blank
 // line holding the stick figure, a shared walk's carries its step count and its chips, a door's carries
 // its kind glyph. Targeting the label made the whole box a link — 94% of an actor's — and left nothing
 // to select on. Targeting the words leaves every one of those extra lines to selection.
+// TWO CLASSES, ONE QUESTION. `.ibox-name` is the item box's name; `.cyname` is what the generators
+// still wrap a name in on the pictures that have not moved onto the item box yet. Both answer "was the
+// click on the words themselves", and this is the one place that asks.
 function nameClick(ev) {
   const t = ev && ev.target;
-  return !!(t && t.closest && t.closest('.cyname'));
+  return !!(t && t.closest && t.closest('.ibox-name, .cyname'));
 }
 function bindFlowMap(uc) {
   const scene = mainScene;
-  fillFlowMapGlyphs(scene.root);
   const steps = FLOWS_NARR[uc] || [];
 
   // Every element box selects exactly as it does in any other diagram (glow, neighbourhood dim, its own
@@ -7860,13 +8248,138 @@ function productLeadHtml() {
 // A stable tint per feature, from a hash of its id into a fixed palette — the ONE answer to "what
 // colour is this feature", so any page that ever colours features agrees with this one. Pastel
 // backgrounds, because they sit behind ink text and a 3px rail.
-const FEATURE_TINTS = ['#eef0fd', '#e8f4ee', '#fdf3e4', '#f3e9f7', '#e9f2f9', '#fdeef0',
-                       '#eef7ea', '#f6efe4'];
-function featureTint(fid) {
+// A STABLE COLOUR PER FEATURE, from a hash of its id — the ONE answer to "what colour is this
+// feature", so any page that ever colours features agrees with this one.
+//
+// A FEATURE'S COLOUR IS FOR READING, NOT FOR NAMING. Its whole job is that two features drawn NEXT
+// TO EACH OTHER read as two things — on the Features column, and on the happy path where a run of
+// steps in one feature is a band of colour. It is not a name: two features at opposite ends of a
+// board may share a wash, and the colour does not carry to another screen.
+//
+// TEN WASHES, AND THE PICKER USES AS MANY AS IT CAN. Three or four would satisfy the neighbour
+// rule — measured, 4 on MCP Hero and 3 on argus and on coyodex — and a board drawn in four colours
+// is duller than one drawn in nine for no gain. So the palette is wide and the picker SPREADS across
+// it; "enough to separate neighbours" is the floor it may never go below, not the target.
+//
+// A CLOSE PAIR IN THE PALETTE IS NOT A PROBLEM any more, and that is what lets it be wide: the two
+// closest of these ten are 12 apart, and the picker's whole job is to keep such a pair off two boxes
+// that touch. Only NEIGHBOURS have to be far apart, and they are chosen to be.
+//
+// SO FEATURES STAY PALE, and the rule the rest of the map keeps is untouched: a deeper wash means a
+// CONTAINER (a subsystem 0.888, a data area 0.906) and a very pale one means a leaf. A feature in a
+// band of its own would have said "a feature is a container", 12 away from a data area on the one
+// page where the two stand side by side.
+//
+// Measured: the closest two of these five are 15 apart out of 441; the closest two of the palette
+// this replaces were 7, and the person and the door already ship 4 apart. A band is a large area,
+// not a small mark.
+// SPREAD, NOT STEPPED ROUND THE WHEEL. Ten evenly spaced hues at one lightness gave three greens,
+// two blues and two purples: neighbours on the wheel are near-duplicates by family, and a board drawn
+// from them looked two-tone whatever the picker then did. These ten are chosen by farthest-point
+// sampling over hue AND lightness AND saturation — each is the colour whose nearest already-chosen
+// companion is as far away as possible — so the closest pair anywhere is 19 against that palette's 12
+// and against the 7 of the eight washes this replaces.
+//
+// AND THEY ARE PALE, 0.929 to 0.955, the band the old washes sat in. They can afford to be: on a
+// high-level picture only the ONE KIND the picture is about is coloured — the features on the
+// Features page, the interfaces on the Interfaces page — and everything beside them is white. So a
+// wash has nothing to clear but the other washes and the page.
+const ROTATING_TINTS = ['#ffdbdb', '#dbffff', '#edffdb', '#eddbff', '#faefed',
+                        '#dbffe7', '#dbe7ff', '#ffdbf3', '#edfaf8', '#ffffe2'];
+// How far apart two washes look, as plain distance between their red, green and blue.
+function tintGap(a, b) {
+  const n = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const x = n(a), y = n(b);
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+}
+// SEPARATION IS A FLOOR, NOT A TARGET — and getting that backwards is what made a board two-tone
+// twice over. The plain greedy colouring takes the lowest index no neighbour holds, which piles
+// everything onto the first two washes. Maximising the distance from a neighbour is no better: the
+// furthest colour is always one of the extremes, so it oscillates between the same handful.
+//
+// So the distance is a BAR each candidate must clear, and among everything that clears it the pick
+// is the LEAST-USED wash. A FRESH colour beats a lower bar — every bar is tried against the unused
+// washes first — so the board reaches for a colour it has not spent before it relaxes how far apart
+// two touching boxes are. The bar drops in steps until something clears it, so a crowded item always
+// gets a colour rather than none.
+const ROTATE_GAP_STEPS = [45, 30, 18, 0];
+function rotateTints(order, adj) {
+  const out = {};
+  const used = ROTATING_TINTS.map(() => 0);
+  // Busiest first, so the crowded items choose while the palette is still open.
+  const byLoad = order.slice().sort((a, b) => ((adj[b] || []).size || 0) - ((adj[a] || []).size || 0));
+  for (const f of byLoad) {
+    const taken = [...(adj[f] || [])].map((n) => out[n]).filter((i) => i !== undefined);
+    const gap = (i) => (taken.length
+      ? Math.min(...taken.map((j) => tintGap(ROTATING_TINTS[i], ROTATING_TINTS[j]))) : 999);
+    let best = 0;
+    for (const [bar, fresh] of ROTATE_GAP_STEPS.flatMap((b) => [[b, true], [b, false]])
+      .sort((x, y) => (x[1] === y[1] ? 0 : x[1] ? -1 : 1))) {
+      const ok = ROTATING_TINTS.map((_, i) => i)
+        .filter((i) => gap(i) >= bar && (!fresh || used[i] === 0));
+      if (!ok.length) continue;
+      best = ok.reduce((a, b) =>
+        (used[b] < used[a] || (used[b] === used[a] && gap(b) > gap(a))) ? b : a);
+      break;
+    }
+    out[f] = best;
+    used[best]++;
+  }
+  return out;
+}
+// A neighbour list built from RUNS: consecutive items in a list are drawn touching.
+function chainNeighbours(...lists) {
+  const adj = {};
+  for (const list of lists) {
+    for (let i = 1; i < list.length; i++) {
+      const a = list[i - 1], b = list[i];
+      if (!a || !b || a === b) continue;
+      (adj[a] = adj[a] || new Set()).add(b);
+      (adj[b] = adj[b] || new Set()).add(a);
+    }
+  }
+  return adj;
+}
+// WHO IS NEXT TO WHOM, for a FEATURE: one above the other in the Features column, or side by side as
+// two runs of the happy path. Everything else is free to repeat.
+function featureNeighbours() {
+  const column = ((FEATURES.story || {}).column || []).slice();
+  // The happy path's BANDS: a run of consecutive steps in one feature. Two runs that follow each
+  // other are drawn touching, whether that is along a row or over its wrap to the next one.
+  const bands = [];
+  for (const st of (GRAPH.happy_path || [])) {
+    const f = (CAP_OF_UC[st.uc] || {}).id || null;
+    if (f && f !== bands[bands.length - 1]) bands.push(f);
+  }
+  return chainNeighbours(column, bands);
+}
+function featureHue(fid) {
+  if (!FEATURE_COLOUR_OF) {
+    FEATURE_COLOUR_OF = rotateTints((FEATURES.story || {}).column || [], featureNeighbours());
+  }
+  const at = FEATURE_COLOUR_OF[fid];
+  if (at !== undefined) return at;
+  // A feature the column does not list (a stale link, a mid-edit map) still gets a colour rather
+  // than none: a hash, which cannot be neighbour-aware but is at least stable.
   let h = 0;
   for (const ch of String(fid || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return FEATURE_TINTS[h % FEATURE_TINTS.length];
+  return h % ROTATING_TINTS.length;
 }
+function featureTint(fid) { return ROTATING_TINTS[featureHue(fid)]; }
+// AN INTERFACE ROTATES THE SAME WAY, for the same reason: on a high-level picture the one kind the
+// picture is ABOUT is the only thing coloured, and rotating the colour is what lets a reader scan a
+// column of sixteen without their eye sliding off it. Its neighbours are simply the card above and
+// the card below on the same shore — the two shores are a hub apart and never compared.
+function ifaceTint(iid) {
+  if (!IFACE_COLOUR_OF) {
+    const ours = ifaceSorted('ours').map((i) => i.id);
+    const theirs = ifaceSorted('theirs').map((i) => i.id);
+    IFACE_COLOUR_OF = rotateTints(ours.concat(theirs), chainNeighbours(ours, theirs));
+  }
+  const at = IFACE_COLOUR_OF[iid];
+  return ROTATING_TINTS[at === undefined ? 0 : at];
+}
+
 
 // The display fold gen_viewer._safe_msg applies to every diagram label. HP_ACTORS names live in
 // that space while the page is keyed by the AUTHORED role name — comparing across the two spaces
@@ -8997,29 +9510,49 @@ function walkStepOf(s) {
     .find((k) => String(k).startsWith('hpstep:'));
   return key ? key.slice(7) : null;
 }
-function ringWalkStep() {
+// PICK A STEP, and it stays picked. It was a 1.4s flash, which is the shape of "here it is" and not
+// of "this is the one you asked for" — a reader who looked away lost the step they had navigated to,
+// and there was nothing on the board to click to get it back.
+//
+// Picking does three things, and the third is what makes the first two readable: the row scrolls
+// sideways until the step is in the middle of it, the step's own box lights and stays lit, and the
+// USE CASE'S CARD opens beside it with a line drawn to the step. `is-selected` is what the line
+// looks for (`soleSelectedEl`), so this board gets the same leader line every diagram has without a
+// second implementation of it.
+function pickWalkStep(scroll) {
+  diagram.querySelectorAll('.walk-step.ibox-picked').forEach((e) => e.classList.remove('ibox-picked'));
   if (!walkStepNow) return;
   const el = diagram.querySelector(`.walk-step[data-step="${CSS.escape(walkStepNow)}"]`);
   if (!el) return;
-  // The board is scrolled DIRECTLY, not through scrollIntoView. That walks every scrollable
-  // ancestor, and the page's own wrap is one — it took part of the movement, and the step then
-  // stopped 5px past the board's right edge instead of arriving inside it.
-  const board = el.closest('.walk-strip');
-  if (board) {
-    // Measured, not `offsetLeft`: a box is `position: relative`, so the step's offset parent is its
-    // own box and the number was a few pixels inside it rather than the distance down the board.
-    const br = board.getBoundingClientRect(), r = el.getBoundingClientRect();
-    board.scrollLeft += (r.left - br.left) - (board.clientWidth - r.width) / 2;
+  if (scroll) {
+    // The board is scrolled DIRECTLY, not through scrollIntoView. That walks every scrollable
+    // ancestor, and the page's own wrap is one — it took part of the movement, and the step then
+    // stopped 5px past the board's right edge instead of arriving inside it.
+    const board = el.closest('.walk-strip');
+    if (board) {
+      // Measured, not `offsetLeft`: a box is `position: relative`, so the step's offset parent is
+      // its own box and the number was a few pixels inside it rather than the distance down the
+      // board. The ROW is scrolled sideways; the page is scrolled down to it, because a row far
+      // down the board is off screen however well it is scrolled within itself.
+      const br = board.getBoundingClientRect(), r = el.getBoundingClientRect();
+      board.scrollLeft += (r.left - br.left) - (board.clientWidth - r.width) / 2;
+    }
+    const row = el.closest('.walk-row');
+    if (row) {
+      const rr = row.getBoundingClientRect();
+      if (rr.top < 90 || rr.bottom > window.innerHeight) row.scrollIntoView({ block: 'center' });
+    }
   }
-  el.classList.remove('walk-step-flash');
-  void el.offsetWidth;                        // restart the animation on a repeat of the same step
-  el.classList.add('walk-step-flash');
-  setTimeout(() => el.classList.remove('walk-step-flash'), 1400);
+  el.classList.add('ibox-picked');
 }
 // Three doors, each to the page that thing already has: a step to the flow of the use case it
 // realizes (the same flow the Features tab drills to, so a use case keeps ONE home), a feature's
 // name to that feature's page, a person's name to theirs.
 function bindWalk(root) {
+  // A STEP IS A DOOR to the walk of the use case it realizes — the same walk the Features tab
+  // drills to, so a use case keeps ONE home. The step's own BOX is what says "this one": it lights
+  // on hover, and it stays lit when a link arrives here naming a step (see pickWalkStep). Nothing
+  // pops up: the board is a picture to read across, and a card over it is in the way.
   root.querySelectorAll('.walk-step[data-uc]').forEach((b) => b.addEventListener('click', () => {
     // The step this reader was on, so leaving and coming Back returns to it rather than to step 1.
     walkStepNow = b.getAttribute('data-step');
@@ -9137,7 +9670,6 @@ function storyFeatureCardHtml(id) {
   // where those rules are listed. Zero draws nothing — on the join's floor, "0 rules" would read
   // as "decides nothing" when it can only mean "nothing joined".
   const nr = (f.rules || []).length;
-  const rules = nr ? `<span class="story-pill">${nr} rule${nr === 1 ? '' : 's'}</span>` : '';
   // The NAME is the card's one DOOR to the feature's own details page — the same treatment the cast
   // card gives the actor's name, so a name that opens a page looks the same in both columns. The
   // card body around it stays the pin.
@@ -9149,18 +9681,27 @@ function storyFeatureCardHtml(id) {
   // TWO bands of pill, the same split the cast card makes. Beside the NAME goes the pill that changes
   // how the name itself reads: who the feature is for. The LAST line is counts only, so the two
   // columns' bottom lines are the same kind of line and can be compared down the page.
-  // The feature's OWN colour, from `featureTint` — the same hash the actor journey board tints each
-  // feature band with, so one feature is one colour everywhere it appears and the reader carries
-  // the association between the two screens. Inline, because the tint is per-card data, not a class.
-  return `<article class="story-card story-feature" style="background:${featureTint(id)}" `
-    + `data-sfeat="${esc(id)}" tabindex="0">`
-    + `<span class="story-who">${storyFeatureGlyphSvg()}`
-    + `<button type="button" class="story-name story-namelink" data-cap="${esc(id)}" `
-    + `title="Open the details page of ${esc(name)}">${esc(name)}</button>${aud}</span>`
-    + (f.purpose ? `<p class="story-desc">${mdInline(f.purpose)}</p>` : '')
-    + `<div class="story-pills">`
-    + `<span class="story-pill">${n} use case${n === 1 ? '' : 's'}</span>${rules}</div>`
-    + '</article>';
+  // THE CARD WEARS ITS FEATURE'S OWN WASH. It is the one kind whose fill is not the kind's: a
+  // feature card is only ever drawn in a column of feature cards, under a heading that says so, so
+  // the fill is free to do the job the picture cannot — make the card above and the card below read
+  // as two things. `featureTint` picks it by colouring the neighbour graph, so two cards that touch
+  // never share, and a wash that is reused belongs to a feature somewhere else on the board.
+  //
+  // The left EDGE it briefly carried is gone with it: that was the colour squeezed onto 10px because
+  // the fill had been taken, and the fill is its own again.
+  return itemBoxHtml({ id, k: 'feature', name, word: 'feature', what: f.purpose || '',
+                       pills: [], facts: [],
+                       // The rule count joins the use-case count in the same band, and zero draws
+                       // nothing: on the join's floor "0 rules" would read as "decides nothing" when
+                       // it can only mean "nothing joined".
+                       band: [`${n} use case${n === 1 ? '' : 's'}`]
+                         .concat(nr ? [`${nr} rule${nr === 1 ? '' : 's'}`] : []),
+                       chips: [] },
+                     'full',
+                     { tinted: true, extra: aud, fill: featureTint(id),
+                       word: false, cls: 'story-card story-feature',
+                       nameAttrs: ` data-cap="${esc(id)}"`,
+                       attrs: ` data-sfeat="${esc(id)}" tabindex="0"` });
 }
 function storyActorCardHtml(rid) {
   const r = ROLE_BY_ID[rid] || {};
@@ -9175,14 +9716,17 @@ function storyActorCardHtml(rid) {
   // count on this page: a card carries one door, and that door is its name. The nature pills stay
   // beside the name: they say what this actor IS, which is part of reading the name, not a fact
   // collected under it.
-  return `<article class="story-card story-actor" data-sactor="${esc(rid)}" tabindex="0">`
-    + `<span class="story-who">${storyGlyphSvg(r.kind)}<button type="button" `
-    + `class="story-name story-namelink" data-actor="${esc(r.name || '')}" `
-    + `title="Open the details page of ${esc(r.name || rid)}">${esc(r.name || rid)}</button>`
-    + cardPillsHtml(actorSidePills(r.kind, r.audience)) + '</span>'
-    + (wants ? `<p class="story-desc">${mdInline(wants)}</p>` : '')
-    + `<div class="story-pills">`
-    + `<span class="story-pill">${n} use case${n === 1 ? '' : 's'}</span></div></article>`;
+  const spec = itemSpecRole(r.name || rid);
+  spec.what = wants;
+  spec.band = [`${n} use case${n === 1 ? '' : 's'}`];
+  // WHITE, NOT THE PERSON'S ORANGE. Painting every box its kind's colour was one rule too many for
+  // this picture: the column headings already say what each column is, and the fills then competed
+  // with the one colour that carries information here — the feature's own. The kind still says
+  // itself in the glyph and in the pills, and the fill stays the kind's on every other picture.
+  return itemBoxHtml(spec, 'full',
+                     { word: false, cls: 'story-card story-actor',
+                       nameAttrs: ` data-actor="${esc(r.name || '')}"`,
+                       attrs: ` data-sactor="${esc(rid)}" tabindex="0"` });
 }
 // One DATA AREA box of the right column: a sub-domain holding saved records, named, with how many
 // records it holds. The name is a DOOR to that area's own page (the Domain view drilled into it) —
@@ -9232,34 +9776,40 @@ function storyAreaCardHtml(a) {
   const shared = owners.length > 1
     ? `<p class="story-shared">Shared by ${owners.map((c) => esc(featureName(c))).join(', ')}</p>`
     : '';
-  return `<article class="story-card story-area${owners.length === 1 ? ' story-area-owned' : ''}`
-    + `${owners.length > 1 ? ' story-area-shared' : ''}" data-sarea="${esc(a.id)}" tabindex="0">`
-    + `<span class="story-who">${storyAreaGlyphSvg()}`
-    + `<button type="button" class="story-name story-namelink" `
-    + `data-sd="${esc(a.id)}" title="Open the details page of ${esc(a.name || a.id)}">`
-    + `${esc(a.name || a.id)}</button></span>`
-    + (a.purpose ? `<p class="story-desc">${mdInline(a.purpose)}</p>` : '')
-    + shared
-    + '<div class="story-pills"><span class="story-pill" title="Kinds of thing this area keeps a '
-    + 'record of. Read-only views, value shapes and enums are not counted.">'
-    + `${n} stored entit${n === 1 ? 'y' : 'ies'}</span></div>`
-    + '</article>';
+  return itemBoxHtml({ id: a.id, k: 'subdomain', name: a.name || a.id, word: 'data area',
+                       what: a.purpose || '', pills: [], facts: [],
+                       band: [`${n} stored entit${n === 1 ? 'y' : 'ies'}`], chips: [] },
+                     'full',
+                     // WHITE, for the reason the cast card gives: the column heading says what this
+                     // column is, so a fill here only competes with the feature's own colour.
+                     { foot: shared,
+                       word: false, cls: 'story-card story-area'
+                            + (owners.length === 1 ? ' story-area-owned' : '')
+                            + (owners.length > 1 ? ' story-area-shared' : ''),
+                       nameAttrs: ` data-sd="${esc(a.id)}"`,
+                       attrs: ` data-sarea="${esc(a.id)}" tabindex="0"` });
 }
 // The label a reference arrow carries: the saved records that feature's walks actually reach in
 // that area. Each name is a DOOR — click it and the record is shown in context, selected on the
 // view that draws it — because the label is the one place on this page that names a single record,
 // and a name the reader cannot follow is a claim they have to take on trust. Names, never ids.
 //
-// Capped at three: a feature reaching nine records would draw a pill wider than the column it
+// Capped at three: a feature reaching nine records would draw a pill taller than the column it
 // points at. The tail says how many were left, and stays plain text — there is no single record
 // for it to open.
+//
+// ONE RECORD PER LINE, and no commas. They were a comma-separated run, which reads as a sentence and
+// hides where one name ends and the next begins — and every one of them is a DOOR, so the reader has
+// to find each name's edges before they can click it. A list down the label puts each name on its
+// own line, and the tail joins the list as its last line rather than trailing the final name.
 const _AREA_LABEL_CAP = 3;
 function fillAreaTouchLabel(lab, t) {
   const ids = (t.entities || []).slice(0, _AREA_LABEL_CAP);
-  ids.forEach((id, i) => {
-    if (i) lab.appendChild(document.createTextNode(', '));
+  ids.forEach((id) => {
+    const line = document.createElement('span');
+    line.className = 'story-elabel-line';
     const name = (GRAPH.nodes[id] || {}).name || id;
-    if (!GRAPH.nodes[id]) { lab.appendChild(document.createTextNode(name)); return; }
+    if (!GRAPH.nodes[id]) { line.textContent = name; lab.appendChild(line); return; }
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'story-elabel-ent';
@@ -9269,9 +9819,11 @@ function fillAreaTouchLabel(lab, t) {
       ev.stopPropagation();          // the record's door is not the label's, nor the stage's unpin
       showInContext(id);
     });
-    lab.appendChild(b);
+    line.appendChild(b);
+    lab.appendChild(line);
   });
-  lab.insertAdjacentHTML('beforeend', moreTailHtml((t.entities || []).length - ids.length));
+  const tail = moreTailHtml((t.entities || []).length - ids.length);
+  if (tail) lab.insertAdjacentHTML('beforeend', `<span class="story-elabel-line">${tail}</span>`);
 }
 // Does the story diagram draw on this map? ONE answer, read by the renderer, by renderOverview
 // (which hides the duplicate card grid when it does), and by the search / "show in context"
@@ -9396,10 +9948,10 @@ function bindStoryDiagram(root) {
     const lab = document.createElement('div');
     lab.className = 'story-elabel';
     Object.assign(lab.dataset, keys);
-    // Every label on this page belongs to a FEATURE — an actor's stake in one, or the records one
-    // reaches — so it wears that feature's own colour, the same `featureTint` its card wears and
-    // its band on the journey board wears. A label used to be one indigo pill whatever it labelled,
-    // which made a lit card's several labels read as one voice instead of as that feature's.
+    // A LABEL WEARS THE WASH OF THE FEATURE IT BELONGS TO, the same one that feature's card wears.
+    // That is what makes a lit card's several labels read as that feature's voice rather than as one
+    // anonymous pill repeated — and hovering an ACTOR or a DATA AREA shows labels from several
+    // features at once on 10 of MCP Hero's 17 such cards, one of them seven at once.
     if (keys.sfeat) lab.style.background = featureTint(keys.sfeat);
     // The label is CAPPED to the gutter it crosses, so it can never reach either box — a long stake
     // wraps to two or three lines instead of running under the cards on both sides of it. This one
@@ -9422,23 +9974,15 @@ function bindStoryDiagram(root) {
     // the feature's left edge — which is what makes the stake label read in sentence order.
     const lab = wire(a, f, { sactor: e.actor, sfeat: e.feature }, '', 'sactor', 'sfeat');
     lab.textContent = e.label;
+    // A STAKE LABEL IS NOT A DOOR. It was one: it opened the Happy Path with this edge's first step
+    // selected. What it cost was the picture — a reader hovering a card to read its stakes was one
+    // stray click from losing the page they were reading. The step it named is still reachable, and
+    // still selectable, on the Happy Path itself, which is the view whose subject that is.
+    // NOT EMPTY BACKGROUND EITHER: a click on the label must not clear the pinned card under it.
     const hp = e.step ? HP_BY_ID[e.step] : null;
-    if (hp) {
-      // The label is a door to the walk: the Happy Path view, arriving with this edge's FIRST step
-      // selected (the same one-shot `sel` restore a flow drill uses). Named by TITLE, never by
-      // number — this view carries no step numbers anywhere.
-      lab.classList.add('story-elabel-live');
-      lab.title = 'Open the Happy Path: ' + (hp.title || 'this step');
-      lab.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        go({ kind: 'hp', sel: 'hpstep:' + hp.id });
-      });
-    } else {
-      lab.title = (GRAPH.happy_path || []).length ? 'Not on the happy path'
-        : 'This map has no happy path';
-      // Not a door, but not empty background either: a click on it must not clear the pin.
-      lab.addEventListener('click', (ev) => ev.stopPropagation());
-    }
+    lab.title = hp ? (hp.title || 'On the happy path')
+      : ((GRAPH.happy_path || []).length ? 'Not on the happy path' : 'This map has no happy path');
+    lab.addEventListener('click', (ev) => ev.stopPropagation());
     stage.appendChild(lab); labels.push(lab);
   }
   // The REFERENCE arrows: a feature's walks reach these saved records. Derived and factual — it
@@ -9579,15 +10123,15 @@ function bindStoryDiagram(root) {
     if (!selected) return;
     selected = null;
     storyPinNow = null;
-    stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
+    stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected', 'ibox-picked'));
     clearWires();
     refreshUrl();
   };
   const pin = (key, id, card) => {
     selected = { key, id };
     storyPinNow = { key, id };
-    stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected'));
-    card.classList.add('story-selected');
+    stage.querySelectorAll('.story-card.story-selected').forEach((c) => c.classList.remove('story-selected', 'ibox-picked'));
+    card.classList.add('story-selected', 'ibox-picked');
     show(key, id);
     refreshUrl();
   };
@@ -9634,7 +10178,7 @@ function bindStoryDiagram(root) {
   // branching on which id the name carries. It is also the ONLY door on either card: the counts
   // under the sentence used to be doors too, which put three targets on one small card and made a
   // count read as a place to go rather than a fact about the element.
-  root.querySelectorAll('.story-namelink').forEach((b) => b.addEventListener('click', (ev) => {
+  root.querySelectorAll('.story-card .ibox-name').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
     const cap = b.getAttribute('data-cap');
     const sd = b.getAttribute('data-sd');
@@ -10658,95 +11202,66 @@ const IFACE_GLYPH_D = {
   // "someone else's thing", which is all the map can honestly claim about a name it holds no URL for.
   provider: '<rect x="7" y="4" width="9.5" height="10" rx="2"/><path d="M1.5 9h5.5M4.2 6.6 1.5 9l2.7 2.4"/>',
 };
-// SIZED IN CSS, NOT HERE. `#diagram svg { width: 100%; height: 100% }` sizes the mermaid canvas and
-// reaches every inline SVG under it, so width and height attributes on the tag lose and a 15px icon
-// renders 400px tall. The story cards' glyphs already solve this with a `#diagram`-scoped class, and
-// these follow it — see `#diagram .ifd-glyph` in the stylesheet.
-function ifaceGlyphSvg(key, color) {
-  const d = IFACE_GLYPH_D[key] || IFACE_GLYPH_D.doc;
-  return `<svg class="ifd-glyph" viewBox="0 0 18 18" fill="none" stroke="${color}" `
-    + `stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
-    + `${d}</svg>`;
-}
-// A person or a piece of software, the same two shapes the story diagram draws.
-function ifaceActorGlyphSvg(kind) {
-  // The same bot head on the same body as `storyGlyphSvg`, redrawn in this row's hand: 18px,
-  // stroke-only, `currentColor`. Two hands for one figure, because a chip inherits its colour from
-  // the chip and a card glyph carries the actor tint. The antenna's tip is the one FILLED mark in an
-  // otherwise stroke-only figure: a 0.75px ring at this size renders as a smudge.
-  if (String(kind || '').trim().toLowerCase() === 'ai-agent') {
-    return '<svg class="ifd-agly" viewBox="0 0 18 18" fill="none" stroke="currentColor" '
-      + 'stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'
-      + '<path d="M9 2.1V1.1"/><circle cx="9" cy="0.75" r="0.75" fill="currentColor" stroke="none"/>'
-      + '<rect x="5.2" y="2.1" width="7.6" height="4.8" rx="1.6"/>'
-      + '<path d="M9 6.9v4.5M5.4 8.5h7.2M6.4 15.5 9 11.4l2.6 4.1"/></svg>';
-  }
-  return isMachineActor(kind)
-    ? '<svg class="ifd-agly" viewBox="0 0 18 18" fill="none" stroke="currentColor" '
-      + 'stroke-width="1.6" aria-hidden="true"><rect x="2" y="5" width="14" height="8" rx="4"/></svg>'
-    : '<svg class="ifd-agly" viewBox="0 0 18 18" fill="none" stroke="currentColor" '
-      + 'stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="4" r="2.1"/>'
-      + '<path d="M9 6.2v5.2M5.4 8.2h7.2M6.4 15.5 9 11.4l2.6 4.1"/></svg>';
-}
 // ONE SURFACE, as a card. The `N ways in` count used to lead the last band and is gone: it was the
 // only number here and it measured the wrong thing. 91 addresses behind a dashboard against 10
 // behind a marketing site says which is bigger, and this page is not about size. The count is still
 // on the surface's own page, where "how big is this" is a fair question.
 function ifaceBoxHtml(i, me) {
+  // THE ITEM BOX, in its `full` variant. This card was one of the five designs the item box replaces,
+  // and it is the one the others were measured against — so what it says is unchanged and only the
+  // builder moved. `ifd-box` rides along as a class because the picture's wire geometry, its pinning
+  // and its click handling all address the card by it.
+  //
   // THE SHAPE, in the reader's words, beside the name. The glyph alone asked the reader to recognise
   // eight drawings; the word asks nothing. Both, because they do different work: the glyph is what
   // makes a column scannable at a glance, and the word is what makes it unambiguous when it matters.
-  // A MINTED kind falls through to itself, so a product with a shape the seeds cannot name still
-  // says so rather than showing a blank pill.
-  const kind = i.kind ? `<span class="ifd-kind">${esc(ifaceKindWord(i.kind))}</span>` : '';
-  const staff = i.facing === 'operator' ? '<span class="ifd-staff">staff</span>' : '';
-  // ONE DOOR PER CARD, AND IT IS THE NAME. The people and the providers are FACTS about this
-  // surface, not places to go — they were buttons opening an actor's page and a dependency in the
-  // tree, which put three kinds of target on one small card and made a fact read as somewhere to
-  // click. The same split every other card on this viewer makes: the name leaves, the body pins.
+  // An interface is the ONE kind whose type word survives on every variant, for exactly this reason.
+  const spec = itemSpecOf(i.id) || { id: i.id, k: 'interface', name: i.name, word: 'interface',
+                                     pills: [], facts: [], band: [], chips: [] };
+  spec.ikind = i.kind || '';
+  spec.what = i.what || spec.what;
+  spec.pills = i.facing === 'operator' ? [{ text: 'staff', cls: 'ibox-pill-staff' }] : [];
+  // HOW MUCH OF THE PRODUCT'S WORK COMES THROUGH HERE, as one number. Sixteen cards with nothing to
+  // separate them read as sixteen equal things, and they are not: MCP Hero's dashboard carries 32
+  // use cases and its command line carries none.
+  // NONE SHOWS NOTHING. A pill reading "no use case" was a label for an absence, and the card is
+  // already drawn dashed for it — the quiet is the statement.
+  const n = (i.useCases || []).length;
+  spec.band = n ? [`${n} use case${n === 1 ? '' : 's'}`] : [];
+  // ONE DOOR PER CARD, AND IT IS THE NAME. The people and the providers are FACTS about this surface,
+  // not places to go — they were buttons opening an actor's page and a dependency in the tree, which
+  // put three kinds of target on one small card and made a fact read as somewhere to click.
   // ONE CHIP MAY BE MARKED. On an actor's page every card is there BECAUSE that actor stands at it,
   // and the other people at the same surface are context worth keeping — so the chips stay as they
   // are and the reader's own actor is lit, rather than the rest being dropped.
   // IN THE ORDER THE STORY BRINGS THEM, not alphabetically and not by how busy each one is. On MCP
   // Hero's dashboard that is Visitor, then Organization admin, then Team member — the sequence the
   // product's own happy path takes, which is the same rule the surfaces themselves are sorted by.
-  const chips = ifaceActorRows(i).map(({ role: rid }) => {
+  spec.chips = ifaceActorRows(i).map(({ role: rid }) => {
     const r = ROLE_BY_ID[rid] || {};
-    const svc = isMachineActor(r.kind);
-    return `<span class="ifd-chip-actor${svc ? ' ifd-chip-svc' : ''}`
-      + `${rid === me ? ' ifd-chip-me' : ''}">`
-      + `${ifaceActorGlyphSvg(r.kind)}${esc(r.name || rid)}</span>`;
-  }).join('');
+    const k = String(r.kind || 'human').trim().toLowerCase();
+    return { name: r.name || rid, kind: k,
+             cls: rid === me ? 'ibox-chip-me' : '',
+             glyph: itemGlyphSvg(itemKind(k), '') };
+  });
+  // The PROVIDER is the pipe this interface is reached through, never the far side — the rule the
+  // whole section is built on. It sits under the band as the card's last line, and the tooltip stays:
+  // it says what a provider IS, which is the one thing the line cannot.
   const prov = (i.deps || []).map((d) => {
-    const n = GRAPH.nodes[d];
-    const nm = (n && n.name) || d;
-    // The tooltip stays: it says what a provider IS, which is the one thing the line cannot.
-    return `<span class="ifd-prov" `
+    const nm = (GRAPH.nodes[d] || {}).name || d;
+    return '<span class="ifd-prov" '
       + `title="${esc(nm)} — the pipe this interface is reached through, not the far side">`
-      + `${ifaceGlyphSvg('provider', '#6b7280')}${esc(nm)}</span>`;
+      + `${itemGlyphSvg('dep', '')}${esc(nm)}</span>`;
   }).join('');
-  // HOW MUCH OF THE PRODUCT'S WORK COMES THROUGH HERE, as one number. Sixteen cards with nothing to
-  // separate them read as sixteen equal things, and they are not: MCP Hero's dashboard carries 32
-  // use cases and its command line carries none. In the head row it competed with the name and the
-  // shape for a line that already holds two labels; under the name it split the name from the
-  // sentence explaining it.
-  // NONE SHOWS NOTHING. A pill reading "no use case" was a label for an absence, and the card is
-  // already drawn dashed for it — the quiet is the statement.
-  const n = (i.useCases || []).length;
-  const count = n ? `<p class="ifd-ucs">${n} use case${n === 1 ? '' : 's'}</p>` : '';
-  return `<article class="ifd-box${n ? '' : ' ifd-box-quiet'}" data-iface="${esc(i.id)}"`
-    + ` tabindex="0">`
-    + `<span class="ifd-head">${ifaceGlyphSvg(IFACE_GLYPH[i.kind], '#3730a3')}`
-    + `<button type="button" class="ifd-name" title="Open ${esc(i.name)}">${esc(i.name)}</button>`
-    + `${kind}${staff}</span>`
-    + (i.what ? `<p class="ifd-what">${esc(i.what)}</p>` : '')
-    // …ON ITS OWN LINE, BETWEEN the sentence and the people. It sat under the name, where it split
-    // the name from the sentence that explains it. Here it heads the band of facts the card ends
-    // with — how much work comes through, then who comes.
-    + count
-    + (chips ? `<div class="ifd-chips">${chips}</div>` : '')
-    + prov + '</article>';
+  // THE CARD ROTATES ITS COLOUR, it does not wear the door's amber. On a high-level picture the one
+  // kind the picture is ABOUT is the only thing coloured, and every box on this one is a door — so
+  // amber everywhere said nothing and made a column of sixteen a wall. A rotating wash is what lets
+  // the eye walk down it. WHICH door it is is still said, in the kind word beside the name.
+  return itemBoxHtml(spec, 'full', { fill: ifaceTint(i.id), foot: prov,
+                                     cls: 'ifd-box' + (n ? '' : ' ifd-box-quiet'),
+                                     attrs: ` data-iface="${esc(i.id)}" tabindex="0"` });
 }
+
 // THE ORDER, on each shore: where the walk first reaches it, unbroken, then the surfaces the walk
 // never reaches. It is the same rule the Features page's column uses, and on MCP Hero it reads as
 // the product's own story — a prospect reads the public website, signs up on the dashboard, a member
@@ -11018,6 +11533,10 @@ function bindIfaceDiagram(root) {
     if (!ifaceActorRows(i).length && !(i.useCases || []).length) return;
     const lab = document.createElement('div');
     lab.className = 'ifd-elabel';
+    // …in the colour of the surface it belongs to, the same one that card wears. The box floats over
+    // the picture away from its own card, so without the colour a reader has only the leader line to
+    // join the two — the Features page's labels answer the same question the same way.
+    lab.style.background = ifaceTint(i.id);
     lab.dataset.iface = i.id;
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
@@ -11317,9 +11836,9 @@ function bindSurfacePick(stage, paths, labels) {
     });
     const pick = (ev) => {
       ev.stopPropagation();
-      stage.querySelectorAll('.ifd-box.ifd-picked').forEach((b) => b.classList.remove('ifd-picked'));
+      stage.querySelectorAll('.ifd-box.ifd-picked').forEach((b) => b.classList.remove('ifd-picked', 'ibox-picked'));
       if (pinned === iid) { pinned = null; clear(); remember(); return; }
-      pinned = iid; box.classList.add('ifd-picked'); show(iid); remember();
+      pinned = iid; box.classList.add('ifd-picked', 'ibox-picked'); show(iid); remember();
     };
     box.addEventListener('click', pick);
     // Enter OPENS the surface's page — the keyboard has no hover to preview with, so the key that
@@ -11337,9 +11856,10 @@ function bindSurfacePick(stage, paths, labels) {
     const p = pendingStoryPin;
     pendingStoryPin = null;
     const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(p.id)}"]`);
-    if (box) { pinned = p.id; box.classList.add('ifd-picked'); show(p.id); storyPinNow = p; }
+    if (box) { pinned = p.id; box.classList.add('ifd-picked', 'ibox-picked');
+               show(p.id); storyPinNow = p; }
   }
-  stage.querySelectorAll('.ifd-name').forEach((b) => {
+  stage.querySelectorAll('.ifd-box .ibox-name').forEach((b) => {
     b.addEventListener('click', (ev) => {
       ev.stopPropagation();
       go({ kind: 'interfaces', iface: b.closest('.ifd-box').dataset.iface });
@@ -11366,7 +11886,7 @@ function bindSurfacePick(stage, paths, labels) {
     // gesture as putting a card down.
     if (!ev.target.closest('#diagram')) return;
     if (ev.target.closest('.ifd-box')) return;
-    stage.querySelectorAll('.ifd-box.ifd-picked').forEach((c) => c.classList.remove('ifd-picked'));
+    stage.querySelectorAll('.ifd-box.ifd-picked').forEach((c) => c.classList.remove('ifd-picked', 'ibox-picked'));
     pinned = null; clear(); remember();
   };
   document.addEventListener('click', ifdOutsideClick);
@@ -11710,7 +12230,7 @@ async function renderView(sArg, transient, seq) {
     renderChrome(s); restoreTextScroll(s); applyPendingFlash();
     // …and the ring lands AFTER the remembered offset is put back, for the reason applyPendingFlash
     // states: an arrival scroll that goes first is undone by the restore.
-    ringWalkStep();
+    pickWalkStep(true);
     return;
   }
   // One actor's page — the journey line: their happy-path stations on one rail, zoned by feature,
@@ -11760,7 +12280,10 @@ async function renderView(sArg, transient, seq) {
   // chrome (back/forward still work) so the user can step out.
   let svg;
   try {
-    const src = mermaidFor(s);
+    // ITEM SLOTS ARE FILLED BEFORE THE ENGINE SEES THE SOURCE, and sized before it measures — see
+    // expandItemSlots. A source carrying none passes through untouched, so a picture that has not
+    // been moved onto the item box is unaffected.
+    const src = expandItemSlots(mermaidFor(s));
     if (!src) throw new Error('no diagram for ' + JSON.stringify(s));
     ({ svg } = await mermaid.render('coyodexGraph' + (rc++), src));
   } catch (_) {
@@ -11771,6 +12294,7 @@ async function renderView(sArg, transient, seq) {
   }
   if (seq !== renderSeq) return;  // a newer render started during the async layout — drop this stale one
   diagram.innerHTML = svg;
+  fillItemSlots(diagram);  // each sized span becomes the box it stood in for — step 3 of the slot
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
   emphasizeZoomedFrame(diagram, s);  // thicker border + bigger title on the group you drilled into
   if (s.kind === 'deployment' || s.kind === 'deploymentUnit') styleDeploymentLanes(diagram);  // bold lane titles + gap
@@ -13390,6 +13914,16 @@ PANEL_HOST.addEventListener('dblclick', (ev) => {
 //
 // So the size is compared against what applyPanelBox last WROTE. An inline width or height is also still
 // required: a card the reader never touched must keep following the stylesheet.
+// THE LINE FOLLOWS A SCROLL, and `scroll` does not bubble — so this listens in the CAPTURE phase on
+// the page's own frame and catches every scroller under it. Three of them move a selected box on the
+// happy path alone: the row scrolling sideways, the page scrolling down, and the whole stage. Without
+// this the card stayed where it was while the box it points at slid away, and the line ended in empty
+// space or ran off the layer.
+document.addEventListener('scroll', () => {
+  if (PANEL_HOST.hidden || drawerMode) return;
+  syncCallout();
+}, { capture: true, passive: true });
+
 document.addEventListener('mouseup', () => {
   if (drawerMode || PANEL_HOST.hidden || panelDrag) return;   // a drawer has no corner grip to read
   const w = PANEL_HOST.style.width, h = PANEL_HOST.style.height;

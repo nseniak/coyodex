@@ -36,6 +36,7 @@ import sys
 from html import escape as html_escape
 from pathlib import Path
 from typing import Any, TypedDict, cast
+from urllib.parse import quote
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
 from coyodex.features import as_bundle, build_index
@@ -711,6 +712,25 @@ ELEMENT_TINT = {
     "infraStore": _fill_stroke(INFRA_STORE_STYLE),
     "infraSvc": _fill_stroke(INFRA_SVC_STYLE),
     "infraSec": _fill_stroke(INFRA_SEC_STYLE),
+    # ── the kinds the ITEM BOX draws that no diagram had a colour for ────────────────────────────
+    # An AI agent wears the program colour and the person's stance; the viewer draws the bot figure.
+    "agent": {"fill": "#eef2ff", "stroke": "#4338ca"},
+    # A SHARED WALK is not an element of the product, it is a piece of another use case's story, so
+    # it wears no element colour. Slate, and the dashed border every "there is more inside" box has.
+    "subflow": {"fill": "#f8fafc", "stroke": "#475569", "strokeWidth": "2.5px",
+                "strokeDasharray": "6 3"},
+    # A FEATURE and a USE CASE are the light-member / deep-container pair a component and a subsystem
+    # already make in indigo, here in sky. SKY, and not the person's warm orange the feature glyph
+    # used to borrow, because on the Features picture a feature's box sits between the person's and
+    # the data area's and has to differ from both: 36 from the person, 40 from the data area, where
+    # the warm alternative (rose #ffe4e6) managed only 20 from the person.
+    #
+    # It is close to the component's indigo (14 and 7), and that costs nothing only because neither
+    # a feature nor a use case ever shares a picture with a component. THE RULE THAT FALLS OUT, and
+    # it has to be checked whenever a new picture is drawn: a kind's colour must be far from the
+    # kinds it SHARES A PICTURE WITH, not from every kind in the map.
+    "feature": {"fill": "#e0f2fe", "stroke": "#0369a1"},
+    "usecase": {"fill": "#f0f9ff", "stroke": "#0284c7"},
 }
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
@@ -2893,15 +2913,11 @@ def all_walks(graph: GraphDict) -> list[dict[str, Any]]:
 #: `_safe_label` says in its own docstring that an intentional break is the caller's to add.
 #: The non-breaking space is the belt: even a renderer that ignores the break keeps "AI agent" whole.
 #: Parentheses because this is an aside about the name, not part of it.
-#: TWO SPELLINGS, BECAUSE THE TWO PICTURES SIZE A LABEL DIFFERENTLY, and each broke the other way:
-#:   * the LIFELINE picture widens an actor's column to fit its label, so ONE LINE is free and a
-#:     second line has nowhere to go — pushed up it lands on the figure's legs, pushed down it lands
-#:     on the first message. Both were tried on mcpolis UC29 and both were wrong on screen.
-#:   * the MAP picture wraps a long label inside a box sized for the name, and wrapped it mid-phrase
-#:     ("… via AI" / "agent"), so it needs the break put where a reader would want it.
-#: The non-breaking space keeps "AI agent" whole in either.
+#: ONE SPELLING NOW. There were two, because the two pictures sized a label differently and each broke
+#: the other way. The MAP's is gone with the label it rode on: a person's box there is an item box, and
+#: "via AI agent" is a PILL on it, laid out by the box rather than by a hand-placed line break.
+#: The non-breaking space keeps "AI agent" whole.
 CLIENT_LABEL_TEXT = " (via AI\u00a0agent)"          # one line — the lifeline picture, and matching
-CLIENT_LABEL_SUFFIX = "<br/>(via AI\u00a0agent)"    # its own line — the map picture
 
 
 def flow_client_roles(graph: GraphDict, steps: list[dict[str, Any]]) -> set[str]:
@@ -2939,26 +2955,27 @@ def flow_client_roles(graph: GraphDict, steps: list[dict[str, Any]]) -> set[str]
 # A SEQUENCE DIAGRAM stood beside it and was removed. Two renderings of one walk meant every rule had to
 # be written twice and kept in step — and the map answers strictly more: it draws the element kinds in
 # the structural views' own colours and shapes, which lifelines cannot.
-FLOW_MAP_SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]'), "entity": ('("', '")'),
-                  "subsystem": ('["', '"]'), "subdomain": ('("', '")'),
-                  # A DOOR is drawn as a stadium — the one shape nothing else on this map uses, so
-                  # the place a story crosses the product's edge is never read as a component.
-                  "interface": ('(["', '"])')}
-#: A SHARED WALK collapsed to one box on a use-case map. The subroutine shape (`[[…]]`) is the
-#: flowchart's own symbol for "a process defined elsewhere", which is exactly what a shared walk is,
-#: and the dashed container border repeats the map's existing "there is more inside this" signal.
-#: Slate, because the box is not an element of the product — it is a piece of ANOTHER use case's story
-#: — so it must not wear any element colour.
-SUBFLOW_SHAPE = ('[["', '"]]')
-SUBFLOW_STYLE = f"fill:#f8fafc,stroke:#475569,color:#0f172a,{_CONTAINER_BORDER}"
-FLOW_MAP_STYLE = {"component": COMPONENT_STYLE, "dep": DEP_STYLE, "entity": ENTITY_STYLE,
-                  "subsystem": SUBSYSTEM_STYLE, "subdomain": SUBDOMAIN_STYLE,
-                  "interface": INTERFACE_STYLE,
-                  # An AI agent wears the PROGRAM colour and the person's node shape; the viewer
-                  # re-paths that shape into a bot figure. Missing this entry is a KeyError at the
-                  # classDef loop, not a silent miss, which is the failure mode to prefer.
-                  "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE, "agent": ACTOR_SVC_STYLE,
-                  "subflow": SUBFLOW_STYLE}
+#: HOW A BOX GETS ONTO THIS MAP. The generator writes the SHAPE of the drawing — which boxes, which
+#: arrows, which step numbers — and nothing about what a box SAYS. What a box says is `itemBoxHtml` in
+#: the viewer, and it is the one box every picture in this product draws; a second copy of it here, in
+#: Python, is exactly the drift the item box was built to end. Measured before it existed: eleven
+#: builders in five designs, the name set in three sizes, one stick figure drawn twice.
+#:
+#: So each node's label is one EMPTY SLOT and the node itself is invisible — the box IS the label. The
+#: viewer builds the box, measures it, gives the drawing engine that exact size, and swaps the real box
+#: in once the drawing is on the page (see `expandItemSlots` / `fillItemSlots`).
+#:
+#: The label therefore holds no markup the engine's own label syntax could choke on: one span, three
+#: unquoted attributes, no angle brackets and no quotes of ours. `data-id` is URL-encoded because an
+#: actor's is a NAME, and a name may hold anything.
+FLOW_MAP_SLOT_CLASSDEF = "  classDef itembox fill:none,stroke:none;"
+
+
+def _slot(kind: str, variant: str, ident: str, pill: str = "") -> str:
+    """One item-box slot, as a mermaid node label body."""
+    extra = f" data-pill={quote(pill, safe='')}" if pill else ""
+    return (f"<span class=cyslot data-k={kind} data-v={variant} "
+            f"data-id={quote(ident, safe='')}{extra}></span>")
 
 
 def _flow_map_arrow_label(ns: list[int]) -> str:
@@ -2972,58 +2989,41 @@ def _flow_map_arrow_label(ns: list[int]) -> str:
     return ", ".join(str(n) for n in ns)
 
 
-#: One chip on a collapsed shared-walk box. `securityLevel: "loose"` + htmlLabels means a node label is
-#: rendered as HTML, so the chip is a real styled element (see `.cychip` in viewer.css) rather than a
-#: post-processed rectangle — and Mermaid sizes the box around it, which no post-process could make it do.
-#: Attribute values are unquoted on purpose: the whole label is already inside Mermaid's own quotes.
-#: Each chip sits in a block of its own so it LEFT-ALIGNS. The label as a whole is centred (the walk's
-#: name and its step count read as a title), but a centred stack of pills of different widths reads as
-#: rubble — a list aligns down one edge.
-#: THE NAME, IN ITS OWN SPAN. A box's name opens the thing it names, and the LABEL is not the name: an
-#: actor's label carries a blank line holding the stick figure, and a shared walk's carries its step
-#: count and its chips. Targeting the label made the whole box a link — on an actor, 94% of it — leaving
-#: no room to select. Targeting this span leaves every one of those extra lines to selection.
-def _name_html(name: str) -> str:
-    return f"<span class=cyname>{_safe_label(name)}</span>"
-
-
-def _chip_html(chip: dict[str, str]) -> str:
-    return (f"<span class=cychipline><span class=cychip data-k={chip['kind']}>"
-            f"{_safe_label(chip['name'])}</span></span>")
-
-
 def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
-    """One walk as a LEAF-ONLY map: a box per touched element (component / dependency / entity / the
+    """One walk as a LEAF-ONLY map: a box per touched element (component / dependency / record / the
     driving actor) and one arrow per ordered pair, labelled with the step numbers that ride it.
 
-    A SHARED WALK is one dashed box, and the arrow into it carries that reference's single step number —
-    the walk's insides are not this walk's steps. The box wears the people, doors and records inside it
-    as chips, so collapsing never buries the product's edge or its saved data.
+    EVERY BOX IS AN ITEM BOX, in the variant this picture asked for:
 
-    Three deliberate choices:
+    * the PERSON keeps the stick figure it has always had here, so the actor is still the biggest mark
+      on the drawing (`figure`);
+    * a SHARED WALK is a full box (`full`) — it is the one box a reader cannot see inside, so it has to
+      wear its people, doors and records as chips or collapsing it buries the product's edge;
+    * everything else is `tight`: a glyph, a name, and the kind said by the box's own colour. What a
+      tight box leaves out is one click away in the floating card, which is the same box in full.
+
+    Measured on MCP Hero's 11-step walk: this drawing is 1678x459 against 1224x383 for the old one, so
+    41% wider and 20% taller. Every richer arrangement tried cost more: a full box everywhere at a fixed
+    300px width came to 3170px wide on the 27-step walk, and fitting each box to its own text is what
+    took that back.
+
+    Three choices that predate the item box and still hold:
 
     * **No subsystem / subdomain frames.** Scoped to one use case, a container frames one or two
-      members and reads as noise. The box carries just the element's name — the group lives in the
-      element's own panel, a click away. (A group-name second line was tried and removed: on a live
-      map 94% of boxes carried one, each group repeating on ~2 boxes, so it widened every box while
-      almost never showing a cluster.)
+      members and reads as noise. The group lives in the element's own panel, a click away.
     * **Arrows come from THIS WALK'S STEPS, never the backbone edge list.** A step is what the
       scenario does; a backbone edge is the aggregate of every scenario. Drawing edges here would
-      show relationships this use case never exercises — so the map is a re-rendering of the same
-      data the sequence diagram draws, and can never contradict it.
+      show relationships this use case never exercises.
     * **Nothing is drawn OUT of a shared walk's box.** No step in the model hands control back; the
       walk simply continues, and its next step draws itself. Measured before this was built: an arrow
-      out of the box would have to be invented for 64 of 83 runs, and an invented arrow carries no
-      step, no direction and no code link.
+      out of the box would have to be invented for 64 of 83 runs.
 
-    A box's mermaid id IS its element id (an actor gets the sequence view's `FAn` alias, a shared walk
-    its `SFn`), so the viewer's generic node binding resolves a click with no special casing."""
+    A box's mermaid id IS its element id (an actor gets the `FAn` alias, a shared walk its `SFn`), so
+    the viewer's generic node binding resolves a click with no special casing."""
     steps = own_steps(graph, flow)
-    roles_by_name = _roles_by_name(graph)
     clients = flow_client_roles(graph, steps)
     pid: dict[str, str] = {}
     decls: list[str] = []
-    kinds: set[str] = set()
     n_actor = 0
 
     def ensure(token: str, is_id: bool) -> None:
@@ -3034,90 +3034,29 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
             aid = "FA" + str(n_actor)
             n_actor += 1
             pid[token] = aid
-            # human vs service is the METHOD's distinction, drawn the same way as everywhere else: the
-            # stick figure for a person, the hexagon for an autonomous service. Same glyph vocabulary as
-            # the Context view and the sequence lifelines, so one flow cannot say "a person did this"
-            # where the other says "a scheduled job did".
-            role = roles_by_name.get(token.strip().lower())
-            rkind = str((role or {}).get("kind") or "").strip().lower()
-            # An AI agent takes the PERSON'S node shape — it stands in a story the way a person does —
-            # and the viewer re-paths it into a bot figure. The blank first label line is the room
-            # that figure is drawn in, exactly as for a person.
-            if rkind == "ai-agent":
-                kinds.add("agent")
-                decls.append(f'  {aid}([" <br/>{_name_html(token)}"]):::cy-{aid}')
-                decls.append(f"  class {aid} agent")
-                return
-            if role is not None and grammar.is_machine_role(rkind):
-                kinds.add("svc")
-                decls.append(f'  {aid}{{{{"{_name_html(token)}"}}}}:::cy-{aid}')   # hexagon = service
-                decls.append(f"  class {aid} svc")
-                return
-            kinds.add("human")
-            # The blank first line makes room for the stick figure the viewer redraws this outline as
-            # (`stickFigureNode`) — the same actor glyph the Context view draws.
-            #
-            # ONE BLANK LINE PER TEXT LINE BELOW IT. The label is a block of equal lines CENTRED on
-            # the node, so the name sits at the node's origin only while blanks and text are matched.
-            # Adding the client line without a second blank pulled the name half a line up, into the
-            # figure's feet — measured on mcpolis UC29: a 72px, 3-line block put the name at -12
-            # while the figure ran to -3. Two blanks and two text lines restore the name to 0, which
-            # is exactly what `stickFigureNode` assumes, so the viewer needs no change and the
-            # single-line case is untouched.
-            via = CLIENT_LABEL_SUFFIX if token in clients else ""
-            room = " <br/> <br/>" if via else " <br/>"
-            decls.append(f'  {aid}(["{room}{_name_html(token)}{via}"]):::cy-{aid}')
-            decls.append(f"  class {aid} human")
+            # VIA AN AI AGENT is a fact about THIS WALK, not about the actor, so the generator is the
+            # only thing that can know it and it rides on the slot as an extra pill.
+            via = "via AI agent" if token in clients else ""
+            decls.append(f'  {aid}["{_slot("role", "figure", token, via)}"]:::cy-{aid}')
+            decls.append(f"  class {aid} itembox")
             return
         if token in pid:
             return
         node = cast("dict[str, Any] | None", graph["nodes"].get(token))
-        # An unknown id (validate blocks the build on one, serve still renders drafts) falls back to a
-        # component-shaped box labelled with the raw id — visible as a gap, never silently dropped. A
-        # legal-but-unusual endpoint kind (a step may name a subsystem or subdomain) keeps its OWN
-        # shape and colour: this map speaks the structural views' vocabulary, so drawing a container as
-        # a component would be the map saying something the model does not.
+        # An unknown id (validate blocks the build on one, serve still renders drafts) still draws a
+        # box, labelled with the raw id — visible as a gap, never silently dropped.
         kind = str((node or {}).get("kind") or "component")
-        if kind not in FLOW_MAP_SHAPE:
-            kind = "component"
-        label = _name_html(str((node or {}).get("name") or token))
-        # A DOOR wears the same glyph the Interfaces picture draws for its kind — a browser, a
-        # terminal, a wrench. The map had no way to say WHAT KIND of door this is: shape and colour
-        # said "a door", and the reader went to the legend for the rest.
-        #
-        # An EMPTY span, sized by CSS, filled by the viewer (`fillFlowMapGlyphs`). Mermaid measures the
-        # label before any of our code runs, so the room has to come from the stylesheet; and the eleven
-        # drawings live in viewer.js already, so copying them here would be a second copy to keep in
-        # step. The generator ships the KIND, the viewer owns the picture.
-        if kind == "interface":
-            gk = str(((node or {}).get("fields") or {}).get("Kind") or "").strip()
-            if gk:
-                label = f"<span class=cyglyph data-k={_safe_label(gk)}></span>{label}"
-        open_b, close_b = FLOW_MAP_SHAPE[kind]
         pid[token] = token
-        kinds.add(kind)
-        decls.append(f"  {token}{open_b}{label}{close_b}:::cy-{token}")
-        decls.append(f"  class {token} {kind}")
+        decls.append(f'  {token}["{_slot(kind, "tight", token)}"]:::cy-{token}')
+        decls.append(f"  class {token} itembox")
 
     def ensure_sf(st: dict[str, Any]) -> None:
         sid = str(st["sf"])
         if sid in pid:
             return
         pid[sid] = sid
-        kinds.add("subflow")
-        n = int(cast("int", st.get("sfSteps") or 0))
-        chips = cast("list[dict[str, str]]", st.get("sfChips") or [])
-        # Name, then how big the detour is, then one chip per line. One per line rather than a wrapped
-        # row: the widest chip then sets the box width, so nothing is ever clipped, and the tallest real
-        # case is 4 chips on 1 of the 24 shared walks across both live maps.
-        head = [_name_html(str(st.get("sfName") or sid)),
-                f"<span class=cysteps>{n} step{'' if n == 1 else 's'}</span>"]
-        # The chips carry their own line breaks (each is a block), so only the two centred head lines
-        # are joined with `<br/>` — a `<br/>` before a block would add an empty line above the list.
-        open_b, close_b = SUBFLOW_SHAPE
-        label = "<br/>".join(head) + "".join(_chip_html(c) for c in chips)
-        decls.append(f"  {sid}{open_b}{label}{close_b}:::cy-{sid}")
-        decls.append(f"  class {sid} subflow")
+        decls.append(f'  {sid}["{_slot("subflow", "full", sid)}"]:::cy-{sid}')
+        decls.append(f"  class {sid} itembox")
 
     def box_of(st: dict[str, Any]) -> str:
         return str(st["sf"]) if st.get("sf") else pid[str(st["dst"])]
@@ -3136,10 +3075,7 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     lines = ["flowchart LR", *decls]
     for (a, b), ns in pairs.items():
         lines.append(f"  {a} -->|{_edge_label(_flow_map_arrow_label(ns))}| {b}")
-    for kind in ("component", "dep", "entity", "subsystem", "subdomain", "interface",
-                 "human", "svc", "agent", "subflow"):
-        if kind in kinds:
-            lines.append(f"  classDef {kind} {FLOW_MAP_STYLE[kind]};")
+    lines.append(FLOW_MAP_SLOT_CLASSDEF)
     return "\n".join(lines)
 
 
@@ -3348,6 +3284,9 @@ class ViewBundle(TypedDict):
     hpActors: list[dict[str, Any]]
     flowActors: dict[str, list[dict[str, Any]]]
     elementTint: dict[str, dict[str, str]]
+    #: {SFn: [chip, …]} — the people, doors and records inside each shared walk, so the
+    #: viewer can wear them on that walk's collapsed box without re-deriving the join.
+    subflowChips: dict[str, list[dict[str, str]]]
     mermaidLibs: str
     foldedLibs: list[dict[str, str]]
     mermaidByBucketFold: dict[str, str]
@@ -3470,6 +3409,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
         hpActors=hp_actors(graph) if hp else [],
         flowActors=flow_actors_map(graph),
         elementTint=ELEMENT_TINT,
+        subflowChips=subflow_chips(graph),
         mermaidLibs=gen_libs_mermaid(graph),
         foldedLibs=folded_libs(graph),
         mermaidByBucketFold=mermaid_by_bucketfold(graph),

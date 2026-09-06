@@ -1885,17 +1885,21 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                    border-radius: 16px; padding: 14px 16px 16px;
                    box-shadow: 0 6px 22px rgba(40,44,90,.13), 0 1px 3px rgba(40,44,90,.08); }
 .story-col-spine > .story-colhead { color: #3730a3; font-size: 11.5px; letter-spacing: .08em; }
-/* No `background` here: a feature card carries its OWN colour inline (`featureTint`, the same hash
-   the actor journey board uses), so one feature is one colour on both screens. */
-.story-col-spine > .story-card { border-width: 1.5px; border-color: #b9c0ee;
-                                 box-shadow: 0 2px 8px rgba(40,44,90,.13); }
+/* No `background` here: a feature card's fill says WHAT KIND it is (`.ibox-tinted`), and its own
+   colour is the thick left edge — `featureEdge`, the saturated companion to the wash its band on the
+   journey board wears, off one index, so one feature is one colour on both screens. */
+/* NO BORDER HERE, of either width or colour. The item box sets both: the width once for every box,
+   the colour from the card's own kind. This rule set a uniform indigo over the top of that, and
+   because it is two classes deep it also outranked the shared PICKED state — so choosing a card on
+   the pillar left its border exactly as it was. The pillar lifts its cards with a shadow, which is
+   what "raised" was ever about. */
+.story-col-spine > .story-card { box-shadow: 0 2px 8px rgba(40,44,90,.13); }
 .story-col-spine > .story-card:hover { box-shadow: 0 4px 16px rgba(79,70,229,.24); }
 /* The two side columns sit ON the page, not above it — flat, so the pillar is the only thing with
    height. */
-.story-col-cast > .story-card, .story-col-areas > .story-card { box-shadow: none;
-                                                                border-color: #dcdff0; }
+.story-col-cast > .story-card, .story-col-areas > .story-card { box-shadow: none; }
 .story-col-cast > .story-card:hover, .story-col-areas > .story-card:hover {
-    border-color: #8b93d8; box-shadow: 0 1px 6px rgba(79,70,229,.14); }
+    box-shadow: 0 1px 6px rgba(79,70,229,.14); }
 /* The cast spreads over the spine's height, so its six cards meet the seven features they drive at
    comparable heights instead of bunching at the top with every wire fanning down. */
 .story-col-cast { grid-column: 1; justify-content: space-between; }
@@ -1905,20 +1909,20 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    each area to the first feature whose walks reach it); spreading is what turns that order into a
    position the eye can use. */
 .story-col-areas { grid-column: 5; justify-content: space-between; }
-/* A data area is a quieter box than a feature: it is what the middle column KEEPS, not a thing the
-   reader chose to come for. */
-.story-area { background: #fcfcfe; }
 /* An area name is a sentence-long noun phrase ("Upstream connections and credentials") and wraps to
-   two lines. It must wrap UNDER ITSELF, beside the glyph — not onto a flex line of its own, where a
-   button's default centring then leaves the glyph stranded above centred text. */
-.story-area .story-who { flex-wrap: nowrap; align-items: flex-start; }
-.story-area .story-name { text-align: left; }
-#diagram .story-area .story-glyph { margin-top: 1px; }
+   two lines. It must wrap UNDER ITSELF, beside the glyph — which is what the item box's head already
+   does for every box: the glyph is its own flex item and the title beside it wraps within itself. */
 .story-colhead { margin: 0 0 4px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                  letter-spacing: .06em; color: #6b7280; }
-.story-card { background: #fff; border: 1.5px solid #c7cdf9; border-radius: 10px;
-              padding: 10px 14px 9px; cursor: pointer; box-shadow: 0 1px 2px rgba(30,34,53,.06); }
-.story-card:hover { border-color: #4f46e5; box-shadow: 0 2px 10px rgba(79,70,229,.16); }
+/* THE CARD IS AN ITEM BOX NOW, so its LOOK is written once, at the foot of this file. What is left
+   here belongs to THIS PICTURE: the card is a click target and it lifts on hover. */
+/* A CARD FILLS ITS COLUMN. The item box's `full` variant is 320px wide because that is what the
+   Interfaces picture lays its two shores out at; here the three columns set the width and the card
+   follows, which is what left the pillar 100px wider than the cards standing on it. Two classes, so
+   it outranks the variant's own width. */
+.story-col > .story-card { width: auto; }
+.story-card { cursor: pointer; box-shadow: 0 1px 2px rgba(30,34,53,.06); }
+.story-card:hover { box-shadow: 0 2px 10px rgba(79,70,229,.16); }
 .story-card:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
 /* THE PICKED CARD, ON EVERY CARD-AND-WIRES DIAGRAM. One rule, listing each of them, because "which
    card is picked" must not be answered two ways on two screens that look the same — the Interfaces
@@ -1928,15 +1932,13 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    The border is the same indigo as a lit wire and runs the card's whole height, which used to close
    a surface's TWO wires into a bracket reading as one line bent twice. A surface draws ONE wire now,
    so there is nothing left to close. */
-.story-card.story-selected,
-.ifd-box.ifd-picked { border-color: #4f46e5; border-width: 2px;
-                      padding: 9.5px 13.5px 8.5px; box-shadow: 0 3px 14px rgba(79,70,229,.28); }
-.story-name { font-weight: 650; font-size: 13.5px; color: #111827; }
-.story-desc { margin: 2px 0 0; color: #5a6072; font-size: 11.5px; line-height: 1.35; }
+/* THE PICKED CARD is `.ibox-picked` now, with every other box on this viewer — see the two shared
+   states at the foot of this file. What is left here is nothing: the two classes below survive only
+   as the hooks each picture's own code addresses its card by. */
 .story-pills { display: flex; gap: 5px; align-items: center; margin-top: 5px; flex-wrap: wrap; }
 /* A count under the sentence, on either column: a LABEL, never a door. It carries no cursor and no
    hover, because a card has exactly one door and that door is its name.
-   ONE LOOK, SHARED WITH THE INTERFACES PAGE — see `.ifd-ucs`. Two pages counting the same kind of
+   ONE LOOK, SHARED WITH THE INTERFACES PAGE — see `.ibox-count`. Two pages counting the same kind of
    thing in two different pills is two vocabularies for one idea, and a reader moving between them
    has to learn both. */
 .story-who { display: flex; gap: 8px; align-items: center; font-weight: 650; font-size: 13.5px;
@@ -1964,8 +1966,6 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    page has no red and this is a map defect, not an error state — but italic and quieter, so
    it reads as an absence rather than as a list of records. */
 .story-elabel-noev { font-style: italic; opacity: .85; }
-.story-elabel-live { cursor: pointer; }
-.story-elabel-live:hover { text-decoration: underline; box-shadow: 0 3px 10px rgba(79,70,229,.5); }
 /* A record NAME inside a reference arrow's label is a door of its own (show it in context). It rides
    the pill's own type and colour — it is the label's text, not a control bolted onto it — and says
    it is a door the way every other name-door here does: an underline on hover. */
@@ -2261,9 +2261,21 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* `display: block`, the same rule `.journey-station` carries and for the same reason: a BUTTON
    centres its content box vertically inside itself, and as a stretched flex item every step is as
    tall as the tallest, so a step with a short title had its bullet pushed 8px below the line. */
+/* A STEP IS A BOX. It was a bare column of text with a bullet on the line, so there was nothing on
+   screen to hover and nothing to stay lit once you had picked one — the arrival ring was a flash that
+   faded, and a reader who looked away lost the step they came for. The border is transparent at rest,
+   so the board still reads as one line of steps rather than as a wall of boxes, and it is the SAME
+   box in all three states: nothing moves when it lights. */
 .walk-step { font: inherit; background: none; border: 0; text-align: left; color: inherit;
              display: block; width: 150px; flex: none; position: relative;
-             padding: 0 16px 0 14px; cursor: pointer; border-radius: 8px; }
+             padding: 0 16px 6px 14px; cursor: pointer; border-radius: 8px;
+             transition: box-shadow .12s, background .12s; }
+
+/* PICKED, and it stays picked: the reader asked for this step and nothing but another click takes it
+   away. `is-selected` is the class the floating card's own leader line looks for, so the line finds
+   this step exactly as it finds a box on any diagram. */
+.walk-step.ibox-picked .walk-dot, .walk-step.ibox-picked:hover .walk-dot { background: #4f46e5; }
+.walk-step.ibox-picked .walk-t { color: #312e81; }
 /* Hollow, and filled on hover: the same bullet `.journey-dot` draws on the two rails. */
 .walk-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
             border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
@@ -2311,6 +2323,7 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .walk-nowho { font-size: 11px; font-weight: 650; color: #8a90a4; text-align: center; }
 /* …and a step whose use case the map never recorded: the same rule, for the same reason. */
 .walk-step-dead { cursor: default; }
+.walk-step-dead:hover { box-shadow: none; background: none; }
 .walk-step-dead:hover .walk-dot { background: #fff; }
 .walk-step-dead:hover .walk-t { color: #1e2235; }
 /* Between two INTERCHANGEABLE people, in the same quiet lower case a feature box's label uses. */
@@ -2324,12 +2337,8 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* "Show in context" on this board: a station on an actor's rail, a feature's rail or a story
    arrow's label lands here naming one step, and the step is ringed the way a card list rings a
    card (`.ecard-flash`), since there is no scene to select into. */
-.walk-step-flash { animation: walkflash 1.4s ease-out; }
-@keyframes walkflash {
-  0%   { box-shadow: 0 0 0 3px #6366f1; }
-  70%  { box-shadow: 0 0 0 3px #6366f1; }
-  100% { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0); }
-}
+/* The arrival FLASH is gone with the thing it stood in for. A step picked from anywhere now stays
+   picked (`.walk-step.ibox-picked` above), so there is nothing left for an animation to say. */
 
 .journey-metasep { margin: 0 2px; color: #9aa0b4; }
 /* The other role's name inside the "may also do everything a <role> may do" sentence. A link in
@@ -2494,34 +2503,34 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 
 /* ONE SURFACE, as a card. Three bands, the same three a feature card has: glyph + name + pill, one
    sentence, then what is attached to it. */
-.ifd-box { background: #fff; border: 1.5px solid #dcdff0; border-radius: 10px;
-           padding: 10px 14px 9px; cursor: pointer; box-shadow: 0 1px 2px rgba(30,34,53,.06);
+/* THE CARD IS AN ITEM BOX NOW, so its LOOK is written once, with every other box on this viewer
+   (`.ibox` at the foot of this file). What is left here is what belongs to THIS PICTURE and to no
+   other: the card is a click target, it lifts on hover, and its opacity is what a wire's dimming
+   moves. `ifd-box` rides on the item box as a second class because the wire geometry, the pinning
+   and the click handling all address a card by it. */
+.ifd-box { cursor: pointer; box-shadow: 0 1px 2px rgba(30,34,53,.06);
            transition: opacity .15s, border-color .15s, box-shadow .15s; }
-.ifd-box:hover { border-color: #4f46e5; box-shadow: 0 2px 10px rgba(79,70,229,.16); }
+.ifd-box:hover { box-shadow: 0 2px 10px rgba(79,70,229,.16); }
 .ifd-box:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
 /* The picked look is shared with the Features page — see `.story-card.story-selected` there, which
    this card is listed alongside. */
-.ifd-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* SIZED HERE, and it has to be here: `#diagram svg { width: 100%; height: 100% }` sizes the mermaid
    canvas and reaches every inline SVG under it, so the width and height attributes on the tag lose
    and a 15px icon renders 400px tall. The story cards' glyphs carry the same `#diagram`-scoped
    guard for the same reason. */
 #diagram .ifd-glyph { width: 15px; height: 15px; flex: 0 0 auto; display: block; }
-#diagram .ifd-prov .ifd-glyph { width: 14px; height: 14px; }
-#diagram .ifd-agly { width: 11px; height: 11px; flex: 0 0 auto; }
-.ifd-name { font-weight: 650; font-size: 13.5px; color: #111827; background: none; border: 0;
-            padding: 0; font-family: inherit; cursor: pointer; text-align: left; }
-.ifd-name:hover { text-decoration: underline; text-decoration-color: #6366f1; }
-.ifd-what { margin: 2px 0 0; color: #5a6072; font-size: 11.5px; line-height: 1.35; }
+#diagram .ibox-chip .ibox-gly { width: 11px; height: 11px; }
+#diagram .ifd-prov .ibox-gly { width: 14px; height: 14px; }
 /* WHO STANDS HERE, inside the box. This was a column of its own with a wire to every surface: 13
    wires and 240px of width to say what these chips say. A chip carries no sentence and cannot be
    read backwards, and the backwards question — which surfaces does one actor stand at — is answered
    in full on that actor's own page. */
-.ifd-chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 7px; }
-.ifd-chip-actor { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px;
-                  padding: 2px 8px 2px 5px; border-radius: 99px;
-                  border: 1px solid #e6d5cc; background: #fffaf7; color: #7c2d12; }
-.ifd-chip-actor.ifd-chip-svc { border-color: #d8dcf5; background: #f8f9ff; color: #3730a3; }
+/* WHO STANDS HERE, inside the box. This was a column of its own with a wire to every surface: 13
+   wires and 240px of width to say what these chips say. A chip carries no sentence and cannot be
+   read backwards, and the backwards question — which surfaces does one actor stand at — is answered
+   in full on that actor's own page.
+   THE CHIP IS THE ITEM BOX'S CHIP, and it takes its colour from the person's or the program's own
+   tint, the same way a chip on a collapsed shared walk does. */
 /* THE PROVIDER, on its own line under a hairline. It was a pill in a count band and read as one more
    small grey fact. It is not that: it is who is actually out there.
    NO BRAND LOGO. The map records a dependency's name, kind and purpose, and no URL or domain to take
@@ -2535,14 +2544,11 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* THE SHAPE, beside the name and before `staff`. It takes the indigo a card pill already uses for a
    piece of software, and the same indigo as the glyph it sits next to, so the two read as one fact
    said twice rather than as two. */
-.ifd-kind { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-            padding: 1px 7px; border-radius: 9px; background: #eef2ff; color: #3730a3;
-            border: 1px solid #cdd6fb; }
 /* `staff`, the SAME word and the same amber a feature card and an actor card use for an internal
    audience. A user-facing surface shows nothing at all, which is the silence features already keep. */
-.ifd-staff { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-             padding: 1px 7px; border-radius: 9px; background: #fef3c7; color: #92400e;
-             border: 1px solid #eed9a0; }
+/* `staff`, the SAME word and the same amber a feature card and an actor card use for an
+   internal audience. Declared with the item box's own pills, below, so the two are read in
+   the order they are written. */
 /* HOW MUCH OF THE PRODUCT'S WORK COMES THROUGH HERE — sixteen cards with nothing to separate them
    read as sixteen equal things, and MCP Hero's dashboard carries 32 use cases against its command
    line's none. ON ITS OWN LINE under the name: in the head row it was a third label competing with
@@ -2563,15 +2569,13 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    the actor chip's 1.42 — the count started shouting over the people, and a count is the smaller
    fact of the two. This one measures 1.44 on white and 1.23-1.32 on the tints, which is the actor
    chip's own 1.42 and 1.21-1.30 in green. Quiet, and no longer invisible. */
-.ifd-ucs, .story-pill {
+.ibox-count, .story-pill {
   font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .04em; padding: 1px 7px; border-radius: 9px;
   background: #eef7f0; color: #166534; border: 1px solid #c3ddcc; white-space: nowrap; }
-/* …and on an interface card it stands on its own line under the name. */
-.ifd-ucs { display: inline-block; margin: 5px 0 0; }
 /* …and the card itself steps back. Dashed rather than faded, because faded reads as "loading" and
    dashed reads as "outside the story", which is what it is. */
-.ifd-box-quiet { border-style: dashed; background: #fcfcfe; }
+.ifd-box-quiet { border-style: dashed; }
 
 /* WHAT CROSSES, hidden at rest and shown for the surface the reader picked. ONE box per surface,
    both directions inside it. It was one box PER DIRECTION, and on the ten two-way surfaces of MCP
@@ -2834,16 +2838,7 @@ body.insp-on { cursor: crosshair; }
                    text-decoration-color: #c7d2fe; }
 .pane-title-link:hover { text-decoration-color: #4338ca; }
 
-/* The kind glyph on a door's box in a use case map. EMPTY and sized here: Mermaid measures the node
-   label before any of our code runs, so the room must come from the stylesheet, or the box is drawn
-   too narrow and the name is clipped. `fillFlowMapGlyphs` puts the drawing in afterwards.
-   NOT scoped to `#diagram`: Mermaid measures a label in its own temporary node, outside the diagram,
-   so a scoped rule does not reach it and the box comes out one glyph too narrow. Measured: the
-   Gateway box rendered as "Gatew". 18px to match the drawing's own box, which `.ifd-glyph` sizes. */
-.cyglyph { display: inline-block; width: 18px; height: 18px; vertical-align: -4px;
-           margin-right: 5px; }
-
-/* A BOX'S NAME IS A LINK, and it says so on hover — the same underline `.ifd-name` draws on the
+/* A BOX'S NAME IS A LINK, and it says so on hover — the same underline `.ibox-name` draws on the
    Interfaces picture and `.ecard-name` draws on a card. Only on boxes whose name actually opens
    something: an actor's box is almost all label, so its name selects rather than opens, and an
    underline there would promise a door that is not one. */
@@ -2853,3 +2848,160 @@ body.insp-on { cursor: crosshair; }
    whose name is the longest thing on any map. */
 #diagram .cyname { cursor: pointer; display: inline-block; }
 #diagram .cyname:hover { text-decoration: underline; text-decoration-color: #6366f1; }
+
+/* ── THE ITEM BOX ────────────────────────────────────────────────────────────────────────────────
+   One box for one thing, drawn wherever a thing is drawn. Everything below is the ONE place the box
+   is styled: the card list's card, the Interfaces picture's box, the Features picture's cards and
+   every box on a diagram now come out of `itemBoxHtml` and land here.
+
+   NOT SCOPED TO `#diagram`. Mermaid measures a node label inside its own temporary node, outside the
+   diagram, so a scoped rule does not reach it and every box on a map comes out too narrow. The same
+   trap `.ifd-glyph` records, and it once cost a box reading "Gatew". */
+.ibox { display: block; box-sizing: border-box; text-align: left; background: #fff;
+        border: 1.5px solid #dcdff0; border-radius: 10px; padding: 8px 11px 9px;
+        font: 400 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+/* A box on a picture FITS ITS TEXT, with a floor so a short name still leaves the sentence room and
+   a ceiling so a long one does not run away. Measured on MCP Hero's 11-step walk: a fixed 300px box
+   made every box as wide as the widest and cost 70% more drawing width, where fitting the text costs
+   29%. The floor and the ceiling are the whole difference. */
+/* INLINE-BLOCK, so `width:auto` is shrink-to-fit wherever the box is laid out — including the
+   off-screen node the box is measured in before the drawing engine is given its size. As a block it
+   would fill whatever container it was measured in and every box would come out the same width. */
+.ibox-map, .ibox-compact, .ibox-tight { display: inline-block; width: auto; min-width: 200px;
+                                        max-width: 300px; }
+.ibox-tight { min-width: 0; padding: 6px 10px; }
+.ibox-full { width: 320px; }
+/* The PERSON on a map, at the size the stick figure has always been drawn there.
+   IT IS STILL A BOX. It carried `border: 0`, and a box with no border has nothing for the hover and
+   the picked states to change — the actor was the one box on a map that never answered a click. It
+   keeps its kind's fill and its kind's border like every other box; what makes it a figure is the
+   glyph's size and the name sitting under it, not the absence of a frame. */
+.ibox-figure { width: auto; min-width: 96px; display: inline-block; text-align: center;
+               padding: 6px 10px 8px; }
+.ibox-figure .ibox-head { display: block; }
+.ibox-figure .ibox-glybox { display: block; margin-inline: auto; margin-bottom: 4px; }
+.ibox-figure .ibox-gly { width: 46px; height: 46px; margin: 0; }
+/* THE NAME FILLS THE BOX AND CENTRES IN IT. A button shrink-wraps its text even as a block, so the
+   name sat at the left of a box made wider by something else — the pill under an AI agent, whose
+   "user AI agent" is wider than "Assistant". `.ibox-name` sets `text-align: left` for every other
+   variant, where the name leads a row; here the whole box is centred and the name follows it. */
+.ibox-figure .ibox-title { display: block; }
+.ibox-figure .ibox-name { display: block; width: 100%; text-align: center; }
+.ibox-figure .ibox-pill { display: inline-block; margin-top: 3px; }
+/* "There is more inside this" — the dashed border every container on this viewer already wears. */
+.ibox-dashed { border-style: dashed; }
+.ibox-head { display: flex; align-items: flex-start; gap: 6px; }
+.ibox-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0;
+              flex: 1 1 auto; }
+.ibox-glybox { display: inline-flex; flex: none; line-height: 0; margin-top: 1px; }
+.ibox-gly { width: 17px; height: 17px; flex: none; }
+.ibox-name { font: inherit; font-weight: 650; font-size: 13.5px; color: #111827; background: none;
+             border: 0; padding: 0; text-align: left; cursor: pointer; }
+.ibox-name:hover { text-decoration: underline; text-decoration-color: #6366f1; }
+.ibox-name:focus-visible { outline: 2px solid #4f46e5; outline-offset: 1px; border-radius: 3px; }
+.ibox-pill { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+             padding: 1px 6px; border-radius: 999px; background: #eef0f6; color: #4b5563; }
+.ibox-pill-alt { background: #fff; border: 1px solid #dfe2ec; color: #6b7280; }
+/* `staff`, the same amber a feature card and an actor card use for an internal audience. A
+   user-facing box shows nothing at all, which is the silence features already keep. */
+.ibox-pill.ibox-pill-staff { background: #fef3c7; color: #92400e; border-color: #eed9a0; }
+.ibox-what { display: block; margin-top: 4px; font-size: 11.5px; line-height: 1.35; color: #5a6072; }
+/* Two lines, because a component's sentence runs to 188 characters on a live map and a picture has
+   no room for a paragraph. The whole sentence is one click away in the floating card. */
+.ibox-clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+               overflow: hidden; }
+.ibox-fact { display: block; margin-top: 4px; font-size: 11.5px; color: #6b7280; }
+.ibox-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px;
+            color: #9ca3af; }
+/* NO RULE ABOVE IT. The gap is already the separator; a hairline as well said the same thing twice. */
+.ibox-band { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.ibox-count { font-size: 10.5px; color: #6b7280; }
+.ibox-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px;
+             border-radius: 9px; font-size: 10px; border: 1px solid #dfe2ec;
+             background: #fbfbfe; color: #4b5563; }
+.ibox-chip .ibox-gly { width: 11px; height: 11px; }
+/* ONE CHIP MAY BE MARKED — the reader's own actor, on that actor's page, where every card is
+   there BECAUSE they stand at it and the other people are context worth keeping. */
+.ibox-chip-me { outline: 2px solid #4f46e5; outline-offset: 1px; }
+
+/* ── WHICH BOX AM I ON, AND WHICH ONE DID I CHOOSE ───────────────────────────────────────────────
+   TWO STATES, WRITTEN ONCE, FOR EVERY BOX ON THIS VIEWER. Five pictures each answered these two
+   questions their own way: the Features cards, the Interfaces cards, a box on a diagram, a happy
+   path step, and a card in a list. Four different hover colours, three different picked looks, and
+   two of them had drifted far enough that the same gesture read as a different app.
+
+     hover    the border goes blue. Nothing else moves.
+     picked   the SAME blue, a little thicker, and the box lifts on a shadow. It stays until the box
+              is deselected — a pick is a decision, not a hint.
+
+   ONE BLUE FOR BOTH, and that is deliberate: hover and pick are the same fact at two strengths ("this
+   box"), so what separates them is the WEIGHT of the line and the lift under it, not a second hue.
+   A darker blue was tried for the pick and read as a different state rather than a firmer one.
+
+   `ibox-picked` is the ONE class. Every picture toggles it and none of them styles it, so the two
+   states cannot drift apart again.
+
+   THE BOX DOES NOT CHANGE SIZE WHEN IT IS PICKED. The extra border comes out of the padding, because
+   the wires on two of these pictures are measured against these boxes: a card that grew by a pixel
+   on a click would drag every line attached to it.
+
+   THE LEFT EDGE IS LEFT ALONE where a box has an identity edge — that stripe is the only place a
+   feature's own colour survives, and `border-width` is a shorthand that would flatten it. That trap
+   has now caught this file twice. */
+.ibox:hover { border-color: #4f46e5; }
+.ibox.ibox-picked, .ibox.ibox-picked:hover {
+  border-top-color: #4f46e5; border-right-color: #4f46e5; border-bottom-color: #4f46e5;
+  border-top-width: 2px; border-right-width: 2px; border-bottom-width: 2px;
+  padding-top: 7.5px; padding-right: 10.5px; padding-bottom: 8.5px;
+  box-shadow: 0 3px 14px rgba(79, 70, 229, .28); }
+.ibox.ibox-picked:not(.ibox-idedge) { border-left-color: #4f46e5; border-left-width: 2px;
+                                      padding-left: 10.5px; }
+/* A TIGHT box carries its own smaller padding, so its compensation is its own. */
+.ibox-tight.ibox.ibox-picked { padding: 5.5px 9.5px; }
+.ibox-tight.ibox.ibox-picked:not(.ibox-idedge) { padding-left: 9.5px; }
+.ibox-figure.ibox.ibox-picked { padding: 5.5px 9.5px 7.5px; }
+.ibox-figure.ibox.ibox-picked:not(.ibox-idedge) { padding-left: 9.5px; }
+/* A HAPPY PATH STEP takes the SAME TWO STATES in the same colours, drawn as an inset ring instead of
+   a border. A border is layout: 1.5px of it pushes every bullet off the line the board draws them
+   on, which a test measures to the pixel. A ring paints the same box and occupies nothing. */
+.walk-step:hover { box-shadow: inset 0 0 0 1.5px #4f46e5; }
+.walk-step.ibox-picked, .walk-step.ibox-picked:hover {
+  box-shadow: inset 0 0 0 2px #4f46e5, 0 3px 14px rgba(79, 70, 229, .28); }
+
+/* The IDENTITY edge: the fill says WHAT KIND, this says WHICH ONE. Drawn only where a thing has a
+   colour of its own, which today means a feature.
+   TEN PIXELS. At 4 it read as a slightly heavier border rather than as a colour, and this edge is the
+   only place a feature's own colour survives now that the fill carries the kind. */
+.ibox.ibox-idedge { border-left-width: 10px; }
+
+/* A BOX ON A DIAGRAM IS AN ITEM BOX NOW, so the drawing engine's own node shape is invisible and the
+   selection/hover highlight has nothing to land on. `glowNode` puts an SVG filter on that shape and
+   marks the group `.is-selected`; these two rules are the item box's half of the same signal. */
+#diagram g.node .ibox { transition: border-color .12s, box-shadow .12s; }
+/* A box on a DIAGRAM takes the same two states as every other box: `glowNode` puts `ibox-picked` on
+   it, and the hover is the shared `.ibox:hover`. The node's own invisible shape is not the box, so
+   hovering the transparent padding around it no longer lights anything. */
+/* The box is the label, so the label must not be clipped by the invisible node it sits in. */
+#diagram g.node foreignObject { overflow: visible; }
+/* THE GLYPH, SIZED TWICE, AND BOTH ARE NEEDED. `#diagram svg { width: 100% }` sizes the drawing canvas
+   and reaches every inline SVG under it, so an unscoped `.ibox-gly` loses inside a diagram and a 17px
+   mark renders 400px tall — the same trap `.ifd-glyph` above records. But the box is
+   MEASURED off-screen, outside `#diagram`, where only the unscoped rule applies. The two must agree, or
+   every box on a map is laid out at one size and drawn at another. */
+#diagram .ibox-gly { width: 17px; height: 17px; }
+/* THE DRAWING ENGINE PAINTS EVERY SHAPE INSIDE A NODE. It injects a per-render rule
+   (`#<id> .node circle, … .node path { fill: … }`), and a CSS rule beats a `fill`
+   ATTRIBUTE however that attribute was written — so a stick figure's head and legs came
+   out filled with the engine's lilac. Every mark that WANTS a fill carries it as an
+   INLINE style, which nothing can outrank; this clears every other one. */
+#diagram .ibox .ibox-gly circle, #diagram .ibox .ibox-gly path,
+#diagram .ibox .ibox-gly rect, #diagram .ibox .ibox-gly ellipse,
+#diagram .ibox .ibox-gly polygon { fill: none; }
+#diagram .ibox-figure .ibox-gly { width: 46px; height: 46px; }
+
+/* ONE RECORD PER LINE on a reference arrow's label. They ran as a comma-separated sentence, which
+   hid where one name ended and the next began — and each name is a door, so a reader had to find its
+   edges before they could click it. The tail joins the list as its own last line. */
+.story-elabel-line { display: block; }
+.story-elabel-line + .story-elabel-line { margin-top: 2px; }
+

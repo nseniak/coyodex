@@ -269,6 +269,10 @@ def test_every_bullet_of_the_walk_sits_on_the_line() -> None:
 def test_the_walk_has_three_doors_and_each_opens_that_thing_s_own_page() -> None:
     """A step opens the flow of the use case it realizes — the same flow the Features tab drills to,
     so a use case keeps ONE home. A feature's name opens that feature's page, a person's name theirs.
+
+    THE STEP ITSELF IS THE DOOR, and nothing pops up when it is clicked: the board is a picture to
+    read across, and a card over it is in the way. What says "this one" is the step's own BOX, which
+    lights on hover and stays lit when a link arrives here naming a step.
     """
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
@@ -595,12 +599,12 @@ def test_a_surface_card_says_what_shape_it_is() -> None:
             # STORED kind is read back off the served bundle — same origin, so a plain fetch does it.
             box = page.evaluate("""async () => {
                 const b = document.querySelector('.ifd-box[data-iface="I1"]');
-                const g = b.querySelector('.ifd-head .ifd-glyph');
+                const g = b.querySelector('.ibox-head .ibox-gly');
                 const v = await (await fetch('api/view')).json();
                 return { d: [...g.querySelectorAll('rect, path')].map(e =>
                             e.getAttribute('d') || 'rect').join('|'),
                          w: g.getBoundingClientRect().width,
-                         word: b.querySelector('.ifd-kind').textContent,
+                         word: b.querySelector('.ibox-pill:not(.ibox-pill-alt)').textContent,
                          kind: v.features.interfaces.find(x => x.id === 'I1').kind };
             }""")
             # the browser-window drawing: a rounded rect with one line across it, near the top
@@ -831,8 +835,8 @@ def test_a_surface_with_no_kind_still_draws_a_box() -> None:
         _settle(page)
         got = page.evaluate("""() => {
             const b = document.querySelector('.ifd-box[data-iface="I1"]');
-            return { name: b.querySelector('.ifd-name').textContent,
-                     glyphs: b.querySelectorAll('.ifd-head .ifd-glyph').length };
+            return { name: b.querySelector('.ibox-name').textContent,
+                     glyphs: b.querySelectorAll('.ibox-head .ibox-gly').length };
         }""")
         # It draws, it is named, and it takes the FALLBACK glyph rather than none: a box with a hole
         # where every sibling has a mark reads as a rendering fault, not as a missing field.
@@ -854,8 +858,8 @@ def test_the_picture_is_the_list_and_there_is_no_second_copy_under_it() -> None:
         _settle(page)
         got = page.evaluate("""() => ({
             boxes: [...document.querySelectorAll('.ifd-box')].map(
-                b => b.querySelector('.ifd-name').textContent),
-            sentences: [...document.querySelectorAll('.ifd-box .ifd-what')].map(e => e.textContent),
+                b => b.querySelector('.ibox-name').textContent),
+            sentences: [...document.querySelectorAll('.ifd-box .ibox-what')].map(e => e.textContent),
             cards: document.querySelectorAll('.usecases-wrap .ecard[data-key]').length,
             text: document.querySelector('.usecases-wrap').textContent
         })""")
@@ -927,7 +931,7 @@ def test_the_picture_draws_the_people_and_the_pipe_on_both_shores() -> None:
             const out = {};
             for (const b of document.querySelectorAll('.ifd-box')) {
                 out[b.dataset.iface] = [
-                    ...[...b.querySelectorAll('.ifd-chip-actor')].map(e => 'who:' + e.textContent),
+                    ...[...b.querySelectorAll('.ibox-chip')].map(e => 'who:' + e.textContent),
                     ...[...b.querySelectorAll('.ifd-prov')].map(e => 'pipe:' + e.textContent)];
             }
             return out;
@@ -983,7 +987,7 @@ def test_the_inspector_answers_with_the_record_the_map_stores() -> None:
     slot holds — not what the view bundle made of it."""
     with _served() as url, _page(url + "#v=usecases") as page:
         _settle(page)
-        got = _inspect(page, "article.story-card.story-feature[data-sfeat]")
+        got = _inspect(page, ".story-card.story-feature[data-sfeat]")
         assert got["open"], got
         assert got["kind"] == "feature", got
         assert re.fullmatch(r"capabilities\[\d+\]", got["path"]), got
@@ -996,7 +1000,7 @@ def test_a_click_without_both_keys_is_an_ordinary_click() -> None:
     the one thing it must never do is change what a plain click means."""
     with _served() as url, _page(url + "#v=usecases") as page:
         _settle(page)
-        page.click("article.story-card.story-feature[data-sfeat] button")
+        page.click(".story-card.story-feature[data-sfeat] button")
         _settle(page)
         pop = page.evaluate(_READ_POP_JS)
         assert not pop["open"], pop
@@ -1082,7 +1086,7 @@ def test_the_secondary_click_opens_it_too_and_no_native_menu_appears() -> None:
         _settle(page)
         prevented = page.evaluate("""
             () => {
-              const el = document.querySelector('article.story-card.story-feature[data-sfeat]');
+              const el = document.querySelector('.story-card.story-feature[data-sfeat]');
               const e = new MouseEvent('contextmenu',
                 { bubbles: true, cancelable: true, view: window, ctrlKey: true, shiftKey: true });
               el.dispatchEvent(e);
@@ -1107,7 +1111,7 @@ def test_while_the_two_keys_are_held_the_page_itself_is_deaf() -> None:
         }"""
     fire = """
         (held) => {
-          const el = document.querySelector('article.story-card.story-feature[data-sfeat]');
+          const el = document.querySelector('.story-card.story-feature[data-sfeat]');
           const mods = held ? { ctrlKey: true, shiftKey: true } : {};
           const o = { bubbles: true, cancelable: true, view: window, ...mods };
           for (const t of ['mousedown', 'mouseup', 'dblclick', 'contextmenu'])
@@ -1288,7 +1292,7 @@ def test_an_actors_page_names_the_surfaces_they_stand_at_and_says_which_shore() 
             _page(url + "#v=actor&act=Org creator") as page:
         _settle(page)
         seen = page.evaluate("""() => [...document.querySelectorAll(
-                '#asfstage .asf-shore, #asfstage .ifd-box .ifd-name')]
+                '#asfstage .asf-shore, #asfstage .ifd-box .ibox-name')]
             .map((el) => (el.classList.contains('asf-shore') ? 'SHORE:' : 'surface:')
                 + el.textContent)""")
         assert seen == ["SHORE:Where they reach the product", "surface:The dashboard",
@@ -1296,7 +1300,7 @@ def test_an_actors_page_names_the_surfaces_they_stand_at_and_says_which_shore() 
         # The reader's OWN actor is marked on every card; the other people at the same surface stay
         # drawn, because "who else stands here" is context the card should keep.
         marked = page.evaluate(
-            "() => [...document.querySelectorAll('.ifd-chip-me')].map((c) => c.textContent.trim())")
+            "() => [...document.querySelectorAll('.ibox-chip-me')].map((c) => c.textContent.trim())")
         assert marked == ["Org creator", "Org creator"], marked
         assert not page.js_errors, page.js_errors
 
@@ -1366,7 +1370,7 @@ def test_an_actors_surfaces_picture_lines_each_one_up_with_what_they_reach_there
                   '.asf-featcell[data-iface="' + CSS.escape(b.dataset.iface) + '"]');
               const box = cell && cell.querySelector('.asf-feats');
               return {
-                surface: b.querySelector('.ifd-name').textContent,
+                surface: b.querySelector('.ibox-name').textContent,
                 cardMid: Math.round(b.offsetTop + b.offsetHeight / 2),
                 featMid: box ? Math.round(box.offsetTop + box.offsetHeight / 2) : null,
                 feats: box ? [...box.querySelectorAll('.asf-feat span')].map((f) => f.textContent)
@@ -1564,8 +1568,8 @@ def test_the_picture_reads_down_in_the_order_the_walk_touches_each_surface() -> 
     with _served_map(_walk_ordered_interfaces()) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         got = page.evaluate("""() => ({
-            ours: [...document.querySelectorAll('.ifd-col-ours .ifd-name')].map(e => e.textContent),
-            theirs: [...document.querySelectorAll('.ifd-col-theirs .ifd-name')].map(e => e.textContent)
+            ours: [...document.querySelectorAll('.ifd-col-ours .ibox-name')].map(e => e.textContent),
+            theirs: [...document.querySelectorAll('.ifd-col-theirs .ibox-name')].map(e => e.textContent)
         })""")
         assert got["ours"] == ["First", "Second", "Never", "Late and staffy"], got
         assert got["theirs"] == ["Theirs on the walk"], got
@@ -1596,7 +1600,7 @@ def test_the_people_at_a_surface_are_ordered_by_the_happy_path() -> None:
         page.hover('.ifd-box[data-iface="I1"]')
         page.wait_for_timeout(250)
         got = page.evaluate("""() => ({
-            chips: [...document.querySelectorAll('.ifd-box[data-iface="I1"] .ifd-chip-actor')]
+            chips: [...document.querySelectorAll('.ifd-box[data-iface="I1"] .ibox-chip')]
                      .map(e => e.textContent.trim()),
             heads: [...document.querySelectorAll('.ifd-elabel.ifd-lab-on .ifd-elabel-dir')]
                      .map(e => e.textContent)
@@ -1632,7 +1636,7 @@ def test_a_surface_no_use_case_reaches_is_drawn_quiet_and_sorted_last() -> None:
             quiet: [...document.querySelectorAll('.ifd-col-ours .ifd-box')]
                      .map(b => b.classList.contains('ifd-box-quiet')),
             pills: [...document.querySelectorAll('.ifd-col-ours .ifd-box')]
-                     .map(b => { const e = b.querySelector('.ifd-ucs');
+                     .map(b => { const e = b.querySelector('.ibox-count');
                                  return e ? e.textContent : null; })
         })""")
         # the used one leads, the untouched one is last and drawn quiet
@@ -1831,16 +1835,16 @@ def test_a_surface_card_has_one_door_and_it_is_the_name() -> None:
             _page(url + "#v=interfaces") as page:
         _settle(page)
         got = page.evaluate("""() => [...document.querySelectorAll('.ifd-box')].map(b => ({
-            name: b.querySelector('.ifd-name').textContent,
+            name: b.querySelector('.ibox-name').textContent,
             doors: [...b.querySelectorAll('button, a, [role=button]')]
                      .filter(e => !e.classList.contains('gloss-link'))
                      .map(e => e.className),
-            chips: b.querySelectorAll('.ifd-chip-actor').length,
+            chips: b.querySelectorAll('.ibox-chip').length,
             provs: b.querySelectorAll('.ifd-prov').length
         }))""")
         assert got, got
         for card in got:
-            assert card["doors"] == ["ifd-name"], card
+            assert card["doors"] == ["ibox-name"], card
         # …and the facts are still drawn, so this is not passing by them having disappeared.
         assert sum(c["chips"] for c in got) > 0, got
         assert sum(c["provs"] for c in got) > 0, got
@@ -2382,20 +2386,24 @@ def test_a_use_case_walk_counts_its_own_steps_not_the_shared_walk_s() -> None:
     with _served_map(_with_shared_walk) as url, _page(url + "#v=usecase&uc=UC1") as page:
         _settle(page)
         seen = page.evaluate("""() => {
-            const chips = [...document.querySelectorAll('#diagram .cychip')].map((c) =>
-              ({ t: c.textContent, k: c.dataset.k }));
+            const chips = [...document.querySelectorAll('#diagram .ibox-chip')].map((c) =>
+              ({ t: c.textContent,
+                 k: ([...c.classList].find((x) => x.startsWith('ibox-k-')) || '').slice(7) }));
             const box = [...document.querySelectorAll('#diagram g.node')]
               .find((n) => /SF1/.test(n.id));
             return { counter: document.querySelector('.flowplay-count, .stepcount, .flow-count')?.textContent
                        || document.body.innerText.match(/Step\\s*[-–]?\\s*\\/\\s*(\\d+)/)?.[1],
                      chips, hasBox: !!box,
-                     steps: [...document.querySelectorAll('#diagram .cysteps')].map((e) => e.textContent),
+                     steps: [...document.querySelectorAll('#diagram .ibox-count')].map((e) => e.textContent),
                      arrows: [...document.querySelectorAll('#diagram .edgeLabel')]
                        .map((e) => e.textContent.trim()).filter(Boolean) };
         }""")
         assert seen["hasBox"], "the shared walk is drawn as its own box"
         assert seen["chips"] == [{"t": "Organization", "k": "entity"}], seen["chips"]
-        assert seen["steps"] == ["2 steps"], seen["steps"]
+        # HOW MANY STEPS THE SHARED WALK HOLDS IS NOT ON ITS BOX. The box is a door to the walk's own
+        # screen, where its steps are numbered from 1 and belong to it; a count here answered a
+        # question this picture is not about, and it was the one number on a box that carries chips.
+        assert seen["steps"] == [], seen["steps"]
         # 12 = the fixture's own 11 steps plus the one reference. Expanded it would have read 13.
         assert seen["counter"] == "12", seen
         assert "3" in seen["arrows"] and "13" not in seen["arrows"], seen["arrows"]
@@ -2476,10 +2484,15 @@ def test_a_box_s_name_opens_it_and_the_box_around_the_name_selects_it() -> None:
         _settle(page)
         spot = page.evaluate("""() => {
             const n = [...document.querySelectorAll('#diagram g.node')].find((x) => /C15/.test(x.id));
-            const b = n.getBoundingClientRect();
-            const l = n.querySelector('.cyname').getBoundingClientRect();
+            // THE VISIBLE BOX, not the node group. The drawing engine pads a node well past its
+            // label, and that padding is transparent and takes no clicks — a point inside the group
+            // can be outside the box a reader can see. Every coordinate here is the box's own, and
+            // the second one is its top-left corner: inside the box, inside its own padding, and
+            // clear of the name however long the name runs.
+            const b = n.querySelector('.ibox').getBoundingClientRect();
+            const l = n.querySelector('.ibox-name').getBoundingClientRect();
             return { nameX: l.left + l.width / 2, nameY: l.top + l.height / 2,
-                     edgeX: b.left + 4, edgeY: b.top + b.height / 2 };
+                     edgeX: b.left + 3, edgeY: b.top + 3 };
         }""")
         page.mouse.click(spot["nameX"], spot["nameY"])
         page.wait_for_function("() => location.hash.includes('v=element')")
@@ -2505,7 +2518,7 @@ def test_hovering_a_box_shows_its_card_with_a_line_to_it() -> None:
         _settle(page)
         spot = page.evaluate("""() => {
             const n = [...document.querySelectorAll('#diagram g.node')].find((x) => /C15/.test(x.id));
-            const c = n.querySelector('.cyname').getBoundingClientRect();
+            const c = n.querySelector('.ibox-name').getBoundingClientRect();
             return { x: c.left + c.width / 2, y: c.top + c.height / 2 };
         }""")
         page.mouse.move(spot["x"], spot["y"])

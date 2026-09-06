@@ -3497,8 +3497,11 @@ def test_flow_map_from_use_case() -> None:
     mm = gen_viewer.flow_maps(parse_map(make_gp_map()))
     s1 = mm["UC1"]
     assert s1.startswith("flowchart LR")
-    assert '<span class=cyname>Andy</span>' in s1        # the actor's box
-    assert '<span class=cyname>Gateway</span>' in s1 and '<span class=cyname>Engine</span>' in s1
+    # Each box is an empty SLOT naming its element and the variant this picture wants; the viewer
+    # builds the box itself, so no name reaches the drawing's source.
+    assert "data-k=role data-v=figure data-id=Andy" in s1        # the actor's box
+    assert "data-k=component data-v=tight data-id=C1" in s1 \
+        and "data-k=component data-v=tight data-id=C2" in s1
     assert 'FA0 -->|"1"| C1' in s1 and 'C1 -->|"2"| C2' in s1
     assert 'C2 -->|"2"| D1' in mm["UC2"]
 

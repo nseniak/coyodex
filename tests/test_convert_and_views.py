@@ -450,22 +450,30 @@ def make_flow_map_model() -> ProjectModel:
     return m
 
 
-def test_flow_map_draws_one_box_per_element_by_name_alone():
-    """The leaf-only map: a box per touched element, kind-shaped and kind-coloured, labelled with
-    JUST the element's name — no subsystem FRAME (the containers are what it drops) and no group
-    second line (tried and removed: it widened nearly every box while almost never showing a
-    cluster; the group lives in the element's own panel)."""
+def test_flow_map_draws_one_empty_slot_per_element():
+    """The leaf-only map: a box per touched element and no subsystem FRAME (the containers are what it
+    drops).
+
+    EVERY BOX IS A SLOT. This generator writes the SHAPE of the drawing and nothing about what a box
+    says; the viewer builds the box (`itemBoxHtml`), measures it, and swaps it in. A second copy of
+    that builder here, in Python, is the drift the item box exists to end. So the label carries no
+    name, no colour and no shape of its own — only which element, and which variant this picture
+    wants."""
     g = model_to_graph(make_flow_map_model())
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
     assert mm.startswith("flowchart LR")
     assert "subgraph" not in mm                                   # leaf-only: no container frames
-    # The name rides in its own span — that span is the click target, and the LABEL is not the name.
-    assert 'C1["<span class=cyname>Viewer</span>"]' in mm
+    assert '  C1["<span class=cyslot data-k=component data-v=tight data-id=C1></span>"]:::cy-C1' in mm
+    assert "class C1 itembox" in mm
     assert "Reading room" not in mm                               # its group name stays off the box
-    assert 'E1("<span class=cyname>Order</span>")' in mm \
-        and 'D1[("<span class=cyname>Postgres</span>")]' in mm     # entity and dep keep their shapes
-    assert 'FA0([" <br/><span class=cyname>Andy</span>"])' in mm                             # the actor, as the Context stick figure
-    assert mm.count("classDef") == 4                               # component / dep / entity / human
+    assert "Viewer" not in mm and "Order" not in mm               # NO name in the source at all
+    assert "data-k=entity data-v=tight data-id=E1" in mm \
+        and "data-k=dep data-v=tight data-id=D1" in mm
+    # The PERSON keeps the stick figure it has always had here, so the actor is still the biggest mark
+    # on the drawing — `figure` is the variant that draws it.
+    assert 'FA0["<span class=cyslot data-k=role data-v=figure data-id=Andy></span>"]' in mm
+    # ONE classDef, and it makes the node itself invisible: the box IS the label now.
+    assert mm.count("classDef") == 1 and "classDef itembox fill:none,stroke:none;" in mm
 
 
 def test_flow_map_arrows_come_from_the_steps_and_carry_their_numbers():
@@ -499,8 +507,12 @@ def test_flow_map_draws_a_service_actor_as_a_service():
     m.roles = [Role(id="R1", name="Andy", kind="service", wants="to sync")]
     g = model_to_graph(m)
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    assert 'FA0{{"<span class=cyname>Andy</span>"}}' in mm and "class FA0 svc" in mm   # hexagon
-    assert "classDef svc" in mm and "classDef human" not in mm
+    # THE DRAWING NO LONGER DECIDES THIS, and that is the point: the slot names the ROLE and the
+    # viewer reads its kind off the map to pick the mark (`itemSpecRole` -> `itemGlyphSvg`), so one
+    # answer serves the map, the Interfaces picture and every card. What must survive here is that
+    # the actor still reaches the drawing as an actor, under its roster alias.
+    assert 'FA0["<span class=cyslot data-k=role data-v=figure data-id=Andy></span>"]' in mm
+    assert flow_actors(g, cast("dict", g["flows"][0]))[0]["kind"] == "service"
 
 
 def test_flow_map_and_flow_actors_agree_on_every_alias():
@@ -515,8 +527,8 @@ def test_flow_map_and_flow_actors_agree_on_every_alias():
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
     roster = flow_actors(g, cast("dict", g["flows"][0]))
     assert [a["name"] for a in roster] == ["Andy"] and roster[0]["aid"] == "FA0"
-    assert 'FA0([" <br/><span class=cyname>Andy</span>"])' in mm       # the roster's alias, on the map
-    assert 'C99["<span class=cyname>C99</span>"]' in mm                # the dangling id stays an element
+    assert "data-k=role data-v=figure data-id=Andy" in mm              # the roster's alias, on the map
+    assert "data-k=component data-v=tight data-id=C99" in mm           # the dangling id stays an element
     assert "FA1" not in mm
 
 
@@ -537,7 +549,8 @@ def test_actor_facts_survive_a_name_the_sanitisers_rewrite():
     assert roster[0]["kind"] == "service" and roster[0]["wants"] == "to sync"   # authored token
     assert hp_actors(g)[0]["kind"] == "service"                                 # sanitised token
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    assert "class FA0 svc" in mm                      # the kind reached the drawing
+    assert "data-k=role data-v=figure data-id=Ops%231%20%3Csync%3E" in mm   # URL-encoded: a name may
+    #                                                        hold anything, and the slot is unquoted
     # The frontend joins a drawn box back to this roster BY ALIAS, so the alias must agree — the raw
     # name never has to survive the round trip through the sanitised label.
     assert roster[0]["aid"] == "FA0" and "FA1" not in mm
@@ -607,8 +620,10 @@ def test_a_shared_walk_is_one_dashed_box_with_nothing_drawn_out_of_it():
     carries no step, no direction and no code link."""
     g = model_to_graph(make_subflow_model())
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    assert 'SF1[["<span class=cyname>Persist the thing</span>' in mm and "class SF1 subflow" in mm
-    assert "classDef subflow" in mm and "stroke-dasharray" in mm
+    # A SHARED WALK IS A FULL BOX — the one box a reader cannot see inside, so it wears its people,
+    # doors and records as chips or collapsing it buries the product's edge.
+    assert 'SF1["<span class=cyslot data-k=subflow data-v=full data-id=SF1></span>"]' in mm
+    assert "class SF1 itembox" in mm
     assert [ln for ln in mm.splitlines() if "-->" in ln and ln.strip().startswith("SF1 ")] == []
 
 
@@ -620,11 +635,13 @@ def test_the_box_says_how_big_the_walk_is_and_wears_its_people_doors_and_records
     chips = subflow_chips(g)["SF1"]
     assert [(c["kind"], c["name"]) for c in chips] == [
         ("actor", "Andy"), ("interface", "Public site"), ("entity", "Order")]  # people, doors, records
+    # The chips reach the viewer through the BUNDLE, keyed by walk, not through the drawing's source:
+    # the source carries a slot and nothing else. `subflow_chips` above is the one join, and the box
+    # that wears them is `itemBoxHtml`.
+    assert [c["name"] for c in chips] == ["Andy", "Public site", "Order"]
+    assert "Store" not in [c["name"] for c in chips]          # C2 is a component, not a chip
     mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
-    assert "<span class=cysteps>5 steps</span>" in mm
-    assert "<span class=cychip data-k=interface>Public site</span>" in mm
-    assert "<span class=cychip data-k=entity>Order</span>" in mm
-    assert "cychip data-k=entity>Store<" not in mm            # C2 is a component, not a chip
+    assert "cychip" not in mm and "Public site" not in mm
 
 
 def test_a_shared_walk_is_a_walk_in_its_own_right():
