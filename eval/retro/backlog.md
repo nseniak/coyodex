@@ -463,6 +463,42 @@ result.
 The write-up came out of a build scratchpad that would have been swept. `method.md`'s closing list
 now carries step 12b — write an experiment's answer somewhere durable before the commit.
 
+### Open 2026-09-07 — the 45 number-claims in the tools that can go stale
+
+**The class.** Six defects fixed on 2026-09-07 were all one shape: a sentence that stopped matching
+what it described, while the code stayed right. A gate cannot see one, because every instance IS the
+code doing exactly what the code says. Four of the six were a NUMBER in a comment or docstring that
+no longer held.
+
+**Measured the same day, over `tools/coyodex/` and `eval/tools/coyodex_eval/`:**
+
+| | claims |
+|---|---|
+| number-claims in comments and docstrings | 958 |
+| date fragments, an artefact of the counting regex | 88 |
+| **records a PAST build** — cannot rot, it says what happened then | **665** |
+| illustrative or neither | 160 |
+| **describes a LIVE map NOW** — the class that rots | **45** |
+
+That split is the finding. "Numbers in comments" is not the problem: two thirds are historical
+evidence that stays true forever. What rots is a claim phrased about a live map today — "coyodex 2
+of 40", "fires three times on the same map" — and those are exactly the four that were wrong.
+
+**The list of 45** was written to `scratchpad/rotting-claims.txt` in the session that measured it,
+which is git-ignored and gone. Regenerate it: prose blocks in those two trees carrying `\d+\s+\w+`,
+naming argus / mcpolis / coyodex's own map / "live maps", with no past-tense framing (`was`, `were`,
+`ran`, `on the 20xx-`, `one build`).
+
+**Why no check was written.** Each of the 45 needs its own probe — re-measure THIS function against
+THAT map — so it is 45 small measurements, not one rule. And the three advisories written that same
+day each missed the defect they were written for, so a fourth designed at the same speed was the
+wrong move. `owner: a session with a fresh head`.
+
+**What would settle it.** Re-measure the 45 and count how many are wrong today. Four of four known
+wrong is not a rate. If the real rate is low, this needs no check and the answer is to stop writing
+present-tense numbers about live maps in code comments — put them in a retro-check file, where
+something already comes back to measure them.
+
 ## Candidate L3 assertions
 
 **Five landed as 36-39 plus a widening of 26 (`e138a2a`)**: the piped exit code, the growing gate
