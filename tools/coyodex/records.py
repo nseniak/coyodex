@@ -137,6 +137,10 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     HeadingSpec("Audience exceptions", True, ID_KEY),
     HeadingSpec("Stake exceptions", True, ID_KEY),
     HeadingSpec("Persistence exceptions", True, ID_KEY),
+    # A walk that leaves its person with nothing handed back. Keyed on the USE CASE, because
+    # the answer is about that one story: either its way out is missing, or the surface
+    # its person ends at was never written.
+    HeadingSpec("Missing surfaces", True, ID_KEY),
     # NOT "Ownership exceptions": "Persistence exceptions" one line up already adjudicates
     # ownership in the OTHER sense (which COMPONENT writes an entity), on `En` keys too, so
     # two `En`-keyed headings would both have been called ownership and neither would have

@@ -5532,3 +5532,50 @@ def test_a_walk_jump_sees_through_a_shared_walk():
     assert walk_jumps(m) == []          # the shared sub-use case reached C3, so step 3 has its way in
     m.subflows[0].steps[0].dst = "C2"   # …and now it does not
     assert len(walk_jumps(m)) == 1 and "step 3 starts at C3" in walk_jumps(m)[0]
+
+
+def test_a_walk_that_leaves_its_person_with_no_reply_is_reported():
+    """The method says a door works both ways: a walk arrives through one and hands its result back
+    through one. Nothing checked the second half.
+
+    THIS IS THE ARM THE INTERFACE SWEEP COULD NOT REACH. "Every interface owes a use case" reads
+    DOWN the interface table, so it only ever finds a surface no story crosses; a story that needed
+    a surface NOBODY WROTE is invisible to it, because that row is not in the table to be read. On
+    the 2026-09-06 mcpolis build a tracing agent reported exactly that — "no authored surface fits,
+    so I added no door and the story stops at the click" — the lead read it as a wording correction,
+    and the map lost its only `handoff` surface while the use case's own outcome still reads "their
+    own mail program opens". Measured across the two maps: 0 person-facing walks fire on the
+    previous one and 5 of 43 on that build, including the story in question."""
+    from coyodex.model import (Component, ExtraSection, Flow, FlowStep, Interface, ProjectModel,
+                               Role, UseCase)
+    m = ProjectModel(title="T", goal="G")
+    m.roles = [Role(id="R1", name="Visitor", kind="human", audience="user")]
+    m.components = [Component(id="C1", name="Page", purpose="shows the address", source="a.py:1")]
+    m.interfaces = [Interface(id="I1", name="Website", side="ours", kind="screen", facing="user")]
+    m.use_cases = [UseCase(id="UC1", name="Ask the team a question")]
+    m.flows = [Flow(uc="UC1", title="Ask the team a question", steps=[
+        FlowStep(n=1, src="R1", dst="I1", phrase="open the contact page"),
+        FlowStep(n=2, src="I1", dst="C1", phrase="render the address"),
+        FlowStep(n=3, src="R1", dst="C1", phrase="click the address that fits the question"),
+    ])]
+    fired = [w for w in validate_model_mod._walk_no_reply_warnings(m) if "UC1" in w]
+    assert fired, "a walk ending on the person acting draws nothing"
+    assert "step 3" in fired[0] and "click the address" in fired[0], (
+        "the warning must name WHICH step left the person waiting")
+
+    # A reply closes it: the last actor contact now runs product -> person.
+    m.flows[0].steps.append(FlowStep(n=4, src="I1", dst="R1", phrase="hand the visitor to their "
+                                                                    "own mail program"))
+    assert not validate_model_mod._walk_no_reply_warnings(m)
+
+    # A SERVICE role opening its own scheduled work is owed no reply, and firing on those buried
+    # the five that mattered under three timer walks on the same map.
+    m.flows[0].steps.pop()
+    m.roles[0].kind = "software"
+    assert not validate_model_mod._walk_no_reply_warnings(m)
+
+    # …and the recorded escape silences it durably, keyed on the use case.
+    m.roles[0].kind = "human"
+    m.extras = [ExtraSection(heading="Missing surfaces",
+                             body="UC1: the visitor leaves for a program we never see")]
+    assert not validate_model_mod._walk_no_reply_warnings(m)

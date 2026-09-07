@@ -832,6 +832,26 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
         **"Interface exceptions"** extras heading.
   `validate` reports every unstoried surface, so this sweep is checkable rather than a good
   intention. A surface no story reaches leaves the map unable to say what crosses it or when.
+  **AND THE SWEEP RUNS BOTH WAYS.** Reading down the table finds a surface no story reaches. It
+  cannot find the opposite — a story that needed a surface nobody wrote — because that row is not in
+  the table to be read. A tracing agent is the only thing that ever sees it, and it says so in its
+  report: *"no authored surface fits that, so I added no door there and the story stops."* Answer
+  every one of those lines:
+
+      for each walk report that says no surface fitted:
+          mint the surface, and send that walk back to close through it
+          OR record `UCn: <why this story's person stands at no surface>`
+             under a **"Missing surfaces"** extras heading
+      a report answered by neither is a row this build loses silently
+
+  **This has happened, and the two builds differ only in the answer.** On 2026-09-02 a tracing agent
+  reported that a marketing story ends by handing the visitor to their own mail program and that no
+  surface fitted; the lead minted the row 13 minutes later and sent the agent back to close the
+  story through it. On 2026-09-06 the same report arrived, the lead called it "a second wording
+  correction", rewrote the use case's outcome sentence, and wrote no row. The map's only `handoff`
+  surface is gone, its code is unchanged, and the story's own outcome still reads "their own mail
+  program opens" while no box in the map is one. Eight other walk reports landed in the four minutes
+  after that one.
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).

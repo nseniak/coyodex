@@ -2508,6 +2508,7 @@ def _check_actors(m: ProjectModel) -> list[str]:
 
 
 INTERFACE_EXCEPTIONS_HEADING = "Interface exceptions"
+MISSING_SURFACES_HEADING = "Missing surfaces"
 
 _PLUMBING_EP_KINDS = frozenset({"middleware"})
 #: Request middleware: it runs on the way to a way in and is not one itself, so the "belongs to no
@@ -2971,6 +2972,57 @@ def _is_undoored_crossing(st: FlowStep, role_ids: set[str], iface_ids: set[str])
     if ends[0] == ends[1]:
         return False
     return not (st.src in iface_ids or st.dst in iface_ids)
+
+
+def _walk_no_reply_warnings(m: ProjectModel) -> list[str]:
+    """A walk whose LAST contact with its PERSON is the person acting, with nothing handed back.
+
+    The method already says a door works both ways: a walk arrives through one and hands its result
+    back through one, and the way out is drawn even when it is the same surface the walk came in by.
+    Nothing checked the second half. A walk can end on the person clicking, and the map then cannot
+    say what they got.
+
+    THIS IS THE ARM THE SWEEP COULD NOT REACH. "Every interface owes a use case" reads DOWN the
+    interface table, so it only ever finds a surface no story crosses. The opposite — a story that
+    needed a surface nobody wrote — is invisible to it, because that row is not in the table to be
+    read. Only the tracing agent sees it, in the moment, and it says so in its report.
+
+    Measured on the two mcpolis maps of 2026-09-02 and 2026-09-07: 0 person-facing walks fire on the
+    first and 5 of 43 on the second. One of the five is UC3 "Ask the team a question", whose last
+    step is the visitor clicking a mail address — the build's tracing agent reported that no surface
+    fitted, the lead read the report as a wording correction, and the map lost its only `handoff`
+    surface while the use case's own outcome still says "their own mail program opens".
+
+    PEOPLE ONLY. A service role opening its own scheduled work is the normal case and fires three
+    times on the same map — a timer that starts a sweep is owed no reply. Counting those would bury
+    the five that matter under noise, which is how an advisory teaches people to skip it."""
+    if not (m.flows and m.roles):
+        return []
+    role_ids = {r.id for r in m.roles}
+    people = person_role_ids(m)
+    if not people:
+        return []
+    recorded = _recorded_ids(m, MISSING_SURFACES_HEADING, ("UC",))
+    uc_name = {u.id: u.name for u in m.use_cases}
+    out: list[str] = []
+    for f in m.flows:
+        last = None
+        for st in f.steps:
+            if st.src in role_ids or st.dst in role_ids:
+                last = st
+        if last is None or f.uc in recorded:
+            continue
+        # Inbound only: the actor is the SOURCE, so the person acted and the walk never answered.
+        if last.src in people and last.dst not in role_ids:
+            out.append(
+                f"{f.uc} ({uc_name.get(f.uc, f.uc)}) ends with its person acting and nothing handed "
+                f"back — step {last.n} is '{_clip(last.phrase)}' and no later step reaches them. A "
+                f"door works both ways, so either the way out is missing a step, or the surface the "
+                f"person ends at was never written. If a tracing agent reported that no surface "
+                f"fitted, that report is the row: mint the surface and close the walk through it, "
+                f"or record '{f.uc}: <why this story's person stands at no surface>' under a "
+                f"'{MISSING_SURFACES_HEADING}' extras heading")
+    return out
 
 
 def _check_actor_doors(m: ProjectModel) -> list[str]:
@@ -6004,6 +6056,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_runs_in_family_warnings(m))   # the whole `runs_in` family, through ONE counted exit
+    warnings.extend(_walk_no_reply_warnings(m))   # the sweep-back arm reading the OTHER way
     warnings.extend(recorded_line_warnings(m))    # the shape of the adjudication log itself
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
