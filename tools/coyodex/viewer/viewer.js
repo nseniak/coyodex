@@ -4441,6 +4441,31 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
   if (edgeAction) bindEdgeActionIcon(p, hits, label, edgeAction, isSelected);
 }
 
+// A LABEL SITS AT THE MIDDLE OF ITS ARROW. The layout engine puts an arrow's label half way between
+// the two boxes' COLUMNS and never asks how far the curve travels up or down on the way — so on a use
+// case map, where the label IS the step number, a number sat 15% along one arrow and 88% along the
+// next (mcpolis UC1: 5 of its 17 numbers more than 15px from the middle, 31px at worst). The callout
+// already lands half way ALONG the drawn curve (arrowMidpoint); the label is moved to that same point
+// once the drawing is on screen and before anything binds to or measures it.
+// The label group is `translate(x, y)` at the label's own centre, in the same space as the path (the
+// two sit in sibling groups under the root, checked on mcpolis), so one host-space hop converts it.
+// A self-arrow keeps the engine's place: its three pieces are not one curve, and the loop's label
+// already stands clear of its box. An arrow with an empty label has nothing to move.
+function centreEdgeLabels(root) {
+  const paths = [...root.querySelectorAll('.edgePaths path.flowchart-link')];
+  const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
+  const loops = selfArrowParts(paths);
+  paths.forEach((p, i) => {
+    const label = labels[i];
+    if (loops[i] || !edgeLabelHasContent(label)) return;
+    let len, mid;
+    try { len = p.getTotalLength(); mid = len && p.getPointAtLength(len / 2); } catch (_) { return; }
+    if (!mid) return;
+    const at = pointToHostSpace(p, mid.x, mid.y, label.parentNode);
+    if (at) label.setAttribute('transform', `translate(${at.x}, ${at.y})`);
+  });
+}
+
 // Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
 // element per edge in path order (an empty one for an unlabelled arrow), so the index pairing stays
 // aligned even when some arrows carry no label. `fn(path, label, match)` gets the L_<src>_<dst>_<i>.
@@ -4556,20 +4581,40 @@ function edgeFocus(scene, e) {
   if (!(scene.nodeEls[e.src] || scene.nodeEls[e.dst])) return null;
   return { nodes: new Set([e.src, e.dst]), edge: (x) => x.src === e.src && x.dst === e.dst };
 }
-function edgeDesc(scene, p, label, e, selKey, showFn) {
-  return { key: selKey, glow: (reveal) => glowEdge(p, label, reveal),
+// Light an arrow AND say where its line lands. `anchor` is one of the arrow's step numbers, or the
+// whole row of them: the line goes there instead of to the arrow's middle. On a use case map the
+// arrow's middle never says which step you picked, and it did not even stay under the number — a
+// click on the line beside a number moved the line from the number to the arrow's middle, so the
+// same card pointed at two different places depending on which pixels the click hit.
+// One function for both doors to a step — the number and the arrow — so the two cannot drift apart.
+function glowEdgeAt(p, label, reveal, anchor) {
+  const off = glowEdge(p, label, reveal);
+  if (anchor) { anchor.classList.add('flow-step-picked'); setStepAnchor(anchor); }
+  return () => {
+    if (anchor) {
+      anchor.classList.remove('flow-step-picked');
+      if (stepAnchorEl === anchor) setStepAnchor(null);
+    }
+    if (off) off();
+  };
+}
+// `anchor` (optional) is called at glow time, not at bind time: the step numbers are built after the
+// arrows are bound, so an element looked up any earlier would be the one the rebuild threw away.
+function edgeDesc(scene, p, label, e, selKey, showFn, anchor) {
+  return { key: selKey, glow: (reveal) => glowEdgeAt(p, label, reveal, anchor ? anchor() : null),
            focus: edgeFocus(scene, e), show: showFn };
 }
 // `opts.onDrill` (optional) makes an ⌥-click drill instead of select, and marks the arrow with the drill
 // cursor; `opts.actionFn` is its preview. `opts.action` adds an explicit icon action without changing
-// the arrow's ordinary click behavior.
+// the arrow's ordinary click behavior. `opts.anchor` (optional) returns what the callout points at
+// while the arrow is selected — see glowEdgeAt.
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
   // EVERY ARROW SHOWS ITS CARD, bundled or not. A bundled arrow was silent for a while, on the grounds
   // that its card was a LIST and its page drew the same links — true of a subsystem pair, never true of a
   // Deployment arrow, whose members are drawn nowhere. A click is also the easiest gesture on the thinnest
   // target, so it is the one that should answer "what is this".
-  const desc = edgeDesc(scene, p, label, e, selKey, showFn);
+  const desc = edgeDesc(scene, p, label, e, selKey, showFn, opts.anchor);
   const setFilter = (v) => { for (const seg of edgeSegs(p)) seg.style.filter = v; if (label) label.style.filter = v; };
   const hoverOn = () => { if (!selHas(scene, selKey)) setFilter(HOVER); };
   const hoverOff = () => { if (!selHas(scene, selKey)) setFilter(''); };
@@ -4647,8 +4692,8 @@ function bindBridgeEdge(scene, p, label, a, b, target) {
 // `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn, opts? } or null to skip.
 function bindEdges(scene, resolve) {
   eachEdge(scene.root, (p, label, m) => {
-    const r = resolve(m);
-    if (r) bindSelectEdge(scene, p, label, r.e, r.selKey, r.showFn, r.opts);
+    const r = resolve(m, p, label);
+    if (r) bindSelectEdge(scene, p, label, r.e, r.selKey, r.showFn, { ...(r.opts || {}), anchor: r.anchor });
   });
 }
 
@@ -5821,12 +5866,17 @@ function bindFlowMap(uc) {
   // (which lists every step riding it) and the step player (which needs the DOM of the arrow carrying
   // step i).
   const arrows = {};                       // 'src>dst' -> {path, label}
-  bindEdges(scene, (m) => {
+  bindEdges(scene, (m, p, label) => {
     const key = m[1] + '>' + m[2];
     const on = flowMapSteps(uc, m[1], m[2]);
     if (!on.length) return null;
     return { e: { src: m[1], dst: m[2] },
              selKey: 'flowpair:' + uc + ':' + key,
+             // THE LINE GOES TO THE NUMBER, whichever pixels of the arrow were clicked. A one-step
+             // arrow points at its one number; a bundle points at the row of them, because its card
+             // describes all of them and the row is what names them all.
+             anchor: () => (on.length === 1 ? stepNumEl(label, on[0].i)
+                                            : label && label.querySelector('foreignObject p')),
              // NO ACTION ON A WALK ARROW. Selecting a step already opens its own code (showFlowStep
              // syncs the viewer), so a drill offering "open the code" would repeat the click that got
              // you here. What the drill used to do was locate the STRUCTURAL arrow between the same two
@@ -5881,16 +5931,7 @@ function bindFlowMap(uc) {
                    // …and the line goes to THIS step's number, not to the arrow's middle. On an arrow
                    // carrying one step the two are the same answer; on one carrying three, the middle
                    // names all three and therefore none.
-                   glow: (reveal) => {
-                     const off = glowEdge(arrow.path, arrow.label, reveal);
-                     const num = stepNumEl(arrow.label, i);
-                     if (num) { num.classList.add('flow-step-picked'); setStepAnchor(num); }
-                     return () => {
-                       if (num) num.classList.remove('flow-step-picked');
-                       if (stepAnchorEl === num) setStepAnchor(null);
-                       if (off) off();
-                     };
-                   },
+                   glow: (reveal) => glowEdgeAt(arrow.path, arrow.label, reveal, stepNumEl(arrow.label, i)),
                    focus: { nodes: new Set([a, b]), edge: (e) => e.src === a && e.dst === b },
                    show: () => { flowSyncCur(i); showFlowStep(uc, i); } };
     scene.selectors[desc.key] = () => selAdd(scene, desc);
@@ -7125,6 +7166,10 @@ function placeCardNear(el) {
 // `hidden` as a PROPERTY is an HTMLElement thing. On an SVG element `el.hidden = true` sets a plain JS
 // property and leaves the ATTRIBUTE alone — and the CSS rule keys off the attribute, so the layer stayed
 // display:none with a perfectly good line inside it. Attributes on both sides, so the two agree.
+const NUM_DOT_CLEAR = 7;   // the 2px ring of a picked number, the dot's 3.5px radius and its stroke
+function isStepAnchor(el) {
+  return !!(el.classList && (el.classList.contains('flow-step-num') || el.dataset.fsteps !== undefined));
+}
 function hideCallout() {
   callout.setAttribute('hidden', '');
   callout.innerHTML = '';
@@ -7137,7 +7182,11 @@ function syncCallout() {
   if (!wrap || !el || PANEL_HOST.hidden) { hideCallout(); return; }
   const w = wrap.getBoundingClientRect();
   const p = PANEL_HOST.getBoundingClientRect();
-  const e = rectOf(el);
+  // A NUMBER IS SMALLER THAN THE DOT. A digit on the map is a few pixels of text at fit zoom (3x8px on
+  // mcpolis UC1), so a dot on its border sat on the digit and hid the one thing the line was there to
+  // point at. The line stops short of a number, or of the row of them, by the picked highlight's own
+  // 2px ring plus the dot, so the dot stands beside the digit and the digit stays readable.
+  const e = grow(rectOf(el), isStepAnchor(el) ? NUM_DOT_CLEAR : 0);
   // An element scrolled out of the drawing area has no end to point at, and a line to a point beyond the
   // edge would run off the layer. The card's title still names it.
   if (e.right <= w.left || e.left >= w.right || e.bottom <= w.top || e.top >= w.bottom) {
@@ -11011,6 +11060,7 @@ function dvRenderChannels(pane) {  // lazily render each broker flowchart in a s
     catch (_) { return; }
     if (seq !== renderSeq || !document.body.contains(ph)) return;  // navigated away mid-layout — drop
     ph.innerHTML = svg;
+    centreEdgeLabels(ph);
     // Best-effort: bind a mermaid component node (id like `flowchart-C116-3`) to navigate to it.
     ph.querySelectorAll('g.node').forEach((g) => {
       const m = /-((?:C|D|E|I|S|SD|UC)\d+)-\d+$/.exec(g.id || '');
@@ -12714,6 +12764,7 @@ async function renderView(sArg, transient, seq) {
   }
   if (seq !== renderSeq) return;  // a newer render started during the async layout — drop this stale one
   diagram.innerHTML = svg;
+  centreEdgeLabels(diagram);  // each label to the middle of its own curve, before anything binds to it
   fillItemSlots(diagram);  // each sized span becomes the box it stood in for — step 3 of the slot
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
   emphasizeZoomedFrame(diagram, s);  // thicker border + bigger title on the group you drilled into

@@ -2927,3 +2927,74 @@ def test_a_shared_sub_use_case_s_page_draws_the_same_head_from_its_own_words() -
         assert seen["title"] == "Shared sub-use case flow" and seen["count"] == "2 steps", seen
         assert seen["player"] == "\u2013 / 2", seen
         assert not page.js_errors, page.js_errors
+
+
+def test_a_step_number_sits_at_the_middle_of_its_arrow_on_screen() -> None:
+    """The layout engine puts a label half way between the two boxes' columns and ignores how far the
+    curve climbs or drops on the way: on mcpolis UC1 a number sat 15% along one arrow and 88% along the
+    next. Only a browser draws the curves, so only a browser can measure where the numbers landed."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        off = page.evaluate("""() => {
+            const root = document.getElementById('diagram');
+            const paths = [...root.querySelectorAll('.edgePaths path.flowchart-link')];
+            const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
+            const out = [];
+            paths.forEach((p, i) => {
+              const L = labels[i];
+              if (!L || !L.textContent.trim()) return;
+              const len = p.getTotalLength(), m = p.getScreenCTM(), pt = p.getPointAtLength(len / 2);
+              const mid = { x: pt.x * m.a + pt.y * m.c + m.e, y: pt.x * m.b + pt.y * m.d + m.f };
+              const r = L.getBoundingClientRect();
+              out.push(Math.hypot(mid.x - (r.left + r.right) / 2, mid.y - (r.top + r.bottom) / 2));
+            });
+            return out;
+        }""")
+        assert len(off) >= 5, "the fixture's first use case draws labelled arrows"
+        assert max(off) < 2, f"every number within 2px of its arrow's middle, got {[round(x) for x in off]}"
+        assert not page.js_errors, page.js_errors
+
+
+def test_clicking_an_arrow_beside_its_number_still_points_the_line_at_the_number() -> None:
+    """Click the number: the line went to the number. Click the arrow's line a little way from it: the
+    line jumped to the arrow's middle. Both clicks select the same step and show the same card, so the
+    line must land in the same place — on the number, which is the one thing that says which step."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        seen = page.evaluate("""async () => {
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            const root = document.getElementById('diagram');
+            const wrap = document.getElementById('diagwrap').getBoundingClientRect();
+            const end = () => { const c = document.querySelector('#callout circle');
+                                return c ? { x: +c.getAttribute('cx') + wrap.left, y: +c.getAttribute('cy') + wrap.top } : null; };
+            // ON the number means BESIDE it: the dot stands off the digit by NUM_DOT_CLEAR (7px, up to
+            // 10px at a corner) so the digit stays readable, and never on the digit's own pixels.
+            const inside = (pt, r, by) => pt.x >= r.left - by && pt.x <= r.right + by && pt.y >= r.top - by && pt.y <= r.bottom + by;
+            const on = (pt, r) => !!pt && inside(pt, r, 11) && !inside(pt, r, 0);
+            // A press, then a click, at the same spot: a click with no press before it reads as a drag.
+            const press = (el, x, y) => { for (const type of ['mousedown', 'click'])
+              el.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y })); };
+            // A one-step arrow: a number whose row holds only itself.
+            const num = [...root.querySelectorAll('.flow-step-num')].find((n) => n.parentNode.children.length === 1);
+            const arrow = num.__cyArrow;
+            const r0 = num.getBoundingClientRect();
+            press(num, (r0.left + r0.right) / 2, (r0.top + r0.bottom) / 2);
+            await sleep(500);
+            const byNumber = { hash: location.hash, onNumber: on(end(), num.getBoundingClientRect()) };
+            // Then the arrow's own hit area, a fifth of the way along — well clear of the number.
+            const len = arrow.getTotalLength(), m = arrow.getScreenCTM(), q = arrow.getPointAtLength(len / 5);
+            const x = q.x * m.a + q.y * m.c + m.e, y = q.x * m.b + q.y * m.d + m.f;
+            press(arrow.__cyHits[0], x, y);
+            await sleep(500);
+            const r = num.getBoundingClientRect();
+            const byArrow = { hash: location.hash, onNumber: on(end(), r),
+                              clickToNumber: Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2),
+                              line: !document.getElementById('callout').hasAttribute('hidden') };
+            return { byNumber, byArrow };
+        }""")
+        assert "flowstep%3A" in seen["byNumber"]["hash"] and seen["byNumber"]["onNumber"], seen
+        assert "flowpair%3A" in seen["byArrow"]["hash"], seen
+        assert seen["byArrow"]["clickToNumber"] > 15, "the click was well clear of the number"
+        assert seen["byArrow"]["line"] and seen["byArrow"]["onNumber"], \
+            f"the line ends on the number whichever pixels of the arrow were clicked: {seen}"
+        assert not page.js_errors, page.js_errors
