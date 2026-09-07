@@ -322,8 +322,10 @@ FIELD_META: dict[tuple[str, str], dict] = {
                         "in-code registry)."},
     ("Store", "mode"): {"enum": [*grammar.STORE_MODES, ""],
                          "description": "how the entity relates to its store — closed vocabulary, "
-                         "exact match: collection (own compartment) / embedded (inside a parent's "
-                         "row) / projection (a read view over rows another entity owns) / transient "
+                         "exact match: collection (own compartment) / embedded (PERSISTED inside "
+                         "a SAVED parent's row — a shape merely nested inside another in-memory "
+                         "object is NOT embedded, it takes its holder's own mode) / projection (a "
+                         "read view over rows another entity owns) / transient "
                          "/ cache / in-code / enum; '' = unstated."},
     ("Store", "container"): {"description": "the compartment inside the dep: collection / table / "
                               "key prefix / bucket / file name."},

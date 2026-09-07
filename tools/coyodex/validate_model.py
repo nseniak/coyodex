@@ -2984,6 +2984,64 @@ _KIND_NAMING_MIN_ROWS = 10
 _KIND_NAMING_FLOOR = 0.10
 
 
+def _orphan_embedded_warnings(m: ProjectModel) -> list[str]:
+    """A record marked KEPT INSIDE A PARENT that nothing saved holds.
+
+    `embedded` means persisted inside another record's row, so it needs a holder and that holder
+    must itself be saved. A shape merely NESTED inside another in-memory object is not embedded: it
+    takes its holder's own mode. The map can answer this out of its own data — `record_parents`
+    already knows which record holds which — and until now nothing asked.
+
+    WHAT IT CATCHES, AND WHY IT WAS WORTH A CHECK. `embedded` is defined in full in one source file
+    no map-building agent opens; what an agent reads said "inside a parent's row", with the word
+    PERSISTED missing. So a build read the word as "nested". On the 2026-09-07 mcpolis map every row
+    it labelled `embedded` from one response-models file was nested inside another row and none was
+    inside anything saved — three read shapes the previous map had labelled correctly came back
+    marked as kept, with the code unchanged, and their compartments named screens rather than
+    places. The saved-record rule then reported all four, and one recorded line excused all four at
+    once with a reason the map's own data contradicts.
+
+    Measured before shipping, across four live maps: argus 0 of 2 `embedded` rows, coyodex 2 of 40,
+    mcpolis 2026-09-02 2 of 23, mcpolis 2026-09-07 4 of 25 — and those four are exactly the four the
+    saved-record rule reported. It lands on the defect and stays quiet elsewhere.
+
+    ITS OWN ESCAPE, not the shared `store` literal. That one already silences three separate
+    findings at once, and this is a truth check about the map contradicting itself."""
+    embedded = [e for e in m.entities
+                if e.store is not None and (e.store.mode or "").strip() == "embedded"]
+    if not embedded:
+        return []
+    # A SCOPED token, never the bare id. The bare `En` under this heading already answers the
+    # saved-record rule, and on the map this was written for ONE line — "E54, E68, E75, E78: three
+    # of these live inside a record a story already reaches" — pre-silenced all four before this
+    # check ever ran. That line's own reason is contradicted by the map's data: none of the three
+    # holders is saved. An old blanket waiver must not answer a question nobody had asked yet.
+    recorded = {k[:-len("/embedded")] for k in _recorded_ids(m, "Balance exceptions", ("E",))
+                if k.endswith("/embedded")}
+    by_id = {e.id: e for e in m.entities}
+    parents = record_parents(m)
+    out: list[str] = []
+    for e in embedded:
+        if e.id in recorded:
+            continue
+        holders = [by_id[h] for h in parents.get(e.id, ()) if h in by_id]
+        if any(is_saved(h) for h in holders):
+            continue
+        if holders:
+            named = ", ".join(f"{h.id} ({(h.store.mode if h.store else '') or 'unstated'})"
+                              for h in holders[:4])
+            why = (f"the record(s) holding it are not saved themselves: {named}. A piece of a "
+                   f"`projection` is a `projection`; a piece of a `transient` is `transient`")
+        else:
+            why = ("no record holds it at all — either the mode is wrong, or the `contains` "
+                   "relation that names its holder was never authored")
+        out.append(
+            f"{e.id} ({e.name}) is marked `embedded`, which means kept inside a saved parent's row, "
+            f"but {why}. Take the holder's own mode, or author the holder, or record "
+            f"'{e.id}/embedded: <why>' under a 'Balance exceptions' extras heading")
+    return out
+
+
 def _kind_naming_warnings(m: ProjectModel) -> list[str]:
     """A whole KIND of front door that almost no use case names any more.
 
@@ -6114,6 +6172,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_runs_in_family_warnings(m))   # the whole `runs_in` family, through ONE counted exit
     warnings.extend(_walk_no_reply_warnings(m))   # the sweep-back arm reading the OTHER way
     warnings.extend(_kind_naming_warnings(m))     # a whole kind of door nobody names
+    warnings.extend(_orphan_embedded_warnings(m))  # kept inside nothing that is kept
     warnings.extend(recorded_line_warnings(m))    # the shape of the adjudication log itself
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)

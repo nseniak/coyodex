@@ -5630,3 +5630,52 @@ def test_a_whole_kind_of_front_door_that_nobody_names_is_reported():
     m.extras = [ExtraSection(heading="Entry-point coverage",
                              body="http-route naming: every address is reached from one shell")]
     assert not validate_model_mod._kind_naming_warnings(m)
+
+
+def test_a_record_kept_inside_nothing_that_is_kept_is_reported():
+    """`embedded` means persisted inside another record's row, so it needs a holder and that holder
+    must itself be saved. The word is defined in full in one source file no map-building agent
+    opens; what an agent reads said "inside a parent's row", with PERSISTED missing. So a build read
+    it as "nested": on the 2026-09-07 mcpolis map every row it labelled `embedded` from one
+    response-models file was nested inside another row and none was inside anything saved.
+
+    The escape is a SCOPED token. The bare id under this heading already answers the saved-record
+    rule, and on that map one line — "E54, E68, E75, E78: three of these live inside a record a
+    story already reaches" — pre-silenced all four before this check existed, with a reason the
+    map's own data contradicts."""
+    from coyodex.model import Entity, EntityField, EntityRelation, ExtraSection, ProjectModel, Store
+    m = ProjectModel(title="T", goal="G")
+    holder = Entity(id="E1", name="Page answer", meaning="what one screen returns",
+                    source="a.py:1", store=Store(mode="projection", container="the detail page"))
+    holder.fields = [EntityField(name="rows", type="list[E2]")]
+    inner = Entity(id="E2", name="Row", meaning="one line of it", source="a.py:9",
+                   store=Store(mode="embedded", container="the detail page"))
+    m.entities = [holder, inner]
+    fired = validate_model_mod._orphan_embedded_warnings(m)
+    assert fired and "E2" in fired[0] and "E1 (projection)" in fired[0], fired
+
+    # A saved holder is the whole point: the same shape inside a real compartment is fine.
+    holder.store = Store(mode="collection", container="answers")
+    assert not validate_model_mod._orphan_embedded_warnings(m)
+
+    # No holder at all is the other half — either the mode is wrong or the `contains` is missing.
+    holder.store = Store(mode="collection", container="answers")
+    holder.fields = []
+    fired = validate_model_mod._orphan_embedded_warnings(m)
+    assert fired and "no record holds it at all" in fired[0]
+
+    # A containment RELATION is the second arm of the same question.
+    holder.relations = [EntityRelation(verb="contains", target="E2")]
+    assert not validate_model_mod._orphan_embedded_warnings(m)
+
+    # The bare id must NOT silence it — that token already answers a different check.
+    holder.relations = []
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="E2: it lives inside a record a story already reaches")]
+    assert validate_model_mod._orphan_embedded_warnings(m), (
+        "a blanket waiver written for another check answered this one before it was asked")
+
+    # …and the scoped token does silence it.
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="E2/embedded: the holder is authored in a slice we do not map")]
+    assert not validate_model_mod._orphan_embedded_warnings(m)

@@ -258,7 +258,15 @@ Semantics, stated on the fields:
   `validate` blocks a near-miss), `notes` what the shape can't say (TTL, cache tiers). `null` = not
   persisted / not stated. `projection` is a READ shape over rows ANOTHER entity owns (the row type a
   query module returns, a view assembled in code): the data is durable, this type is not what stores
-  it. Set the mode rather than writing an ownership exception — see "Persistence exceptions" below;
+  it. **`embedded` is PERSISTED INSIDE another record's row, and the holder must itself be saved** —
+  a `collection` or another `embedded`. A shape merely NESTED inside another in-memory object is not
+  embedded: it takes its holder's own mode, so a piece of a `projection` is a `projection` and a
+  piece of a `transient` is `transient`. `container` names the holder's real compartment, never the
+  screen the shape appears on. **This is the one word here that has been read as "nested".** On the
+  2026-09-07 mcpolis build every row the agent labelled `embedded` from one response-models file was
+  nested inside another row and none was inside anything saved, and their compartments were named
+  "mounted-server detail page" and "my tools page" — screens, not places. Three read shapes the
+  previous map had right came back marked as kept, with the code unchanged. Set the mode rather than writing an ownership exception — see "Persistence exceptions" below;
   the five no-writer modes (`embedded`/`in-code`/`enum`/`transient`/`projection`) answer that
   advisory on their own. This makes "what is persisted in <store>?" a query instead of a prose hunt,
   and powers the **persistence-coverage rule** (advisory, adoption-gated): once any entity
