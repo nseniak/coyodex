@@ -77,3 +77,17 @@ distinction, and neither asks a reader to see something under a pixel across.
    `validate` never blocks a minted one, so only a reader catches it.
    regression sign: a fourth spelling. It will still draw as a program (the predicate is `!= human`)
    but with no glyph and no reader's word, so it prints the raw code word on a card.
+
+---
+
+**verified in mcpolis build of 2026-09-07 00:32** (map commit `e430399`, tool stamp
+`21de5e3`). All 5 items confirmed by a fresh reader with no part in the change:
+1 role authored `ai-agent` (`R3 Headless agent`) with nobody editing the row · the rebuild
+re-derived it rather than falling back to `service` · the background job stayed `service` +
+`internal` with 0 doors against that role's 4 · the bot is drawn in 6 places with 0 hexagons on
+it · 3 actor kinds over 6 roles and no fourth spelling anywhere.
+
+One thing the reader found that does NOT reopen the file: the SEQUENCE DIAGRAM this check names
+as the third drawing surface no longer exists. `styleSeqActor` and `botHeadActor` are defined
+and called by nothing (`tools/coyodex/viewer/viewer.js`); the Happy Path gutter replaced it and
+draws the bot. Dead viewer code, filed separately, not a failure of this change.

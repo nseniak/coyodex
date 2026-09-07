@@ -40,3 +40,14 @@ A step's `note` is also untouched: it is a condition or a qualifier, never an ac
    regression sign: a build returns `Admin invite a team member`, or an edge `why` reading `verify
    service tokens` where it used to read `verifies`. The rule has been over-applied, and a happy-path
    title with its own subject now reads ungrammatically.
+
+---
+
+**verified in mcpolis build of 2026-09-07 00:32** (map commit `e430399`, tool stamp
+`21de5e3`). All 3 items confirmed by a fresh reader:
+**811 of 811 step phrases** start with a bare verb, across 134 distinct first words, 0 flagged ·
+37 coordinated `-s` words and 0 third-person verbs among them · **31 of 31** Happy Path titles
+and **490 of 490** edge explanations stayed third person, with 63 step notes untouched.
+
+The one `-s` verb the reader paused on, `takes` in UC15.16, coordinates with `is` inside a
+content clause rather than with the imperative — correct as written.
