@@ -2724,6 +2724,14 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    corner is what there is to write. `.ifd-tail-up` / `.ifd-tail-down` survive as a record of which
    side of the arrow the box landed on, and carry no style. */
 .ifd-elabel.ifd-lab-on { display: block; }
+/* THE ROWS' OWN BOX. It exists so the placement's third step has something to put a ceiling on: the
+   leader is the OUTER box's `::after` and points out of it, so an outer box that scrolls cuts its own
+   leader off. Plain until a ceiling arrives — `.ifd-elabel-scroll` is added only to a box that had to
+   shrink to be placed at all, which no live map has needed yet.
+   OVERSCROLL CONTAINED, so reaching the end of the list does not carry on scrolling the picture behind
+   it: this box floats over a drawing the reader is panning, and a list that hands the wheel back
+   mid-read moves the very thing the box is pointing at. */
+.ifd-elabel-body.ifd-elabel-scroll { overflow-y: auto; overscroll-behavior: contain; }
 /* The two directions, one under the other, in the order the surface's own story takes them. SPACE
    between them, not a rule. There were four greys inside one box — its border, one between the
    directions, one between the sentences of each — delimiting three different kinds of thing, and a
