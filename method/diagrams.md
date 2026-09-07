@@ -50,14 +50,14 @@ show/hide toggle. The element-keyed deltas are the data.
   into subdomains, a bounded-contexts overview that ⌥-drills (or double-click) into one subdomain's `classDiagram`; a
   subsystem card also draws the subdomains its components own/read — the derived `S→SD` bridge) and the
   **Happy Path** as its own behavioural overlay (a black-box sequence diagram of the use cases; clicking
-  a step drills into its use case's T6 flow — a walk map + readable narrative — whose element
+  a step drills into its use case's T6 flow — a flow map + readable narrative — whose element
   links locate each element in its home view). A flow has ONE rendering of its step list:
   the **map** (what it touches, and in what order on the arrows — one box per
   element, kind-coloured as everywhere else, entities and dependencies included, with no container
   frames, since scoped to one use case a subsystem frame holds one or two members and reads as noise;
   each box names its area instead). The map's arrows are the flow's own steps, deduplicated per pair
   and labelled with the step numbers riding them, never the backbone edge list — so it cannot draw a
-  relationship this scenario does not exercise. The step player walks it. A shared sub-use case is drawn as ONE
+  relationship this scenario does not exercise. The step player walks it. A shared sub-flow is drawn as ONE
   dashed box, wearing a chip per person, door or record inside it, and opens onto its own screen.
   Navigated as a back/forward history (header arrows,
   ⌘/⌥+←/→, breadcrumb) with pan/zoom and click→panel. A change-impact report adds a baseline⇄diff

@@ -149,9 +149,14 @@ class InterfaceFacts:
     of this module follows, and the reason a hand-assigned "these features use this surface" is not
     a field.
 
-    `flow` is derived rather than authored for the same reason: it is exactly the set of directions
-    this surface's own walk steps carry, so a surface cannot claim to send while no story sends
-    anything through it."""
+    `directions` is derived rather than authored for the same reason: it is exactly the set of
+    directions this surface's own flow steps carry, so a surface cannot claim to send while no story
+    sends anything through it.
+
+    IT WAS CALLED `flow`, and that was one word for two ideas: everywhere else in this product a
+    flow is a use case's numbered steps (`flows` in the map, `flowsNarr` in the bundle). The field
+    never existed in an authored map at all — it is computed here — so a reader who met it in the
+    served bundle had every reason to think a surface stores one."""
     id: str
     name: str
     what: str = ""
@@ -169,7 +174,7 @@ class InterfaceFacts:
     #: page orders the people by where the happy path first reaches them, and lists what each is
     #: here for. Keyed by role id, values are use-case ids.
     actor_use_cases: dict[str, list[str]] = field(default_factory=dict)
-    flow: list[str] = field(default_factory=list)            # in and/or out — DERIVED from the steps
+    directions: list[str] = field(default_factory=list)      # in and/or out — DERIVED from the steps
     ways_in: list[str] = field(default_factory=list)         # EPn
     deps: list[str] = field(default_factory=list)            # Dn naming this surface
     components: list[str] = field(default_factory=list)      # the code behind it: each way in's
@@ -558,7 +563,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             kind=grammar.canonical_interface_kind(i.kind),
             actors=list(iface_actor_ucs.get(i.id, {})),
             actor_use_cases=iface_actor_ucs.get(i.id, {}),
-            flow=iface_dirs.get(i.id, []),
+            directions=iface_dirs.get(i.id, []),
             ways_in=sorted_ids(set(i.ways_in)),
             deps=sorted_ids(set(iface_deps.get(i.id, ()))),
             components=sorted_ids(
@@ -653,10 +658,10 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
         "interfaces": [
             {"id": i.id, "name": i.name, "what": i.what, "side": i.side, "facing": i.facing,
              "kind": i.kind, "actors": i.actors, "actorUseCases": i.actor_use_cases,
-             "flow": i.flow, "waysIn": i.ways_in, "deps": i.deps,
+             "directions": i.directions, "waysIn": i.ways_in, "deps": i.deps,
              "components": i.components, "useCases": i.use_cases, "features": i.features,
              "featuresUnknown": i.features_unknown,
-             "walkPos": i.walk_pos, "opens": i.opens,
+             "hpStepPos": i.walk_pos, "opens": i.opens,
              "steps": [{"uc": uc, "steps": [{"phrase": ph, "container": ct, "n": n, "role": r,
                                              "direction": dr}
                                             for ph, ct, n, r, dr in group]}

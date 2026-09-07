@@ -102,7 +102,7 @@ understanding.)
 1. **Header** — baseline-commit → new-commit, files changed.
 2. **Narrative summary** — functional (delta to the Happy Path / use cases) + technical
    (architectural shape). Lives here, at the top, never in the baseline.
-3. **Happy Path / flow impact** — which use cases entered/left the walk, and whose T6 flow changed.
+3. **Happy Path / flow impact** — which use cases entered/left the happy path, and whose T6 flow changed.
 4. **Per-element annotated diff** — `was → now`, classification (modified/added/deleted), why,
    code link, confidence. *This section is also the patch applied at accept* (see above).
 5. **New / removed elements.**

@@ -52,29 +52,37 @@ the code's names.
 - **box** — one thing drawn on a view. **arrow** — a relation between two boxes.
 - **code link** — the `file:line` a box points at. A box without one is
   ungrounded, which is a defect.
-- **use case walk** — the numbered steps of one use case: each step says who or
-  what acts, on what, in one phrase. The use case is the GOAL; its walk is how it
+- **flow** — the numbered steps of one use case: each step says who or what
+  acts, on what, in one phrase. The use case is the GOAL; its flow is how it
   happens. Exactly one per use case (argus 31 and 31, mcpolis 47 and 47).
-  ALWAYS SAY BOTH WORDS. "Walk" alone was used for a while and read as a stroll
-  through the map; *journey* and *story* were used for the same thing in other
-  entries, so one idea had three names and no definition.
-  A **shared sub-use case** is a run of steps that several use case walks RUN
-  (argus 10, mcpolis 14). It is not spliced in: a use case walk's numbers are its
-  own, and running one of these is one of them. On a use case map it is one
-  dashed box wearing its chips; it has a screen of its own, where its steps are
-  numbered from 1 and belong to it. It was called a *shared walk* until the
-  screen said otherwise: one word, one thing.
+  THE WORD IS THE MAP'S OWN. The file has called this `flows` all along, so
+  saying anything else meant translating at every sentence. It was *use case
+  walk* for a while, and *walk* alone before that, which read as a stroll through
+  the map; *journey* and *story* were used for the same thing in other entries,
+  so one idea had four names. The rename ended that, and it is also why an
+  interface's derived direction field is called `directions`: `flow` there was
+  one word for two ideas, and it sent a reader looking for a `flow` property on
+  an authored interface, which has never had one.
+  NOT the happy path. That is the product's ONE successful run, across several
+  use cases; a flow is one use case's own steps. The two were both called "the
+  walk" and that is the confusion this rename exists to remove.
+  A **shared sub-flow** is a run of steps that several flows RUN (argus 10,
+  mcpolis 14). It is not spliced in: a flow's numbers are its own, and running
+  one of these is one of them. On a use case map it is one dashed box wearing its
+  chips; it has a screen of its own, where its steps are numbered from 1 and
+  belong to it. The map calls these `subflows`. It was a *shared walk*, then a
+  *shared sub-flow*; one word, one thing.
 - **owner** (of a data area) — the feature the area's data exists FOR: the one
   that creates its records and runs their lifecycle. Authored, never derived.
 - **owner with no evidence** — the map says an area exists for a feature, but no
-  use case walk of that feature ever touches the area's records. A defect. Distinct
+  flow of that feature ever touches the area's records. A defect. Distinct
   from *ungrounded*, which is only ever about a missing code link.
 - **saved record** — a record the product KEEPS: a row of its own, or one carried
   inside another record's row. Not everything the map names is one. A read shape
   built to answer one question, a request object, a list of fixed words: those are
   named so the map can talk about them, and the product keeps none of them. Across
   the two live maps, 142 named things and 46 saved records.
-- **unstoried** — a saved record or an interface that no use case walk reaches. The
+- **unstoried** — a saved record or an interface that no flow reaches. The
   map keeps it, or meets the world through it, and cannot say what for. A defect,
   and the same one twice: those two are the map's whole outside, and neither means
   anything until a story says what it is for. A record inside another one counts as
@@ -99,7 +107,7 @@ the code's names.
   words, the mechanism: `mcp-tool`, `http-route`), an actor's (human or software),
   a dependency's (its context group). A bare "kind" names none of them.
 - **who is on the far side** — the people the map can show standing at an interface.
-  Never written by hand: it is worked out from the use case walks. An interface with nobody
+  Never written by hand: it is worked out from the flows. An interface with nobody
   on it is a normal answer, because the product itself is what reaches most of
   the outside services.
 - **our interface / their interface** — **ours** = we design it (our command
@@ -119,8 +127,8 @@ the code's names.
   removal is a stated reason on one screen.
   Why the rule exists: on the Features page the actors are a whole column joined
   by wires, so naming them again on the feature card says it twice.
-- **chip** — a small named tag on the dashed box of a shared sub-use case, one per
-  person, door or record inside it. It is what stops collapsing the walk from
+- **chip** — a small named tag on the dashed box of a shared sub-flow, one per
+  person, door or record inside it. It is what stops collapsing the flow from
   burying the product's edge and its saved data. Never clickable: the box is
   what you open. Not a *type pill*, which says what KIND a thing is.
 - **way in** — one address, command or tool an interface is made of. An
@@ -135,7 +143,7 @@ the code's names.
 - **pipe** — something on the path to a far side that is not itself an interface: a
   reverse proxy, a log shipper, the library that calls a service. Name the far
   side, never the pipe.
-- **what crosses** — what goes through an interface, read off the use case walk
+- **what crosses** — what goes through an interface, read off the flow
   steps drawn at it. Each of those steps says which way the data went: **in** the
   product received it, **out** it sent it, **both** one exchange ran each way.
   There is no hand-written list any more. The field that held one was removed once
@@ -147,11 +155,11 @@ the code's names.
   question, and marks a bought payment service *internal* while its interface is
   user-facing.
 - **door** — a crossing between an actor and the product, at an interface, in one
-  use case walk. Narrower: an interface is a place, a door is one crossing.
-  A door works BOTH ways. A walk arrives through one, and hands its result back
+  flow. Narrower: an interface is a place, a door is one crossing.
+  A door works BOTH ways. A flow arrives through one, and hands its result back
   through one, and the way out is drawn even when it is the same interface the
-  walk came in by. EVERY crossing takes a door, not only the two ends: an
-  exchange in the middle of a walk goes through one too. Two actors reaching the same goal
+  flow came in by. EVERY crossing takes a door, not only the two ends: an
+  exchange in the middle of a flow goes through one too. Two actors reaching the same goal
   through different doors are two use cases, and a gate blocks the map otherwise.
 - **change impact** — the report saying what a code change does to the map.
 - **accept** — folding a change-impact report into the baseline.
@@ -217,8 +225,8 @@ design principles these come from)
   and We use. Each card opens that interface's own page.
 - **what it reaches out to** — the block on a feature's page listing the
   interfaces that feature calls out to. It reads *not stated* on most features,
-  because a feature is linked to a service only when a step of its own use case
-  walk is drawn at that service.
+  because a feature is linked to a service only when a step of its own flow is
+  drawn at that service.
 
 **How coyodex is delivered**
 

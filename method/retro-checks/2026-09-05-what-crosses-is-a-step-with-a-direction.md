@@ -1,4 +1,4 @@
-# What crosses a surface is a walk step, and the step says which way
+# What crosses a surface is a flow step, and the step says which way
 
 Change (2026-09-05): `interfaces[].carries[]` is REMOVED from the model, the method, the tools and
 all three maps on disk. Its one underivable fact becomes `flows[].steps[].direction`
@@ -23,7 +23,7 @@ nothing.** Every part of it was measured on argus and mcpolis before removal:
   steps. 4 rows were word-for-word copies of a single step. At the busiest surfaces the words that
   were genuinely new were mostly paraphrase (*wants, supplies, including, deciding, doing, lately*).
 - **The records were not the important ones.** 68 references, of which 31 were already named in a
-  use case walk that reaches the surface. Of the 37 that were not: 14 transient wire shapes, 12
+  flow that reaches the surface. Of the 37 that were not: 14 transient wire shapes, 12
   pieces of other records, 9 computed views, and **2** real independent stored records.
 - **It was where an unbacked claim could live.** mcpolis's dashboard row said a new agent credential
   is "shown exactly once". Nothing in the map backs it, no step says it, and it sat outside every
@@ -81,7 +81,7 @@ anchored at the real call site.
    is what decides whether it gets promoted.
 3. **Coyodex's own map is the real cost, and the headline numbers hide it.** Every measurement
    above is from argus and mcpolis. The third map on disk draws no doors, so all 11 of its surfaces
-   had no walk step: it lost 15 authored sentences and every one of its 11 direction answers, and
+   had no flow step: it lost 15 authored sentences and every one of its 11 direction answers, and
    states nothing in their place until its walks get doors. It is stale and not rebuilt, which is
    why this was accepted rather than fixed — but "5 of 28 surfaces had no step" is the two-map
    number, not the whole truth, and the next rebuild of coyodex's own map is where the bill lands.

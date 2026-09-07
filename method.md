@@ -226,22 +226,22 @@ one content family with no structure at all, and no screen answers *"what does t
 - **A capability is a group of use cases that serve one goal of the product** — `Organizations &
   teams`, `Upstream MCPs`, `Tool access via gateway`. Aim for the same 5±2 the diagrams use: five
   boxes is a product description, twenty is a list.
-- **Each capability carries a `happy_path`: `expected` | `excluded`.** Must the walk reach at least
+- **Each capability carries a `happy_path`: `expected` | `excluded`.** Must the happy path reach at least
   one of its use cases? `expected` = yes. `excluded` = no, and one record says why. This is what
   turns Happy-Path membership into a rule (see the Coverage rule below) instead of a written
   justification per off-spine use case.
-- **A capability the walk never reaches states its `story` anchor:**
+- **A capability the happy path never reaches states its `story` anchor:**
   `{ "place": "before"|"after", "feature": "CAPn" }` — the feature this one reads beside. WHY: the
-  viewer draws ONE story column, the walk unbroken and the off-walk features in a block after it,
-  and a feature with no walk step has no derived position in it. So `after` ORDERS that trailing
-  block — the block already sits after every walk feature — while `before` is the one placement
-  that keeps a feature among the walk, because the end of the column is not before anything. Author
+  viewer draws ONE story column, the happy path unbroken and the off-happy-path features in a block after it,
+  and a feature with no flow step has no derived position in it. So `after` ORDERS that trailing
+  block — the block already sits after every happy-path feature — while `before` is the one placement
+  that keeps a feature among the happy path, because the end of the column is not before anything. Author
   `before` on a lead-in (a marketing / onboarding feature belongs BEFORE the first step); author
   `after` on a trailing or variant feature, so it follows the work it extends instead of landing
-  last. Without an anchor the viewer guesses from the feature's actors' last walk step, which
+  last. Without an anchor the viewer guesses from the feature's actors' last flow step, which
   orders the block sensibly for trailing features and never rescues a lead-in. Anchor to the
   feature it genuinely reads beside in the product's story; never invent an anchor for a feature
-  the walk already reaches (its position is derived), and never author anchors that form a cycle
+  the happy path already reaches (its position is derived), and never author anchors that form a cycle
   (A after B, B after A) — a cycle cannot resolve, and the viewer then drops one member's anchor.
   `validate` blocks the field on the other forests, checks `place` is exactly `before`/`after`,
   and that `feature` names a defined capability other than this one — nothing more.
@@ -257,15 +257,15 @@ one content family with no structure at all, and no screen answers *"what does t
   recordable as `CAPn: <why>` under a **"Stake exceptions"** extras heading.
 - **It says NOTHING about who the capability is for.** That is a second, independent question, and
   it is answered once on the ROLE (`audience`, below) and derived up. A capability may be internal work
-  that the walk shows on purpose — the story has to meet the operator and the upkeep job somewhere —
+  that the happy path shows on purpose — the story has to meet the operator and the upkeep job somewhere —
   and it needs no per-step excuse for that.
-- **Deliberately not derived from the walk.** A value that always agreed with `happy_path[]` could
-  never disagree with it, and the disagreement IS the check: "you wrote that the walk must reach
+- **Deliberately not derived from the happy path.** A value that always agreed with `happy_path[]` could
+  never disagree with it, and the disagreement IS the check: "you wrote that the happy path must reach
   this, and it never does" is the gap the forward direction exists to find. An EMPTY value means
   nobody decided, and warns; it never reads as `excluded`. (This is why the field is a word pair and
   not a boolean: `false` cannot tell "undecided" from "deliberately off".)
 - **`validate` BLOCKS `happy_path` on a subsystem or a subdomain** — only a capability is on the
-  walk at all, and a walk expectation over code is exactly the parallel, contradictable axis the
+  happy path at all, and a happy-path expectation over code is exactly the parallel, contradictable axis the
   `tech`-on-a-subdomain rule already refuses.
 
 ### Audience — who a capability is for, authored once on the role
@@ -311,64 +311,64 @@ someone who has not bought it yet.
   a product area groups *components* (structural). A product area usually mirrors a capability —
   that is the point of the top-cut guidance — but neither derives the other.
 
-### Happy Path — the spine (an ordered walk through the use cases)
+### Happy Path — the spine (an ordered run through the use cases)
 
 The Happy Path is one end-to-end happy-path **ordering of use cases** that traverses **all** main
 functionality and involves **all** relevant actors; edge cases excluded. A use case on its own has
 no fixed position — use cases relate by **preconditions**, a partial order / DAG ("an org must exist
 before a user can join it"), and several orderings can satisfy it. The Happy Path is the **one
-concrete walk** through that DAG that tells a coherent story. Placed right after Roles/Use cases as
+concrete run** through that DAG that tells a coherent story. Placed right after Roles/Use cases as
 the spine; built after harvest + at least one full trace.
 
 - **Each step IS a use case.** A step is a `**HPn — <title>** *(UCn)*` heading whose `*(UCn)*` tag
-  (**required**) names the use case it realizes; `HPn` is just its position in the walk. The step's
+  (**required**) names the use case it realizes; `HPn` is just its position in the happy path. The step's
   *detail* — the sequence of actions and the components/deps/entities involved — is **not** written
   here; it lives once in that use case's **T6 flow** (below). Drilling a step opens its flow. A use
   case may appear at several positions (each a distinct `HPn`); the use case is still defined once.
-- **Order = the chosen walk; an optional `why:` line records the prerequisite** ("needs the org from
+- **Order = the chosen run; an optional `why:` line records the prerequisite** ("needs the org from
   HP1"). That is the only narrative the Happy Path itself carries — the actions and mechanics belong
   to the use case's flow, not restated here.
 - **A step's title states the ACTION taken at that position** (present tense: "Admin invites a team
-  member"), phrased for this walk moment (it may name the variant/actor: "…adds a *Hosted stdio*
+  member"), phrased for this moment of the happy path (it may name the variant/actor: "…adds a *Hosted stdio*
   MCP"). **Never a post-condition**: "Admin signs in; the organization exists" reads as a
   precondition and can contradict its use case's name — the outcome belongs to the use case's
   `Trigger → Outcome`, and state chaining belongs to dependent steps' `why:` lines.
-- **Preconditions: implicit vs explicit.** *Implicit* = environment state no walk actor produces by
+- **Preconditions: implicit vs explicit.** *Implicit* = environment state no happy-path actor produces by
   using the product (the service is running, the database exists) — never a step, never mentioned.
-  *Explicit* = something a walk actor actually does with the product's surfaces (a first-run
+  *Explicit* = something a happy-path actor actually does with the product's surfaces (a first-run
   sign-in) — it must live somewhere findable: an on-spine step, an off-spine use case, or the
-  depending use case's trigger; when the walk's FIRST step depends on it, say so in that step's
+  depending use case's trigger; when the happy path's FIRST step depends on it, say so in that step's
   `why:` so the spine-as-a-list reading isn't left assuming state nobody established.
 - **Actor = the use case's actor.** Because a step is exactly one use case, its driving role is that
   use case's `Actor` — there is no separate `Actor:` line. A cross-actor handoff is simply the next
   step being a use case with a different actor.
 - **Refer to actors by their role id** (`R2`, resolved to the Roles-table name in the views) — never
   invented persona nicknames, which anchor to nothing and can read as real data.
-- **Coverage rule — asked at CAPABILITY altitude.** Pick the walk hitting all main functionality +
-  all actors; if one linear walk can't reach everything, the use cases left off still have their own
+- **Coverage rule — asked at CAPABILITY altitude.** Pick the happy path hitting all main functionality +
+  all actors; if one linear happy path can't reach everything, the use cases left off still have their own
   T6 flow, just not a spine position. Membership follows the capability's `happy_path`, in **both**
   directions, and `validate` warns (advisory) on each:
   - **forward** — a capability marked **`expected`** that no spine step reaches. About five checks on
     a real map, each a genuine gap. Fix it, or record `CAPn/spine: <why>`.
   - **converse** — a spine step whose use case sits in an **`excluded`** capability: either the
-    expectation is wrong or the step does not belong on the main walk. Record `HPn: <why>` to keep
-    it. This is the direction a one-way check cannot produce, and it is what catches a walk quietly
+    expectation is wrong or the step does not belong on the main happy path. Record `HPn: <why>` to keep
+    it. This is the direction a one-way check cannot produce, and it is what catches a happy path quietly
     padded with side work.
   - an **`excluded` capability that HOLDS off-spine use cases** needs ONE record — `CAPn: <why>`, not
     a line per use case. Without it, flipping a capability expected→excluded would silence its whole
     membership with no trace anywhere, and the field would have become an unrecorded escape.
   - a capability with **NO `happy_path` at all** warns on its own: the rule cannot ask the question.
-  - **`audience` is not read here.** An `internal` capability sits on the walk whenever the story needs
+  - **`audience` is not read here.** An `internal` capability sits on the happy path whenever the story needs
     it there, and that costs no record.
   - a **role none of whose use cases has a spine position** (the "involves all relevant actors" half)
-    is unchanged: an ops-only role kept off the walk is legitimate, but it is a decision — record
+    is unchanged: an ops-only role kept off the happy path is legitimate, but it is a decision — record
     `Rn: <why>` under the same heading.
 
   Every record goes under a **"Happy Path coverage"** extras heading, and ids are read from
   **line-leading** tokens only (`UC7: …`, `- R4: …`), so explanatory prose naming other ids never
   silences them by accident.
 
-  **What this deliberately gives up**: an individual core use case falling off the walk no longer
+  **What this deliberately gives up**: an individual core use case falling off the happy path no longer
   warns, because its capability still passes. Those use cases are COUNTED instead
   (`off_spine_in_expected_capabilities`), so the trade stays visible rather than becoming a silent loss.
   The old rule demanded a written record for each one, and a record that costs more to write than to
@@ -399,7 +399,7 @@ its `SOURCE` link) so both link directions are clickable. Each touch inherits it
 
 One use case has two faces: **outside** — what the actor does and sees, carried by the use case's
 `Trigger → Outcome` cell — and **inside = T6 flow** (the ordered interactions among
-components/deps/entities), drawn as a walk map and read as a numbered narrative.
+components/deps/entities), drawn as a flow map and read as a numbered narrative.
 
 ---
 
@@ -500,7 +500,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   catalog, the edges claim — see [the map model](method/model.md)).
 - **T2b Interfaces** *(the product's outside edge)*: `Name | Side | Kind | Facing | What it is |
   Far side | Source`. Author this AFTER T2 and T4 both exist, since it groups their rows. There is
-  no "what crosses" block: what crosses a surface is the walk steps drawn at it, and each of those
+  no "what crosses" block: what crosses a surface is the flow steps drawn at it, and each of those
   says which way it went. An **interface** is a surface through which the product SENDS data or events
   **not consumed by the product itself**, or RECEIVES data or events **not generated by the product
   itself**. Four lines close the gaps: (1) data the product produces only to read back is EXCLUDED
@@ -618,7 +618,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   browser: a config file, environment variables, a flag file an operator edits. Values a person
   types into a page of ours are `screen`.
   **`actors` is DERIVED and is NOT a field — never author it.** Who is on the far side falls out of
-  the walks, from THREE sources, and the first is the strongest. **(1) The DOORS**: any role standing
+  the flows, from THREE sources, and the first is the strongest. **(1) The DOORS**: any role standing
   at a step next to the surface, `Rn → In` or `In → Rn`, either side, on ANY surface and with no kind
   gate — a written step is the map's own statement, not an inference. **(2)** An `ours` surface also
   takes the roles driving the use cases behind its ways in. **(3)** A `theirs` surface also takes the
@@ -627,7 +627,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   product itself is what reaches most outside services — but do not read it as permission to skip a
   door. If a surface hands something OUT and derives nobody, the missing thing is a story, and
   `validate` says so. Writing it by hand was measured and is worse: one build authored a single role
-  on a dashboard whose walks show three.
+  on a dashboard whose flows show three.
   An actor here means a role OUTSIDE the product. A role that is `kind: service` AND
   `audience: internal` is the product's own scheduled work and never stands on a far side. **`ways_in`** are `EPn` ids and travel through `reconcile` like a use
   case's, never hand-written into a fragment. `source` is the ONE line declaring the whole surface
@@ -818,7 +818,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   **WHAT CROSSES A SURFACE IS ITS WALK STEPS, and there is no field for it.** `carries[]` was
   removed: it stated in a sentence per direction what goes in and out, and every part of it was
   either unsaid elsewhere for one reason only, or already said. Measured on the two live maps before
-  the removal — on the surfaces with the richest walks, 66% of a row's words were already in the
+  the removal — on the surfaces with the richest flows, 66% of a row's words were already in the
   steps and 4 rows were word-for-word copies of a single step; its record list held 68 references of
   which 2 were a real independent stored record, the rest being wire shapes, embedded parts and
   computed views; and one of its genuinely-new facts ("shown exactly once") was a claim nothing in
@@ -850,8 +850,8 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   report: *"no authored surface fits that, so I added no door there and the story stops."* Answer
   every one of those lines:
 
-      for each walk report that says no surface fitted:
-          mint the surface, and send that walk back to close through it
+      for each flow report that says no surface fitted:
+          mint the surface, and send that flow back to close through it
           OR record `UCn: <why this story's person stands at no surface>`
              under a **"Missing surfaces"** extras heading
       a report answered by neither is a row this build loses silently
@@ -862,7 +862,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   story through it. On 2026-09-06 the same report arrived, the lead called it "a second wording
   correction", rewrote the use case's outcome sentence, and wrote no row. The map's only `handoff`
   surface is gone, its code is unchanged, and the story's own outcome still reads "their own mail
-  program opens" while no box in the map is one. Eight other walk reports landed in the four minutes
+  program opens" while no box in the map is one. Eight other flow reports landed in the four minutes
   after that one.
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
@@ -880,18 +880,18 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
     records and runs their lifecycle?* One clear answer → `"owners": ["CAPn"]`. Several genuine
     ones → list them all, and the split / dominance advisories then challenge the list. No clear
     answer → leave the field out and record `SDn: <why>` under a **"Data owner exceptions"** extras
-    heading. **Never author an owner to make a diagram complete**: an owner whose feature's walks
+    heading. **Never author an owner to make a diagram complete**: an owner whose feature's flows
     reach none of the area's records is reported as AN OWNER WITH NO EVIDENCE, which is worse than an empty column.
     A "saved record" is an entity whose `store.mode` is `collection` or `embedded`; an area of pure
     plumbing (request shapes, enums, read projections) is not asked the question at all.
-    - **DECIDE IT AFTER THE TRACE, NOT AT SYNTHESIS** — the walks have to exist first. The
+    - **DECIDE IT AFTER THE TRACE, NOT AT SYNTHESIS** — the flows have to exist first. The
       question is which feature the data exists FOR, and the only evidence that bears on it is
-      which features' walks reach the area's records. At synthesis that evidence does not exist
+      which features' flows reach the area's records. At synthesis that evidence does not exist
       yet: the areas and the features are written, the flows are not. Deciding there is deciding
       blind, and `validate` cannot help either — run it at that moment and every owner comes back
-      ungrounded, because no walk reaches anything yet.
+      ungrounded, because no flow reaches anything yet.
       MEASURED, on the mcpolis build of 2026-08-26: decided at synthesis, 8 areas took 8 single
-      owners, one feature took 5 of them, one owner was reached by no walk at all and needed a
+      owners, one feature took 5 of them, one owner was reached by no flow at all and needed a
       recorded exception to get through. The SAME map and the SAME instruction, decided after the
       trace, changed exactly those two answers — the owner with no evidence became the one that
       really writes the records, the over-claimed area became an honest three-way share — and
@@ -909,7 +909,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
       DOES go through reconcile (`{"ids": ["E51"], "owners": ["CAP4"]}`), for the same reason
       `capability` does: the entity was authored in the T5 harvest, before any `CAPn` existed. An
       override is checked as hard as an area: one that repeats what the area already says is
-      reported as redundant, and one naming a feature whose walks never touch that record is
+      reported as redundant, and one naming a feature whose flows never touch that record is
       reported as ungrounded. It belongs only on a SAVED record; on anything else `validate` blocks
       it.
     - **WHY AUTHORED, and why no derivation replaces it.** Code says what a feature TOUCHES; it
@@ -927,7 +927,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   `from → to`: **every step** — element↔element and actor steps alike — carries a short authored phrase
   saying what happens at that point, as an action in the IMPERATIVE ("POST the new upstream", "return
   the verified email"), never the third person, which is what the arrow shows. The viewer titles the
-  step with the phrase ALONE, with no subject in front of it, and a use case's name and a shared sub-use case's
+  step with the phrase ALONE, with no subject in front of it, and a use case's name and a shared sub-flow's
   name are written the same way — one form for every action the map states. Don't lean on the backbone edge for it: the same
   element pair can appear in several steps that do different things, and one shared edge label can't
   describe each; the step describes itself. A phrase is **pure action** — a condition or qualifier
@@ -968,7 +968,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
     **Anchor it on the product, not on the arrow.** `In → Cn` is the surface handing inward what
     it received, so that is `in` however the arrow points.
     **`both` is for one exchange, and it is not a cop-out.** A code traded for a verified email, an
-    upsert that returns the stored row. Splitting such a step in two only lengthens the walk to
+    upsert that returns the stored row. Splitting such a step in two only lengthens the flow to
     record something the step already knows.
     **DO NOT READ IT OFF THE ARROW'S POLARITY, ever.** A PULL points outward while its data comes
     back. Doing that flipped argus's "Tracked web pages" from `in` to `out` on a page the product
@@ -977,7 +977,7 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
     Nothing else holds it: the `C→E` arrows say BOTH read and write on 83 of the 170 record steps
     across the live maps, and no arrow reaches a surface at all.
   - **EVERY SAVED RECORD OWES A USE CASE, the same way every interface does.** A record this
-    codebase KEEPS — `store.mode` of `collection` or `embedded` — that no walk step reaches leaves
+    codebase KEEPS — `store.mode` of `collection` or `embedded` — that no flow step reaches leaves
     the map unable to say what it is FOR: it draws a box on the Data tab whose owner nothing backs,
     which is the "owner with no evidence" defect arrived at from the other side.
     **A record INSIDE another one counts as reached when its holder is**, so an embedded piece needs
@@ -991,9 +991,9 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
     `validate` reports the unstoried ones. The escape is `<En>: <why no story keeps it>` under a
     **"Balance exceptions"** extras heading, for a record only a migration writes.
     **AND THE STORIES MUST NOT CONTRADICT THE ARROWS.** An arrow saying `C31 writes E18` is the map
-    stating that the code writes that record. If no walk step ever writes it, the map disagrees with
+    stating that the code writes that record. If no flow step ever writes it, the map disagrees with
     itself, and it is the ARROW that is the evidence. `validate` reports each one; draw the missing
-    touch as a `Cn → En` step carrying that direction, in the walk where it happens. Measured on the
+    touch as a `Cn → En` step carrying that direction, in the flow where it happens. Measured on the
     live maps: 2 of 46 saved records, both argus's, each with a `writes` arrow and only ever read in
     a story. A record whose only arrow is a `reads` is correctly silent — someone else writes it.
   - **Entity steps — author the flow's CENTRAL entity touches (1–2 per flow).** The entities whose
@@ -1404,7 +1404,7 @@ from memory:
 | **deleting or correcting a recorded line** | `coyodex record --remove "<prefix>"` / `--replace "<prefix>"` — a python splice of `extras.json` takes the heading with it when the line is the last one |
 | **a batch of recorded lines** | `coyodex record --lines-from <file\|->` — one process, one write, every line shape-checked before any of them lands |
 | **which headings may carry a comma list of ids** | `coyodex record --headings` — five of them key on free text and silence NOTHING when merged; the merged form is right only for the other six |
-| a rewrite of a rule's / entity's / **a walk step's** own TEXT | `coyodex fix row --fragments .coyodex/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly. It reaches ANY row with an id, `happy_path` steps included: `--set-why`, `--set-confidence`, `--set-risk` all work |
+| a rewrite of a rule's / entity's / **a flow step's** own TEXT | `coyodex fix row --fragments .coyodex/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly. It reaches ANY row with an id, `happy_path` steps included: `--set-why`, `--set-confidence`, `--set-risk` all work |
 | **TWO OR MORE row rewrites** | `coyodex fix rows --fragments .coyodex/build-fragments --edits <file\|->` — a JSON list of `{"id"\|"edge", "set", "set_json"}`. One process, one write, all-or-nothing, every fault reported at once. One build spent twelve consecutive turns on 37 single `fix row` calls plus 8 identical hand edits |
 | **an arrow's VERB** | `coyodex fix rows` with `{"edge": "C12:emits:C30", "set": {"verb": "queues"}}` — writing `verb` MOVES the edge, because an edge's identity is its triple, so a move onto a triple that already exists is refused as the merge it is |
 | a corrected anchor | `coyodex fix apply-drift --to-reconcile` |
@@ -1473,7 +1473,7 @@ through `reconcile` (their `EPn`/`In` ids are minted at assembly, exactly like a
 `entry_points`), and every external-group dep is decided one way or the other.
 **Author `kind` with the row**, in the same pass, from the eleven seeds — it is a fact about the
 surface you have just named, not a later tidy-up, and nothing derives it. Who is on the far side is
-DERIVED from the walks and must never be written by hand.
+DERIVED from the flows and must never be written by hand.
 **Every flow AND every sub-flow does ALL FOUR halves of the doors rule** — shared machinery is swept
 under its own id, and one undoored step there is drawn in every story that rides it. **Halves 1–3
 belong to the TRACE, written with the steps; half 4 is the lead's, after the trace.** A trace agent
@@ -2320,7 +2320,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   `rule`, `dep-usage`, `ownership`, `persistence`, `messaging`, `interface`, `lifecycle`, `cadence`,
   `description`,
   `backbone`, `behaviour`)
-  — and `behaviour` covers flow titles and step phrases, the walk a reader follows, added by
+  — and `behaviour` covers flow titles and step phrases, the flow a reader follows, added by
   `audit --with-behavioural`. **RUN IT.** It is not the default flag, so pass it, and record
   `behavioural: <why not>` under an **"Entry-point coverage"** extras heading if you deliberately
   skip it. `grounding.note` says either way.

@@ -1,10 +1,10 @@
 # Off-walk features get a story anchor, and the story column reads as one story
 
 Change: one story column — the Features diagram's "Off the happy path" column is gone; every
-feature sits in one column, the walk unbroken and the off-walk features in a block after it,
+feature sits in one column, the happy path unbroken and the off-happy-path features in a block after it,
 ordered by an authored `capabilities[].story` anchor ({place: before|after, feature: CAPn}) with a
-derived fallback (the feature's actors' last walk step). A `before` anchor on a walk feature is the
-one placement that keeps an off feature among the walk · method.md, method/model.md,
+derived fallback (the feature's actors' last flow step). A `before` anchor on a walk feature is the
+one placement that keeps an off feature among the happy path · method.md, method/model.md,
 method/project-map.schema.json, tools/coyodex/model.py, validate_model.py, features.py, viewer.
 
 Escalation: if check 3 fails (anchors placing features where the story misreads), run the eval
@@ -12,7 +12,7 @@ before accepting the map.
 
 ## Checks
 
-1. expect: the next MCP Hero build authors a `story` anchor on each of its 2 off-walk features —
+1. expect: the next MCP Hero build authors a `story` anchor on each of its 2 off-happy-path features —
    "Marketing and self-serve onboarding" anchored `before` the organizations/sign-in feature
    (a prospect reads about the product BEFORE step 1), and "Conversational administration"
    anchored `after` the admin's last clicked feature (it is a chat variant of that work).

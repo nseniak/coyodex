@@ -5,12 +5,12 @@
 ## What this change is answering
 
 The viewer titles a step with its phrase ALONE, with no subject in front of it — because the same line
-has to title a step that runs a shared sub-use case, where the text is the walk's NAME. Names are imperative,
-for use cases and shared sub-use cases alike. A third-person phrase in that slot reads as a sentence whose
+has to title a step that runs a shared sub-flow, where the text is the walk's NAME. Names are imperative,
+for use cases and shared sub-flows alike. A third-person phrase in that slot reads as a sentence whose
 beginning is missing.
 
 Before this rule the two forms split cleanly on the two live maps: 1376 of 1379 step phrases were
-third person, and 24 of 24 shared sub-use case names and 82 of 82 use case names were imperative. Both maps
+third person, and 24 of 24 shared sub-flow names and 82 of 82 use case names were imperative. Both maps
 were migrated, and `method.md`, `method/model.md` and the trace contract now say imperative.
 
 ## Open, and NOT fixed
@@ -24,7 +24,7 @@ A step's `note` is also untouched: it is a condition or a qualifier, never an ac
 
 ## Checks
 
-1. expect: on a rebuild, every `phrase` on a flow step and on a shared sub-use case's step starts with a bare
+1. expect: on a rebuild, every `phrase` on a flow step and on a shared sub-flow's step starts with a bare
    verb — `return the verified email`, not `returns the verified email`.
    regression sign: take the first word of every phrase and flag any ending in `s` that is not a
    plural noun, plus `is`, `has`, `does`, `goes`. A non-empty list means the trace contract's wording

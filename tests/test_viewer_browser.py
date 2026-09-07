@@ -212,12 +212,12 @@ def test_the_happy_path_draws_one_line_broken_at_every_change_of_person() -> Non
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
         counts = page.evaluate("""() => ({
-            steps: document.querySelectorAll('.walk-step').length,
-            boxes: document.querySelectorAll('.walk-box').length,
-            hands: document.querySelectorAll('.walk-hand').length,
-            elbows: document.querySelectorAll('.walk-elbow').length,
-            hooks: document.querySelectorAll('.walk-hook').length,
-            closed: document.querySelectorAll('.walk-box.walk-closes').length
+            steps: document.querySelectorAll('.flow-step').length,
+            boxes: document.querySelectorAll('.hp-box').length,
+            hands: document.querySelectorAll('.hp-hand').length,
+            elbows: document.querySelectorAll('.hp-elbow').length,
+            hooks: document.querySelectorAll('.hp-hook').length,
+            closed: document.querySelectorAll('.hp-box.hp-closes').length
         })""")
         assert counts == {"steps": 14, "boxes": 11, "hands": 6,
                           "elbows": 5, "hooks": 5, "closed": 1}, counts
@@ -238,16 +238,16 @@ def test_every_bullet_of_the_walk_sits_on_the_line() -> None:
         off = page.evaluate("""() => {
             const mid = (el) => { const r = el.getBoundingClientRect(); return +(r.top + r.height / 2).toFixed(1); };
             const bad = [];
-            [...document.querySelectorAll('.walk-row')].forEach((row, i) => {
-                const line = +(row.querySelector('.walk-line').getBoundingClientRect().top + 21).toFixed(1);
-                const dots = [...new Set([...row.querySelectorAll('.walk-dot')].map(mid))];
+            [...document.querySelectorAll('.hp-row')].forEach((row, i) => {
+                const line = +(row.querySelector('.hp-line').getBoundingClientRect().top + 21).toFixed(1);
+                const dots = [...new Set([...row.querySelectorAll('.flow-step-dot')].map(mid))];
                 // The person's BLOCK is what sits on the line: an icon with the name under it, so the
                 // line runs between the two. And where two people share a row, the little "or"
                 // between them sits on their ICONS, not on their block — its own middle would fall
                 // in the names, and it would read as a word joining them rather than a choice.
-                const one = row.querySelector('.walk-one, .walk-nowho');
-                const or = row.querySelector('.walk-or');
-                const ico = row.querySelector('.walk-ico');
+                const one = row.querySelector('.hp-one, .flow-step-numowho');
+                const or = row.querySelector('.hp-or');
+                const ico = row.querySelector('.hp-ico');
                 if (dots.length !== 1 || dots[0] !== line) bad.push({ row: i, dots, line });
                 else if (one && Math.abs(mid(one) - line) > 1) bad.push({ row: i, one: mid(one), line });
                 else if (or && Math.abs((or.getBoundingClientRect().top + 10.5) - mid(ico)) > 1.5) {
@@ -271,20 +271,20 @@ def test_the_walk_has_three_doors_and_each_opens_that_thing_s_own_page() -> None
     """
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
-        page.evaluate("() => document.querySelector('.walk-step').click()")
+        page.evaluate("() => document.querySelector('.flow-step').click()")
         _settle(page)
         assert page.evaluate("() => location.hash").startswith("#v=usecase&uc="), \
             page.evaluate("() => location.hash")
 
         page.evaluate("() => { location.hash = '#v=hp'; }")
         _settle(page)
-        page.evaluate("() => document.querySelector('.walk-fname').click()")
+        page.evaluate("() => document.querySelector('.hp-fname').click()")
         _settle(page)
         assert page.evaluate("() => location.hash").startswith("#v=capability&cap=")
 
         page.evaluate("() => { location.hash = '#v=hp'; }")
         _settle(page)
-        page.evaluate("() => document.querySelector('.walk-one').click()")
+        page.evaluate("() => document.querySelector('.hp-one').click()")
         _settle(page)
         assert page.evaluate("() => location.hash").startswith("#v=actor&act=")
         assert not page.js_errors, page.js_errors
@@ -298,12 +298,12 @@ def test_a_link_naming_one_step_arrives_scrolled_to_it() -> None:
     with _served() as url, _page(url + "#v=hp&sel=hpstep:HP12") as page:
         _settle(page)
         seen = page.evaluate("""() => {
-            const el = document.querySelector('.walk-step[data-step="HP12"]');
+            const el = document.querySelector('.flow-step[data-step="HP12"]');
             if (!el) return null;
-            const strip = el.closest('.walk-strip');
+            const strip = el.closest('.hp-strip');
             const r = el.getBoundingClientRect(), b = strip.getBoundingClientRect();
             return { onScreen: r.left >= b.left - 1 && r.right <= b.right + 1,
-                     row: strip.querySelectorAll('.walk-step').length > 0 };
+                     row: strip.querySelectorAll('.flow-step').length > 0 };
         }""")
         assert seen == {"onScreen": True, "row": True}, seen
         assert not page.js_errors, page.js_errors
@@ -320,32 +320,32 @@ def test_every_feature_box_is_the_same_height_and_the_line_bridges_the_gap() -> 
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
         seen = page.evaluate("""() => {
-            const all = [...document.querySelectorAll('.walk-box')];
+            const all = [...document.querySelectorAll('.hp-box')];
             const heights = [...new Set(all.map((b) => Math.round(b.getBoundingClientRect().height)))];
             const px = (el, k) => parseFloat(getComputedStyle(el).getPropertyValue(k)) || 0;
             // Pairs WITHIN a row: two boxes of one person, so the line must cross the gap. Across
             // rows there is nothing to bridge — the row break is the hand-over.
             const gaps = [];
-            for (const row of document.querySelectorAll('.walk-row')) {
-                const boxes = [...row.querySelectorAll('.walk-box')];
+            for (const row of document.querySelectorAll('.hp-row')) {
+                const boxes = [...row.querySelectorAll('.hp-box')];
                 for (let i = 0; i < boxes.length - 1; i++) {
-                    const a = boxes[i].querySelector('.walk-line').getBoundingClientRect();
-                    const b = boxes[i + 1].querySelector('.walk-line').getBoundingClientRect();
-                    const reach = -px(boxes[i], '--walk-r') - px(boxes[i + 1], '--walk-l');
+                    const a = boxes[i].querySelector('.hp-line').getBoundingClientRect();
+                    const b = boxes[i + 1].querySelector('.hp-line').getBoundingClientRect();
+                    const reach = -px(boxes[i], '--hp-r') - px(boxes[i + 1], '--hp-l');
                     gaps.push({ joined: reach >= b.left - a.right,
-                                closes: boxes[i].classList.contains('walk-closes') });
+                                closes: boxes[i].classList.contains('hp-closes') });
                 }
             }
             // …and every part of the wrap must sit ON the line it continues, never near it.
             const off = [];
-            document.querySelectorAll('.walk-row').forEach((row, i) => {
-                const bs = [...row.querySelectorAll('.walk-box')];
-                const f = bs[0].querySelector('.walk-line').getBoundingClientRect();
-                const l = bs[bs.length - 1].querySelector('.walk-line').getBoundingClientRect();
-                const left = f.left + px(bs[0], '--walk-l');
-                const right = l.right + px(bs[bs.length - 1], '--walk-r');
+            document.querySelectorAll('.hp-row').forEach((row, i) => {
+                const bs = [...row.querySelectorAll('.hp-box')];
+                const f = bs[0].querySelector('.hp-line').getBoundingClientRect();
+                const l = bs[bs.length - 1].querySelector('.hp-line').getBoundingClientRect();
+                const left = f.left + px(bs[0], '--hp-l');
+                const right = l.right + px(bs[bs.length - 1], '--hp-r');
                 const mid = f.top + 21;
-                const el = row.querySelector('.walk-elbow'), hk = row.querySelector('.walk-hook');
+                const el = row.querySelector('.hp-elbow'), hk = row.querySelector('.hp-hook');
                 if (el) {
                     const b = el.getBoundingClientRect();
                     if (Math.abs(b.left - right) > 1 || Math.abs(b.top + 1.5 - mid) > 1) off.push(i);
@@ -356,8 +356,8 @@ def test_every_feature_box_is_the_same_height_and_the_line_bridges_the_gap() -> 
                 }
             });
             return { heights, gaps, off,
-                     rows: document.querySelectorAll('.walk-row').length,
-                     arrows: all.filter((b) => b.classList.contains('walk-closes')).length };
+                     rows: document.querySelectorAll('.hp-row').length,
+                     arrows: all.filter((b) => b.classList.contains('hp-closes')).length };
         }""")
         assert len(seen["heights"]) == 1, seen["heights"]
         # inside a row the line always crosses, and no box but the last of a row closes
@@ -381,7 +381,7 @@ def test_a_board_that_scrolls_sideways_shades_the_edge_there_is_more_on() -> Non
         _settle(page)
         seen = page.evaluate("""async () => {
             // the WIDEST row: the only one with anything to scroll to
-            const board = [...document.querySelectorAll('.walk-strip')]
+            const board = [...document.querySelectorAll('.hp-strip')]
                 .reduce((a, b) => (b.scrollWidth - b.clientWidth > a.scrollWidth - a.clientWidth ? b : a));
             const wrap = board.parentElement;
             // the shades are synced on the board's own scroll event, which is asynchronous
@@ -445,8 +445,8 @@ def test_the_walk_keeps_the_step_a_link_named_in_the_address() -> None:
         page.wait_for_selector("#crumb")
         _settle(page)
         seen = page.evaluate("""() => {
-            const el = document.querySelector('.walk-step[data-step="HP12"]');
-            const b = el.closest('.walk-strip');
+            const el = document.querySelector('.flow-step[data-step="HP12"]');
+            const b = el.closest('.hp-strip');
             const r = el.getBoundingClientRect(), br = b.getBoundingClientRect();
             return { hash: location.hash, inside: r.left >= br.left - 1 && r.right <= br.right + 1 };
         }""")
@@ -462,7 +462,7 @@ def test_back_from_a_step_returns_to_that_step_not_to_the_start_of_the_walk() ->
         _settle(page)
         left_by = page.evaluate("""() => {
             // a step near the END of the walk, so coming back to the top of the page would miss it
-            const all = [...document.querySelectorAll('.walk-step[data-uc]')];
+            const all = [...document.querySelectorAll('.flow-step[data-uc]')];
             const el = all[all.length - 1];
             el.scrollIntoView({ block: 'center' });
             el.click();
@@ -473,7 +473,7 @@ def test_back_from_a_step_returns_to_that_step_not_to_the_start_of_the_walk() ->
         page.go_back()
         _settle(page)
         seen = page.evaluate("""(step) => {
-            const el = document.querySelector(`.walk-step[data-step="${step}"]`);
+            const el = document.querySelector(`.flow-step[data-step="${step}"]`);
             const wrap = document.querySelector('.usecases-wrap');
             const r = el.getBoundingClientRect(), w = wrap.getBoundingClientRect();
             return { hash: location.hash, scrolled: wrap.scrollTop > 0,
@@ -496,14 +496,14 @@ def test_the_walk_offers_no_door_it_cannot_open() -> None:
     with _served_map(strip_the_last_step) as url, _page(url + "#v=hp") as page:
         _settle(page)
         seen = page.evaluate("""() => {
-            const person = document.querySelector('.walk-one-dead');
-            const step = document.querySelector('.walk-step-dead');
+            const person = document.querySelector('.hp-one-dead');
+            const step = document.querySelector('.flow-step-dead');
             return {
                 personDrawn: !!person, personIsButton: person ? person.tagName === 'BUTTON' : null,
                 personName: person ? person.textContent.trim() : null,
                 stepDrawn: !!step, stepIsDoor: step ? step.hasAttribute('data-uc') : null,
                 stepTitle: step ? step.getAttribute('title') : null,
-                liveButtons: document.querySelectorAll('.walk-one').length
+                liveButtons: document.querySelectorAll('.hp-one').length
             };
         }""")
         assert seen["personDrawn"] and seen["personIsButton"] is False, seen
@@ -523,7 +523,7 @@ def test_the_arrow_head_that_turns_the_line_down_is_centred_on_it() -> None:
         _settle(page)
         off = page.evaluate("""() => {
             const bad = [];
-            [...document.querySelectorAll('.walk-elbow')].forEach((el, i) => {
+            [...document.querySelectorAll('.hp-elbow')].forEach((el, i) => {
                 const b = el.getBoundingClientRect();
                 const cs = getComputedStyle(el, '::after');
                 const lineX = b.right - 1.5;                       // the 3px border's own middle
@@ -537,7 +537,7 @@ def test_the_arrow_head_that_turns_the_line_down_is_centred_on_it() -> None:
             return bad;
         }""")
         assert off == [], off
-        assert page.evaluate("() => document.querySelectorAll('.walk-elbow').length") == 5
+        assert page.evaluate("() => document.querySelectorAll('.hp-elbow').length") == 5
         assert not page.js_errors, page.js_errors
 
 
@@ -1011,7 +1011,7 @@ def test_the_smaller_things_answer_too_not_just_the_boxes() -> None:
     component's list. Both were invisible to a resolver that only knew about drawn boxes."""
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
-        step = _inspect(page, ".walk-step[data-step]")
+        step = _inspect(page, ".flow-step[data-step]")
         assert step["open"] and step["kind"] == "happy-path step", step
         assert re.fullmatch(r"happy_path\[\d+\]", step["path"]), step
         assert not page.js_errors, page.js_errors
@@ -1030,7 +1030,7 @@ def test_an_id_inside_a_record_opens_that_record_and_back_returns() -> None:
     file. Following one must also be undoable, or the popup is a one-way trip."""
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
-        first = _inspect(page, ".walk-step[data-step]")
+        first = _inspect(page, ".flow-step[data-step]")
         assert first["open"], first
         moved = page.evaluate("""
             () => {
@@ -1196,13 +1196,15 @@ def test_an_item_pages_sections_each_say_what_they_are_and_what_is_in_them() -> 
             count: s.querySelector('.item-sec-n').textContent,
             note: s.querySelector('.item-sec-note').textContent.slice(0, 24)
         }))""")
-        assert [s["title"] for s in secs] == ["Use cases", "Interfaces"], secs
+        # ONE section. The Interfaces block under it went, and with it the chip strip that only
+        # exists to index several — the board names every interface on the use case itself now.
+        assert [s["title"] for s in secs] == ["Use cases"], secs
         assert all(s["note"] and s["count"] != "" for s in secs), secs
-        # The bar states the same numbers the headings do — one page, one set of counts.
-        chips = page.evaluate("""() => [...document.querySelectorAll('.tab-index-chip')].map((c) => ({
-            title: c.firstChild.textContent.trim(),
-            count: c.querySelector('.tab-index-n').textContent }))""")
-        assert chips == [{"title": s["title"], "count": s["count"]} for s in secs], (chips, secs)
+        # NO BAR. It indexed several sections and there is one; `tabIndexHtml` returns nothing below
+        # two, and the page no longer asks it. The mechanism itself is pinned on a page that has
+        # several — see the actor-page test that checks a feature's page still builds one.
+        chips = page.evaluate("() => document.querySelectorAll('.tab-index-chip').length")
+        assert chips == 0, chips
         # …and the actor's name is drawn ONCE in the page body, by the hero.
         names = page.evaluate(
             "() => [...document.querySelectorAll('#diagram .page-hero-subject,"
@@ -1234,285 +1236,23 @@ def test_an_item_pages_sections_each_say_what_they_are_and_what_is_in_them() -> 
                     below: parseFloat(cs.marginBottom)};
         })""")
         assert rules[0]["top"] == 0, rules
-        assert all(r["top"] == 1 for r in rules[1:]), rules
-        assert all(r["below"] >= 24 for r in rules[:-1]), rules
-        # …and the air around that line is DELIBERATELY UNEVEN. Below it sits exactly the gap the chip
-        # bar leaves under its own grey line, so every grey line on the page stands the same distance
-        # above the heading it introduces. Even air on both sides was drawn first and read as a rule
-        # floating between two blocks, belonging to neither.
-        gaps = page.evaluate("""() => {
-            const w = document.querySelector('.usecases-wrap');
-            const nav = w.querySelector('.tab-index');
-            const secs = [...w.querySelectorAll('.item-sec')];
-            const top = (s) => s.querySelector('.item-sec-title').getBoundingClientRect().top;
-            return {bar: Math.round(top(secs[0]) - nav.getBoundingClientRect().bottom),
-                    sep: Math.round(top(secs[1]) - secs[1].getBoundingClientRect().top),
-                    above: Math.round(secs[1].getBoundingClientRect().top
-                                      - secs[0].getBoundingClientRect().bottom)};
-        }""")
-        assert abs(gaps["sep"] - gaps["bar"]) <= 2, gaps
-        assert gaps["above"] >= gaps["sep"] * 2, gaps
-        # A CHIP LANDS YOU ON THE TITLE IT NAMES. The section was left out of the rule that clears the
-        # pinned bar, so clicking a chip put its heading under the very bar that was clicked.
-        landed = page.evaluate("""() => {
-            const w = document.querySelector('.usecases-wrap');
-            const nav = w.querySelector('.tab-index');
-            const chip = nav.querySelector('.tab-index-chip');
-            const sec = w.querySelector('#' + chip.dataset.target);
-            w.scrollTop = w.scrollHeight;
-            sec.scrollIntoView({block: 'start'});
-            const t = sec.querySelector('.item-sec-title').getBoundingClientRect();
-            return {title: t.top, bar: nav.getBoundingClientRect().bottom};
-        }""")
-        assert landed["title"] >= landed["bar"], landed
+        # THE MULTI-SECTION PROMISES LEFT THIS TEST WITH THE SECOND SECTION. The grey rule between
+        # two of them, the air above and below it, and a chip landing on the title it names are all
+        # promises about a STACK, and this page is one section now. They are NOT re-checked here
+        # against a feature's page: driving a second view out of this fixture inside one browser
+        # context did not render its sections, and a check that silently sees zero of them is worse
+        # than none. `test_the_pinned_bar_...` still exercises the bar itself on a feature's page.
+        # Written down rather than quietly dropped: this spacing has no test right now.
+        assert not page.js_errors, page.js_errors
         assert not page.js_errors, page.js_errors
 
 
-def test_an_actors_page_names_the_surfaces_they_stand_at_and_says_which_shore() -> None:
-    """The far-side derivation read BACKWARDS. A surface's page already named the people at it, and
-    no page named the surfaces for a person — the link was one-way for as long as the actors column
-    was empty.
-
-    The two headings are not one sentence turned round: the actor COMES TO our surface, and the
-    product SENDS THEM to theirs. Google sign-in is where mcpolis sends three roles, and calling that
-    "where they reach the product" would be false.
-
-    It is a PICTURE, read left to right: what crosses, the surface it crosses at, and what this actor
-    does there. The two groups are sub-headings inside the middle column.
-
-    THE GROUPS CUT BY DIRECTION, not by whose surface it is. `side` says who defines a surface and
-    the headings claim which way the actor goes, and those are different questions: the fixture's
-    dashboard is ours AND is where the creator comes in, while Google sign-in is theirs AND is where
-    the product starts the exchange. On the live maps the difference was drawn wrong on 4 of 35
-    rows — every one of them Outgoing email, our surface, with no way in and one outbound sentence."""
-    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
-            _page(url + "#v=actor&act=Org creator") as page:
-        _settle(page)
-        seen = page.evaluate("""() => [...document.querySelectorAll(
-                '#asfstage .asf-shore, #asfstage .ifd-box .ibox-name')]
-            .map((el) => (el.classList.contains('asf-shore') ? 'SHORE:' : 'surface:')
-                + el.textContent)""")
-        assert seen == ["SHORE:Where they reach the product", "surface:The dashboard",
-                        "SHORE:Where the product reaches them", "surface:Google sign-in"], seen
-        # The reader's OWN actor is marked on every card; the other people at the same surface stay
-        # drawn, because "who else stands here" is context the card should keep.
-        marked = page.evaluate(
-            "() => [...document.querySelectorAll('.ibox-chip-me')].map((c) => c.textContent.trim())")
-        assert marked == ["Org creator", "Org creator"], marked
-        assert not page.js_errors, page.js_errors
-
-
-def test_a_surface_names_the_features_that_arrive_at_an_actor_not_only_the_ones_they_drive() -> None:
-    """WHO DRIVES IT AND WHO IS AT THE DOOR ARE DIFFERENT QUESTIONS, and the far-side list is built
-    from the DOOR. Asking only "does this use case name my actor" therefore reported "not stated" on
-    a surface the map has plenty to say about: the actor is on that surface BECAUSE of a door, and
-    the features had to be found by the same rule that put them there.
-
-    MCP Hero is the real case. Outgoing email carries one use case, "Warn a member that a server
-    sign-in expired" — its actor is the UPKEEP JOB, the product's own timer, and two of its steps are
-    `Outgoing email -> Organization admin` and `Outgoing email -> Team member`. The admin never
-    drives that story; it arrives at them. Their page said nothing about the one thing that surface
-    does for them.
-
-    Here the same shape: a use case the ORG ADMIN drives, whose walk hands out through the dashboard
-    to the Org creator, who drives none of it."""
-    def mutate(m: dict) -> None:
-        m["interfaces"] = [
-            {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
-             "side": "ours", "facing": "user", "kind": "screen"
-             },
-        ]
-        # UC2 is the ORG ADMIN's story. Its walk is made to hand out through the dashboard to the ORG
-        # CREATOR, who drives none of it — so the only thing that can put the creator on that surface,
-        # or name a feature for them there, is the door.
-        flow = next(f for f in m["flows"] if f["uc"] == "UC2")
-        last = flow["steps"][-1]
-        step = lambda n, src, dst, phrase: {
-            "n": n, "src": src, "dst": dst, "phrase": phrase, "note": "", "where": None,
-            "no_call_site": False, "subflow": None}
-        flow["steps"].append(step(len(flow["steps"]) + 1, last["src"], "I1", "writes the notice out"))
-        flow["steps"].append(step(len(flow["steps"]) + 1, "I1", "R1", "reaches the org creator"))
-    with _served_map(mutate) as url, _page(url + "#v=actor&act=Org creator") as page:
-        _settle(page)
-        seen = page.evaluate("""() => {
-            const cell = document.querySelector('#asfstage .asf-featcell[data-iface="I1"]');
-            const box = cell && cell.querySelector('.asf-feats');
-            return box ? [...box.querySelectorAll('.asf-feat span')].map((f) => f.textContent)
-                       : 'NONE: ' + (cell ? cell.textContent.trim() : 'no cell at all');
-        }""")
-        assert isinstance(seen, list) and seen, seen
-        # …and the wire is drawn, because there is now an answer for it to land on.
-        wires = page.evaluate(
-            "() => document.querySelectorAll('#asfstage path[data-iface=I1]').length")
-        assert wires == 2, wires
-        assert not page.js_errors, page.js_errors
-
-
-def test_an_actors_surfaces_picture_lines_each_one_up_with_what_they_reach_there() -> None:
-    """The third column answers "and what do I get through it?", per surface — so its box has to sit
-    at its own surface's height. Only a shared grid row can promise that: two independently stacked
-    columns line up at the top and drift apart at the first card whose sentence wraps to a different
-    number of lines. Measured, not eyeballed: the two middles must meet, because the wire between
-    them is drawn from one to the other.
-
-    The features are THIS actor's, joined through their own use cases — the surface's own feature
-    list would answer a different question, every feature ANYONE reaches there."""
-    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
-            _page(url + "#v=actor&act=Org creator") as page:
-        _settle(page)
-        rows = page.evaluate("""() => {
-            const st = document.querySelector('#asfstage');
-            return [...st.querySelectorAll('.ifd-box')].map((b) => {
-              const cell = st.querySelector(
-                  '.asf-featcell[data-iface="' + CSS.escape(b.dataset.iface) + '"]');
-              const box = cell && cell.querySelector('.asf-feats');
-              return {
-                surface: b.querySelector('.ibox-name').textContent,
-                cardMid: Math.round(b.offsetTop + b.offsetHeight / 2),
-                featMid: box ? Math.round(box.offsetTop + box.offsetHeight / 2) : null,
-                feats: box ? [...box.querySelectorAll('.asf-feat span')].map((f) => f.textContent)
-                           : cell.textContent.trim()
-              };
-            });
-        }""")
-        assert rows, rows
-        for r in rows:
-            if r["featMid"] is not None:
-                assert abs(r["cardMid"] - r["featMid"]) <= 1, r
-            assert r["feats"], r
-        # …and every wire the picture draws belongs to a surface: what this person does there, to
-        # the surface, to the features they get through it. EACH wire needs the thing at its far end
-        # to exist, and there are TWO such things — a surface no step of this actor's is drawn at
-        # has nothing in the left cell and loses the first wire, exactly as a surface with no
-        # feature loses the second.
-        wired = page.evaluate("""() => {
-            const st = document.querySelector('#asfstage');
-            const per = {};
-            for (const p of st.querySelectorAll('svg.ifd-wires path[data-iface]'))
-              per[p.dataset.iface] = (per[p.dataset.iface] || 0) + 1;
-            const has = {};
-            for (const c of st.querySelectorAll('.asf-featcell'))
-              has[c.dataset.iface] = { feats: !!c.querySelector('.asf-feats') };
-            for (const c of st.querySelectorAll('.asf-crosscell'))
-              (has[c.dataset.iface] = has[c.dataset.iface] || {}).cross = !!c.querySelector('.asf-cross');
-            return Object.keys(per).map((k) => [per[k], !!has[k].cross, !!has[k].feats]);
-        }""")
-        assert wired, wired
-        assert all(count == cross + feats for count, cross, feats in wired), wired
-        assert any(count == 2 for count, _c, _f in wired), "the fixture exercises the full shape"
-        assert not page.js_errors, page.js_errors
-
-def _actor_wires_meet_their_cells(page: Any) -> dict:
-    """How far the worst wire on an actor's page is from the two cells it joins, on screen NOW.
-
-    Both ends of every wire, because both are read off the settled layout: the left one leaves what
-    this person does at the surface, the right one arrives at the features they get through it."""
-    return dict(page.evaluate("""() => {
-        const st = document.getElementById('asfstage');
-        const R = (el) => [el.offsetLeft + el.offsetWidth, el.offsetTop + el.offsetHeight / 2];
-        const L = (el) => [el.offsetLeft, el.offsetTop + el.offsetHeight / 2];
-        let worst = 0, wires = 0;
-        for (const box of st.querySelectorAll('.ifd-box')) {
-          const iid = box.dataset.iface, want = [];
-          const c = st.querySelector('.asf-crosscell[data-iface="' + CSS.escape(iid) + '"] .asf-cross');
-          if (c) want.push([R(c), L(box)]);
-          const f = st.querySelector('.asf-featcell[data-iface="' + CSS.escape(iid) + '"] .asf-feats');
-          if (f) want.push([R(box), L(f)]);
-          const got = [...st.querySelectorAll(
-              'svg.ifd-wires path[data-iface="' + CSS.escape(iid) + '"]')];
-          for (let k = 0; k < want.length && k < got.length; k++) {
-            const n = got[k].getAttribute('d').match(/-?[0-9.]+/g).map(Number);
-            const d = Math.max(Math.hypot(n[0] - want[k][0][0], n[1] - want[k][0][1]),
-                               Math.hypot(n[n.length - 2] - want[k][1][0],
-                                          n[n.length - 1] - want[k][1][1]));
-            if (d > worst) worst = d;
-            wires++;
-          }
-        }
-        return { wires, offCell: +worst.toFixed(1), stage: st.offsetWidth };
-    }"""))
-
-
-def test_an_actors_wires_meet_their_cells_in_a_narrow_window_and_after_a_RESIZE() -> None:
-    """The same one-shot layout the Interfaces picture had, and the same two ways of being wrong:
-    a stage that had not settled when the page first drew (18px off at 900px), and nothing at all
-    recomputing afterwards (45px after a drag, and 445px on MCP Hero's widest actor).
-
-    Here a wire runs cell to cell rather than to a circle, so BOTH of its ends are the claim: a line
-    that starts beside what the person does and ends beside what they get is the only thing joining
-    the three columns into one row."""
-    with _served_map(_both_shores_carry_people_and_a_pipe()) as url, \
-            _page(url + "#v=actor&act=Org creator") as page:
-        page.set_viewport_size({"width": 900, "height": 900})
-        page.reload()                    # a FRESH layout at the narrow width, not a resize
-        page.wait_for_selector("#crumb")
-        _settle(page)
-        fresh = _actor_wires_meet_their_cells(page)
-        assert fresh["wires"] >= 2, fresh
-        assert fresh["offCell"] <= 1, fresh
-        for width in (1900, 1152, 1024, 900):
-            page.set_viewport_size({"width": width, "height": 900})
-            _settle(page)
-            got = _actor_wires_meet_their_cells(page)
-            assert got["wires"] == fresh["wires"], (width, got, fresh)
-            assert got["offCell"] <= 1, (width, got)
-        assert not page.js_errors, page.js_errors
-
-
-def test_an_actors_page_never_shows_ANOTHER_named_persons_steps() -> None:
-    """The blocking finding of an adversarial review. The cell falls back when the walks name no
-    step of this actor's own, and the fallback used to be EVERY step at the surface — including ones
-    the map attributes to a different named role. On argus that told a reader the software
-    "Assistant" picks a Google account and approves, a step belonging to the human "Visitor".
-
-    The fallback is now to the UNATTRIBUTED steps only. A step naming nobody is machinery this actor
-    can legitimately be shown; a step naming SOMEONE ELSE is another person's story."""
-    def mutate(m: dict) -> None:
-        _both_shores_carry_people_and_a_pipe()(m)
-        for f in m["flows"]:
-            if f["uc"] == "UC1":
-                # R2 is a DIFFERENT person, and their step is the one that must not leak. It sits at
-                # I2, where the actor under test (R1) has no step of their own.
-                f["steps"].insert(2, {"n": -2, "src": "R2", "dst": "I2",
-                                      "phrase": "picks the account and approves", "note": "",
-                                      "where": None, "no_call_site": True, "subflow": None})
-        m["roles"].append({"id": "R2", "name": "Somebody else", "kind": "human",
-                           "audience": "user", "wants": "to sign in"})
-    with _served_map(mutate) as url, _page(url + "#v=actor&act=Org creator") as page:
-        _settle(page)
-        text = page.evaluate("""() => [...document.querySelectorAll('.asf-crosscell')]
-            .map((c) => c.textContent).join(' ')""")
-        assert "picks the account and approves" not in text, text
-        # …and the unattributed step at that same surface IS shown, or the fix would be a blanket
-        # silence rather than a narrowing.
-        assert "sends them to Google to sign in" in text, text
-        assert not page.js_errors, page.js_errors
-
-
-def test_an_actor_at_no_interface_says_so_and_the_products_own_work_says_why() -> None:
-    """Two different facts, two different sentences. An actor the map puts at no surface is a plain
-    absence; the product's OWN scheduled work — a service role that is internal — is inside the
-    product and crosses nothing, which is a complete answer. One sentence for both would report the
-    timer as an unfinished map."""
-    def outsider(m: dict) -> None:
-        _both_shores_carry_people_and_a_pipe()(m)
-    with _served_map(outsider) as url, _page(url + "#v=actor&act=Superadmin") as page:
-        _settle(page)
-        text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
-        assert "No interface in this map has this actor standing at it." in text, text
-        assert not page.js_errors, page.js_errors
-
-    def inside(m: dict) -> None:
-        _both_shores_carry_people_and_a_pipe()(m)
-        for r in m["roles"]:
-            if r["id"] == "R5":
-                r["kind"], r["audience"] = "service", "internal"
-    with _served_map(inside) as url, _page(url + "#v=actor&act=Superadmin") as page:
-        _settle(page)
-        text = page.evaluate("() => document.querySelector('.usecases-wrap').textContent")
-        assert "crosses no interface" in text, text
-        assert not page.js_errors, page.js_errors
-
+# SIX TESTS OF THE ACTOR PAGE'S INTERFACES BLOCK WERE HERE, and they went with the block: the
+# shores it cut by, the features column beside each surface, the picture's wires and their
+# behaviour on a resize, the leak of another person's step into a cell, and the sentence an actor
+# at no surface got. Each pinned a promise the page no longer makes — the board names every
+# interface on the use case that reaches it, and the surfaces themselves are the Interfaces
+# view's subject, whose own tests are untouched below.
 
 def _walk_ordered_interfaces() -> Any:
     """Four surfaces the walk reaches in a KNOWN order, and two it never reaches.
@@ -2570,4 +2310,439 @@ def test_opening_the_source_narrows_what_you_see_of_the_interfaces_picture_not_t
         # the edge shade that says there is more that way. Only the right one, having not scrolled yet.
         assert opened["board"] == {"radius": "10px", "border": "1px"}, opened
         assert opened["shadeRight"] and not opened["shadeLeft"], opened
+        assert not page.js_errors, page.js_errors
+
+
+def _three_ways_to_reach_a_surface() -> Any:
+    """The three shapes the interface rule has to tell apart, on one map.
+
+    `I1` the flow OPENS at, with the person drawn there — the plain door.
+    `I2` the flow reaches with NO person at either end (a component calls it), which is how a product
+         reaches an analytics or an upstream service: the use case goes there, nobody stands there.
+    `I3` is reached only inside a shared SUB-FLOW, which cannot name a person at all — `SF1` here is
+         run by two use cases with different drivers, exactly as `Sign in with Google` is on the live
+         map, so no door can be drawn in it and the caller's own driver is the strongest claim.
+
+    The committed fixture has no interfaces and no sub-flows, so all of it is built here."""
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [
+            {"id": "I1", "name": "The dashboard", "what": "Screens a person signs in to.",
+             "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"]},
+            {"id": "I2", "name": "Usage analytics", "what": "Where page views are sent.",
+             "side": "theirs", "facing": "operator", "kind": "api"},
+            {"id": "I3", "name": "Google sign-in", "what": "Where a person proves who they are.",
+             "side": "theirs", "facing": "user", "kind": "hosted-screen"},
+        ]
+        m["entry_points"][0]["id"] = "EP1"
+        for u in m["use_cases"]:
+            if u["id"] in ("UC1", "UC2"):
+                u["entry_points"] = ["EP1"]
+        m["subflows"] = [{"id": "SF1", "name": "Sign in with Google", "steps": [
+            {"n": 1, "src": "C15", "dst": "I3", "phrase": "redirect the browser to Google",
+             "note": "", "where": None, "no_call_site": False, "subflow": None},
+            {"n": 2, "src": "I3", "dst": "C15", "phrase": "return the visitor with a code",
+             "note": "", "where": None, "no_call_site": False, "subflow": None}]}]
+        step = lambda n, a, b, ph, sub=None: {
+            "n": n, "src": a, "dst": b, "phrase": ph, "note": "", "where": None,
+            "no_call_site": False, "subflow": sub}
+        for f in m["flows"]:
+            if f["uc"] == "UC1":            # driven by R1 "Org creator"
+                nxt = len(f["steps"])
+                f["steps"] += [step(nxt + 1, "R1", "I1", "open the dashboard"),
+                               step(nxt + 2, "C15", "I2", "send the page-view event"),
+                               step(nxt + 3, "C15", "C15", "sign in", "SF1")]
+            if f["uc"] == "UC2":            # driven by R2 "Org admin" — the sub-flow's second caller
+                nxt = len(f["steps"])
+                f["steps"] += [step(nxt + 1, "C15", "C15", "sign in", "SF1")]
+    return mutate
+
+
+def _a_door_for_a_bystander(long_title: bool = False) -> Any:
+    """One `ours` surface, reached two ways, because the actor board has to answer two questions.
+
+    Its ways in put it behind the use cases the Org admin drives, so those stations get chips. Its
+    DOOR — one flow step `R3 -> I1` inside UC1 — puts the Team member at it in a use case the Org
+    creator drives, which is the only shape the third lane exists for and one the committed fixture
+    holds nowhere.
+
+    `long_title` stretches ONE happy-path title past the rest, so the levelling pass has a station
+    that must keep its own height rather than be padded to the majority."""
+    admin_ucs = ("UC2", "UC3", "UC4", "UC5", "UC6", "UC13")
+
+    def mutate(m: dict) -> None:
+        m["interfaces"] = [{
+            "id": "I1", "name": "Sign-in page", "what": "Where a person proves who they are.",
+            "side": "ours", "facing": "user", "kind": "screen", "ways_in": ["EP1"]}]
+        m["entry_points"][0]["id"] = "EP1"
+        for u in m["use_cases"]:
+            if u["id"] in admin_ucs or u["id"] == "UC1":
+                u["entry_points"] = ["EP1"]
+        # DRAWN, not merely addressed. A tag comes off the steps now, so every use case that should
+        # show this surface needs a step at it — the bystander's door included.
+        for f in m["flows"]:
+            nxt = len(f["steps"]) + 1
+            if f["uc"] == "UC1":
+                f["steps"].append({
+                    "n": nxt, "src": "R3", "dst": "I1",
+                    "phrase": "reads the invite that brought them here",
+                    "note": "", "where": None, "no_call_site": False, "subflow": None})
+            elif f["uc"] in admin_ucs:
+                f["steps"].append({
+                    "n": nxt, "src": "R2", "dst": "I1", "phrase": "work on the dashboard",
+                    "note": "", "where": None, "no_call_site": False, "subflow": None})
+        if long_title:
+            for s in m["happy_path"]:
+                if s.get("uc") == "UC4":
+                    s["title"] = ("Admin connects and starts every upstream MCP server the "
+                                  "organization has mounted so far")
+    return mutate
+
+
+def test_the_board_says_where_each_use_case_happens() -> None:
+    """The board said what an actor does and never where they do it, while the Interfaces section
+    under it held the same fact filed by surface — so "where does THIS use case happen" meant reading
+    the whole section and inverting it in your head.
+
+    CHIPS, and not the eight marks alone. The marks cover 13 kinds between them, so two surfaces on
+    one step are routinely one drawing twice: on the mcpolis map, 12 of the 13 use cases that touch
+    two surfaces or more would have drawn a repeat. The chip carries the NAME, and it is the same
+    chip a shared sub-use case's box and a surface card already draw."""
+    with _served_map(_a_door_for_a_bystander()) as url, \
+            _page(url + "#v=actor&act=Org%20admin") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const st = [...document.querySelectorAll('.journey-track .flow-step')];
+            return { stations: st.length,
+                     withChips: st.filter((s) => s.querySelector('.journey-ifs')).length,
+                     names: [...new Set([...document.querySelectorAll(
+                         '.journey-ifs .ibox-chip')].map((c) => c.textContent.trim()))],
+                     // The SHARED chip, mark and all — not a second drawing of the same idea.
+                     marks: [...document.querySelectorAll(
+                         '.journey-ifs .ibox-chip .ibox-gly')].length,
+                     // …and inert. The station is the door; a chip inside it would be a second one.
+                     clickable: document.querySelectorAll('.journey-ifs button, .journey-ifs a').length,
+                     sentence: (document.querySelector('.item-sec-note')
+                                || {}).textContent || '' };
+        }""")
+        assert seen["withChips"] >= 5, seen
+        assert seen["names"] == ["Sign-in page"], seen
+        assert seen["marks"] == seen["withChips"], "every chip carries its kind's mark"
+        assert seen["clickable"] == 0, "a chip is never clickable — the box it sits on is"
+        assert "interfaces they meet in each" in seen["sentence"], seen["sentence"]
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_use_case_this_actor_is_in_without_driving_gets_its_own_lane() -> None:
+    """The page dropped these entirely. It counted only the use cases an actor DRIVES, under a
+    sentence promising "drives or takes part in", beside an Interfaces section that named the others
+    all along — so the Team member's page read "5 use cases" over a board of five while the section
+    below it named nine.
+
+    THEIR OWN LANE, not the lower one. A side stop means something this actor CAN DO, and a member
+    cannot refresh somebody else's credential — so the box would have stated something untrue. The
+    lane names the difference, and each box leads with a chip saying who does drive it."""
+    with _served_map(_a_door_for_a_bystander()) as url, \
+            _page(url + "#v=actor&act=Team%20member") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const parts = [...document.querySelectorAll('.journey-part')];
+            return { lane: (document.querySelector('.journey-gutter-part') || {}).textContent || '',
+                     parts: parts.map((p) => ({
+                         drivers: [...p.querySelectorAll('.journey-drivers .ibox-chip')]
+                                    .map((c) => c.textContent.trim()),
+                         // The driver's chip is the FIRST thing in the box's text column.
+                         first: p.querySelector('.journey-sidet').firstElementChild.className,
+                         uc: p.getAttribute('data-uc') })),
+                     // …and it is NOT filed with the things this actor can do.
+                     sides: document.querySelectorAll('.journey-side:not(.journey-part)').length,
+                     count: (document.body.innerText.match(/Use cases\\s*(\\d+)/) || [])[1] };
+        }""")
+        assert seen["lane"] == "Takes part in, doesn’t drive", seen["lane"]
+        assert [p["uc"] for p in seen["parts"]] == ["UC1"], seen
+        assert seen["parts"][0]["drivers"] == ["Org creator"], seen
+        assert seen["parts"][0]["first"] == "journey-drivers", seen
+        # Three stations on the happy path, and the one they take part in — counted, because the
+        # heading sits eight pixels above a board that now draws all four.
+        assert seen["count"] == "4", seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_third_lane_belongs_to_the_actor_page_alone() -> None:
+    """A feature's board is the actor board's mirror and shares its builder, so a lane added to one
+    lands on both unless the caller decides. It must not: a feature's box zones by DRIVER and can
+    name several actors, so "which use cases does this actor not drive" has no single answer there."""
+    with _served_map(_a_door_for_a_bystander()) as url, \
+            _page(url + "#v=capability&cap=CAP1") as page:
+        _settle(page)
+        seen = page.evaluate("""() => ({
+            board: !!document.querySelector('.journey-board'),
+            stations: document.querySelectorAll('.journey-track .flow-step').length,
+            lane: document.querySelectorAll('.journey-gutter-part').length,
+            parts: document.querySelectorAll('.journey-part').length,
+            chips: document.querySelectorAll('.journey-ifs').length })""")
+        assert seen["board"] and seen["stations"] >= 1, seen
+        assert seen["lane"] == 0 and seen["parts"] == 0, seen
+        assert seen["chips"] == 0, "…and neither do the chips, for the same reason"
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_chips_line_up_on_the_majority_and_a_longer_title_keeps_its_own() -> None:
+    """The chips start right after the title, and a title is one line or two — so on a board of
+    mostly two-line titles the short station's chips sat a whole line above everyone else's, and the
+    row read as a ragged edge instead of a band.
+
+    THE MAJORITY, not the tallest, which is where this parts company with the Happy Path view's own
+    levelling pass. One long title would otherwise open a blank line under EVERY other station to
+    make room for the exception. A title longer than the majority keeps its own height and its chips
+    follow its own text, which is what falls out of setting a floor rather than a height."""
+    with _served_map(_a_door_for_a_bystander(long_title=True)) as url, \
+            _page(url + "#v=actor&act=Org%20admin") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const st = [...document.querySelectorAll('.journey-track .flow-step')];
+            const rows = st.map((s) => {
+                const t = s.querySelector('.flow-step-title'), f = s.querySelector('.journey-ifs');
+                return { floor: t.style.minHeight,
+                         h: Math.round(t.getBoundingClientRect().height),
+                         top: f ? Math.round(f.getBoundingClientRect().top) : null };
+            });
+            const floor = Math.round(parseFloat(rows[0].floor));
+            const at = rows.filter((r) => r.h <= floor + 1 && r.top !== null);
+            const over = rows.filter((r) => r.h > floor + 1 && r.top !== null);
+            return { floors: [...new Set(rows.map((r) => r.floor))], floor,
+                     atFloor: at.length, tops: [...new Set(at.map((r) => r.top))],
+                     over: over.map((r) => r.top), overCount: over.length,
+                     lowest: at.length ? Math.max(...at.map((r) => r.top)) : null };
+        }""")
+        # ONE floor for the whole board, so the chips have one line to start on.
+        assert len(seen["floors"]) == 1 and seen["floors"][0], seen
+        assert seen["atFloor"] >= 3 and len(seen["tops"]) == 1, seen
+        # …and the station that outgrew it keeps its own text, with its chips below everyone else's.
+        assert seen["overCount"] >= 1, "the long title must actually have outgrown the majority"
+        assert all(t > seen["lowest"] for t in seen["over"]), seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_every_use_case_on_a_board_is_picked_and_put_down_the_same_way() -> None:
+    """A pick was the happy-path step's alone. A side stop and a takes-part box opened the same use
+    case by the same click and lit nothing, so two thirds of the board answered a gesture the other
+    third answered visibly — and none of them could be put DOWN: the ring stayed, and stayed in the
+    address, so a copied link carried a choice its reader had already abandoned.
+
+    ONE KEY for all three (`data-pick`), because a stop has no step behind it and a bare step id
+    could not have said which kind of box it named. `hpstep:` is untouched, so a link shared before
+    any of this still lands on its step."""
+    with _served_map(_a_door_for_a_bystander()) as url, \
+            _page(url + "#v=actor&act=Team%20member") as page:
+        _settle(page)
+        keys = page.evaluate("""() => [...document.querySelectorAll('.pickbox')]
+            .map((b) => b.getAttribute('data-pick'))""")
+        assert any(k.startswith("hpstep:") for k in keys), keys
+        assert any(k.startswith("ucstop:") for k in keys), keys
+        # PICK A STOP — the lane that could not be picked at all — and come back to it.
+        picked = page.evaluate("""async () => {
+            const stop = document.querySelector('.journey-side.pickbox');
+            const key = stop.getAttribute('data-pick');
+            stop.click();
+            await new Promise((r) => setTimeout(r, 500));
+            const went = location.hash;
+            history.back();
+            await new Promise((r) => setTimeout(r, 800));
+            const lit = document.querySelector('.pickbox.ibox-picked');
+            return { key, went, back: location.hash,
+                     lit: lit && lit.getAttribute('data-pick') };
+        }""")
+        assert picked["went"].startswith("#v=usecase&uc="), picked
+        assert picked["lit"] == picked["key"], picked
+        assert "sel=ucstop" in picked["back"].replace("%3A", ":"), picked
+        # …and the BACKGROUND puts it down, in the ring and in the address together.
+        after = page.evaluate("""async () => {
+            document.querySelector('.journey-board')
+                .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await new Promise((r) => setTimeout(r, 250));
+            return { lit: !!document.querySelector('.pickbox.ibox-picked'), hash: location.hash };
+        }""")
+        assert not after["lit"] and "sel=" not in after["hash"], after
+        assert not page.js_errors, page.js_errors
+
+
+def test_leaving_the_page_is_not_the_gesture_that_puts_a_box_down() -> None:
+    """The clearing click is scoped to the view. A click on a view TAB is also a click on `document`,
+    and unscoped it dropped the pick a moment before the navigation that was meant to remember it —
+    the bug the Interfaces picture's own outside click was written to avoid, repeated here."""
+    with _served_map(_a_door_for_a_bystander()) as url, \
+            _page(url + "#v=actor&act=Team%20member") as page:
+        _settle(page)
+        kept = page.evaluate("""async () => {
+            document.querySelector('.pickbox[data-uc]').click();
+            await new Promise((r) => setTimeout(r, 500));
+            history.back();
+            await new Promise((r) => setTimeout(r, 800));
+            const before = location.hash;
+            // a click on the app's own chrome, outside #diagram
+            document.querySelector('header, #crumb, .tabrow, body')
+                .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await new Promise((r) => setTimeout(r, 250));
+            return { before, after: location.hash,
+                     lit: !!document.querySelector('.pickbox.ibox-picked') };
+        }""")
+        assert "sel=" in kept["before"], kept
+        assert kept["lit"] and kept["after"] == kept["before"], kept
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_use_case_reads_the_same_wherever_the_board_draws_it() -> None:
+    """Three lanes drew one sentence three ways. A step's title was 11.5px near-black; a stop's name
+    was 11px grey, eight pixels below it. And a step's title starts life as a walk title with its
+    leading actor designator stripped, so it opened lower case — "wires their AI client" under
+    "Import several MCPs", which reads as two kinds of thing rather than as two use cases.
+
+    ONE CLASS carries the text now (`.flow-step-title`), on every lane, and the capital is put on in the
+    builder rather than by `::first-letter` — a rule no test could read back, and a second place to
+    keep in step with this one."""
+    with _served_map(_a_door_for_a_bystander()) as url, \
+            _page(url + "#v=actor&act=Org%20admin") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const ts = [...document.querySelectorAll('.flow-step-title')];
+            const style = (e) => { const c = getComputedStyle(e);
+                                   return [c.fontSize, c.color, c.lineHeight].join('|'); };
+            const texts = ts.map((t) => t.textContent.trim()).filter(Boolean);
+            return { lanes: { steps: document.querySelectorAll('.journey-track .flow-step-title').length,
+                              stops: document.querySelectorAll('.journey-sides .flow-step-title').length },
+                     styles: [...new Set(ts.map(style))],
+                     lower: texts.filter((t) => t[0] !== t[0].toUpperCase()) };
+        }""")
+        # Both lanes actually drawn, or the comparison below proves nothing.
+        assert seen["lanes"]["steps"] >= 1 and seen["lanes"]["stops"] >= 1, seen
+        assert len(seen["styles"]) == 1, seen["styles"]
+        assert seen["lower"] == [], seen["lower"]
+        # …and the words are the door, so hovering underlines them wherever they are.
+        hover = page.evaluate("""() => {
+            const rule = [...document.styleSheets].flatMap((ss) => {
+                try { return [...ss.cssRules]; } catch (e) { return []; } })
+                .filter((r) => r.selectorText && /\\.pickbox:hover \\.flow-step-title/.test(r.selectorText));
+            return rule.map((r) => r.style.textDecorationLine || r.style.textDecoration);
+        }""")
+        assert hover and any("underline" in h for h in hover), hover
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_chip_draws_its_mark_in_the_same_place_on_a_board_as_on_a_card() -> None:
+    """The rendered half of the same promise. The stylesheet test beside this one pins that no page
+    re-styles the chip; this measures that the chip therefore LOOKS the same in both places, which is
+    the thing a reader actually sees and the thing that was wrong.
+
+    Measured, not eyeballed: the mark's top edge against the chip's own top edge, on a chip in a use
+    case lane and on a chip on a surface card, on one screen. They were 3.5px and 1.8px apart."""
+    with _served_map(_a_door_for_a_bystander()) as url, \
+            _page(url + "#v=actor&act=Org%20admin") as page:
+        _settle(page)
+        # TWO SCREENS, because the actor page no longer carries a card: its Interfaces block went, and
+        # the chip on a card now lives on the Interfaces view. Same document, same stylesheet, so the
+        # comparison is the same one — a chip in a use case lane against a chip on a surface card.
+        seen = page.evaluate("""async () => {
+            const at = (sel) => [...document.querySelectorAll(sel)].map((c) => {
+                const g = c.querySelector('.ibox-gly');
+                if (!g || !c.getBoundingClientRect) return null;
+                const cr = c.getBoundingClientRect(), gr = g.getBoundingClientRect();
+                if (!cr.height || !gr.height) return null;   // not laid out on this screen
+                return { top: Math.round((gr.top - cr.top) * 10) / 10,
+                         h: Math.round(cr.height * 10) / 10 };
+            }).filter(Boolean);
+            const lane = at('.journey-ifs .ibox-chip');
+            location.hash = '#v=interfaces';
+            await new Promise((r) => setTimeout(r, 800));
+            const card = at('.ifd-box .ibox-chip');
+            return { laneTops: [...new Set(lane.map((x) => x.top))],
+                     cardTops: [...new Set(card.map((x) => x.top))],
+                     laneOne: [...new Set(lane.filter((x) => x.h < 22).map((x) => x.h))],
+                     cardOne: [...new Set(card.map((x) => x.h))],
+                     counts: { lane: lane.length, card: card.length } };
+        }""")
+        # Both places actually drawn, or there is nothing to compare.
+        assert seen["counts"]["lane"] >= 1 and seen["counts"]["card"] >= 1, seen
+        # ONE mark position, across both places and including a chip whose name wrapped.
+        assert seen["laneTops"] == seen["cardTops"] and len(seen["laneTops"]) == 1, seen
+        # …and a one-line chip is the same height wherever it stands.
+        assert seen["laneOne"] == seen["cardOne"] and len(seen["laneOne"]) == 1, seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_use_case_names_the_interfaces_its_own_flow_reaches() -> None:
+    """The tags used to come from the ADDRESSES a use case is entered at: a surface we define claimed
+    every use case reachable at one of its ways in, whether or not the story ever went there. On the
+    live map that put a Dashboard tag on "Weigh up the product before signing up", whose ten interface
+    steps are nine at the Product website and one at Usage analytics and none at the Dashboard.
+    Measured against the steps, the address rule made 77 claims to the steps' 72 — it added nothing
+    true and five that were false.
+
+    Read off the steps, a tag cannot outrun the picture the reader is looking at."""
+    with _served_map(_three_ways_to_reach_a_surface()) as url, _page(url + "#v=hp") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const at = {};
+            for (const s of document.querySelectorAll('.flow-step[data-uc]')) {
+                at[s.getAttribute('data-uc')] = [...s.querySelectorAll('.journey-ifs .ibox-chip')]
+                    .map((c) => c.textContent.trim()).sort();
+            }
+            return at;
+        }""")
+        # UC1's flow draws all three shapes, so the whole-story rule shows all three.
+        assert seen.get("UC1") == ["Google sign-in", "The dashboard", "Usage analytics"], seen
+        # UC2 reaches the surface ONLY through the shared sub-flow, and still names it.
+        assert seen.get("UC2") == ["Google sign-in"], seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_actor_s_page_keeps_only_the_interfaces_that_actor_meets() -> None:
+    """A use case page asks "where does this happen"; an actor's page asks "where does THIS PERSON
+    meet the product in it". The product calls an analytics service by itself, with nobody at either
+    end, so that surface belongs on the first answer and not on the second.
+
+    A SHARED SUB-FLOW is the exception, and it is not a loophole: a sub-flow cannot name a person —
+    `SF1` here is run by two use cases with different drivers, as `Sign in with Google` is on the live
+    map — so no door can ever be drawn inside one, and "the person this run is for" is the strongest
+    claim the map can make. Without it the two use cases that reach that surface show it nowhere."""
+    with _served_map(_three_ways_to_reach_a_surface()) as url, \
+            _page(url + "#v=actor&act=Org%20creator") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const at = {};
+            for (const s of document.querySelectorAll('.pickbox[data-uc]')) {
+                at[s.getAttribute('data-uc')] = [...s.querySelectorAll('.journey-ifs .ibox-chip')]
+                    .map((c) => c.textContent.trim()).sort();
+            }
+            return at;
+        }""")
+        # the door survives, the sub-flow's surface survives, the one nobody stands at does not
+        assert seen.get("UC1") == ["Google sign-in", "The dashboard"], seen
+        assert "Usage analytics" not in (seen.get("UC1") or []), seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_actor_s_page_is_the_board_and_nothing_else() -> None:
+    """The page carried an Interfaces block under the board — the same surfaces the board now names on
+    the use cases themselves, drawn three columns wide at 1295px against the board's 421, so 61% of
+    the page restated what a tag says. Worse, it did it by the ADDRESS rule the board had just stopped
+    using, so the two halves contradicted each other on five rows of the live map.
+
+    The chip strip went with it: a contents bar listing one section is a label with extra steps. The
+    MECHANISM stays, and this pins that too — a feature's page still builds one."""
+    with _served_map(_three_ways_to_reach_a_surface()) as url, \
+            _page(url + "#v=actor&act=Org%20creator") as page:
+        _settle(page)
+        gone = page.evaluate("""() => ({
+            interfacesBlock: document.querySelectorAll('.asf-stage').length,
+            indexChips: document.querySelectorAll('.tab-index-chip').length,
+            board: document.querySelectorAll('.journey-board').length,
+            sections: document.querySelectorAll('.item-sec-note').length })""")
+        assert gone == {"interfacesBlock": 0, "indexChips": 0, "board": 1, "sections": 1}, gone
+        # …and the pages that still have several sections still get the strip.
+        kept = page.evaluate("""async () => {
+            location.hash = '#v=capability&cap=CAP1';
+            await new Promise((r) => setTimeout(r, 800));
+            return document.querySelectorAll('.tab-index-chip').length;
+        }""")
+        assert kept >= 2, kept
         assert not page.js_errors, page.js_errors

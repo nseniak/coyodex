@@ -1,7 +1,7 @@
 # Every saved record owes a use case, the same way every interface does
 
 Change (2026-09-05): `validate` gains an advisory — a record this codebase KEEPS (`store.mode` of
-`collection` or `embedded`) that no use case walk reaches draws one line, naming the fix (author the
+`collection` or `embedded`) that no flow reaches draws one line, naming the fix (author the
 central touch as a `Cn → En` step) and the escape (`<En>: <why>` under a "Balance exceptions" extras
 heading). A record INSIDE another one counts as reached when its container is. New derivation
 `record_use_cases`. The method and the trace contract say so at the point steps are authored ·
@@ -51,7 +51,7 @@ a cycle.
 
 ## Checks
 
-1. expect: on a rebuild, every saved record is reached by a use case walk, directly or through a
+1. expect: on a rebuild, every saved record is reached by a flow, directly or through a
    container, and `validate` reports none unstoried.
    regression sign: the advisory names more than a handful. The instruction is not reaching the
    worker that authors T6, and the field-level fix is to make the trace contract louder, not to add

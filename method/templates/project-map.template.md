@@ -58,15 +58,15 @@
 
 ---
 
-## Happy Path — the spine (an ordered walk through the use cases)
+## Happy Path — the spine (an ordered run through the use cases)
 
 The happy-path ORDERING of use cases across all main functionality and every actor. Each step IS a
-use case — its `*(UCn)*` tag is required; `HPn` is just its position in the walk. The step carries no
+use case — its `*(UCn)*` tag is required; `HPn` is just its position in the happy path. The step carries no
 STORY / mechanics / Touches: those live once in the use case's T6 flow below, and drilling a step
 opens it. An optional `why:` line records the prerequisite that fixes this step's position. The
 driving actor is the use case's own Actor (no separate `Actor:` line). Refer to actors by their
 Roles-table names, never invented nicknames.
-Coverage: the walk hits all main functionality + all actors. What one linear walk can't reach is
+Coverage: the happy path hits all main functionality + all actors. What one linear happy path can't reach is
 RECORDED, not forced in: each off-spine use case (`UCn: <why>`) and each role deliberately without
 a spine position (`Rn: <why>`) gets a line-leading entry under a "Happy Path coverage" extras
 heading — `validate` warns on the unrecorded ones.
@@ -203,7 +203,7 @@ why: needs the result of HP1
      hand over is `handoff`, a crash reporter an operator opens on their own is `api`.
 
      There is no `Actors` column and no `actors` field: WHO is on the far side is DERIVED from the
-     walks, gated on the kind. Never write it by hand.
+     flows, gated on the kind. Never write it by hand.
 
      There is no `Far side` column either. The dependencies standing on a surface are derived from
      each dep's own list — do not name a `Dn` here. Anything you would have written in words about
@@ -219,7 +219,7 @@ why: needs the result of HP1
 |---|---|---|---|---|---|---|---|
 | **I1** | <surface, in product words> | ours | screen | user | <one sentence> | [file](path:1) | verified |
 
-<!-- NO "what crosses" BLOCK. What crosses a surface is the walk steps drawn at it (T6), and each
+<!-- NO "what crosses" BLOCK. What crosses a surface is the flow steps drawn at it (T6), and each
      of those says which way it went — see `direction` under Use-case flows below. There is no
      per-surface direction to author, and a map that supplies one is rejected outright.
 
@@ -299,7 +299,7 @@ SOURCE: [file](path/sub:1)
      every other step, a DOOR included (`R1 → I3` is a human action with no product end), and
      `validate` blocks a door that carries one.
      EVERY SAVED RECORD OWES A USE CASE, the same way every interface does. A record this codebase
-     KEEPS (a row of its own, or one carried inside a parent's row) that no walk step reaches leaves
+     KEEPS (a row of its own, or one carried inside a parent's row) that no flow step reaches leaves
      the map unable to say what it is for. A record INSIDE another one counts as reached when its
      holder is, so an embedded piece needs no step of its own. A read shape, a request object or a
      set of constants is not a saved record and owes nothing. `validate` reports the unstoried ones;

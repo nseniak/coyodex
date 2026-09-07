@@ -84,7 +84,7 @@ lead; nothing above this line goes into an agent prompt.
 >   ("return the verified email"), never the third person ("returns the verified email"). The viewer
 >   shows the phrase ON ITS OWN as the step's title, with no subject in front of it, so a third-person
 >   verb there reads as a sentence missing its start. It is also the form a use case's name and a
->   shared sub-use case's name already take, which is what lets one line title either kind of step.
+>   shared sub-flow's name already take, which is what lets one line title either kind of step.
 >   A condition or qualifier belongs in `note`, never in `phrase`.
 > - **Every element↔element step carries its own `where`** — the `path:line` in the `src` side's code
 >   where THIS step's action fires. Not the callee's definition. A step with genuinely no single site
@@ -109,12 +109,12 @@ lead; nothing above this line goes into an agent prompt.
 >   This is the map's ONLY statement of direction. Nothing else holds it: the `C→E` arrows say both
 >   read and write on half the record steps, and no arrow reaches a surface at all.
 > - **EVERY SAVED RECORD IN YOUR SLICE OWES A STEP** — one this codebase KEEPS (a row of its own,
->   or one carried inside a parent's row). A saved record no walk reaches cannot say what it is for.
+>   or one carried inside a parent's row). A saved record no flow reaches cannot say what it is for.
 >   A record INSIDE another one counts when its container is reached, so an embedded piece needs no
 >   step of its own. A read shape, a request object or an enum is not a saved record and owes
 >   nothing.
 > - **YOUR STEPS MUST NOT CONTRADICT THE ARROWS.** If a `C→E` arrow in your slice says the code
->   WRITES a record, some walk step must write it (`direction: "out"`), and the same for a `reads`.
+>   WRITES a record, some flow step must write it (`direction: "out"`), and the same for a `reads`.
 >   The arrow is the map's own statement that the code does this, so a story that never does it is
 >   the map disagreeing with itself about one record.
 > - **A flow OPENS with an actor its own use case declares.** Your slice's use cases are listed

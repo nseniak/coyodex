@@ -21,7 +21,7 @@ Every element has a stable, unique ID by prefix:
 |---|---|
 | `UC` | Use case |
 | `CAP` | Capability — a group of use cases and/or nested capabilities (optional) |
-| `HP` | Happy Path step (a use-case occurrence — a position in the ordered walk) |
+| `HP` | Happy Path step (a use-case occurrence — a position in the happy path) |
 | `C` | Component |
 | `S` | Subsystem — a group of components and/or nested subsystems (optional) |
 | `D` | External dependency |
@@ -76,17 +76,17 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                                                   // linking. See the Glossary deliverable.
   "capabilities": [ { "id": "CAPn", "name", "purpose", "parent": "CAPn|null",
                       "happy_path": "expected|excluded",        // capability-only; blocked on S/SD
-                                                  // must the walk reach it? Says nothing about
+                                                  // must the happy path reach it? Says nothing about
                                                   // audience — that derives from the roles.
                       "story": { "place": "before|after", "feature": "CAPn" },
                                                   // capability-only, optional; author it ONLY on a
-                                                  // feature the walk never reaches: where it sits
-                                                  // in the one story column. The walk reads
-                                                  // unbroken and off-walk features form a block
+                                                  // feature the happy path never reaches: where it sits
+                                                  // in the one story column. The happy path reads
+                                                  // unbroken and off-happy-path features form a block
                                                   // after it, so `after` orders that block and
                                                   // `before` is what keeps a lead-in among the
-                                                  // walk. Absent = the viewer derives (the
-                                                  // feature's actors' last walk step, else the end).
+                                                  // happy path. Absent = the viewer derives (the
+                                                  // feature's actors' last flow step, else the end).
                       "stakes": [ { "actor": "Rn", "stake": "<verb phrase>" }, … ] } ],
                                                   // capability-only; one entry per driving actor:
                                                   // what THAT actor comes to this feature to do,
@@ -349,7 +349,7 @@ Semantics, stated on the fields:
   it) and **"Happy Path coverage"**, which now carries four subjects: `CAPn: <why>` — a core
   capability deliberately off the spine, OR a non-core capability whose off-spine members are
   deliberate (ONE line covers its whole membership); `HPn: <why>` — a spine step in a non-core
-  capability that belongs on the walk anyway; `UCn: <why>` — a use case deliberately off the spine
+  capability that belongs on the happy path anyway; `UCn: <why>` — a use case deliberately off the spine
   (the pre-capability form, still read); `Rn: <why>` — a role deliberately without a spine position.
   A record silences exactly one `(check, id)` pair — `CAPn` and `HPn` are different judgements about
   the same capability and never substitute for each other.
@@ -413,8 +413,8 @@ Semantics, stated on the fields:
   carries its own `phrase` — a short action describing what happens at that point, written in the
   IMPERATIVE ("return the verified email"), never the third person — which the flow arrow and narrative
   render from. The viewer titles the step with the phrase ALONE, so it carries no subject; a use case's
-  name and a shared sub-use case's name are written the same way, and that is what lets one line title a plain
-  step and a step that runs a shared sub-use case. A step does NOT reuse the backbone edge's label: one element pair can appear
+  name and a shared sub-flow's name are written the same way, and that is what lets one line title a plain
+  step and a step that runs a shared sub-flow. A step does NOT reuse the backbone edge's label: one element pair can appear
   in several steps meaning different things, so a shared edge label can't describe each; the step
   describes itself (`coyodex validate` requires a non-empty `phrase`). For the same reason each
   element↔element step carries its own **`where` — THE location**: a step is exactly ONE interaction,
@@ -429,7 +429,7 @@ Semantics, stated on the fields:
   hole on the other half of the map's outside: a record the codebase keeps, that no story reaches,
   cannot say what it is for. The container arm is what makes it affordable — an embedded record
   lives in its parent's row, and requiring a step per piece would put 16 of them into one live map's
-  walks to say what one step already says. Advisory, escaped by `<En>: <why>` under
+  flows to say what one step already says. Advisory, escaped by `<En>: <why>` under
   **"Balance exceptions"**.
   **And each step where the map's OWN CODE touches a surface or a record carries a `direction`** —
   `in`/`out`/`both`, read from the PRODUCT: at a record `in` is a read and `out` a write, at a
@@ -466,7 +466,7 @@ Semantics, stated on the fields:
   `roles[].audience` answers a different question and marks a bought service `internal` while its
   interface is user-facing. **There is NO field for the far side in words.** The dependencies
   standing on the surface are DERIVED from each dep's own `interfaces` list, and WHO is on the far
-  side is DERIVED from the walks — neither is authored here. A free-text `party` was tried and
+  side is DERIVED from the flows — neither is authored here. A free-text `party` was tried and
   removed: 14 of its 15 values across the two live maps repeated one of those two neighbours, and
   the fifteenth repeated its own row's `what`. Anything genuinely unsaid goes in `what`.
   **`kind`** is WHAT THE SURFACE IS, seeded-open over
@@ -497,14 +497,14 @@ Semantics, stated on the fields:
   **A person derived at an `api` or a `content` surface draws a nudge**, because those two kinds are
   one program calling another. It is the only check that can ask whether a door is the RIGHT door:
   every other door check verifies a door EXISTS, and cannot tell a right one from a wrong one. Two
-  causes, either of which can be the wrong one — the walk names the wrong surface, or the surface
+  causes, either of which can be the wrong one — the flow names the wrong surface, or the surface
   wears the wrong kind.
   **`ways_in`** lists the `EPn`s the surface is made of and
   travels through `reconcile` (field `ways_in`) exactly like a use case's `entry_points`, for the
   same reason: those ids are minted at assembly.
   **WHAT CROSSES IS THE WALK STEPS DRAWN AT IT, and there is no field.** `carries[]` held one
   sentence per direction and was REMOVED. Each part of it was measured on the two live maps first:
-  its sentence repeated the steps (66% of its words at the surfaces with the richest walks, and 4
+  its sentence repeated the steps (66% of its words at the surfaces with the richest flows, and 4
   rows were word-for-word copies of a single step); its record list held 68 references of which 2
   were a real independent stored record, the rest wire shapes, embedded parts and computed views;
   and one of its genuinely-new facts was a claim nothing in the map backed, which is what an

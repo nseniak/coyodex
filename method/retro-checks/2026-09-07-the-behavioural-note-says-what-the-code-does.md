@@ -12,7 +12,7 @@ carried again.
 
 **The message told operators the opposite of what the code does, and a build reads the message.**
 
-`--with-behavioural` adds the claims that cover the walk a reader follows: flow titles, step
+`--with-behavioural` adds the claims that cover the flow a reader follows: flow titles, step
 phrases, use cases. The record path was fixed so a pinned behavioural worklist folds into the
 grounding record — the comment two lines above the message says so outright, "THE LIMIT THIS USED TO
 STATE IS GONE". The message kept saying the limit stands, and ended with the instruction **"keep the

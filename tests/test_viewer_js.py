@@ -341,7 +341,7 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "title: 'Locate in ' + tab" in locate_code
     assert "sel: 'node:' + t.selectId" in locate_code
     assert "pendingCenter = t.selectId" in locate_code
-    assert "if (isWalkState(s)) return;" in locate_code   # no icons at all on a walk
+    assert "if (isFlowState(s)) return;" in locate_code   # no icons at all on a walk
     # No icons on a walk at all — the box's NAME opens what it names. Off a walk, the icon is the
     # element's own primary action.
     assert "const action = primaryActionFor(id);" in locate_code
@@ -697,12 +697,13 @@ def test_a_board_is_headed_by_its_subject_only_where_the_page_does_not_say_it() 
     # THE ACTOR'S BOARD IS BARE: the section heading above it names it, and the hero above that names
     # the actor. Neither the page nor the helper it used survives.
     assert "journey-actorhead" not in page and "journeyActorHeadHtml" not in js
-    assert '<div class="journey-board">${journeyRailHtml(hasPath, offLane, rail)}</div>' in page
-    assert "journeyRailHtml(hasPath, offLane, rail)" in page, "…and the two lanes come from one place"
+    assert '<div class="journey-board">${journeyRailHtml(hasPath, offLane, rail, partLane)}</div>' in page
+    assert "journeyRailHtml(hasPath, offLane, rail, partLane)" in page, \
+        "…and the lanes come from one place, the third one included"
     assert "hasPath ? `<div" not in page and "hasPath ? '<span" not in page, \
         "the board is not conditional on there being a happy path"
-    railfn = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
-                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
+    railfn = js[js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {"):
+                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {") + 10)]
     assert "journey-actorhead" not in railfn, "…and it never was one of the gutter's cells"
     # THE SLOT ITSELF SURVIVES, with one caller left: a feature's board.
     slot = js[js.index("function journeyHeadHtml(glyph, name) {"):
@@ -724,8 +725,9 @@ def test_a_board_is_headed_by_its_subject_only_where_the_page_does_not_say_it() 
     # Row 1 is the feature-name row and nothing else, so the tinted boxes are untouched.
     assert ".journey-gutter-top { grid-row: 1; }" in css
     assert ".journey-zlabel { grid-row: 1; white-space: nowrap; padding-top: 8px;" in css
-    # The upper lane's name sits ON the rail, which is drawn at top 21 with height 3.
-    assert ".journey-track::before" in css and "top: 21px;" in css and "height: 3px;" in css
+    # The upper lane's name sits ON the rail. The rule is at top 19.5 with height 3, so its middle
+    # is 21 — where the shared step box puts its bullet (13.5px of margin plus half a 15px dot).
+    assert ".journey-track::before" in css and "top: 19.5px;" in css and "height: 3px;" in css
     assert ".journey-gutter-on { grid-row: 2; padding-top: 15.75px; }" in css
 
 def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
@@ -748,9 +750,15 @@ def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
     assert 'class="journey-n"' not in js and ".journey-n {" not in css, "no number on the dot"
     assert "journey-d1" not in js and "journey-d2" not in css, "and no per-digit indent rule"
     assert "sideIndent" not in zone, "…nor the off-path list's copy of it"
-    assert '<span class="journey-dot"></span>' in zone
-    assert '<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span>' in zone
-    assert 'class="journey-station" ' in zone, "one class, no digit-count variant"
+    # A STATION IS THE SHARED STEP BOX (flowStepBoxHtml), the one the Happy Path draws — so the dot and
+    # the title are stated once, there, and the rail asks for the box WITHOUT the number. `num` is
+    # the parameter that says so; the rail never passes it, and no stylesheet rule hides it.
+    assert "flowStepBoxHtml(s, { actor: o.actor, marks: true, ifs })" in zone
+    assert "num:" not in zone, "the rail asks for no step number"
+    step = js[js.index("function flowStepBoxHtml(st, o) {"):
+              js.index("\nfunction ", js.index("function flowStepBoxHtml(st, o) {") + 10)]
+    assert '<span class="flow-step-dot"></span>' in step
+    assert 'opt.num ? `<span class="flow-step-num">' in step, "…and the number is the caller\'s to ask for"
     # The counter is gone from the data, not just from the markup.
     stations = js[js.index("function actorStations(actorName) {"):
                   js.index("\nfunction ", js.index("function actorStations(actorName) {") + 10)]
@@ -803,8 +811,8 @@ def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None
     # in one function, so the words exist once in the file rather than once per page.
     page = js[js.index("function renderActorPage(actorName) {"):
               js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
-    rail = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
-              js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
+    rail = js[js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {"):
+              js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {") + 10)]
     assert ">Happy path<" in rail and ">Off the happy path<" in rail
     assert js.count(">Happy path</div>") == 1 and js.count(">Off the happy path</div>") == 1, \
         "one label each in the whole file, so a rename cannot land on one page only"
@@ -817,7 +825,9 @@ def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None
     # An actor with nothing off their happy path gets no empty band and no label for it.
     assert "const offLane = onRail.concat(off).some((b) => (b.z.sides || []).length);" in page
     assert "offLane ? ' journey-has-off' : ''" in rail
-    assert ".journey-rail:not(.journey-has-off) .journey-track { padding-bottom: 12px; }" in css
+    assert (".journey-rail:not(.journey-has-off):not(.journey-has-part)"
+            " .journey-track { padding-bottom: 12px; }") in css, \
+        "with NEITHER lower lane the upper one closes the box itself"
     # The gutter is prose-shaped, so the glossary matcher must leave it alone like the other labels.
     assert ".journey-zkind, .journey-gutter'" in js
 
@@ -883,123 +893,15 @@ def test_the_actor_page_says_a_thing_once_and_never_out_of_order() -> None:
     assert "lead: 'becomes'" in meta and "at(rel, 'at')" in meta
     assert "lead: 'was'" in meta and "at(rel, 'until')" in meta
     assert 'class="journey-inclink"' in meta and ".journey-inclink {" in css
-    # THE SURFACES BLOCK IS A PICTURE, and it is the ACTOR'S picture, not the Interfaces view's one
-    # filtered. That one puts the PRODUCT down the middle, because its question is "where does this
-    # product stop"; this one is asked a person's question — what crosses, where, and what they do
-    # there.
-    surf = js[js.index("function actorSurfaceDiagramHtml(actorName, role, rows) {"):
-              js.index("\nfunction ",
-                       js.index("function actorSurfaceDiagramHtml(actorName, role, rows) {") + 10)]
-    assert "cardGridHtml" not in surf, "the two card grids it replaced are gone, not kept beside it"
-    assert "function ifaceCardHtml" not in js, "…and so is the card builder they were the only caller of"
-    assert "bindActorSurfaces(diagram, actorName);" in js
-    # NO ACTOR CARD. It drew this page's own subject a second time in its body — figure, name and
-    # pill — and its only other job was to anchor the wires. What crosses holds that column now.
-    assert "asf-who" not in js and "asf-who" not in css
-    # THE CUT IS BY DIRECTION, NOT BY WHOSE SURFACE IT IS. `side` says who defines a surface; these
-    # headings claim which way the actor goes. Cutting on `side` was wrong on 4 of the 35 actor-
-    # surface rows across the six mapped projects, every one of them Outgoing email: our surface, no
-    # way in, one outbound sentence, filed under "where they reach the product".
-    page_fn = js[js.index("function actorSurfacesHtml(actorName) {"):
-                 js.index("\nfunction ", js.index("function actorSurfacesHtml(actorName) {") + 10)]
-    assert "i.opens !== 'out'" in page_fn and "i.opens === 'out'" in page_fn
-    assert "i.side === 'ours'" not in page_fn, "whose surface it is decides nothing here"
-    assert "shore('Where they reach the product', rows.in," in surf
-    assert "shore('Where the product reaches them', rows.out," in surf
-    assert surf.count("cells.push(`<p class=\"ifd-none asf-none\"") == 1, \
-        "an empty group says so under its own heading, rather than the heading vanishing"
-    # ONE GRID, ONE ROW PER SURFACE — the only thing that can promise the three cells of a row sit at
-    # one height. Independent columns line up at the top and drift apart at the first card whose
-    # sentence wraps to a different number of lines.
-    assert "style=\"grid-row:${r}\"" in surf and ".asf-stage { position: relative; display: grid;" in css
-    # WHAT THIS PERSON DOES HERE — their own walk steps. It drew the surface's AUTHORED crossings,
-    # which said what crosses for the PRODUCT: on a page about a member, Google sign-in showed the
-    # product talking to Google, and neither sentence was anything that member sent or received.
-    # Those rows are gone from the map entirely now; a step was always the better answer here.
-    assert "stepGroupsOf(i, role.id)" in surf
-    assert "crossingsOf" not in js, "the actor's page was its last caller"
-    # AND THE DIRECTION RIDES THE STEP, so this page draws it too — through the SAME builder the
-    # surface's own page uses, never a second one.
-    #
-    # THIS ASSERTION USED TO NAME A DEAD CLASS. It read `"asf-cross-dir" not in js`, under a comment
-    # saying a step cannot carry a direction; `grep -c asf-cross-dir` is 0, so it passed while the
-    # page it guards started drawing exactly the mark it forbade. An adversarial review found it.
-    # A "must not come back" guard whose subject never existed proves nothing at all.
-    assert "asf-cross-dir" not in js and "asf-cross-dir" not in css, \
-        "one direction mark, and it is `ifs-dirtag` — a second class is a second look"
-    assert "stepLineHtml(st, uc, true, false)" in surf, "the same step line the surface's page draws"
-    assert "ifs-dirtag" in js and ".ifs-dirtag" in css, "and it carries the direction mark"
-    # …AND THE FALLBACK IS TO UNATTRIBUTED STEPS ONLY. Falling back to every step put another named
-    # person's steps on this one's page: argus told a reader that the software "Assistant" picks a
-    # Google account and approves, a step belonging to the human "Visitor".
-    groups = js[js.index("function stepGroupsOf(i, role) {"):
-                js.index("\n}", js.index("function stepGroupsOf(i, role) {"))]
-    assert "(st) => !st.role" in groups, "the fallback keeps only steps that name nobody"
-    assert "return groups;" in groups and "if (mine.length) return mine;" in groups
-    # ONE LINE PER STEP, from the renderer the surface's own page shares, so the two screens cannot
-    # disagree about how a step reads.
-    assert js.count("function stepLineHtml(") == 1 and js.count("stepLineHtml(") == 3
-    # EVERY LINE ENDS IN THE STEP THAT MAKES THE CLAIM, and `(container, n)` is what identifies it:
-    # a sub-flow's steps keep their own numbering when spliced in, so `(uc, n)` alone lands the
-    # reader on a different step.
-    assert "const i = flowStepIndex(uc, container, st.n);" in js
-    assert js.count("bindStepFroms(") == 3, "the binder, the actor's page, and the surface's page"
-    # ONE TAIL COMPONENT, for every capped list in the viewer. They were built three ways and drawn
-    # in two looks, and the two a reader meets in the same box were the two that differed.
-    assert js.count("moreTailHtml(") == 5, \
-        ("the component, and the four lists that cap something: this actor's steps, the steps one "
-         "story draws at a surface, the entities a feature touches in a data area, and the use "
-         "cases a person has at a surface")
-    assert "' more'" not in js and "more</span>`" not in js, "no list still writes its own tail"
-    assert ".more-tail { font: inherit; font-style: italic;" in css, \
-        "the size is inherited, so the tail matches the line it ends; the treatment is what is shared"
-    # IT IS A DOOR WHERE A PAGE HOLDS THE REST — the surface's own page carries every step…
-    assert "go({ kind: 'interfaces', iface: b.getAttribute('data-more-iface') });" in js
-    # …and OPENS IN PLACE on that page itself, where there is nowhere left to send the reader.
-    assert ".more-tail-open" in js and ".more-hidden { display: none; }" in css
-    assert js.count("bindMoreTails(stage);") == 2, "both pictures wire it"
-    bind = js[js.index("function bindActorSurfaces(root, actorName) {"):
-              js.index("\nfunction ", js.index("function bindActorSurfaces(root, actorName) {") + 10)]
-    # EACH WIRE IS DRAWN ONLY WHEN THE THING AT ITS FAR END EXISTS: a line into a sentence saying
-    # nothing is a line that promises an answer.
-    assert "if (cross) wire(rightMid(cross), leftMid(box), iid);" in bind
-    assert "if (feats) wire(rightMid(box), leftMid(feats), iid);" in bind
-    assert "bindSurfacePick(stage, paths, []);" in bind, "no hover labels: the sentences are drawn"
-    # The features are THIS actor's, joined through their own use cases. Taking the surface's own
-    # `features` would answer a different question — every feature ANYONE reaches there, which on MCP
-    # Hero's dashboard is six for a prospect who reaches one. The COUNT beside each is the join
-    # between this page's two sections, and it opens that feature's use cases filtered to this actor.
-    feat = js[js.index("function actorSurfaceFeatures(actorName, iface) {"):
-              js.index("\nfunction ", js.index("function actorSurfaceFeatures(actorName, iface) {") + 10)]
-    assert "(n.actors || []).includes(actorName)" in feat and "iface.features" not in feat
-    assert "return order.map((id) => ({ id, ucs: per[id] }));" in feat
-    assert "go({ kind: 'capability', cap: b.getAttribute('data-cap'), act: actorName });" in bind
-    # …and DRIVING IT IS NOT THE ONLY WAY IN. The far-side list this whole block is filtered by is
-    # built from DOORS, so the features had to be found by the same rule that put the actor there.
-    # Asking only who drives it reported "not stated" on MCP Hero's Outgoing email, whose one use
-    # case the UPKEEP JOB drives and whose walk hands out to the admin and the member.
-    assert "!doorsOnto(uc)" in feat
-    assert "st.srcId === iface.id && !st.dstId && st.dst === actorName" in feat
-    assert "st.dstId === iface.id && !st.srcId && st.src === actorName" in feat
-    # The column head has to cover both directions, so it says MEET — the same word the middle column
-    # already uses for two-way contact — and not "reach", which only fits the half they drive.
-    # WHAT THEY DO THERE, and not "features they meet": the column names features but the number
-    # beside each is this actor's use cases through that door, which is the thing they do.
-    assert "What they do there" in js
-    assert "Features they meet there" not in js and "What they reach there" not in js
-    # ONE PICK GESTURE for both pictures, from one function — two copies of a rule this small drift.
-    assert js.count("bindSurfacePick(") == 3, "the helper itself, and the two pictures that call it"
-    assert "root.querySelectorAll('.journey-inclink')" in js, "the other actor's page is still a click away"
-    # …and an actor the happy path never touches (argus's Page owner) loses the upper lane entirely
-    # rather than showing an empty one under a dashed line that cuts nothing.
-    assert "const noPath = !hasPath;" in page and "offLane, noPath," in page
-    assert "o.noPath ? '' :" in js, "the upper-lane cell is dropped, not drawn empty"
-    assert ".journey-no-path .journey-sides, .journey-no-path .journey-gutter-off { grid-row: 2;" in css
-    railfn = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
-                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
-    assert "journey-gutter-off\">Off the happy path" in railfn, "…and the one lane is still named"
-
-
+    # THE SURFACES BLOCK'S HALF OF THIS TEST WENT WITH THE BLOCK: its picture, its two shore
+    # headings, its per-surface grid row, the step lines in its crossings column. The page draws
+    # one section now — the board — and names every interface on the use case that reaches it.
+    # The FUNCTIONS are gone, not merely unreferenced — the note left where they stood names them,
+    # so the test asks for the definitions and the call, never the bare string.
+    assert "function actorSurfacesHtml(" not in js and "function bindActorSurfaces(" not in js
+    assert "bindActorSurfaces(diagram" not in js, "…and nothing calls it"
+    # The RULES, not the word: the note left where they stood names the class it removed.
+    assert not re.search(r"^\\s*[.#][^{}\\n]*\\.asf-", css, re.M), "…and the rules that drew it"
 
 def test_a_feature_the_happy_path_enters_twice_gets_two_boxes() -> None:
     """A happy path may leave a feature and come back to it later, and it does: measured on the four
@@ -1020,7 +922,11 @@ def test_a_feature_the_happy_path_enters_twice_gets_two_boxes() -> None:
         "a zone is a RUN of consecutive stations, cut when the FEATURE changes"
     assert "zoneOf" not in jrn and "byFid" not in jrn, "the one-zone-per-feature index is gone"
     assert "for (const z of zones) if (!(z.fid in firstOf)) firstOf[z.fid] = z;" in jrn
-    assert "if (firstOf[fid]) { firstOf[fid].sides.push(uc); continue; }" in jrn
+    # Filed by ONE routine for both lower lanes now (`lane` is all that differs between the
+    # callers), so the rule that a side stop hangs under its feature's FIRST zone cannot
+    # drift away from the same rule for the third lane.
+    assert "if (firstOf[fid]) { firstOf[fid][lane].push(uc); return; }" in jrn
+    assert "for (const uc of ucs) if (!stationUcs.has(uc.id)) file(uc, 'sides');" in jrn
 
 
 def test_every_state_field_survives_a_right_pane_navigation() -> None:
@@ -2769,7 +2675,7 @@ def test_a_feature_board_wears_no_section_frame() -> None:
         "the one push left is the no-board fallback's"
     assert "${board}${index}" in ren, "the board leads the page, the chip bar indexes what follows"
     # …and the board keeps its own frame, because there is no section around it to be the card.
-    assert ".walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
+    assert ".hp-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
 
 
 def test_a_side_stop_hangs_under_the_actor_who_drives_it() -> None:
@@ -2837,8 +2743,8 @@ def test_a_feature_the_walk_never_enters_still_draws_the_board() -> None:
     assert "const hasPath = zones.some((z) => z.stations.length);" in rail
     # The two lanes are switched on and off in ONE place, shared with the actor board.
     assert "journeyRailHtml(hasPath, offLane, boxes(zones, true) + boxes(offZones, false))" in rail
-    shared = js[js.index("function journeyRailHtml(hasPath, offLane, boxes) {"):
-                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes) {") + 10)]
+    shared = js[js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {"):
+                js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {") + 10)]
     assert "hasPath ? '<div class=\"journey-gutter journey-gutter-on\">Happy path</div>' : ''" in shared
     assert "hasPath ? '' : ' journey-no-path'" in shared, "one lane, and no cut to draw"
     assert ".journey-no-path .journey-sides, .journey-no-path .journey-gutter-off" in css
@@ -2858,8 +2764,13 @@ def test_the_rail_keeps_the_marks_the_cards_carried() -> None:
     assert "(FLOWS_NARR && FLOWS_NARR[ucId]) ? ''" in marks
     zone = js[js.index("function journeyZoneHtml(z, opts) {"):
               js.index("\nfunction ", js.index("function journeyZoneHtml(z, opts) {") + 10)]
-    assert "${journeyMarksHtml(s.uc)}" in zone and "${journeyMarksHtml(uc.id)}" in zone, \
-        "a station and a side stop both carry them"
+    step = js[js.index("function flowStepBoxHtml(st, o) {"):
+              js.index("\nfunction ", js.index("function flowStepBoxHtml(st, o) {") + 10)]
+    # A STATION carries them through the shared box, which draws them when its caller asks; a SIDE
+    # STOP still draws its own, because a stop is not a step. Both, which is what this pins.
+    assert "opt.marks ? journeyMarksHtml(st.uc) : ''" in step
+    assert "marks: true" in zone, "…and the rail is the caller that asks"
+    assert "${journeyMarksHtml(uc.id)}" in zone, "a side stop carries them too"
     # The card's own two colours, so one mark means one thing wherever it is drawn.
     assert ".journey-mark-changed { background: #fff8c5; color: #9a6700; }" in css
     assert ".journey-mark-untraced { background: #fef3c7; color: #92400e; }" in css
@@ -4018,7 +3929,7 @@ def test_the_outer_frame_is_the_drawing_s_and_a_page_of_cards_does_not_get_one()
     # The MARGIN goes with the frame: bare, it left a strip of the pane under the header for the
     # header's shadow to land on, which reads as a solid band over the page rather than an edge.
     # It is still ON the shared board rule: a map page is exactly where it earns the frame.
-    assert ".walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
+    assert ".hp-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
 
 
 def test_a_name_wears_its_kind_as_one_small_mark_and_never_as_a_block() -> None:
@@ -4072,7 +3983,7 @@ def test_a_picture_with_a_natural_width_is_framed_at_that_width() -> None:
     assert "body:not(.code-hidden) .ifd-stage { min-width: var(--ifd-stage-w); }" in css
     # …and the Interfaces page earns the same measure as the other picture pages, so the page's own
     # ground runs the width of the pane behind the hugged board instead of stopping in bare white.
-    assert (".usecases-wrap:has(.walk-board), .usecases-wrap:has(.ifd-wrap) { max-width: 1440px; }"
+    assert (".usecases-wrap:has(.hp-board), .usecases-wrap:has(.ifd-wrap) { max-width: 1440px; }"
             in css)
 
 
@@ -4953,7 +4864,7 @@ def test_a_use_case_map_arrow_resolves_to_its_WALK_STEPS():
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     fn = js[js.index("function inspFlowArrow(el, handle) {"):js.index("// One step of a walk.")]
     assert "flowMapSteps(uc, m[1], m[2])" in fn, "the picture's own lookup, not a second one"
-    assert "isWalkState(here)" in fn, \
+    assert "isFlowState(here)" in fn, \
         "guarded to the use case map: a stale uc would answer for a backbone arrow"
     assert "parts.length === 1) return parts[0]" in fn, \
         "one step answers as itself; several answer as all of them"
@@ -5165,16 +5076,16 @@ def test_the_first_walk_a_reader_opens_shows_them_the_code_column() -> None:
     boot, and syncCodePane is the one place that runs again once it lands. Deciding it at the navigation
     left the column shut on the very first walk — the one arrival the rule exists for."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
-    fn = js[js.index("function openCodeOnFirstWalk(s) {"):
-            js.index("\n}", js.index("function openCodeOnFirstWalk(s) {"))]
-    assert "if (!SERVED || !isWalkState(s)) return;" in fn        # a walk, on a served map
+    fn = js[js.index("function openCodeOnFirstFlow(s) {"):
+            js.index("\n}", js.index("function openCodeOnFirstFlow(s) {"))]
+    assert "if (!SERVED || !isFlowState(s)) return;" in fn        # a walk, on a served map
     # ARRIVING IS THE EVENT, open or not. Returning early on an already-open column left the flag
     # unset, so the reader's × — which comes back through here — met a shut column and an unset flag
     # and forced it open again. The × was dead for anyone who had ever left the column open.
     assert "if (!codePaneOpen()) setCodeOpen(true);" in fn
-    assert "lsGet(LS.walkCode) === '1'" in fn and "lsSet(LS.walkCode, '1')" in fn
+    assert "lsGet(LS.flowCode) === '1'" in fn and "lsSet(LS.flowCode, '1')" in fn
     sync = js[js.index("function syncCodePane(s) {"):js.index("\n}", js.index("function syncCodePane(s) {"))]
-    assert "openCodeOnFirstWalk(s);" in sync, "decided where SERVED is re-read, not at the navigation"
+    assert "openCodeOnFirstFlow(s);" in sync, "decided where SERVED is re-read, not at the navigation"
 
 
 def test_the_name_is_the_words_and_every_box_s_name_opens_a_page() -> None:
@@ -5206,7 +5117,7 @@ def test_a_walk_draws_no_corner_icons() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     fn = js[js.index("function decorateActionIcons(scene, s) {"):
             js.index("\n}", js.index("function decorateActionIcons(scene, s) {"))]
-    assert "if (isWalkState(s)) return;" in fn
+    assert "if (isFlowState(s)) return;" in fn
     assert "addActionIcon(el, sid, open)" not in js, "the shared sub-use case's box lost its icon too"
 
 
@@ -5264,12 +5175,12 @@ def test_the_interfaces_picture_scrolls_in_the_same_board_the_other_two_do() -> 
     a negative margin instead, which reads as a picture that ENDS at the window rather than one carrying
     on past it — and it had no shades at all, so nothing said there was more."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
-    assert "'.walk-strip, .journey-board, .story-wrap, .ifd-wrap'" in js
+    assert "'.hp-strip, .journey-board, .story-wrap, .ifd-wrap'" in js
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
     wrap = css[css.index(".ifd-wrap { margin: 4px"):]
     wrap = wrap[:wrap.index("}")]
     # THE LOOK IS STATED ONCE, for every drawing in the product — see `.cy-board`.
-    assert ".walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
+    assert ".hp-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {" in css
     assert "background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;" in css
     assert "overflow-x: auto" in wrap
     # VERTICAL padding only. A card's name sits half above the stage and would be clipped without it —
@@ -5280,3 +5191,38 @@ def test_the_interfaces_picture_scrolls_in_the_same_board_the_other_two_do() -> 
     # wrapper it inserts, so a board wider than that wrapper drew its own shades inside itself, over the
     # cards — a stain on the content instead of an edge the content passes under.
     assert ".hfade-wrap:has(> .ifd-wrap) { margin: 0 -1px; }" in css
+
+
+def test_a_chip_is_one_component_that_no_page_restyles() -> None:
+    """A chip is built by ONE function (`itemChipHtml`) and looked at in three places: a shared
+    sub-use case's box, a surface card's far side, and now every use case on a board. It stopped
+    being one component the moment a lane wrote `.journey-ifs .ibox-chip { align-items: flex-start }`
+    for itself — a rule that put the chip's mark 1.7px above where the same chip drew it on a card,
+    which a reader noticed before any test did.
+
+    So the STYLESHEET is what this pins, not the builder: the builder was already shared, and sharing
+    it bought nothing while a page could re-style what came out. Every selector naming the chip has to
+    be the component's own. A new page-scoped one fails here rather than on somebody's eye."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    sels = [" ".join(m.group(2).split()).split("*/")[-1].strip()
+            for m in re.finditer(r"(^|\})\s*([^{}@]*ibox-chip[^{}]*)\{", css, re.M)]
+    assert sorted(sels) == sorted([
+        ".ibox-chip",                                   # the box itself
+        ".ibox-chip .ibox-gly",                         # …and its mark
+        "#diagram .ibox-chip .ibox-gly, #diagram .ifd-elabel-dir .ibox-gly",   # one size on a diagram
+        ".ibox-chip-me",                                # the reader's own actor, on their page
+    ]), sels
+    # THE MARK IS ALIGNED ON THE COMPONENT, so a chip whose name wraps inside a narrow box keeps it on
+    # the first line without the box saying anything. `center` cannot: it floats the mark to the
+    # middle of a two-line tag, which is what the lane's own rule was working around.
+    chip = css[css.index(".ibox-chip {"):css.index("}", css.index(".ibox-chip {"))]
+    assert "align-items: flex-start" in chip and "line-height: 14px" in chip
+    assert "max-width: 100%" in chip, "a chip fits its container wherever it is drawn"
+    mark = css[css.index(".ibox-chip .ibox-gly {"):
+               css.index("}", css.index(".ibox-chip .ibox-gly {"))]
+    # 14px of line box less an 11px mark, halved: the one-line chip is unmoved by the change.
+    assert "margin-top: 1.5px" in mark, mark
+    # …and ONE builder still, which is the half that was already true.
+    assert js.count("function itemChipHtml(") == 1
+    assert js.count('class="ibox-chip') == 1, "one place writes a chip's markup"

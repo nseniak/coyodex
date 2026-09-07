@@ -546,20 +546,20 @@ def test_the_interface_fixture_is_a_map_VALIDATE_ACCEPTS():
     assert not [p for p in problems if "direction" in p], problems
 
 
-def test_a_surface_flow_is_derived_from_the_DIRECTIONS_ITS_STEPS_CARRY():
+def test_a_surface_s_directions_are_derived_from_the_STEPS_THAT_CARRY_THEM():
     """Never authored. `interfaces[].carries[]` said it by hand beside the walks, and a surface
     could claim to send while no story sent anything through it."""
     ix = build_index(load_model(json.dumps(make_interface_map())))
     by_id = {i.id: i for i in ix.interfaces}
-    assert by_id["I1"].flow == ["in"], "one step drawn at it, and it says the product received"
+    assert by_id["I1"].directions == ["in"], "one step drawn at it, and it says the product received"
     # …and a surface reached only THROUGH A DEP states no direction. That is the honest answer, not
     # a gap to paper over: the step is drawn at the dependency, which is the PIPE, so nothing says
     # which way data crossed the SURFACE. The fix is to draw the step at the surface, which is
     # exactly what the method now tells an author to do.
-    assert by_id["I2"].flow == []
+    assert by_id["I2"].directions == []
 
 
-def test_the_walk_steps_ARE_what_crosses_and_each_carries_its_own_direction():
+def test_the_flow_steps_ARE_what_crosses_and_each_carries_its_own_direction():
     """`interfaces[].carries[]` is removed and these replaced it. An earlier removal WITHOUT the
     step direction was reverted, because a step could not say which way data went."""
     doc = make_interface_map()
@@ -569,13 +569,13 @@ def test_the_walk_steps_ARE_what_crosses_and_each_carries_its_own_direction():
         {"n": 3, "src": "C2", "dst": "I3", "phrase": "ships a log line", "direction": "out"}]
     by_id = {i.id: i for i in build_index(load_model(json.dumps(doc))).interfaces}
     assert not hasattr(by_id["I1"], "crossings"), "the authored rows are gone for good"
-    assert by_id["I1"].flow == ["in"], "…and `flow` now comes from the steps themselves"
+    assert by_id["I1"].directions == ["in"], "…and `directions` now comes from the steps themselves"
     # grouped by story, in walk order, none dropped, each with its direction
     assert by_id["I1"].steps == [("UC1", [("hands over the card", "UC1", 1, "R1", "in"),
                                           ("carries it inward", "UC1", 2, "", "in")])], \
         by_id["I1"].steps
     assert by_id["I3"].steps == [("UC1", [("ships a log line", "UC1", 3, "", "out")])]
-    assert by_id["I2"].steps == [] and by_id["I2"].flow == []
+    assert by_id["I2"].steps == [] and by_id["I2"].directions == []
 
 
 def test_the_bundle_ships_the_steps_with_their_direction():

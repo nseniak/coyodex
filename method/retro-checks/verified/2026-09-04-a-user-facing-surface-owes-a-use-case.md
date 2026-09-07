@@ -12,12 +12,12 @@ here, because the next build throws it away and the silence then reads as the ru
 ## What this change is answering
 
 **The map can claim a surface exists for a person and never tell a story that goes near it.**
-Nothing checked the pair. `facing` is authored and says who a surface serves; use case walks are
+Nothing checked the pair. `facing` is authored and says who a surface serves; flows are
 authored separately; no gate joined them.
 
 **One live case, and it is the whole evidence.** argus I7 "Paid reading service" — the anti-bot
 service the product pays when its own readers get blocked — is `facing: user`, is carried a second
-time as dependency D3 "Scrapfly", and is reached by no use case at all. Its shared sub-use case "Read a page
+time as dependency D3 "Scrapfly", and is reached by no use case at all. Its shared sub-flow "Read a page
 and store its clean text" mentions paid reading twice in PROSE (step 3 "checks the account still has
 paid reading allowance", step 7 "charges the account for the credits the paid reading spent") while
 step 5, the one that actually leaves the product, is drawn at I8 "Tracked web pages", the open web.
@@ -37,7 +37,7 @@ four would bury the one real case under four false ones, and an advisory that is
 advisory people learn to skip.
 
 **"Reached" takes THREE arms, the same three `interface_walk_order` already used** — a use case
-naming one of the surface's `ways_in`, a walk step drawn at the surface, or a walk step drawn at a
+naming one of the surface's `ways_in`, a flow step drawn at the surface, or a flow step drawn at a
 dep standing on it. The third arm scores zero on both live maps, and is kept for the day a step
 names a `Dn` rather than the surface it is met at.
 

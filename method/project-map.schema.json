@@ -367,7 +367,7 @@
             "expected",
             "excluded"
           ],
-          "description": "CAPABILITY-ONLY: must the Happy-Path walk reach this capability? `expected` = yes, at least one of its use cases; `excluded` = no, and one 'Happy Path coverage' record says why. Deliberately NOT derived from happy_path[] \u2014 a value that always agreed with the walk could never disagree with it, and the disagreement IS the check. Says nothing about audience. `validate` blocks it on a subsystem or a subdomain."
+          "description": "CAPABILITY-ONLY: must the happy path reach this capability? `expected` = yes, at least one of its use cases; `excluded` = no, and one 'Happy Path coverage' record says why. Deliberately NOT derived from happy_path[] \u2014 a value that always agreed with the happy path could never disagree with it, and the disagreement IS the check. Says nothing about audience. `validate` blocks it on a subsystem or a subdomain."
         },
         "stakes": {
           "type": "array",
@@ -378,7 +378,7 @@
         },
         "story": {
           "$ref": "#/$defs/StoryAnchor",
-          "description": "CAPABILITY-ONLY, and only worth authoring on a feature the walk never reaches: where that feature sits in the ONE story column the viewer draws. The walk reads unbroken and the off-walk features form a block after it, so `after` ORDERS that block (the block is already after every walk feature) while `before` is the one placement that keeps a feature among the walk \u2014 author it on a lead-in like a marketing page, which belongs BEFORE the first step. Absent = the viewer guesses from the feature's actors' last walk step, which orders the block sensibly for trailing features (ops, a chat variant of work already walked) and never rescues a lead-in. `validate` blocks it on the other forests."
+          "description": "CAPABILITY-ONLY, and only worth authoring on a feature the happy path never reaches: where that feature sits in the ONE story column the viewer draws. The happy path reads unbroken and the off-happy-path features form a block after it, so `after` ORDERS that block (the block is already after every happy-path feature) while `before` is the one placement that keeps a feature among the happy path \u2014 author it on a lead-in like a marketing page, which belongs BEFORE the first step. Absent = the viewer guesses from the feature's actors' last happy-path step, which orders the block sensibly for trailing features (ops, a chat variant of work already walked) and never rescues a lead-in. `validate` blocks it on the other forests."
         },
         "owners": {
           "type": [
@@ -510,7 +510,7 @@
         "id": {
           "type": "string",
           "pattern": "^HP\\d+$",
-          "description": "this step's position in the ordered walk."
+          "description": "this step's position in the happy path."
         },
         "title": {
           "type": "string"
@@ -528,7 +528,7 @@
             "string",
             "null"
           ],
-          "description": "the prerequisite that fixes this step's position \u2014 why it can't come earlier in the walk."
+          "description": "the prerequisite that fixes this step's position \u2014 why it can't come earlier in the happy path."
         }
       },
       "required": [

@@ -159,7 +159,7 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     in an arrow head. Each step is a bullet carrying its position in the whole walk — the number both
     rails drop, because this is the view whose subject it is. Three doors: a step opens its use
     case's flow, a feature's name that feature's page, a person's name theirs. Every box on the page
-    is one height (`levelWalkBoxes`), and each row scrolls sideways on its own, so a row of three
+    is one height (`levelHpBoxes`), and each row scrolls sideways on its own, so a row of three
     steps is not dragged off screen to reach the end of a row of thirteen.
     It is HTML (`renderHappyPath`), not a diagram, so it never shrinks: Mermaid scaled the sequence
     diagram this replaced down to 9.5px of step text on a 29-step map, and 44% of another map's

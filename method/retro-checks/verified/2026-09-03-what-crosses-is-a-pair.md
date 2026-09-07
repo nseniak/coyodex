@@ -1,4 +1,4 @@
-# What crosses a surface is a PAIR: the authored rows, and the walk steps beside them
+# What crosses a surface is a PAIR: the authored rows, and the flow steps beside them
 
 > **SUPERSEDED ONE DAY LATER by `2026-09-05-what-crosses-is-a-step-with-a-direction.md`.**
 > `interfaces[].carries[]` IS now removed, and the checks below no longer run. Kept because the
@@ -6,7 +6,7 @@
 > never the sentence, it was DIRECTION, and the step now carries one. Read this file for what the
 > first attempt got wrong, and the newer one for what closed it.
 
-Change (2026-09-03): the viewer shows `interfaces[].carries[]` and the walk steps drawn at the same
+Change (2026-09-03): the viewer shows `interfaces[].carries[]` and the flow steps drawn at the same
 surface SIDE BY SIDE on that surface's own page, and an actor's page switches from the authored rows
 to that actor's OWN steps. New derivations `interface_walk_steps` and `interface_steps_by_use_case`.
 The audit worklist now challenges SUB-FLOW step phrases too. The advisory demanding a `where` on
@@ -28,7 +28,7 @@ accepting the map.
 **The authored rows were accused of being a hand-written summary of the walks, and the accusation
 was measured and did not hold.** Measured on the three live maps:
 
-- **16 of the 39 surfaces have no walk step at all**, so the derivation would have turned 22
+- **16 of the 39 surfaces have no flow step at all**, so the derivation would have turned 22
   authored sentences into silence — including every one of coyodex's own 11 surfaces, whose map
   draws no doors. Three of the 22 are redaction guarantees ("a log record, with secret-shaped fields
   and credential headers stripped before it leaves the host") that no story reaches.
@@ -83,7 +83,7 @@ line that proves the value is not readable later."* Either that row earns an anc
 
 2. expect: every surface still carries `carries[]` rows, including the ones no walk reaches. On the
    previous mcpolis map that was 16 of 16 surfaces and 35 rows; on argus 12 of 12 and 31.
-   regression sign: a surface with walk steps and NO authored rows — the build read the new second
+   regression sign: a surface with flow steps and NO authored rows — the build read the new second
    block as permission to stop authoring the first.
 
 3. expect: no screen states a direction that is not authored. Grep the built viewer payload: an

@@ -28,7 +28,7 @@ outcome still reads "their own mail program opens" while no box in the map is on
 minutes later and sent the agent back to close the story through it. The two builds differ only in
 the answer, which is why the method text now names the case.
 
-Eight other walk reports landed in the four minutes after that one.
+Eight other flow reports landed in the four minutes after that one.
 
 **Measured, and CORRECTED after an adversarial review.** Person-facing walks whose person is left
 acting with nothing handed back: **0 of 50 on the 2026-09-02 map and 4 of 43 on the 2026-09-07 map**,
@@ -41,7 +41,7 @@ The first shipped version was wrong in both directions and a reviewer reproduced
 - it took the last step touching ANY actor and then asked whether that one was a person, so **one
   machine step after a person's dead end hid it** — silent on argus UC3 and coyodex UC38, the exact
   defect it exists for;
-- it read a walk's OWN steps, so a reply handed back inside a shared sub-use case read as no
+- it read a walk's OWN steps, so a reply handed back inside a shared sub-flow read as no
   reply. **This one has no live instance**: expanded and own steps give identical rows on all four
   maps today. It is a defect in reasoning, fixed before it could bite, and not something a reviewer
   reproduced on a map;

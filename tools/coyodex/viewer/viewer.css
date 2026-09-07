@@ -143,7 +143,7 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    Stated ONCE. Three of the five had the same three declarations written out separately, and two —
    the walk map and the Features picture — had none at all: their drawing ran to the edge of the pane.
    The five selectors ARE the list; a `.cy-board` class was here too and no element ever carried it. */
-.walk-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {
+.hp-board, .journey-board, .ifd-wrap, .story-wrap, #diagwrap {
   background: #fff; border: 1px solid #e4e6ef; border-radius: 10px;
 }
 /* The floor is 160px OF DRAWING, and it is written here and in viewer.js as the SAME number — a test
@@ -1416,10 +1416,12 @@ body.altmod .opensrc, body.altmod .opensrc * {
    to close before they can see what is under it costs more than it explains. */
 
 /* Step player for use-case flow views. It lives INSIDE #flowpicker (one card for "how is this flow
-   drawn" + "where am I in it"), so it is laid out inline here and carries only the divider that separates
-   it from the mode switch — the card owns the position, background and shadow. `hidden` toggles from JS. */
-#flowplayer { display: inline-flex; align-items: center; gap: 6px;
-              padding-left: 9px; margin-left: 2px; border-left: 1px solid #e5e7eb; }
+   drawn" + "where am I in it"), so it is laid out inline here — the card owns the position, background
+   and shadow. `hidden` toggles from JS.
+   NO DIVIDER. It carried a left rule to part it from the mode switch, and #flowmode has been empty
+   since the map became the one rendering of a walk — so the rule stood at the card's own left edge,
+   dividing the label from nothing. Its 11px of padding went with it. */
+#flowplayer { display: inline-flex; align-items: center; gap: 6px; }
 #flowplayer[hidden] { display: none; }
 #flowplayer button { font-size: 12px; line-height: 1; padding: 5px 11px; border: 0; border-radius: 999px;
                      background: #6366f1; color: #fff; cursor: pointer; }
@@ -1428,10 +1430,12 @@ body.altmod .opensrc, body.altmod .opensrc * {
    because it wraps around. Only a truly inert control (unstarted Prev) uses the real :disabled attr. */
 #flowplayer button:disabled, #flowplayer button.flowend { background: #e5e7eb; color: #9ca3af; }
 #flowplayer button:disabled { cursor: default; }
-/* The LABEL leads, then a divider, then the control. It is the sentence the counter could not be:
-   "– / 20" says nothing about what pressing an arrow would do. */
-#flowlabel { font-size: 12px; color: #4b5563; padding-right: 9px; margin-right: 2px;
-             border-right: 1px solid #e5e7eb; white-space: nowrap; }
+/* The LABEL leads, then the control. It is the sentence the counter could not be: "– / 20" says
+   nothing about what pressing an arrow would do. No divider between the two: the label ends in a word
+   and the control starts with a round button, so nothing was running together for a rule to part —
+   and one card carrying two grey rules read as three controls rather than one. The container's own
+   6px gap is the whole separation now. */
+#flowlabel { font-size: 12px; color: #4b5563; white-space: nowrap; }
 #flowcount { font-size: 12px; color: #374151; font-variant-numeric: tabular-nums; min-width: 46px;
              text-align: center; padding: 0 2px; }
 
@@ -1860,7 +1864,7 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
    same measure — matched on the child only, a feature's rail lost 360px and clipped its last
    station into a scrollbar on a window with the room for it. */
 .usecases-wrap:has(.story-wrap), .usecases-wrap:has(.journey-board),
-.usecases-wrap:has(.walk-board), .usecases-wrap:has(.ifd-wrap) { max-width: 1440px; }
+.usecases-wrap:has(.hp-board), .usecases-wrap:has(.ifd-wrap) { max-width: 1440px; }
 /* THREE columns, read left to right as one sentence: the people, what they do, the data it keeps.
    Every arrow on this page flows the same way, which is why the actors moved left — a stake label
    on a right-to-left wire read backwards on every one of them.
@@ -2048,12 +2052,12 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .journey-rail { display: grid; grid-auto-flow: column;
                 grid-template-columns: max-content;
                 grid-auto-columns: minmax(150px, max-content);
-                grid-template-rows: auto auto auto; column-gap: 14px;
+                grid-template-rows: auto auto auto auto; column-gap: 14px;
                 align-items: start; min-width: max-content; }
 .journey-zbg { grid-row: 1 / -1; align-self: stretch; border-radius: 10px; background: #f7f8fb;
                z-index: 0; }
 /* The cells sit ON the box, so each one carries the side padding the box used to own. */
-.journey-zlabel, .journey-track, .journey-sides { position: relative; z-index: 1;
+.journey-zlabel, .journey-track, .journey-sides, .journey-parts { position: relative; z-index: 1;
                                                   padding-left: 16px; padding-right: 16px; }
 /* Single-line, so a long feature name WIDENS its column instead of clipping, and every feature's
    name is exactly one line high — which is what keeps the two lanes level across the board. */
@@ -2075,9 +2079,15 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .journey-zor { font-size: 10.5px; font-weight: 500; color: #8a90a4; margin: 0 5px; }
 /* The upper lane: the rail runs at one height and bridges the gaps between boxes, each side
    reaching half the gap. */
-.journey-track { grid-row: 2; display: flex; gap: 30px; align-items: flex-start;
-                 padding-top: 12px; padding-bottom: 4px; }
-.journey-track::before { content: ''; position: absolute; left: -7px; right: -7px; top: 21px;
+/* The steps in it are `.flow-step`, the SAME box the Happy Path draws, so the spacing comes from the
+   box's own 4px side margins (a 150px column) and not from a `gap` this lane sets for itself. The
+   line sits where that box puts its bullet: 13.5px of margin plus half a 15px dot is 21px down, and
+   the 3px rule at `top: 19.5` has its middle there. Both numbers are the walk's.
+   NO TOP PADDING. The rule is placed against this cell's own top edge, so padding moves the bullets
+   down it and leaves the line where it was — 4px of it put every dot 25px down against a rule at 21. */
+.journey-track { grid-row: 2; display: flex; align-items: stretch;
+                 padding-top: 0; padding-bottom: 4px; }
+.journey-track::before { content: ''; position: absolute; left: -7px; right: -7px; top: 19.5px;
                          height: 3px; background: #4f46e5; border-radius: 2px; }
 /* The two tips: the line runs past the first and last boxes, so it reads as one path through them
    rather than as a rule belonging to each box. */
@@ -2086,7 +2096,7 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* The right tip ends in an arrowhead: the rail has a direction, and the reader is meant to walk it
    left to right. Its POINT sits at the line's end, so the triangle reads as the line finishing
    rather than as a mark parked beside it. Centred on the 3px rail at top 21: 22.5 - 5. */
-.journey-track-last::after { content: ''; position: absolute; right: -20px; top: 17.5px;
+.journey-track-last::after { content: ''; position: absolute; right: -20px; top: 16px;
                              width: 0; height: 0; border-left: 8px solid #4f46e5;
                              border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
 /* …and the first feature the happy path never enters stands clear of that right-hand tip. */
@@ -2094,35 +2104,38 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* A feature this actor only touches OFF the happy path still has an upper-lane cell, to hold the
    two lanes level. It is empty, and no path crosses a feature the path never joins. */
 .journey-track:empty::before { display: none; }
-/* With no lower lane the upper one is the last row, so it closes the box itself. */
-.journey-rail:not(.journey-has-off) .journey-track { padding-bottom: 12px; }
+/* With no lane under it the upper one is the last row, so it closes the box itself. Both lower lanes
+   have to be absent: with only the third one, the box closes at THAT row instead. */
+.journey-rail:not(.journey-has-off):not(.journey-has-part) .journey-track { padding-bottom: 12px; }
 /* An actor the happy path never touches has no upper lane: the lower one moves up into row 2, and
    with a single lane there is no cut to draw. */
 .journey-no-path .journey-sides, .journey-no-path .journey-gutter-off { grid-row: 2; border-top: 0;
                                                                         padding-top: 12px; }
-.journey-station { font: inherit; background: none; border: 0; padding: 0; text-align: left;
-                   position: relative; width: 126px; cursor: pointer; display: block; color: inherit; }
-/* The dot sits at the station's left edge, and the title starts at that same edge under it, so both
-   hang from the point the rail actually passes through. */
-.journey-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
-               border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
-               margin: 2px 0 3px; box-sizing: border-box; }
-.journey-station:hover .journey-dot { background: #4f46e5; }
-.journey-station:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
-/* The step's position in the whole walk was drawn here as a number over the title. It answered no
-   question this page asks — the rail already runs left to right — and it cost an indent rule per
-   digit count on the title and on the off-path list under it, because a number centred on the dot
-   starts further left the more digits it has. Gone, and both columns now start at the box's own
-   16px of padding, which is what makes the box read as ONE text column. */
-.journey-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; }
-.journey-station:hover .journey-t { color: #4f46e5; }
+/* NO RULES FOR A STATION HERE ANY MORE. A station IS a `.flow-step` — the Happy Path's box, drawn by
+   the one builder both boards call (flowStepBoxHtml) — so its width, its bullet, its title, its hover and
+   its picked ring are that box's, stated once further down this file. Three near-copies lived here
+   and had already drifted: 126px against 142, a bullet 10px off the walk's, a hover that changed the
+   title's colour but drew no box, so a station could be hovered and never looked hoverable. */
 /* The lower lane. Its dashed top edge spans the full width of every box at one height, and the
    gutter's own lower label carries the same line, so the cut reads as one band across the board. */
-.journey-sides { grid-row: 3; display: flex; flex-direction: column; gap: 4px;
+/* The gap grew from 4px with the ring: two stops 4px apart had 4px between their rings too, which
+   read as one bordered block cut in half rather than as two boxes. */
+.journey-sides { grid-row: 3; display: flex; flex-direction: column; gap: 7px; align-items: start;
                  border-top: 1px dashed #c9cdde; padding-top: 7px; padding-bottom: 12px; }
-.journey-side { font: inherit; background: none; border: 0; padding: 0; text-align: left;
+/* A STOP IS A BOX, the same two states a step has (`.pickbox`), so every use case on this board is
+   hovered and picked one way. It needs padding of its own for the ring to hug, and the padding comes
+   out of the row's own inset — `margin-left: -7px` puts the circle back where it was, so the column
+   of circles still lines up under the step titles above it. `max-width` grows by the same padding so
+   the TEXT column is unchanged at 190px. */
+.journey-side { font: inherit; background: none; border: 0; text-align: left;
                 display: flex; gap: 7px; align-items: baseline; font-size: 11px; color: #5a6072;
-                cursor: pointer; max-width: 190px; }
+                cursor: pointer; max-width: 206px; padding: 4px 7px 5px; margin-left: -7px;
+                border-radius: 8px; transition: box-shadow .12s; }
+/* THE USE CASE'S OWN TEXT is `.flow-step-title` here too, so a stop and a step are one size, one colour and
+   one hover. The stop set its own 11px grey and the step 11.5px near-black, which put two sizes of
+   the same sentence eight pixels apart on one board. `.journey-side`'s type above is what is left
+   over for the circle, which is not a use case's text. */
+.journey-sidet .flow-step-title { display: inline; }
 /* The name and its marks are ONE column beside the circle, never two items on the circle's row: as a
    row item the marks pushed the name onto a line of its own as soon as the two passed 190px. */
 .journey-sidet { display: block; }
@@ -2140,6 +2153,31 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                 padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
 .journey-mark-changed { background: #fff8c5; color: #9a6700; }
 .journey-mark-untraced { background: #fef3c7; color: #92400e; }
+/* WHERE A USE CASE HAPPENS: the surfaces this actor stands at, as the shared chip. Same stack as the
+   marks above and for the same reason — under the title, one column, a footnote on the thing above.
+   NOTHING HERE RE-STYLES THE CHIP. It carried `align-items: flex-start` so that "Upstream consent
+   screens", the one name too wide for a step, kept its mark on the first line when it wrapped — and
+   that put every chip's mark 1.7px above where the same chip draws it on a card. A shared component
+   with a private variant is two components; the wrapping case is now answered on the chip itself. */
+.journey-ifs { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+/* A side stop's chips indent under its name, which starts 7px right of the circle — so the chips
+   line up with the name they belong to and not with the circle. */
+.journey-sidet .journey-ifs { margin-top: 3px; }
+/* ── THE THIRD LANE: takes part in, doesn't drive ────────────────────────────────────────────────
+   Row 4, and everything about the BOX is the lower lane's, because it is the same box: a circle and
+   one text column. What is different is the driver's chip leading that column and the gutter naming
+   the lane, which is exactly the difference the lane is for. The band is wider than the lower one's
+   190px: its boxes carry a name AND somebody else's chip on the same first line. */
+.journey-parts { grid-row: 4; display: flex; flex-direction: column; gap: 4px;
+                 border-top: 1px dashed #c9cdde; padding-top: 7px; padding-bottom: 12px; }
+/* Wider than a side stop by the driver's chip line, and by the same padding, so its text column
+   keeps the room the chip and the name need. */
+.journey-part { max-width: 248px; }
+/* WHOSE use case this is, on its OWN line above the name. Inline before the name it read worse the
+   longer the name was: "Choose which MCPs a role can reach" broke after "which", so the name was cut
+   across the chip's line and the next, and the eye had to reassemble it. On its own line the chip is
+   still the first thing on the box, and the name gets the box's full width. */
+.journey-drivers { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
 /* The lane names, once each, pinned to the left edge while the board scrolls sideways. One cell per
    row and `stretch`, so the gutter is a solid strip the boxes pass under — sized to the labels only,
    it left the feature names and the step titles showing through the gaps, cut off mid-word. */
@@ -2155,6 +2193,12 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    and the two lanes are not the same kind of thing — only one of them has a line. */
 .journey-gutter-on { grid-row: 2; padding-top: 15.75px; }
 .journey-gutter-off { grid-row: 3; border-top: 1px dashed #c9cdde; padding-top: 7px; }
+/* The third lane's name, in the SAME hand as the other two — the gutter's own uppercase, size and
+   tracking, and the same dashed cut the lower lane carries. It briefly dropped the uppercase because
+   it is the longest of the three names, and that bought a tidier label at the price of the thing the
+   gutter is: three names of one kind, so a reader reads them as three lanes and not as a lane, a
+   lane, and a note. It takes the extra line instead. */
+.journey-gutter-part { grid-row: 4; border-top: 1px dashed #c9cdde; padding-top: 7px; }
 /* Trailing features need no marker before them: their happy-path lane is empty, and the rail stops. */
 /* --- a board that scrolls sideways says so, on both edges --------------------------------------
    The wrapper and the two fades are built by `bindHFade`, not written into any board's markup:
@@ -2192,15 +2236,15 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* The board is a STACK of rows now, one per run of steps under one person, and it does not scroll
    sideways itself: each row does, on its own. One scroller for the whole board would tie a row of
    three steps to a row of thirteen, dragging the short ones off screen to reach the long one's end. */
-.walk-board { padding: 6px 0 10px; margin: 10px 0 6px; }
-.walk-row { display: flex; align-items: flex-start; position: relative; }
+.hp-board { padding: 6px 0 10px; margin: 10px 0 6px; }
+.hp-row { display: flex; align-items: flex-start; position: relative; }
 /* THE WRAP. The line turns down at the row's end and comes back in from above at the next row's
    start, the way a wrapped line of text does. Both are pinned to the line the boxes draw, which
    sits 51.5px below the lane's top: 10px of box padding, an 18px feature label, 4px of gap, and the
    line's own 19.5 + 1.5. Placed by eye instead, all three parts were out by 6 to 20px.
    The elbow rides INSIDE the lane, where the line it continues is, and its -14px of left margin
    cancels the lane's column gap so it touches that line. */
-.walk-elbow { flex: none; align-self: flex-start; width: 22px; height: 30px;
+.hp-elbow { flex: none; align-self: flex-start; width: 22px; height: 30px;
               margin: 51.5px 0 0 -14px; position: relative;
               border-top: 3px solid #4f46e5; border-right: 3px solid #4f46e5;
               border-top-right-radius: 10px; }
@@ -2212,7 +2256,7 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    stops square at y=30 (its border box): same 3px width, same x 19..22, no radius at that joint or
    the two would meet in a notch. It runs to y=74, and the fade starts at 41% of its length — which
    is y=48, exactly the head's point, so the line is solid up to the head and never after it. */
-.walk-elbow::before { content: ''; position: absolute; left: 19px; top: 27px;
+.hp-elbow::before { content: ''; position: absolute; left: 19px; top: 27px;
                       width: 3px; height: 44px; background: #4f46e5;
                       -webkit-mask-image: linear-gradient(to bottom, #000 41%, rgba(0, 0, 0, 0) 100%);
                       mask-image: linear-gradient(to bottom, #000 41%, rgba(0, 0, 0, 0) 100%); }
@@ -2223,14 +2267,14 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    `bottom: -18px` puts its point at y=48 and its body at 37..48, so its middle (42.5) lands on the
    middle of the whole drop: the vertical starts at y=11.5, where the corner's 10px radius finishes,
    and ends at y=74, whose midpoint is 42.75. */
-.walk-elbow::after { content: ''; position: absolute; right: -7.5px; bottom: -18px;
+.hp-elbow::after { content: ''; position: absolute; right: -7.5px; bottom: -18px;
                      border-top: 11px solid #4f46e5;
                      border-left: 6px solid transparent; border-right: 6px solid transparent; }
 /* …and the hook hangs off the ROW, not off the strip: a strip is `overflow-x: auto`, and that clips
    the other axis too, so a hook reaching up out of the row was sliced off. Off the row it also stays
    put when a long row is scrolled. 144.5px puts its left border on the line's own left end: a 150px
    gutter, plus the lane's 8px of padding, less the 12px the first box's line reaches back. */
-.walk-hook { position: absolute; z-index: 3; left: 144.5px; top: 16.5px; width: 26px; height: 46px;
+.hp-hook { position: absolute; z-index: 3; left: 144.5px; top: 16.5px; width: 26px; height: 46px;
              border-bottom: 3px solid #4f46e5; border-left: 3px solid #4f46e5;
              border-bottom-left-radius: 10px;
              /* The tail FADES IN at its top rather than starting on a hard edge. It used to reach up
@@ -2240,7 +2284,7 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
                 carries on from above" without claiming a join it cannot draw. */
              -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), #000 55%);
              mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), #000 55%); }
-.walk-row + .walk-row { border-top: 1px solid #f2f3f8; }
+.hp-row + .hp-row { border-top: 1px solid #f2f3f8; }
 /* The row's own scroller. `min-width: 0` or a flex item refuses to shrink below its content, and the
    row would push the page sideways instead of scrolling inside itself.
    The rule below is on the WRAPPER, not on the strip: `bindHFade` puts a wrapper round every
@@ -2252,28 +2296,28 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    1px of overflow would answer with a vertical scrollbar inside the row. Cut instead: the drop is
    already three quarters of the way through its own fade by then, so what is lost is a few px of
    line at about a fifth of full strength. Nothing in this strip ever wants to scroll downwards. */
-.walk-strip { min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 8px 0 10px; }
-.walk-row > .hfade-wrap, .walk-row > .walk-strip { flex: 1; min-width: 0; }
+.hp-strip { min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 8px 0 10px; }
+.hp-row > .hfade-wrap, .hp-row > .hp-strip { flex: 1; min-width: 0; }
 /* `stretch`, so every feature box is the same height: the tallest step title sets it once for the
    whole walk, instead of each box ending where its own longest title happens to end. The person in
    a break keeps its own height, or the glyph would be dragged down the full box.
-   The 14px gap is the journey rail's own `column-gap`; the line bridges it (see --walk-l/--walk-r). */
-.walk { display: flex; align-items: stretch; column-gap: 14px;
+   The 14px gap is the journey rail's own `column-gap`; the line bridges it (see --hp-l/--hp-r). */
+.hp-steps { display: flex; align-items: stretch; column-gap: 14px;
         min-width: max-content; padding: 0 24px 0 8px; }
 /* A box holds a run of steps sharing one feature AND one set of people. Its width comes from the
    step count (set inline), never from its own label: a one-step box sized to "Page tracking · Page
    owner" stopped the bullets lining up down the walk. */
-.walk-box { flex: none; border-radius: 10px; padding: 10px 0 12px; position: relative;
+.hp-box { flex: none; border-radius: 10px; padding: 10px 0 12px; position: relative;
             background: #f7f8fb; }
-.walk-flabel { height: 18px; padding: 0 14px; display: flex; align-items: center; gap: 5px; }
-.walk-fname { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+.hp-flabel { height: 18px; padding: 0 14px; display: flex; align-items: center; gap: 5px; }
+.hp-fname { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
               color: #1e2235; background: none; border: 0; padding: 0; cursor: pointer;
               display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
-.walk-fname:hover { color: #4f46e5; text-decoration: underline; }
-.walk-fnm { white-space: nowrap; }
-#diagram .walk-fname .story-glyph { width: 13px; height: 13px; }
-.walk-fkind { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; color: #5a6072; }
-/* The line. `--walk-l` pulls its left end BACK past the box edge, to touch the person who just
+.hp-fname:hover { color: #4f46e5; text-decoration: underline; }
+.hp-fnm { white-space: nowrap; }
+#diagram .hp-fname .story-glyph { width: 13px; height: 13px; }
+.hp-fkind { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; color: #5a6072; }
+/* The line. `--hp-l` pulls its left end BACK past the box edge, to touch the person who just
    took over; a box that only changes feature leaves it at 0 and the line runs on unbroken. */
 /* `flex-start`, the same rule `.journey-track` carries. Stretched, every step button is as tall as
    the tallest, and a BUTTON centres its content box inside itself — which put the bullet of a step
@@ -2283,17 +2327,17 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    itself a column flex box for the same reason `align-items: flex-start` used to be here: a
    BUTTON centres its content, so a step made taller than its text dropped its bullet off the
    line. Saying where the content goes is what lets the box grow without moving anything. */
-.walk-line { display: flex; align-items: stretch; position: relative; margin-top: 4px; }
-.walk-line::before { content: ''; position: absolute; left: var(--walk-l, -7px);
-                     right: var(--walk-r, -7px);
+.hp-line { display: flex; align-items: stretch; position: relative; margin-top: 4px; }
+.hp-line::before { content: ''; position: absolute; left: var(--hp-l, -7px);
+                     right: var(--hp-r, -7px);
                      top: 19.5px; height: 3px; background: #4f46e5; border-radius: 2px; }
 /* …and the arrow head closes it wherever the next step belongs to somebody else. The same triangle
    the journey rail's right tip draws, with its POINT at the line's end. */
-.walk-closes .walk-line::after { content: ''; position: absolute; right: -20px; top: 16px;
+.hp-closes .hp-line::after { content: ''; position: absolute; right: -20px; top: 16px;
                                  width: 0; height: 0; border-left: 8px solid #4f46e5;
                                  border-top: 5px solid transparent;
                                  border-bottom: 5px solid transparent; }
-/* `display: block`, the same rule `.journey-station` carries and for the same reason: a BUTTON
+/* `display: block` rather than a button's own centring, because a BUTTON
    centres its content box vertically inside itself, and as a stretched flex item every step is as
    tall as the tallest, so a step with a short title had its bullet pushed 8px below the line. */
 /* A STEP IS A BOX. It was a bare column of text with a bullet on the line, so there was nothing on
@@ -2303,9 +2347,9 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    box in all three states: nothing moves when it lights. */
 /* THE BOX IS INSET FROM ITS COLUMN, so two picked steps side by side keep clear air between their
    rings instead of sharing an edge. The COLUMN is still 150px — 142 of box and 4 either side — so
-   the bullets down a row stay on their pitch and `WALK_STEP_W` is unchanged. The bottom margin is
+   the bullets down a row stay on their pitch and `HP_STEP_W` is unchanged. The bottom margin is
    what keeps the box off the floor of the band it stands in. */
-.walk-step { font: inherit; background: none; border: 0; text-align: left; color: inherit;
+.flow-step { font: inherit; background: none; border: 0; text-align: left; color: inherit;
              display: flex; flex-direction: column; justify-content: flex-start;
              width: 142px; margin: 0 4px 6px; flex: none; position: relative;
              padding: 0 12px 6px 10px; cursor: pointer; border-radius: 8px;
@@ -2314,28 +2358,32 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 /* PICKED, and it stays picked: the reader asked for this step and nothing but another click takes it
    away. `is-selected` is the class the floating card's own leader line looks for, so the line finds
    this step exactly as it finds a box on any diagram. */
-.walk-step.ibox-picked .walk-dot, .walk-step.ibox-picked:hover .walk-dot { background: #4f46e5; }
-.walk-step.ibox-picked .walk-t { color: #312e81; }
-/* Hollow, and filled on hover: the same bullet `.journey-dot` draws on the two rails. */
-.walk-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
+.flow-step.ibox-picked .flow-step-dot, .flow-step.ibox-picked:hover .flow-step-dot { background: #4f46e5; }
+.pickbox.ibox-picked .flow-step-title { color: #312e81; }
+/* Hollow, and filled on hover. ONE bullet for every board: the rails drew their own beside this
+   one, 10px up its column, and nothing but this file said the two were meant to match. */
+.flow-step-dot { position: relative; z-index: 2; display: block; width: 15px; height: 15px;
             border-radius: 50%; background: #fff; border: 3.5px solid #4f46e5;
             box-sizing: border-box; margin: 13.5px 0 4px; }
-.walk-step:hover .walk-dot { background: #4f46e5; }
-.walk-step:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+.flow-step:hover .flow-step-dot { background: #4f46e5; }
+.flow-step:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
 /* The step's place in the WHOLE walk. Both rails drop this number on purpose; this is the view
    whose subject it is, so here it stays. */
-.walk-n { display: block; font-size: 10px; font-weight: 700; color: #8a90a4; }
-.walk-t { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; margin-top: 1px; }
-.walk-step:hover .walk-t { color: #4f46e5; text-decoration: underline;
-                           text-decoration-color: #6366f1; }
+.flow-step-num { display: block; font-size: 10px; font-weight: 700; color: #8a90a4; }
+.flow-step-title { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; margin-top: 1px; }
+/* HOVER UNDERLINES THE TEXT, on every board. It was the step's alone, so a side stop lit its ring
+   and said nothing about the words in it — and the words are the door. */
+.pickbox:hover .flow-step-title { color: #4f46e5; text-decoration: underline;
+                         text-decoration-color: #6366f1; }
 /* …and a step whose use case the map never recorded opens nothing, so it says nothing. */
-.walk-step-dead:hover .walk-t { text-decoration: none; }
-/* Measured once per render by `levelWalkBoxes`: the tallest line of steps anywhere sets a floor for
+.flow-step-dead:hover .flow-step-title { text-decoration: none; }
+/* …and the picked box keeps the deeper colour it always had, over every board. */
+/* Measured once per render by `levelHpBoxes`: the tallest line of steps anywhere sets a floor for
    all of them, so a row whose titles are all short does not draw a band half the height of the one
    above it. On the LINE, never on the step: a button centres its own content box, so a step given a
    floor taller than its text dropped its bullet 8px below the line, which is the same trick that
    caught `align-items` on this board once already. */
-.walk-line { min-height: var(--walk-h, auto); }
+.hp-line { min-height: var(--hp-h, auto); }
 /* The person NAMES their row, in a gutter on the left — where the journey rail has always put the
    thing a lane is about. They used to stand in the gap between two boxes; a row break says the same
    thing, and this puts the name somewhere a reader can scan straight down. Icon then name on one
@@ -2345,43 +2393,43 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    its line (8px of row padding, an 18px feature label, 4px of gap and the line's own 21px). A fixed
    padding above the block cannot do it: a two-line name is taller than a one-line one, and the two
    would sit at different heights against the same line. */
-.walk-hand { flex: none; width: 150px; height: 122px; padding: 0 12px 0 14px;
+.hp-hand { flex: none; width: 150px; height: 122px; padding: 0 12px 0 14px;
              display: flex; align-items: center; justify-content: center; gap: 6px; }
 /* Icon over name, the way a person is drawn everywhere else on this board's family of pages. The
    two blocks of an "either of them may start it" row sit side by side, and `align-items: center` on
    the row is what puts the little "or" on their middle instead of on a baseline one of them owns. */
-.walk-one { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
+.hp-one { font: inherit; background: none; border: 0; padding: 0; cursor: pointer;
             display: inline-flex; flex-direction: column; align-items: center; gap: 4px;
             min-width: 0; min-height: 56px; }
-.walk-ico { display: inline-flex; }
-#diagram .walk-ico .story-glyph { width: 21px; height: 21px; }
-.walk-who { font-size: 11px; line-height: 1.25; font-weight: 650; color: #39405a;
+.hp-ico { display: inline-flex; }
+#diagram .hp-ico .story-glyph { width: 21px; height: 21px; }
+.hp-who { font-size: 11px; line-height: 1.25; font-weight: 650; color: #39405a;
             text-align: center; }
-.walk-one:hover .walk-who { color: #4f46e5; text-decoration: underline; }
+.hp-one:hover .hp-who { color: #4f46e5; text-decoration: underline; }
 /* A person the map never declared: drawn, because the walk really does hand over to them, but not a
    door — there is no page behind them. Quieter, and with no pointer, so nothing invites the click. */
-.walk-one-dead { cursor: default; }
-.walk-one-dead .walk-who { color: #8a90a4; }
-.walk-one-dead:hover .walk-who { color: #8a90a4; text-decoration: none; }
-.walk-nowho { font-size: 11px; font-weight: 650; color: #8a90a4; text-align: center; }
+.hp-one-dead { cursor: default; }
+.hp-one-dead .hp-who { color: #8a90a4; }
+.hp-one-dead:hover .hp-who { color: #8a90a4; text-decoration: none; }
+.flow-step-numowho { font-size: 11px; font-weight: 650; color: #8a90a4; text-align: center; }
 /* …and a step whose use case the map never recorded: the same rule, for the same reason. */
-.walk-step-dead { cursor: default; }
-.walk-step-dead:hover { box-shadow: none; background: none; }
-.walk-step-dead:hover .walk-dot { background: #fff; }
-.walk-step-dead:hover .walk-t { color: #1e2235; }
+.flow-step-dead { cursor: default; }
+.flow-step-dead:hover { box-shadow: none; background: none; }
+.flow-step-dead:hover .flow-step-dot { background: #fff; }
+.flow-step-dead:hover .flow-step-title { color: #1e2235; }
 /* Between two INTERCHANGEABLE people, in the same quiet lower case a feature box's label uses. */
 /* On the ICON's middle, not the block's. The block is an icon with a name under it, so its own
    middle falls in the name — and the little "or" then read as a word belonging to the two names
    rather than as a choice between the two people. It takes the block's own 56px height, so the row
    centres the two identically, and then walks down to the icon's centre: half of the 21px glyph,
    less half of its own line. The two 56px must stay in step, which is why they sit together here. */
-.walk-or { font-size: 10px; font-weight: 500; color: #8a90a4; height: 56px;
+.hp-or { font-size: 10px; font-weight: 500; color: #8a90a4; height: 56px;
            display: flex; align-items: flex-start; padding-top: 4px; }
 /* "Show in context" on this board: a station on an actor's rail, a feature's rail or a story
    arrow's label lands here naming one step, and the step is ringed the way a card list rings a
    card (`.ecard-flash`), since there is no scene to select into. */
 /* The arrival FLASH is gone with the thing it stood in for. A step picked from anywhere now stays
-   picked (`.walk-step.ibox-picked` above), so there is nothing left for an animation to say. */
+   picked (`.flow-step.ibox-picked` above), so there is nothing left for an animation to say. */
 
 .journey-metasep { margin: 0 2px; color: #9aa0b4; }
 /* The other role's name inside the "may also do everything a <role> may do" sentence. A link in
@@ -2770,54 +2818,9 @@ button.more-tail:hover { opacity: 1; color: #4338ca; text-decoration: underline;
    ONE GRID, ONE ROW PER SURFACE, which is the only thing that can promise the three cells of a row
    sit at one height: independent columns line up at the top and drift apart at the first card whose
    sentence wraps to a different number of lines. */
-.asf-stage { position: relative; display: grid; width: 100%; align-items: stretch;
-             grid-template-columns: minmax(0, 330px) 80px minmax(0, 380px) 80px minmax(0, 300px);
-             row-gap: 14px; }
-.asf-head-cross { grid-column: 1; grid-row: 1; }
-.asf-head-surf  { grid-column: 3; grid-row: 1; }
-.asf-head-feat  { grid-column: 5; grid-row: 1; }
-/* THE SHORE, as a sub-heading inside the middle column. It cuts by DIRECTION — which side starts the
-   exchange — and not by whose surface it is; see actorSurfaceDiagramHtml for the four rows the older
-   cut got wrong. Quieter than the column head above it, because it cuts one column rather than
-   naming one. */
-.asf-shore { grid-column: 3; margin: 6px 0 0; font-size: 11px; font-weight: 650;
-             letter-spacing: .04em; text-transform: uppercase; color: #9199a8; }
-/* WHAT THIS PERSON DOES HERE — their own walk steps at this surface, in the story's words. It held
-   the surface's AUTHORED crossings under an `in`/`out` mark, and those said what crosses for the
-   PRODUCT: on a page about a member, Google sign-in showed the product talking to Google, and
-   neither sentence was anything that member sent or received. The authored rows still lead the
-   surface's own page, where a boundary claim belongs. No direction mark here, because a step cannot
-   carry one — it records who talks to whom, and a pull points outward while its data comes back. */
-.asf-crosscell { grid-column: 1; display: flex; align-items: center; }
-.asf-cross { flex: 1; align-self: center; display: flex; flex-direction: column; gap: 7px;
-             padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
-.asf-steps { font-size: 12.5px; line-height: 1.45; color: #374151; }
-.asf-steps .ifs-step { padding: 5px 0; }
-/* The surface card hugs its own content, for the same reason the boxes either side of it do: the
-   dashboard is a three-line card whose neighbours run to six, and a card stretched to their height
-   opens with 50px of empty white under its chips. Centred, the three middles meet and the wires
-   between them are straight lines. `flex: 1` is the WIDTH (this is a row-direction flex),
-   `align-items` the height, so the card still fills the column. */
-.asf-cell { grid-column: 3; display: flex; align-items: center; }
-.asf-cell > .ifd-box { flex: 1; }
-.asf-featcell { grid-column: 5; display: flex; align-items: center; }
-.asf-none { grid-column: 3; padding: 0; }
-.asf-crosscell > .asf-none, .asf-featcell > .asf-none { grid-column: auto; align-self: center;
-                                                        font-style: italic; }
-/* WHAT THEY DO THERE: the features, and how many of THIS actor's use cases come through this door.
-   The number is the join between the page's two sections, and it is a door of its own — it opens
-   that feature's use cases filtered to this actor. */
-.asf-feats { flex: 1; align-self: center; display: flex; flex-direction: column;
-             align-items: stretch; gap: 6px;
-             padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
-.asf-feat { display: flex; align-items: center; gap: 6px; font: inherit; font-size: 12.5px;
-            font-weight: 600; color: #1f2430; text-align: left; padding: 2px 0; border: 0;
-            background: none; cursor: pointer; }
-.asf-feat:hover { color: #4338ca; text-decoration: underline; }
-.asf-feat-n { margin-left: auto; font-size: 11px; font-weight: 700; color: #64748b;
-              background: #eef2f7; border-radius: 6px; padding: 1px 6px;
-              font-variant-numeric: tabular-nums; text-decoration: none; }
-#diagram .asf-feat .story-glyph { width: 15px; height: 15px; flex: none; }
+/* THE ACTOR PAGE'S INTERFACES PICTURE WAS HERE (18 `.asf-` rules). The page's board now names
+   every interface on the use case that reaches it, so the picture restated five surfaces at three
+   times the height. See the note where its builders stood in viewer.js. */
 
 /* ── THE MAP INSPECTOR ────────────────────────────────────────────────────────────────────────────
    A development surface, so it is DELIBERATELY not the app's own skin: dark ground, monospace, no
@@ -3000,10 +3003,19 @@ body.insp-on { cursor: crosshair; }
 /* NOTHING HERE ABOUT ITS COLOUR OR ITS SIZE. This line used to set both, and being later in the file
    it beat the measured green above while leaving that green's FILL and BORDER standing — so every
    count in the product was a green pill with grey text, which nobody chose. One count, one look. */
-.ibox-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px;
-             border-radius: 9px; font-size: 10px; border: 1px solid #dfe2ec;
-             background: #fbfbfe; color: #4b5563; }
-.ibox-chip .ibox-gly { width: 11px; height: 11px; }
+/* THE MARK SITS ON THE NAME'S FIRST LINE, and it is stated here so it is true of every chip, on a
+   card and on a board alike. `center` is right only while a chip is one line: on the boards a chip
+   is capped at its box's width, so a long name wraps inside it, and a centred mark then floated to
+   the middle of a two-line tag. Aligning to the START and pushing the mark down by hand keeps the
+   ONE-line chip pixel-identical to what centring drew — measured, not computed: the line box is
+   stated at the 14px the chip already stood at, and 14 less the 11px mark, halved, is the 1.5px below.
+   `max-width` is here for the same reason the alignment is: a chip fits its container wherever it is
+   drawn, and a lane setting that for itself is what made this component two components. */
+.ibox-chip { display: inline-flex; align-items: flex-start; gap: 4px; padding: 1px 7px;
+             border-radius: 9px; font-size: 10px; line-height: 14px; border: 1px solid #dfe2ec;
+             background: #fbfbfe; color: #4b5563; max-width: 100%; min-width: 0;
+             text-align: left; }
+.ibox-chip .ibox-gly { width: 11px; height: 11px; margin-top: 1.5px; }
 /* ONE CHIP MAY BE MARKED — the reader's own actor, on that actor's page, where every card is
    there BECAUSE they stand at it and the other people are context worth keeping. */
 .ibox-chip-me { outline: 2px solid #4f46e5; outline-offset: 1px; }
@@ -3045,11 +3057,14 @@ body.insp-on { cursor: crosshair; }
 .ibox-tight.ibox.ibox-picked:not(.ibox-idedge) { padding-left: 9.5px; }
 .ibox-figure.ibox.ibox-picked { padding: 5.5px 9.5px 7.5px; }
 .ibox-figure.ibox.ibox-picked:not(.ibox-idedge) { padding-left: 9.5px; }
-/* A HAPPY PATH STEP takes the SAME TWO STATES in the same colours, drawn as an inset ring instead of
+/* A BOX ON A BOARD takes the SAME TWO STATES in the same colours, drawn as an inset ring instead of
    a border. A border is layout: 1.5px of it pushes every bullet off the line the board draws them
-   on, which a test measures to the pixel. A ring paints the same box and occupies nothing. */
-.walk-step:hover { box-shadow: inset 0 0 0 1.5px #4f46e5; }
-.walk-step.ibox-picked, .walk-step.ibox-picked:hover {
+   on, which a test measures to the pixel. A ring paints the same box and occupies nothing.
+   `.pickbox` IS THE WHOLE VARIANT MECHANISM: a box that can be picked wears the class and gets these
+   two states, and its lane's own class still says what shape it is. Written for the happy path step
+   alone at first, which is why a side stop could be clicked, was remembered, and lit up nowhere. */
+.pickbox:hover { box-shadow: inset 0 0 0 1.5px #4f46e5; }
+.pickbox.ibox-picked, .pickbox.ibox-picked:hover {
   box-shadow: inset 0 0 0 2px #4f46e5, 0 3px 14px rgba(79, 70, 229, .28); }
 
 /* The IDENTITY edge: the fill says WHAT KIND, this says WHICH ONE. Drawn only where a thing has a

@@ -34,13 +34,13 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R02 — The walk expectation is authored, never derived from the walk
 - **Where**: `method.md`
-- **Anchor**: `**Deliberately not derived from the walk.** A value that always agreed with`
-- **Evidence**: Two derivations were tried and dropped. From FLOW REACH: on the reference map the maximum spread was 4 capabilities of 7, so no threshold separates machinery from product. From the WALK ITSELF: a value seeded from `happy_path[]` agrees with it by construction, so the forward check ("you wrote that the walk must reach this, and it never does") can never fire. Seeding the three live maps from their own walks reproduced all 27 authored values, which is exactly why seeding alone proves nothing.
+- **Anchor**: `**Deliberately not derived from the happy path.** A value that always agreed with`
+- **Evidence**: Two derivations were tried and dropped. From FLOW REACH: on the reference map the maximum spread was 4 capabilities of 7, so no threshold separates machinery from product. From the WALK ITSELF: a value seeded from `happy_path[]` agrees with it by construction, so the forward check ("you wrote that the happy path must reach this, and it never does") can never fire. Seeding the three live maps from their own walks reproduced all 27 authored values, which is exactly why seeding alone proves nothing.
 
 ### R02b — One word carried two questions, and its middle value meant neither
 - **Where**: `method.md`
 - **Anchor**: `**It says NOTHING about who the capability is for.** That is a second, independent`
-- **Evidence**: The predecessor field was a three-value `label` (core | supporting | platform). Two of its three values had no definition in any file, and every branch in the tooling tested only `== "core"`, so nothing ever distinguished them. The audience half was therefore unenforced and drifted: across rebuilds of the same repo one week apart the same feature was `platform`, then `supporting`; an audit feature was `supporting`, then `core`. Splitting the two questions also named the missing 2x2 cell — staff work the walk shows on purpose — which is all that six per-step records on the three live maps existed to excuse; they were deleted in the same change.
+- **Evidence**: The predecessor field was a three-value `label` (core | supporting | platform). Two of its three values had no definition in any file, and every branch in the tooling tested only `== "core"`, so nothing ever distinguished them. The audience half was therefore unenforced and drifted: across rebuilds of the same repo one week apart the same feature was `platform`, then `supporting`; an audit feature was `supporting`, then `core`. Splitting the two questions also named the missing 2x2 cell — staff work the happy path shows on purpose — which is all that six per-step records on the three live maps existed to excuse; they were deleted in the same change.
 
 ### R02d — One audience is a signal, never a grouping rule
 - **Where**: `method.md`
@@ -64,7 +64,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R05 — The dropped prose Journey table
 - **Where**: `method.md`
-- **Anchor**: `drawn as a walk map and read as a numbered narrative.`
+- **Anchor**: `drawn as a flow map and read as a numbered narrative.`
 - **Evidence**: A separate prose "Journey" table existed in earlier method versions. It duplicated the flows at prose level, the model had no field for it, and builders rightly skipped it — dropped.
 
 ### R06 — Flattening the environment axis loses information

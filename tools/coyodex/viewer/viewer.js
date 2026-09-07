@@ -912,6 +912,24 @@ function itemGlyphSvg(k, ikind) {
     + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     + `${d}</svg>`;
 }
+// ONE CHIP, wherever a chip is drawn: the kind's own mark, then the name, in a plain box. It lived
+// inside the item box's band and is pulled out here because the actor board draws the same chip on
+// its use cases — the glossary has ONE chip, and a second builder is how it would have become two.
+// `ikind` is the interface's own kind, and only an interface has one; every other kind ignores it.
+function itemChipHtml(c) {
+  const ck = itemKind(c.kind);
+  return `<span class="ibox-chip ibox-k-${esc(ck)} ${esc(c.cls || '')}">`
+    + `${itemGlyphSvg(ck, c.ikind || '')}${esc(c.name)}</span>`;
+}
+// ONE ROLE, as a chip's spec. `human` is the fallback for a name the map never declared as a role,
+// which is the honest default: the figure says "somebody", and the alternative is no mark at all.
+// Two callers — an interface card's far side, and the driver on an actor board's third lane — and
+// the mapping from a role to its mark lived in the first of them until the second needed it too.
+function roleChipOf(role, fallbackName) {
+  const r = role || {};
+  return { name: r.name || fallbackName || r.id || '',
+           kind: String(r.kind || 'human').trim().toLowerCase(), cls: '' };
+}
 
 // ── the box ──────────────────────────────────────────────────────────────────────────────────────
 const ITEM_VARIANT = {
@@ -993,14 +1011,10 @@ function itemBoxHtml(spec, variant, opts) {
       // collapsed shared sub-use case the chips are the only thing saying the product's edge and its saved
       // data are inside, and the mark says which is which without spending a word on it. The chip
       // itself stays a plain box: see the note where the per-kind rules are injected.
-      + (spec.chips || []).map((c) => {
-        // THE MARK IS BUILT HERE, not by whoever assembled the chips. A caller that forgot to build
-        // one shipped a chip with no mark at all — which is what a shared sub-use case's box did on the use
-        // case map, beside an interface's box whose chips had theirs. One place decides.
-        const ck = itemKind(c.kind);
-        return `<span class="ibox-chip ibox-k-${esc(ck)} ${esc(c.cls || '')}">`
-          + `${itemGlyphSvg(ck, '')}${esc(c.name)}</span>`;
-      }).join('');
+      // THE MARK IS BUILT BY `itemChipHtml`, not by whoever assembled the chips. A caller that forgot
+      // to build one shipped a chip with no mark at all — which is what a shared sub-use case's box did
+      // on the use case map, beside an interface's box whose chips had theirs. One place decides.
+      + (spec.chips || []).map(itemChipHtml).join('');
     if (bits) out.push(`<span class="ibox-band">${bits}</span>`);
   }
   // The THING's own last line before the CALLER's: a provider belongs to the door wherever it is
@@ -1040,10 +1054,7 @@ function ifaceSpecFacts(spec, id) {
   spec.band = n ? [`${n} use case${n === 1 ? '' : 's'}`] : [];
   // THE PEOPLE ON THE FAR SIDE, in the order the story brings them — the same rule the doors
   // themselves are sorted by, not alphabetically and not by how busy each one is.
-  spec.chips = ifaceActorRows(i).map(({ role: rid }) => {
-    const r = ROLE_BY_ID[rid] || {};
-    return { name: r.name || rid, kind: String(r.kind || 'human').trim().toLowerCase(), cls: '' };
-  });
+  spec.chips = ifaceActorRows(i).map(({ role: rid }) => roleChipOf(ROLE_BY_ID[rid], rid));
   // The PROVIDER is the pipe this door is reached through, never the far side — the rule the whole
   // section is built on. Last line of the box, and the tooltip says what a provider IS, which is the
   // one thing the line itself cannot.
@@ -2347,7 +2358,7 @@ function relationshipLocateAction(srcId, dstId) {
 function decorateActionIcons(scene, s) {
   // NO ICONS ON A WALK. Every box's NAME opens what it names now, and the icon was the older way of
   // saying so — a control floating in the corner of a box, in a language no other screen speaks.
-  if (isWalkState(s)) return;
+  if (isFlowState(s)) return;
   for (const id in scene.nodeEls) {
     if (scene.noAction.has(id)) continue;  // the box you're already zoomed into — no self-drill icon
     const action = primaryActionFor(id);
@@ -3421,7 +3432,7 @@ function syncFlowCard(s) {
   const card = document.getElementById('flowpicker');
   const mode = document.getElementById('flowmode');
   if (!card) return;
-  card.hidden = !isWalkState(s);
+  card.hidden = !isFlowState(s);
   if (mode) mode.innerHTML = '';
 }
 function flowInit(s) {
@@ -3927,7 +3938,7 @@ function applyDiffOverlay(s) {
 // A use case "contains changes" when any element its T6 flow touches is changed (FLOWS_NARR × DIFF_STATE)
 // — the behavioural layer of the diff, DERIVED from the element changes, not a separate source.
 function usecaseDiffState(uc) {
-  for (const st of walkStepsDeep(uc)) {
+  for (const st of flowStepsDeep(uc)) {
     for (const id of [st.srcId, st.dstId]) {
       if (id && DIFF_STATE[id] && DIFF_STATE[id] !== 'rippled') return 'modified';
     }
@@ -4745,7 +4756,7 @@ let storyPinNow = null;   // {key, id} of the pinned card while the Features pag
 // The step the walk is showing: the one a link named and the board ringed, or the one the reader
 // clicked on their way out. The Happy Path's twin of `storyPinNow` — a page with no scene still has
 // a place in it, and this is what carries that place into the address and into history.
-let walkStepNow = null;
+let pickNow = null;
 // `siface` rides here with the Features page's three, because a pinned SURFACE is the same kind of
 // thing as a pinned card: an HTML page has no scene, so `mainScene.selection` cannot answer for it,
 // and this is what carries the pin into the address and into back/forward. One `sel` field covers
@@ -4754,6 +4765,9 @@ const STORY_PIN_KEYS = ['sfeat', 'sactor', 'sarea', 'siface'];
 const IFACE_PIN_KEY = 'siface';
 // The live outside-click listener, so a re-render can take the previous one off `document`.
 let ifdOutsideClick = null;
+// …and the twin for a picked box on either board. Same reason it exists: the listener sits on
+// `document`, so a re-render has to take the previous one off before adding its own.
+let pickOutsideClick = null;
 function storyPinKey(p) { return p ? p.key + ':' + p.id : null; }
 function storyPinFromKey(k) {
   const i = String(k || '').indexOf(':');
@@ -4768,9 +4782,15 @@ function storyPinFromKey(k) {
 // cannot answer this differently — they did, which is how the pin reached neither.
 function liveSelKeys() {
   if (mainScene) return mainScene.selection.map((d) => d.key);
-  if (walkStepNow) return ['hpstep:' + walkStepNow];
+  // BOTH, and the surface first. An actor's page can hold two pins at once now that its stations are
+  // pickable — a surface in its Interfaces picture and a step on its board — and this field is a
+  // LIST. Returning only one dropped whichever the reader had set second. The surface leads because
+  // `storyPinFromKey` reads position 0, while a step is found by scanning for its own prefix.
+  const keys = [];
   const k = storyPinKey(storyPinNow);
-  return k ? [k] : [];
+  if (k) keys.push(k);
+  if (pickNow) keys.push(pickNow);
+  return keys;
 }
 // The word a LINK carries is the word on the tab. `usecases` is this kind's name in some forty places
 // in this file and in the class name every page wrapper uses, so renaming it to reach the address bar
@@ -5563,12 +5583,12 @@ function flowMermaidFor(uc) {
 // Only the MODE half is rebuilt here — the step player is
 // static markup inside the same card, shown and driven by flowInit/flowCounter, so re-rendering the
 // switch can never tear out the player's buttons.
-function isWalkState(s) { return !!(s && (s.kind === 'usecase' || s.kind === 'subflow')); }
-function walkIdOf(s) { return s.kind === 'subflow' ? s.sf : s.uc; }
+function isFlowState(s) { return !!(s && (s.kind === 'usecase' || s.kind === 'subflow')); }
+function flowIdOf(s) { return s.kind === 'subflow' ? s.sf : s.uc; }
 function subflowName(sid) { return (SUBFLOW_BY_ID[sid] || {}).name || sid; }
 // THE NAME OF A WALK, whichever kind it is. A use case is a graph node; a shared sub-use case is not, so a
 // single `GRAPH.nodes` lookup printed a raw `SFn` wherever the two kinds meet.
-function walkName(id) {
+function flowName(id) {
   return SUBFLOW_BY_ID[id] ? subflowName(id) : ((GRAPH.nodes[id] && GRAPH.nodes[id].name) || id);
 }
 function flowMapToken(uc, mid) {
@@ -5662,14 +5682,14 @@ function flowMapStepArrow(uc, i, st) {
 // WALKS. Running a shared sub-use case does reach what is inside it, so every "does this use case touch X?"
 // question asks this one, and every "how long is this walk / which step am I on" question asks the
 // other. The map's own checks make exactly this split, for exactly this reason.
-function walkStepsDeep(uc, seen) {
+function flowStepsDeep(uc, seen) {
   const been = seen || new Set();
   if (been.has(uc)) return [];      // a shared sub-use case cannot run itself, but never loop on a bad map
   been.add(uc);
   const out = [];
   for (const st of (FLOWS_NARR[uc] || [])) {
     out.push(st);
-    if (st.sf) out.push(...walkStepsDeep(st.sf, been));
+    if (st.sf) out.push(...flowStepsDeep(st.sf, been));
   }
   return out;
 }
@@ -6334,7 +6354,7 @@ function mermaidFor(s) {
   if (s.kind === 'deployment') return MERMAID_DEPLOYMENT;  // one diagram; the env dims, never filters
   if (s.kind === 'deploymentGroup') return DEPLOYMENT_GROUP_CARDS[s.gid];
   if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
-  if (isWalkState(s)) return flowMermaidFor(walkIdOf(s));  // Sequence or Map — the flow picker's choice
+  if (isFlowState(s)) return flowMermaidFor(flowIdOf(s));  // Sequence or Map — the flow picker's choice
   if (s.kind === 'libs') return MERMAID_LIBS;
   if (s.kind === 'bucketfold') return MERMAID_BY_BUCKETFOLD[s.bkid];
   // component: the baked report ships a diff-styled diagram (MERMAID_DIFF); a live diff has none, so it
@@ -6403,14 +6423,14 @@ function codePaneOpen() { return codeOpen; }
 // arrow points at a place in the code, and a reader who has never opened the column does not know it is
 // there — the rail on the right edge is a thin strip, and nothing on the map says the two are joined.
 // Once only, and remembered: a reader who then shuts it is not argued with, on this screen or any other.
-function openCodeOnFirstWalk(s) {
-  if (!SERVED || !isWalkState(s)) return;
-  if (lsGet(LS.walkCode) === '1') return;
+function openCodeOnFirstFlow(s) {
+  if (!SERVED || !isFlowState(s)) return;
+  if (lsGet(LS.flowCode) === '1') return;
   // ARRIVING ON A WALK IS THE EVENT, whether or not the column had to be opened. Returning early on an
   // ALREADY-OPEN column left the flag unset, so the reader's × — which comes back through here — met a
   // shut column and an unset flag and forced it open again. The × was dead for every reader who had
   // ever left the column open.
-  lsSet(LS.walkCode, '1');
+  lsSet(LS.flowCode, '1');
   if (!codePaneOpen()) setCodeOpen(true);
 }
 function syncCodePane(s) {
@@ -6418,7 +6438,7 @@ function syncCodePane(s) {
   // boot, and this is the one place that runs again once it lands (initServerMode -> resyncCodePane) —
   // the same reason the rail's own state is read here. Deciding it at the navigation left the column
   // shut on the very first walk, which is the one arrival the rule exists for.
-  openCodeOnFirstWalk(s);
+  openCodeOnFirstFlow(s);
   const close = document.getElementById('cvclose');
   if (close) close.hidden = false;   // the column is optional everywhere, so × is offered everywhere
   // MID-SLIDE the column owns its own layout (slideCodePane), and a re-render must not take it back:
@@ -7250,7 +7270,7 @@ function bindFor(s) {
   else if (s.kind === 'domsub') bindDomainSub(s.sd);  // neighbourhood: framed entities + collapsed neighbour boxes + cross arrows
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
-  else if (isWalkState(s)) bindFlowMap(walkIdOf(s));
+  else if (isFlowState(s)) bindFlowMap(flowIdOf(s));
   else if (s.kind === 'deployment') bindDeployment();
   else if (s.kind === 'deploymentUnit') bindDeployment(s.unit);  // same binder; the focal process (s.unit) drills nowhere further
   else if (s.kind === 'libs') bindLibs();
@@ -8603,6 +8623,16 @@ function actorStations(actorName) {
 // "Admin signs in to the dashboard" belongs to a use case both the admin and the member can start. Under
 // a box reading "Workspace admin or Workspace member", the untouched title named only half of it. Strip
 // the designator and the line reads "signs in to the dashboard", which is true of both.
+// A USE CASE'S TEXT STARTS WITH A CAPITAL, wherever it is drawn. The two boards disagreed because
+// their texts come from different places: a stop shows the use case's NAME, which the map authors
+// capitalised, while a step shows a walk TITLE with its leading actor designator stripped off — so
+// "Admin wires their AI client" became "wires their AI client" and sat lower-case beside it.
+// Done here rather than with `::first-letter`, which cannot be read back by a test and would have
+// been a second rule to keep in step with this one.
+function sentenceCase(text) {
+  const t = String(text || '');
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
 function stationTitle(title, actorName) {
   const s = String(title || '').trim();
   const names = (Array.isArray(actorName) ? actorName : [actorName])
@@ -8630,7 +8660,7 @@ function actorJourney(actorName) {
   const stations = actorStations(actorName);
   const g = actorGroups().find((x) => x.actor === actorName);
   const ucs = g ? g.ucs : [];
-  const zones = [];              // [{fid, stations:[hpStep], sides:[ucNode]}], in WALK order
+  const zones = [];              // [{fid, stations:[hpStep], sides:[ucNode], parts:[ucNode]}], WALK order
   const featureOfUc = (ucId) => {
     const p = (GRAPH.nodes[ucId] || {}).parent;
     return (p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'capability') ? p : '';
@@ -8642,7 +8672,7 @@ function actorJourney(actorName) {
   // own map the coyodex developer's rail read 21, 25, 22, 23, 24. The rail is the one thing on this
   // page that claims an order, so a feature entered twice gets TWO zones, one at each position.
   for (const run of runsOf(stations, (s) => featureOfUc(s.uc))) {
-    zones.push({ fid: run.key, stations: run.items, sides: [] });
+    zones.push({ fid: run.key, stations: run.items, sides: [], parts: [] });
   }
   // A feature's side stops hang under its FIRST zone: they belong to the feature, not to a position
   // in the walk, so repeating them under every zone of a twice-entered feature would say a thing
@@ -8657,16 +8687,24 @@ function actorJourney(actorName) {
   const column = (FEATURES.story || {}).column || [];
   const offZones = [];
   const offByFid = {};
-  for (const uc of ucs) {
-    if (stationUcs.has(uc.id)) continue;
+  // ONE filing routine for both lower lanes. It was written for side stops; the takes-part lane files
+  // by exactly the same rule, and a second copy is how the two lanes would have drifted apart —
+  // a use case joins its feature's first zone on the rail, or opens a trailing zone for a feature this
+  // actor's walk never enters. `lane` is the only thing that differs between the two callers.
+  const file = (uc, lane) => {
     const fid = featureOfUc(uc.id);
-    if (firstOf[fid]) { firstOf[fid].sides.push(uc); continue; }
+    if (firstOf[fid]) { firstOf[fid][lane].push(uc); return; }
     if (!offByFid[fid]) {
-      offByFid[fid] = { fid, sides: [] };
+      offByFid[fid] = { fid, sides: [], parts: [] };
       offZones.push(offByFid[fid]);
     }
-    offByFid[fid].sides.push(uc);
-  }
+    offByFid[fid][lane].push(uc);
+  };
+  for (const uc of ucs) if (!stationUcs.has(uc.id)) file(uc, 'sides');
+  // …and the third lane: the use cases this actor is IN without driving. They are not side stops —
+  // a side stop is something this actor can DO, and the Team member cannot refresh a credential —
+  // so they file into a lane of their own and each box names whoever does drive it.
+  for (const uc of actorTakesPart(actorName, ucs)) file(uc, 'parts');
   const pos = (fid) => {
     const at = column.indexOf(fid);
     return at >= 0 ? at : column.length + (fid ? 0 : 1);
@@ -8727,263 +8765,14 @@ function actorHeroMetaHtml(actorName) {
   return parts.map((p, i) => '<span>' + (i === 0 ? cap(p.lead) : p.lead) + p.tail + '</span>')
     .join('<span class="journey-metasep">·</span>');
 }
-// WHERE THIS ACTOR MEETS THE PRODUCT — the surfaces they stand at. This is the far-side derivation
-// read BACKWARDS: a surface's page already named the people at it, and no page named the surfaces
-// for a person. The link was one-way for as long as the actors column was empty, and filling it from
-// the doors is what made the other direction worth drawing — every actor on both live maps but one
-// stands at a surface now.
-//
-// The CUT is by shore, and the two headings are not the same sentence turned round, because the two
-// shores are not the same event: the actor comes to OUR surface, and the product sends them to
-// THEIRS. Google sign-in is where mcpolis sends three roles; it is not where they reach the product.
-//
-// Cards, not chips, and the SAME card the Interfaces list draws — so a surface reads the same
-// wherever it is named, and its shape and its ways-in count come along without being restated here.
-function actorSurfacesHtml(actorName) {
-  // Gated on the map, not on the actor: a map that records no surface has no answer to give, and an
-  // empty block under every actor would read as a gap in every one of them.
-  if (!HAS_INTERFACES) return null;
-  const role = ROLE_BY_NAME[(actorName || '').trim().toLowerCase()];
-  // "Other" is a bucket, not a role (an actor the map never declared), so there is no id to match on
-  // and nothing true to say. The page keeps its board and stops there.
-  if (!role || !role.id) return null;
-  // ORDERED BY THE WALK, the same rule the Interfaces view's shores use, so a surface sits in one
-  // place in the product's story wherever it is listed. Both shores are read, because WHICH SHORE a
-  // surface sits on is not what this page cuts by — see actorSurfaceDiagramHtml.
-  const mine = ifaceSorted('ours').concat(ifaceSorted('theirs'))
-    .filter((i) => (i.actors || []).includes(role.id));
-  const rows = { in: mine.filter((i) => i.opens !== 'out'),
-                 out: mine.filter((i) => i.opens === 'out') };
-  const ours = rows.in, theirs = rows.out;
-  // NO SURFACE IS A REAL ANSWER for the product's own scheduled work — a timer or a boot hook is
-  // inside the product and crosses nothing — and it is a plain absence for anybody else. The two
-  // are different facts and get different sentences; one sentence for both would report the timer
-  // as an unfinished map.
-  if (!ours.length && !theirs.length) {
-    // LITERALLY `service`, never `isMachineActor` — the same rule `outside_actor_ids` keeps. This
-    // sentence claims the actor is the product's OWN scheduled work; a customer's AI agent is a
-    // machine and is never that, so widening this would tell a reader an outside agent runs inside
-    // the product.
-    const inside = String(role.kind || '').trim().toLowerCase() === 'service'
-      && String(role.audience || '').trim().toLowerCase() === 'internal';
-    return { count: 0, body: '<p class="feat-empty">' + (inside
-        ? 'Nowhere. This is the product\u2019s own work, running inside it, so it crosses no interface.'
-        : 'No interface in this map has this actor standing at it.') + '</p>' };
-  }
-  return { count: mine.length, body: actorSurfaceDiagramHtml(actorName, role, rows) };
-}
-// WHICH FEATURES THIS ACTOR MEETS THROUGH ONE SURFACE. Both halves of the join are already on the
-// map and neither is enough on its own: the surface knows its use cases, and a use case knows the
-// feature it belongs to. Taking the surface's features straight off `iface.features` would answer a
-// different question — every feature ANYONE meets there — and on MCP Hero's dashboard that is six
-// features for a prospect who meets exactly one.
-//
-// TWO WAYS A USE CASE COUNTS, and the second is not the first restated:
-//
-//   they DRIVE it     -> the use case names this actor as its actor
-//   they are AT a DOOR -> a step of that use case crosses between this surface and this actor
-//
-// Only the first was asked at first, and it reported "not stated" on a surface the map has plenty to
-// say about. MCP Hero's Outgoing email is the case: the use case behind it is "Warn a member that a
-// server sign-in expired", whose actor is the UPKEEP JOB — the product's own timer sends the mail —
-// and two of its steps are `Outgoing email → Organization admin` and `Outgoing email → Team member`.
-// The admin never drives that story; the story arrives at them. Asking only who drives it makes the
-// page silent about the one thing that surface does for them.
-//
-// A DOOR STEP is a step with an element at one end and a ROLE at the other: the walk carries a role
-// as a NAME with no id (`srcId`/`dstId` null), which is how a role is drawn in every flow.
-//
-// NAMING NONE IS STILL A REAL ANSWER — a surface whose use cases neither name this actor nor door
-// onto them has nothing to report, and says so rather than borrowing somebody else's list.
-function actorSurfaceFeatures(actorName, iface) {
-  const doorsOnto = (uc) => walkStepsDeep(uc).some((st) =>
-    (st.srcId === iface.id && !st.dstId && st.dst === actorName)
-    || (st.dstId === iface.id && !st.srcId && st.src === actorName));
-  // …AND HOW MANY OF THIS ACTOR'S USE CASES GO THROUGH IT, per feature. The column named features and
-  // stopped, which left the page's two sections unconnected: one is a list of use cases, the other
-  // said which features they belong to, and nothing said how many of THOSE use cases came through
-  // THIS door. The number is the join, and it is also the door's own door — clicking it opens that
-  // feature's use cases filtered to this actor, which is a screen the viewer already draws.
-  //
-  // NAMES ARE NOT LISTED HERE and the count is what stands in for them. Measured on MCP Hero: the
-  // Organization admin reaches 23 use cases through the dashboard across 6 features, and 23 names in
-  // a column beside a 101px card is a wall, not an answer.
-  const order = [];
-  const per = {};
-  for (const uc of (iface.useCases || [])) {
-    const n = GRAPH.nodes[uc];
-    if (!n) continue;
-    if (!(n.actors || []).includes(actorName) && !doorsOnto(uc)) continue;
-    const p = n.parent;
-    if (!p || !GRAPH.nodes[p] || GRAPH.nodes[p].kind !== 'capability') continue;
-    if (!(p in per)) { per[p] = 0; order.push(p); }
-    per[p] += 1;
-  }
-  return order.map((id) => ({ id, ucs: per[id] }));
-}
-// THE ACTOR'S OWN PICTURE OF THE OUTSIDE EDGE, read left to right: what crosses, the surface it
-// crosses at, and what this actor does there.
-//
-// IT IS NOT THE INTERFACES VIEW'S PICTURE FILTERED. That one puts the PRODUCT down the middle and
-// sorts the surfaces onto two shores of it, because its question is "where does this product stop".
-// The question here is a person's, so the answer runs outward from what reaches them.
-//
-// THE CUT IS BY DIRECTION, NOT BY WHOSE SURFACE IT IS, and that is a correction. It was cut on
-// `side` — the authored fact of who defines the surface — under headings that claim which way the
-// actor goes. Those are different questions, and the difference was drawn wrong on 4 of the 35
-// actor-surface rows across the six mapped projects: every one of them is Outgoing email, which is
-// OUR surface and so sat under "where they reach the product", with no way in at all and one
-// outbound sentence. Nobody reaches the product through the mail; the mail reaches them.
-//
-// `opens` is the derived answer and it is already on the surface: "in" when something outside
-// invokes an address of ours, "out" when the product is what starts the exchange. Cutting on it puts
-// the dashboard and the admin MCP on one side and the mail and the hosted sign-in on the other,
-// which is what the two headings have always claimed to say.
-//
-// NO ACTOR CARD. It drew this actor's figure, name and pill for the second time in the page body,
-// 230px of a 1366px stage, and its only other job was to give the wires a left-hand anchor. What
-// crosses takes that place — the fact the picture was missing, in the column the repetition held.
-//
-// ONE GRID, ONE ROW PER SURFACE. The three cells of a row have to sit at one height, and only a
-// shared row can promise that: independent columns line up at the top and drift apart by the first
-// card whose sentence wraps to a different number of lines.
-function actorSurfaceDiagramHtml(actorName, role, rows) {
-  let row = 1;
-  const cells = [];
-  const shore = (head, list, none) => {
-    cells.push(`<p class="asf-shore" style="grid-row:${++row}">${esc(head)}</p>`);
-    if (!list.length) {
-      cells.push(`<p class="ifd-none asf-none" style="grid-row:${++row}">${esc(none)}</p>`);
-      return;
-    }
-    for (const i of list) {
-      const r = ++row;
-      // WHAT THIS PERSON DOES HERE, in the story's own words — their own walk steps at this
-      // surface, narrowed to them (see `stepGroupsOf`).
-      //
-      // IT USED TO BE THE PRODUCT'S SENTENCES, not this person's: the surface's authored crossing
-      // rows said what crosses for the PRODUCT, so Google sign-in showed the product talking to
-      // Google on a page about a member, and neither sentence was anything that member sent or
-      // received. Those rows are gone from the map entirely now, and a step was always the better
-      // answer here.
-      //
-      // THE DIRECTION RIDES THE STEP, so this page shows it too. It could not before, when
-      // direction was authored once per surface: one sentence cannot say which way THIS person's
-      // step went.
-      const ACTOR_STEP_CAP = 2;
-      const groups = stepGroupsOf(i, role.id);
-      const shown = groups.flatMap((g) => g.steps.map((st) => [st, g.uc]));
-      const cross = shown.length
-        ? `<ul class="ifs-steps asf-steps">`
-          + shown.slice(0, ACTOR_STEP_CAP)
-                 .map(([st, uc]) => stepLineHtml(st, uc, true, false)).join('')
-          + '</ul>'
-          + moreTailHtml(shown.length - ACTOR_STEP_CAP, i.id,
-                         'Open this interface: every step drawn at it')
-        : '';
-      cells.push(`<div class="asf-crosscell" data-iface="${esc(i.id)}" style="grid-row:${r}">`
-        + (cross ? `<div class="asf-cross">${cross}</div>`
-                 : '<p class="ifd-none asf-none">No step of any story in this map shows this actor '
-                   + 'doing anything here. What crosses is on the interface\'s own page.</p>')
-        + '</div>');
-      cells.push(`<div class="asf-cell" style="grid-row:${r}">${ifaceBoxHtml(i, role.id)}</div>`);
-      const feats = actorSurfaceFeatures(actorName, i);
-      // THE COUNT IS THE JOIN between this page's two sections, and it is a door: it opens that
-      // feature's use cases filtered to this actor.
-      cells.push(`<div class="asf-featcell" data-iface="${esc(i.id)}" style="grid-row:${r}">`
-        + (feats.length
-          ? `<div class="asf-feats">${feats.map((f) =>
-              `<button type="button" class="asf-feat" data-cap="${esc(f.id)}" `
-              + `title="Open ${esc(featureName(f.id))}: the ${f.ucs} use case`
-              + `${f.ucs === 1 ? '' : 's'} ${esc(actorName)} has there">`
-              + `${storyFeatureGlyphSvg()}<span>${esc(featureName(f.id))}</span>`
-              + `<span class="asf-feat-n">${f.ucs}</span></button>`).join('')}</div>`
-          : '<p class="ifd-none asf-none" title="This actor stands at this interface, but no use case '
-            + 'of theirs is drawn at it">Not stated</p>')
-        + '</div>');
-    }
-  };
-  shore('Where they reach the product', rows.in,
-        'No interface in this map is one this actor comes to.');
-  shore('Where the product reaches them', rows.out,
-        'The product starts no exchange that reaches this actor.');
-  return '<div class="ifd-wrap"><div class="asf-stage" id="asfstage">'
-    + '<svg class="ifd-wires" aria-hidden="true"><defs>'
-    + '<marker id="asf-arr" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="9" markerHeight="9" '
-    + 'markerUnits="userSpaceOnUse" orient="auto-start-reverse">'
-    + '<path d="M0,0 L8,4 L0,8 z"/></marker></defs></svg>'
-    + '<p class="ifd-colhead asf-head-cross">What crosses</p>'
-    + '<p class="ifd-colhead asf-head-surf">Where they meet the product</p>'
-    + '<p class="ifd-colhead asf-head-feat">What they do there</p>'
-    + cells.join('') + '</div></div>';
-}
-function bindActorSurfaces(root, actorName) {
-  const stage = root.querySelector('#asfstage');
-  if (!stage) return;
-  const svg = stage.querySelector('svg.ifd-wires');
-  if (!svg) return;
-  // OFFSET geometry, not getBoundingClientRect: a render can arrive mid drill-animation, whose
-  // ancestor transform skews client rects box by box. Every cell's offsetParent is the stage.
-  const rightMid = (el) => [el.offsetLeft + el.offsetWidth, el.offsetTop + el.offsetHeight / 2];
-  const leftMid = (el) => [el.offsetLeft, el.offsetTop + el.offsetHeight / 2];
-  const paths = [];
-  const wire = (from, to, iid) => {
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', wireCurveD(from[0], from[1], to[0], to[1]));
-    path.setAttribute('marker-end', 'url(#asf-arr)');
-    path.dataset.iface = iid;
-    svg.appendChild(path); paths.push(path);
-  };
-  // LAID OUT AGAIN WHENEVER THE STAGE'S BOX CHANGES, for the reason the Interfaces picture is: the
-  // first pass runs before the layout has settled — the source rail is a 30px button unhidden after
-  // the view renders — and nothing recomputed on a resize at all. Both left the wires drawn against
-  // a stage this page is no longer in: 18px off on a fresh 900px load, 45px after a resize.
-  // `paths` is REFILLED IN PLACE because the pick gesture below closes over it, and whatever was lit
-  // is re-lit afterwards, because these wires are the only thing a pick lights here.
-  const layout = () => {
-    const hot = paths.find((pth) => pth.classList.contains('ifd-hot'));
-    const lit = hot ? hot.dataset.iface : null;
-    for (const pth of paths) pth.remove();   // ours only: the arrowhead marker lives in the same svg
-    paths.length = 0;
-    for (const box of stage.querySelectorAll('.ifd-box')) {
-      const iid = box.dataset.iface;
-      // WHAT CROSSES -> the surface it crosses at -> what this actor does there. Each wire is drawn
-      // only when the thing at its far end exists: a line into a sentence saying nothing is a line
-      // that promises an answer.
-      const cross = stage.querySelector(`.asf-crosscell[data-iface="${CSS.escape(iid)}"] .asf-cross`);
-      if (cross) wire(rightMid(cross), leftMid(box), iid);
-      const feats = stage.querySelector(`.asf-featcell[data-iface="${CSS.escape(iid)}"] .asf-feats`);
-      if (feats) wire(rightMid(box), leftMid(feats), iid);
-    }
-    if (lit) {
-      for (const pth of paths) pth.classList.add(pth.dataset.iface === lit ? 'ifd-hot' : 'ifd-cold');
-    }
-  };
-  layout();
-  // One watcher on the stage's own box covers every route a re-layout could be needed by, and is
-  // skipped when the box has not moved. See the twin on the Interfaces picture.
-  if (window.ResizeObserver) {
-    let lastW = stage.offsetWidth, lastH = stage.offsetHeight;
-    const obs = new ResizeObserver(() => {
-      if (!stage.isConnected) { obs.disconnect(); return; }   // a re-render left this stage behind
-      const w = stage.offsetWidth, h = stage.offsetHeight;
-      if (w === lastW && h === lastH) return;
-      lastW = w; lastH = h;
-      layout();
-    });
-    obs.observe(stage);
-  }
-  // The same pick gesture the Interfaces view has, from the one function both call. No labels here.
-  bindSurfacePick(stage, paths, []);
-  bindMoreTails(stage);
-  bindStepFroms(stage);
-  // A FEATURE OPENS ITS USE CASES, FILTERED TO THIS ACTOR — the screen the count is counting, which
-  // the viewer already draws. `act` is what filters it.
-  stage.querySelectorAll('.asf-feat').forEach((b) => b.addEventListener('click', (ev) => {
-    ev.stopPropagation();   // a feature's door is not the card's pin
-    go({ kind: 'capability', cap: b.getAttribute('data-cap'), act: actorName });
-  }));
-}
+// THE ACTOR PAGE'S INTERFACES BLOCK WAS HERE — `actorSurfacesHtml`, `actorSurfaceFeatures`,
+// `actorSurfaceDiagramHtml` and `bindActorSurfaces`, about 245 lines and eighteen `.asf-` rules.
+// The board above it now names every interface on the use case that reaches it, so the block was
+// the same five surfaces again at three times the height, drawn from the ADDRESS rule the board
+// had just stopped using — which is how one page came to contradict itself on five rows. What it
+// held that a tag cannot is on each surface's own page, one click away.
+// The Interfaces VIEW is untouched: it answers who stands at a surface, which is a different
+// question and still the doors' to answer.
 function actorPageHeroHtml(actorName) {
   const g = actorGroups().find((x) => x.actor === actorName);
   // A group is one role, or the "Other" bucket for an actor this map never declared. Other has no
@@ -9021,6 +8810,271 @@ function journeyMarksHtml(ucId) {
   return (changed || untraced) ? `<span class="journey-marks">${changed}${untraced}</span>` : '';
 }
 
+// WHERE ONE USE CASE HAPPENS, as chips on the board. The board said what this actor does and never
+// where they do it; the Interfaces section under it holds the same fact filed the other way round,
+// by surface, so a reader asking "where does THIS use case happen" had to read the whole section and
+// invert it in their head.
+//
+// CHIPS, and not the eight marks alone. The marks are a smaller answer that is usually no answer: 8
+// drawings cover 19 surfaces on the mcpolis map, and of the 13 use cases that touch two surfaces or
+// more, 12 would draw one of those drawings twice. Two identical globes on one step are Dashboard
+// and Operator console, and nothing on the board says which is which.
+//
+// INERT, like every other chip: a chip offers no click, and the thing it sits on is what opens. Here
+// the station is already a door to the walk, and a second target inside it would make one small box
+// answer two questions.
+function journeyIfsHtml(list) {
+  if (!list || !list.length) return '';
+  return '<span class="journey-ifs">'
+    + list.map((i) => itemChipHtml({ name: i.name, kind: 'interface', ikind: i.kind })).join('')
+    + '</span>';
+}
+// WHERE ONE USE CASE HAPPENS: every interface its own steps reach, its shared sub-flows included.
+//
+// READ OFF THE STEPS, and off nothing else. It used to come from `actorUseCases`, which an interface
+// we define fills from its ADDRESSES: it claims every use case reachable at one of its ways in,
+// whether or not the story ever goes there. On mcpolis that put a Dashboard tag on "Weigh up the
+// product before signing up", whose ten interface steps are nine at the Product website and one at
+// Usage analytics, and none at the Dashboard. Measured against the steps, the address rule made 77
+// claims to the steps' 72: it added nothing true and 5 that were false.
+//
+// SUB-FLOWS COUNT. A shared sub-flow is part of the story that runs it — "Create an organization at
+// first sign-in" reaches Google sign-in only inside `Sign in with Google`, and a reader who is told
+// otherwise is told wrong. Its interfaces come off the step's own chips, which the bundle already
+// carries, so nothing is expanded twice.
+//
+// ORDERED by `ifaceSorted`, which is story order, so an interface sits in one place in the product's
+// story wherever it is listed.
+// Each use case gets `{ list, sub, at }`: every interface in story order, which of them came ONLY
+// from a shared sub-flow, and which people a step joins to each. One pass, because the actor filter
+// below needs all three and walking the steps twice is two chances to answer differently.
+let FLOW_UC_IFACES = null;
+function flowUcIfaces() {
+  if (FLOW_UC_IFACES) return FLOW_UC_IFACES;
+  FLOW_UC_IFACES = {};
+  if (!HAS_INTERFACES) return FLOW_UC_IFACES;
+  const order = ifaceSorted('ours').concat(ifaceSorted('theirs'));
+  const rank = new Map(order.map((i, n) => [i.id, n]));
+  const key = (n) => String(authoredActorName(n) || '').trim().toLowerCase();
+  for (const uc of Object.keys(FLOWS_NARR || {})) {
+    const hit = new Set(), sub = new Set(), at = new Map();
+    for (const st of FLOWS_NARR[uc] || []) {
+      for (const id of [st.srcId, st.dstId]) if (rank.has(id)) hit.add(id);
+      for (const c of st.sfChips || []) {
+        if (c.kind === 'interface' && rank.has(c.id)) { hit.add(c.id); sub.add(c.id); }
+      }
+      // A ROLE carries no id on a step: `srcId` is null and `src` holds the DRAWN name, so the match
+      // is by name, through the crossing every other board makes.
+      const near = (id, nm, other) => {
+        if (id != null || !rank.has(other)) return;
+        const k = key(nm);
+        if (k) (at.get(other) || at.set(other, new Set()).get(other)).add(k);
+      };
+      near(st.srcId, st.src, st.dstId);
+      near(st.dstId, st.dst, st.srcId);
+    }
+    // An interface a DIRECT step reached is not a sub-flow-only one, however many sub-flows also hold it.
+    for (const st of FLOWS_NARR[uc] || []) {
+      for (const id of [st.srcId, st.dstId]) if (rank.has(id)) sub.delete(id);
+    }
+    if (hit.size) {
+      FLOW_UC_IFACES[uc] = {
+        list: [...hit].sort((a, b) => rank.get(a) - rank.get(b)).map(ifaceById).filter(Boolean),
+        sub, at,
+      };
+    }
+  }
+  return FLOW_UC_IFACES;
+}
+function flowUcIfaceList(uc) { return (flowUcIfaces()[uc] || {}).list || []; }
+// …and the same table NARROWED to one actor. On an actor's page the question is not "where does this
+// use case happen" but "where does THIS PERSON meet the product in it", and the two differ by a third
+// of the tags: the product calls Upstream MCP servers, sends to Usage analytics and pushes to the
+// member's client by itself, with nobody standing at any of them.
+//
+// THE TEST IS PER USE CASE, not per step, and it has two arms because the map states a person's
+// presence two ways.
+//
+// 1. ANY DECLARED DRIVER, not the one that happens to be drawn. The method allows a use case to name
+//    interchangeable initiators ("an admin OR a moderator") and says that even then "only one of them
+//    ever appears as a step `src`". Matching the drawn name alone would put the other one's own page
+//    blank. No map has authored a second driver yet, so this is a rule written against the method
+//    rather than against today's data — which is the point: the data cannot show the hole.
+//
+// 2. A SHARED SUB-FLOW's interfaces go to whoever DRIVES the caller. A sub-flow cannot name a person:
+//    `Sign in with Google` is run by the Prospect in one use case and the Team member in another, and
+//    4 of mcpolis's 12 shared sub-flows have two drivers like that. So no door can be drawn inside
+//    one, and "the person this run is for" is the strongest statement the map can make. Without this
+//    the two use cases that reach Google sign-in only inside that sub-flow showed it nowhere.
+//
+// An actor who merely TAKES PART — the third lane — gets neither arm, only a step drawn at them. They
+// do not drive it, so there is no run that is theirs.
+function actorUcIfaces(actorName) {
+  const all = flowUcIfaces();
+  const who = String(actorName || '').trim().toLowerCase();
+  const out = {};
+  if (!who) return out;
+  for (const uc of Object.keys(all)) {
+    const { list, sub, at } = all[uc];
+    const drivers = ((GRAPH.nodes[uc] || {}).actors || [])
+      .map((a) => String(a || '').trim().toLowerCase()).filter(Boolean);
+    const drives = drivers.indexOf(who) >= 0;
+    const keep = list.filter((i) => {
+      const there = at.get(i.id) || new Set();
+      if (there.has(who)) return true;
+      if (!drives) return false;
+      return sub.has(i.id) || drivers.some((d) => there.has(d));
+    });
+    if (keep.length) out[uc] = keep;
+  }
+  return out;
+}
+// TAKES PART IN, DOESN'T DRIVE: the use cases this actor stands in without being one of the actors
+// who can start them. The page had no room for these and simply dropped them, while the Interfaces
+// section below named them all along — so the Team member page said "5 use cases" over a board of 5,
+// under a sentence promising "drives OR TAKES PART IN", beside a section naming 9. A reader found the
+// gap by reading the page.
+//
+// Two lists, two rules. Driving comes off the use case's own `actors` (who can start it); standing in
+// it comes off the doors. On the mcpolis map the second list adds 4 use cases to the Team member, 1 to
+// the Organization admin, 1 to the Headless agent, and nothing to the other three actors.
+//
+// IN STORY ORDER, the order every other list on this page uses, so a use case sits at the same point
+// in the product's story wherever it is named.
+function actorTakesPart(actorName, driven) {
+  const ifs = actorUcIfaces(actorName);
+  const drives = new Set((driven || []).map((n) => n.id));
+  return Object.keys(ifs)
+    .filter((uc) => !drives.has(uc) && GRAPH.nodes[uc])
+    .sort(byHappyPath(hpPosOfUc, (uc) => (GRAPH.nodes[uc] || {}).name || uc))
+    .map((uc) => GRAPH.nodes[uc]);
+}
+// WHO DOES DRIVE IT, as the chip a role is drawn as everywhere else. It leads the box, before the use
+// case's own name, because "somebody else's use case" is the first thing a reader has to know about a
+// box sitting on THIS actor's page — the name alone reads as one more thing they can do.
+// A use case may name several interchangeable drivers, and then every one of them gets a chip: either
+// can start it, and naming only the first would pick a winner the map does not.
+function journeyDriversHtml(uc) {
+  const names = (uc.actors && uc.actors.length ? uc.actors : [((uc.fields || {}).Actor || '')])
+    .map((s) => String(s || '').trim()).filter(Boolean);
+  if (!names.length) return '';
+  return '<span class="journey-drivers">'
+    + names.map((nm) => itemChipHtml(roleChipOf(ROLE_BY_NAME[nm.toLowerCase()], nm))).join('')
+    + '</span>';
+}
+
+// ── ONE STEP, on every board that draws one ─────────────────────────────────────────────────────
+// The Happy Path and the two rails drew the same thing twice: a bullet on a line, a title under it,
+// a door to the use case behind it. Two builders and two class families, whose stylesheets had
+// already drifted apart — 126px against 142, a hover underline on one and not the other, and a box
+// that lit on the walk and did not on a rail. This is that box, once.
+//
+// WHAT DIFFERS IS PASSED IN, never switched on by a class the stylesheet reads. `num` is the step's
+// place in the whole walk: the Happy Path is the page whose subject that is, and both rails drop it
+// deliberately (see hpBoxHtml). `marks` are the "changed" and "not traced" footnotes a rail
+// carries. `ifs` is the table of surfaces to chip. `actor` is whose designator the title may drop.
+// A caller that wants none of them passes none and gets the plain box.
+function flowStepBoxHtml(st, o) {
+  const opt = o || {};
+  // No use case behind the step, no door: the drill had nowhere to go and landed on "Not in this
+  // map" under a title promising to open something.
+  const dead = !st.uc;
+  // `pickbox` is the CLASS THAT MAKES A BOX PICKABLE, and it says nothing about layout: the ring on
+  // hover and the ring-plus-lift when picked are written once for it, and a lane's own class still
+  // decides the shape. A dead step keeps the class off — there is nothing to pick.
+  return `<button type="button" class="flow-step${dead ? ' flow-step-dead' : ' pickbox'}" `
+    + `data-step="${esc(st.id)}"${dead ? '' : ` data-uc="${esc(st.uc)}" data-pick="hpstep:${esc(st.id)}"`} `
+    + `title="${dead ? 'This map does not say how this step works'
+                     : 'Open how this works: ' + esc(st.title || 'this step')}">`
+    + '<span class="flow-step-dot"></span>'
+    + (opt.num ? `<span class="flow-step-num">${esc(String(hpStepPos(st.id)))}</span>` : '')
+    + `<span class="flow-step-title">${esc(sentenceCase(stationTitle(st.title, opt.actor)))}</span>`
+    + (opt.marks ? journeyMarksHtml(st.uc) : '')
+    + journeyIfsHtml((opt.ifs || {})[st.uc])
+    + '</button>';
+}
+// ONE DOOR HANDLER for every board's steps. A step opens the USE CASE it realizes — the map, not the
+// walk — so a use case keeps one home wherever you meet it. The actor rail used to send its stations
+// to the Happy Path instead, which answered a question the reader had not asked and lost the actor
+// they were reading about.
+//
+// `act` carries the actor page's drill context, exactly as its side stops do: a use case has two
+// homes, and passing the actor is what keeps the crumb running through this page.
+function bindStepDoors(root, o) {
+  const opts = o || {};
+  // EVERY PICKABLE BOX, not just a step: a side stop and a takes-part box open the same use case by
+  // the same click and are remembered the same way. The rails bound their stops separately, which is
+  // why a stop could be clicked and never came back lit.
+  root.querySelectorAll('.pickbox[data-uc]').forEach((b) => b.addEventListener('click', () => {
+    // The step this reader was on, so leaving and coming Back returns to it rather than to the start.
+    // Set on BOTH boards now, which is what makes a picked station survive a trip out and back.
+    pickNow = b.getAttribute('data-pick');
+    const to = { kind: 'usecase', uc: b.getAttribute('data-uc') };
+    if (opts.act) to.act = opts.act;
+    go(to);
+  }));
+  bindPickClear();
+}
+// CLICKING THE BACKGROUND PUTS THE BOX DOWN. A pick is a decision and nothing but another click took
+// it away, so a reader who had finished with a use case had no way to say so: the ring stayed, and it
+// stayed in the address too, so a copied link carried a choice its reader had already abandoned.
+//
+// The listener is REMOVED before a new one is added — it lives on `document`, which outlives the
+// board, so every re-render would otherwise leave another behind, each holding a dead render's
+// closure and each still writing to the address bar. Same shape, and the same reason, as the
+// Interfaces picture's own outside click.
+//
+// SCOPED TO THE VIEW, and that scope is the point: a click on a view TAB is also a click on
+// `document`, and unscoped this dropped the pick a moment before the navigation that was meant to
+// remember it. Leaving a page is not the gesture "I am done with this box".
+function bindPickClear() {
+  if (pickOutsideClick) document.removeEventListener('click', pickOutsideClick);
+  pickOutsideClick = (ev) => {
+    if (!pickNow || !ev.target.closest) return;
+    if (!ev.target.closest('#diagram')) return;
+    if (ev.target.closest('.pickbox')) return;
+    diagram.querySelectorAll('.pickbox.ibox-picked').forEach((e) => e.classList.remove('ibox-picked'));
+    pickNow = null;
+    // `refreshUrl` is replaceState only, so putting a box down never grows the browser's Back button.
+    refreshUrl();
+  };
+  document.addEventListener('click', pickOutsideClick);
+}
+// ONE HEIGHT FOR THE STEP TITLES on a board, so the chips under them land on one line. Both boards
+// need it for the same reason and neither could have it before the chips existed: a title is one
+// line or two, and its chips start right after it, so on a board of mostly two-line titles the short
+// step's chips sat a whole line above everyone else's.
+//
+// THE MAJORITY, not the tallest — which is where this parts company with `levelHpBoxes`, the other
+// measure-then-set pass on the walk. One long title would otherwise open a blank line under EVERY
+// other step to accommodate the exception. A title longer than the majority keeps its own height and
+// its chips follow its own text, which is what falls out of a floor rather than a fixed height.
+//
+// Measured, never assumed: the line height comes off the element, so a stylesheet change cannot
+// leave a hard-coded 14.95px behind. Nothing to do when no step carries chips — padding titles would
+// then buy a reader nothing and cost every board without interfaces a line of white.
+function levelStepTitles(root) {
+  if (!root.querySelector('.flow-step .journey-ifs')) return;
+  const ts = [...root.querySelectorAll('.flow-step .flow-step-title')];
+  if (!ts.length) return;
+  const cs = getComputedStyle(ts[0]);
+  const lh = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.3);
+  if (!(lh > 0)) return;
+  // Cleared first: a second pass would otherwise measure the floor the first one set and never shrink.
+  for (const t of ts) t.style.minHeight = '';
+  const counts = new Map();
+  for (const t of ts) {
+    const n = Math.max(1, Math.round(t.getBoundingClientRect().height / lh));
+    counts.set(n, (counts.get(n) || 0) + 1);
+  }
+  // A TIE GOES TO THE TALLER count. Either way half the board is padded, but padding the shorter
+  // titles up is what lines their chips up with the rest; aligning down leaves the taller ones
+  // hanging past the line, which is the ragged edge this pass exists to remove.
+  let mode = 1, best = 0;
+  for (const [n, c] of counts) if (c > best || (c === best && n > mode)) { mode = n; best = c; }
+  for (const t of ts) t.style.minHeight = `${mode * lh}px`;
+}
+
 // THE TWO LANES, for both boards. Everything else about a board differs between the two pages and
 // stays with them — what names a box, what colours it, what heads the board, which zones come first.
 // What does NOT differ is the pair of lanes: the gutter carrying their names, and the two classes that
@@ -9030,11 +9084,18 @@ function journeyMarksHtml(ucId) {
 // `hasPath` false is a board with no station anywhere: the upper lane is dropped rather than drawn
 // empty, and with one lane there is no cut for the dashed line to make. The gutter still names the
 // lane it kept, because "everything here is off the happy path" is an answer, not an absence.
-function journeyRailHtml(hasPath, offLane, boxes) {
+// `partLane` is the actor page's third lane and nothing else has one: the feature page calls this with
+// three arguments and draws exactly the two lanes it always drew.
+function journeyRailHtml(hasPath, offLane, boxes, partLane) {
   const gutter = '<div class="journey-gutter journey-gutter-top"></div>'
     + (hasPath ? '<div class="journey-gutter journey-gutter-on">Happy path</div>' : '')
-    + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '');
+    + (offLane ? '<div class="journey-gutter journey-gutter-off">Off the happy path</div>' : '')
+    // THE LANE'S NAME SAYS BOTH HALVES. "Takes part in" alone reads as a softer word for the same
+    // thing the other two lanes hold, and the whole point of the lane is the half that follows it.
+    + (partLane ? '<div class="journey-gutter journey-gutter-part">'
+      + 'Takes part in, doesn’t drive</div>' : '');
   return `<div class="journey-rail${offLane ? ' journey-has-off' : ''}`
+    + `${partLane ? ' journey-has-part' : ''}`
     + `${hasPath ? '' : ' journey-no-path'}">${gutter}${boxes}</div>`;
 }
 
@@ -9067,17 +9128,36 @@ function journeyZoneHtml(z, opts) {
   // and which of the walk's twenty steps this one is answers no question this page asks. It cost an
   // alignment rule per digit count, because a number centred on the dot starts further left the more
   // digits it has, and the title had to line up with the number rather than with the dot.
+  //
+  // WHERE each use case happens rides under its title, in BOTH lanes, and only when the caller hands
+  // the board an `ifs` table. The actor page hands one over; the feature page hands none, and draws
+  // exactly what it drew before. A feature's board zones by DRIVER, so one box there can name several
+  // actors, and "where this actor stands" has no single answer to put on it.
+  const ifs = o.ifs || {};
+  // The SHARED step box (flowStepBoxHtml), the one the Happy Path draws. What a rail wants of it is
+  // passed: the footnote marks yes, the walk-position number no — "which of the walk's twenty steps
+  // is this" answers no question either rail asks, and it is the question the Happy Path exists for.
   const stations = (z.stations || []).map((s) =>
-    '<button type="button" class="journey-station" '
-    + `data-step="${esc(s.id)}" `
-    + `title="Open the Happy Path: ${esc(s.title || 'this step')}">`
-    + '<span class="journey-dot"></span>'
-    + `<span class="journey-t">${esc(stationTitle(s.title, o.actor))}</span>`
-    + `${journeyMarksHtml(s.uc)}</button>`).join('');
+    flowStepBoxHtml(s, { actor: o.actor, marks: true, ifs })).join('');
+  // The chips join the name and its marks INSIDE `journey-sidet`, which is the one text column beside
+  // the circle. As a third item on the circle's own row they would have been a second column, and the
+  // name would break onto a line of its own as soon as the two passed 190px.
   const sides = (z.sides || []).map((uc) =>
-    `<button type="button" class="journey-side" data-uc="${esc(uc.id)}" `
+    `<button type="button" class="journey-side pickbox" data-uc="${esc(uc.id)}" `
+    + `data-pick="ucstop:${esc(uc.id)}" `
     + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>`
-    + `<span class="journey-sidet">${esc(uc.name)}${journeyMarksHtml(uc.id)}</span></button>`).join('');
+    + `<span class="journey-sidet"><span class="flow-step-title">${esc(sentenceCase(uc.name))}</span>`
+    + `${journeyMarksHtml(uc.id)}${journeyIfsHtml(ifs[uc.id])}</span></button>`).join('');
+  // THE THIRD LANE, and the same box the lower lane draws — one circle, one text column beside it —
+  // with the driver's chip leading that column. It is not a fourth kind of thing to learn: what makes
+  // it different is the one chip saying whose use case this is, and the gutter naming the lane.
+  const parts = (z.parts || []).map((uc) =>
+    `<button type="button" class="journey-side journey-part pickbox" data-uc="${esc(uc.id)}" `
+    + `data-pick="ucstop:${esc(uc.id)}" `
+    + `title="Open ${esc(uc.name)}"><span class="journey-o">○</span>`
+    + `<span class="journey-sidet">${journeyDriversHtml(uc)}`
+    + `<span class="flow-step-title">${esc(sentenceCase(uc.name))}</span>`
+    + `${journeyMarksHtml(uc.id)}${journeyIfsHtml(ifs[uc.id])}</span></button>`).join('');
   // The zone's own feature decides its colour on the actor rail. The FEATURE rail passes one tint
   // for every zone instead: that whole board is one feature, and a colour changing from zone to zone
   // would claim a difference the zones do not have.
@@ -9093,7 +9173,7 @@ function journeyZoneHtml(z, opts) {
   // The off-path list lines its circles up with the station titles above it, so the box has ONE text
   // column. Both now start at the box's own 16px of padding and need no extra indent: with the step
   // numbers gone, a title starts at its dot's left edge instead of under a number of unknown width.
-  // Every cell of a box carries `gapBefore`, because the box is four separate grid items in one
+  // Every cell of a box carries `gapBefore`, because the box is five separate grid items in one
   // column and a margin on one of them would move that cell alone.
   const gap = o.gapBefore ? ' journey-gap-before' : '';
   return `<div class="journey-zbg${gap}" style="grid-column:${col}${tint}"></div>`
@@ -9102,7 +9182,12 @@ function journeyZoneHtml(z, opts) {
       + `${o.last ? ' journey-track-last' : ''}" `
       + `style="grid-column:${col}">${stations}</div>`)
     + (o.offLane ? `<div class="journey-sides${gap}" `
-      + `style="grid-column:${col}">${sides}</div>` : '');
+      + `style="grid-column:${col}">${sides}</div>` : '')
+    // Row 4, drawn under every box once ANY box on the board has one, for the same reason rows 2 and
+    // 3 are: the cells share the row, so the lane's dashed cut lands at one height across the board
+    // instead of starting somewhere different in every feature.
+    + (o.partLane ? `<div class="journey-parts${gap}" `
+      + `style="grid-column:${col}">${parts}</div>` : '');
 }
 // This page once opened with a greyed BEFORE-segment: the steps of the role this actor used to be,
 // when the map authors a `becomes` toward them. It was removed as untrue rather than as clutter. It
@@ -9138,12 +9223,18 @@ function journeyHeadHtml(glyph, name) {
 }
 function renderActorPage(actorName) {
   const { zones, offZones } = actorJourney(actorName);
-  const onRail = zones.map((z) => ({ z, o: { actor: actorName } }));
-  const off = offZones.map((z) => ({ z, o: { actor: actorName } }));
+  // Built ONCE for the whole board, not per zone: every zone reads the same table, and building it
+  // per box would walk all 19 surfaces again for each of them.
+  const ifs = actorUcIfaces(actorName);
+  const onRail = zones.map((z) => ({ z, o: { actor: actorName, ifs } }));
+  const off = offZones.map((z) => ({ z, o: { actor: actorName, ifs } }));
   // The lower lane is drawn at all only when this actor HAS something off their happy path.
   // Otherwise every box would carry a dashed line under an empty band, and the gutter would name a
   // lane holding nothing.
   const offLane = onRail.concat(off).some((b) => (b.z.sides || []).length);
+  // …and the third lane on the same rule: drawn only when this actor is IN a use case they do not
+  // drive. On the mcpolis map that is 3 of the 6 actors, so the other three boards are untouched.
+  const partLane = onRail.concat(off).some((b) => (b.z.parts || []).length);
   // An actor the happy path never touches (argus's Page owner is one) has no upper lane at all: the
   // row is dropped rather than drawn empty, and with one lane there is nothing for the dashed line
   // to cut. The gutter still names the lane, because "everything this actor does is off the happy
@@ -9153,7 +9244,7 @@ function renderActorPage(actorName) {
   // Column 1 is the gutter; each feature takes the next column.
   let col = 1;
   const boxes = (list, lead) => list.map((b, i) => journeyZoneHtml(b.z,
-    Object.assign({}, b.o, { col: ++col, offLane, noPath,
+    Object.assign({}, b.o, { col: ++col, offLane, partLane, noPath,
       first: lead && i === 0, last: lead && i === list.length - 1,
       // The FIRST feature the happy path never enters opens a wider gap, so the rail's right tip
       // ends in clear space instead of pointing at it.
@@ -9183,31 +9274,42 @@ function renderActorPage(actorName) {
   // said the thing a reader actually needed, which is that the boxes are USE CASES. The section's own
   // heading says that now, so the board is just the board.
   const board = rail
-    ? `<div class="journey-board">${journeyRailHtml(hasPath, offLane, rail)}</div>`
+    ? `<div class="journey-board">${journeyRailHtml(hasPath, offLane, rail, partLane)}</div>`
     : '<p class="empty">This map records nothing this actor does.</p>';
   const g = actorGroups().find((x) => x.actor === actorName);
-  const ucs = g ? g.ucs.length : 0;
+  // WHAT THE BOARD DRAWS, which is now more than what this actor drives. The count was the driven
+  // ones only, and with the third lane on the board that number would have been contradicted eight
+  // pixels below it: the Team member page would read "Use cases 5" over nine boxes.
+  const ucs = (g ? g.ucs.length : 0)
+    + onRail.concat(off).reduce((n, b) => n + (b.z.parts || []).length, 0);
   const secs = [];
-  // ONE SENTENCE. It ran to two, and the second explained the circles under the line — which the
-  // board's own gutter already names, in the words "Off the happy path", eight pixels away.
-  let html = itemSectionHtml(secs, 'uc', 'Use cases', ucs,
-    'Every use case this actor drives or takes part in, in the order the happy path runs.', board);
-  // INTERFACES, the word the tab uses. `surface` is the everyday word for one of them and the two
-  // shore headings inside the picture still speak it; the section is named after the tab it belongs
-  // to, so a reader who wants the whole edge knows where to go.
-  const surf = actorSurfacesHtml(actorName);
-  if (surf) {
-    html += itemSectionHtml(secs, 'iface', 'Interfaces', surf.count,
-      'Where this actor meets the product, and which features they reach through each place.',
-      surf.body);
-  }
-  diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}`
-    + `${tabIndexHtml(secs)}${html}</div>`;
-  bindTabIndex(diagram.querySelector('.usecases-wrap'));
+  // STILL ONE SENTENCE. It ran to two once, and the second explained the circles under the line —
+  // which the board's own gutter already names, in the words "Off the happy path", eight pixels away.
+  // The chips are the one thing on this board that no label anywhere names, so the clause naming them
+  // is welded onto the sentence that was already here rather than added under it as a second.
+  // Only when the board actually carries chips: a map with no surfaces would otherwise promise a
+  // reader something its board never draws.
+  const anyIfs = Object.keys(ifs).length
+    ? ', with the interfaces they meet in each' : '';
+  // …and "or takes part in" ONLY where the board has the lane that shows them. It is the promise the
+  // third lane keeps, and on a board with no such lane it promised a reader something the board did
+  // not draw — which is the whole defect the lane was built to answer, restated on the sentence.
+  const drives = partLane ? 'drives or takes part in' : 'drives';
+  // ONE SECTION, so no index above it. The page carried an Interfaces block under the board: the same
+  // five surfaces the board now names on the use cases themselves, drawn as a three-column picture
+  // 1295px tall against the board's 421 — 61% of the page restating what a tag says, and doing it by
+  // the ADDRESS rule the board has just stopped using, so the two halves contradicted each other on
+  // five rows. Everything it held that the board cannot is on the surface's own page, one click from
+  // the tag. The chip bar went with it: a contents strip listing one item is a label with extra steps.
+  //
+  // `tabIndexHtml` and `bindTabIndex` STAY — a feature's page and the System page still build one.
+  const html = itemSectionHtml(secs, 'uc', 'Use cases', ucs,
+    `Every use case this actor ${drives}, in the order the happy path runs${anyIfs}.`, board);
+  diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${html}</div>`;
   bindActorPage(diagram, actorName);
-  // The surfaces picture: its own wires, and the pick gesture the Interfaces view shares with it.
-  // Silent when this actor stands at none — the block is a sentence then, with no stage to bind.
-  bindActorSurfaces(diagram, actorName);
+  // AFTER the board is in the document, because it measures drawn text. The Happy Path runs the
+  // same pass on its own board, for the same ragged chip line.
+  levelStepTitles(diagram);
 }
 // ONE binder for both rails. The actor page and the feature page draw the SAME board out of the same
 // cells, so the clicks are wired once: a station opens the walk, a side stop opens that use case,
@@ -9221,15 +9323,10 @@ function renderActorPage(actorName) {
 // crumb already runs through the use case's own feature — which on that page is the page you are on.
 function bindJourney(root, o) {
   const opts = o || {};
-  root.querySelectorAll('.journey-station').forEach((b) => b.addEventListener('click', () =>
-    // The station is a door to the WALK: the Happy Path view, arriving with this step selected —
-    // the same one-shot `sel` restore the story diagram's edge labels use.
-    go({ kind: 'hp', sel: 'hpstep:' + b.getAttribute('data-step') })));
-  root.querySelectorAll('.journey-side').forEach((b) => b.addEventListener('click', () => {
-    const to = { kind: 'usecase', uc: b.getAttribute('data-uc') };
-    if (opts.act) to.act = opts.act;
-    go(to);
-  }));
+  // A STEP'S OWN DOOR is bound once, for every board (bindStepDoors): it opens the use case, which
+  // is the map. It used to open the HAPPY PATH with this step selected — a page about the product's
+  // one run, reached from a page about one person, answering a question the reader had not asked.
+  bindStepDoors(root, { act: opts.act });
   root.querySelectorAll('.journey-zname').forEach((b) => b.addEventListener('click', () => {
     const cap = b.getAttribute('data-cap');
     if (cap) go({ kind: 'capability', cap });
@@ -9241,22 +9338,6 @@ function bindJourney(root, o) {
 function bindActorPage(root, actorName) {
   bindJourney(root, { act: actorName });
 }
-
-// ── The FEATURE PAGE's rail: the same board, turned ninety degrees ───────────────────────────────
-// The actor page answers "what does this actor do" with one rail zoned by FEATURE. A feature's page
-// asks the mirror question — "what happens in this feature" — so it draws the mirror board: the same
-// stations, the same dashed cut, the same gutter, zoned by the DRIVER instead.
-//
-// It replaced a card grid that threw away an order the map already knows. "Building a map" owns
-// steps 2 to 7 of the walk, in that order; the grid drew eight cards in model order and said nothing
-// about which came first. Measured on this project's own map: 570px of cards for 8 use cases,
-// against a rail that fits the same eight in one band. The grid is no longer the fallback for a
-// feature the walk never enters either — that draws the board with one lane, as the actor page does.
-//
-// A zone is a RUN of steps sharing ONE set of drivers. The two rules that decide a zone each have
-// their own argument, written where they are applied inside featureJourney: which actors name a box
-// (all of a step's interchangeable drivers, not the leftmost), and when a new box opens (a change of
-// that set, and nothing else — never a gap in the walk, which is the actor rail's mirror rule).
 function featureJourney(capId) {
   const f = FEAT_BY_ID[capId] || {};
   const own = new Set(f.useCases || []);
@@ -9434,7 +9515,7 @@ function roleKindOfName(name) {
 // inside a scroll box scrolls away with the content, and the whole point is that it does not move.
 // Building the wrapper here rather than in each board's markup is what lets the three call sites
 // stay as they are — one function owns both the shape and the behaviour.
-const HFADE_SCROLLERS = '.walk-strip, .journey-board, .story-wrap, .ifd-wrap';
+const HFADE_SCROLLERS = '.hp-strip, .journey-board, .story-wrap, .ifd-wrap';
 function bindHFades(root) {
   for (const el of (root || document).querySelectorAll(HFADE_SCROLLERS)) bindHFade(el);
 }
@@ -9484,7 +9565,7 @@ function bindHFade(scroller) {
 // each apply with ONE key; this board is the third caller, and it cuts on both. The line therefore
 // breaks at every change of person, the new person stands in the break, and the box that follows
 // reopens after them: who takes over is the one thing a walk's picture must not make you look up.
-function walkSegments() {
+function hpSegments() {
   const segs = runsOf(GRAPH.happy_path || [],
     (st) => capabilityOfUc(st.uc) + '\u0000' + zoneKey(actorsOfStep(st.id)))
     .map((run) => ({ fid: capabilityOfUc(run.items[0].uc),
@@ -9536,30 +9617,30 @@ function capabilityOfUc(ucId) {
 // as rows it is about 2 screens DOWN, which is the gesture every other page already uses. Only one
 // row on two of those maps is still wider than a window (MCP Hero's run of 9 steps under the admin,
 // and this project's run of 13 under the agent), and that row scrolls on its own.
-function walkRows() {
-  const segs = walkSegments();
+function hpRows() {
+  const segs = hpSegments();
   return runsOf(segs, (sg) => zoneKey(sg.acts))
     .map((run) => ({ acts: run.items[0].acts, segs: run.items }));
 }
 // The person NAMES their row now, in a gutter on the left, which is where the journey rail has
 // always put them. They used to stand in the gap between two boxes; a row break says the same thing
 // and leaves the name somewhere a reader can scan straight down.
-function walkHandHtml(acts) {
+function hpHandHtml(acts) {
   const list = (acts || []).filter(Boolean);
   // No driver recorded at all: the break is still drawn, and it says so rather than standing empty.
-  if (!list.length) return '<div class="walk-hand"><span class="walk-nowho">no actor recorded</span></div>';
+  if (!list.length) return '<div class="hp-hand"><span class="flow-step-numowho">no actor recorded</span></div>';
   // A DOOR only when the map declares this person. `journeyDriverLabelHtml` has always checked, and
   // this board did not: a step with no use case gets an invented driver called "Actor", which was
   // drawn as a live link to a page that knows nothing about them. Same guard, same source of truth.
   const one = (name) => (actorNodeId(name)
-    ? `<button type="button" class="walk-one" data-act="${esc(name)}" `
+    ? `<button type="button" class="hp-one" data-act="${esc(name)}" `
       + `title="Open the page of ${esc(name)}">`
-      + `<span class="walk-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
-      + `<span class="walk-who">${esc(name)}</span></button>`
-    : `<span class="walk-one walk-one-dead">`
-      + `<span class="walk-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
-      + `<span class="walk-who">${esc(name)}</span></span>`);
-  return `<div class="walk-hand">${list.map(one).join('<span class="walk-or">or</span>')}</div>`;
+      + `<span class="hp-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
+      + `<span class="hp-who">${esc(name)}</span></button>`
+    : `<span class="hp-one hp-one-dead">`
+      + `<span class="hp-ico">${storyGlyphSvg(roleKindOfName(name))}</span>`
+      + `<span class="hp-who">${esc(name)}</span></span>`);
+  return `<div class="hp-hand">${list.map(one).join('<span class="hp-or">or</span>')}</div>`;
 }
 // One box: the feature's name over a line of its steps. The step's title drops the leading actor
 // designator (stationTitle), because the person who does it is named on the line a few pixels away,
@@ -9568,23 +9649,20 @@ function walkHandHtml(acts) {
 // The NUMBER stays. Both rails drop it deliberately — "which of the walk's twenty steps is this"
 // answers no question either of those pages asks. It is the question THIS page asks, so the number
 // belongs here and nowhere else.
-function walkBoxHtml(sg, finalRow) {
+function hpBoxHtml(sg, finalRow, ifs) {
   const name = sg.fid ? featureName(sg.fid) : '';
   const label = name
-    ? `<button type="button" class="walk-fname" data-cap="${esc(sg.fid)}" `
+    ? `<button type="button" class="hp-fname" data-cap="${esc(sg.fid)}" `
       + `title="Open the details page of ${esc(name)}">${storyFeatureGlyphSvg()}`
-      + `<span class="walk-fnm">${esc(name)}</span></button>`
-    : '<span class="walk-fkind">not in any feature</span>';
+      + `<span class="hp-fnm">${esc(name)}</span></button>`
+    : '<span class="hp-fkind">not in any feature</span>';
+  // The SHARED step box (flowStepBoxHtml), the one the two rails draw. This is the page the NUMBER
+  // belongs to, and the chips say where this row's hand stands in each of its use cases — the same
+  // sentence a chip makes on an actor's board, read off the same derivation. `ifs` is built once per
+  // ROW and handed down, because every box in a row is under the same hand and rebuilding the table
+  // per box would walk every surface again for each of them.
   const steps = sg.steps.map((st) =>
-    // No use case behind the step, no door: the drill had nowhere to go and landed on "Not in this
-    // map" under a title promising to open something.
-    `<button type="button" class="walk-step${st.uc ? '' : ' walk-step-dead'}" `
-    + `data-step="${esc(st.id)}"${st.uc ? ` data-uc="${esc(st.uc)}"` : ''} `
-    + `title="${st.uc ? 'Open how this works: ' + esc(st.title || 'this step')
-                      : 'This map does not say how this step works'}">`
-    + '<span class="walk-dot"></span>'
-    + `<span class="walk-n">${esc(String(walkPos(st.id)))}</span>`
-    + `<span class="walk-t">${esc(stationTitle(st.title, sg.acts))}</span></button>`).join('');
+    flowStepBoxHtml(st, { num: true, actor: sg.acts, ifs })).join('');
   // A FLOOR of one column per step, and the feature's own name may push it wider — the rule the
   // journey rail states as `minmax(150px, max-content)`. Fixed at the step count instead, half the
   // feature names on the board were clipped: 6 of 16 on the Mio map and 9 of 18 on MCP Hero, where
@@ -9592,34 +9670,34 @@ function walkBoxHtml(sg, finalRow) {
   // thing this board exists to add, so it is not the thing to truncate.
   const tint = sg.fid ? featureTint(sg.fid) : '';
   // Where this box's line STARTS and ENDS, in the journey rail's own three lengths. Inside a row a
-  // box reaches half the gap on each side (WALK_BRIDGE), so two boxes of one person read as one line
-  // running through them. WALK_TIP starts the row. What ENDS it depends on whether the walk carries
-  // on: the last row finishes at WALK_END with the rail's arrow head, and every other row stops at
+  // box reaches half the gap on each side (HP_BRIDGE), so two boxes of one person read as one line
+  // running through them. HP_TIP starts the row. What ENDS it depends on whether the walk carries
+  // on: the last row finishes at HP_END with the rail's arrow head, and every other row stops at
   // its own edge, where the elbow picks the line up and turns it down to the row below.
-  const ends = sg.closes ? (finalRow ? WALK_END : 0) : WALK_BRIDGE;
-  return `<div class="walk-box${sg.closes && finalRow ? ' walk-closes' : ''}" `
-    + `style="min-width:${sg.steps.length * WALK_STEP_W}px`
+  const ends = sg.closes ? (finalRow ? HP_END : 0) : HP_BRIDGE;
+  return `<div class="hp-box${sg.closes && finalRow ? ' hp-closes' : ''}" `
+    + `style="min-width:${sg.steps.length * HP_STEP_W}px`
     + `${tint ? ';background:' + tint : ''}`
-    + `;--walk-l:${sg.opens ? WALK_TIP : WALK_BRIDGE}px`
-    + `;--walk-r:${ends}px">`
-    + `<div class="walk-flabel">${label}</div>`
-    + `<div class="walk-line">${steps}</div></div>`;
+    + `;--hp-l:${sg.opens ? HP_TIP : HP_BRIDGE}px`
+    + `;--hp-r:${ends}px">`
+    + `<div class="hp-flabel">${label}</div>`
+    + `<div class="hp-line">${steps}</div></div>`;
 }
-const WALK_STEP_W = 150;   // one step's column, in px — the width every box is a multiple of
+const HP_STEP_W = 150;   // one step's column, in px — the width every box is a multiple of
 // The three lengths the line runs past a box's own edge, all taken from the journey rail so the two
 // pictures are drawn in one hand: half the 14px gap between boxes (which bridges them into one
 // line), the left tip, and the right tip where the arrow head's point sits.
-const WALK_BRIDGE = -7;
-const WALK_TIP = -12;
-const WALK_END = -20;
+const HP_BRIDGE = -7;
+const HP_TIP = -12;
+const HP_END = -20;
 // A step's place in the whole walk, 1-based, read from the walk itself — so a board built from any
 // slice of it still numbers by the real position.
-function walkPos(hpId) {
+function hpStepPos(hpId) {
   const i = (GRAPH.happy_path || []).findIndex((st) => st.id === hpId);
   return i < 0 ? '' : i + 1;
 }
 function renderHappyPath() {
-  const rows = walkRows();
+  const rows = hpRows();
   if (!rows.length) {
     diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">'
       + 'This map records no happy path.</p></div>';
@@ -9642,11 +9720,18 @@ function renderHappyPath() {
   // off. Off the row it also stays put when a long row is scrolled.
   const html = rows.map((r, i) => {
     const final = i === rows.length - 1;
-    return `<div class="walk-row">${i ? '<span class="walk-hook"></span>' : ''}`
-      + `${walkHandHtml(r.acts)}`
-      + '<div class="walk-strip"><div class="walk">'
-      + r.segs.map((sg) => walkBoxHtml(sg, final)).join('')
-      + `${final ? '' : '<span class="walk-elbow"></span>'}`
+    // THE WHOLE STORY'S interfaces, not this row's hand alone. The Happy Path is the product's one
+    // successful run; a row names the person holding that stretch of it, but the page's subject is
+    // the run. Narrowing here would blank the Upkeep job's row, whose flows reach five interfaces
+    // with a program at every end. The ACTOR page is the one that narrows (actorUcIfaces).
+    // The whole story's interfaces, keyed by use case, the same table the actor page narrows.
+    const ifs = {};
+    for (const uc of Object.keys(flowUcIfaces())) ifs[uc] = flowUcIfaceList(uc);
+    return `<div class="hp-row">${i ? '<span class="hp-hook"></span>' : ''}`
+      + `${hpHandHtml(r.acts)}`
+      + '<div class="hp-strip"><div class="hp-steps">'
+      + r.segs.map((sg) => hpBoxHtml(sg, final, ifs)).join('')
+      + `${final ? '' : '<span class="hp-elbow"></span>'}`
       + '</div></div></div>';
   }).join('');
   // The counts only. "The walk" repeated the tab and the breadcrumb, which already name this page,
@@ -9659,21 +9744,26 @@ function renderHappyPath() {
     // by side; the word says what the walk actually does with them, which is pass through each one.
     + `<p class="block-lbl">${n} step${n === 1 ? '' : 's'} through `
     + `${feats}${of} feature${(of ? allFeats : feats) === 1 ? '' : 's'}</p>`
-    + `<div class="walk-board">${html}</div></div>`;
-  levelWalkBoxes(diagram);
-  bindWalk(diagram);
+    + `<div class="hp-board">${html}</div></div>`;
+  levelHpBoxes(diagram);
+  // …and the titles inside those boxes, so the chips under them start on one line. Two passes, two
+  // questions: `levelHpBoxes` makes every BOX the page's tallest, this makes every TITLE the
+  // board's most common — the tallest is right for a band of tinted boxes and wrong for a line of
+  // text, where one long title would open a blank line under all the others.
+  levelStepTitles(diagram);
+  bindHappyPath(diagram);
 }
 // One height for every box on the page, measured once. Each row stretches its boxes to its own
 // tallest step, which levels a row but not the page: a row whose titles are all short drew a band
 // half the height of the one above it. The tallest step anywhere sets a floor for all of them, so
 // the boxes read as one band down the page.
-function levelWalkBoxes(root) {
-  const lines = [...root.querySelectorAll('.walk-line')];
-  const board = root.querySelector('.walk-board');
+function levelHpBoxes(root) {
+  const lines = [...root.querySelectorAll('.hp-line')];
+  const board = root.querySelector('.hp-board');
   if (!lines.length || !board) return;
-  board.style.removeProperty('--walk-h');   // measure the natural height, never the last one set
+  board.style.removeProperty('--hp-h');   // measure the natural height, never the last one set
   const tallest = Math.max(...lines.map((el) => el.getBoundingClientRect().height));
-  board.style.setProperty('--walk-h', Math.ceil(tallest) + 'px');
+  board.style.setProperty('--hp-h', Math.ceil(tallest) + 'px');
 }
 // Arriving FROM a station on an actor's rail, from a feature's rail, or from a story arrow's label:
 // all three navigate here naming one step, on the same one-shot `sel` a diagram's selection rides.
@@ -9681,10 +9771,14 @@ function levelWalkBoxes(root) {
 // list answers "show in context".
 // The step a state names, if it names one. Both spellings, because a freshly built navigation
 // carries the scalar `sel` while a restored history point carries the `sels` list.
-function walkStepOf(s) {
-  const key = ((s && s.sels) || [s && s.sel]).filter(Boolean)
-    .find((k) => String(k).startsWith('hpstep:'));
-  return key ? key.slice(7) : null;
+// THE PICKED BOX'S KEY, read back off a state. Two prefixes, because two kinds of box are pickable
+// and both are one use case to the reader: `hpstep:` a step on either board's line, `ucstop:` one of
+// the lower lanes' stops. The key is carried WHOLE — a bare id could not have said which kind it was,
+// and `hpstep:` is unchanged, so a link shared before the second kind existed still lands.
+const PICK_KEYS = ['hpstep:', 'ucstop:'];
+function pickKeyOf(s) {
+  return ((s && s.sels) || [s && s.sel]).filter(Boolean)
+    .map(String).find((k) => PICK_KEYS.some((pre) => k.startsWith(pre))) || null;
 }
 // PICK A STEP, and it stays picked. It was a 1.4s flash, which is the shape of "here it is" and not
 // of "this is the one you asked for" — a reader who looked away lost the step they had navigated to,
@@ -9695,16 +9789,24 @@ function walkStepOf(s) {
 // USE CASE'S CARD opens beside it with a line drawn to the step. `is-selected` is what the line
 // looks for (`soleSelectedEl`), so this board gets the same leader line every diagram has without a
 // second implementation of it.
-function pickWalkStep(scroll) {
-  diagram.querySelectorAll('.walk-step.ibox-picked').forEach((e) => e.classList.remove('ibox-picked'));
-  if (!walkStepNow) return;
-  const el = diagram.querySelector(`.walk-step[data-step="${CSS.escape(walkStepNow)}"]`);
+function applyPick(scroll) {
+  diagram.querySelectorAll('.pickbox.ibox-picked').forEach((e) => e.classList.remove('ibox-picked'));
+  if (!pickNow) return;
+  // BY KEY, not by step id: a lower lane's stop has no step behind it, and addressing every pickable
+  // box the same way is what let the two lanes join in without a second pick of their own.
+  const el = diagram.querySelector(`.pickbox[data-pick="${CSS.escape(pickNow)}"]`);
   if (!el) return;
   if (scroll) {
     // The board is scrolled DIRECTLY, not through scrollIntoView. That walks every scrollable
     // ancestor, and the page's own wrap is one — it took part of the movement, and the step then
     // stopped 5px past the board's right edge instead of arriving inside it.
-    const board = el.closest('.walk-strip');
+    // The walk scrolls inside a `.hp-strip`; a rail scrolls inside the wrapper `bindHFade` puts
+    // round it. Either way it is the nearest ancestor with somewhere to scroll to, and asking
+    // that directly beats naming both classes here.
+    let board = el.parentElement;
+    while (board && board !== diagram
+           && board.scrollWidth <= board.clientWidth + 1) board = board.parentElement;
+    if (board === diagram) board = null;
     if (board) {
       // Measured, not `offsetLeft`: a box is `position: relative`, so the step's offset parent is
       // its own box and the number was a few pixels inside it rather than the distance down the
@@ -9713,7 +9815,7 @@ function pickWalkStep(scroll) {
       const br = board.getBoundingClientRect(), r = el.getBoundingClientRect();
       board.scrollLeft += (r.left - br.left) - (board.clientWidth - r.width) / 2;
     }
-    const row = el.closest('.walk-row');
+    const row = el.closest('.hp-row');
     if (row) {
       const rr = row.getBoundingClientRect();
       if (rr.top < 90 || rr.bottom > window.innerHeight) row.scrollIntoView({ block: 'center' });
@@ -9724,19 +9826,15 @@ function pickWalkStep(scroll) {
 // Three doors, each to the page that thing already has: a step to the flow of the use case it
 // realizes (the same flow the Features tab drills to, so a use case keeps ONE home), a feature's
 // name to that feature's page, a person's name to theirs.
-function bindWalk(root) {
+function bindHappyPath(root) {
   // A STEP IS A DOOR to the walk of the use case it realizes — the same walk the Features tab
   // drills to, so a use case keeps ONE home. The step's own BOX is what says "this one": it lights
-  // on hover, and it stays lit when a link arrives here naming a step (see pickWalkStep). Nothing
+  // on hover, and it stays lit when a link arrives here naming a step (see applyPick). Nothing
   // pops up: the board is a picture to read across, and a card over it is in the way.
-  root.querySelectorAll('.walk-step[data-uc]').forEach((b) => b.addEventListener('click', () => {
-    // The step this reader was on, so leaving and coming Back returns to it rather than to step 1.
-    walkStepNow = b.getAttribute('data-step');
-    go({ kind: 'usecase', uc: b.getAttribute('data-uc') });
-  }));
-  root.querySelectorAll('.walk-fname').forEach((b) => b.addEventListener('click', () =>
+  bindStepDoors(root);
+  root.querySelectorAll('.hp-fname').forEach((b) => b.addEventListener('click', () =>
     go({ kind: 'capability', cap: b.getAttribute('data-cap') })));
-  root.querySelectorAll('.walk-one').forEach((b) => b.addEventListener('click', () =>
+  root.querySelectorAll('.hp-one').forEach((b) => b.addEventListener('click', () =>
     go({ kind: 'actor', act: b.getAttribute('data-act') })));
 }
 
@@ -11337,8 +11435,11 @@ function ifaceActorRows(i) {
     .map((r) => ({ role: r, ucs: (per[r] || []).slice().sort(byHappyPath(hpPosOfUc, (u) => u)) }));
 }
 function ifaceById(id) { return ifaceList().find((i) => i.id === id) || null; }
-function ifaceFlowWord(i) {
-  const f = i.flow || [];
+// WHICH WAY DATA CROSSES here, in one word. Named `direction`, never `flow`: a flow in this product
+// is a use case's numbered steps, and one word for both is what made a reader look for a `flow`
+// property on an authored interface, which has never had one.
+function ifaceDirectionWord(i) {
+  const f = i.directions || [];
   return f.length === 2 ? 'both' : f[0] || '';
 }
 // A ROLE as a card. Roles do NOT ride in `GRAPH.nodes` — they have their own `GRAPH.roles` array —
@@ -11462,9 +11563,9 @@ function ifaceBoxHtml(i, me) {
 // nothing to say about a surface it never reaches, and ties break on id so the order is stable.
 function ifaceSorted(side) {
   return ifaceList().filter((i) => i.side === side).slice().sort((a, b) => {
-    const aw = a.walkPos == null ? 1 : 0, bw = b.walkPos == null ? 1 : 0;
+    const aw = a.hpStepPos == null ? 1 : 0, bw = b.hpStepPos == null ? 1 : 0;
     if (aw !== bw) return aw - bw;
-    if (!aw) return a.walkPos - b.walkPos;
+    if (!aw) return a.hpStepPos - b.hpStepPos;
     // …and BELOW the untouched ones, the surfaces no use case reaches AT ALL. A surface off the
     // happy path but used by some journey is still part of the product's work; one no journey names
     // is a different thing, and burying it is the honest ranking. 3 of MCP Hero's 16 are like that.
@@ -11629,8 +11730,8 @@ function stepFromHtml(st, uc, withName) {
   const i = flowStepIndex(uc, container, st.n);
   const shared = container !== uc && !!SUBFLOW_BY_ID[container];
   const parts = [];
-  if (withName) parts.push(walkName(uc));
-  if (shared) parts.push('\u27e8' + walkName(container) + '\u27e9');
+  if (withName) parts.push(flowName(uc));
+  if (shared) parts.push('\u27e8' + flowName(container) + '\u27e9');
   const nm = parts.length ? parts.join(' \u00b7 ') + (i >= 0 ? ' \u00b7 ' : '') : '';
   return `<button type="button" class="ifd-what-from" data-uc="${esc(container)}" `
     + `data-i="${esc(String(i))}" title="Open this walk at the step that says it">`
@@ -12125,7 +12226,7 @@ function renderInterface(s) {
     `<span class="uc-caplabel">${esc(i.side === 'ours' ? 'our interface' : 'their interface')}</span>`,
     i.kind ? `<span class="uc-caplabel">${esc(ifaceKindWord(i.kind))}</span>` : '',
     i.facing ? `<span class="uc-caplabel">${esc(i.facing)}-facing</span>` : '',
-    ifaceFlowWord(i) ? `<span class="uc-caplabel">${esc(ifaceFlowWord(i))} ${esc(IFACE_ARROW[ifaceFlowWord(i)] || '')}</span>` : '',
+    ifaceDirectionWord(i) ? `<span class="uc-caplabel">${esc(ifaceDirectionWord(i))} ${esc(IFACE_ARROW[ifaceDirectionWord(i)] || '')}</span>` : '',
   ].join('');
   // THE AUTHORED CROSSING TABLE IS GONE, with `interfaces[].carries[]`. What crosses is the walk
   // steps below, each carrying its own direction. Measured before the removal: its sentence
@@ -12386,7 +12487,7 @@ async function renderView(sArg, transient, seq) {
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   storyPinNow = null;   // a pin belongs to the Features page; a render of anything else leaves none behind
-  walkStepNow = null;   // …and a step belongs to the walk, on the same rule
+  pickNow = null;       // …and a picked box belongs to its board, on the same rule
   const s = sArg || history[hi];
   syncInfoPane(s, transient);   // every navigation starts with no card (one rule, before any return)
   syncCodePane(s);   // …and no source pane either, until the reader asks for a file
@@ -12430,11 +12531,11 @@ async function renderView(sArg, transient, seq) {
     // Claimed BEFORE the chrome, because that is where the address is written (refreshUrl). Claimed
     // after it, the step was ringed on a screen whose address had already forgotten it — so the link
     // you copied, and a reload, came back to step 1.
-    walkStepNow = walkStepOf(s);
+    pickNow = pickKeyOf(s);
     renderChrome(s); restoreTextScroll(s); applyPendingFlash();
     // …and the ring lands AFTER the remembered offset is put back, for the reason applyPendingFlash
     // states: an arrival scroll that goes first is undone by the restore.
-    pickWalkStep(true);
+    applyPick(true);
     return;
   }
   // One actor's page — the journey line: their happy-path stations on one rail, zoned by feature,
@@ -12445,7 +12546,15 @@ async function renderView(sArg, transient, seq) {
     if (!transient && !pendingStoryPin) pendingStoryPin = storyPinFromKey((s.sels || [])[0]);
     renderActorPage(s.act);
     mainScene = null;
-    renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return;
+    // The picked STEP, claimed before the chrome for the reason the Happy Path branch states: the
+    // address is written by `renderChrome`, and a step claimed after it was ringed on a screen whose
+    // address had already forgotten it — so the copied link, and a reload, lost it.
+    pickNow = pickKeyOf(s);
+    renderChrome(s); restoreTextScroll(s); applyPendingFlash();
+    // …and the ring lands after the remembered scroll offset is put back, or the arrival scroll is
+    // undone by the restore.
+    applyPick(true);
+    return;
   }
   // The System tab is HTML, not a mermaid diagram — same shape as Glossary. Its landing level is the
   // collection cards; one collection is the drill out of them, and heads itself with its own name, as one
@@ -13619,13 +13728,13 @@ function codeItemsForPath(path) {
       // A SHARED SUB-USE CASE IS NOT A USE CASE, and it has no graph node — so the old lookup fell through to
       // its raw id and printed `SF20` on the line, under a pill reading "use case". Two wrongs: an
       // element id on screen, which nothing in this product does, and a word that names the wrong kind
-      // of thing. `walkName` answers for both kinds.
-      choices.push({ name: walkName(s.uc), shared: !!SUBFLOW_BY_ID[s.uc],
+      // of thing. `flowName` answers for both kinds.
+      choices.push({ name: flowName(s.uc), shared: !!SUBFLOW_BY_ID[s.uc],
         select: () => { suppressCodeScroll = true; selectFlowStep(s.uc, s.i); } });
     }
     // The WORD follows what is on the line: two shared sub-use cases are "2 shared sub-use cases", a mix is "2 walks".
     const kinds = new Set(choices.map((c) => (c.shared ? 'shared sub-use case' : 'use case')));
-    const one = kinds.size === 1 ? [...kinds][0] : 'walk';
+    const one = kinds.size === 1 ? [...kinds][0] : 'flow';
     const many = one === 'shared sub-use case' ? 'shared sub-use cases'
       : one === 'use case' ? 'use cases' : 'walks';
     const name = choices.length === 1 ? choices[0].name
@@ -14200,7 +14309,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
 ]);
 const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', leftW: 'coyodex.leftW', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW',
-  walkCode: 'coyodex.walkCode',
+  flowCode: 'coyodex.flowCode',
   // A NEW KEY, because the old one cannot be read. `coyodex.drawer` was WRITTEN AT EVERY BOOT with
   // whatever the default then was, so every reader who ever opened the viewer has '1' stored whether
   // they chose the drawer or never opened Settings. Flipping the default left all of them on the
@@ -15314,7 +15423,7 @@ const INSP_GESTURE = 'Ctrl+Shift';
 const INSP_KIND = {
   roles: 'actor', capabilities: 'feature', use_cases: 'use case', happy_path: 'happy-path step',
   subsystems: 'subsystem', components: 'component', deps: 'dependency', entry_points: 'way in',
-  subdomains: 'subdomain', entities: 'record type', flows: 'walk', subflows: 'shared sub-use case',
+  subdomains: 'subdomain', entities: 'record type', flows: 'flow', subflows: 'shared sub-flow',
   rules: 'business rule', blocks: 'rule block', interfaces: 'interface', glossary: 'glossary term',
   tests: 'test row', deployment: 'process', config: 'setting', observability: 'signal',
   run_commands: 'command', non_entity_types: 'not a record type', extras: 'extra section',
@@ -15456,7 +15565,7 @@ function inspFlowArrow(el, handle) {
   const holder = el.closest && el.closest('[data-uc]');
   const here = history[hi];
   const uc = (holder && holder.getAttribute('data-uc'))
-    || (isWalkState(here) ? walkIdOf(here) : '');
+    || (isFlowState(here) ? flowIdOf(here) : '');
   if (!uc || !FLOWS_NARR[uc]) return null;
   // `flowMapSteps` IS THE LOOKUP — call it, never re-implement it. A first version compared the
   // arrow's ends to the narration's directly and always missed, because the two are in different
@@ -15479,7 +15588,7 @@ function inspFlowArrow(el, handle) {
 function inspFlowStep(el, i) {
   const holder = el.closest('[data-uc]');
   const here = history[hi];
-  const uc = (holder && holder.getAttribute('data-uc')) || (isWalkState(here) ? walkIdOf(here) : '');
+  const uc = (holder && holder.getAttribute('data-uc')) || (isFlowState(here) ? flowIdOf(here) : '');
   const st = uc && (FLOWS_NARR[uc] || [])[i];
   if (!st) return null;
   const shared = !!SUBFLOW_BY_ID[uc];

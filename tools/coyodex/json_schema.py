@@ -95,10 +95,10 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                "at all). For a term whose name is an ordinary English word that "
                                "would over-link."},
     ("HappyStep", "id"): {"pattern": r"^HP\d+$", "description": "this step's position in the "
-                           "ordered walk."},
+                           "happy path."},
     ("HappyStep", "uc"): {"pattern": r"^UC\d+$", "description": "the use case this step realizes."},
     ("HappyStep", "why"): {"description": "the prerequisite that fixes this step's position — "
-                             "why it can't come earlier in the walk."},
+                             "why it can't come earlier in the happy path."},
     ("Group", "id"): {"pattern": ID_SHAPE.pattern, "description": "`S<n>` in subsystems[], "
                        "`SD<n>` in subdomains[], `CAP<n>` in capabilities[], `BLK<n>` in blocks[] "
                        "— same dataclass, four id forests."},
@@ -106,10 +106,10 @@ FIELD_META: dict[tuple[str, str], dict] = {
                            "in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP, a BLK "
                            "a BLK), or null for top-level."},
     ("Group", "happy_path"): {"enum": ["", *grammar.CAP_HAPPY_PATH], "description": "CAPABILITY-ONLY: "
-                               "must the Happy-Path walk reach this capability? `expected` = yes, at "
+                               "must the happy path reach this capability? `expected` = yes, at "
                                "least one of its use cases; `excluded` = no, and one 'Happy Path "
                                "coverage' record says why. Deliberately NOT derived from happy_path[] "
-                               "— a value that always agreed with the walk could never disagree with "
+                               "— a value that always agreed with the happy path could never disagree with "
                                "it, and the disagreement IS the check. Says nothing about audience. "
                                "`validate` blocks it on a subsystem or a subdomain."},
     ("Group", "stakes"): {"description": "CAPABILITY-ONLY: one entry per driving actor, saying "
@@ -125,13 +125,13 @@ FIELD_META: dict[tuple[str, str], dict] = {
                           "the actor's name; writing rules apply (one idea, plain words, no code, "
                           "no step numbers)."},
     ("Group", "story"): {"description": "CAPABILITY-ONLY, and only worth authoring on a feature the "
-                          "walk never reaches: where that feature sits in the ONE story column the "
-                          "viewer draws. The walk reads unbroken and the off-walk features form a "
+                          "happy path never reaches: where that feature sits in the ONE story column the "
+                          "viewer draws. The happy path reads unbroken and the off-happy-path features form a "
                           "block after it, so `after` ORDERS that block (the block is already after "
-                          "every walk feature) while `before` is the one placement that keeps a "
-                          "feature among the walk — author it on a lead-in like a marketing page, "
+                          "every happy-path feature) while `before` is the one placement that keeps a "
+                          "feature among the happy path — author it on a lead-in like a marketing page, "
                           "which belongs BEFORE the first step. Absent = the viewer guesses from "
-                          "the feature's actors' last walk step, which orders the block sensibly "
+                          "the feature's actors' last happy-path step, which orders the block sensibly "
                           "for trailing features (ops, a chat variant of work already walked) and "
                           "never rescues a lead-in. `validate` blocks it on the other forests."},
     ("StoryAnchor", "place"): {"enum": ["before", "after"], "description": "exactly `before` or "
