@@ -267,7 +267,7 @@ def test_only_direct_diagram_clicks_pin_selection_action_icons() -> None:
     assert "p._actionIcon._selected = !!revealAction" in glow_edge
     assert "hpGlow(el, revealAction = true)" in hp_glow
     assert "el._actionIcon._selected = !!revealAction" in hp_glow
-    assert "const off = glowEdge(arrow.path, arrow.label, reveal);" in flow_map
+    assert "glowEdgeAt(arrow.path, arrow.label, reveal, stepNumEl(arrow.label, i))" in flow_map
     assert "flowPlay.showLocate" not in js
     assert "showLocate:" not in js
     assert "const pinOnSelect" not in edge_action
@@ -1288,7 +1288,7 @@ def test_every_arrow_is_drawn_the_same_and_every_arrow_answers_a_click() -> None
     assert "markSyntheticEdge" not in js and "SYN_EDGE" not in js and "data-syn" not in js
     bind = js[js.index("function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {"):
               js.index("\n}", js.index("function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {"))]
-    assert "edgeDesc(scene, p, label, e, selKey, showFn)" in bind, "no arrow is filtered out of its card"
+    assert "edgeDesc(scene, p, label, e, selKey, showFn, opts.anchor)" in bind, "no arrow is filtered out of its card"
     stack = js[js.index("function renderSelPanel(scene) {"):
                js.index("\n}", js.index("function renderSelPanel(scene) {"))]
     assert "if (!d.show) continue;" in stack, "kept as a guard: an empty card must never be appended"
@@ -1432,6 +1432,62 @@ def test_the_line_points_at_an_arrows_own_middle_not_its_boxs() -> None:
     draw = js[js.index("function syncCallout() {"): js.index("\n}", js.index("function syncCallout() {"))]
     assert "const mid = arrowMidpoint(el);" in draw
     assert "b = mid || borderPoint(e, pc)" in draw, "an arrow points at its middle, a box at its border"
+
+
+def test_a_step_number_sits_at_the_middle_of_its_arrow() -> None:
+    """The layout engine puts an arrow's label half way between the two boxes' COLUMNS, and never asks
+    how far the curve travels up or down on the way. On a use case map the label IS the step number, so
+    a number sat 15% along one arrow and 88% along the next — measured on mcpolis UC1, 5 of its 17
+    numbers were more than 15px from the middle, 31px at worst.
+
+    The callout already lands half way ALONG the drawn curve (arrowMidpoint), so the label is moved to
+    that same point, once per render and before anything binds to it or measures it: the pill beside
+    a label and the line to a number both read the label's place, so a label moved after them would
+    leave both pointing at where it used to be."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function centreEdgeLabels(root) {"): js.index("\n}", js.index("function centreEdgeLabels(root) {"))]
+    assert "getPointAtLength(len / 2)" in fn, "the point half way along the curve — the same point arrowMidpoint lands on"
+    assert "pointToHostSpace(p, mid.x, mid.y, label.parentNode)" in fn, "the label's translate is in its parent's space"
+    assert "label.setAttribute('transform', `translate(${at.x}, ${at.y})`)" in fn
+    assert "if (loops[i] || !edgeLabelHasContent(label)) return;" in fn, \
+        "a self-arrow keeps the engine's place; an empty label has nothing to move"
+    render = js[js.index("async function renderView(sArg, transient, seq) {"): js.index("\n}", js.index("async function renderView(sArg, transient, seq) {"))]
+    assert render.index("diagram.innerHTML = svg;") < render.index("centreEdgeLabels(diagram);") < render.index("bindFor(s);"), \
+        "moved after the drawing is on screen and before anything binds to it"
+    channels = js[js.index("function dvRenderChannels("): js.index("function dvShow(")]
+    assert "centreEdgeLabels(ph);" in channels, "the Storage tab's small pictures are drawn by the same engine"
+
+
+def test_clicking_an_arrow_points_the_line_at_its_number_not_its_middle() -> None:
+    """A number is a door to its step, and so is the arrow that carries it. Clicking the number drew the
+    line to the number; clicking the line beside it drew the line to the arrow's middle — the same card,
+    pointed at two different places depending on which pixels the click hit. And the middle of an arrow
+    carrying three steps names all three and therefore none.
+
+    ONE helper lights an arrow and says where its line lands, and both doors go through it: the step's
+    own selection hands it the number, the arrow's selection hands it the number (one step) or the row of
+    numbers (a bundle, whose card describes all of them). The anchor is looked up at glow time, not at
+    bind time, because the numbers are built after the arrows are bound."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    glow_at = js[js.index("function glowEdgeAt(p, label, reveal, anchor) {"): js.index("\n}", js.index("function glowEdgeAt(p, label, reveal, anchor) {"))]
+    assert "const off = glowEdge(p, label, reveal);" in glow_at
+    assert "anchor.classList.add('flow-step-picked'); setStepAnchor(anchor);" in glow_at
+    assert "if (stepAnchorEl === anchor) setStepAnchor(null);" in glow_at, "the line goes when the selection goes"
+    desc = js[js.index("function edgeDesc(scene, p, label, e, selKey, showFn, anchor) {"): js.index("\n}", js.index("function edgeDesc(scene, p, label, e, selKey, showFn, anchor) {"))]
+    assert "glowEdgeAt(p, label, reveal, anchor ? anchor() : null)" in desc, "looked up at glow time"
+    assert js.count("function glowEdgeAt(") == 1 and js.count("glowEdgeAt(") == 3, \
+        "one helper, two doors: the step's own selection and the arrow's — nothing else lights a step"
+    flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function syncEnvPicker")]
+    assert "bindEdges(scene, (m, p, label) => {" in flow_map
+    assert "anchor: () => (on.length === 1 ? stepNumEl(label, on[0].i)" in flow_map, "a one-step arrow points at its number"
+    assert ": label && label.querySelector('foreignObject p'))" in flow_map, "a bundle points at the row of them"
+    bind = js[js.index("function bindEdges(scene, resolve) {"): js.index("\n}", js.index("function bindEdges(scene, resolve) {"))]
+    assert "resolve(m, p, label)" in bind and "anchor: r.anchor" in bind
+    # …and the dot stands BESIDE the digit. A digit is 3x8px at fit zoom, smaller than the dot, so a dot
+    # on its border hid the one thing the line was there to point at.
+    draw = js[js.index("function syncCallout() {"): js.index("\n}", js.index("function syncCallout() {"))]
+    assert "grow(rectOf(el), isStepAnchor(el) ? NUM_DOT_CLEAR : 0)" in draw
+    assert "const NUM_DOT_CLEAR = 7;" in js
 
 
 def test_the_sequence_views_get_a_line_too() -> None:
