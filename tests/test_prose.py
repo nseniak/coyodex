@@ -27,7 +27,7 @@ def make_model() -> ProjectModel:
     m.roles = [Role(id="R1", name="Andy", kind="human", wants="to place an order")]
     m.use_cases = [UseCase(id="UC1", name="Place order",
                            trigger_outcome="A shopper submits a basket and gets an order.")]
-    m.happy_path = [HappyStep(id="HP1", title="Place", uc="UC1", why="nothing precedes it")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1", why="nothing precedes it")]
     m.components = [Component(id="C1", name="Checkout", purpose="Takes a basket and books an order.")]
     m.capabilities = [Group(id="CAP1", name="Ordering", purpose="Everything a shopper buys with.")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", used_for="Stores every order.")]

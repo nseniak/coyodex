@@ -161,32 +161,32 @@ The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag
 names it); the step's detail lives in that use case's T6 flow. An optional `why:`
 line records the prerequisite that fixes the step's position.
 
-**HP1 — Sign up & create the organization** *(UC1)*
+**HP1 — Sign up and create an organization** *(UC1)*
 **HP2 — Add a remote HTTP upstream MCP** *(UC2)*
 why: needs the org from HP1
 **HP3 — Add a hosted stdio upstream MCP** *(UC3)*
 why: same org as HP2
-**HP4 — Connect / start the upstreams** *(UC4)*
+**HP4 — Connect or start an upstream** *(UC4)*
 why: an upstream must exist (HP2/HP3) before it can connect
-**HP5 — Configure roles & per-MCP access** *(UC5)*
+**HP5 — Configure roles and per-MCP access** *(UC5)*
 why: needs discovered upstreams (HP4) to scope access to
-**HP6 — Configure per-tool access & argument checks** *(UC6)*
+**HP6 — Configure per-tool access and argument checks** *(UC6)*
 why: refines the role from HP5
 **HP7 — Invite a team member** *(UC13)*
 why: needs a role (HP5) to assign
-**HP8 — Member connects their AI client via Google OAuth** *(UC7)*
+**HP8 — Connect human AI client via Google OAuth** *(UC7)*
 why: the member must be invited (HP7) to authenticate into the org
-**HP9 — Member authenticates per-user OAuth to an upstream** *(UC8)*
+**HP9 — Per-user OAuth to an upstream** *(UC8)*
 why: needs a gateway session (HP8) and a per-user-OAuth upstream (HP2)
-**HP10 — Member lists & calls tools through the gateway** *(UC12)*
+**HP10 — List and call tools through the gateway** *(UC12)*
 why: needs the connected session (HP8) and allowed tools (HP6)
-**HP11 — Admin mints a service token** *(UC10)*
+**HP11 — Mint a service token** *(UC10)*
 why: needs a least-privilege role (HP5)
-**HP12 — Headless agent calls tools via the service token** *(UC11)*
+**HP12 — Headless agent calls tools via service token** *(UC11)*
 why: needs the minted token (HP11)
-**HP13 — Admin reviews the audit log** *(UC17)*
+**HP13 — View and filter the audit log** *(UC17)*
 why: tool calls (HP10/HP12) must have happened to audit
-**HP14 — Admin deletes the organization** *(UC25)*
+**HP14 — Delete an organization** *(UC25)*
 why: terminal — purges everything created above
 
 ---

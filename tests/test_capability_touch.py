@@ -253,7 +253,7 @@ def test_a_parent_capability_inherits_its_childrens_elements() -> None:
 
 def test_a_parent_capability_is_reached_when_a_child_walks_the_spine() -> None:
     m = make_nested_model()
-    m.happy_path = [HappyStep(id="HP1", title="Order", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     assert not vm._spine_membership_warnings(m, {"UC1"}, set())
 
 

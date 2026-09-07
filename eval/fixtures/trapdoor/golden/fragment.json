@@ -87,24 +87,20 @@
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Support agent browses the tenant queue",
       "uc": "UC1"
     },
     {
       "id": "HP2",
-      "title": "Support agent opens one ticket",
       "uc": "UC2",
       "why": "needs a ticket id from the queue listed in HP1"
     },
     {
       "id": "HP3",
-      "title": "Reporter adds context as a comment",
       "uc": "UC4",
       "why": "the ticket opened in HP2 is the one being commented on"
     },
     {
       "id": "HP4",
-      "title": "Support agent moves the ticket to resolved",
       "uc": "UC3",
       "why": "the comment thread from HP3 is what the agent read before deciding"
     }

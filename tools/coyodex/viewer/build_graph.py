@@ -94,8 +94,7 @@ class HappyStep:
     a use case (`uc`). It carries no STORY/Touches — those live in the use case's T6 flow; drilling the
     step opens that flow. `why` is the optional prerequisite that fixes this step's position."""
     id: str
-    title: str
-    uc: str | None = None  # the use case this step realizes (from the required `*(UCn)*` heading tag)
+    uc: str | None = None  # the use case this step realizes; the viewer labels the step with its name
     why: str = ""          # optional `why:` line — the prerequisite that places this step in the walk
 
 

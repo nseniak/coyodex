@@ -27,6 +27,7 @@ from coyodex.model import (
     Entity,
     FlowStep,
     Group,
+    HappyStep,
     ModelError,
     ProjectModel,
     SubFlow,
@@ -109,6 +110,10 @@ def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
     # what a map built before `name` existed still answers with, instead of `"name": null`.
     name: str | None = (getattr(el, "name", None) or getattr(el, "title", None)
                         or getattr(el, "statement", None))
+    if isinstance(el, HappyStep):
+        # A step has no text of its own: it answers with its use case's name, as every screen does.
+        uc = next((u for u in m.use_cases if u.id == el.uc), None)
+        name = uc.name if uc else None
     source: str | None = None
     members: list[object] = []
     if isinstance(el, Component):

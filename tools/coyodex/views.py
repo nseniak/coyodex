@@ -381,9 +381,12 @@ def model_to_markdown(m: ProjectModel) -> str:
         body = ["The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag",
                 "names it); the step's detail lives in that use case's T6 flow. An optional `why:`",
                 "line records the prerequisite that fixes the step's position.", ""]
+        uc_name = {u.id: u.name for u in m.use_cases}
         for hp in m.happy_path:
+            # A step has no text of its own: the heading is its use case's name, so the spine
+            # reads in the same words as the use-case table above it.
             tag = f" *({hp.uc})*" if hp.uc else ""
-            body.append(f"**{hp.id} — {hp.title}**{tag}")
+            body.append(f"**{hp.id} — {uc_name.get(hp.uc or '', hp.uc or '')}**{tag}")
             if hp.why:
                 body.append(f"why: {hp.why}")
         section("Happy Path — the spine (an ordered walk through the use cases)", body)
@@ -1285,7 +1288,7 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         "goal": m.goal or None,
         "nodes": {nid: asdict(n) for nid, n in nodes.items()},
         "edges": [asdict(e) for e in edges],
-        "happy_path": [asdict(GraphHappyStep(id=g.id, title=g.title, uc=g.uc, why=g.why or ""))
+        "happy_path": [asdict(GraphHappyStep(id=g.id, uc=g.uc, why=g.why or ""))
                for g in m.happy_path],
         "flows": [asdict(f) for f in flows],
         "subflows": subflows,

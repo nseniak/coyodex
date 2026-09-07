@@ -27,7 +27,7 @@ MAP = {
     "title": "T", "goal": "G",
     "roles": [{"id": "R1", "name": "A", "kind": "human", "wants": "x", "drives": "UC1"}],
     "use_cases": [{"id": "UC1", "name": "Do it", "actors": ["R1"]}],
-    "happy_path": [{"id": "HP1", "title": "Do", "uc": "UC1"}],
+    "happy_path": [{"id": "HP1", "uc": "UC1"}],
     "components": [{"id": "C1", "name": "Front", "purpose": "takes the ask", "entry_point": "src/a.py:1"},
                    {"id": "C2", "name": "Back", "purpose": "answers it", "entry_point": "src/b.py:1"}],
     "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": "to answer", "where": "src/a.py:2"}],

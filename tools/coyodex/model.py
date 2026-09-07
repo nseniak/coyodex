@@ -129,8 +129,9 @@ class UseCase:
 @dataclass
 class HappyStep:
     id: str                   # HPn — the position in the walk
-    title: str
-    uc: str | None = None     # the use case this step realizes (required by validate)
+    uc: str | None = None     # the use case this step realizes (required by validate). The step
+                              # has no text of its own: every screen labels it with that use
+                              # case's name, so one goal is worded once.
     why: str | None = None    # the prerequisite that fixes this step's position
 
 

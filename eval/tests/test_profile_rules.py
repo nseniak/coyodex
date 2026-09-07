@@ -48,7 +48,7 @@ def make_base_model() -> ProjectModel:
     m = ProjectModel(title="Demo", goal="A demo.")
     m.roles = [Role(id="R1", name="Andy", kind="human", wants="orders", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="Cancel", actors=["R1"])]
-    m.happy_path = [HappyStep(id="HP1", title="Cancel", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     m.components = [Component(id="C1", name="Guard", purpose="p", source="src/guard.py:1",
                               files=["src/guard.py"]),
                     Component(id="C2", name="Admin", purpose="p", source="src/admin.py:1",

@@ -181,53 +181,53 @@ The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag
 names it); the step's detail lives in that use case's T6 flow. An optional `why:`
 line records the prerequisite that fixes the step's position.
 
-**HP1 — Reader installs the skill into their coding agents** *(UC1)*
-**HP2 — Agent briefs the reader on what it is about to analyse** *(UC3)*
+**HP1 — Install the coyodex skill into the coding agents** *(UC1)*
+**HP2 — Brief the reader on what will be analysed** *(UC3)*
 why: needs the skill installed at HP1, so the agent knows what coyodex means
-**HP3 — Agent measures the weight of every folder** *(UC5)*
+**HP3 — Size the code tree before choosing altitude** *(UC5)*
 why: needs the file set agreed at HP2
-**HP4 — Agent hands each worker its briefing** *(UC6)*
+**HP4 — Hand a fan-out worker its contract** *(UC6)*
 why: needs the slice sizes from HP3
-**HP5 — A worker self-checks its fragment before returning it** *(UC7)*
+**HP5 — Self-check one harvested fragment** *(UC7)*
 why: needs the briefing handed over at HP4
-**HP6 — Agent merges every fragment into one map** *(UC8)*
+**HP6 — Merge the workers' fragments into one map** *(UC8)*
 why: needs every worker's fragment on disk from HP5
-**HP7 — Agent assigns grouping and links across the whole build** *(UC9)*
+**HP7 — Turn path rules into explicit assignments** *(UC9)*
 why: needs the merged identifiers from HP6
-**HP8 — Agent checks the map is well formed** *(UC11)*
+**HP8 — Check the map is well formed** *(UC11)*
 why: needs a written map from HP6
-**HP9 — Agent makes the walk and the flows refute each other** *(UC12)*
+**HP9 — Make the map's two layers refute each other** *(UC12)*
 why: needs the map to be well formed, from HP8
-**HP10 — A fresh worker tries to disprove a batch of claims** *(UC13)*
+**HP10 — Disprove a claim against the code** *(UC13)*
 why: needs the ranked claim list from HP9
-**HP11 — Agent corrects a code link the skeptics moved** *(UC15)*
+**HP11 — Correct a code link that points at the wrong line** *(UC15)*
 why: needs the skeptics' verdicts from HP10
-**HP12 — Agent records what the skeptics proved** *(UC14)*
+**HP12 — Record what the skeptics proved** *(UC14)*
 why: needs every verdict file from HP10
-**HP13 — Agent runs the pre-commit read** *(UC19)*
+**HP13 — Run the pre-commit read** *(UC19)*
 why: needs the grounding record from HP12
-**HP14 — Agent stamps the conversation that built the map** *(UC20)*
+**HP14 — Stamp which conversation built the map** *(UC20)*
 why: needs a map that passed the gates at HP13
-**HP15 — Reader starts the local map server** *(UC2)*
-**HP16 — Reader opens the new project's map** *(UC21)*
+**HP15 — Start the local map server** *(UC2)*
+**HP16 — Open a project's map in a browser** *(UC21)*
 why: needs the server running from HP15 and a committed map from HP14
-**HP17 — Reader follows the product's story end to end** *(UC22)*
+**HP17 — Follow the product's story end to end** *(UC22)*
 why: needs the map open from HP16
-**HP18 — Reader reads the code under a box that surprised them** *(UC23)*
+**HP18 — Read the code under a box** *(UC23)*
 why: needs a box on screen from HP17
-**HP19 — Agent reports what later code changes did to the map** *(UC25)*
+**HP19 — Report what a code change did to the map** *(UC25)*
 why: needs the pinned baseline from HP14
-**HP20 — Agent folds the change report into the map** *(UC26)*
+**HP20 — Fold a change report into the map** *(UC26)*
 why: needs the report from HP19 and the reader's agreement
-**HP21 — Developer archives the map before rebuilding it** *(UC37)*
+**HP21 — Archive a map so the next run builds from scratch** *(UC37)*
 why: needs a baseline worth comparing against, from HP20
-**HP22 — Developer scores the rebuilt map against the archived one** *(UC29)*
+**HP22 — Score a rebuilt map against the accepted one** *(UC29)*
 why: needs the archived baseline from HP21
-**HP23 — Judges read both maps for grounding and against the rubric** *(UC30)*
+**HP23 — Have judges read both maps** *(UC30)*
 why: needs both maps profiled at HP22
-**HP24 — Developer accepts the rebuilt map as the new baseline** *(UC31)*
+**HP24 — Accept a run as the new baseline** *(UC31)*
 why: needs the verdict and the judgements from HP22 and HP23
-**HP25 — Developer scores the build's behaviour against the method** *(UC35)*
+**HP25 — Score a build's behaviour against the method** *(UC35)*
 why: needs the finished build's transcript, found through the stamp from HP14
 
 ---

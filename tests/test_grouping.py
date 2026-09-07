@@ -616,7 +616,6 @@ def make_domain_map(cards: str | None = None) -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -714,7 +713,6 @@ def make_domain_map(cards: str | None = None) -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -796,7 +794,6 @@ def make_domain_map(cards: str | None = None) -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -898,7 +895,6 @@ def make_domain_map(cards: str | None = None) -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -1022,7 +1018,6 @@ def make_domain_map(cards: str | None = None) -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -1108,7 +1103,6 @@ def make_domain_map(cards: str | None = None) -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -1201,7 +1195,6 @@ def make_domain_map(cards: str | None = None) -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -1329,13 +1322,11 @@ def make_gp_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Submit order",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Approve order",
       "uc": "UC2",
       "why": "needs the order from HP1"
     }
@@ -1484,7 +1475,6 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Admin creates the org",
       "uc": "UC22",
       "why": null
     }
@@ -2221,7 +2211,6 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -2363,7 +2352,6 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -2502,7 +2490,6 @@ def make_nested_subdomain_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -2943,7 +2930,6 @@ def _two_context_map(cards_extra: str = "") -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Search",
       "uc": "UC1",
       "why": null
     }
@@ -3267,8 +3253,8 @@ def test_hp_actors_are_one_per_distinct_driver_in_walk_order() -> None:
     actors = gen_viewer.hp_actors(parse_map(make_gp_map()))
     assert [a["name"] for a in actors] == ["Andy", "Adam"]
     assert [a["aid"] for a in actors] == ["HPA0", "HPA1"]
-    assert actors[0]["steps"] == [{"id": "HP1", "title": "Submit order"}]
-    assert actors[1]["steps"] == [{"id": "HP2", "title": "Approve order"}]
+    assert actors[0]["steps"] == [{"id": "HP1"}]
+    assert actors[1]["steps"] == [{"id": "HP2"}]
 
 
 def test_hp_actor_fallback_without_uc() -> None:
@@ -3286,7 +3272,6 @@ def test_hp_actor_fallback_without_uc() -> None:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Do a thing",
       "uc": null,
       "why": null
     }
@@ -3335,7 +3320,7 @@ def test_hp_actors_links_roles_and_steps() -> None:
     assert a["aid"] == "HPA0" and a["name"] == "Org admin"
     assert a["kind"] == "human" and a["wants"] == "manage"   # joined from the Roles table by name
     assert a["stepIdx"] == [0]
-    assert a["steps"] == [{"id": "HP1", "title": "Admin creates the org"}]
+    assert a["steps"] == [{"id": "HP1"}]
 
 
 def test_hp_actors_follow_first_appearance_order() -> None:
@@ -3386,13 +3371,11 @@ def test_parser_hp_captures_first_uc_of_multi_tag() -> None:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Sign in and create",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Renewal flow",
       "uc": "UC3",
       "why": null
     }
@@ -3452,7 +3435,7 @@ def make_gp_two_actor_map() -> str:
     m["use_cases"][0]["actors"] = ["R1", "R2"]
     m["use_cases"].append({"id": "UC23", "name": "Ban a user", "actors": ["R2"],
                            "trigger_outcome": "a -> b"})
-    m["happy_path"].append({"id": "HP2", "title": "Moderator bans a user", "uc": "UC23", "why": None})
+    m["happy_path"].append({"id": "HP2", "uc": "UC23", "why": None})
     return json.dumps(m)
 
 
@@ -3537,7 +3520,8 @@ def test_bundle_carries_gp_data() -> None:
     # diagram behind each of its steps. The board is HTML built in the browser, so the bundle ships
     # no drawing of the walk — only the facts it is drawn from.
     b = bundle_of(make_gp_map())
-    assert [s["title"] for s in b["graph"]["happy_path"]] == ["Submit order", "Approve order"]
+    assert [s["uc"] for s in b["graph"]["happy_path"]] == ["UC1", "UC2"]
+    assert all("title" not in s for s in b["graph"]["happy_path"]), "a step has no text of its own"
     assert [a["name"] for a in b["hpActors"]] == ["Andy", "Adam"]
     assert "flowchart LR" in " ".join(b["flowsMap"].values())
 

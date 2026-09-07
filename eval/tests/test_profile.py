@@ -52,19 +52,16 @@ def make_counts_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Andy views the order",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP3",
-      "title": "Logger records it",
       "uc": "UC1",
       "why": null
     }
@@ -281,7 +278,6 @@ def make_roles_then_usecases_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "View",
       "uc": "UC1",
       "why": null
     }
@@ -354,7 +350,6 @@ def make_broken_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "View",
       "uc": "UC1",
       "why": null
     }
@@ -433,13 +428,11 @@ def make_backward_whyref_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "First",
       "uc": "UC1",
       "why": "needs the thing from HP2"
     },
     {
       "id": "HP2",
-      "title": "Second",
       "uc": "UC2",
       "why": "follows HP1"
     }
@@ -532,13 +525,11 @@ def make_read_before_create_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Andy views the order",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
     }
@@ -1063,7 +1054,7 @@ def _door_map(steps: str, roles: str) -> str:
     return ("""{"format": "coyodex-map", "title": "D", "goal": "g",
   "roles": [%s],
   "use_cases": [{"id": "UC1", "name": "Do it", "actors": ["R1"]}],
-  "happy_path": [{"id": "HP1", "title": "Do", "uc": "UC1"}],
+  "happy_path": [{"id": "HP1", "uc": "UC1"}],
   "components": [{"id": "C1", "name": "Viewer", "purpose": "shows", "entry_point": "src/v.py:1"}],
   "interfaces": [{"id": "I1", "name": "CLI", "what": "How a person runs it.", "side": "ours",
                   "kind": "command-line", "facing": "user", "source": "src/v.py:1"}],

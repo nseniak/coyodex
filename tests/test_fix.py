@@ -1806,7 +1806,7 @@ def _rows_edit(d, edits: list[dict]) -> int:
 
 def test_a_gate_requested_field_may_be_added(monkeypatch, capsys):
     with tempfile.TemporaryDirectory() as td:
-        d = make_frag_dir(td, hp={"happy_path": [{"id": "HP1", "title": "Sign in", "uc": "UC1"}]})
+        d = make_frag_dir(td, hp={"happy_path": [{"id": "HP1", "uc": "UC1"}]})
         monkeypatch.setattr("sys.stdin", io.StringIO(
             json.dumps([{"id": "HP1", "set": {"why": "the caller has no session yet"}}])))
         rc = fix.main(["rows", "--fragments", str(d), "--edits", "-"])
@@ -1818,7 +1818,7 @@ def test_a_gate_requested_field_may_be_added(monkeypatch, capsys):
 def test_a_field_nobody_asked_for_is_still_refused(monkeypatch, capsys):
     """The general rule is unchanged: a key that is not on a row is usually a typo."""
     with tempfile.TemporaryDirectory() as td:
-        d = make_frag_dir(td, hp={"happy_path": [{"id": "HP1", "title": "Sign in", "uc": "UC1"}]})
+        d = make_frag_dir(td, hp={"happy_path": [{"id": "HP1", "uc": "UC1"}]})
         monkeypatch.setattr("sys.stdin", io.StringIO(
             json.dumps([{"id": "HP1", "set": {"porpoise": "x"}}])))
         rc = fix.main(["rows", "--fragments", str(d), "--edits", "-"])

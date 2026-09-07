@@ -61,12 +61,12 @@ The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag
 names it); the step's detail lives in that use case's T6 flow. An optional `why:`
 line records the prerequisite that fixes the step's position.
 
-**HP1 — Support agent browses the tenant queue** *(UC1)*
-**HP2 — Support agent opens one ticket** *(UC2)*
+**HP1 — Browse a tenant's tickets** *(UC1)*
+**HP2 — Read one ticket** *(UC2)*
 why: needs a ticket id from the queue listed in HP1
-**HP3 — Reporter adds context as a comment** *(UC4)*
+**HP3 — Comment on a ticket** *(UC4)*
 why: the ticket opened in HP2 is the one being commented on
-**HP4 — Support agent moves the ticket to resolved** *(UC3)*
+**HP4 — Move a ticket along its lifecycle** *(UC3)*
 why: the comment thread from HP3 is what the agent read before deciding
 
 ---

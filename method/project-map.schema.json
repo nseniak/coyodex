@@ -512,9 +512,6 @@
           "pattern": "^HP\\d+$",
           "description": "this step's position in the happy path."
         },
-        "title": {
-          "type": "string"
-        },
         "uc": {
           "type": [
             "string",
@@ -532,8 +529,7 @@
         }
       },
       "required": [
-        "id",
-        "title"
+        "id"
       ],
       "additionalProperties": false
     },

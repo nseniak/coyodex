@@ -95,7 +95,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "use_cases":   [ { "id": "UCn", "name", "actors": ["Rn", ...], "trigger_outcome",
                      "capability": "CAPn|null",                 // assigned at synthesis via reconcile
                      "entry_points": ["EPn", …] } ],            // the TRIGGER arm; empty is legitimate
-  "happy_path": [ { "id": "HPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
+  "happy_path": [ { "id": "HPn", "uc": "UCn", "why": "<prerequisite or null>" } ],   // no text of its own: labelled by UCn's name
 
   "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "source", "confidence",
                      "tech": "<one stack label, e.g. 'Python/FastAPI'>",   // subsystem-only; blocked on subdomains

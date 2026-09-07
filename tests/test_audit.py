@@ -109,13 +109,11 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
         """[
     {
       "id": "HP1",
-      "title": "Andy views the order",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
     }
@@ -123,13 +121,11 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
         """[
     {
       "id": "HP1",
-      "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Andy views the order",
       "uc": "UC1",
       "why": null
     }
@@ -272,7 +268,7 @@ def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
   "roles": [{roles_json}],
   "glossary": [],
   "use_cases": [{{"id": "UC1", "name": "View order", "actors": ["R1"], "trigger_outcome": "opens -> sees"}}],
-  "happy_path": [{{"id": "HP1", "title": "View the order", "uc": "UC1", "why": null}}],
+  "happy_path": [{{"id": "HP1", "uc": "UC1", "why": null}}],
   "subsystems": [],
   "components": [{{"id": "C1", "name": "Viewer", "subsystem": null, "purpose": "x", "entry_point": "f",
                   "depends_on": "", "source": null, "confidence": "", "extra": {{}}}}],
@@ -320,19 +316,16 @@ def make_shared_read_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "A",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "B",
       "uc": "UC2",
       "why": null
     },
     {
       "id": "HP3",
-      "title": "C",
       "uc": "UC3",
       "why": null
     }
@@ -495,13 +488,11 @@ def make_cc_routed_read_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Sign in",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Create org",
       "uc": "UC2",
       "why": null
     }
@@ -648,13 +639,11 @@ def make_backward_whyref_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "First",
       "uc": "UC1",
       "why": "needs the thing from HP2"
     },
     {
       "id": "HP2",
-      "title": "Second",
       "uc": "UC2",
       "why": "follows HP1"
     }
@@ -740,7 +729,6 @@ def make_read_never_created_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Load the config",
       "uc": "UC1",
       "why": null
     }
@@ -838,13 +826,11 @@ def make_whyless_map() -> str:
   "happy_path": [
     {
       "id": "HP1",
-      "title": "First",
       "uc": "UC1",
       "why": "the start"
     },
     {
       "id": "HP2",
-      "title": "Second",
       "uc": "UC2",
       "why": null
     }
@@ -1488,8 +1474,8 @@ def test_hp_whyref_ignores_word_with_embedded_hp() -> None:
     # (A standalone "HP15" is still ref-shaped and correctly matches — that residual needs typed refs.)
     from coyodex.model import HappyStep, ProjectModel
     m = ProjectModel(happy_path=[
-        HappyStep(id="HP1", title="a", uc="UC1"),
-        HappyStep(id="HP2", title="b", uc="UC2", why="runs on PHP7 runtime (not BHP2)"),
+        HappyStep(id="HP1", uc="UC1"),
+        HappyStep(id="HP2", uc="UC2", why="runs on PHP7 runtime (not BHP2)"),
     ])
     assert audit_model.happy_path_steps(m)[1].why_refs == []
 
@@ -1497,8 +1483,8 @@ def test_hp_whyref_ignores_word_with_embedded_hp() -> None:
 def test_hp_whyref_reads_whole_token() -> None:
     from coyodex.model import HappyStep, ProjectModel
     m = ProjectModel(happy_path=[
-        HappyStep(id="HP1", title="a", uc="UC1"),
-        HappyStep(id="HP2", title="b", uc="UC2", why="needs the org from HP1"),
+        HappyStep(id="HP1", uc="UC1"),
+        HappyStep(id="HP2", uc="UC2", why="needs the org from HP1"),
     ])
     assert audit_model.happy_path_steps(m)[1].why_refs == [1]
 
@@ -1754,7 +1740,7 @@ def make_walk(*rows: tuple[str, str, str | None]) -> ProjectModel:
     ucs = sorted({uc for _, uc, _ in rows})
     return ProjectModel(
         use_cases=[UseCase(id=u, name=u, trigger_outcome="t") for u in ucs],
-        happy_path=[HappyStep(id=hp, uc=uc, title=f"step {hp}", why=why)
+        happy_path=[HappyStep(id=hp, uc=uc, why=why)
                     for hp, uc, why in rows],
     )
 
@@ -1802,7 +1788,7 @@ def test_positional_why_ref_silently_retargets_when_the_walk_is_renumbered():
         return ProjectModel(
             use_cases=[UseCase(id=u, name=u, trigger_outcome="t")
                        for u in ("UC1", "UC2", "UC9")],
-            happy_path=[HappyStep(id=hp, uc=uc, title=uc, why=why) for hp, uc, why in rows])
+            happy_path=[HappyStep(id=hp, uc=uc, why=why) for hp, uc, why in rows])
 
     before = walk([("HP1", "UC1", None), ("HP2", "UC2", "needs the org from HP1")])
     after = walk([("HP1", "UC9", None),                       # inserted first act
@@ -1933,7 +1919,7 @@ def make_advisory_map() -> ProjectModel:
     m = ProjectModel(title="T", goal="G")
     m.roles = [Role(id="R1", name="A", kind="human", wants="x", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="Read it", actors=["R1"])]
-    m.happy_path = [HappyStep(id="HP1", title="Read", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     m.components = [Component(id="C1", name="A", purpose="p", entry_point="a.py:1")]
     m.entities = [Entity(id="E1", name="Thing", source="a.py:1")]
     m.edges = [Edge(src="C1", verb="reads", dst="E1", why="w", where="a.py:2")]
@@ -1989,7 +1975,7 @@ def test_a_recorded_line_silences_one_pair_never_a_family():
     # A SECOND component, not just a second entity: reads are attributed at component granularity, so
     # two flows through one component both land on the first HP step and the ids would not differ.
     m.use_cases.append(UseCase(id="UC2", name="Read again", actors=["R1"]))
-    m.happy_path.append(HappyStep(id="HP2", title="Again", uc="UC2"))
+    m.happy_path.append(HappyStep(id="HP2", uc="UC2"))
     m.components.append(Component(id="C2", name="B", purpose="p", entry_point="b.py:1"))
     m.entities.append(Entity(id="E2", name="Other", source="b.py:1"))
     m.edges.append(Edge(src="C2", verb="reads", dst="E2", why="w", where="b.py:2"))

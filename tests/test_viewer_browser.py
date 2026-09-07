@@ -2467,7 +2467,7 @@ def _a_door_for_a_bystander(long_title: bool = False) -> Any:
     creator drives, which is the only shape the third lane exists for and one the committed fixture
     holds nowhere.
 
-    `long_title` stretches ONE happy-path title past the rest, so the levelling pass has a station
+    `long_title` stretches ONE happy-path label (its use case's name) past the rest, so the levelling pass has a station
     that must keep its own height rather than be padded to the majority."""
     admin_ucs = ("UC2", "UC3", "UC4", "UC5", "UC6", "UC13")
 
@@ -2493,10 +2493,11 @@ def _a_door_for_a_bystander(long_title: bool = False) -> Any:
                     "n": nxt, "src": "R2", "dst": "I1", "phrase": "work on the dashboard",
                     "note": "", "where": None, "no_call_site": False, "subflow": None})
         if long_title:
-            for s in m["happy_path"]:
-                if s.get("uc") == "UC4":
-                    s["title"] = ("Admin connects and starts every upstream MCP server the "
-                                  "organization has mounted so far")
+            # A step is labelled with its use case's name, so the stretch goes on the use case.
+            for u in m["use_cases"]:
+                if u["id"] == "UC4":
+                    u["name"] = ("Connect and start every upstream MCP server the organization "
+                                 "has mounted so far")
     return mutate
 
 

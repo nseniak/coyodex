@@ -286,67 +286,56 @@
   "happy_path": [
     {
       "id": "HP1",
-      "title": "Developer installs the coyodex skill",
       "uc": "UC1",
       "why": null
     },
     {
       "id": "HP2",
-      "title": "Coding agent builds the repo's baseline map",
       "uc": "UC2",
       "why": "needs the skill and the CLI installed in HP1"
     },
     {
       "id": "HP3",
-      "title": "Developer starts the local map server",
       "uc": "UC3",
       "why": "needs the CLI and virtualenv installed in HP1"
     },
     {
       "id": "HP4",
-      "title": "Developer explores the new map top-down",
       "uc": "UC4",
       "why": "needs the map from HP2 and the server from HP3"
     },
     {
       "id": "HP5",
-      "title": "Developer opens the source behind a box that surprised them",
       "uc": "UC5",
       "why": "the code viewer reads from git at the commit the HP2 map is pinned to"
     },
     {
       "id": "HP6",
-      "title": "Coding agent analyzes the developer's next code change",
       "uc": "UC6",
       "why": "diffs against the baseline pinned in HP2"
     },
     {
       "id": "HP7",
-      "title": "Developer sees what that change ripples to in the viewer",
       "uc": "UC11",
       "why": "needs the server from HP3 and the code change analyzed in HP6"
     },
     {
       "id": "HP8",
-      "title": "Coding agent accepts the change into the baseline",
       "uc": "UC7",
       "why": "acts on the report written in HP6"
     },
     {
       "id": "HP9",
-      "title": "Developer asks for the map itself to be restructured",
       "uc": "UC8",
       "why": "edits the baseline map built in HP2"
     },
     {
       "id": "HP10",
-      "title": "Developer backs up the map with its build transcript",
       "uc": "UC10",
       "why": "pairs the map with the session stamped into its provenance during HP2"
     },
     {
       "id": "HP11",
-      "title": "Method maintainer checks whether the method improved",
       "uc": "UC9",
       "why": "compares a fresh build against the baseline accepted in HP8"
     }

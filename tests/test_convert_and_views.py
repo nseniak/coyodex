@@ -545,7 +545,7 @@ def test_actor_facts_survive_a_name_the_sanitisers_rewrite():
     m.roles = [Role(id="R1", name="Ops#1 <sync>", kind="service", wants="to sync")]
     m.use_cases = [UseCase(id="UC1", name="View", actors=["Ops#1 <sync>"])]
     m.flows[0].steps[0] = FlowStep(n=1, src="Ops#1 <sync>", dst="C1", phrase="opens the page")
-    m.happy_path = [HappyStep(id="HP1", title="The bot syncs", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     g = model_to_graph(m)
     roster = flow_actors(g, cast("dict", g["flows"][0]))
     assert roster[0]["kind"] == "service" and roster[0]["wants"] == "to sync"   # authored token

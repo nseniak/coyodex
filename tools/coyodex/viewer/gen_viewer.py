@@ -2718,7 +2718,7 @@ def hp_actors(graph: GraphDict) -> list[dict[str, Any]]:
             "name": name,
             "kind": str(role["kind"]) if role else "",
             "wants": str(role["wants"]) if role else "",
-            "steps": [{"id": str(steps[i]["id"]), "title": str(steps[i]["title"] or "")} for i in idxs],
+            "steps": [{"id": str(steps[i]["id"])} for i in idxs],
             "stepIdx": idxs,
         })
     return out

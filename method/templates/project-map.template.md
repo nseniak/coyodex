@@ -63,7 +63,8 @@
 The happy-path ORDERING of use cases across all main functionality and every actor. Each step IS a
 use case — its `*(UCn)*` tag is required; `HPn` is just its position in the happy path. The step carries no
 STORY / mechanics / Touches: those live once in the use case's T6 flow below, and drilling a step
-opens it. An optional `why:` line records the prerequisite that fixes this step's position. The
+opens it. A step has no text of its own: its heading is its use case's name, repeated. An optional
+`why:` line records the prerequisite that fixes this step's position. The
 driving actor is the use case's own Actor (no separate `Actor:` line). Refer to actors by their
 Roles-table names, never invented nicknames.
 Coverage: the happy path hits all main functionality + all actors. What one linear happy path can't reach is
@@ -71,10 +72,10 @@ RECORDED, not forced in: each off-spine use case (`UCn: <why>`) and each role de
 a spine position (`Rn: <why>`) gets a line-leading entry under a "Happy Path coverage" extras
 heading — `validate` warns on the unrecorded ones.
 
-**HP1 — <title>** *(UC1)*
-**HP2 — <title>** *(UC2)*
+**HP1 — <use case name>** *(UC1)*
+**HP2 — <use case name>** *(UC2)*
 why: needs the result of HP1
-**HP3 — <title>** *(UC3)*
+**HP3 — <use case name>** *(UC3)*
 
 <!-- The use-case↔element traceability and the backward "Used in UC" view are DERIVED from the T6
      flows below (the flow steps name the elements) — not authored here. -->

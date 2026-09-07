@@ -512,10 +512,19 @@ if (HAS_GLOSSARY && GLOSS_MATCHER.maxWords) {
   }, true);
 }
 
-// Happy Path step lookup 'HP1' -> step record (id, title, uc, why). The step IS a use case; its
+// Happy Path step lookup 'HP1' -> step record (id, uc, why). The step IS a use case; its
 // detailed actions live in that use case's walk (FLOWS_NARR), opened when the step drills.
 const HP_BY_ID = {};
 for (const s of GRAPH.happy_path || []) HP_BY_ID[s.id] = s;
+// A step's text is its use case's NAME. The step used to carry a title of its own, and the two
+// texts drifted on every map ("Admin reviews the audit log" over "View and filter the audit log"):
+// one goal, two wordings, and a reader who had to guess whether they were the same thing. Now the
+// step has no text of its own, so a goal is worded once, and a step with no use case behind it has
+// nothing to say — the caller decides what that reads as.
+function hpStepText(st) {
+  const uc = st && st.uc && GRAPH.nodes[st.uc];
+  return uc ? uc.name : '';
+}
 // Happy Path actor lookups: by participant id (HPA0) and by the step it drives (HP1 -> actor records).
 // A step maps to a LIST: its use case may name several interchangeable actors, and each of them really
 // does drive it — keeping only one lit while a step is selected would dim a driver of that very step.
@@ -3701,7 +3710,8 @@ function actionTipEdge(a, b, drawn) {
 }
 function actionTipHP(hpId) {
   const s = HP_BY_ID[hpId];
-  return '<div class="tt">Open step</div>' + (s && s.title ? '<div class="tm">' + esc(s.title) + '</div>' : '');
+  const text = hpStepText(s);
+  return '<div class="tt">Open step</div>' + (text ? '<div class="tm">' + esc(text) + '</div>' : '');
 }
 
 // --- diff badges ------------------------------------------------------------------
@@ -8657,48 +8667,18 @@ function actorStations(actorName) {
   });
   return out;
 }
-// A station's label: the step's title with its leading actor designator dropped — on a page about
-// one actor, "Admin adds a remote HTTP MCP" says "Admin" once per station for nothing. Two forms,
-// because walk titles use both: the actor's FULL name ("Headless agent calls a tool…"), or a short
-// capitalized designator ("Admin adds…", "Prospect signs in…"). The short form only strips when
-// every one of its words is a word of the actor's name or a prefix of one ("Prospect" ⊂
-// "Prospective customer") — a leading capitalized run that is NOT the actor ("Ops on-call rotates
-// keys" on someone else's page) keeps every word, since dropping a stranger's name changes who acts.
-// `actorName` is one name or SEVERAL — a box on a feature's page can be named after every actor who
-// may drive its steps, and then the title is stripped if it names ANY of them. The walk narrates one
-// story, so its step titles name ONE doer even where the use case allows several: on the Mio map, step
-// "Admin signs in to the dashboard" belongs to a use case both the admin and the member can start. Under
-// a box reading "Workspace admin or Workspace member", the untouched title named only half of it. Strip
-// the designator and the line reads "signs in to the dashboard", which is true of both.
-// A USE CASE'S TEXT STARTS WITH A CAPITAL, wherever it is drawn. The two boards disagreed because
-// their texts come from different places: a stop shows the use case's NAME, which the map authors
-// capitalised, while a step shows a walk TITLE with its leading actor designator stripped off — so
-// "Admin wires their AI client" became "wires their AI client" and sat lower-case beside it.
-// Done here rather than with `::first-letter`, which cannot be read back by a test and would have
-// been a second rule to keep in step with this one.
+// A USE CASE'S TEXT STARTS WITH A CAPITAL, wherever it is drawn. A station's label is its use
+// case's name, and the map authors capitalise those; this keeps a stop and a step reading alike
+// even where a name was written lower-case. Done here rather than with `::first-letter`, which
+// cannot be read back by a test and would have been a second rule to keep in step with this one.
+// A station used to show the step's own title with its leading actor designator stripped off
+// ("Admin adds a remote HTTP MCP" -> "adds a remote HTTP MCP"). The title is gone, and a use
+// case's name is an imperative verb phrase that names no actor, so there is nothing to strip.
+// The stripper was removed with the title: fed use case names it only had false positives left
+// ("Visit the pricing page" on the Visitor's page lost its verb).
 function sentenceCase(text) {
   const t = String(text || '');
   return t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
-}
-function stationTitle(title, actorName) {
-  const s = String(title || '').trim();
-  const names = (Array.isArray(actorName) ? actorName : [actorName])
-    .map((n) => String(n || '').trim()).filter(Boolean);
-  for (const full of names) {
-    if (s.toLowerCase().startsWith(full.toLowerCase() + ' ')) {
-      const rest = s.slice(full.length).trim();
-      if (rest) return rest;
-    }
-  }
-  const m = s.match(/^((?:[A-Z][^\s]*\s+){1,3})([a-z].*)$/);
-  if (!m) return s;
-  const runWords = m[1].trim().toLowerCase().split(/\s+/);
-  const ofActor = names.some((full) => {
-    const actorWords = full.toLowerCase().split(/\s+/).filter(Boolean);
-    return runWords.every((w) =>
-      actorWords.some((aw) => aw === w || (w.length >= 4 && aw.startsWith(w))));
-  });
-  return ofActor ? m[2] : s;
 }
 // One actor's rail, derived: the zones the walk drags them through (in first-station order), then
 // the features they only touch off the walk. `zones` draw ON the rail; `offZones` follow its
@@ -9032,10 +9012,10 @@ function flowStepBoxHtml(st, o) {
   return `<button type="button" class="flow-step${dead ? ' flow-step-dead' : ' pickbox'}" `
     + `data-step="${esc(st.id)}"${dead ? '' : ` data-uc="${esc(st.uc)}" data-pick="hpstep:${esc(st.id)}"`} `
     + `title="${dead ? 'This map does not say how this step works'
-                     : 'Open how this works: ' + esc(st.title || 'this step')}">`
+                     : 'Open how this works: ' + esc(hpStepText(st) || 'this step')}">`
     + '<span class="flow-step-dot"></span>'
     + (opt.num ? `<span class="flow-step-num">${esc(String(hpStepPos(st.id)))}</span>` : '')
-    + `<span class="flow-step-title">${esc(sentenceCase(stationTitle(st.title, opt.actor)))}</span>`
+    + `<span class="flow-step-title">${esc(sentenceCase(hpStepText(st) || st.id))}</span>`
     + (opt.marks ? journeyMarksHtml(st.uc) : '')
     + journeyIfsHtml((opt.ifs || {})[st.uc])
     + '</button>';
@@ -9689,9 +9669,8 @@ function hpHandHtml(acts) {
       + `<span class="hp-who">${esc(name)}</span></span>`);
   return `<div class="hp-hand">${list.map(one).join('<span class="hp-or">or</span>')}</div>`;
 }
-// One box: the feature's name over a line of its steps. The step's title drops the leading actor
-// designator (stationTitle), because the person who does it is named on the line a few pixels away,
-// and repeating it in every title is the noise the two rails already dropped.
+// One box: the feature's name over a line of its steps. A step is labelled with its use case's
+// name, which names no actor: the person who does it is named on the line a few pixels away.
 //
 // The NUMBER stays. Both rails drop it deliberately — "which of the walk's twenty steps is this"
 // answers no question either of those pages asks. It is the question THIS page asks, so the number
@@ -10319,7 +10298,7 @@ function bindStoryDiagram(root) {
     // still selectable, on the Happy Path itself, which is the view whose subject that is.
     // NOT EMPTY BACKGROUND EITHER: a click on the label must not clear the pinned card under it.
     const hp = e.step ? HP_BY_ID[e.step] : null;
-    lab.title = hp ? (hp.title || 'On the happy path')
+    lab.title = hp ? (hpStepText(hp) || 'On the happy path')
       : ((GRAPH.happy_path || []).length ? 'Not on the happy path' : 'This map has no happy path');
     lab.addEventListener('click', (ev) => ev.stopPropagation());
     stage.appendChild(lab); labels.push(lab);

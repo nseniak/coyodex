@@ -38,7 +38,7 @@ def make_map(*, capability_on_uc: str | None = "CAP1", rules: list[dict] | None 
         "use_cases": [{"id": "UC1", "name": "Pay", "actors": ["R1", "R2"],
                        "capability": capability_on_uc,
                        "entry_points": entry_points if entry_points is not None else ["EP1"]}],
-        "happy_path": [{"id": "HP1", "title": "Pay", "uc": "UC1"}],
+        "happy_path": [{"id": "HP1", "uc": "UC1"}],
         "entry_points": [{"id": "EP1", "kind": "http-route", "trigger": "POST /pay",
                           "source": "src/a.py:1", "component": "C1"},
                          {"id": "EP2", "kind": "cli", "trigger": "pay",
@@ -267,9 +267,9 @@ def make_story_map() -> dict:
         {"id": "UC5", "name": "Refund", "actors": ["R2"], "capability": "CAP1",
          "entry_points": []}]
     # The walk touches Signup FIRST, then Billing twice — Billing must appear once, at its first.
-    doc["happy_path"] = [{"id": "HP1", "title": "Open the account", "uc": "UC2"},
-                         {"id": "HP2", "title": "Pay", "uc": "UC1"},
-                         {"id": "HP3", "title": "Refund", "uc": "UC5"}]
+    doc["happy_path"] = [{"id": "HP1", "uc": "UC2"},
+                         {"id": "HP2", "uc": "UC1"},
+                         {"id": "HP3", "uc": "UC5"}]
     doc["flows"] = []
     doc["rules"] = []
     return doc
@@ -345,7 +345,7 @@ def test_a_walk_step_naming_a_missing_use_case_is_skipped_not_fatal():
     """A dangling `uc` is validate's finding; the derivation must not crash on it or let it shift
     the orders."""
     doc = make_story_map()
-    doc["happy_path"].insert(0, {"id": "HP9", "title": "Ghost", "uc": "UC99"})
+    doc["happy_path"].insert(0, {"id": "HP9", "uc": "UC99"})
     st = story_of(doc)
     assert st.spine == ["CAP2", "CAP1"] and st.cast == ["R1", "R2", "R3"]
 
@@ -418,7 +418,7 @@ def test_before_an_unpinned_off_feature_does_not_drag_it_into_the_walk():
                                 "happy_path": "expected"})
     doc["use_cases"].append({"id": "UC6", "name": "Ask for help", "actors": ["R2"],
                              "capability": "CAP5", "entry_points": []})
-    doc["happy_path"].append({"id": "HP4", "title": "Ask for help", "uc": "UC6"})
+    doc["happy_path"].append({"id": "HP4", "uc": "UC6"})
     doc["capabilities"][3]["story"] = {"place": "before", "feature": "CAP3"}
     col = story_of(doc).column
     assert col == ["CAP2", "CAP1", "CAP5", "CAP4", "CAP3"]

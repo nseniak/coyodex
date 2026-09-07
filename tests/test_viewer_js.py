@@ -4337,7 +4337,7 @@ def test_a_stake_label_names_its_step_and_is_not_a_door() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = _story_fn(js, "bindStoryDiagram")
     assert "go({ kind: 'hp'" not in bind, "the label leaves the page no more"
-    assert "lab.title = hp ? (hp.title || 'On the happy path')" in bind
+    assert "lab.title = hp ? (hpStepText(hp) || 'On the happy path')" in bind
     assert "'Not on the happy path'" in bind
     assert "lab.addEventListener('click', (ev) => ev.stopPropagation());" in bind
     css = (VIEWER_DIR / "viewer.css").read_text()

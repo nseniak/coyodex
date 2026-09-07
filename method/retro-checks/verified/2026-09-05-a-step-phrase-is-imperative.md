@@ -15,10 +15,11 @@ were migrated, and `method.md`, `method/model.md` and the trace contract now say
 
 ## Open, and NOT fixed
 
-Two other fields keep the third person on purpose, because neither is ever shown as a title on its own:
-a Happy Path step's `title` (it carries its own subject, "Admin invites a team member") and a backbone
-edge's `why` (shown beside its two ends). If a later screen starts titling either of them alone, they
-join this rule.
+One other field keeps the third person on purpose, because it is never shown as a title on its own: a
+backbone edge's `why` (shown beside its two ends). If a later screen starts titling it alone, it joins
+this rule. A Happy Path step's `title` was the other exemption; the field was removed on 2026-09-07
+(a step is labelled with its use case's name, which is imperative already), so item 3 below no longer
+has a title to keep the rule off.
 
 A step's `note` is also untouched: it is a condition or a qualifier, never an action.
 
@@ -36,10 +37,10 @@ A step's `note` is also untouched: it is a condition or a qualifier, never an ac
    That is the half-applied rule, and it reads worse than the old form because one sentence carries
    both.
 
-3. expect: the rule stays OFF a Happy Path step title, an edge `why` and a step `note`.
-   regression sign: a build returns `Admin invite a team member`, or an edge `why` reading `verify
-   service tokens` where it used to read `verifies`. The rule has been over-applied, and a happy-path
-   title with its own subject now reads ungrammatically.
+3. expect: the rule stays OFF an edge `why` and a step `note`. (It also stayed off a Happy Path step
+   title while that field existed.)
+   regression sign: an edge `why` reading `verify service tokens` where it used to read `verifies`.
+   The rule has been over-applied.
 
 ---
 

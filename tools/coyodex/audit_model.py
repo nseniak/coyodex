@@ -564,7 +564,6 @@ class HPStep:
     pos: int
     hp_id: str
     uc: str | None
-    title: str
     why: str | None
     why_refs: list[int] = field(default_factory=list)
     why_uc_refs: list[str] = field(default_factory=list)
@@ -580,7 +579,7 @@ def happy_path_steps(m: ProjectModel) -> list[HPStep]:
         # forward reference, a BLOCKING audit failure found after the final assemble). A `UCn`
         # citation names what the step depends on, not where it happens to sit, so it survives.
         uc_refs = sorted(set(re.findall(r"\bUC\d+\b", g.why or "")))
-        steps.append(HPStep(pos=pos, hp_id=g.id, uc=g.uc, title=g.title, why=g.why,
+        steps.append(HPStep(pos=pos, hp_id=g.id, uc=g.uc, why=g.why,
                             why_refs=refs, why_uc_refs=uc_refs))
     return steps
 
@@ -651,7 +650,7 @@ def check_precedence(m: ProjectModel) -> list[Finding]:
     reported: set[str] = set()
     for st in steps:
         uc = st.uc or ""
-        loc = f"HP{st.pos + 1} ({uc}) — {st.title}" if uc else f"HP{st.pos + 1} — {st.title}"
+        loc = f"HP{st.pos + 1} ({uc})" if uc else f"HP{st.pos + 1}"
         for e in sorted(reads.get(uc, set())):
             if e in written_so_far or e in writes.get(uc, set()) or e in reported:
                 continue
@@ -690,7 +689,7 @@ def check_why_refs(m: ProjectModel) -> list[Finding]:
     known_ucs = {u.id for u in m.use_cases}
     findings: list[Finding] = []
     for st in steps:
-        loc = f"HP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"HP{st.pos + 1} — {st.title}"
+        loc = f"HP{st.pos + 1} ({st.uc})" if st.uc else f"HP{st.pos + 1}"
         for ref in st.why_refs:
             ref_id = f"HP{ref}"
             if ref_id not in pos_of:
@@ -803,7 +802,7 @@ def check_whyless_steps(m: ProjectModel) -> list[Finding]:
     findings: list[Finding] = []
     for st in steps:
         if st.pos > 0 and st.why is None:
-            loc = f"HP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"HP{st.pos + 1} — {st.title}"
+            loc = f"HP{st.pos + 1} ({st.uc})" if st.uc else f"HP{st.pos + 1}"
             findings.append(Finding(
                 "why-less-step", ADVISORY, loc,
                 "declares no `why:` precondition while other steps do; state its prerequisite, or "

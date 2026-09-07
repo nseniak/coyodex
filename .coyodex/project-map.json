@@ -958,151 +958,126 @@
  "happy_path": [
   {
    "id": "HP1",
-   "title": "Reader installs the skill into their coding agents",
    "uc": "UC1",
    "why": null
   },
   {
    "id": "HP2",
-   "title": "Agent briefs the reader on what it is about to analyse",
    "uc": "UC3",
    "why": "needs the skill installed at HP1, so the agent knows what coyodex means"
   },
   {
    "id": "HP3",
-   "title": "Agent measures the weight of every folder",
    "uc": "UC5",
    "why": "needs the file set agreed at HP2"
   },
   {
    "id": "HP4",
-   "title": "Agent hands each worker its briefing",
    "uc": "UC6",
    "why": "needs the slice sizes from HP3"
   },
   {
    "id": "HP5",
-   "title": "A worker self-checks its fragment before returning it",
    "uc": "UC7",
    "why": "needs the briefing handed over at HP4"
   },
   {
    "id": "HP6",
-   "title": "Agent merges every fragment into one map",
    "uc": "UC8",
    "why": "needs every worker's fragment on disk from HP5"
   },
   {
    "id": "HP7",
-   "title": "Agent assigns grouping and links across the whole build",
    "uc": "UC9",
    "why": "needs the merged identifiers from HP6"
   },
   {
    "id": "HP8",
-   "title": "Agent checks the map is well formed",
    "uc": "UC11",
    "why": "needs a written map from HP6"
   },
   {
    "id": "HP9",
-   "title": "Agent makes the walk and the flows refute each other",
    "uc": "UC12",
    "why": "needs the map to be well formed, from HP8"
   },
   {
    "id": "HP10",
-   "title": "A fresh worker tries to disprove a batch of claims",
    "uc": "UC13",
    "why": "needs the ranked claim list from HP9"
   },
   {
    "id": "HP11",
-   "title": "Agent corrects a code link the skeptics moved",
    "uc": "UC15",
    "why": "needs the skeptics' verdicts from HP10"
   },
   {
    "id": "HP12",
-   "title": "Agent records what the skeptics proved",
    "uc": "UC14",
    "why": "needs every verdict file from HP10"
   },
   {
    "id": "HP13",
-   "title": "Agent runs the pre-commit read",
    "uc": "UC19",
    "why": "needs the grounding record from HP12"
   },
   {
    "id": "HP14",
-   "title": "Agent stamps the conversation that built the map",
    "uc": "UC20",
    "why": "needs a map that passed the gates at HP13"
   },
   {
    "id": "HP15",
-   "title": "Reader starts the local map server",
    "uc": "UC2",
    "why": null
   },
   {
    "id": "HP16",
-   "title": "Reader opens the new project's map",
    "uc": "UC21",
    "why": "needs the server running from HP15 and a committed map from HP14"
   },
   {
    "id": "HP17",
-   "title": "Reader follows the product's story end to end",
    "uc": "UC22",
    "why": "needs the map open from HP16"
   },
   {
    "id": "HP18",
-   "title": "Reader reads the code under a box that surprised them",
    "uc": "UC23",
    "why": "needs a box on screen from HP17"
   },
   {
    "id": "HP19",
-   "title": "Agent reports what later code changes did to the map",
    "uc": "UC25",
    "why": "needs the pinned baseline from HP14"
   },
   {
    "id": "HP20",
-   "title": "Agent folds the change report into the map",
    "uc": "UC26",
    "why": "needs the report from HP19 and the reader's agreement"
   },
   {
    "id": "HP21",
-   "title": "Developer archives the map before rebuilding it",
    "uc": "UC37",
    "why": "needs a baseline worth comparing against, from HP20"
   },
   {
    "id": "HP22",
-   "title": "Developer scores the rebuilt map against the archived one",
    "uc": "UC29",
    "why": "needs the archived baseline from HP21"
   },
   {
    "id": "HP23",
-   "title": "Judges read both maps for grounding and against the rubric",
    "uc": "UC30",
    "why": "needs both maps profiled at HP22"
   },
   {
    "id": "HP24",
-   "title": "Developer accepts the rebuilt map as the new baseline",
    "uc": "UC31",
    "why": "needs the verdict and the judgements from HP22 and HP23"
   },
   {
    "id": "HP25",
-   "title": "Developer scores the build's behaviour against the method",
    "uc": "UC35",
    "why": "needs the finished build's transcript, found through the stamp from HP14"
   }

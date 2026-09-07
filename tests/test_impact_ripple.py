@@ -62,7 +62,7 @@ def make_ripple_model() -> ProjectModel:
                          relations=[EntityRelation(verb="has", target="E2")]),
                   Entity(id="E2", name="Member", subdomain="SD1")],
         use_cases=[UseCase(id="UC1", name="Do a thing"), UseCase(id="UC2", name="Other")],
-        happy_path=[HappyStep(id="HP1", title="Do a thing", uc="UC1")],
+        happy_path=[HappyStep(id="HP1", uc="UC1")],
         flows=[Flow(uc="UC1", title="t", steps=[
                    FlowStep(n=1, src="Member", dst="C1", phrase="asks"),
                    FlowStep(n=2, src="C1", dst="E1", phrase="stores"),

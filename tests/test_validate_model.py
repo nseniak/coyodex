@@ -89,7 +89,7 @@ def make_valid_model() -> ProjectModel:
     m = ProjectModel(title="Demo", goal="A demo.")
     m.roles = [Role(id="R1", name="Andy", kind="human", wants="orders", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="View order", actors=["R1"])]
-    m.happy_path = [HappyStep(id="HP1", title="View", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     m.components = [Component(id="C1", name="Viewer", purpose="shows",
                               entry_point="src/v.py:1")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
@@ -274,8 +274,8 @@ def _walk_model(record: str, keep_step: bool = True):
                 trigger_outcome="a visitor opens it -> it renders", capability="CAP8"),
         UseCase(id="UC34", name="Switch the demo version", actors=["R1"],
                 trigger_outcome="an admin picks one -> it serves that one", capability="CAP8")]
-    m.happy_path = ([HappyStep(id="HP1", uc="UC34", title="Switch the demo version")] if keep_step
-                    else [HappyStep(id="HP1", uc="UC1", title="View")])
+    m.happy_path = ([HappyStep(id="HP1", uc="UC34")] if keep_step
+                    else [HappyStep(id="HP1", uc="UC1")])
     m.extras = [ExtraSection(heading="Happy Path coverage", body=record)]
     return m
 
@@ -1495,7 +1495,7 @@ def test_entry_surface_check_is_silent_without_flows():
 def test_use_case_without_flow_warns_once_tracing_began():
     m = make_valid_model()
     m.use_cases.append(UseCase(id="UC2", name="Ghost feature", actors=["R1"]))
-    m.happy_path.append(HappyStep(id="HP2", title="Ghost", uc="UC2"))  # on-spine, still untraced
+    m.happy_path.append(HappyStep(id="HP2", uc="UC2"))  # on-spine, still untraced
     assert any("UC2" in w and "has no T6 flow" in w for w in warnings_of(m))
     m.flows = []  # no tracing yet → the phantom signal stays quiet for every use case
     assert not any("has no T6 flow" in w for w in warnings_of(m))
@@ -3483,7 +3483,7 @@ def make_capability_model() -> ProjectModel:
     m.use_cases = [UseCase(id="UC1", name="Place order", actors=["R1"], capability="CAP1"),
                    UseCase(id="UC2", name="Amend order", actors=["R1"], capability="CAP1"),
                    UseCase(id="UC3", name="Read report", actors=["R1"], capability="CAP2")]
-    m.happy_path = [HappyStep(id="HP1", title="Place", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     m.flows = [Flow(uc=u.id, title=u.name, steps=[FlowStep(n=1, src="R1", dst="C1", phrase="does")])
                for u in m.use_cases]
     return m
@@ -3491,7 +3491,7 @@ def make_capability_model() -> ProjectModel:
 
 def test_an_expected_capability_off_the_spine_warns_once_not_per_use_case() -> None:
     m = make_capability_model()
-    m.happy_path = [HappyStep(id="HP1", title="Read", uc="UC3")]   # only the excluded one walks
+    m.happy_path = [HappyStep(id="HP1", uc="UC3")]   # only the excluded one walks
     ws = warnings_of(m)
     assert any("CAP1" in w and "no Happy-Path step reaches it" in w for w in ws)
     # the two CAP1 members are NOT each nagged about — that is the whole point of moving altitude
@@ -3575,7 +3575,7 @@ def test_an_untagged_role_warns_only_once_the_axis_is_adopted() -> None:
 def test_a_spine_step_in_an_excluded_capability_warns_and_can_be_recorded() -> None:
     """The converse direction — the one a single-direction check cannot produce."""
     m = make_capability_model()
-    m.happy_path.append(HappyStep(id="HP2", title="Read", uc="UC3"))
+    m.happy_path.append(HappyStep(id="HP2", uc="UC3"))
     assert any("HP2" in w and "happy_path: excluded" in w for w in warnings_of(m))
     m.extras = [ExtraSection(heading="Happy Path coverage",
                              body="HP2: the operator reads the report as part of the main walk")]
@@ -3603,7 +3603,7 @@ def test_a_staff_capability_on_the_walk_costs_no_record() -> None:
     m = make_capability_model()
     m.roles = [Role(id="R1", name="Operator", kind="human", audience="internal")]
     m.capabilities[1].happy_path = "expected"
-    m.happy_path.append(HappyStep(id="HP2", title="Read", uc="UC3"))
+    m.happy_path.append(HappyStep(id="HP2", uc="UC3"))
     ws = warnings_of(m)
     assert not any("HP2" in w for w in ws)
     assert validate_model_mod.capability_audience(m)["CAP2"] == ["internal"]
@@ -3704,7 +3704,7 @@ def test_a_stale_record_cannot_silence_the_other_capability_check() -> None:
                              body="CAP2: reporting is side work, deliberately off the walk")]
     assert not any("CAP2" in w and "off-spine use case" in w for w in warnings_of(m))
     m.capabilities[1].happy_path = "expected"   # flipped; the old record must not cover this
-    m.happy_path = [HappyStep(id="HP1", title="Place", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     assert any("CAP2" in w and "no Happy-Path step reaches" in w for w in warnings_of(m))
 
 
@@ -3725,7 +3725,7 @@ def test_an_unreached_expected_subtree_reports_once_at_its_highest_ancestor() ->
     m.capabilities.append(Group(id="CAP1x", name="Other", happy_path="excluded"))
     m.flows.append(Flow(uc="UC9", title="Elsewhere",
                         steps=[FlowStep(n=1, src="R1", dst="C1", phrase="does")]))
-    m.happy_path = [HappyStep(id="HP1", title="Elsewhere", uc="UC9")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC9")]
     hits = [w for w in warnings_of(m) if "no Happy-Path step reaches" in w]
     assert len(hits) == 1 and "CAP1" in hits[0], hits
     m.extras = [ExtraSection(heading="Happy Path coverage",
@@ -4250,7 +4250,7 @@ def test_the_steps_are_grouped_by_story_in_happy_path_order():
     m = make_interface_model()
     m.use_cases.append(UseCase(id="UC2", name="Second", trigger_outcome="asks -> gets",
                                capability=m.use_cases[0].capability))
-    m.happy_path.append(HappyStep(id="HP2", title="Second", uc="UC2"))
+    m.happy_path.append(HappyStep(id="HP2", uc="UC2"))
     m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I1", phrase="a")]
     m.flows.append(Flow(uc="UC2", title="Second",
                         steps=[FlowStep(n=1, src="R1", dst="I1", phrase="b")]))
@@ -4748,7 +4748,7 @@ def test_a_SUB_FLOW_crossing_is_reported_under_its_OWN_step_number():
     # nothing to double-count and nothing to misattribute — which is how an adversarial review landed
     # a mutation reading `expanded_flow_steps` straight through this test.
     m.use_cases.append(UseCase(id="UC2", name="Ask again", actors=["R1"]))
-    m.happy_path.append(HappyStep(id="HP2", title="Again", uc="UC2"))
+    m.happy_path.append(HappyStep(id="HP2", uc="UC2"))
     riders = [FlowStep(n=1, src="R1", dst="I1", phrase="opens it"),
               FlowStep(n=2, src="I1", dst="C1", phrase="asks", where="src/v.py:3"),
               FlowStep(n=3, src="C1", dst="C1", phrase="runs the shared ask", subflow="SF1"),

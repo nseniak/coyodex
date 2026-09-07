@@ -99,7 +99,7 @@ def make_base_model() -> ProjectModel:
     m = ProjectModel(title="Demo", goal="A demo.")
     m.roles = [Role(id="R1", name="Andy", kind="human", wants="orders", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="View order", actors=["R1"])]
-    m.happy_path = [HappyStep(id="HP1", title="View", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     m.components = [Component(id="C1", name="Viewer", purpose="shows", entry_point="src/v.py:1",
                               files=["src/v.py"])]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
@@ -486,7 +486,7 @@ def make_extent_model() -> ProjectModel:
                             sites=[RuleSite(where="src/guard.py:22", why="rejects a non-owner")])]
     m.use_cases = [UseCase(id="UC1", name="Cancel", actors=["R1"]),
                    UseCase(id="UC2", name="Refund", actors=["R1"])]
-    m.happy_path = [HappyStep(id="HP1", title="Cancel", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", uc="UC1")]
     m.flows = [
         Flow(uc="UC1", title="Cancel", steps=[
             FlowStep(n=1, src="R1", dst="C1", phrase="asks"),
