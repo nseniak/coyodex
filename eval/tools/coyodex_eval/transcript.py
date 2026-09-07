@@ -343,7 +343,16 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
             if not isinstance(message, dict):
                 continue
             content = message.get("content")
-            blocks: Sequence[object] = content if isinstance(content, list) else []
+            # A TYPED MESSAGE ARRIVES AS A PLAIN STRING, not a list of blocks, and dropping it threw
+            # away the only records that are the operator talking. On the 2026-09-06 mcpolis build
+            # 77 user records carried a string: the `/coyodex build` that started the build, 75
+            # task-notifications, and the one word the operator typed to unblock it. The scorecard's
+            # "did anyone notice" assertion read 0 operator lines on a session that had one, and
+            # nothing said the reader had not looked.
+            blocks: Sequence[object] = (
+                content if isinstance(content, list)
+                else [{"type": "text", "text": content}] if isinstance(content, str) and content
+                else [])
 
             record_ts = record.get("timestamp")
             record_ts = record_ts if isinstance(record_ts, str) else ""
@@ -961,6 +970,11 @@ COMMAND_LINES = 40
 #: quoted the tag, including a real operator's, and rendered the quotation as if it were the command.
 _HARNESS_TEXT = (
     "<system-reminder", "<local-command-",
+    # A background task announcing itself is the harness, not a person. These arrive as plain-string
+    # user records, so they only became visible when the reader started accepting one; without this
+    # marker the 2026-09-06 mcpolis build would render 75 of them as an operator speaking, which the
+    # docstring below calls a worse answer than no answer.
+    "<task-notification",
     "<ide_", "Base directory for this skill:", "Caveat: The messages below were generated",
 )
 
@@ -997,7 +1011,11 @@ def operator_text(text: str) -> str:
     if name is not None:
         args = _COMMAND_ARGS.search(head)
         body = (args.group("args").strip() if args else "")
-        return f"/{name.group('name')}" + (f" {body}" if body else "")
+        # LSTRIP THE SLASH THE TAG MAY ALREADY CARRY. Claude Code 2.1.263 writes
+        # `<command-name>/coyodex</command-name>`; an earlier version wrote the bare word, which is
+        # what this line was built for. Prepending unconditionally rendered the command that started
+        # the 2026-09-06 mcpolis build as `//coyodex build`.
+        return f"/{name.group('name').lstrip('/')}" + (f" {body}" if body else "")
     return text
 
 

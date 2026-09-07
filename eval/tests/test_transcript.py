@@ -488,3 +488,51 @@ def test_harness_text_quoting_the_wrapper_is_still_hidden():
     from coyodex_eval.transcript import operator_text
     assert operator_text("<system-reminder>\nran <command-name>clear</command-name>\n"
                          "</system-reminder>") == ""
+
+
+# --- a typed message arrives as a plain string ------------------------------------------
+# `read_turns` kept `content` only when it was a LIST of blocks, so every record the harness writes
+# as a bare string was dropped whole — and those are exactly the records that are a person talking.
+# On the 2026-09-06 mcpolis build that was 77 records: the `/coyodex build` that started it, 75
+# task-notifications, and the one word the operator typed to unblock a guard. The process
+# scorecard's "did anyone notice" assertion read 0 operator lines on a session that had one, and
+# nothing anywhere said the reader had not looked.
+
+
+def make_string_content_transcript(tmp: Path) -> Path:
+    lines = [
+        json.dumps({"type": "user", "message": {"role": "user", "content":
+                    "<command-message>coyodex</command-message>\n"
+                    "<command-name>/coyodex</command-name>\n"
+                    "<command-args>build</command-args>"}}),
+        json.dumps({"type": "assistant", "message": {"id": "m0", "content": [
+            {"type": "tool_use", "id": "t0", "name": "Bash",
+             "input": {"command": "coyodex preindex ."}}]}}),
+        json.dumps({"type": "user", "message": {"role": "user", "content":
+                    "<task-notification>\n<task-id>abc</task-id>\n</task-notification>"}}),
+        json.dumps({"type": "user", "message": {"role": "user", "content": "A"}}),
+    ]
+    p = tmp / "strings.jsonl"
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
+def test_a_typed_message_reaches_the_reader_and_the_harness_chatter_does_not():
+    with tempfile.TemporaryDirectory() as td:
+        p = make_string_content_transcript(Path(td))
+        spoken = [transcript.operator_text(t.text)
+                  for t in transcript.read_turns(p) if t.role == "user"]
+        spoken = [s for s in spoken if s]
+    # The slash command and the one typed word, and NOTHING else. A background task announcing
+    # itself is the harness; rendering it as a person is the failure `operator_text` exists to
+    # avoid, and it only became reachable once string content stopped being dropped.
+    assert spoken == ["/coyodex build", "A"]
+
+
+def test_a_command_name_tag_that_already_carries_its_slash_is_not_doubled():
+    """Claude Code 2.1.263 writes `<command-name>/coyodex</command-name>`; an earlier version wrote
+    the bare word, which is what the unwrapping was built for. Prepending unconditionally rendered
+    the command that started a real build as `//coyodex build`."""
+    for tag in ("/coyodex", "coyodex"):
+        body = (f"<command-name>{tag}</command-name>\n<command-args>build</command-args>")
+        assert transcript.operator_text(body) == "/coyodex build"
