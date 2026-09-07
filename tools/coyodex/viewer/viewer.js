@@ -11731,6 +11731,13 @@ function bindIfaceDiagram(root) {
     lab.dataset.anchor = String(x);
     lab.dataset.side = side;
     lab.dataset.wire = ends.join(' ');
+    // THE ROWS LIVE IN A BOX OF THEIR OWN, so the tallest of them can be given a ceiling and scroll
+    // under it — see the placement's third step below. THE CEILING CANNOT GO ON THE OUTER BOX: the
+    // leader is drawn as that box's own `::after`, pointing OUT of it, and an outer box that scrolls
+    // clips the leader off at its edge. So the scroll goes one level in, where there is nothing to clip.
+    const body = document.createElement('div');
+    body.className = 'ifd-elabel-body';
+    lab.appendChild(body);
     const sec = (headText, ucs, cap, glyph, who) => {
       const row = document.createElement('div');
       row.className = 'ifd-elabel-row';
@@ -11769,7 +11776,7 @@ function bindIfaceDiagram(root) {
                                       'Open this interface: every use case that comes through it');
         row.appendChild(tail);
       }
-      lab.appendChild(row);
+      body.appendChild(row);
     };
     const rows = ifaceActorRows(i);
     const ucs = (i.useCases || []).slice().sort(byHappyPath(hpPosOfUc, (u) => u));
@@ -11872,7 +11879,24 @@ function bindIfaceDiagram(root) {
     // MEASURED WITH THE LABEL LAID OUT. A `display: none` element has no box at all, so `offsetHeight`
     // reads 0 and every box would be placed as if it were empty. `visibility: hidden` lays it out
     // without painting.
-    const LABEL_GAP = 4, LEAD_LEN = 14, TIP_CLEAR = 28, SCAN_STEP = 4;
+    //
+    // AND WHEN NOTHING BESIDE THE ARROW FITS, the room is widened in steps rather than given up on.
+    // Each step surrenders something the step before it kept, and the FIRST one that lands wins, so a
+    // box pays only for the room it actually needed:
+    //   1. beside its arrow, between its own card and the far column        — costs nothing
+    //   2. …and allowed OVER the far column                                 — covers a card over there
+    //   3. …and given a ceiling, its rows scrolling under it                — the rest needs a scroll
+    // MCP Hero's Dashboard is why. Its box is 353px tall, the tallest of the 27 across the two live
+    // maps, and 300px of box in a 380px gutter leaves 76px of sideways play. 250 spots were tried
+    // beside its arrow and every one was rejected — 142 out of the sideways bound, 47 outside the
+    // picture, 61 landing on the arrow — so it fell to the last resort below: sat ON its own arrow,
+    // with no leader, on the one interface a reader opens first. Step 2 gives it 70 spots to pick from.
+    // A TALLER PICTURE WOULD NOT HAVE HELPED, which is what says the sideways bound is the binding
+    // one: the same scan against a 2000px stage still finds nothing. Nor would a wider window — the
+    // stage is a fixed 1060px (`--ifd-stage-w`), and 1280 through 2200 all clamp identically.
+    // Step 3 has never fired on a live map. It is there so "nowhere at all" stays unreachable, and
+    // the ceilings are two rather than one so a box shrinks as little as the picture demands.
+    const LABEL_GAP = 4, LEAD_LEN = 14, TIP_CLEAR = 28, SCAN_STEP = 4, HEIGHT_CAPS = [260, 160];
     const colOurs = stage.querySelector('.ifd-col-ours');
     const colTheirs = stage.querySelector('.ifd-col-theirs');
     // WHERE THE OWNERSHIP BOX'S TOP EDGE GOES: below the two column headings and clear of the first
@@ -11893,8 +11917,25 @@ function bindIfaceDiagram(root) {
     const gutterFrom = colOurs ? colOurs.offsetLeft + colOurs.offsetWidth : 0;
     const gutterTo = colTheirs ? colTheirs.offsetLeft : stage.offsetWidth;
     for (const lab of labels) {
+      // A FRESH VERDICT EVERY PASS. Every mark this loop leaves used to be set and never unset —
+      // `dataset.clamped` and the two tail classes were only ever added — so a box the FIRST pass
+      // could not place stayed marked unplaceable through every later pass that placed it fine, and
+      // the first pass is the one that runs before the source rail and the fonts have settled. The
+      // marks are what the diagnostics and the tests read, so a stale one is a lie told to the check
+      // that exists to catch this.
+      const body = lab.querySelector('.ifd-elabel-body');
+      lab.classList.remove('ifd-tail-up', 'ifd-tail-down');
+      delete lab.dataset.clamped;
+      delete lab.dataset.capped;
+      if (body) { body.style.maxHeight = ''; body.classList.remove('ifd-elabel-scroll'); }
       lab.style.visibility = 'hidden'; lab.style.display = 'block';
-      const h = lab.offsetHeight, w = lab.offsetWidth;
+      let h = lab.offsetHeight;
+      // WHAT THE BOX COSTS AROUND ITS ROWS — its padding and its border. A ceiling is asked for as a
+      // height for the WHOLE box, and only the rows inside can carry it, so the difference has to
+      // come off. Measured rather than repeated from the stylesheet, so changing the padding there
+      // cannot leave a box one ceiling short.
+      const chrome = body ? h - body.offsetHeight : 0;
+      const w = lab.offsetWidth;
       lab.style.display = ''; lab.style.visibility = '';
       const ours = lab.dataset.side === 'ours';
       const anchor = parseFloat(lab.dataset.anchor);
@@ -11902,43 +11943,74 @@ function bindIfaceDiagram(root) {
       const dx = wx1 - wx0, dy = wy1 - wy0, seg = Math.hypot(dx, dy) || 1;
       const at = (x) => wy0 + dy * (x - wx0) / dx;
       const wLo = Math.min(wx0, wx1), wHi = Math.max(wx0, wx1);
-      const minL = ours ? anchor + LABEL_GAP : gutterFrom;
-      const maxL = ours ? gutterTo - w : anchor - LABEL_GAP - w;
-      // Does the arrow cross this box anywhere? The offset only guarantees the corner; a diagonal can
-      // come back through the far end of a 300px box, and that is the thing the whole rule is for.
-      const hits = (bl, bt) => {
-        const lo = Math.max(wLo, bl), hi = Math.min(wHi, bl + w);
-        if (hi < lo || dx === 0) return false;
-        const a = at(lo), b = at(hi);
-        return Math.max(a, b) >= bt && Math.min(a, b) <= bt + h;
+      // THE BOUND ON THE BOX'S OWN SIDE NEVER MOVES, whichever step we are on: the box grows AWAY
+      // from the card the reader just picked, and covering that one card is the thing the anchor is
+      // for. Step 2 gives up the FAR bound only.
+      const bounds = (wide) => (ours
+        ? [anchor + LABEL_GAP, (wide ? stage.offsetWidth : gutterTo) - w]
+        : [wide ? 0 : gutterFrom, anchor - LABEL_GAP - w]);
+      // ONE SCAN, ASKED THREE TIMES. The height and the two sideways bounds are what the steps vary,
+      // so they are what it takes as arguments; everything else about the rule is unchanged.
+      const scan = (bh, minL, maxL) => {
+        // Does the arrow cross this box anywhere? The offset only guarantees the corner; a diagonal
+        // can come back through the far end of a 300px box, and that is what the whole rule is for.
+        const hits = (bl, bt) => {
+          const lo = Math.max(wLo, bl), hi = Math.min(wHi, bl + w);
+          if (hi < lo || dx === 0) return false;
+          const a = at(lo), b = at(hi);
+          return Math.max(a, b) >= bt && Math.min(a, b) <= bt + bh;
+        };
+        // …and how far the box would sit from the arrow's tip at the card, which is what we minimise.
+        // ON STEP 2 IT IS ALSO WHAT KEEPS THE BOX HOME: the tip is at the box's own card, so pulling
+        // the box towards it pulls it back out of the far column, and the overlap it takes is the
+        // least the picture allowed rather than whatever the scan happened to reach first.
+        const away = (bl, bt) => Math.hypot(Math.max(bl - wx0, 0, wx0 - (bl + w)),
+                                            Math.max(bt - wy0, 0, wy0 - (bt + bh)));
+        let found = null;
+        for (let along = Math.min(TIP_CLEAR, seg); along <= seg + 0.5; along += SCAN_STEP) {
+          const t = Math.min(along / seg, 1);
+          const px = wx0 + dx * t, py = wy0 + dy * t;
+          // the two unit normals of the arrow: the box hangs off one side or the other
+          for (const sgn of [1, -1]) {
+            const nx = sgn * -dy / seg, ny = sgn * dx / seg;
+            const qx = px + nx * LEAD_LEN, qy = py + ny * LEAD_LEN;
+            // the corner facing the arrow IS that point: left or right by which way the box grows,
+            // top or bottom by which side of the arrow it landed on.
+            const bl = ours ? qx : qx - w;
+            const bt = ny < 0 ? qy - bh : qy;
+            if (bl < minL || bl > maxL) continue;
+            if (bt < 0 || bt + bh > stage.offsetHeight) continue;
+            if (hits(bl, bt)) continue;
+            const d = away(bl, bt);
+            if (!found || d < found.d) found = { d, bl, bt, px, py, qx, qy, ny };
+          }
+        }
+        return found;
       };
-      // …and how far the box would sit from the arrow's tip at the card, which is what we minimise.
-      const away = (bl, bt) => Math.hypot(Math.max(bl - wx0, 0, wx0 - (bl + w)),
-                                          Math.max(bt - wy0, 0, wy0 - (bt + h)));
-      let best = null;
-      for (let along = Math.min(TIP_CLEAR, seg); along <= seg + 0.5; along += SCAN_STEP) {
-        const t = Math.min(along / seg, 1);
-        const px = wx0 + dx * t, py = wy0 + dy * t;
-        // the two unit normals of the arrow: the box hangs off one side or the other
-        for (const sgn of [1, -1]) {
-          const nx = sgn * -dy / seg, ny = sgn * dx / seg;
-          const qx = px + nx * LEAD_LEN, qy = py + ny * LEAD_LEN;
-          // the corner facing the arrow IS that point: left or right by which way the box grows, top
-          // or bottom by which side of the arrow it landed on.
-          const bl = ours ? qx : qx - w;
-          const bt = ny < 0 ? qy - h : qy;
-          if (bl < minL || bl > maxL) continue;
-          if (bt < 0 || bt + h > stage.offsetHeight) continue;
-          if (hits(bl, bt)) continue;
-          const d = away(bl, bt);
-          if (!best || d < best.d) best = { d, bl, bt, px, py, qx, qy, ny };
+      let best = scan(h, ...bounds(false));
+      if (!best) best = scan(h, ...bounds(true));
+      if (!best && body) {
+        for (const cap of HEIGHT_CAPS) {
+          if (cap >= h) continue;
+          best = scan(cap, ...bounds(true));
+          if (!best) continue;
+          // THE CEILING GOES ON, AND IS SAID OUT LOUD. `data-capped` is how a reader of the
+          // diagnostics — and the test below — can tell a box that shrank from one that fitted.
+          body.style.maxHeight = (cap - chrome) + 'px';
+          body.classList.add('ifd-elabel-scroll');
+          lab.dataset.capped = String(cap);
+          h = cap;
+          break;
         }
       }
-      // NOWHERE CLEAR? Then the picture is too short to hold this box off this arrow anywhere, and
-      // staying INSIDE the picture beats staying off the line: a sentence the reader cannot scroll to
-      // is worse than one with a line across it. NO LEADER in that case — the box is ON the arrow, so
-      // there is no gap to draw across, and a stub of dashes going nowhere was the old tail's mistake.
+      // NOWHERE CLEAR, EVEN THEN? Every step has been spent — beside the arrow, over the far column,
+      // and shrunk to the smallest ceiling — and the picture still cannot hold this box off this
+      // arrow. Staying INSIDE the picture beats staying off the line: a sentence the reader cannot
+      // scroll to is worse than one with a line across it. NO LEADER in that case — the box is ON the
+      // arrow, so there is no gap to draw across, and a stub of dashes going nowhere was the old
+      // tail's mistake. Neither live map reaches here any more; the Dashboard was the last one that did.
       if (!best) {
+        const [minL, maxL] = bounds(true);
         const mid = wy0;
         const bt = Math.max(0, Math.min(stage.offsetHeight - h,
                                         mid < stage.offsetHeight / 2 ? mid + LEAD_LEN : mid - LEAD_LEN - h));

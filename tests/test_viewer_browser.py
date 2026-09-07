@@ -2060,27 +2060,11 @@ def test_the_leader_meets_its_arrow_at_a_right_angle_clear_of_the_head() -> None
 
     All three are read back from the laid-out page: where the leader starts, how long it is, which
     way it is turned. A dashed line that merely EXISTS would pass a test that only looked for one."""
-    def mutate(m: dict) -> None:
-        # AS LONG AS THE REAL MAPS GET, not longer. MCP Hero's dashboard is the tallest box on any
-        # of the three live maps at 378px — two sentences a direction, each wrapping three or four
-        # lines. A fixture beyond that is a picture no build produces, and every box in it clamps,
-        # which tests the exemption rather than the rule.
-        # A WAY IN EACH, so every one is reached by a use case: an interface nothing reaches
-        # gets no box at all, and this test is about where the boxes go.
-        for n, ep in enumerate(m["entry_points"][:16], start=1):
-            ep["id"] = f"EP{n}"
-        for n, u in enumerate(m["use_cases"][:16], start=1):
-            u["entry_points"] = [f"EP{n}"]
-        m["interfaces"] = [
-            {"id": f"I{n}", "name": f"Surface {n}", "what": "One of several.",
-             "side": "ours" if n % 2 else "theirs", "facing": "user", "kind": "screen",
-             "ways_in": [f"EP{n}"] }
-            # SIXTEEN, the size of the largest live map. The stage's height comes from the
-            # number of cards, and the room a box has to get off its line comes from the
-            # stage. Eight interfaces make a 500px picture a 300px box cannot be placed in.
-            for n in range(1, 17)
-        ]
-    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+    # AS LONG AS THE REAL MAPS GET, not longer. MCP Hero's dashboard is the tallest box on any of
+    # the three live maps at 378px — two sentences a direction, each wrapping three or four lines.
+    # A fixture beyond that is a picture no build produces, and the box would be shrunk to fit,
+    # which tests the ceiling rather than the rule.
+    with _served_map(_sixteen_surfaces) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         got = page.evaluate("""() => {
             return [...document.querySelectorAll('.ifd-elabel')].map(l => {
@@ -2127,7 +2111,125 @@ def test_the_leader_meets_its_arrow_at_a_right_angle_clear_of_the_head() -> None
             # it off its arrow, so it is ON the line and there is no gap to draw across.
             if g["clamped"]:
                 assert g["len"] == 0, g
+        # …AND ON THIS FIXTURE NOTHING MAY CLAMP AT ALL. Everything above only checked the boxes that
+        # WERE placed, so it passed just as happily when one box was clamped as when all sixteen were
+        # — and one of them was, on the live map: MCP Hero's dashboard, the interface a reader opens
+        # first, sat on its own arrow with no leader through every green run of this file.
+        assert not [g for g in got if g["clamped"]], got
         assert not page.js_errors, page.js_errors
+
+
+def _ifd_boxes(page: Any) -> list[dict]:
+    """Where every surface's floating box ended up, and which step of the placement put it there."""
+    return list(page.evaluate("""() => {
+        const stage = document.querySelector('.ifd-stage');
+        const co = stage.querySelector('.ifd-col-ours'), ct = stage.querySelector('.ifd-col-theirs');
+        const gutterFrom = co.offsetLeft + co.offsetWidth, gutterTo = ct.offsetLeft;
+        return [...document.querySelectorAll('.ifd-elabel')].map(l => {
+            const body = l.querySelector('.ifd-elabel-body');
+            l.style.visibility = 'hidden'; l.style.display = 'block';
+            const h = l.offsetHeight, w = l.offsetWidth;
+            const scrolls = body ? body.scrollHeight > body.clientHeight + 1 : false;
+            l.style.display = ''; l.style.visibility = '';
+            const bl = parseFloat(l.style.left), ours = l.dataset.side === 'ours';
+            return {
+                id: l.dataset.iface, ours, h, w, left: bl, anchor: parseFloat(l.dataset.anchor),
+                len: parseFloat(getComputedStyle(l).getPropertyValue('--lead-len')),
+                clamped: !!l.dataset.clamped, capped: l.dataset.capped ? +l.dataset.capped : 0,
+                scrolls,
+                // how far it reaches into the column on the OTHER shore, and 0 when it stays home
+                over: ours ? Math.max(0, (bl + w) - gutterTo) : Math.max(0, gutterFrom - bl),
+            };
+        });
+    }"""))
+
+
+def _stylesheet_with_giant_boxes(url: str) -> str:
+    """The viewer's real stylesheet, with every row of a surface's floating box made 3000px tall — so
+    the boxes are several times the height of the picture that has to hold them, which no real map
+    produces and no window size can undo."""
+    parts = urlsplit(url)
+    css = urlopen(f"{parts.scheme}://{parts.netloc}/static/viewer.css").read().decode()
+    return css + "\n.ifd-elabel-row{min-height:3000px;}"
+
+
+def _sixteen_surfaces(m: dict) -> None:
+    """Sixteen surfaces on the served map, each reached by one use case.
+
+    SIXTEEN is the size of the largest live map. The stage's height comes from the number of cards,
+    and the room a box has to get off its line comes from the stage, so eight surfaces make a 500px
+    picture a 300px box cannot be placed in. A WAY IN EACH, because a surface nothing reaches gets
+    no box at all, and every test using this shape is about where the boxes go."""
+    for n, ep in enumerate(m["entry_points"][:16], start=1):
+        ep["id"] = f"EP{n}"
+    for n, u in enumerate(m["use_cases"][:16], start=1):
+        u["entry_points"] = [f"EP{n}"]
+    m["interfaces"] = [
+        {"id": f"I{n}", "name": f"Surface {n}", "what": "One of several.",
+         "side": "ours" if n % 2 else "theirs", "facing": "user", "kind": "screen",
+         "ways_in": [f"EP{n}"]}
+        for n in range(1, 17)
+    ]
+
+
+def test_a_box_with_no_room_beside_its_arrow_takes_the_far_column_before_it_gives_up() -> None:
+    """STEP 2 OF THE PLACEMENT, and the reason it exists.
+
+    MCP Hero's dashboard box is 353px tall — the tallest of the 27 across the two live maps — and
+    300px of box in a 380px gutter leaves 76px of sideways play. 250 spots were tried beside its
+    arrow and every one was rejected: 142 out of the sideways bound, 47 outside the picture, 61
+    landing on the arrow. So the box fell to the last resort, sat ON its own arrow, and lost its
+    leader — on the one interface a reader opens first.
+
+    A TALLER PICTURE WAS NEVER THE ANSWER, which is what says the sideways bound is the binding one:
+    the same scan against a 2000px stage still finds nothing, and the stage is a fixed 1060px at
+    every window from 1280 to 2200. So the room has to come from the far column.
+
+    WHAT STEP 2 MAY NOT DO is cover the card the reader just picked. The box grows away from its own
+    card, and only the FAR bound is given up — asserted here, because a bound dropped one line too
+    far would put the box straight back over the thing it is describing."""
+    with _served_map(_sixteen_surfaces) as url, _page(url + "#v=interfaces") as page:
+        _settle(page)
+        got = _ifd_boxes(page)
+        assert got
+        for g in got:
+            assert not g["clamped"], g              # every box placed…
+            assert abs(g["len"] - 14) < 0.5, g      # …and every box still joined to its own arrow
+            # …on its own side of its own card, whatever room it had to borrow on the other shore
+            if g["ours"]:
+                assert g["left"] >= g["anchor"], g
+            else:
+                assert g["left"] + g["w"] <= g["anchor"], g
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_box_too_tall_for_the_picture_gets_a_ceiling_and_scrolls_rather_than_losing_its_leader()\
+        -> None:
+    """STEP 3, forced. No live map has ever reached it: MCP Hero's dashboard, the worst real case,
+    is placed by step 2 with 70 spots to choose from. So the fixture makes every row 3000px tall,
+    which is several times the whole picture and which no build produces.
+
+    The point is that the LAST RESORT stays unreachable. A box that cannot be placed at its natural
+    height is shrunk until it can be, and the rows it can no longer show scroll under the ceiling.
+    That is a worse box than a whole one, and a better picture than a box sitting on its own arrow
+    with nothing joining the two.
+
+    THE CEILING IS ON THE ROWS, NOT ON THE BOX, and that is not tidiness: the leader is the box's own
+    `::after` and points OUT of it, so a box that scrolls clips its own leader off at the edge. The
+    assertion that the leader is still 14px is what would catch that."""
+    with _served_map(_sixteen_surfaces) as url:
+        with _page(url + "#v=interfaces", stylesheet=_stylesheet_with_giant_boxes(url)) as page:
+            _settle(page)
+            got = _ifd_boxes(page)
+            assert got
+            shrunk = [g for g in got if g["capped"]]
+            assert shrunk, got            # or the fixture stopped forcing the step it is here for
+            for g in shrunk:
+                assert not g["clamped"], g
+                assert abs(g["h"] - g["capped"]) < 1, g   # exactly the ceiling it was given
+                assert g["scrolls"], g                    # …with the rest reachable, not lost
+                assert abs(g["len"] - 14) < 0.5, g        # …and the leader not clipped away
+            assert not page.js_errors, page.js_errors
 
 
 def _stage_state(page: Any) -> dict:
