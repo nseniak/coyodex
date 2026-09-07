@@ -2480,3 +2480,50 @@ def test_a_behavioural_worklist_is_recognised_from_its_own_themes():
                      for w in l2_worklist_model(_behavioural_map(), behavioural=behavioural)]
             p.write_text(json.dumps({"worklist": items}), encoding="utf-8")
             assert worklist_is_behavioural(p) is expect, (behavioural, items)
+
+
+# --- the note must say what the code does ---------------------------------------------
+# `audit --with-behavioural` printed the limit its own comment two lines above calls gone: "keep
+# the record on the default worklist until the record path follows this flag". A build reads the
+# message, never the comment. So the record path was fixed and every build kept obeying the old
+# instruction — three consecutive retros filed "claims naming a use case, flow, HP step or
+# capability: 0 of 935" as landed but ineffective, because the thing that landed was still telling
+# operators not to use it. Measured on the mcpolis map the day this was found: with the record
+# following the pinned tier, 0 of 854 behaviour claims are superseded; at the default tier, 854.
+
+
+def test_the_behavioural_note_does_not_repeat_a_limit_that_is_gone(capsys):
+    from coyodex import audit_model
+    from coyodex.grounding import worklist_is_behavioural
+
+    # A flow with a phrased step is all the behavioural tier needs: the claim it emits is that
+    # phrase, checked at the step's own call site.
+    m = ProjectModel(title="T", goal="G")
+    m.components = [Component(id="C1", name="Door", purpose="lets a caller in", source="a.py:1")]
+    m.use_cases = [UseCase(id="UC1", name="Come in")]
+    m.flows = [Flow(uc="UC1", title="Come in",
+                    steps=[FlowStep(n=1, src="C1", dst="C1", phrase="open the door",
+                                    where="a.py:1")])]
+    wide = audit_model.l2_worklist_model(m, behavioural=True)
+    assert any(w.theme == "behaviour" for w in wide), (
+        "the behavioural tier emits no behaviour claim, so the note under test is moot")
+
+    # The record path recognises a pinned behavioural worklist, which is the fact the old note
+    # denied. Pin one the way a build does and ask the function the record path consults.
+    with tempfile.TemporaryDirectory() as td:
+        pinned = Path(td) / "worklist.json"
+        pinned.write_text(json.dumps({"worklist": [{"claim": w.claim, "theme": w.theme}
+                                                   for w in wide]}), encoding="utf-8")
+        assert worklist_is_behavioural(pinned) is True
+
+    source = (Path(audit_model.__file__)).read_text(encoding="utf-8")
+    at = source.index('print("NOTE: `--with-behavioural`')
+    note = source[at:at + 1200]
+    assert "widens the worklist AND the grounding record" in note, (
+        "the note no longer says the record follows the flag")
+    for stale in ("NOT the grounding record",
+                  "keep the record on the default worklist",
+                  "until the record path follows this flag"):
+        assert stale not in note, (
+            f"the note tells operators {stale!r}, which the record path stopped doing. That "
+            f"sentence is why three builds left the behavioural half of their map unwarranted")

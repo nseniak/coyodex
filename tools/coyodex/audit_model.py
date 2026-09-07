@@ -1656,11 +1656,19 @@ def _run(argv: list[str] | None = None) -> int:
         # `refutations` still computes its ADVISORY confidence surface at the default tier, on
         # purpose: a behaviour claim resolves onto a flow or a crossing, neither of which carries a
         # `confidence` field.
-        print("NOTE: `--with-behavioural` widens the worklist and NOT the grounding record. "
-              "`grounding write` measures against the default surface, so behaviour claims come "
-              "back as `superseded` and the digest describes a different surface. Batch and "
-              "challenge them, read the verdicts, and keep the record on the default worklist "
-              "until the record path follows this flag.", file=sys.stderr)
+        # THE MESSAGE MUST SAY WHAT THE COMMENT ABOVE SAYS. It used to state the limit the comment
+        # calls gone — "keep the record on the default worklist until the record path follows this
+        # flag" — and a build reads the message, never the comment. So the record path was fixed and
+        # every build kept obeying the old instruction: on three consecutive retros the row "claims
+        # naming a use case, flow, HP step or capability" measured 0 of 935 and was filed "landed
+        # but ineffective", because the thing that landed was still telling operators not to use it.
+        print("NOTE: `--with-behavioural` widens the worklist AND the grounding record. "
+              "`grounding write` recomputes the live surface at the pinned worklist's own tier, so "
+              "behaviour claims are folded into the record instead of coming back `superseded`, "
+              "and the digest describes the surface you pinned. Batch and challenge them like any "
+              "other theme. One thing still sits at the default tier on purpose: the `refutations` "
+              "confidence surface, because a behaviour claim resolves onto a flow or a crossing and "
+              "neither carries a `confidence` field.", file=sys.stderr)
     if batches_out is not None:
         out_dir = Path(batches_out)
         # `build-fragments/` is where `assemble` globs. A batch file dropped there is not a fragment
