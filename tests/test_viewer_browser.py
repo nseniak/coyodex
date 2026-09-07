@@ -2847,4 +2847,82 @@ def test_an_actor_s_page_is_the_board_and_nothing_else() -> None:
             return document.querySelectorAll('.tab-index-chip').length;
         }""")
         assert kept >= 2, kept
+
+
+def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_framed_section() -> None:
+    """A use case's page drew its sentence in the fixed block under the trail, with no name and no glyph,
+    and the map ran straight under the shadow with nothing saying what it was. An actor's page, one click
+    away, names the actor on a hero and announces its board as a section. The two are the same kind of
+    screen — one element, with its board under it — so the use case's page now draws the same two blocks,
+    IN THE PAGE: a hero carrying the use case's glyph, name and pill, and a section head over the frame
+    whose count is the step player's own total. The board itself stays in the drawing area, because the
+    pan/zoom, the floating controls and the card all measure against that box."""
+    with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const q = (s) => document.querySelector(s);
+            const box = (e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)]; };
+            const wrap = q('#diagwrap'), cs = getComputedStyle(wrap);
+            return {
+                headShown: !q('#diaghead').hidden, fixedHeroShown: !q('#pagehero').hidden,
+                name: q('#diaghead .page-hero-subject').textContent,
+                glyph: !!q('#diaghead .page-hero-name .ibox-gly'),
+                pills: [...document.querySelectorAll('#diaghead .ecard-pill')].map((e) => e.textContent),
+                sentence: q('#diaghead .page-hero-purpose').textContent.length,
+                title: q('#diaghead .item-sec-title').firstChild.textContent.trim(),
+                count: q('#diaghead .item-sec-n').textContent,
+                note: q('#diaghead .item-sec-note').textContent.length,
+                player: q('#flowcount').textContent,
+                headAboveFrame: q('#diaghead').getBoundingClientRect().bottom <= wrap.getBoundingClientRect().top,
+                frame: {radius: cs.borderRadius, border: cs.borderColor},
+                left: [box(q('#diaghead .page-hero-name')), box(wrap)].map((b) => b[0]),
+                mapInFrame: !!q('#diagram svg') && wrap.contains(q('#diagram svg')),
+            };
+        }""")
+        assert seen["headShown"] and not seen["fixedHeroShown"], seen
+        assert seen["name"] and seen["glyph"] and seen["pills"] == ["use case"], seen
+        assert seen["sentence"] > 0 and seen["note"] > 0, seen
+        assert seen["title"] == "Use case flow", seen
+        assert seen["player"].endswith(" / " + seen["count"].split(" ")[0]), \
+            "the section counts what the player steps through"
+        assert seen["count"].endswith(" steps"), "the count keeps its noun"
+        assert seen["headAboveFrame"] and seen["mapInFrame"], seen
+        # The frame is the section frame's own: the actor page's colours, not the drawing's old ones.
+        assert seen["frame"] == {"radius": "12px", "border": "rgb(203, 213, 225)"}, seen
+        assert seen["left"] == [20, 20], "the head and the frame share the actor page's left edge"
+        # …and the actor's page is untouched, which is the whole point: it stays the reference.
+        page.goto(url + "#v=actor&act=Org creator")
+        _settle(page)
+        other = page.evaluate("""() => ({
+            headShown: !document.getElementById('diaghead').hidden,
+            headEmpty: document.getElementById('diaghead').innerHTML === '',
+            margin: getComputedStyle(document.getElementById('diagwrap')).margin })""")
+        assert not other["headShown"] and other["headEmpty"], other
+        assert other["margin"] == "0px", other    # a text page's own rule, unchanged
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_shared_sub_use_case_s_page_draws_the_same_head_from_its_own_words() -> None:
+    """A shared sub-use case is not a graph node, so the fixed-block hero never had anything to say about
+    it and its page opened straight on the map. It gets the same head as a use case, from the subflow
+    itself: its name, its own word for a pill, no sentence (it has none), and its own step count."""
+    with _served_map(_with_shared_walk) as url, _page(url + "#v=subflow&sf=SF1&uc=UC1") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const q = (s) => document.querySelector(s);
+            return {
+                name: q('#diaghead .page-hero-subject').textContent,
+                pills: [...document.querySelectorAll('#diaghead .ecard-pill')].map((e) => e.textContent),
+                sentence: !!q('#diaghead .page-hero-purpose'),
+                foot: !!q('#diaghead .ecard-extra'),
+                title: q('#diaghead .item-sec-title').firstChild.textContent.trim(),
+                count: q('#diaghead .item-sec-n').textContent,
+                player: q('#flowcount').textContent,
+            };
+        }""")
+        assert seen["name"] == "Keep the organization", seen
+        assert seen["pills"] == ["shared sub-use case"], seen
+        assert not seen["sentence"] and not seen["foot"], "nothing is drawn where the map has nothing"
+        assert seen["title"] == "Shared sub-use case flow" and seen["count"] == "2 steps", seen
+        assert seen["player"] == "\u2013 / 2", seen
         assert not page.js_errors, page.js_errors

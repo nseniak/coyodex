@@ -226,6 +226,7 @@ const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
 const pageq = document.getElementById('pageq');          // the open view's question, leading the content
 const pagehero = document.getElementById('pagehero');    // what the page you drilled into IS (syncPageHero)
+const diaghead = document.getElementById('diaghead');    // …and a walk's own head, in the page (walkHeadHtml)
 const callout = document.getElementById('callout');      // the line from the card to what it describes
 const crumb = document.getElementById('crumb');
 const tip = document.getElementById('tip');
@@ -3588,33 +3589,29 @@ function showFlowStep(uc, i) {
   highlightTreePath(local ? refTreePath(wn.file, wn.line) : null);
   if (local) syncCodeView(wn.file, wn.line, []);
 }
-// One actor's card, in ANY view that draws an actor. `drives` is the only part that differs by view (the
-// Happy Path lists step titles, a flow lists its own steps), so everything else lives here once.
+// One actor's card, in ANY view that draws an actor: THE SAME CARD a list shows, and nothing under it.
+//
+// It used to carry a `Drives` list under the card — the steps of this flow the actor drives, as
+// `source verb target` rows. Removed: the map the card floats over already draws every one of those
+// steps, numbered, with the actor's own arrows lit the moment the actor is selected, so the list restated
+// the picture in words beside it.
 //
 // `Wants` used to be a TITLED row here, because an untitled paragraph read as a description of the actor
 // rather than as what they are after. The sentence now says that itself — `Wants to keep the hosted
 // service healthy` — so the title is the same words twice, and the row goes back to being a sentence.
 // That is the whole point of the prefix: one shape everywhere, and it needs no label to be understood.
-function actorPanelHtml(a, drives) {
-  const driveRows = drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '';
-  // THE SAME CARD a list shows, then the one thing the card does not carry: which steps of THIS walk the
-  // actor drives. That is real extra content, and it needed no second card design to hold it — a process
-  // already answers the same shape of question the same way, card first, its own detail under it.
+function actorPanelHtml(a) {
   const id = actorNodeId(a.name);
-  if (id) return `<div class="pane-card">${elementCardHtml(id, { bare: true })}</div>` + driveRows;
+  if (id) return `<div class="pane-card">${elementCardHtml(id, { bare: true })}</div>`;
   // An actor a sequence view names but the graph has no node for: no card to draw, so the name and the
   // sentence stand in for one rather than inventing a second card shape for the exception.
   const wants = a.wants ? '<p class="uc-wants">' + mdInline(wantsSentence(a.wants)) + '</p>' : '';
   return '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
-    + '<span class="badge kind">actor</span></div>' + wants + driveRows;
+    + '<span class="badge kind">actor</span></div>' + wants;
 }
-// A flow-level actor's card — the same card, scoped to one flow: which of THIS flow's own steps it
-// drives. Reads those steps straight out of FLOWS_NARR by index rather than duplicating their text in
-// FLOW_ACTORS.
+// A flow-level actor's card — the same card, whichever flow it is drawn on.
 function showFlowActor(uc, a) {
-  const flowSteps = FLOWS_NARR[uc] || [];
-  panel.innerHTML = actorPanelHtml(a, a.stepIdx.map((i) => flowSteps[i]).filter(Boolean)
-    .map((st) => '<dd>' + esc(st.src) + ' <em>' + esc(st.verb) + '</em> ' + esc(st.dst) + '</dd>').join(''));
+  panel.innerHTML = actorPanelHtml(a);
   bindElementCards(panel);
 }
 
@@ -6713,28 +6710,78 @@ const FOLD_NARRATIVE = {
 function heroDetailsLinkHtml(id) {
   return `<button type="button" class="hero-details" data-goelement="${esc(id)}">All details</button>`;
 }
+// A USE CASE NO LONGER COMES THROUGH HERE. Its page draws its own head, in the page (walkHeadHtml), and
+// the `In feature` line this used to add for it went with it. `chain` stays in the signature because
+// the caller passes it for that head, and the two are the same call from syncPageHero.
 function heroSubjectHtml(id, chain) {
   const n = GRAPH.nodes[id];
   const c = n ? cardFacts(id) : null;
   if (!c) return '';
   const pills = kindPillsExtra(n) + (n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '');
-  const inTrail = (chain || []).some((a) => a.kind === 'capability');
   return pageHeroHtml({ pills, desc: c.desc ? mdInline(c.desc) : '', noDesc: false,
                         meta: n.kind === 'process' ? heroDetailsLinkHtml(id) : '' })
-    + cardExtraHtml(id) + (inTrail ? '' : useCaseFeatureFootHtml(id));
+    + cardExtraHtml(id);
+}
+// THE WALK'S OWN HEAD. A use case's page, or a shared sub-use case's, is the same kind of screen as an
+// actor's page — one element, named, with its board under it — so it draws the two blocks that page
+// draws: the hero, with the element's glyph, its name and its pills on the name row, and a section head
+// announcing the board (its title, the step count, one sentence). And it draws them IN THE PAGE, under
+// the fixed block's shadow, where the actor page draws its own — not in #pagehero. That strip carries
+// no name on purpose, because the trail is that page's title; here the body is a framed section, and a
+// section under a nameless strip read as a drawing with no page around it.
+//
+// The board itself stays where every drawing lives, in #diagram inside #diagwrap: the pan/zoom, the
+// floating controls, the card and the callout all measure against that box, and the frame #diagwrap
+// draws IS the section's frame. Only the words above it moved.
+//
+// A shared sub-use case is not a graph node, so its name and its word come from the subflow itself;
+// it has no sentence and no feature of its own, and the hero says nothing where it has nothing to say.
+function walkHeadHtml(s, chain) {
+  const id = flowIdOf(s);
+  const sub = SUBFLOW_BY_ID[id];
+  const n = GRAPH.nodes[id];
+  if (!sub && !n) return '';
+  const c = n ? cardFacts(id) : null;
+  const inTrail = (chain || []).some((a) => a.kind === 'capability');
+  const hero = pageHeroHtml({
+    glyph: itemGlyphSvg(sub ? 'subflow' : 'usecase'),
+    name: sub ? subflowName(id) : n.name,
+    // A use case's pills are THE SAME ONES ITS CARD SHOWS, from the one function that decides them,
+    // plus the change badge in diff mode — what the fixed-block hero drew for it before.
+    pills: sub ? '<span class="ecard-pill">shared sub-use case</span>'
+               : elementPillsHtml(id) + (n.change ? `<span class="badge ${n.change}">${n.change}</span>` : ''),
+    desc: c && c.desc ? mdInline(c.desc) : '',
+    noDesc: false,
+  }) + (inTrail || sub ? '' : useCaseFeatureFootHtml(id));
+  // THE COUNT KEEPS ITS NOUN. A bare `22` on the head said nothing about what it counted, and the
+  // player one line below counts the same thing with a slash: `22 steps` is the one the reader can check.
+  const steps = (FLOWS_NARR[id] || []).length;
+  const what = sub ? 'shared sub-use case' : 'use case';
+  return hero + itemSectionHeadHtml(sub ? 'Shared sub-use case flow' : 'Use case flow',
+    `${steps} step${steps === 1 ? '' : 's'}`,
+    `Who or what acts at each step of this ${what}, on what, in the order the steps run.`);
 }
 // Drawn on every navigation, from renderChrome — so it is refreshed by the same call that repaints the
 // tabs and the trail, and can never survive onto a page that is about something else.
+//
+// TWO HOSTS, one filled at a time: a walk's head goes in the page (#diaghead, see walkHeadHtml), every
+// other subject's in the fixed block (#pagehero). The one not in use is emptied and hidden here, so
+// neither can outlive its page.
 function syncPageHero(s, chain) {
+  const walk = isFlowState(s);
   const id = heroSubjectId(s);
   const fold = FOLD_NARRATIVE[s && s.kind] || '';
-  const html = id ? heroSubjectHtml(id, chain)
+  const html = walk ? walkHeadHtml(s, chain)
+             : id ? heroSubjectHtml(id, chain)
              : fold ? pageHeroHtml({ desc: esc(fold), noDesc: false }) : '';
-  pagehero.innerHTML = html;
-  pagehero.hidden = !html;
+  const host = walk ? diaghead : pagehero;
+  const other = walk ? pagehero : diaghead;
+  other.innerHTML = ''; other.hidden = true;
+  host.innerHTML = html;
+  host.hidden = !html;
   if (!html) return;
-  bindElementCards(pagehero);   // the `In feature …` line is a door, here as on a card
-  pagehero.querySelectorAll('[data-goelement]').forEach((b) =>
+  bindElementCards(host);   // the `In feature …` line is a door, here as on a card
+  host.querySelectorAll('[data-goelement]').forEach((b) =>
     b.addEventListener('click', () => go({ kind: 'element', id: b.getAttribute('data-goelement') })));
 }
 // ── THE CALLOUT ───────────────────────────────────────────────────────────────────────────────────
@@ -10587,12 +10634,18 @@ function bindProductLead() {
 function itemSectionHtml(secs, key, title, count, note, body) {
   const id = 'itemsec-' + key;
   secs.push({ id, title, count });
-  return `<section class="item-sec" id="${id}">`
-    + `<h2 class="item-sec-title">${esc(title)}`
+  return `<section class="item-sec" id="${id}">${itemSectionHeadHtml(title, count, note)}`
+    + `<div class="item-sec-frame">${body}</div></section>`;
+}
+// The head alone — the title, its count and its sentence — for a section whose frame is not the
+// `item-sec-frame` this builder draws. A walk's page has one: its board is the pan/zoom drawing, and
+// the frame around that is #diagwrap, so the head is written above it and the frame stays where every
+// drawing's frame is. One builder for the words, whichever frame sits under them.
+function itemSectionHeadHtml(title, count, note) {
+  return `<h2 class="item-sec-title">${esc(title)}`
     + (count === '' || count == null ? '' : `<span class="item-sec-n">${esc(String(count))}</span>`)
     + '</h2>'
-    + (note ? `<p class="item-sec-note">${esc(note)}</p>` : '')
-    + `<div class="item-sec-frame">${body}</div></section>`;
+    + (note ? `<p class="item-sec-note">${esc(note)}</p>` : '');
 }
 function tabIndexHtml(secs) {
   if (!secs || secs.length < 2) return '';
@@ -12544,6 +12597,9 @@ async function render(sArg, transient) {
   } catch (err) {
     if (seq !== renderSeq) return;
     const s = sArg || history[hi];
+    // SAID IN THE CONSOLE TOO. The message on screen is all a reader needs; whoever is asked to fix it
+    // needs the stack, and a swallowed error left nothing to read anywhere.
+    console.error('coyodex: this view could not be rendered', s, err);
     diagram.innerHTML = '<p class="empty">This view could not be rendered.</p>';
     mainScene = null;
     try { renderChrome(s); } catch (_) { /* the chrome is the last thing that can fail; leave the rest */ }

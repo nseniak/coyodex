@@ -1885,8 +1885,12 @@ def test_a_process_keeps_all_its_depth_on_a_details_page() -> None:
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
     assert "syncPageHero(s, chain);" in chrome
     # The `In feature` line is dropped when the trail already names that feature — which it does on every
-    # use case reached through a feature card. Under the crumb it would print the same words twice.
-    assert "inTrail ? '' : useCaseFeatureFootHtml(id)" in sub
+    # use case reached through a feature card. Under the crumb it would print the same words twice. It
+    # lives in the WALK's head now, the one builder a use case's page goes through.
+    walk = js[js.index("function walkHeadHtml(s, chain) {"):
+              js.index("\n}", js.index("function walkHeadHtml(s, chain) {"))]
+    assert "inTrail || sub ? '' : useCaseFeatureFootHtml(id)" in walk
+    assert "useCaseFeatureFootHtml" not in sub, "a use case never comes through the fixed-block hero"
 
 def test_a_code_link_looks_the_same_on_every_screen_that_draws_one() -> None:
     """`srcCell` builds one code link and eight screens call it: the Glossary, the Storage table, an
@@ -2045,8 +2049,8 @@ def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
         "the trail draws none of them"
     # Every page about one element asks that one function; a surface has no node to ask it about and
     # builds its own words (`our surface`, its shape, who it faces).
-    assert js.count("elementPillsHtml(") == 4, \
-        "the helper itself, and the actor, feature and decision-area pages"
+    assert js.count("elementPillsHtml(") == 5, \
+        "the helper itself, and the actor, feature, decision-area and use case pages"
     # …and the body no longer draws what the trail carries.
     extra = js[js.index("function kindPillsExtra(n) {"):
                js.index("\n}", js.index("function kindPillsExtra(n) {"))]
@@ -3229,8 +3233,8 @@ def test_one_card_design_reaches_the_card_that_floats_over_a_diagram() -> None:
     a bare slate badge instead of a labelled line you could click. Six differences, and the overlay was
     the poorer of the two — it had neither the label nor the door.
 
-    Both read `elementCardHtml` now. An actor's overlay keeps the one thing a card does not carry — which
-    steps of THIS walk it drives — as its own block UNDER the card, the shape a process already used.
+    Both read `elementCardHtml` now. An actor's overlay is the card and nothing else: the `Drives` list it
+    kept under the card restated, in words, the numbered steps the map beside it already lights up.
 
     The remaining hand-built panels are not elements and have no card to reuse: an arrow, a bridge, a flow
     step, and the Libraries / bucket folds."""
@@ -3241,15 +3245,15 @@ def test_one_card_design_reaches_the_card_that_floats_over_a_diagram() -> None:
     assert "elementCardHtml(uc," in uc and "pane-card" in uc, "the same card a grid draws"
     assert "bindElementCards(panel);" in uc, "…with the same actions"
     assert "badge kind" not in uc and "class=\"explain\"" not in uc, "the hand-built design is gone"
-    ap = js[js.index("function actorPanelHtml(a, drives) {"):
-            js.index("\n}", js.index("function actorPanelHtml(a, drives) {"))]
+    ap = js[js.index("function actorPanelHtml(a) {"):
+            js.index("\n}", js.index("function actorPanelHtml(a) {"))]
     assert "elementCardHtml(id, { bare: true })" in ap and "pane-card" in ap
     # `bare` is an OPTION on the box, never three declarations reaching in from its container.
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert ".ibox-bare { border-color: transparent; background: transparent; padding: 0; }" in css
     assert "#panel .pane-card .ecard {" not in css
-    assert "Drives" in ap and ap.index("driveRows") < ap.index("elementCardHtml"), \
-        "what it drives here is a block under the card, not a second card design"
+    assert "Drives" not in ap and "driveRows" not in js, \
+        "the steps it drives are on the map the card floats over, not listed again under it"
     # The pane must not resize the card either: one card, one size, wherever a reader meets it.
     assert "#panel .pane-card .ecard-name { font-size" not in css
     # The panels that stay hand-built are the ones with no card to reuse.
@@ -5226,3 +5230,33 @@ def test_a_chip_is_one_component_that_no_page_restyles() -> None:
     # …and ONE builder still, which is the half that was already true.
     assert js.count("function itemChipHtml(") == 1
     assert js.count('class="ibox-chip') == 1, "one place writes a chip's markup"
+
+
+def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> None:
+    """The use case page's hero and section head are drawn in the page (#diaghead), between the fixed
+    block and the frame, by one builder — and that builder assembles the SAME pieces the actor page
+    uses: the shared hero, the element's pills from the one function that decides them, and the section
+    head factored out of `itemSectionHtml` so the words over a frame have one source. The two hosts are
+    filled by one call, and the one not in use is emptied, so neither can outlive its page."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    stage = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
+    assert stage.index('<div id="diaghead" hidden></div>') > stage.index('<div id="pagehero" hidden></div>'), \
+        "in the page, under the fixed block's shadow — never inside it"
+    head = js[js.index("function walkHeadHtml(s, chain) {"):
+              js.index("\n}", js.index("function walkHeadHtml(s, chain) {"))]
+    assert "pageHeroHtml({" in head and "elementPillsHtml(id)" in head, "the actor page's own hero and pills"
+    assert "itemGlyphSvg(sub ? 'subflow' : 'usecase')" in head, "the element's own glyph on the name row"
+    assert "itemSectionHeadHtml(" in head, "the section head, from the one builder"
+    assert "(FLOWS_NARR[id] || []).length" in head, "the count is the walk's own steps"
+    sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body) {"):
+             js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body) {"))]
+    assert "itemSectionHeadHtml(title, count, note)" in sec, "…which the framed section uses too"
+    sync = js[js.index("function syncPageHero(s, chain) {"):
+              js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
+    assert "const walk = isFlowState(s);" in sync and "walk ? walkHeadHtml(s, chain)" in sync
+    assert "other.innerHTML = ''; other.hidden = true;" in sync, "the host not in use is emptied"
+    # The frame under the head is #diagwrap, restyled to the section frame's own colours while it shows.
+    assert "#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 9px 20px 24px; border-color: #cbd5e1; border-radius: 12px; }" in css
+    assert "#diaghead { flex: 0 0 auto; padding: 0 20px; }" in css, "the actor page's left edge"

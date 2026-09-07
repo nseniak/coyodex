@@ -247,6 +247,18 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #pagehero .page-hero-purpose { margin: 6px 0 0; font-size: 13.5px; color: #4b5563; }
 #pagehero .ecard-extra { margin: 6px 0 0; }
 #pagehero .page-hero-meta { margin: 7px 0 0; }
+/* THE WALK'S HEAD (#diaghead, filled by walkHeadHtml): the hero and the section head of a use case's
+   page, in the page rather than in the fixed block. The same left edge the actor page's column has
+   (20px), the hero's own shape (the shared `.page-hero` rule, name row and all), and the same section
+   head — so a reader coming from an actor's page meets the same page. The frame under it is #diagwrap,
+   given the section frame's own rule (the `.item-sec-frame` colours) while this head shows; the note's
+   own bottom margin is dropped because the frame's top margin is that gap. */
+#diaghead { flex: 0 0 auto; padding: 0 20px; }
+#diaghead[hidden] { display: none; }
+#diaghead .page-hero-name .ibox-gly { width: 19px; height: 19px; align-self: center; }
+#diaghead .ecard-extra { margin: -6px 0 12px; }
+#diaghead .item-sec-note { margin-bottom: 0; }
+#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 9px 20px 24px; border-color: #cbd5e1; border-radius: 12px; }
 /* THE DOOR TO A PROCESS'S DETAILS PAGE. A link, not a button: it goes somewhere, it does not act on what
    is on screen — and every button in this header block (a tab, a group, a crumb) already means "switch
    what you are looking at". Set in the trail's own quiet indigo so it reads as one more step of the path
