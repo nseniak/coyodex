@@ -529,6 +529,48 @@ def test_a_typed_message_reaches_the_reader_and_the_harness_chatter_does_not():
     assert spoken == ["/coyodex build", "A"]
 
 
+def test_every_machine_class_that_arrives_as_a_string_stays_hidden():
+    """Accepting string content made SEVERAL machine classes visible at once, not just the task
+    notification the first version filtered. An adversarial reader diffed the old reader against the
+    new one over real transcripts and found 41 kB of machine text rendering as the operator on one
+    session, including two continuation summaries of 19,846 and 21,094 characters.
+
+    Counted on this machine when the markers were added: 242 security-review prompts, 178 image
+    placeholders, 16 cross-session messages, 21 interrupt notices. An interrupt is a real operator
+    ACT, and still not the operator's words: rendering it as a quotation claims they typed
+    "[Request interrupted by user]"."""
+    machine = [
+        "<task-notification>\n<task-id>abc</task-id>",
+        "Review this change for security vulnerabilities. Changed files: a.py",
+        "[Image: original 3200x1846, displayed at 2000x1154.]",
+        "Another Claude session sent a message: <cross-session-message>hi</cross-session-message>",
+        "This session is being continued from a previous conversation that ran out of context.",
+        "(Re-invocation of /debrief — the skill instructions are unchanged.)",
+        "Skill /debrief is already loaded above; instructions unchanged.",
+        "You check Claude's final message to one specific user before it is sent.",
+    ]
+    for body in machine:
+        assert transcript.operator_text(body) == "", f"rendered as a person: {body[:48]!r}"
+
+    # …and a person's own words still come through, including the short ones a build turns on.
+    for body in ("A", "yes", "commit", "status", "3.3 mcp"):
+        assert transcript.operator_text(body) == body
+
+    # A PERSON QUOTING A MARKER MUST SURVIVE. The markers above are matched at the HEAD for exactly
+    # this reason: as substrings they ate ordinary sentences, which is the failure `operator_text`'s
+    # own docstring records from the last time someone reached for a substring test.
+    for body in ("Review this change for security vulnerabilities before I commit it.",
+                 "Another Claude session sent a message about the split — is it committed?",
+                 "the reader still shows [Request interrupted by user] as if I typed it"):
+        assert transcript.operator_text(body) == body
+
+    # `[Request interrupted by user` is NOT filtered, on purpose. It arrives as a list-content
+    # block rather than a plain string, so it was already visible before string content reached the
+    # reader at all — hiding it would be a new removal of 57 records across 30 sessions, not a
+    # repair, and that a person interrupted is something a retro wants to see.
+    assert transcript.operator_text("[Request interrupted by user for tool use]") != ""
+
+
 def test_a_command_name_tag_that_already_carries_its_slash_is_not_doubled():
     """Claude Code 2.1.263 writes `<command-name>/coyodex</command-name>`; an earlier version wrote
     the bare word, which is what the unwrapping was built for. Prepending unconditionally rendered

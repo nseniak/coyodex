@@ -30,11 +30,29 @@ the answer, which is why the method text now names the case.
 
 Eight other walk reports landed in the four minutes after that one.
 
-**Measured before shipping**, person-facing walks that end with the person acting and nothing handed
-back: **0 of 50 on the 2026-09-02 map, 5 of 43 on the 2026-09-07 map.** One of the five is UC3. The
-advisory counts PEOPLE only: a service role opening its own scheduled work fires 3 more times on the
-same map and is owed no reply, and burying the five under those three is how an advisory teaches
-people to skip it.
+**Measured, and CORRECTED after an adversarial review.** Person-facing walks whose person is left
+acting with nothing handed back: **0 of 50 on the 2026-09-02 map and 4 of 43 on the 2026-09-07 map**,
+one of them UC3. Also 3 of argus's 18 person-facing walks and 3 of coyodex's own 18. **Every
+denominator here is person-facing walks, not flows** — an earlier draft of this line said "3 of 40"
+for a map that has 38 flows, having borrowed the 40 from the sibling check's own denominator.
+
+The first shipped version was wrong in both directions and a reviewer reproduced each on a live map:
+
+- it took the last step touching ANY actor and then asked whether that one was a person, so **one
+  machine step after a person's dead end hid it** — silent on argus UC3 and coyodex UC38, the exact
+  defect it exists for;
+- it read a walk's OWN steps, so a reply handed back inside a shared sub-use case read as no
+  reply. **This one has no live instance**: expanded and own steps give identical rows on all four
+  maps today. It is a defect in reasoning, fixed before it could bite, and not something a reviewer
+  reproduced on a map;
+- it demanded a reply when the person walked out to somebody ELSE'S console, which the product
+  stands at neither end of. That was 1 of the 5 it first reported.
+
+It now tracks the last contact PER PERSON over the expanded steps, and exempts a third party's
+surface only when the walk ENDS there. Across four live maps that exemption suppresses exactly one
+row. The advisory counts PEOPLE only: a service role opening its own scheduled work fires 2 more
+times on the 2026-09-07 map (UC40-43) and 2 on the earlier one (UC46-47), and is owed no reply.
+Both of those numbers were stated wrong twice before being measured.
 
 ## Checks
 
@@ -44,7 +62,8 @@ people to skip it.
    regression sign: the advisory fires on UC3 again with neither. A build is reading its warnings
    and skipping this one.
 
-2. expect: the count stays small — at most 2 or 3 person-facing walks per map.
+2. expect: the count stays small — at most 4 or 5 person-facing walks per map. (An earlier draft
+   said "2 or 3" while the same file measured 4, so the check contradicted its own evidence.)
    regression sign: it fires on 8 or more. Either most walks legitimately end on the person acting,
    which would make the whole check the wrong shape, or the person/service cut is drawn wrong.
 

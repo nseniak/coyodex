@@ -5679,3 +5679,82 @@ def test_a_record_kept_inside_nothing_that_is_kept_is_reported():
     m.extras = [ExtraSection(heading="Balance exceptions",
                              body="E2/embedded: the holder is authored in a slice we do not map")]
     assert not validate_model_mod._orphan_embedded_warnings(m)
+
+
+def test_the_embedded_holder_chain_must_end_somewhere_real():
+    """One level is not enough, and the containment helper's own docstring says so: it is "not
+    transitive: callers walk it themselves, and must carry a `seen` set".
+
+    The first version asked only whether an immediate holder `is_saved`, and `embedded` counts as
+    saved. So a record embedded inside an embedded inside a read shape passed, and a record naming
+    ITSELF as its holder passed on its own say-so. An adversarial reader found the second on
+    coyodex's own map: E38 `DirExpectation`, whose only holder is E38. A cycle of two never
+    converges at all, which is why `seen` is not optional."""
+    from coyodex.model import Entity, EntityField, ProjectModel, Store
+
+    def rec(i, mode, holds=None):
+        e = Entity(id=i, name=i, meaning="m", source=f"a.py:{i[1:]}",
+                   store=Store(mode=mode, container="c"))
+        if holds:
+            e.fields = [EntityField(name="inner", type=f"list[{holds}]")]
+        return e
+
+    # A chain that never lands: E3 embedded in E2 embedded in E1, and E1 is a read shape.
+    m = ProjectModel(title="T", goal="G")
+    m.entities = [rec("E1", "projection", "E2"), rec("E2", "embedded", "E3"), rec("E3", "embedded")]
+    fired = {w.split()[0] for w in validate_model_mod._orphan_embedded_warnings(m)}
+    assert fired == {"E2", "E3"}, fired
+
+    # The same chain landing on a real compartment is fine.
+    m.entities[0].store = Store(mode="collection", container="rows")
+    assert not validate_model_mod._orphan_embedded_warnings(m)
+
+    # A record naming ITSELF as its holder is held by nothing.
+    m.entities = [rec("E9", "embedded", "E9")]
+    fired = validate_model_mod._orphan_embedded_warnings(m)
+    assert fired and "E9" in fired[0]
+
+    # A cycle terminates instead of hanging, and both rows are reported.
+    m.entities = [rec("E1", "embedded", "E2"), rec("E2", "embedded", "E1")]
+    assert {w.split()[0] for w in validate_model_mod._orphan_embedded_warnings(m)} == {"E1", "E2"}
+
+
+def test_a_machine_step_after_a_person_no_longer_hides_the_dead_end():
+    """The first version took the last step touching ANY actor and then asked whether that one was
+    a person. So a single machine step after a person's dead end hid it, and an adversarial reader
+    found the shipped check silent on argus UC3 and on coyodex's own UC38 — the exact defect it
+    exists for. It also read a walk's OWN steps, so a reply handed back inside a shared sub-use case
+    read as no reply, and a dead end inside one was invisible."""
+    from coyodex.model import (Component, Flow, FlowStep, Interface, ProjectModel, Role, SubFlow,
+                               UseCase)
+    m = ProjectModel(title="T", goal="G")
+    m.roles = [Role(id="R1", name="Visitor", kind="human", audience="user"),
+               Role(id="R3", name="Assistant", kind="ai-agent", audience="user")]
+    m.components = [Component(id="C1", name="App", purpose="p", source="a.py:1")]
+    m.interfaces = [Interface(id="I1", name="Site", side="ours", kind="screen", facing="user"),
+                    Interface(id="I2", name="Sign-in", side="theirs", kind="hosted-screen",
+                              facing="user")]
+    m.use_cases = [UseCase(id="UC1", name="Approve")]
+    m.flows = [Flow(uc="UC1", title="Approve", steps=[
+        FlowStep(n=1, src="R1", dst="I1", phrase="approve it"),
+        FlowStep(n=2, src="I1", dst="R3", phrase="hand the assistant its pass"),
+    ])]
+    fired = validate_model_mod._walk_no_reply_warnings(m)
+    assert fired and "R1" in fired[0], "a machine step after the person still hides the dead end"
+
+    # A person answered inside a SHARED sub-use case is answered. The walk's own steps do not say so.
+    m.subflows = [SubFlow(id="SF1", name="Say thanks", steps=[
+        FlowStep(n=1, src="I1", dst="R1", phrase="show the confirmation")])]
+    m.flows[0].steps.append(FlowStep(n=3, src="I1", dst="I1", phrase="run the thanks", subflow="SF1"))
+    assert not validate_model_mod._walk_no_reply_warnings(m)
+
+    # Somebody else's console, as the walk's LAST act, is a door we cannot answer.
+    m.subflows = []
+    m.flows[0].steps = [FlowStep(n=1, src="R1", dst="I2", phrase="search their log store")]
+    assert not validate_model_mod._walk_no_reply_warnings(m)
+
+    # …but stepping out to a third party while the walk CARRIES ON without the person is the
+    # opposite case, and exempting it hid argus UC3.
+    m.flows[0].steps.append(FlowStep(n=2, src="I1", dst="R3", phrase="answer the assistant instead"))
+    fired = validate_model_mod._walk_no_reply_warnings(m)
+    assert fired and "R1" in fired[0]

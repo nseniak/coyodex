@@ -11374,7 +11374,7 @@ function ifaceActorCardHtml(rid) {
 const IFACE_GLYPH = {
   'screen': 'web', 'hosted-screen': 'web',
   'mobile-app': 'phone', 'desktop-app': 'desktop',
-  'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench', 'mcp': 'socket',
+  'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench', 'mcp': 'mcp',
   'file': 'doc', 'content': 'doc', 'settings': 'doc', 'handoff': 'exit', 'message': 'envelope',
 };
 const IFACE_GLYPH_D = {
@@ -11405,8 +11405,15 @@ const IFACE_GLYPH_D = {
   // under an identical drawing, with nothing telling a reader whether that was one thing or two.
   // A socket says what MCP is that "tools" does not: a plug shape both sides agree on. The wrench
   // stays with `agent-tools`, which is the broader word and the one a wrench actually reads as.
-  socket:   '<rect x="2.5" y="6" width="11" height="6" rx="2"/>'
-            + '<path d="M5.6 6V3.4M10.4 6V3.4M13.5 9h2.5"/>',
+  // THE OFFICIAL MCP MARK, not a drawing of my own. Three stroked paths from
+  // github.com/modelcontextprotocol/docs favicon.svg, scaled from its 180-box to this 18-box;
+  // MIT-licensed, and Commons records it as below the threshold of originality. It replaced a
+  // socket I had invented, which said "a plug" rather than "MCP" and made a reader learn a private
+  // symbol for a thing that already has a public one. Stroke width and caps come from the shared
+  // rule above, so it sits at the same weight as its neighbours.
+  mcp:      '<path d="M1.8 8.49L8.59 1.7C9.53 0.76 11.05 0.76 11.98 1.7V1.7C12.92 2.63 12.92 4.15 11.98 5.09L6.86 10.22"/>'
+            + '<path d="M6.93 10.15L11.98 5.09C12.92 4.15 14.44 4.15 15.38 5.09L15.41 5.13C16.35 6.06 16.35 7.58 15.41 8.52L9.27 14.66C8.96 14.97 8.96 15.48 9.27 15.79L10.53 17.05"/>'
+            + '<path d="M10.29 3.39L5.26 8.41C4.33 9.35 4.33 10.87 5.26 11.81V11.81C6.2 12.75 7.72 12.75 8.66 11.81L13.68 6.79"/>',
 };
 // ONE SURFACE, as a card. The `N ways in` count used to lead the last band and is gone: it was the
 // only number here and it measured the wrong thing. 91 addresses behind a dashboard against 10

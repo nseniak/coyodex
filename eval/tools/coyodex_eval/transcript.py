@@ -970,11 +970,22 @@ COMMAND_LINES = 40
 #: quoted the tag, including a real operator's, and rendered the quotation as if it were the command.
 _HARNESS_TEXT = (
     "<system-reminder", "<local-command-",
-    # A background task announcing itself is the harness, not a person. These arrive as plain-string
-    # user records, so they only became visible when the reader started accepting one; without this
-    # marker the 2026-09-06 mcpolis build would render 75 of them as an operator speaking, which the
-    # docstring below calls a worse answer than no answer.
+    # EVERY CLASS BELOW ARRIVES AS A PLAIN STRING, so all of them became visible at once when the
+    # reader started accepting one — and each would render as the operator speaking, which the
+    # docstring below calls a worse answer than no answer. Counted on this machine's 1,938
+    # transcripts: 242 security-review prompts, 178 image placeholders, 75 task notifications on one
+    # build alone, 16 cross-session messages, and two continuation summaries of 19,846 and 21,094
+    # characters on a single session. An adversarial reader found them by diffing the old reader
+    # against the new one on real transcripts, which is the only way this was ever going to surface.
+    #
+    # LONG MARKERS ON PURPOSE. These are substring-matched over the first 400 characters, so a short
+    # one eats real operator text: "Skill /" would swallow a person writing "use the Skill /debrief".
+    # Each marker here is long enough that a person would have to quote the harness to trip it.
     "<task-notification",
+    # A skill re-announcing itself mid-message: "Skill /debrief is already loaded above;
+    # instructions unchanged". It does not START the record, so head-anchoring cannot reach
+    # it, and the phrase is specific enough that a person would have to quote the harness.
+    "is already loaded above; instructions unchanged",
     "<ide_", "Base directory for this skill:", "Caveat: The messages below were generated",
 )
 
@@ -986,6 +997,29 @@ _HARNESS_TEXT = (
 _SLASH_COMMAND = re.compile(r"<command-name>\s*(?P<name>[^<]*?)\s*</command-name>", re.S)
 _COMMAND_ARGS = re.compile(r"<command-args>(?P<args>.*?)</command-args>", re.S)
 _COMMAND_MESSAGE = re.compile(r"\A<command-message>.*?</command-message>\s*", re.S)
+
+
+#: Machine text that arrives as a PLAIN STRING and is matched at the HEAD, not anywhere in the
+#: message. The tuple above is substring-matched, and the docstring below says why that is
+#: dangerous: it "hid every message that merely quoted the tag, including a real operator's". These
+#: markers were added after string content started reaching the reader at all, and a reviewer showed
+#: that as substrings they ate plausible operator sentences — "Review this change for security
+#: vulnerabilities before I commit it", "the reader still shows [Request interrupted by user] as if
+#: I typed it". Anchored at the head, and long enough to carry the harness's own punctuation, a
+#: person has to reproduce the machine's opening word for word to be hidden.
+#:
+#: `[Request interrupted by user` is deliberately ABSENT. It arrives as a list-content block, not a
+#: string, so it was already visible before this change and hiding it would be a new removal rather
+#: than a repair — 57 records across 30 sessions, and the fact that a person interrupted is
+#: something a retro wants to see.
+_HARNESS_HEAD = (
+    "Review this change for security vulnerabilities. Changed files",
+    "[Image: original ",
+    "Another Claude session sent a message: <cross-session-message",
+    "This session is being continued from a previous conversation",
+    "(Re-invocation of /",
+    "You check Claude's final message to one specific user",
+)
 
 
 def operator_text(text: str) -> str:
@@ -1004,6 +1038,8 @@ def operator_text(text: str) -> str:
     # rule is that machine text rendered as a person is worse than no answer, and the test that was
     # meant to hold it only used bodies with no wrapper in them.
     if any(marker in head[:400] for marker in _HARNESS_TEXT):
+        return ""
+    if head.startswith(_HARNESS_HEAD):
         return ""
     # ANCHORED AT THE HEAD, not searched. A slash-command record opens with the wrapper (optionally
     # after a `<command-message>` block); a wrapper found deeper in a body is a quotation.

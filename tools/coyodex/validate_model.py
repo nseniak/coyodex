@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from coyodex import anchors, balance_lib, prose, records, grammar
+from coyodex import anchors, balance_lib, model, prose, records, grammar
 from coyodex.audit_model import l2_worklist_model
 from coyodex.reporting import clip as _clip, reset_full_lists, set_full_lists, shown as _shown
 from coyodex.anchors import (
@@ -2984,6 +2984,37 @@ _KIND_NAMING_MIN_ROWS = 10
 _KIND_NAMING_FLOOR = 0.10
 
 
+def _reaches_a_saved_root(eid: str, parents: dict[str, list[str]],
+                          by_id: dict[str, "Entity"]) -> bool:
+    """Does this record's holder chain end at a `collection` — a compartment of its own?
+
+    ONE LEVEL IS NOT ENOUGH, and the helper's own docstring says so: `record_parents` is "not
+    transitive: callers walk it themselves, and must carry a `seen` set". The first version of this
+    check asked only whether an immediate holder `is_saved`, and `embedded` counts as saved — so a
+    record `embedded` inside another `embedded` inside a read shape passed, and a record naming
+    ITSELF as its holder passed on its own say-so. An adversarial reader found the second on
+    coyodex's own map: E38 `DirExpectation`, whose only holder is E38.
+
+    A cycle never converges either, which is why `seen` is not optional.
+
+    The chain must reach a `collection`. Nothing else is a place of its own: `embedded` only ever
+    borrows its holder's, which is the whole point of the word."""
+    seen = {eid}
+    frontier = [h for h in parents.get(eid, ()) if h != eid]
+    while frontier:
+        hid = frontier.pop()
+        if hid in seen or hid not in by_id:
+            continue
+        seen.add(hid)
+        holder = by_id[hid]
+        mode = (holder.store.mode or "").strip() if holder.store is not None else ""
+        if mode == "collection":
+            return True
+        if mode == "embedded":
+            frontier += [h for h in parents.get(hid, ()) if h not in seen]
+    return False
+
+
 def _orphan_embedded_warnings(m: ProjectModel) -> list[str]:
     """A record marked KEPT INSIDE A PARENT that nothing saved holds.
 
@@ -3001,7 +3032,7 @@ def _orphan_embedded_warnings(m: ProjectModel) -> list[str]:
     places. The saved-record rule then reported all four, and one recorded line excused all four at
     once with a reason the map's own data contradicts.
 
-    Measured before shipping, across four live maps: argus 0 of 2 `embedded` rows, coyodex 2 of 40,
+    Measured before shipping, across four live maps: argus 0 of 2 `embedded` rows, coyodex 3 of 40,
     mcpolis 2026-09-02 2 of 23, mcpolis 2026-09-07 4 of 25 — and those four are exactly the four the
     saved-record rule reported. It lands on the defect and stays quiet elsewhere.
 
@@ -3024,14 +3055,23 @@ def _orphan_embedded_warnings(m: ProjectModel) -> list[str]:
     for e in embedded:
         if e.id in recorded:
             continue
-        holders = [by_id[h] for h in parents.get(e.id, ()) if h in by_id]
-        if any(is_saved(h) for h in holders):
+        all_holders = [h for h in parents.get(e.id, ()) if h in by_id]
+        holders = [by_id[h] for h in all_holders if h != e.id]
+        self_held = e.id in all_holders
+        if _reaches_a_saved_root(e.id, parents, by_id):
             continue
         if holders:
             named = ", ".join(f"{h.id} ({(h.store.mode if h.store else '') or 'unstated'})"
                               for h in holders[:4])
-            why = (f"the record(s) holding it are not saved themselves: {named}. A piece of a "
-                   f"`projection` is a `projection`; a piece of a `transient` is `transient`")
+            why = (f"no chain of holders from it reaches a record with a compartment of its "
+                   f"own — it is held by {named}. A piece of a `projection` is a `projection`; a "
+                   f"piece of a `transient` is `transient`; and a record naming ITSELF as its "
+                   f"holder is held by nothing")
+        elif self_held:
+            # Its `contains` IS authored — at itself. Saying "the relation was never authored" sent
+            # a reader looking for a missing line that is present; the fault is what it points at.
+            why = ("the only record holding it is ITSELF, so nothing holds it. Name the record it "
+                   "really sits inside, or take that record's mode")
         else:
             why = ("no record holds it at all — either the mode is wrong, or the `contains` "
                    "relation that names its holder was never authored")
@@ -3102,14 +3142,14 @@ def _walk_no_reply_warnings(m: ProjectModel) -> list[str]:
     read. Only the tracing agent sees it, in the moment, and it says so in its report.
 
     Measured on the two mcpolis maps of 2026-09-02 and 2026-09-07: 0 person-facing walks fire on the
-    first and 5 of 43 on the second. One of the five is UC3 "Ask the team a question", whose last
+    first and 4 of 43 on the second. One of the five is UC3 "Ask the team a question", whose last
     step is the visitor clicking a mail address — the build's tracing agent reported that no surface
     fitted, the lead read the report as a wording correction, and the map lost its only `handoff`
     surface while the use case's own outcome still says "their own mail program opens".
 
-    PEOPLE ONLY. A service role opening its own scheduled work is the normal case and fires three
-    times on the same map — a timer that starts a sweep is owed no reply. Counting those would bury
-    the five that matter under noise, which is how an advisory teaches people to skip it."""
+    PEOPLE ONLY. A service role opening its own scheduled work is the normal case and fires four
+    more times on the same map — a timer that starts a sweep is owed no reply. Counting those would bury
+    the four that matter under noise, which is how an advisory teaches people to skip it."""
     if not (m.flows and m.roles):
         return []
     role_ids = {r.id for r in m.roles}
@@ -3118,21 +3158,48 @@ def _walk_no_reply_warnings(m: ProjectModel) -> list[str]:
         return []
     recorded = _recorded_ids(m, MISSING_SURFACES_HEADING, ("UC",))
     uc_name = {u.id: u.name for u in m.use_cases}
+    theirs = {i.id for i in m.interfaces if i.side == "theirs"}
     out: list[str] = []
     for f in m.flows:
-        last = None
-        for st in f.steps:
-            if st.src in role_ids or st.dst in role_ids:
-                last = st
-        if last is None or f.uc in recorded:
+        if f.uc in recorded:
             continue
-        # Inbound only: the actor is the SOURCE, so the person acted and the walk never answered.
-        if last.src in people and last.dst not in role_ids:
+        # PER PERSON, and over the EXPANDED steps. The first version took the last step touching
+        # ANY actor and then asked whether that one was a person, so a single machine step after a
+        # person's dead end hid it — an adversarial reader found the shipped check silent on
+        # argus UC3 and on coyodex's own UC38, which are the exact defect it exists for. It also
+        # read the walk's OWN steps, so a reply handed back inside a shared sub-use case looked
+        # like no reply at all, and a dead end inside one was invisible.
+        last: dict[str, FlowStep] = {}
+        steps = model.expanded_flow_steps(m, f)
+        #: the walk's LAST STEP, full stop. Not its last actor contact: that made the verdict on a
+        #: PERSON depend on which actor a later step happened to touch, so appending one machine
+        #: step to mcpolis UC39 brought it back and truncating argus UC3 silenced it. What the rule
+        #: is really asking is whether the product was still running after the person left — if it
+        #: was, it had the chance to come back to them and did not.
+        final_step = steps[-1] if steps else None
+        for st in steps:
+            for end in (st.src, st.dst):
+                if end in role_ids:
+                    last[end] = st
+        for rid, st in sorted(last.items()):
+            if rid not in people or st.src != rid or st.dst in role_ids:
+                continue
+            # SOMEBODY ELSE'S CONSOLE IS NOT OURS TO ANSWER — but only when the walk ENDS there,
+            # measured against its last STEP. A person leaving for a `theirs` surface as the very
+            # last thing that happens is a door the product stands at neither end of, and the
+            # glossary says such a step carries no direction for that reason: mcpolis UC39, "search
+            # the log store for the test record", has no reply the product could give because
+            # nothing of the product runs afterwards. A person who steps out while the walk CARRIES
+            # ON is the opposite case — argus UC3, where the visitor approves on a sign-in page and
+            # only the assistant is answered over the next twelve steps.
+            # Across four live maps this clause suppresses exactly one row, and it is UC39's.
+            if st.dst in theirs and st is final_step:
+                continue
             out.append(
-                f"{f.uc} ({uc_name.get(f.uc, f.uc)}) ends with its person acting and nothing handed "
-                f"back — step {last.n} is '{_clip(last.phrase)}' and no later step reaches them. A "
-                f"door works both ways, so either the way out is missing a step, or the surface the "
-                f"person ends at was never written. If a tracing agent reported that no surface "
+                f"{f.uc} ({uc_name.get(f.uc, f.uc)}) leaves {rid} acting with nothing handed "
+                f"back — step {st.n} is '{_clip(st.phrase)}' and no later step reaches THAT person. "
+                f"A door works both ways, so either the way out is missing a step, or the surface "
+                f"the person ends at was never written. If a tracing agent reported that no surface "
                 f"fitted, that report is the row: mint the surface and close the walk through it, "
                 f"or record '{f.uc}: <why this story's person stands at no surface>' under a "
                 f"'{MISSING_SURFACES_HEADING}' extras heading")

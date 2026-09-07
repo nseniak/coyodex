@@ -258,8 +258,10 @@ Semantics, stated on the fields:
   `validate` blocks a near-miss), `notes` what the shape can't say (TTL, cache tiers). `null` = not
   persisted / not stated. `projection` is a READ shape over rows ANOTHER entity owns (the row type a
   query module returns, a view assembled in code): the data is durable, this type is not what stores
-  it. **`embedded` is PERSISTED INSIDE another record's row, and the holder must itself be saved** —
-  a `collection` or another `embedded`. A shape merely NESTED inside another in-memory object is not
+  it. **`embedded` is PERSISTED INSIDE another record's row, and the chain of holders must END at a
+  `collection`** — a compartment of its own. Another `embedded` may sit between, but it only ever
+  borrows its own holder's place, so a chain that never reaches a `collection` is held by nothing.
+  A record naming ITSELF as its holder is the same case, said shorter. A shape merely NESTED inside another in-memory object is not
   embedded: it takes its holder's own mode, so a piece of a `projection` is a `projection` and a
   piece of a `transient` is `transient`. `container` names the holder's real compartment, never the
   screen the shape appears on. **This is the one word here that has been read as "nested".** On the
