@@ -2320,11 +2320,22 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   `rule`, `dep-usage`, `ownership`, `persistence`, `messaging`, `interface`, `lifecycle`, `cadence`,
   `description`,
   `backbone`, `behaviour`)
-  — and `behaviour` is the one nothing emits by default: flow titles and step phrases, the walk a
-  reader follows, added only by `audit --with-behavioural`. It is off because it roughly doubles
-  the worklist, and on the map it was written for it was the difference between 0 and 559 claims
-  about the behavioural half. Turn it on when the budget is there, and say in `grounding.note`
-  that you did
+  — and `behaviour` covers flow titles and step phrases, the walk a reader follows, added by
+  `audit --with-behavioural`. **RUN IT.** It is not the default flag, so pass it, and record
+  `behavioural: <why not>` under an **"Entry-point coverage"** extras heading if you deliberately
+  skip it. `grounding.note` says either way.
+  **Why this is now an instruction rather than a suggestion.** It read "turn it on when the budget
+  is there" for three consecutive builds and **no build ever turned it on**, so the behavioural half
+  of every shipped map carries zero claims: 899 rows on the 2026-09-07 mcpolis map — every use case
+  name, every story title, every step phrase, every happy-path step. Three retros filed that as
+  "landed but ineffective" without finding the cause, which was not budget at all: the flag's own
+  NOTE told every build the record could not hold the result, and kept saying so after that was
+  fixed. A soft suggestion produced nothing in three builds, and it was answering a message that was
+  wrong.
+  **The cost, measured rather than feared.** The worklist roughly doubles — 933 claims to 1787 on
+  that map, of which 854 are this theme. The readers that check them cost $69 of a $341 build, so
+  the flag adds about a fifth to the bill, not double. Weigh that against the half of the map a
+  reader actually reads being the half nobody has ever checked.
   and **`security` holds every `access: true` rule site** as well as the `enforces`/`encrypts`
   edges, so the batch that sorts first really is the access-control batch — send the multi-skeptic
   majority vote there. (A rule site that is NOT an access rule carries `rule`.) `theme_counts` gives
