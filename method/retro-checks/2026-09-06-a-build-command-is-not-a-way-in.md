@@ -63,23 +63,34 @@ the row it picked was one the author's own gold answer had missed.
    regression sign: any drop. A command that loses its `entry_points` row must still be recorded,
    and this is the check that "Move it, never drop it" is answerable at all.
 
-4. expect: three mcpolis commands KEEP an `entry_points` row on the rebuild — the sandbox image
-   publisher (`runner/e2b-templates`), the orphan-sandbox lister
-   (`backend/tests/integration/run-list-orphan-sandboxes.sh`), and the live-site smoke test
-   (`internal/scripts/prod-smoke.sh`).
-   regression sign: any of the three missing. The first two prove "acts on a live provider" landed;
-   the third is the only test in either repo that acts on production, and it is what
-   "being a test exempts nothing" was written for.
+4. expect: three mcpolis ACTIONS keep an `entry_points` row on the rebuild — publishing the sandbox
+   images, listing the sandboxes the hosting account holds, and smoke-testing the live site.
+   **Match the action, never a path.** The rule itself moves a row off a wrapper and onto the
+   command that acts, so naming the wrapper's path is asking the rule to break itself.
+   regression sign: any of the three actions has no way-in row anywhere.
+   FIRST RUN (2026-09-07): scored FAILED against the path form, wrongly. Two of the three paths
+   named were wrappers — `run-list-orphan-sandboxes.sh` execs `list_orphan_sandboxes.py`, and
+   `prod-smoke.sh` execs `_prod-smoke.mts` — and the rebuild had put each row on the acting command,
+   exactly as the wrapper cut says. All three ACTIONS kept a row. The check was wrong, not the map.
 
-5. expect: argus records its service launch as ONE way in, not two. `backend/src/argus/main.py` is
-   the row; `make run` is its wrapper and gets a `run_commands` row only.
-   regression sign: two rows for one launch (the wrapper cut did not land), or none (the launch
-   was read as a local start script).
+5. expect: on a rebuild of argus, a command that acts on the live product gains a way-in row that
+   the pre-change map did not have. The candidates are the deploy path and the account-plan and
+   stored-snapshot scripts under `scripts/`.
+   regression sign: the argus way-in set is unchanged, meaning the rule reached mcpolis and not
+   argus.
+   REWRITTEN 2026-09-07. The first wording asked argus to record its launch once rather than twice
+   — which the PRE-CHANGE argus map already does. It would have passed whether or not the change
+   landed, so it measured nothing. An item that the old world already satisfies is not a check.
 
 6. record the number, do not judge it: the "Entry-point coverage" line `coyodex validate` now
    prints. Baselines measured 2026-09-06 — argus **86 external ways in: 73 named by a use case, 13
    reached only through the component a walk touches, 0 unclaimed**; mcpolis **250: 64 named, 144
    component-only, 42 unclaimed**.
-   regression sign: the component-only half grows as a SHARE of the total on a rebuild. That would
-   mean the cut removed rows a use case had named rather than rows nobody claimed, which is the
-   quiet way this change could make coverage look better while making it worse.
+   regression sign: the component-only half grows as a SHARE **and the rows that stopped being named
+   are `cli` rows**. Both halves are needed. The share alone cannot tell "the cut removed named
+   rows" from "use-case authoring stopped naming doors", and on the first run it was the second.
+   FIRST RUN (2026-09-07): the share moved 57.6% -> 82.9% and named rows fell 64 -> 24, but **zero
+   of the lost namings are `cli` rows** and 40 of the 46 sit on `http-route` / `ui-route` rows that
+   still exist. Fewer use cases (50 -> 43) accounts for only 55 of the expected 64. So the alarm was
+   true, its stated cause was false, and the naming collapse is a SEPARATE regression this file must
+   not claim credit for. It is filed on its own.

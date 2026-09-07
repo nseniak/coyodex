@@ -462,8 +462,12 @@ components/deps/entities), drawn as a walk map and read as a numbered narrative.
   command that acts; what a container declares for ITSELF (its own argv, a healthcheck, a sidecar)
   is not a command anybody types and gets no row in either table, while **a command a PERSON runs is
   a command wherever it is written down**, a comment inside the compose file included.
-  **Move it, never drop it** — if T3 carries no row for that command, write the T3 row; the map
-  still records every way to run and test this product, in the one table that owns them.
+  **Moving it is a WRITE, not a decision** — deciding a command is not an entry point is half the
+  work, and the other half is its T3 row, written in the same edit. A harvesting agent states the
+  count in its reply and names the commands it moved, because a row that was never written leaves no
+  trace and no gate can see it. Measured on the first build under this rule: **11 of the 36 command
+  files the previous map carried as entry points landed in NEITHER table**, the backend lint command
+  among them, which the map now records nowhere at all.
 
   This is the rule T2b already states — "the pipeline that builds and tests the product is not a
   product interface" — moved to the step that MINTS the rows, because a row that is never harvested

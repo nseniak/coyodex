@@ -122,8 +122,13 @@ lead; nothing above this line goes into an agent prompt.
 >   down**, a comment inside the compose file included: one live map's only deploy command lives
 >   there, and a reader who took this cut broadly would have dropped it.
 >
-> **Move it, never drop it**: no `entry_points` row, and a `run_commands` row when that command has
-> none yet.
+> **Moving it is a WRITE, not a decision.** Deciding a command is not a way in is half the work;
+> the other half is its `run_commands` row, in the same edit. **Then count them: your reply says how
+> many commands you moved out of `entry_points`, and names them.** Measured on the first build under
+> this rule: 11 of the 36 command files the previous map carried as ways in ended up in NEITHER
+> array — the backend lint command among them, which the map now records nowhere at all. Every one
+> of those was a decision made and a write forgotten, and nothing in the build could see it, because
+> a row that was never written leaves no trace. The count is what makes the second half visible.
 >
 > **`entities` is NOT yours** unless your brief carries the T5 addendum. Neither is any array not
 > listed above.

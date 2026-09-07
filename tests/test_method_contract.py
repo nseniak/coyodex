@@ -1312,9 +1312,14 @@ def test_the_build_and_test_pipeline_is_kept_out_of_the_entry_points_at_harvest(
             f"{name} lost the tie-breaker. The first draft banned a test outright AND said what the "
             f"command acts on decides; a release smoke test against the live site satisfies both, "
             f"and two fresh agents each dropped that row and named the pair")
-        assert "Move it, never drop it" in text, (
-            f"{name} states the cut without naming where the command DOES belong — that reads as "
-            f"permission to drop it from the map")
+        assert "is a WRITE, not a decision" in text, (
+            f"{name} states the cut without making the move an obligation. The first wording — "
+            f"'Move it, never drop it' as a closing clause — did not hold: 11 of the 36 command "
+            f"files the previous map carried as ways in landed in NEITHER array on the first build "
+            f"under the rule, the backend lint command among them")
+        assert "count" in text and "moved" in text, (
+            f"{name} no longer asks the agent to COUNT what it moved. A row that was never written "
+            f"leaves no trace, so the count is the only thing that makes the second half visible")
         # The three cuts, each one a row a partial run got wrong.
         assert "is not a NEW entry point" in text or "is not a NEW way in" in text, (
             f"{name} lost the cut for a command that merely CALLS one of the product's own "
@@ -1335,7 +1340,9 @@ def test_the_build_and_test_pipeline_is_kept_out_of_the_entry_points_at_harvest(
     # The destination is named in each file's own vocabulary: the lead's prose says T3, the
     # harvesting agent's contract says the array it actually authors.
     assert "T3 row and only a T3 row" in method
-    assert "`run_commands` row when" in contract
+    assert "`run_commands` row" in contract, (
+        "the harvest contract no longer names the array a moved command lands in, so the agent is "
+        "told where a row does NOT belong and not where it does")
     # …and the invitation that produced the rows no longer offers a bare "a command".
     assert "a command that acts on the running product" in contract
 
