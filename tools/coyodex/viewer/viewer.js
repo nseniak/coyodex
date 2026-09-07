@@ -11374,7 +11374,7 @@ function ifaceActorCardHtml(rid) {
 const IFACE_GLYPH = {
   'screen': 'web', 'hosted-screen': 'web',
   'mobile-app': 'phone', 'desktop-app': 'desktop',
-  'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench', 'mcp': 'wrench',
+  'command-line': 'terminal', 'api': 'braces', 'agent-tools': 'wrench', 'mcp': 'socket',
   'file': 'doc', 'content': 'doc', 'settings': 'doc', 'handoff': 'exit', 'message': 'envelope',
 };
 const IFACE_GLYPH_D = {
@@ -11400,6 +11400,13 @@ const IFACE_GLYPH_D = {
   // The PROVIDER mark. Deliberately generic: a box out there, with a line reaching it. It says
   // "someone else's thing", which is all the map can honestly claim about a name it holds no URL for.
   provider: '<rect x="7" y="4" width="9.5" height="10" rx="2"/><path d="M1.5 9h5.5M4.2 6.6 1.5 9l2.7 2.4"/>',
+  // A SOCKET, for `mcp`. It used to wear the wrench, which `agent-tools` also wears — so one
+  // protocol read two ways on one screen: four cards saying "MCP" and one saying "agent tools",
+  // under an identical drawing, with nothing telling a reader whether that was one thing or two.
+  // A socket says what MCP is that "tools" does not: a plug shape both sides agree on. The wrench
+  // stays with `agent-tools`, which is the broader word and the one a wrench actually reads as.
+  socket:   '<rect x="2.5" y="6" width="11" height="6" rx="2"/>'
+            + '<path d="M5.6 6V3.4M10.4 6V3.4M13.5 9h2.5"/>',
 };
 // ONE SURFACE, as a card. The `N ways in` count used to lead the last band and is gone: it was the
 // only number here and it measured the wrong thing. 91 addresses behind a dashboard against 10

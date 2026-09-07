@@ -55,10 +55,19 @@ person meets them as known, not as a discovery.
 
 ## Checks
 
-1. expect: on a rebuild of mcpolis, "Upstream MCP servers" comes back as `agent-tools`, not `api`,
-   without anyone editing the row by hand.
-   regression sign: it returns as `api`. The instruction is not reaching the worker that authors
-   T2b, and the corrected row in this change was masking that.
+1. **SUPERSEDED 2026-09-07, and it is the OTHER file's item that stands.** This asked for
+   "Upstream MCP servers" to come back as `agent-tools`. Later the same day `mcp` became the twelfth
+   interface kind (`af79ac2` after `7e552dd`), and `2026-09-03-mcp-is-a-kind.md` item 1 asks for
+   `mcp` on that exact row. Two promises, one row, opposite answers, and neither retired the other.
+   The 2026-09-07 mcpolis build returned `agent-tools`, so this item read confirmed and its sibling
+   read failed on the same data. **The operator settled it on 2026-09-07: the row is `mcp`.**
+   `mcp` is the more specific word, which is this file's own principle applied to a vocabulary that
+   grew after it was written.
+   What remains live here is the rest of the file: items 2 and 3 still watch for a specific kind
+   decaying into `api`, and that is the habit this change exists to prevent.
+   expect (replacing the above): "Upstream MCP servers" comes back as `mcp`, with no hand edit.
+   regression sign: `api`. That is the decay this file was written for, and it is worse than either
+   word in the dispute.
 
 2. expect: no NEW row moves the other way — a surface that a previous map authored with a specific
    kind (`content`, `handoff`, `hosted-screen`, `agent-tools`) coming back as `api`.
