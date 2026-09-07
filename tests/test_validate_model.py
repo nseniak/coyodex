@@ -5579,3 +5579,54 @@ def test_a_walk_that_leaves_its_person_with_no_reply_is_reported():
     m.extras = [ExtraSection(heading="Missing surfaces",
                              body="UC1: the visitor leaves for a program we never see")]
     assert not validate_model_mod._walk_no_reply_warnings(m)
+
+
+def test_a_whole_kind_of_front_door_that_nobody_names_is_reported():
+    """A total hides this: a map can hold its overall naming up on screens while every address
+    behind them goes unnamed, and what is lost is the map's answer to "which address does this
+    action fire?".
+
+    THE COLLAPSE THIS WAS WRITTEN FOR. Between two mcpolis builds the method's front-door sentence
+    widened from "two parties" to "one party arriving two ways". The next build read an admin's
+    screen plus the address behind it as one party arriving twice, kept the screen and dropped the
+    address. Per kind: `http-route` named went 38 of 114 to 2 of 118 and `mcp-tool` 6 of 43 to 1 of
+    43, while `ui-route` held at 20 of 39 and 21 of 36. Only the action-level kinds moved."""
+    from coyodex.model import Component, EntryPoint, ExtraSection, ProjectModel, UseCase
+    m = ProjectModel(title="T", goal="G")
+    m.components = [Component(id="C1", name="Routes", purpose="serves", source="a.py:1")]
+    m.entry_points = [EntryPoint(id=f"EP{i}", kind="http-route", activation="external",
+                                 component="C1", trigger=f"address {i}", source=f"a.py:{i}")
+                      for i in range(1, 21)]
+    m.use_cases = [UseCase(id="UC1", name="Do it", entry_points=["EP1"])]
+    fired = validate_model_mod._kind_naming_warnings(m)
+    assert fired and "1 of 20 `http-route`" in fired[0]
+
+    # Above the floor it goes quiet: naming three of twenty is 15%.
+    m.use_cases[0].entry_points = ["EP1", "EP2", "EP3"]
+    assert not validate_model_mod._kind_naming_warnings(m)
+
+    # A kind too small for a rate to mean anything never fires: one row would swing any threshold.
+    m.use_cases[0].entry_points = ["EP1"]
+    m.entry_points = m.entry_points[:9]
+    assert not validate_model_mod._kind_naming_warnings(m)
+
+    # Plumbing is not a front door. Middleware scores 0 of 15 on every map ever measured, and
+    # reporting it is how a reader learns to skip the whole advisory.
+    m.entry_points = [EntryPoint(id=f"EP{i}", kind="middleware", activation="external",
+                                 component="C1", trigger=f"filter {i}", source=f"a.py:{i}")
+                      for i in range(1, 21)]
+    assert not validate_model_mod._kind_naming_warnings(m)
+
+    # A map where NO use case names anything is the degenerate case another check owns; reporting it
+    # once per kind would say the same fact several times.
+    m.entry_points = [EntryPoint(id=f"EP{i}", kind="http-route", activation="external",
+                                 component="C1", trigger=f"address {i}", source=f"a.py:{i}")
+                      for i in range(1, 21)]
+    m.use_cases[0].entry_points = []
+    assert not validate_model_mod._kind_naming_warnings(m)
+
+    # …and the recorded line silences one kind durably.
+    m.use_cases[0].entry_points = ["EP1"]
+    m.extras = [ExtraSection(heading="Entry-point coverage",
+                             body="http-route naming: every address is reached from one shell")]
+    assert not validate_model_mod._kind_naming_warnings(m)

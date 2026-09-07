@@ -2974,6 +2974,62 @@ def _is_undoored_crossing(st: FlowStep, role_ids: set[str], iface_ids: set[str])
     return not (st.src in iface_ids or st.dst in iface_ids)
 
 
+#: A kind needs this many rows before its naming RATE means anything. Below it one row swings the
+#: percentage past any threshold, and the advisory would fire on a product that has three routes.
+_KIND_NAMING_MIN_ROWS = 10
+#: Under this share of a kind's rows named by a use case, the map has stopped saying which address
+#: each action fires. Measured across two mcpolis builds: the healthy one ran 33% on http-route and
+#: 14% on mcp-tool, the collapsed one 2% on both, so any line between them separates them. 10% is
+#: placed nearer the failure so a slow drift still has room before it fires.
+_KIND_NAMING_FLOOR = 0.10
+
+
+def _kind_naming_warnings(m: ProjectModel) -> list[str]:
+    """A whole KIND of front door that almost no use case names any more.
+
+    The coverage line already prints the split, and a total hides this: a map can hold its overall
+    naming up on screens while the addresses behind them go unnamed. What is lost is the map's
+    answer to "which address does this action fire?", and no other check asks it.
+
+    THE COLLAPSE THIS WAS WRITTEN FOR. Between the mcpolis builds of 2026-09-02 and 2026-09-07 the
+    method's front-door sentence widened from "two parties" to "one party arriving two ways". The
+    next build read an admin's screen plus the address behind it as one party arriving twice, kept
+    the screen and dropped the address. Per kind: `http-route` named went 38 of 114 to 2 of 118,
+    `mcp-tool` 6 of 43 to 1 of 43, while `ui-route` held at 20 of 39 and 21 of 36. Only the
+    action-level kinds moved, which is the signature this advisory reads.
+
+    Silent until a kind has `_KIND_NAMING_MIN_ROWS`, and silent map-wide when NO use case names any
+    way in at all — that degenerate case is `_trigger_arm_warnings`' business, and firing here too
+    would report the same fact once per kind."""
+    triggered = triggered_entry_point_ids(m)
+    if not (m.use_cases and triggered):
+        return []
+    recorded = {ln.split(":", 1)[0].strip().lower()
+                for ln in records.lines(m, "entry-point coverage") if ":" in ln}
+    by_kind: dict[str, list[str]] = {}
+    # Plumbing is excluded for the same reason the surface check excludes it: request middleware
+    # runs on the way to a door and is not one, so nobody ever names it and 0 of 15 is the correct
+    # answer, not a finding. Left in, it fired on BOTH maps and would have been the first line a
+    # reader learned to skip.
+    for ep in _external_ways_in(m):
+        if ep.id:
+            by_kind.setdefault(grammar.canonical_entry_kind(ep.kind), []).append(ep.id)
+    out: list[str] = []
+    for kind, ids in sorted(by_kind.items()):
+        if len(ids) < _KIND_NAMING_MIN_ROWS or f"{kind} naming" in recorded:
+            continue
+        named = sum(1 for i in ids if i in triggered)
+        if named / len(ids) >= _KIND_NAMING_FLOOR:
+            continue
+        out.append(
+            f"only {named} of {len(ids)} `{kind}` way(s) in are named by a use case — a whole kind "
+            f"of front door the map no longer says who opens. A screen and the address that screen "
+            f"calls are ONE door: name both on the same use case rather than keeping the screen and "
+            f"dropping the address. If this kind genuinely has no story that names it, record "
+            f"'{kind} naming: <why>' under an 'Entry-point coverage' extras heading")
+    return out
+
+
 def _walk_no_reply_warnings(m: ProjectModel) -> list[str]:
     """A walk whose LAST contact with its PERSON is the person acting, with nothing handed back.
 
@@ -6057,6 +6113,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_environments(m))
     warnings.extend(_runs_in_family_warnings(m))   # the whole `runs_in` family, through ONE counted exit
     warnings.extend(_walk_no_reply_warnings(m))   # the sweep-back arm reading the OTHER way
+    warnings.extend(_kind_naming_warnings(m))     # a whole kind of door nobody names
     warnings.extend(recorded_line_warnings(m))    # the shape of the adjudication log itself
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
