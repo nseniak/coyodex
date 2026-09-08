@@ -6797,10 +6797,10 @@ function walkHeadHtml(s, chain) {
   const hero = pageHeroHtml({
     glyph: itemGlyphSvg(sub ? 'subflow' : 'usecase'),
     name: sub ? subflowName(id) : n.name,
-    // A use case's pills are THE SAME ONES ITS CARD SHOWS, from the one function that decides them,
-    // plus the change badge in diff mode — what the fixed-block hero drew for it before.
-    pills: sub ? '<span class="ecard-pill">shared sub-use case</span>'
-               : elementPillsHtml(id) + (n.change ? `<span class="badge ${n.change}">${n.change}</span>` : ''),
+    type: sub ? 'shared sub-use case' : elementLabel('usecase'),
+    // A use case's pills are THE SAME ONES ITS CARD SHOWS after the type one, from the one function
+    // that decides them, plus the change badge in diff mode.
+    pills: sub ? '' : elementSidePillsHtml(id) + (n.change ? `<span class="badge ${n.change}">${n.change}</span>` : ''),
     desc: c && c.desc ? mdInline(c.desc) : '',
     noDesc: false,
   }) + (inTrail || sub ? '' : useCaseFeatureFootHtml(id));
@@ -7452,8 +7452,14 @@ function actorNodeId(name) {
 function elementPillsHtml(id) {
   const c = id ? cardFacts(id) : null;
   if (!c) return '';
-  return `<span class="ecard-pill">${esc(c.type)}</span>`
-    + (c.pills || []).map((p) => `<span class="ecard-pill ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('');
+  return `<span class="ecard-pill">${esc(c.type)}</span>` + elementSidePillsHtml(id);
+}
+// The pills AFTER the type one — which kind of actor, which side of a feature. A page hero says the
+// type in words before the name (`Actor: Prospect`), so it draws only these.
+function elementSidePillsHtml(id) {
+  const c = id ? cardFacts(id) : null;
+  if (!c) return '';
+  return (c.pills || []).map((p) => `<span class="ecard-pill ${esc(p.cls || '')}">${esc(p.text)}</span>`).join('');
 }
 function stateTitle(s) {
   if (s.kind === 'context') return 'Dependencies';
@@ -8179,8 +8185,12 @@ function pageHeroHtml(o) {
   // surface and a Deployment arrow have none, and neither does a colour work in their place (the map
   // gives no tint to a feature or a decision area). So the row is built to READ without one, and the
   // two kinds that have a figure hand it over.
+  // THE TYPE IS A WORD BEFORE THE NAME, not a pill after it: `Actor: Prospect`, `Use case: Weigh up
+  // the product`. Read left to right it says what kind of page this is before it says which one, and
+  // the pills that stay are the ones that vary within the kind (`staff`, `user service`).
+  const kind = o.type ? `<span class="page-hero-kind">${esc(sentenceCase(o.type))}:</span>` : '';
   const name = o.name
-    ? `<p class="page-hero-name">${o.glyph || ''}`
+    ? `<p class="page-hero-name">${o.glyph || ''}${kind}`
       + `<span class="page-hero-subject">${esc(o.name)}</span>${o.pills || ''}</p>`
     : (o.pills ? `<p class="page-hero-pills">${o.pills}</p>` : '');
   // NO LABEL, of any kind, on any line of this block. Three louder shapes were built and dropped: an
@@ -8229,7 +8239,8 @@ function featureHeadHtml(capId) {
   return pageHeroHtml({
     glyph: storyFeatureGlyphSvg(),
     name: f.name,
-    pills: elementPillsHtml(capId),
+    type: elementLabel('capability'),
+    pills: elementSidePillsHtml(capId),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
   });
@@ -8864,10 +8875,11 @@ function actorPageHeroHtml(actorName) {
     // figure the cast card and the board head give them.
     glyph: storyGlyphSvg(role && role.kind),
     name: actorName,
-    // `actor`, and the side where it varies (`staff`, `user service`, `internal service`) — the SAME
-    // pills this actor's card shows, from the one function that decides them, so a card and the page
-    // one click later cannot name two different kinds of actor.
-    pills: elementPillsHtml(actorNodeId(actorName)),
+    type: elementLabel('human'),   // every actor kind reads "actor" — see ELEMENT_LABEL
+    // The side where it varies (`staff`, `user service`, `internal service`) — the SAME pills this
+    // actor's card shows after its type one, from the one function that decides them, so a card and
+    // the page one click later cannot name two different kinds of actor.
+    pills: elementSidePillsHtml(actorNodeId(actorName)),
     desc: role && role.wants ? mdInline(wantsSentence(role.wants)) : '',
     noDesc: 'This map does not say what this actor wants.',
     // The role change reads as a sentence already ("Was Prospect until …", "Becomes …"), so it
@@ -12444,7 +12456,7 @@ function renderInterface(s) {
     : (i.features || []).length ? elementCardListHtml(i.features)
                                 : '<p class="feat-empty">No feature reaches this interface.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + pageHeroHtml({ name: i.name, pills, desc: i.what ? mdInline(i.what) : '',
+    + pageHeroHtml({ name: i.name, type: elementLabel('interface'), pills, desc: i.what ? mdInline(i.what) : '',
                      noDesc: 'No description recorded for this interface.' })
     + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
     + '<h3 class="card-group-head">What crosses</h3>'
@@ -12507,7 +12519,8 @@ function renderRules(s) {
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({
       name: g.name,
-      pills: elementPillsHtml(g.id)
+      type: elementLabel('block'),
+      pills: elementSidePillsHtml(g.id)
         + (g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : ''),
       desc: g.purpose ? mdInline(g.purpose) : '',
       noDesc: 'No description recorded for this decision area.',

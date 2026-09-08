@@ -1479,6 +1479,31 @@ def test_a_named_hero_sits_on_a_white_band_with_the_shared_hero_s_own_text_sizes
         "the hosts that keep no air above the band get the same 16px the actor page's column has"
 
 
+def test_a_hero_says_its_type_in_a_word_before_the_name_not_in_a_pill_after_it() -> None:
+    """`Actor: Prospect`, `Use case: Weigh up the product`. Read left to right the row says what kind
+    of page this is before it says which one, and the pills that stay are the ones that vary within
+    the kind (`staff`, `user service`) — the type pill went, since the word already says it.
+
+    Every named page passes its type from the one table that names element kinds (ELEMENT_LABEL),
+    and its side pills from the one function that draws a card's pills after the type one — so a
+    card and the page one click later cannot name two different kinds of the same thing."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    hero = js[js.index("function pageHeroHtml(o) {"): js.index("\n}", js.index("function pageHeroHtml(o) {"))]
+    assert "const kind = o.type ? `<span class=\"page-hero-kind\">${esc(sentenceCase(o.type))}:</span>` : '';" in hero
+    assert "`<p class=\"page-hero-name\">${o.glyph || ''}${kind}`" in hero, "glyph, type word, then the name"
+    side = js[js.index("function elementSidePillsHtml(id) {"): js.index("\n}", js.index("function elementSidePillsHtml(id) {"))]
+    assert "c.type" not in side, "the pills after the type one"
+    pills = js[js.index("function elementPillsHtml(id) {"): js.index("\n}", js.index("function elementPillsHtml(id) {"))]
+    assert "+ elementSidePillsHtml(id)" in pills, "a card's pills are the type one plus the same side pills"
+    for want in ("type: elementLabel('human'),", "type: elementLabel('capability'),", "type: elementLabel('interface'),",
+                 "type: elementLabel('block'),", "type: sub ? 'shared sub-use case' : elementLabel('usecase'),"):
+        assert want in js, want
+    assert js.count("pills: elementSidePillsHtml(") == 3, "actor, feature and decision area draw only their side pills"
+    assert "pills: sub ? '' : elementSidePillsHtml(id)" in js
+    assert ".page-hero-kind { font-size: 16px; font-weight: 500;" in css, "the name's size, a quieter weight"
+
+
 def test_only_a_number_that_opens_a_step_lights_up_under_the_pointer() -> None:
     """The map's step numbers are doors: each opens its step, so each lights up under the pointer. The
     Happy Path writes the same class on a step's rank, which opens nothing — and it went grey under the
@@ -2138,8 +2163,10 @@ def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
         "the trail draws none of them"
     # Every page about one element asks that one function; a surface has no node to ask it about and
     # builds its own words (`our surface`, its shape, who it faces).
-    assert js.count("elementPillsHtml(") == 5, \
-        "the helper itself, and the actor, feature, decision-area and use case pages"
+    # A page hero says the type in a word before the name and draws the pills AFTER the type one,
+    # through the same facts (`elementSidePillsHtml`, which `elementPillsHtml` itself calls).
+    assert js.count("elementPillsHtml(") == 1 and js.count("elementSidePillsHtml(") == 6, \
+        "the two helpers, and the actor, feature, decision-area and use case pages through the side one"
     # …and the body no longer draws what the trail carries.
     extra = js[js.index("function kindPillsExtra(n) {"):
                js.index("\n}", js.index("function kindPillsExtra(n) {"))]
@@ -3168,7 +3195,7 @@ def test_an_actors_side_is_one_pill_the_card_and_its_page_agree_on() -> None:
     head = js[js.index("function actorPageHeroHtml(actorName) {"):
               js.index("\n}", js.index("function actorPageHeroHtml(actorName) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
-    assert "pills: elementPillsHtml(actorNodeId(actorName))," in head, \
+    assert "pills: elementSidePillsHtml(actorNodeId(actorName))," in head, \
         ("…from the ONE builder every element page uses. `of its own` is the guard that still "
          "matters: no hand-built pill list here, so a card and this page cannot disagree")
     # The reader's word is applied in ONE place, and only where the side is about people.
@@ -3231,7 +3258,7 @@ def test_the_audience_pill_prints_only_what_it_distinguishes() -> None:
     head = js[js.index("function featureHeadHtml(capId) {"):
               js.index("\n}", js.index("function featureHeadHtml(capId) {"))]
     head = "\n".join(l for l in head.splitlines() if not l.lstrip().startswith("//"))
-    assert "pills: elementPillsHtml(capId)," in head, \
+    assert "pills: elementSidePillsHtml(capId)," in head, \
         ("…and it draws them from the ONE builder every element page uses, rather than deciding for "
          "itself. `of its own` is the guard that still matters: no hand-built pill list here")
 
@@ -3383,7 +3410,7 @@ def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     # heading. Every other hero leaves the name to the breadcrumb, and on this page that was not
     # enough: the body is a timeline and a picture of surfaces, and nothing in it said whose page you
     # were on. See the trail test for the heading that stays banned.
-    assert "name: actorName," in head and "pills: elementPillsHtml(actorNodeId(actorName))," in head
+    assert "name: actorName," in head and "pills: elementSidePillsHtml(actorNodeId(actorName))," in head
     # NO LEAD WORD IN THE HERO. An actor's goal does need a word saying it is a goal, and that word
     # belongs to the SENTENCE — it is drawn on six screens and only one of them is this hero, so
     # `wantsSentence` carries it and all six say the same thing.
@@ -5335,7 +5362,7 @@ def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> 
         "in the page, under the fixed block's shadow — never inside it"
     head = js[js.index("function walkHeadHtml(s, chain) {"):
               js.index("\n}", js.index("function walkHeadHtml(s, chain) {"))]
-    assert "pageHeroHtml({" in head and "elementPillsHtml(id)" in head, "the actor page's own hero and pills"
+    assert "pageHeroHtml({" in head and "elementSidePillsHtml(id)" in head, "the actor page's own hero and pills"
     assert "itemGlyphSvg(sub ? 'subflow' : 'usecase')" in head, "the element's own glyph on the name row"
     assert "itemSectionHeadHtml(" in head, "the section head, from the one builder"
     assert "(FLOWS_NARR[id] || []).length" in head, "the count is the walk's own steps"

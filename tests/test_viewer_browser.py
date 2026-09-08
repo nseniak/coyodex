@@ -2872,6 +2872,7 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
                 name: q('#diaghead .page-hero-subject').textContent,
                 glyph: !!q('#diaghead .page-hero-name .ibox-gly'),
                 pills: [...document.querySelectorAll('#diaghead .ecard-pill')].map((e) => e.textContent),
+                kind: (q('#diaghead .page-hero-kind') || {}).textContent,
                 sentence: q('#diaghead .page-hero-purpose').textContent.length,
                 title: q('#diaghead .item-sec-title').firstChild.textContent.trim(),
                 count: q('#diaghead .item-sec-n').textContent,
@@ -2884,7 +2885,8 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
             };
         }""")
         assert seen["headShown"] and not seen["fixedHeroShown"], seen
-        assert seen["name"] and seen["glyph"] and seen["pills"] == ["use case"], seen
+        assert seen["name"] and seen["glyph"] and seen["kind"] == "Use case:" and seen["pills"] == [], \
+            "the type is a word before the name, not a pill after it: " + str(seen)
         assert seen["sentence"] > 0 and seen["note"] > 0, seen
         assert seen["title"] == "Use case flow", seen
         assert seen["player"].endswith(" / " + seen["count"].split(" ")[0]), \
@@ -2917,6 +2919,7 @@ def test_a_shared_sub_use_case_s_page_draws_the_same_head_from_its_own_words() -
             return {
                 name: q('#diaghead .page-hero-subject').textContent,
                 pills: [...document.querySelectorAll('#diaghead .ecard-pill')].map((e) => e.textContent),
+                kind: (q('#diaghead .page-hero-kind') || {}).textContent,
                 sentence: !!q('#diaghead .page-hero-purpose'),
                 foot: !!q('#diaghead .ecard-extra'),
                 title: q('#diaghead .item-sec-title').firstChild.textContent.trim(),
@@ -2925,7 +2928,7 @@ def test_a_shared_sub_use_case_s_page_draws_the_same_head_from_its_own_words() -
             };
         }""")
         assert seen["name"] == "Keep the organization", seen
-        assert seen["pills"] == ["shared sub-use case"], seen
+        assert seen["kind"] == "Shared sub-use case:" and seen["pills"] == [], seen
         assert not seen["sentence"] and not seen["foot"], "nothing is drawn where the map has nothing"
         assert seen["title"] == "Shared sub-use case flow" and seen["count"] == "2 steps", seen
         assert seen["player"] == "\u2013 / 2", seen

@@ -704,6 +704,10 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    rather than the pills floating at the name's middle. */
 .page-hero-name { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0 0 7px; }
 .page-hero-subject { font-size: 16px; font-weight: 700; color: #111827; letter-spacing: -.005em; }
+/* THE TYPE WORD, set as the name's own size and a quieter weight and colour: `Actor: Prospect` reads
+   as one line whose first word says the kind. The gap after it is the row's own, so the colon stays
+   on the word. */
+.page-hero-kind { font-size: 16px; font-weight: 500; color: #6b7280; }
 /* The figure is the element's own drawing (an actor's person or hexagon, a feature's sparkle), which
    paints its own tints, so nothing here colours it. `align-self: center` because a glyph has no
    baseline of its own; left on `baseline` it hangs below the name's. */
