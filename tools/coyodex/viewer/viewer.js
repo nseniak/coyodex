@@ -8189,8 +8189,12 @@ function pageHeroHtml(o) {
   // the product`. Read left to right it says what kind of page this is before it says which one, and
   // the pills that stay are the ones that vary within the kind (`staff`, `user service`).
   const kind = o.type ? `<span class="page-hero-kind">${esc(sentenceCase(o.type))}:</span>` : '';
+  // THE FIGURE IS A COLUMN, not a word in the name row: on a named hero it stands in the card's left
+  // margin at the card's full height, and the text is one block beside it. It was a 19px mark before
+  // the type word, where it read as one more word in the line.
+  const figure = o.name && o.glyph ? `<div class="page-hero-glyph">${o.glyph}</div>` : '';
   const name = o.name
-    ? `<p class="page-hero-name">${o.glyph || ''}${kind}`
+    ? `<p class="page-hero-name">${figure ? '' : (o.glyph || '')}${kind}`
       + `<span class="page-hero-subject">${esc(o.name)}</span>${o.pills || ''}</p>`
     : (o.pills ? `<p class="page-hero-pills">${o.pills}</p>` : '');
   // NO LABEL, of any kind, on any line of this block. Three louder shapes were built and dropped: an
@@ -8209,13 +8213,15 @@ function pageHeroHtml(o) {
   // headings on the same ground. The arrow pages, the entry-point kinds and the fixed block over a
   // drawing have no name to lead with, and stay plain. A wash of the kind's colour and a 24px name
   // were tried and dropped as too loud; the card alone does the setting-off.
-  return `<div class="page-hero${o.name ? ' page-hero-band' : ''}">` + name
+  const body = name
     // `noDesc: false` = this page HAS no sentence by design (an entry-point kind is a bare word), as
     // opposed to a page whose sentence the map failed to record, which says so.
     + (o.desc ? `<p class="page-hero-purpose">${o.desc}</p>`
               : o.noDesc === false ? ''
               : `<p class="page-hero-purpose feat-empty">${esc(o.noDesc || 'Nothing recorded.')}</p>`)
-    + (o.meta ? `<p class="page-hero-meta">${o.meta}</p>` : '')
+    + (o.meta ? `<p class="page-hero-meta">${o.meta}</p>` : '');
+  return `<div class="page-hero${o.name ? ' page-hero-band' : ''}${figure ? ' page-hero-figured' : ''}">`
+    + (figure ? figure + `<div class="page-hero-body">${body}</div>` : body)
     + '</div>';
 }
 // What this feature IS, in the three lines a reader needs before anything else.

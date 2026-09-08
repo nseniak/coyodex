@@ -1467,8 +1467,15 @@ def test_a_named_hero_sits_on_a_white_band_with_the_shared_hero_s_own_text_sizes
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     hero = js[js.index("function pageHeroHtml(o) {"): js.index("\n}", js.index("function pageHeroHtml(o) {"))]
-    assert "return `<div class=\"page-hero${o.name ? ' page-hero-band' : ''}\">`" in hero, \
+    assert "return `<div class=\"page-hero${o.name ? ' page-hero-band' : ''}${figure ? ' page-hero-figured' : ''}\">`" in hero, \
         "the band is the NAMED hero's shape, and nothing else decides it"
+    # THE FIGURE IS A COLUMN of the card, at its full height in the left margin, and the text is one
+    # block beside it. Only a named hero with a figure takes this shape; the others keep one column.
+    assert "const figure = o.name && o.glyph ? `<div class=\"page-hero-glyph\">${o.glyph}</div>` : '';" in hero
+    assert "(figure ? figure + `<div class=\"page-hero-body\">${body}</div>` : body)" in hero
+    assert ".page-hero-figured { display: flex; align-items: stretch;" in css
+    assert "#diaghead .page-hero-glyph .story-glyph, #diaghead .page-hero-glyph .ibox-gly { width: 100%; height: 100%; }" in css, \
+        "the figure fills its column, over the small sizes the hosts pin"
     assert "HERO_TINTS" not in js and "heroWash" not in js and "--hero-tint" not in css, "no colour of its own"
     band = css[css.index(".page-hero-band {"): css.index("}", css.index(".page-hero-band {"))]
     assert "background: #fff" in band and "border: 1px solid #cbd5e1" in band and "border-radius: 12px" in band, \
@@ -1491,7 +1498,7 @@ def test_a_hero_says_its_type_in_a_word_before_the_name_not_in_a_pill_after_it()
     css = (VIEWER_DIR / "viewer.css").read_text()
     hero = js[js.index("function pageHeroHtml(o) {"): js.index("\n}", js.index("function pageHeroHtml(o) {"))]
     assert "const kind = o.type ? `<span class=\"page-hero-kind\">${esc(sentenceCase(o.type))}:</span>` : '';" in hero
-    assert "`<p class=\"page-hero-name\">${o.glyph || ''}${kind}`" in hero, "glyph, type word, then the name"
+    assert "`<p class=\"page-hero-name\">${figure ? '' : (o.glyph || '')}${kind}`" in hero, "type word, then the name"
     side = js[js.index("function elementSidePillsHtml(id) {"): js.index("\n}", js.index("function elementSidePillsHtml(id) {"))]
     assert "c.type" not in side, "the pills after the type one"
     pills = js[js.index("function elementPillsHtml(id) {"): js.index("\n}", js.index("function elementPillsHtml(id) {"))]
@@ -3427,7 +3434,7 @@ def test_a_page_about_one_thing_draws_no_section_for_that_thing() -> None:
     # of themselves. An actor is a person or a hexagon and a feature is a sparkle; a decision area, a
     # surface and a Deployment arrow have none, and no colour stands in for it either — the map gives
     # a feature and a decision area no tint. So the row is built to read without one.
-    assert "${o.glyph || ''}" in hero
+    assert '<div class="page-hero-glyph">${o.glyph}</div>' in hero, "the figure, as a column of the card"
     assert "page-hero-callout" not in js and "page-hero-callout" not in css, \
         "no box: it sat directly above a board that opens with the same figure and the same name"
 

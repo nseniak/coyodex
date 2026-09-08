@@ -2870,7 +2870,7 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
             return {
                 headShown: !q('#diaghead').hidden, fixedHeroShown: !q('#pagehero').hidden,
                 name: q('#diaghead .page-hero-subject').textContent,
-                glyph: !!q('#diaghead .page-hero-name .ibox-gly'),
+                glyph: !!q('#diaghead .page-hero-glyph .ibox-gly'),
                 pills: [...document.querySelectorAll('#diaghead .ecard-pill')].map((e) => e.textContent),
                 kind: (q('#diaghead .page-hero-kind') || {}).textContent,
                 sentence: q('#diaghead .page-hero-purpose').textContent.length,

@@ -738,6 +738,16 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    top padding is zeroed for the index's sake — the band is the first thing under the breadcrumb bar,
    and the bar's shadow landed on it. The same 16px the actor page's column keeps above its own band. */
 #diaghead .page-hero-band, .usecases-wrap:has(> .tab-index) > .page-hero-band { margin-top: 16px; }
+/* THE FIGURE COLUMN. An actor's person, a use case's mark, a feature's sparkle: at the card's full
+   height in its left margin, centred, and the text one block beside it. The column is fixed-width so
+   every kind's text starts at the same x, whatever its figure's own proportions; the drawing keeps
+   its proportions inside the column (every glyph carries a viewBox). Written with the hosts' ids
+   because `#diagram .story-glyph` and `#diagram .ibox-gly` already pin the small sizes. */
+.page-hero-figured { display: flex; align-items: stretch; gap: 16px; padding-left: 14px; }
+.page-hero-glyph { flex: none; width: 52px; display: flex; align-items: center; justify-content: center; }
+#diagram .page-hero-glyph .story-glyph, #diagram .page-hero-glyph .ibox-gly,
+#diaghead .page-hero-glyph .story-glyph, #diaghead .page-hero-glyph .ibox-gly { width: 100%; height: 100%; }
+.page-hero-body { flex: 1 1 auto; min-width: 0; }
 /* ── ONE SECTION OF AN ITEM PAGE ──────────────────────────────────────────────────────────────────
    THE HEADING IS PAGE TEXT AND THE FRAME HOLDS ONLY THE CONTENT. Three other shapes were drawn and
    compared against this one: a panel with the heading on a strip inside the frame, the same with a
