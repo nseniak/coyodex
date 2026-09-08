@@ -68,6 +68,7 @@ let HAS_GROUPING, HAS_DOMAIN;
 let HAS_SUBDOMAINS;  // domain model grouped into subdomains -> Domain view leads with the overview
 let HAS_HP;
 let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
+let HAS_OVERVIEW = false;   // the map records a product description, so the Overview tab has a page
 let HAS_USECASES;    // gates the Use Cases tab (any use-case node present)
 let HAS_SYSTEM;      // gates the System tab (any operational/reference collection present)
 let HAS_DATA;        // gates the Data tab (any physical store present in data_view)
@@ -123,6 +124,7 @@ function applyBundle(b) {
                                       // applyBundle runs under top-level await, before the
                                       // code-pane elements are bound.
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
+  HAS_OVERVIEW = !!(((GRAPH.nodes.SYS || {}).fields || {}).Overview || '').trim();
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
   injectItemTintCss();   // the item box's per-kind colours, from the ONE table above (see below)
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
@@ -3813,6 +3815,7 @@ const GROUP_LABEL = {};     // group id -> its label, from VIEW_GROUPS
 const groupLast = {};
 const VIEW_LABEL = {};   // view id -> its tab label, filled from the buttons at boot (one source)
 const VIEW_Q = {
+  overview: 'What is this product, and who is it for?',
   hp: 'Which features does one successful run touch, and in what order?',
   usecases: 'What can this product do, feature by feature?',
   container: 'How is the code organised, and what depends on what?',
@@ -6431,7 +6434,7 @@ function topLevelView(s) {
 // never by top-level view: a use-case FLOW lives under the Features tab and IS a diagram, while its
 // sibling states under the same tab are pages. The colour key that used to hang off this same question
 // kept a SECOND list, keyed by view, and that distinction is exactly what it got wrong.
-const TEXT_PAGES = new Set(['usecases', 'capability', 'actor', 'hp',
+const TEXT_PAGES = new Set(['overview', 'usecases', 'capability', 'actor', 'hp',
   'rules', 'rule', 'system', 'sysSection', 'glossary', 'tests', 'data', 'element', 'depedge']);
 // A CARD BELONGS TO THE PAGE THAT IS ON SCREEN. Every navigation therefore starts with no card, and the
 // page then puts one back only if it has one to show: its own subject (a drilled subsystem, a use case's
@@ -6856,37 +6859,57 @@ const LANDING_COUNT = {
   deployment: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'process').length, 'process', 'processes'],
   glossary: () => [(GRAPH.glossary || []).length, 'term'],
 };
-// A VIEW'S LANDING SCREEN LEADS WITH THE SAME CARD an item page leads with: the view's name, how many
-// of its things the map holds, and the view's question as the card's sentence. No figure and no type
-// word, on purpose — that is what tells a landing card from an item's at a glance. The question used
-// to be an italic grey line in the fixed block, which made the landing screens and the item pages two
-// different objects; it is the same sentence, in the same place a page's sentence goes.
-function landingHeroHtml(view) {
+// A VIEW'S LANDING SCREEN WEARS ITS NAME AND ITS QUESTION AS THE HEAD OF ITS FIRST BLOCK — the same
+// grey strip every section of an item page is headed by: the view's name, how many of its things the
+// map holds, and the question as the strip's sentence. No card of its own: a card is what a page
+// about ONE thing leads with, and a landing is not about one thing. The question used to be an italic
+// grey line in the fixed block, then briefly a card; both made the landing and the block under it two
+// objects, and the strip makes them one.
+function landingHeadHtml(view) {
   const q = viewQuestion(view);
   const name = VIEW_LABEL[view] || view;
   if (!q && !name) return '';
   const count = LANDING_COUNT[view] ? LANDING_COUNT[view]() : null;
-  const pill = count && count[0]
-    ? `<span class="ecard-pill">${count[0]} ${count[0] === 1 ? count[1] : (count[2] || count[1] + 's')}</span>` : '';
-  return '<div class="page-hero-landing">'
-    + pageHeroHtml({ name, pills: pill, desc: esc(q), noDesc: false }) + '</div>';
+  const n = count && count[0] ? `${count[0]} ${count[0] === 1 ? count[1] : (count[2] || count[1] + 's')}` : '';
+  // `landing-head`: the title takes the size an item page's name has, since this is the page's title.
+  return `<div class="landing-head">${itemSectionHeadHtml(name, n, q)}</div>`;
 }
 function syncPageHero(s, chain, tv) {
   const walk = isFlowState(s);
   const id = heroSubjectId(s);
   const fold = FOLD_NARRATIVE[s && s.kind] || '';
-  // The landing card, on a one-item trail — the view's own screen — and nowhere below it.
-  const landing = chain.length === 1 && !walk && !id ? landingHeroHtml(tv) : '';
+  // The landing head, on a one-item trail — the view's own screen — and nowhere below it.
+  const landing = chain.length === 1 && !walk && !id ? landingHeadHtml(tv) : '';
   const html = walk ? walkHeadHtml(s, chain)
              : id ? heroSubjectHtml(id, chain)
              : fold ? pageHeroHtml({ desc: esc(fold), noDesc: false }) : '';
-  // WHERE THE LANDING CARD GOES: into the page, at the top of its column, so it scrolls with the page
-  // as an item's card does — and above the drawing, in the walk's head host, on a view whose landing
-  // is a picture. A card drawn by the previous screen is taken out first, wherever it was.
-  document.querySelectorAll('.page-hero-landing').forEach((e) => e.remove());
+  // WHERE THE LANDING HEAD GOES. A page whose first block is already a section (the Features diagram,
+  // the Overview) gets it as that section's strip. A page of loose blocks (a board, a picture, a card
+  // list, a table) is wrapped, whole, into one framed section headed by it. A view whose landing is a
+  // drawing gets it as the strip above the drawing's frame, joined to it as a use case's flow head is.
+  // Done once per render: the chrome can be repainted without the page being redrawn.
   const column = landing ? diagram.querySelector('.usecases-wrap, .glossary-wrap') : null;
-  if (column) column.insertAdjacentHTML('afterbegin', landing);
-  const inHead = landing && !column ? landing : '';
+  let inHead = '';
+  if (column) {
+    const first = column.firstElementChild;
+    if (first && first.classList.contains('item-sec')) {
+      if (!first.dataset.landing) {
+        first.querySelector('.item-sec-strip').innerHTML = landing;
+        first.dataset.landing = '1';
+      }
+    } else if (!column.querySelector(':scope > .item-sec-landing')) {
+      const sec = document.createElement('section');
+      sec.className = 'item-sec item-sec-landing';
+      sec.dataset.landing = '1';
+      sec.innerHTML = `<div class="item-sec-frame"><div class="item-sec-strip">${landing}</div>`
+        + '<div class="item-sec-body"></div></div>';
+      const body = sec.querySelector('.item-sec-body');
+      while (column.firstChild) body.appendChild(column.firstChild);
+      column.appendChild(sec);
+    }
+  } else if (landing) {
+    inHead = `<div class="item-sec-strip item-sec-strip-stage">${landing}</div>`;
+  }
   const host = walk ? diaghead : pagehero;
   const other = walk ? pagehero : diaghead;
   other.innerHTML = ''; other.hidden = true;
@@ -7455,7 +7478,7 @@ function elementHomeView(id) {
 }
 function topView(kind, id) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'element') return id ? elementHomeView(id) : 'container';
-  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules' || kind === 'interfaces') return kind;
+  if (kind === 'overview' || kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests' || kind === 'rules' || kind === 'interfaces') return kind;
   if (kind === 'sysSection') return 'system';  // one System collection lives under the System tab
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
@@ -7540,6 +7563,7 @@ function stateTitle(s) {
     return i ? i.name : 'Interfaces';
   }
   if (s.kind === 'rule') return ruleCrumbTitle(s.br);
+  if (s.kind === 'overview') return 'Overview';
   if (s.kind === 'glossary') return 'Glossary';
   if (s.kind === 'system') return 'System';
   if (s.kind === 'sysSection') {
@@ -7687,6 +7711,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     return [{ kind: 'rules' }, { kind: 'rules', blk: ruleGroupKeyFor(r && r.block) },
             { kind: 'rule', br: s.br }];
   }
+  if (s.kind === 'overview') return [{ kind: 'overview' }];
   if (s.kind === 'glossary') return [{ kind: 'glossary' }];
   if (s.kind === 'system') return [{ kind: 'system' }];
   if (s.kind === 'data') return [{ kind: 'data' }];
@@ -7738,8 +7763,8 @@ function renderChrome(s) {
   // could name.
   // Outside the SCROLL is what still separates it from the placement the spec undid: a sentence that
   // scrolls with the content becomes a caption for whichever block ends up under it.
-  // THE QUESTION IS THE LANDING CARD'S SENTENCE NOW (landingHeroHtml), drawn in the page by
-  // syncPageHero as the same card an item page leads with. The fixed block's own line is gone: a
+  // THE QUESTION IS THE LANDING HEAD'S SENTENCE NOW (landingHeadHtml), drawn in the page by
+  // syncPageHero as the grey strip of the landing's first block. The fixed block's own line is gone: a
   // landing screen and an item page were two different objects, and the sentence is what made them so.
   syncPageHero(s, chain, q ? tv : '');
   // No dividing rule any more. It existed because the question sat among the TABS, at their size and
@@ -8501,7 +8526,7 @@ function renderUseCases(sel) {
     // A map recording no features falls back to the flat catalog, and the tab's own question ("feature
     // by feature") would then name something the page does not have. It leads with the product
     // description all the same: that map has one, and this is the page a reader lands on.
-    : viewHeadHtml('Use cases') + productLeadHtml();
+    : viewHeadHtml('Use cases');
   // On a feature's page the use-case section is the FIRST of five, and the rest of the map — filtered to
   // this feature — follows it. The pinned index is built from every section, so it and the page cannot
   // disagree about what is on screen.
@@ -8619,15 +8644,22 @@ function unreachedHtml() {
 //
 // Before that it was the Happy Path's default info pane, which was worse still: it vanished on the
 // first click, and a reader who landed on any other tab never saw it at all.
-// A SECTION like every other block on an item page: the same frame, the same strip head at the same
-// 14px, instead of a small-caps label over loose prose. `secs` is the page's section list, for a page
-// that indexes its sections; a page with none passes nothing.
+// THE OVERVIEW TAB: the product description on a page of its own, the first tab under Product. It
+// led the Features landing before, above the feature diagram, and read as that page's preamble: a
+// reader who wanted the diagram scrolled past it every time, and one who wanted the description had
+// to know it lived under Features. One framed section, whose head the landing rule (syncPageHero)
+// fills with the tab's name and question, like every landing's first block.
 function productLeadHtml(secs) {
   const n = GRAPH.nodes.SYS || {};
   const overview = ((n.fields || {}).Overview || '').trim();
   if (!overview) return '';
   return itemSectionHtml(secs || [], 'overview', 'Product overview', '', '',
     `<div class="view-lead"><div class="view-lead-body">${mdRefs(overview, GRAPH.nodes)}</div></div>`);
+}
+function renderOverviewTab() {
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + (productLeadHtml([]) || '<p class="empty">This map records no product description.</p>') + '</div>';
+  bindProductLead();
 }
 
 // ── The ACTOR PAGE: one actor's journey line ─────────────────────────────────────────────────────
@@ -9914,12 +9946,9 @@ function renderHappyPath() {
   // counting them said nothing a reader acts on.
   const n = (GRAPH.happy_path || []).length;
   const of = (allFeats && allFeats !== feats) ? ` of ${allFeats}` : '';
-  diagram.innerHTML = '<div class="usecases-wrap">'
-    // "25 steps THROUGH 10 features". The comma made two counts of unrelated things standing side
-    // by side; the word says what the walk actually does with them, which is pass through each one.
-    + `<p class="block-lbl">${n} step${n === 1 ? '' : 's'} through `
-    + `${feats}${of} feature${(of ? allFeats : feats) === 1 ? '' : 's'}</p>`
-    + `<div class="hp-board">${html}</div></div>`;
+  // NO COUNT LINE OF ITS OWN. "31 steps through 11 features" led the board; the landing head the page
+  // wears now (syncPageHero) says the step count, and the board says the features.
+  diagram.innerHTML = `<div class="usecases-wrap"><div class="hp-board">${html}</div></div>`;
   levelHpBoxes(diagram);
   // …and the titles inside those boxes, so the chips under them start on one line. Two passes, two
   // questions: `levelHpBoxes` makes every BOX the page's tallest, this makes every TITLE the
@@ -10721,8 +10750,7 @@ function renderOverview() {
     ? '<p class="block-lbl">Product features</p>' + grid
     : cardGridHtml(looseCard);
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + viewHeadHtml('Features') + productLeadHtml(secs)
-    + story + below + '</div>';
+    + viewHeadHtml('Features') + story + below + '</div>';
   bindProductLead();
   bindStoryDiagram(diagram);
   bindElementCards(diagram);
@@ -12782,6 +12810,7 @@ async function renderView(sArg, transient, seq) {
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
+  if (s.kind === 'overview') { renderOverviewTab(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   if (s.kind === 'glossary') { renderGlossary(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   // The Features tab is an HTML catalog, not a mermaid diagram — same shape as Glossary. Its landing
   // level is the feature cards; a map that records no features keeps the flat use-case list instead.
@@ -15355,6 +15384,7 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'hp' && !HAS_HP) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'usecases' && !HAS_USECASES) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'deployment' && !HAS_DEPLOYMENT) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'overview' && !HAS_OVERVIEW) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'system' && !HAS_SYSTEM) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'data' && !HAS_DATA) { b.style.display = 'none'; return; }

@@ -1077,13 +1077,15 @@ def test_one_question_in_one_place_on_every_view() -> None:
     assert "const q = chain.length === 1 ? viewQuestion(tv) : '';" in chrome, \
         "a one-item trail IS the view's own landing screen"
     assert "syncPageHero(s, chain, q ? tv : '');" in chrome, "…and only that screen gets the landing card"
-    landing = js[js.index("function landingHeroHtml(view) {"): js.index("\n}", js.index("function landingHeroHtml(view) {"))]
-    assert "pageHeroHtml({ name, pills: pill, desc: esc(q), noDesc: false })" in landing, \
-        "the one hero builder, with no glyph and no type word"
+    landing = js[js.index("function landingHeadHtml(view) {"): js.index("\n}", js.index("function landingHeadHtml(view) {"))]
+    assert "itemSectionHeadHtml(name, n, q)" in landing, "the one section-head builder: name, count, question"
     assert "LANDING_COUNT[view]" in landing, "how many of the view's things the map holds"
+    assert ".landing-head .item-sec-title { font-size: 16px; }" in css, "the page's title, at an item name's size"
     sync = js[js.index("function syncPageHero(s, chain, tv) {"): js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
-    assert "const landing = chain.length === 1 && !walk && !id ? landingHeroHtml(tv) : '';" in sync
+    assert "const landing = chain.length === 1 && !walk && !id ? landingHeadHtml(tv) : '';" in sync
     assert "diagram.querySelector('.usecases-wrap, .glossary-wrap')" in sync, "into the page's column…"
+    assert "first.querySelector('.item-sec-strip').innerHTML = landing;" in sync, "…as its first section's strip…"
+    assert "sec.className = 'item-sec item-sec-landing';" in sync, "…or wrapping loose blocks into one section…"
     assert "if (inHead) { diaghead.innerHTML = inHead; diaghead.hidden = false; }" in sync, \
         "…or above the drawing, in the walk's head host, where the landing is a picture"
     assert "#stage:has(#diaghead .item-sec-strip-stage) #diagwrap" in css, \
@@ -3575,7 +3577,15 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     assert "'goal'" not in js and "renderGoal" not in js, "the Goal tab is gone, not hidden"
     # …and the description leads the Features page, above a labelled block of feature cards.
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert over.count("productLeadHtml(secs)") == 1, "the overview, as a framed section of the page"
+    # THE DESCRIPTION HAS A TAB OF ITS OWN NOW, Overview, first under Product; the Features landing
+    # leads with its diagram.
+    assert "productLeadHtml" not in over, "the description left the Features landing"
+    tab = js[js.index("function renderOverviewTab() {"): js.index("\n}", js.index("function renderOverviewTab() {"))]
+    assert "productLeadHtml([])" in tab
+    html = (VIEWER_DIR / "viewer.html").read_text()
+    assert html.index('data-view="overview" data-group="product"') < html.index('data-view="usecases" data-group="product"'), \
+        "first tab under Product"
+    assert "if (b.dataset.view === 'overview' && !HAS_OVERVIEW)" in js, "hidden on a map with no description"
     assert "'<p class=\"block-lbl\">Product features</p>' + grid" in over
     assert "GRAPH.nodes.SYS" in js[js.index("function productLeadHtml(secs) {"):]
 
@@ -3707,10 +3717,10 @@ def test_the_question_reads_as_a_sentence_and_not_as_a_control() -> None:
     # inside the card and beneath the name, exactly as an item page's sentence is. Nothing joins it to
     # a title on its line, and the card is the only thing around it.
     assert "#pageq" not in css and "pageq" not in js
-    landing = js[js.index("function landingHeroHtml(view) {"): js.index("\n}", js.index("function landingHeroHtml(view) {"))]
-    assert "desc: esc(q)" in landing, "the stored string is the pure question"
-    purpose = css[css.index(".page-hero-purpose {"): css.index("}", css.index(".page-hero-purpose {"))]
-    assert "italic" not in purpose and "\\2014" not in purpose
+    landing = js[js.index("function landingHeadHtml(view) {"): js.index("\n}", js.index("function landingHeadHtml(view) {"))]
+    assert "itemSectionHeadHtml(name, n, q)" in landing, "the stored string is the pure question"
+    note = css[css.index(".item-sec-note {"): css.index("}", css.index(".item-sec-note {"))]
+    assert "italic" not in note and "\\2014" not in note
 
 def test_the_app_name_is_a_working_way_back_to_all_maps() -> None:
     """It was an <h1> with a click handler, and became a plain span when the page's one heading moved to
@@ -4053,7 +4063,13 @@ def test_the_three_columns_read_left_to_right_with_the_features_in_the_middle() 
     assert ".story-stage.story-has-areas { grid-template-columns: 300px 130px 420px 130px 270px; }" in css
     assert ".story-col-cast { grid-column: 1;" in css
     assert ".story-col-spine { grid-column: 3;" in css
-    assert ".story-col-areas { grid-column: 5; justify-content: space-between; }" in css
+    # The side columns still spread over the pillar's height — but from their FIRST card down: the
+    # first actor and the first data area sit under their heads at the first feature's height (the
+    # three heads share the pillar's 15px of top padding and border), and the cards after them take
+    # the free space with auto margins, so the last still meets the pillar's foot.
+    assert ".story-col-areas { grid-column: 5; justify-content: flex-start; padding-top: 15px; }" in css
+    assert ".story-col-cast { grid-column: 1; justify-content: flex-start; padding-top: 15px; }" in css
+    assert ".story-col-cast > .story-card + .story-card, .story-col-areas > .story-card + .story-card { margin-top: auto; }" in css
     # The pillar carries its own ground: the middle column has to stay the thing the eye lands on
     # once there is a column on each side of it.
     spine = css[css.index(".story-col-spine {"):]

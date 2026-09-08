@@ -552,10 +552,13 @@ def test_the_walk_counts_the_features_it_touches_out_of_all_there_are() -> None:
     """
     with _served() as url, _page(url + "#v=hp") as page:
         _settle(page)
-        label = page.evaluate("() => document.querySelector('.block-lbl').textContent")
-        assert re.fullmatch(r"14 steps through \d+ of \d+ features", label), label
-        touched, total = (int(x) for x in re.findall(r"(\d+) of (\d+)", label)[0])
-        assert touched < total, label
+        # THE COUNT IS THE LANDING HEAD'S, in the strip over the board: "14 steps". The board's own
+        # "N steps through M of K features" line went — the head says the steps and the board the
+        # features, and a line between the two was a box in a box.
+        got = page.evaluate("""() => ({
+            count: document.querySelector('.landing-head .item-sec-n').textContent.trim(),
+            ownLine: !!document.querySelector('.item-sec-body > .block-lbl') })""")
+        assert got["count"] == "14 steps" and not got["ownLine"], got
         assert not page.js_errors, page.js_errors
 
 
@@ -2436,7 +2439,8 @@ def test_opening_the_source_narrows_what_you_see_of_the_interfaces_picture_not_t
         page.wait_for_timeout(1200)
         opened = page.evaluate("""() => {
             const s = document.getElementById('ifdstage'), w = s.closest('.ifd-wrap');
-            const wrap = w.parentElement, cs = getComputedStyle(w);
+            // The board is the landing's section frame now; the wrap inside it draws no frame of its own.
+            const wrap = w.parentElement, cs = getComputedStyle(w.closest('.item-sec-frame') || w);
             return { stage: Math.round(s.getBoundingClientRect().width),
                      scrolls: w.scrollWidth > w.clientWidth + 1,
                      board: { radius: cs.borderTopLeftRadius, border: cs.borderTopWidth },
@@ -2451,7 +2455,7 @@ def test_opening_the_source_narrows_what_you_see_of_the_interfaces_picture_not_t
         assert opened["scrolls"], "…and what you see of it scrolls instead"
         # …in the SAME board the Happy Path and a feature's timeline scroll in: a rule, a radius, and
         # the edge shade that says there is more that way. Only the right one, having not scrolled yet.
-        assert opened["board"] == {"radius": "10px", "border": "1px"}, opened
+        assert opened["board"] == {"radius": "12px", "border": "1px"}, opened
         assert opened["shadeRight"] and not opened["shadeLeft"], opened
         assert not page.js_errors, page.js_errors
 

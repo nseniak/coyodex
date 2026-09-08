@@ -114,6 +114,7 @@
                  what the product is FOR and then lists everything it does. Then one walk end to end,
                  then who drives it, then what it decides. The product description had a tab of its own
                  for a moment; three sentences are not a destination, so they lead the Features page. -->
+            <button data-view="overview" data-group="product">Overview</button>  <!-- the product description on a page of its own (hidden when the map records none) -->
             <button data-view="usecases" data-group="product">Features</button>  <!-- internal kind stays `usecases`; the product description, then a grid of feature cards, each drilling to that feature's page (hidden when no use cases) -->
             <button data-view="hp" data-group="product">Happy Path</button>  <!-- internal kind stays `hp` -->
             <button data-view="interfaces" data-group="product">Interfaces</button>  <!-- T2b: the outside edge (hidden when the map records none) -->
@@ -156,7 +157,7 @@
         <nav class="hint" id="crumbrow" aria-label="You are here"><span id="crumb"></span></nav>
         <!-- THE VIEW'S QUESTION IS NOT HERE ANY MORE. It was the last line of this block, an italic grey
              sentence under the trail; it is the sentence of the landing card now, drawn IN THE PAGE by
-             syncPageHero (landingHeroHtml) — the same card, in the same place, as an item page's. -->
+             syncPageHero (landingHeadHtml) — as the grey head of the landing's first block. -->
         <!-- THE PAGE HERO: what the page you drilled into IS — its pills, its one sentence, and one line
              of context. It does NOT carry the name; the breadcrumb two lines above it is the page's h1,
              and printing the name again here would say it twice.
