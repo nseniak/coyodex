@@ -209,20 +209,6 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
                  flex: 0 0 auto; white-space: nowrap; border-bottom: 2px solid transparent; }
 #viewsw button:hover { color: #3730a3; }
 #viewsw button.active { color: #4338ca; border-bottom-color: #6366f1; }
-/* THE VIEW'S QUESTION, on one line under the header block, on every view. Set at the content's own text
-   size (14px, the body size) and on the content's own left edge and reading cap, so it reads as the
-   opening sentence of what follows rather than as one more strip of chrome above it.
-   ITALIC, and for the reason it always was: nothing else in this app is, so one glance says sentence and
-   not control. No dash, no rule, no background and no border — a dash exists to JOIN it to a title on the
-   same line, and anything that boxes it turns the opening sentence back into a bar.
-   It used to take TWO forms: 12.5px beside the page title on a diagram, and this on a page of prose. One
-   sentence looked like two different things depending on which tab you were on, and nothing about a
-   diagram or a page explained the difference. */
-/* Last line of the fixed block, so it closes the block with its own bottom padding — without that the
-   shadow would be cast straight off the words. `max-width` caps the SENTENCE's reading width only; the
-   background belongs to #stagehead, which is full width. */
-#pageq { margin: 0; padding: 10px 20px 12px; max-width: 1100px; font-size: 14px; font-weight: 400;
-         font-style: italic; color: #6b7280; line-height: 1.5; }
 /* THE PAGE HERO, on a page you have DRILLED into: what this page's subject is. It replaces the state
    where the floating selection card filled itself with the page's own element — one card that meant
    "the page" on one screen and "the box you clicked" on the next, with nothing in it saying which.
@@ -230,7 +216,7 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    the hero all say WHERE YOU ARE, and the block's shadow is the line where that ends and the drawing
    begins. So it takes the block's own bottom padding and casts NO border of its own — a rule here would
    sit a hairline above a shadow saying the same thing.
-   Never on screen at the same time as #pageq: the question is drawn on a view's landing screen only,
+   Never on a view's landing screen, which leads with its own card in the page (landingHeroHtml);
    and the hero only once you are below it. Same left edge as the question, so the two states of the
    block's last line start at the same x.
    The pills and the sentence reuse the element page's own hero classes (.page-hero-pills /
@@ -265,7 +251,7 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #diaghead .item-sec-note { margin-bottom: 0; }
 /* The strip in the head and the drawing's frame under it are ONE framed section: the strip carries the
    frame's top and sides and the frame carries the rest, with no gap and one rounded box between them. */
-#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 0 20px 24px; border-color: #cbd5e1; border-top: 0;
+#stage:has(#diaghead .item-sec-strip-stage) #diagwrap { margin: 0 20px 24px; border-color: #cbd5e1; border-top: 0;
                                                  border-radius: 0 0 12px 12px; }
 #diaghead .item-sec-strip-stage { border: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;
                                   border-radius: 12px 12px 0 0; }
@@ -750,6 +736,11 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    top padding is zeroed for the index's sake — the band is the first thing under the breadcrumb bar,
    and the bar's shadow landed on it. The same 16px the actor page's column keeps above its own band. */
 #diaghead .page-hero-band, .usecases-wrap:has(> .tab-index) > .page-hero-band { margin-top: 16px; }
+/* A landing card over a PICTURE sits in the walk's head host with the drawing's frame under it: the
+   frame keeps its own top and corners (the join rule above keys on the strip), and the card keeps the
+   frame's 20px edge and the 9px the frame used to keep from the block above. */
+#stage:has(#diaghead .page-hero-landing) #diagwrap { margin: 9px 20px 24px; }
+#diaghead .page-hero-landing .page-hero-band { margin-bottom: 0; }
 /* THE FIGURE COLUMN. An actor's person, a use case's mark, a feature's sparkle: at the card's full
    height in its left margin, centred, and the text one block beside it. The column is fixed-width so
    every kind's text starts at the same x, whatever its figure's own proportions; the drawing keeps

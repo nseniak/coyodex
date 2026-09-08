@@ -224,7 +224,6 @@ const envpicker = document.getElementById('envpicker');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
 const groupsw = document.getElementById('groupsw');
-const pageq = document.getElementById('pageq');          // the open view's question, leading the content
 const pagehero = document.getElementById('pagehero');    // what the page you drilled into IS (syncPageHero)
 const diaghead = document.getElementById('diaghead');    // …and a walk's own head, in the page (walkHeadHtml)
 const callout = document.getElementById('callout');      // the line from the card to what it describes
@@ -6844,18 +6843,56 @@ function walkHeadHtml(s, chain) {
 // TWO HOSTS, one filled at a time: a walk's head goes in the page (#diaghead, see walkHeadHtml), every
 // other subject's in the fixed block (#pagehero). The one not in use is emptied and hidden here, so
 // neither can outlive its page.
-function syncPageHero(s, chain) {
+// HOW MANY of the view's own things this map holds, for the landing card's pill — only where the view
+// IS a list of one kind of thing. A view with no natural count (System, Tests, Storage) shows none.
+const LANDING_COUNT = {
+  usecases: () => [(FEATURES.features || []).length, 'feature'],
+  hp: () => [(GRAPH.happy_path || []).length, 'step'],
+  interfaces: () => [ifaceList().length, 'interface'],
+  rules: () => [((RULES_VIEW || {}).rules || []).length, 'rule'],
+  domain: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'entity').length, 'entity', 'entities'],
+  container: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'subsystem').length, 'subsystem'],
+  context: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'dep').length, 'dependency', 'dependencies'],
+  deployment: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'process').length, 'process', 'processes'],
+  glossary: () => [(GRAPH.glossary || []).length, 'term'],
+};
+// A VIEW'S LANDING SCREEN LEADS WITH THE SAME CARD an item page leads with: the view's name, how many
+// of its things the map holds, and the view's question as the card's sentence. No figure and no type
+// word, on purpose — that is what tells a landing card from an item's at a glance. The question used
+// to be an italic grey line in the fixed block, which made the landing screens and the item pages two
+// different objects; it is the same sentence, in the same place a page's sentence goes.
+function landingHeroHtml(view) {
+  const q = viewQuestion(view);
+  const name = VIEW_LABEL[view] || view;
+  if (!q && !name) return '';
+  const count = LANDING_COUNT[view] ? LANDING_COUNT[view]() : null;
+  const pill = count && count[0]
+    ? `<span class="ecard-pill">${count[0]} ${count[0] === 1 ? count[1] : (count[2] || count[1] + 's')}</span>` : '';
+  return '<div class="page-hero-landing">'
+    + pageHeroHtml({ name, pills: pill, desc: esc(q), noDesc: false }) + '</div>';
+}
+function syncPageHero(s, chain, tv) {
   const walk = isFlowState(s);
   const id = heroSubjectId(s);
   const fold = FOLD_NARRATIVE[s && s.kind] || '';
+  // The landing card, on a one-item trail — the view's own screen — and nowhere below it.
+  const landing = chain.length === 1 && !walk && !id ? landingHeroHtml(tv) : '';
   const html = walk ? walkHeadHtml(s, chain)
              : id ? heroSubjectHtml(id, chain)
              : fold ? pageHeroHtml({ desc: esc(fold), noDesc: false }) : '';
+  // WHERE THE LANDING CARD GOES: into the page, at the top of its column, so it scrolls with the page
+  // as an item's card does — and above the drawing, in the walk's head host, on a view whose landing
+  // is a picture. A card drawn by the previous screen is taken out first, wherever it was.
+  document.querySelectorAll('.page-hero-landing').forEach((e) => e.remove());
+  const column = landing ? diagram.querySelector('.usecases-wrap, .glossary-wrap') : null;
+  if (column) column.insertAdjacentHTML('afterbegin', landing);
+  const inHead = landing && !column ? landing : '';
   const host = walk ? diaghead : pagehero;
   const other = walk ? pagehero : diaghead;
   other.innerHTML = ''; other.hidden = true;
   host.innerHTML = html;
   host.hidden = !html;
+  if (inHead) { diaghead.innerHTML = inHead; diaghead.hidden = false; }
   if (!html) return;
   bindElementCards(host);   // the `In feature …` line is a door, here as on a card
   host.querySelectorAll('[data-goelement]').forEach((b) =>
@@ -7701,11 +7738,10 @@ function renderChrome(s) {
   // could name.
   // Outside the SCROLL is what still separates it from the placement the spec undid: a sentence that
   // scrolls with the content becomes a caption for whichever block ends up under it.
-  pageq.textContent = q;
-  pageq.hidden = !q;
-  // …and the block's OTHER last line: what the page you drilled into is. The two never show together —
-  // the question is the landing screen's, the hero is every screen below it.
-  syncPageHero(s, chain);
+  // THE QUESTION IS THE LANDING CARD'S SENTENCE NOW (landingHeroHtml), drawn in the page by
+  // syncPageHero as the same card an item page leads with. The fixed block's own line is gone: a
+  // landing screen and an item page were two different objects, and the sentence is what made them so.
+  syncPageHero(s, chain, q ? tv : '');
   // No dividing rule any more. It existed because the question sat among the TABS, at their size and
   // weight, where it read as a fifth disabled one. Beside a 16px bold page title it is a 12.5px grey
   // italic sentence, and nothing about it can be mistaken for a control, so a gap is separation enough.

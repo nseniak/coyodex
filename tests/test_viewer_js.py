@@ -1066,21 +1066,28 @@ def test_one_question_in_one_place_on_every_view() -> None:
     assert "#viewq" not in css
     crumbrow = html[html.index('<nav class="hint" id="crumbrow"'):
                     html.index("</nav>", html.index('<nav class="hint" id="crumbrow"'))]
-    assert 'id="crumb"' in crumbrow and 'id="pageq"' not in crumbrow, "the trail row is the trail alone"
-    head = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
-    assert '<p id="pageq" hidden></p>' in head, "the question is INSIDE the fixed block, under its shadow"
-    assert head.index('<p id="pageq" hidden></p>') > head.index('id="crumbrow"'), "…as its last line"
-    assert head.index("</div>") > head.index('<p id="pageq" hidden></p>'), "…and the block closes after it"
+    assert 'id="crumb"' in crumbrow and 'pageq' not in crumbrow, "the trail row is the trail alone"
+    # THE FIXED BLOCK'S OWN LINE IS GONE TOO. The question is the sentence of the LANDING CARD — the
+    # same card an item page leads with (name, a count pill, one sentence; no figure and no type word,
+    # which is what tells a landing card from an item's) — drawn in the page by syncPageHero, so a
+    # landing screen and an item page are one object. It scrolls with the page, as an item's card does.
+    assert "pageq" not in html and "#pageq" not in css and "pageq" not in js, "retired, not hidden"
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
     assert "const q = chain.length === 1 ? viewQuestion(tv) : '';" in chrome, \
         "a one-item trail IS the view's own landing screen"
-    assert "pageq.textContent = q;" in chrome and "pageq.hidden = !q;" in chrome
-    pq = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
-    assert "font-size: 14px" in pq, "the content's own text size, not the trail row's 12.5px"
-    assert "font-style: italic" in pq
-    assert "padding: 10px 20px 12px" in pq, "the content's own left edge, and a bottom that closes the block"
-    assert "#pageq::before" not in css, "no dash on a sentence with no title to join"
+    assert "syncPageHero(s, chain, q ? tv : '');" in chrome, "…and only that screen gets the landing card"
+    landing = js[js.index("function landingHeroHtml(view) {"): js.index("\n}", js.index("function landingHeroHtml(view) {"))]
+    assert "pageHeroHtml({ name, pills: pill, desc: esc(q), noDesc: false })" in landing, \
+        "the one hero builder, with no glyph and no type word"
+    assert "LANDING_COUNT[view]" in landing, "how many of the view's things the map holds"
+    sync = js[js.index("function syncPageHero(s, chain, tv) {"): js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
+    assert "const landing = chain.length === 1 && !walk && !id ? landingHeroHtml(tv) : '';" in sync
+    assert "diagram.querySelector('.usecases-wrap, .glossary-wrap')" in sync, "into the page's column…"
+    assert "if (inHead) { diaghead.innerHTML = inHead; diaghead.hidden = false; }" in sync, \
+        "…or above the drawing, in the walk's head host, where the landing is a picture"
+    assert "#stage:has(#diaghead .item-sec-strip-stage) #diagwrap" in css, \
+        "the frame joins the strip, not any head — a landing card over a picture leaves the frame whole"
     intro = js[js.index("function viewIntroHtml(view) {"):
                js.index("\nfunction ", js.index("function viewIntroHtml(view) {") + 10)]
     assert "viewQuestion" not in intro
@@ -1101,7 +1108,7 @@ def test_the_header_block_casts_a_shadow_so_it_reads_as_fixed() -> None:
     assert "z-index" in head, "…and sit above what passes under it"
     assert "background:" in head, "…and paint the whole block, not just the rows that set their own"
     block = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
-    assert 'id="pageq"' in block, "the question is above the shadow, with the tabs and the trail"
+    assert 'id="pagehero"' in block, "the drilled page's hero is above the shadow, with the tabs and the trail"
 
 def test_the_page_you_drilled_into_says_what_it_is_in_the_header_not_in_the_card() -> None:
     """A page you have drilled into is ABOUT one element, and that element used to be shown by filling
@@ -1128,7 +1135,7 @@ def test_the_page_you_drilled_into_says_what_it_is_in_the_header_not_in_the_card
     # STUCK TO THE NAVIGATION HEADER: inside #stagehead, and its last line.
     head = html[html.index('<div id="stagehead">'): html.index('<div id="diagwrap">')]
     assert '<div id="pagehero" hidden></div>' in head, "the hero is part of the fixed block"
-    assert head.index('id="pagehero"') > head.index('<p id="pageq" hidden></p>'), \
+    assert head.index('id="pagehero"') > head.index('id="crumbrow"'), \
         "…and its last line, so the block's shadow falls below it"
     # THE SHADE IS THE BLOCK'S. The hero adds no border of its own, and the shared hero's closing rule
     # is switched off here.
@@ -1219,8 +1226,8 @@ def test_a_page_that_draws_its_own_contents_does_not_also_list_them_in_a_card() 
     assert "libs:" in fold and "bucketfold:" in fold
     assert "drill in" not in fold, "the reader is already inside"
     assert "Dependencies view" in fold, "the reader's word for the tab, not the code's `Context`"
-    hero = js[js.index("function syncPageHero(s, chain) {"):
-              js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
+    hero = js[js.index("function syncPageHero(s, chain, tv) {"):
+              js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "FOLD_NARRATIVE[s && s.kind]" in hero
 
 
@@ -2006,14 +2013,14 @@ def test_a_process_keeps_all_its_depth_on_a_details_page() -> None:
     link = js[js.index("function heroDetailsLinkHtml(id) {"):
               js.index("\n}", js.index("function heroDetailsLinkHtml(id) {"))]
     assert "data-goelement" in link
-    hero = js[js.index("function syncPageHero(s, chain) {"):
-              js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
+    hero = js[js.index("function syncPageHero(s, chain, tv) {"):
+              js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "go({ kind: 'element', id: b.getAttribute('data-goelement') })" in hero
     assert ".hero-details {" in css and "text-decoration: underline" in css
     # Redrawn by the same call that redraws the tabs and the trail, so it cannot outlive its page.
     chrome = js[js.index("function renderChrome(s) {"):
                 js.index("\nfunction ", js.index("function renderChrome(s) {") + 10)]
-    assert "syncPageHero(s, chain);" in chrome
+    assert "syncPageHero(s, chain, q ? tv : '');" in chrome
     # The `In feature` line is dropped when the trail already names that feature — which it does on every
     # use case reached through a feature card. Under the crumb it would print the same words twice. It
     # lives in the WALK's head now, the one builder a use case's page goes through.
@@ -3696,11 +3703,14 @@ def test_the_question_reads_as_a_sentence_and_not_as_a_control() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert "has-after" not in js and "has-after" not in css, "the tab-row rule is gone, not shadowed"
-    q = css[css.index("#pageq {"): css.index("}", css.index("#pageq {"))]
-    assert "font-style: italic" in q
-    assert "border" not in q and "background" not in q, "nothing may box the opening sentence"
-    assert "\\2014" not in q and "#pageq::before" not in css, "no dash on a line of its own"
-    assert "pageq.textContent = q;" in js, "the stored string is the pure question"
+    # The sentence is the landing card's now, set in the hero's own sentence style: upright, dark,
+    # inside the card and beneath the name, exactly as an item page's sentence is. Nothing joins it to
+    # a title on its line, and the card is the only thing around it.
+    assert "#pageq" not in css and "pageq" not in js
+    landing = js[js.index("function landingHeroHtml(view) {"): js.index("\n}", js.index("function landingHeroHtml(view) {"))]
+    assert "desc: esc(q)" in landing, "the stored string is the pure question"
+    purpose = css[css.index(".page-hero-purpose {"): css.index("}", css.index(".page-hero-purpose {"))]
+    assert "italic" not in purpose and "\\2014" not in purpose
 
 def test_the_app_name_is_a_working_way_back_to_all_maps() -> None:
     """It was an <h1> with a click handler, and became a plain span when the page's one heading moved to
@@ -5389,14 +5399,14 @@ def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> 
     sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph) {"):
              js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph) {"))]
     assert "itemSectionHeadHtml(title, count, note, glyph)" in sec, "…which the framed section uses too"
-    sync = js[js.index("function syncPageHero(s, chain) {"):
-              js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
+    sync = js[js.index("function syncPageHero(s, chain, tv) {"):
+              js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "const walk = isFlowState(s);" in sync and "walk ? walkHeadHtml(s, chain)" in sync
     assert "other.innerHTML = ''; other.hidden = true;" in sync, "the host not in use is emptied"
     # The frame under the head is #diagwrap, restyled to the section frame's own colours while it shows.
     # The strip in the head and the drawing's frame are ONE framed section: no gap, no top border on
     # the frame, one rounded box between them.
-    assert "#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 0 20px 24px; border-color: #cbd5e1; border-top: 0;" in css
+    assert "#stage:has(#diaghead .item-sec-strip-stage) #diagwrap { margin: 0 20px 24px; border-color: #cbd5e1; border-top: 0;" in css
     assert "#diaghead .item-sec-strip-stage { border: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;" in css
     assert "'<div class=\"item-sec-strip item-sec-strip-stage\">'" in head, "the same strip every section wears"
     assert "#diaghead { flex: 0 0 auto; padding: 0 20px; }" in css, "the actor page's left edge"
