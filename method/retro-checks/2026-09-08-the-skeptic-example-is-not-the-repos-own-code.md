@@ -7,6 +7,17 @@ development sign-in). On the 2026-09-08 mcpolis build all 38 briefs carried that
 `claims-security-2` batch returned exactly that refutation 3 of 3 — voters who did open the call
 sites, but whose agreement on a claim the brief names is uninterpretable either way.
 
+**Partial run, the same night.** One fresh-context skeptic (Opus) was given only a brief filled from
+the new template, over the build's own `claims-cadence` batch (11 claims) on a copy of the map:
+`grounding lint` well-formed, 11 of 11 rows covered by the evidence check (1 file cited that the
+transcript shows only as grep text), and **11 of 11 verdicts agree with the build's three
+skeptics'**, including the same 2 refutations. Where it said it had to guess: what the cadence
+word `on-boot` may cover (it judged it against the code); whether `evidence` cites the anchor
+or the deciding line (it cited the line and named the anchor in the note); how to reach an
+element's record when the claims carry no ids (it wrote a one-off slice script instead of
+`dump --id`); whether writing its output inside the repo is "changing nothing"; and which half of
+a compound claim decides. The template's shape held without the repo's own code in it.
+
 Escalation: none on its own. The open question it leaves ("is the four-build 0-disagreement record
 evidence or priming?") is in the backlog, owner: one wave on the new contract.
 

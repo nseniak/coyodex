@@ -1188,3 +1188,25 @@ def test_a_duplicate_id_inside_one_fragment_is_a_merge_problem():
     frag.components = [Component(id="C1", name="A", purpose="a"), Component(id="C1", name="B", purpose="b")]
     _model, problems = merge_fragments([("h-one.json", frag)])
     assert any("defined twice inside h-one.json" in p for p in problems), problems
+
+
+def test_a_recorded_correction_into_a_stray_file_is_refused_on_replay_too():
+    """The guard in `fix apply-drift` stops a new stray correction; a stray recorded BEFORE the
+    guard existed sits in `reconcile.json` and would be re-applied on every assemble."""
+    import subprocess, tempfile
+    from coyodex.model import FORMAT
+    frag = {"format": FORMAT, "title": "t", "goal": "g",
+            "components": [{"id": "C1", "name": "A", "purpose": "a", "source": "a.py:1", "files": ["a.py"]},
+                           {"id": "C2", "name": "B", "purpose": "b", "source": "b.py:1", "files": ["b.py"]}],
+            "edges": [{"src": "C1", "verb": "reads", "dst": "C2", "where": "a.py:10"}]}
+    with tempfile.TemporaryDirectory() as td:
+        fp, rp, out = Path(td) / "frag.json", Path(td) / "reconcile.json", Path(td) / "map"
+        fp.write_text(json.dumps(frag), encoding="utf-8")
+        rp.write_text(json.dumps({"set_anchors": [{"claim": "C1 reads C2", "corrected": "z.py:3"}]}),
+                      encoding="utf-8")
+        proc = subprocess.run(ASSEMBLE + [str(fp), "--out", str(out), "--reconcile", str(rp)],
+                              capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        m = json.loads((out / "project-map.json").read_text(encoding="utf-8"))
+        assert m["edges"][0]["where"] == "a.py:10", m["edges"][0]
+        assert "REFUSED" in proc.stdout + proc.stderr

@@ -97,7 +97,7 @@ def newest_archived_map(out: Path) -> Path | None:
     exactly this map — files that held ACCESS enforcement there and are named by no rule now — and
     the 2026-09-08 mcpolis build never ran it, because nothing in the closing sequence asked:
     19 of 60 such files went unnamed while the hard gate beside them failed."""
-    maps = sorted((out / "dev-rebuilds").glob("[0-9]*/project-map.json"))
+    maps = sorted(p for p in (out / "dev-rebuilds").glob("*/project-map.json") if p.parent.name.isdigit())
     return maps[-1] if maps else None
 
 

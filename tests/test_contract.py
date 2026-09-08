@@ -457,3 +457,11 @@ def test_a_path_in_a_batch_id_slot_is_refused() -> None:
         contract.fill("skeptic", values)
     values["CLAIMS"], values["BATCH"] = "backbone-1", "backbone-1a"
     assert "«" not in contract.fill("skeptic", values)
+
+
+def test_the_closer_contracts_claims_block_may_carry_paths() -> None:
+    """The closer's «CLAIMS» is a pasted block of claims and `dump` output, `path:line` and all; the
+    skeptic-only path check must not refuse it — its first version did, on the real build's slots."""
+    values = make_slot_values("closer")
+    values["CLAIMS"] = "- C1 reads E1 [backend/src/app.py:12]\n  dump: {\"where\": \"backend/src/app.py:12\"}"
+    assert "«" not in contract.fill("closer", values)

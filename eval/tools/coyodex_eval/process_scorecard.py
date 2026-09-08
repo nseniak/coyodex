@@ -369,23 +369,32 @@ def _python_write(blob: str, needle: str) -> bool:
 
 def _writes_through_a_bound_path(blob: str, esc: str, hops: int = 3) -> bool:
     """Does the blob write through a variable derived, in up to `hops` steps, from a value that
-    names the artifact? `X = "…<art>…"` binds X; `p = f"{X}/f.json"`, `p = Path(X) / …` or
-    `for p in glob(f"{X}/*.json")` binds p from X; `open(p, "w")`, `p.write_text(`, or
-    `json.dump(…, open(p, "w"))` writes through it."""
-    bound = {m.group(1) for m in re.finditer(r"(\w+)\s*=\s*[^\n]*" + esc, blob)}
+    names the artifact? `X = "…<art>…"` or `for X in glob("…<art>…")` binds X; `p = f"{X}/f.json"`,
+    `p = Path(X) / …` or `for p in glob(f"{X}/*.json")` binds p from X; `open(p, "w")`,
+    `p.write_text(`, `json.dump(…, open(p, "w"))` or `Path(X, "f.json").write_text(` writes.
+
+    A binding is read from the RIGHT-HAND SIDE of its own statement only, up to the first `;` — the
+    first version took a bound name anywhere on the line, so `FD=…; out=f"{SP}/x"` bound `out` from
+    `FD`, and it took the `f` of an f-string prefix as the name `f`; both flagged a turn that wrote
+    only scratch files. A name followed by a quote is a string prefix, not a variable."""
+    def uses(name: str, text: str) -> bool:
+        return re.search(r"\b" + re.escape(name) + r"\b(?![\"'])", text) is not None
+
+    stmt = re.compile(r"(?:^|\n)\s*(?:for\s+)?(\w+)\s*(?:=|\bin\b)\s*([^\n;]*)")
+    bound = {m.group(1) for m in stmt.finditer(blob) if re.search(esc, m.group(2))}
     for _ in range(hops):
         grown = set(bound)
-        for name in bound:
-            n = re.escape(name)
-            grown |= {m.group(1) for m in re.finditer(
-                r"(?:^|\n)\s*(?:for\s+)?(\w+)\s*(?:=|\bin\b)\s*[^\n]*\b" + n + r"\b", blob)}
+        for m in stmt.finditer(blob):
+            if any(uses(name, m.group(2)) for name in bound):
+                grown.add(m.group(1))
         if grown == bound:
             break
         bound = grown
     for name in bound:
         n = re.escape(name)
         if (re.search(r"open\s*\(\s*" + n + r"\s*,\s*['\"][wa]", blob)
-                or re.search(r"\b" + n + r"\s*\.write_text\s*\(", blob)):
+                or re.search(r"\b" + n + r"\s*\.write_text\s*\(", blob)
+                or re.search(r"Path\s*\([^)\n]*\b" + n + r"\b[^)\n]*\)\s*(?:/[^\n]*)?\.write_text\s*\(", blob)):
             return True
     return False
 
@@ -1080,6 +1089,18 @@ def _false_gate_claim(commit_text: str) -> str | None:
     return None
 
 
+#: A READ of the gate block `finalize` wrote for THIS map: a reader verb, then the live path, in one
+#: segment with no redirect between them. Not any command mentioning the name — an `echo … #
+#: gate-block`, a `tee` of a hand-written block, or a `cat` of an ARCHIVED build's block
+#: (`dev-rebuilds/…`) would otherwise launder a verdict, and a review reproduced all three.
+_LIVE_GATE_BLOCK_READ = re.compile(
+    r"\b(?:cat|head|tail|sed|less|more)\b[^|;&>\n]*(?<![\w/.-])\.coyodex/verify/gate-block\.md\b")
+
+
+def _reads_live_gate_block(command: str) -> bool:
+    return bool(_LIVE_GATE_BLOCK_READ.search(command)) and "dev-rebuilds" not in command
+
+
 def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Assertion:
     """The commit message's gate claims must match what `finalize` actually said, in the same run.
 
@@ -1104,7 +1125,7 @@ def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Asse
         for call in turn.calls_named("Bash"):
             # …or a read of the gate block `finalize` wrote: that file is the verdict's durable
             # home, and a `cat` of it is how a `ship` build sees the verdict at all.
-            if _invokes(call.command, "finalize") or "gate-block" in call.command:
+            if _invokes(call.command, "finalize") or _reads_live_gate_block(call.command):
                 # Only the RESULT, never the command text: `finalize | grep "finalize: CLEAN …"`
                 # would otherwise launder a grep PATTERN into a verdict.
                 hit = _FINALIZE_VERDICT.search(results.get(call.id, ""))
@@ -1457,6 +1478,11 @@ def assert_14_grounding_total_matches_the_worklist(turns: Sequence[Turn]) -> Ass
     for turn in turns:
         for call in turn.tool_calls:
             blob = call.text() + "\n" + results.get(call.id, "")
+            # `ship` prints this only after its `grounding write --map` step succeeded, and a build
+            # that redirects ship's output reads it back in a LATER call — the latch below sees
+            # only the call that carried both the invocation and the pinned count.
+            if call.name == "Bash" and "SHIP COMPLETE" in results.get(call.id, ""):
+                explained = True
             m = re.search(r"(\d+)\s+of\s+(\d+)\s+claim\(s\)\s+challenged", blob)
             if m:
                 pinned, at = int(m.group(2)), turn.index
@@ -1784,7 +1810,8 @@ def read_agent_lint_calls(session: Path) -> tuple[tuple[str, str], ...]:
                     joined = re.sub(r"\\\n[ \t]*", " ", cmd[m.start():])
                     seg = re.split(r"\n|;|&&", joined)[0]
                     # A `--help` run prints usage, not a verdict; piping it narrows nothing.
-                    if "--help" in seg or re.search(r"\s-h\b", seg):
+                    head_seg = seg.split("|", 1)[0]
+                    if "--help" in head_seg or re.search(r"\s-h\b", head_seg):
                         continue
                     # An INVOCATION, not a mention. One agent ran
                     # `grep -rln "lint-fragment" . --include="*.py" | head` while looking for the

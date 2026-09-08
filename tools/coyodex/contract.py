@@ -197,7 +197,9 @@ def _slot_content_faults(name: str, values: dict[str, str]) -> list[str]:
     # A batch id filled with a PATH. The skeptic contract composes `.coyodex/verify/claims-«CLAIMS».json`
     # and `verdicts-«BATCH».json` from these two, so a path here builds a file name that exists
     # nowhere — 38 of 38 briefs on one build named `claims-/Users/…/claims-backbone-1.json.json`.
-    for key in ("BATCH", "CLAIMS"):
+    # SKEPTIC ONLY: the closer contract has its own «CLAIMS», a pasted block of claims and `dump`
+    # output that carries `path:line`, and the first version of this check refused every closer fill.
+    for key in ("BATCH", "CLAIMS") if name == "skeptic" else ():
         v = (values.get(key) or "").strip()
         if v and ("/" in v or v.lower().endswith(".json")):
             faults.append(

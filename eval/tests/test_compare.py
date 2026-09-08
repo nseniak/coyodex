@@ -844,15 +844,22 @@ def test_a_source_root_the_candidate_cites_nowhere_is_noted() -> None:
     r = compare(old, new)
     assert any("1 source root(s)" in n and "internal/" in n for n in r.notes), r.notes
     assert not any("source root(s)" in n for n in compare(old, old).notes)
+    older = make_profile(component_sources=["backend/x.py"], test_files=None, auth_sites=None)
+    assert not any("source root(s)" in n for n in compare(old, older).notes), "a missing field is not a lost root"
 
 
 def test_a_rules_shrink_beyond_the_band_is_drift() -> None:
     """Rules went 102 -> 79 -> 95 -> 88 across four mcpolis builds with no band on them, while
     every block came back on the contract's ceiling; the decisions and their enforcing sites are
     counts like the others, shrink-only."""
-    assert "rules_shrink_pct" in DEFAULT_BANDS and "rule_sites_shrink_pct" in DEFAULT_BANDS
-    r = compare(make_profile(rules=100, rule_sites=250), make_profile(rules=60, rule_sites=250))
+    import json as _json
+    shipped = _json.loads((Path(__file__).resolve().parents[1] / "thresholds.json").read_text(encoding="utf-8"))
+    bands = next(v["bands"] for v in shipped.values() if isinstance(v, dict) and "bands" in v)
+    assert bands["rules_shrink_pct"] == 0.3 and bands["rule_sites_shrink_pct"] == 0.3
+    assert "rules_shrink_pct" not in DEFAULT_BANDS, "the rules layer is optional: no default band"
+    t = Thresholds(bands={"rules_shrink_pct": 0.3, "rule_sites_shrink_pct": 0.3})
+    r = compare(make_profile(rules=100, rule_sites=250), make_profile(rules=60, rule_sites=250), t)
     assert r.verdict == DRIFT, r
     assert any(b.metric == "rules" and not b.within for b in r.bands)
-    grown = compare(make_profile(rules=60), make_profile(rules=100))
+    grown = compare(make_profile(rules=60), make_profile(rules=100), t)
     assert not any(b.metric == "rules" and not b.within for b in grown.bands), "growth never breaches"

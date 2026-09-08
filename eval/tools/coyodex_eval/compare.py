@@ -63,13 +63,12 @@ DEFAULT_BANDS: dict[str, float] = {
     "edges_shrink_pct": 0.30,
     "hp_steps_shrink_pct": 0.30,
     "flows_shrink_pct": 0.30,
-    # The decisions, and where they are enforced. Rules went 102 -> 79 -> 95 -> 88 across four
-    # mcpolis builds with no band on them; 57 of the 88 were access rules feeding the security
-    # theme, and every one of 11 blocks came back with exactly 8, the contract's ceiling. Shrink-
-    # only, like the other counts: a shrink is a decision the map stopped stating.
-    "rules_shrink_pct": 0.30,
-    "rule_sites_shrink_pct": 0.30,
     "edges_per_component_pct": 0.25,
+    # NOT here: `rules` and `rule_sites`. The rules layer is optional, so a DEFAULT band would print a
+    # "skipped, not numeric on both sides" note on every comparison of a map without it
+    # (`test_the_rule_fields_are_report_only_by_default`). The shipped `eval/thresholds.json` bands
+    # both at 0.30, shrink-only: rules went 102 -> 79 -> 95 -> 88 across four mcpolis builds with
+    # nothing watching, and every block of the last one came back on the contract's ceiling.
 }
 
 # Judge bands are DROP-only (asymmetric): a rise in faithfulness/coverage is good, only a fall is a
@@ -578,8 +577,9 @@ def _source_root_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]
     non-product directory and no check was ever meant to look there. Right or wrong, a root the
     previous map described and this one describes nowhere is worth one line, so the move is
     recorded rather than silent. Reported, never gated: the convention may be the reason."""
-    if baseline.component_sources is None or candidate.component_sources is None:
-        return []
+    for p in (baseline, candidate):
+        if p.component_sources is None or p.test_files is None or p.auth_sites is None:
+            return []            # a profile predating one of the three fields: nothing to compare
 
     def roots(p: MapProfile) -> set[str]:
         cited = [*(p.component_sources or []), *(p.test_files or []), *(p.auth_sites or [])]
@@ -588,9 +588,10 @@ def _source_root_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]
     lost = sorted(roots(baseline) - roots(candidate))
     if not lost:
         return []
-    return [f"{len(lost)} source root(s) the baseline's elements cite and the candidate's cite "
-            f"nowhere: {', '.join(r + '/' for r in lost)} — a scope decision or a loss, and nothing "
-            f"else here can tell which"]
+    return [f"{len(lost)} source root(s) the baseline cites and the candidate cites nowhere in the "
+            f"fields this note reads (component sources, test files, access sites): "
+            f"{', '.join(r + '/' for r in lost)} — a scope decision, a loss, or a root the candidate "
+            f"names only in `files` or ways in; read the map before deciding"]
 
 
 def _reproducibility_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:

@@ -2973,3 +2973,56 @@ def test_27_follows_a_fragment_directory_bound_to_a_variable_two_hops_from_the_w
                   "for p in glob.glob(f\"{FD}/h-*.json\"):\n    d=json.load(open(p))\n"
                   "    open(p,\"w\").write(json.dumps(d))\nPY")
     assert P._hand_written_artifact(make_bash(glob_bound)) == "build-fragments/"
+
+
+def test_12_takes_the_gate_block_spelling_only_from_a_read_of_the_live_gate_block():
+    """A review laundered a verdict four ways once any command naming gate-block was a source: an
+    echo with the name in a comment, a `tee` of a hand-written block, a `cat` of an archived
+    build's block, a grep of a file carrying the spelling. Only a read of the live file counts."""
+    clean_block = "Gates: finalize CLEAN — 0 blocking, 0 advisory (map sha256 abc…)."
+    commit = make_turn(2, make_bash('git commit -m "Gates: finalize clean — 0 blocking, 0 advisory"'))
+    real = make_turn(0, make_bash("coyodex finalize m.json", uid="f"),
+                     results=(("f", "finalize: ADVISORIES — 0 blocking, 3 advisory"),))
+    for laundering in ('echo "x" # gate-block', "tee .coyodex/verify/gate-block.md <<EOF",
+                       "cat .coyodex/dev-rebuilds/0025/verify/gate-block.md",
+                       'grep -r "Gates:" notes/gate-block.txt'):
+        turns = (real, make_turn(1, make_bash(laundering, uid="l"), results=(("l", clean_block),)), commit)
+        a = P.score_turns(turns).by_id()[12]
+        assert (a.observed, a.of) == (0, 1), (laundering, a)
+    turns = (real, make_turn(1, make_bash("cat .coyodex/verify/gate-block.md", uid="c"),
+                             results=(("c", clean_block),)), commit)
+    assert P.score_turns(turns).by_id()[12].observed == 1
+
+
+def test_14_a_ship_run_read_back_in_a_later_call_still_records_the_delta():
+    turns = (make_turn(0, make_bash("coyodex ship . --note-file n.txt > ship.txt", uid="s"),
+                       results=(("s", ""),)),
+             make_turn(1, make_bash('grep -E "SHIP|challenged" ship.txt', uid="g"),
+                       results=(("g", "wrote g.json: 842 of 1791 claim(s) challenged\nSHIP COMPLETE — quote"),)),
+             make_turn(2, make_bash("cat .coyodex/verify/gate-block.md", uid="b"),
+                       results=(("b", "audit: 0 blocking — 833 L2 claims on the grounding worklist"),)))
+    a = P.score_turns(turns).by_id()[14]
+    assert (a.observed, a.of) == (1, 1) and "delta recorded" in a.note, a
+
+
+def test_27_binds_from_the_right_hand_side_only_and_never_from_an_f_string_prefix():
+    """The first bound-path walk flagged a brief-generation turn that wrote only scratch files:
+    it bound `out` from a `FD=…` on the same line past a `;`, and took the `f` of `f"…"` as a
+    name. And it missed the `for f in glob(…build-fragments…)` shape, which one real turn used."""
+    scratch = ("python3 - <<'PY'\nimport json\n"
+               "FD=\"/repo/.coyodex/build-fragments\"; SP=\"/tmp/s\"; out=f\"{SP}/slots.json\"\n"
+               "for f in [\"a\", \"b\"]:\n    open(out,\"w\").write(f\"{f}\")\nPY")
+    assert P._hand_written_artifact(make_bash(scratch)) is None
+    glob_loop = ("python3 - <<'PY'\nimport glob, json\n"
+                 "for f in glob.glob('/repo/.coyodex/build-fragments/r*.json'):\n"
+                 "    d=json.load(open(f))\n    json.dump(d,open(f,'w'))\nPY")
+    assert P._hand_written_artifact(make_bash(glob_loop)) == "build-fragments/"
+    path_ctor = ("python3 - <<'PY'\nfrom pathlib import Path\nFD=\"/repo/.coyodex/build-fragments\"\n"
+                 "Path(FD, \"x.json\").write_text(\"{}\")\nPY")
+    assert P._hand_written_artifact(make_bash(path_ctor)) == "build-fragments/"
+
+
+def test_40_a_grep_dash_h_after_the_pipe_is_still_a_lint_invocation():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        assert len(_lint_calls_from("coyodex lint-fragment f.json 2>&1 | grep -h FAIL", Path(td))) == 1

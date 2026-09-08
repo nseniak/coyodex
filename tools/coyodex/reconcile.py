@@ -34,7 +34,7 @@ import json
 from dataclasses import dataclass, field
 
 from coyodex import grammar
-from coyodex.audit_model import apply_anchor_corrections
+from coyodex.audit_model import apply_anchor_corrections, cross_file_refusals
 from coyodex.model import (
     Interface,
     BusinessRule,
@@ -673,8 +673,11 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
     # claim that no longer matches anything NOTES and never fails, like the two directives above: a
     # reconcile file must not rot when a later fragment edit rewrites the claim it was keyed on.
     if rec.set_anchors:
-        counts, anchor_notes = apply_anchor_corrections(
-            m, [(a.claim, a.corrected) for a in rec.set_anchors])
+        # The same guard `fix apply-drift` runs before recording: a stray correction that reached
+        # the file before the guard existed is refused here on every replay, and named.
+        kept, refused = cross_file_refusals(m, [(a.claim, a.corrected) for a in rec.set_anchors])
+        notes.extend(n.strip() for n in refused)
+        counts, anchor_notes = apply_anchor_corrections(m, kept)
         notes.extend(n.strip() for n in anchor_notes if not n.startswith("  "))
         applied = sum(counts.values())
         if applied:

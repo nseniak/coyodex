@@ -656,7 +656,8 @@ def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
     # would have seen 8 of its 19 names.
     listed = ", ".join(lost)
     return Leg("access baseline", RAN, advisory=[
-        f"{len(lost)} of {len(base)} file(s) that held ACCESS enforcement in {baseline.name} are "
+        f"{len(lost)} of {len(base)} file(s) that held ACCESS enforcement in "
+        f"{baseline.parent.name}/{baseline.name} are "
         f"named by NO access rule in this map: {listed}. The code may be unchanged — check each one "
         f"before shipping. A statement count can hold steady while a claim disappears, so this is "
         f"not visible in `auth-surfaces-no-drop`. Record '<path>: <why>' under an "

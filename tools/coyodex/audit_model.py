@@ -392,8 +392,14 @@ def _move_note(claim: str, before: str | None, after: str) -> str:
 
 
 def _files_hold(files: list[str], path: str) -> bool:
-    """`path` is one of `files`, or sits inside a directory entry (`src/dir/`)."""
-    return any(path == f or (f.endswith("/") and path.startswith(f)) for f in files)
+    """`path` is one of `files`, or sits inside a directory entry — spelled `src/dir/` or `src/dir`,
+    with or without a `./` prefix on either side."""
+    p = path[2:] if path.startswith("./") else path
+    for entry in files:
+        f = entry[2:] if entry.startswith("./") else entry
+        if p == f or p.startswith(f.rstrip("/") + "/"):
+            return True
+    return False
 
 
 def cross_file_refusals(m: ProjectModel, corrections: list[tuple[str, str]],
