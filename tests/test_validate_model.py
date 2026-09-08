@@ -5550,6 +5550,30 @@ def test_a_walk_jump_sees_through_a_shared_walk():
     assert len(walk_jumps(m)) == 1 and "step 3 starts at C3" in walk_jumps(m)[0]
 
 
+def test_a_recorded_walk_jump_is_a_second_thread_not_a_gap():
+    """The advisory has always ended "or record 'UCn: <why this begins a new thread>' under a
+    'Walk jumps' extras heading", and nothing read that heading: `record` refused the line, and a
+    live build carried the advisory with no escape. The heading is registered now and the check
+    reads it — a recorded use case is a story that opens a second thread on purpose. One use case
+    per line; a key with no why is a dismissal, as in every family."""
+    m = ProjectModel(title="T", goal="G")
+    m.use_cases = [UseCase(id="UC1", name="View"), UseCase(id="UC2", name="Sweep")]
+    m.components = [Component(id="C1", name="A", purpose="a"), Component(id="C2", name="B", purpose="b"),
+                    Component(id="C3", name="C", purpose="c")]
+    def jumping(uc: str, title: str) -> Flow:
+        return Flow(uc=uc, title=title, steps=[
+            FlowStep(n=1, src="C1", dst="C2", phrase="hand it on", where="src/a.py:1"),
+            FlowStep(n=2, src="C3", dst="C1", phrase="wake up later", where="src/c.py:1")])
+    m.flows = [jumping("UC1", "View"), jumping("UC2", "Sweep")]
+    assert len(walk_jumps(m)) == 2
+    m.extras = [ExtraSection(heading="Walk jumps",
+                             body="UC1: the sweep is a background job the first half set going")]
+    out = walk_jumps(m)
+    assert len(out) == 1 and out[0].startswith("UC2 step 2 starts at C3"), out
+    m.extras = [ExtraSection(heading="Walk jumps", body="UC2:")]
+    assert len(walk_jumps(m)) == 2, "a key alone is a dismissal, not a record"
+
+
 def test_a_walk_that_leaves_its_person_with_no_reply_is_reported():
     """The method says a door works both ways: a walk arrives through one and hands its result back
     through one. Nothing checked the second half.

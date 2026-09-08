@@ -141,6 +141,12 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # the answer is about that one story: either its way out is missing, or the surface
     # its person ends at was never written.
     HeadingSpec("Missing surfaces", True, ID_KEY),
+    # A walk step that starts where no earlier step has been. Keyed on the USE CASE, like
+    # "Missing surfaces": the answer is about that one story — the jump is a second thread it
+    # opens on purpose, not a step nobody wrote. The advisory named this heading from the day
+    # it was written and nothing registered it, so `record` refused the exact line the advisory
+    # asked for and the finding shipped as carried with no escape.
+    HeadingSpec("Walk jumps", True, ID_KEY),
     # NOT "Ownership exceptions": "Persistence exceptions" one line up already adjudicates
     # ownership in the OTHER sense (which COMPONENT writes an entity), on `En` keys too, so
     # two `En`-keyed headings would both have been called ownership and neither would have

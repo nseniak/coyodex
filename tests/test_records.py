@@ -260,3 +260,23 @@ def test_replace_refuses_a_batch():
     with tempfile.TemporaryDirectory() as tmp:
         assert main(["--map", _extras(tmp), "--heading", "Entry-point coverage",
                      "--replace", "job", "--line", "a: x", "--line", "b: y"]) == 2
+
+
+def test_every_heading_an_advisory_names_is_one_the_tools_read():
+    """An advisory that says "record a line under the 'X' extras heading" while the registry does
+    not know X is a trap: `record` refuses the line and the finding ships as carried with no
+    escape, under a message that promised one. One shipped exactly so ('Walk jumps'), and a
+    docstring went on naming a heading that had been renamed. So every heading named as an escape
+    anywhere under `tools/coyodex/` must be registered — read straight off the source, so a
+    renamed or newly minted heading fails here and not on a build."""
+    src_dir = Path(__file__).resolve().parents[1] / "tools" / "coyodex"
+    named = re.compile(r"""['\"]([A-Z][A-Za-z -]{3,40}?)['\"]\s+extras\s+heading""")
+    known = {h.lower() for h in records.KNOWN_HEADINGS}
+    unknown: list[str] = []
+    for path in sorted(src_dir.glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        for hit in named.finditer(text):
+            if hit.group(1).lower() not in known:
+                unknown.append(f"{path.name}:{text[: hit.start()].count(chr(10)) + 1} names "
+                               f"{hit.group(1)!r}")
+    assert not unknown, unknown

@@ -307,18 +307,18 @@ LEDGER: tuple[Claim, ...] = (
                 "`(uc, container, n)` keys — and only 337 distinct `(uc, n)` keys.",
           measure=_anchored_expanded_steps,
           note="the argument that `(uc, n)` alone silently merges two rows"),
-    Claim(site="tools/coyodex/validate_model.py:1021", maps=("argus", "mcpolis"),
+    Claim(site="tools/coyodex/validate_model.py:1031", maps=("argus", "mcpolis"),
           quote="Measured across the two live maps: 135 entities, 45 of them saved.",
           measure=_saved_records_two_maps,
           note="why the check reads SAVED records and not every entity"),
-    Claim(site="tools/coyodex/validate_model.py:962", maps=("argus", "mcpolis"),
+    Claim(site="tools/coyodex/validate_model.py:972", maps=("argus", "mcpolis"),
           quote="Measured across the two live maps: 0 of 45 saved records, on neither map",
           measure=_record_direction_gaps,
           note="the map contradicting itself about a record's direction",
           data_words="'on neither map' names WHICH maps the gaps land on, read off the map the "
                      "same way the counts are. When a gap comes back the words change with it, and "
                      "that is the row saying the sentence needs rewriting, not renumbering"),
-    Claim(site="tools/coyodex/validate_model.py:1166", maps=("mcpolis",),
+    Claim(site="tools/coyodex/validate_model.py:1176", maps=("mcpolis",),
           quote="mcpolis's dashboard draws 141 steps from 31 different walks, and read as one list "
                 "they are noise.",
           measure=_dashboard_steps,
@@ -328,7 +328,7 @@ LEDGER: tuple[Claim, ...] = (
                 "list they are noise.",
           measure=_dashboard_steps_viewer,
           note="the same fact, restated on the viewer's What crosses block"),
-    Claim(site="tools/coyodex/validate_model.py:1293", maps=("coyodex",),
+    Claim(site="tools/coyodex/validate_model.py:1303", maps=("coyodex",),
           quote="On this repo's own map, 3 files are claimed by 3-4 components each and hold 5 "
                 "of its 245 call-site anchors (2%)",
           measure=_rule_sites_in_shared_files,

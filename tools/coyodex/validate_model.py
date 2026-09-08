@@ -539,6 +539,9 @@ def subflow_refcount_warnings(m: ProjectModel) -> list[str]:
     return out
 
 
+WALK_JUMPS_HEADING = "Walk jumps"
+
+
 def walk_jumps(m: ProjectModel) -> list[str]:
     """Steps that START at a box the walk has never arrived at — a break in the story.
 
@@ -554,16 +557,23 @@ def walk_jumps(m: ProjectModel) -> list[str]:
     Advisory, not blocking: a legitimate walk can begin a second thread (a background job the first half
     set going). But 52 of them across the two reference maps were plain omissions, so the default
     reading is a missing step, and the fix is to write it.
+
+    Escape: '<UCn>: <why this begins a new thread>' under a 'Walk jumps' extras heading, one use
+    case per line, read HERE. The message had named that heading before anything read it, so
+    `record` refused the line it asked for and the advisory was carried with no escape.
     """
     out: list[str] = []
+    recorded = records.recorded_keys(m, WALK_JUMPS_HEADING)
     for f in m.flows:
+        if f.uc in recorded:
+            continue
         reached: set[str] = set()
         for i, st in enumerate(expanded_flow_steps(m, f)):
             src = str(st.src)
             if i and src not in reached:
                 out.append(f"{f.uc} step {st.n} starts at {src}, which no earlier step reaches — "
                            "the walk jumps. Write the step that gets there, or record "
-                           f"'{f.uc}: <why this begins a new thread>' under a 'Walk jumps' extras "
+                           f"'{f.uc}: <why this begins a new thread>' under a '{WALK_JUMPS_HEADING}' extras "
                            "heading")
             reached.add(src)
             reached.add(str(st.dst))
@@ -4582,7 +4592,7 @@ def _owner_warnings(m: ProjectModel) -> list[str]:
       MISSING    — an area holding saved records that nobody has decided for.
       REDUNDANT  — an entity `owners` equal to what it would have inherited.
 
-    Escape, for all of them: '{id}: <why>' under an 'Ownership exceptions' extras heading."""
+    Escape, for all of them: '{id}: <why>' under a 'Data owner exceptions' extras heading."""
     areas = build_areas(m)
     if not areas:
         return []
