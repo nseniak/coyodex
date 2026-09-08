@@ -1178,3 +1178,13 @@ def test_failure_survives_a_tail_because_stdout_is_line_buffered():
             "stderr again:\n" + merged)
         assert "ASSEMBLY FAILED" in lines[1], merged
         assert not (d / "out" / "project-map.json").exists(), "a failed assemble wrote a map"
+
+
+def test_a_duplicate_id_inside_one_fragment_is_a_merge_problem():
+    """The help promises a refusal; two rows with one id in ONE file assembled to a map carrying
+    both, exit 0, and only `validate` caught it downstream."""
+    from coyodex.model import Component
+    frag = ProjectModel()
+    frag.components = [Component(id="C1", name="A", purpose="a"), Component(id="C1", name="B", purpose="b")]
+    _model, problems = merge_fragments([("h-one.json", frag)])
+    assert any("defined twice inside h-one.json" in p for p in problems), problems

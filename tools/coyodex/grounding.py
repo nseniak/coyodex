@@ -36,7 +36,7 @@ from coyodex.anchor_drift import load_verdicts
 from coyodex.audit_model import ClaimTarget, l2_worklist_model, resolve_claim
 from coyodex.model import ModelError, ProjectModel, load_model, resolve_map_path
 
-USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>]
+USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>] [--expect <batch,…>]
        coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
                                [--out <fragment.json>] [--json] [--partial]
                                [--note <text> | --note-file <path> | --keep-note]

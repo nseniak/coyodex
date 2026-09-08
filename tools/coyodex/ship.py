@@ -431,7 +431,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("\nSHIP COMPLETE — quote finalize's verdict line in the commit message "
               f"(gate block at {inputs.gate_block}), then commit the map, the .md, the pre-index "
-              "and provenance. finalize printed the exact `git add -f` line."
+              "and provenance. finalize printed the exact `git add -f` line ABOVE, in this output — "
+              "the report file does not carry it."
               + _coverage_line(inputs))
     return 0
 

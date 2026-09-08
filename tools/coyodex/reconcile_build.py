@@ -413,7 +413,8 @@ def main(argv: list[str] | None = None) -> int:
     # so a one-word rewording would silently zero the count and send the summary back to calling a
     # run with 111 unresolved ids "clean" — the very bug it exists to report.
     print(f"  SUMMARY: {len(rules)} rule(s) — {len(rules) - len(bad)} clean, "
-          f"{len(unmatched_rules)} matched nothing, "
+          f"{len(unmatched_rules)} matched nothing"
+          + (f" ({', '.join(sorted(unmatched_rules))})" if unmatched_rules else "") + ", "
           f"{len(undeclared_rules)} assign an undeclared target."
           + (f"  {unknown_ids} NAMED ID(S) ARE NOT IN THE MAP and were assigned nothing — a rule "
              f"that resolves SOME of its ids is not a clean rule." if unknown_ids else "")

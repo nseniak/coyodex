@@ -392,8 +392,15 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
             if not isinstance(frag_list, list) or not frag_list:
                 continue
             getattr(out, f.name).extend(frag_list)
+        seen_here: set[str] = set()
         for attr in ID_ARRAYS:
             for el in getattr(frag, attr):
+                # Inside ONE fragment too: two rows with one id assembled to a map carrying both,
+                # exit 0, while the help promised a refusal. `validate` blocked it downstream.
+                if el.id in seen_here:
+                    problems.append(f"duplicate id {el.id}: defined twice inside {label} — one id, "
+                                    f"one row")
+                seen_here.add(el.id)
                 if el.id in id_owner and id_owner[el.id] != label:
                     problems.append(f"duplicate id {el.id}: defined by both {id_owner[el.id]} "
                                     f"and {label} — agents must keep to their pre-allocated ID ranges")

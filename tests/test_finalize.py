@@ -1209,3 +1209,20 @@ def test_the_gate_block_says_which_unvoted_claims_were_pinned_and_never_challeng
                      encoding="utf-8")
         line = _grounding_line(p)
         assert "16 do not" in line and "never challenged" not in line, line
+
+
+def test_the_gate_block_carries_the_advisory_disposition_counts():
+    """The gate block is what a commit quotes, and its two-way wording ("recordable / no escape")
+    is how one commit filed two UNANSWERED rows as carried. The report's own disposition rides
+    along, and its counts cover every advisory."""
+    import re as _re
+    root, p = make_repo(components=3)
+    report = finalize.build_report(p, root, [])
+    block = finalize.gate_block(report, report.map_sha256)
+    if not report.advisory_total:
+        assert "Advisory disposition:" not in block
+        return
+    line = next((ln for ln in block.splitlines() if ln.startswith("Advisory disposition:")), "")
+    assert line, block
+    counted = sum(int(n) for n in _re.findall(r": (\d+)", line.split(". An UNANSWERED")[0]))
+    assert counted == report.advisory_total, (line, report.advisory_total)

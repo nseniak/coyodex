@@ -1067,6 +1067,17 @@ def gate_block(report: FinalizeReport, map_sha: str) -> str:
         lines.append("Advisories are NOT a pass. Some name an extras heading and can be recorded; "
                      "the rest name none (tests/test_method_contract.py KNOWN_NO_ESCAPE) and can only "
                      "be fixed or carried. State which of the two you did — neither is 'clean'.")
+        # The report's own disposition, in the block the commit quotes: a two-way vocabulary here
+        # ("recordable / no escape") is how one commit filed two UNANSWERED rows as carried.
+        disp = advisory_disposition(Path(report.map_path), report)
+        if disp:
+            order = ("UNANSWERED", "UNRECORDED", "UNSURE", "carried (no escape)", "disclosure",
+                     "recorded")
+            counts = {k: sum(1 for d, _, _ in disp if d == k) for k in order}
+            lines.append("Advisory disposition: "
+                         + " · ".join(f"{k}: {n}" for k, n in counts.items() if n)
+                         + ". An UNANSWERED or UNRECORDED row is an escape nobody took, not a "
+                         "carried one.")
     for extra in (_shape_line(Path(report.map_path)), _grounding_line(Path(report.map_path))):
         if extra:
             lines.append(extra)
