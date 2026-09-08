@@ -6900,6 +6900,25 @@ function placePagePath(chain) {
   hero.querySelectorAll('.page-path-seg').forEach((b) =>
     b.addEventListener('click', () => go(chain[+b.dataset.path])));
 }
+// EVERY HEADER FIGURE READS AS THE SAME SIZE. The figures are drawn on different squares — a sparkle
+// that fills its 20-unit square to the edges, a person 27px wide in a 52px box, a record card with a
+// margin all round — so one box size gave one figure 49px of ink and another 35 (measured over 17
+// kinds). The ink is what the eye sizes, so each figure's box is set from its own ink: the larger
+// side of what it actually draws comes to HERO_INK_PX, whatever its square. Runs after every
+// navigation, on whichever head the page drew; a figure not yet drawn is left alone.
+const HERO_INK_PX = 40;
+function sizeHeroFigures() {
+  document.querySelectorAll('.page-hero-glyph svg').forEach((g) => {
+    let bb;
+    try { bb = g.getBBox(); } catch (_) { return; }
+    const vb = g.viewBox.baseVal;
+    if (!vb || !vb.width || !bb || !bb.width || !bb.height) return;
+    const ink = Math.max(bb.width, bb.height);            // in the figure's own units
+    const px = Math.round(HERO_INK_PX * vb.width / ink);   // the square that draws that ink at HERO_INK_PX
+    g.style.width = px + 'px';
+    g.style.height = px + 'px';
+  });
+}
 function syncPageHero(s, chain, tv) {
   const walk = isFlowState(s);
   const id = heroSubjectId(s);
@@ -6943,6 +6962,7 @@ function syncPageHero(s, chain, tv) {
   host.hidden = !html;
   if (inHead) { diaghead.innerHTML = inHead; diaghead.hidden = false; }
   placePagePath(chain);
+  sizeHeroFigures();
   if (!html) return;
   bindElementCards(host);   // the `In feature …` line is a door, here as on a card
   host.querySelectorAll('[data-goelement]').forEach((b) =>

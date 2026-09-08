@@ -1529,6 +1529,26 @@ def test_which_interfaces_a_use_case_reaches_is_read_from_the_bundle_not_re_deri
     assert "near(st.srcId, st.src, st.dstId);" in fn, "who stands there is still read off the steps"
 
 
+def test_every_header_figure_is_sized_from_its_own_ink() -> None:
+    """The figures are drawn on different squares — a sparkle that fills its 20-unit square to the
+    edges, a person 27px wide in a 52px box, a record card with a margin all round — so one box size
+    gave one figure 49px of ink and another 35, measured over 17 kinds on mcpolis. The eye sizes the
+    ink, so each figure's box is set from what it actually draws: the larger side of its ink comes to
+    HERO_INK_PX, whatever its square. Measured after: 40px on every one of 12 kinds."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    fn = js[js.index("function sizeHeroFigures() {"): js.index("\n}", js.index("function sizeHeroFigures() {"))]
+    assert "const HERO_INK_PX = 40;" in js
+    assert "bb = g.getBBox();" in fn and "const ink = Math.max(bb.width, bb.height);" in fn, "the ink, not the square"
+    assert "const px = Math.round(HERO_INK_PX * vb.width / ink);" in fn
+    assert "g.style.width = px + 'px';" in fn and "g.style.height = px + 'px';" in fn
+    sync = js[js.index("function syncPageHero(s, chain, tv) {"): js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
+    assert "sizeHeroFigures();" in sync, "after every navigation, on whichever head the page drew"
+    assert ".page-hero-glyph { flex: none; width: 60px;" in css, "room for the widest box the ink calls for"
+    assert ".page-hero-figured > .page-path { flex: 1 0 100%; padding-left: 76px; }" in css, "the path keeps the text's edge"
+    assert ".page-hero-body { flex: 1 1 0; min-width: 0; }" in css, "a long sentence shrinks beside the figure, never drops under it"
+
+
 def test_only_a_number_that_opens_a_step_lights_up_under_the_pointer() -> None:
     """The map's step numbers are doors: each opens its step, so each lights up under the pointer. The
     Happy Path writes the same class on a step's rank, which opens nothing — and it went grey under the
