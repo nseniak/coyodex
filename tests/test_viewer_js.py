@@ -3631,12 +3631,19 @@ def test_the_path_starts_at_the_view_and_never_at_a_level_inside_it() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     crumbs = js[js.index("  crumb.innerHTML = '';"):]
     crumbs = crumbs[: crumbs.index("\n}")]
-    assert "chain.shift()" not in crumbs, "the view's own name leads the trail; nothing trims it"
-    assert "const empty = !chain.length;" in crumbs
-    assert "classList.toggle('hint-empty', empty)" in crumbs
-    assert "h.className = 'sr-only';" in crumbs
-    assert "document.createElement(cur ? 'h1' : 'button')" in crumbs
-    assert "crumbsep" in crumbs and "aria-hidden" in crumbs
+    # NO TRAIL ROW. The path is the HEAD's first line (pagePathHtml, placed by syncPageHero): every
+    # ancestor from the view down to the parent, each a link, then a closing › — the page itself is the
+    # head's name line. The row stays in the document, collapsed, holding the page's name as the h1 a
+    # screen reader hears. A row of its own repeated the name 36px above the head, and a row showing
+    # only the middle of the path came and went between screens.
+    assert "classList.add('hint-empty')" in crumbs and "h.className = 'crumbseg cur sr-only';" in crumbs
+    assert "crumbsep" not in crumbs and "createElement('button')" not in crumbs, "the row draws no path"
+    path = js[js.index("function pagePathHtml(chain) {"): js.index("\n}", js.index("function pagePathHtml(chain) {"))]
+    assert "const parents = (chain || []).slice(0, -1);" in path, "parents only: the page is the name line"
+    assert "if (!parents.length) return '';" in path, "a landing has no parents and draws no line"
+    place = js[js.index("function placePagePath(chain) {"): js.index("\n}", js.index("function placePagePath(chain) {"))]
+    assert "#diaghead .page-hero, #pagehero .page-hero, #diagram .page-hero" in place, "whichever head the page drew"
+    assert "hero.insertAdjacentHTML('afterbegin', html);" in place, "…as its first line, above the figure's row"
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert ".hint.hint-empty { padding: 0; border-bottom: 0; }" in css and ".sr-only {" in css
     # No page draws its own name.

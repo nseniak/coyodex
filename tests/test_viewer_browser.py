@@ -106,7 +106,7 @@ def _page(url: str, stylesheet: str | None = None) -> Iterator[Any]:
             page.route("**/static/viewer.css", lambda route: route.fulfill(
                 status=200, content_type="text/css", body=stylesheet))
         page.goto(url)
-        page.wait_for_selector("#crumb")
+        page.wait_for_selector("#crumb h1", state="attached")
         page.evaluate("() => { const b = document.getElementById('coachok'); if (b) b.click(); }")
         try:
             yield page
@@ -130,7 +130,7 @@ def test_a_reload_comes_back_to_the_screen_you_were_on() -> None:
         _settle(page)
         assert page.evaluate("() => location.hash") == "#v=glossary"
         page.reload()
-        page.wait_for_selector("#crumb")
+        page.wait_for_selector("#crumb h1", state="attached")
         _settle(page)
         assert page.evaluate("() => location.hash") == "#v=glossary"
         assert "Glossary" in _crumb(page)
@@ -442,7 +442,7 @@ def test_the_walk_keeps_the_step_a_link_named_in_the_address() -> None:
         _settle(page)
         assert page.evaluate("() => location.hash") == "#v=hp&sel=hpstep%3AHP12"
         page.reload()
-        page.wait_for_selector("#crumb")
+        page.wait_for_selector("#crumb h1", state="attached")
         _settle(page)
         seen = page.evaluate("""() => {
             const el = document.querySelector('.flow-step[data-step="HP12"]');
@@ -1034,7 +1034,8 @@ def test_a_click_without_both_keys_is_an_ordinary_click() -> None:
         _settle(page)
         pop = page.evaluate(_READ_POP_JS)
         assert not pop["open"], pop
-        assert "Features" in _crumb(page), _crumb(page)
+        # The way here reads in the head's path line: this feature's page sits under Features.
+        assert page.evaluate("() => [...document.querySelectorAll('.page-path-seg')].map((e) => e.textContent)") == ["Features"]
         assert not page.js_errors, page.js_errors
 
 
@@ -1567,7 +1568,7 @@ def test_a_surfaces_wire_lands_on_the_product_in_a_NARROW_window() -> None:
     with _served_map(_two_sided_interfaces()) as url, _page(url + "#v=interfaces") as page:
         page.set_viewport_size({"width": 900, "height": 900})
         page.reload()
-        page.wait_for_selector("#crumb")
+        page.wait_for_selector("#crumb h1", state="attached")
         _settle(page)
         got = _wire_ends_on_the_product(page)
         assert got["wires"] == 2, got

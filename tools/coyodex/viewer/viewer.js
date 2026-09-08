@@ -6874,6 +6874,30 @@ function landingHeadHtml(view) {
   // `landing-head`: the title takes the size an item page's name has, since this is the page's title.
   return `<div class="landing-head">${itemSectionHeadHtml(name, n, q)}</div>`;
 }
+// THE PATH TO THE PAGE, as the first line of its head: every ancestor from the view down to the
+// parent, each a link, then a closing ›. The page itself is the head's name line, so it is not here.
+// The first item repeats the lit tab on purpose, as GOV.UK keeps "Home": a path that starts half way
+// reads as a mistake. A landing has no parents and draws no line.
+function pagePathHtml(chain) {
+  const parents = (chain || []).slice(0, -1);
+  if (!parents.length) return '';
+  return '<nav class="page-path" aria-label="Path to this page">'
+    + parents.map((node, i) => `<button type="button" class="page-path-seg" data-path="${i}">${esc(stateTitle(node))}</button>`
+        + '<span class="page-path-sep" aria-hidden="true">\u203a</span>').join('')
+    + '</nav>';
+}
+function placePagePath(chain) {
+  document.querySelectorAll('.page-path').forEach((e) => e.remove());
+  const html = pagePathHtml(chain);
+  if (!html) return;
+  const hero = document.querySelector('#diaghead .page-hero, #pagehero .page-hero, #diagram .page-hero');
+  if (!hero) return;
+  // ABOVE the figure's row, not inside the text column: the figure centres on the name and the
+  // sentence alone, and the line is indented to the text's left edge by the stylesheet.
+  hero.insertAdjacentHTML('afterbegin', html);
+  hero.querySelectorAll('.page-path-seg').forEach((b) =>
+    b.addEventListener('click', () => go(chain[+b.dataset.path])));
+}
 function syncPageHero(s, chain, tv) {
   const walk = isFlowState(s);
   const id = heroSubjectId(s);
@@ -6916,6 +6940,7 @@ function syncPageHero(s, chain, tv) {
   host.innerHTML = html;
   host.hidden = !html;
   if (inHead) { diaghead.innerHTML = inHead; diaghead.hidden = false; }
+  placePagePath(chain);
   if (!html) return;
   bindElementCards(host);   // the `In feature …` line is a door, here as on a card
   host.querySelectorAll('[data-goelement]').forEach((b) =>
@@ -7802,48 +7827,17 @@ function renderChrome(s) {
   // breadcrumb: the structural nesting from the VIEW down to this page; each ancestor crumb zooms out
   // to it. The bar is always there, because its first segment is always the view.
   crumb.innerHTML = '';
-  // The path from the open view down. The GROUP is never here — "Product" is a set of tabs, not a page
-  // you can be on — but the view itself is: it is a page, it is where the trail starts, and clicking
-  // it is the way up that does not read as leaving.
-  //
-  // The LAST item is the page's own name, so it is the document's h1 and no page draws a heading. When
-  // the row collapses that h1 would go with it, leaving the document untitled — so the view's name
-  // takes its place, readable by a screen reader and invisible on screen, where the tab already has it.
-  // The view's own name LEADS the trail, always. It used to be dropped as an echo of the lit tab,
-  // but the tab is a control and the trail is a place: a page one level in then began mid-path, and
-  // the reader's way back to the view's own landing screen was the tab, which reads as "leave" rather
-  // than "go up". Every chain therefore starts at its view, and the row never collapses.
-  const empty = !chain.length;   // no chain is empty today; the guard keeps the document titled
-  if (crumb.parentElement) crumb.parentElement.classList.toggle('hint-empty', empty);
-  if (empty) {
-    const h = document.createElement('h1');
-    h.className = 'sr-only';
-    h.textContent = stateTitle({ kind: topView(s.kind, s.id) });
-    crumb.appendChild(h);
-    return;
-  }
-  chain.forEach((node, i) => {
-    if (i) {
-      const sep = document.createElement('span');
-      sep.className = 'crumbsep';
-      sep.setAttribute('aria-hidden', 'true');
-      sep.textContent = '\u203a';
-      crumb.appendChild(sep);
-    }
-    const cur = i === chain.length - 1;
-    // The current item is the page title: an h1, not a link. Everything above it is a button, because
-    // it does something when clicked and a screen reader should hear that.
-    const seg = document.createElement(cur ? 'h1' : 'button');
-    if (!cur) seg.type = 'button';
-    seg.className = 'crumbseg' + (cur ? ' cur' : '');
-    seg.textContent = stateTitle(node);
-    if (!cur) seg.addEventListener('click', () => go(node));
-    crumb.appendChild(seg);
-    // NO PILLS HERE. They rode the breadcrumb for a while, beside the last crumb, and the trail is the
-    // wrong home for them: it says WHERE YOU ARE, one step per level, and a word describing the thing
-    // at the end of it is not a step. They sit on the hero's name row now, which is the shape every
-    // card in the viewer already uses — the name, then what kind of thing it is.
-  });
+  // NO TRAIL ROW. The path is drawn IN THE PAGE HEAD, above the page's name (pagePathHtml, placed by
+  // syncPageHero): parents only, each a link, the way GOV.UK and Carbon draw a breadcrumb over an H1.
+  // A row of its own repeated the page's name 36px above the head that names it, and repeated the
+  // lit tab as its first item; and a row that showed only the middle of the path came and went
+  // between screens. The row stays in the document, collapsed, holding the page's name as the
+  // document's h1 for a screen reader and the window title — never drawn twice on screen.
+  if (crumb.parentElement) crumb.parentElement.classList.add('hint-empty');
+  const h = document.createElement('h1');
+  h.className = 'crumbseg cur sr-only';
+  h.textContent = stateTitle(chain[chain.length - 1] || { kind: tv });
+  crumb.appendChild(h);
   // Every path through render() ends here, so this is the ONE place the URL has to be restated after a
   // screen is drawn. The identity test skips the drill animation's intermediate flashes, which render a
   // throwaway state that is not where the reader ends up.
