@@ -46,7 +46,8 @@ Two phases, split where the ONE judgement input sits:
                    then stop, so the note is written FROM the report.
   --note-file    : the full tail through finalize. --partial / --keep-note /
                    --note-cites-other-runs forward to `grounding write`;
-                   --access-baseline forwards to `finalize`.
+                   --access-baseline forwards to `finalize`; without it, the newest archived map under
+                   .coyodex/dev-rebuilds/ is used when one exists.
 
 --note-cites-other-runs says the figures in the note are about OTHER runs, or are scoped
 to one theme. `grounding write` REFUSES a note whose numbers contradict its own record;
@@ -88,6 +89,18 @@ class ShipInputs:
     behavioural: bool = False
 
 
+def newest_archived_map(out: Path) -> Path | None:
+    """The map the last `coyodex-eval archive` filed under `dev-rebuilds/NNNN/`, or None.
+
+    The archive is the coyodex developer's convention (a user of coyodex never has it), and its
+    numbers are zero-padded, so text order is recency. `finalize --access-baseline` exists for
+    exactly this map — files that held ACCESS enforcement there and are named by no rule now — and
+    the 2026-09-08 mcpolis build never ran it, because nothing in the closing sequence asked:
+    19 of 60 such files went unnamed while the hard gate beside them failed."""
+    maps = sorted((out / "dev-rebuilds").glob("[0-9]*/project-map.json"))
+    return maps[-1] if maps else None
+
+
 def derive_inputs(repo: Path,
                   note_file: Path | None = None,
                   partial: bool = False,
@@ -123,6 +136,8 @@ def derive_inputs(repo: Path,
     rec_final: Path | None = rec if rec.is_file() else None
     from coyodex.grounding import worklist_is_behavioural   # lazy, like `_dispatch`
     behavioural = worklist_is_behavioural(wl)
+    if access_baseline is None:
+        access_baseline = newest_archived_map(out)
     return ShipInputs(
         repo=repo, out=out, map_path=out / "project-map.json", fragments=frags,
         reconcile=rec_final, worklist=wl, verdicts=vd,

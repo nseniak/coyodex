@@ -365,3 +365,24 @@ def test_step_2_counts_drift_coverage_at_the_pinned_worklists_tier():
             encoding="utf-8")
         step2 = ship.build_plan(make_inputs(repo))[0]
         assert step2.argv[0] == "anchor-drift" and "--with-behavioural" in step2.argv, step2
+
+
+def test_the_newest_archived_map_is_the_access_baseline_unless_one_is_given():
+    """`finalize --access-baseline` exists for the map an archive filed, and the 2026-09-08 build
+    never ran it because nothing in the closing sequence asked. The newest `dev-rebuilds/NNNN/` map
+    is the default; an explicit flag still wins; a repo with no archive passes nothing."""
+    with tempfile.TemporaryDirectory() as td:
+        repo = make_repo(td)
+        note = repo / "note.txt"
+        note.write_text("n")
+        for n in ("0002", "0010"):
+            d = repo / ".coyodex" / "dev-rebuilds" / n
+            d.mkdir(parents=True)
+            (d / "project-map.json").write_text("{}")
+        fin = ship.build_plan(make_inputs(repo, note_file=note))[-1].argv
+        assert fin[0] == "finalize" and "--access-baseline" in fin
+        assert fin[fin.index("--access-baseline") + 1].endswith("dev-rebuilds/0010/project-map.json")
+        mine = repo / "old.json"
+        mine.write_text("{}")
+        fin = ship.build_plan(make_inputs(repo, note_file=note, access_baseline=mine))[-1].argv
+        assert fin[fin.index("--access-baseline") + 1] == str(mine)

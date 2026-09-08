@@ -1826,3 +1826,30 @@ def test_a_field_nobody_asked_for_is_still_refused(monkeypatch, capsys):
     err = capsys.readouterr().err
     assert "has no field(s) porpoise" in err, err
     assert "may be ADDED" in err, "the refusal should name the fields that CAN be added"
+
+
+def test_apply_drift_refuses_a_correction_into_a_file_neither_end_of_the_edge_lists(capsys):
+    """One live build rewrote 22 anchors with no file opened, and one landed `C99 tests C41` in a
+    file a third component lists. A corrected file that neither end of the edge lists in `files`
+    is refused before either write path; a file the far end lists is a legitimate cross-file move."""
+    m = make_map([{"src": "C1", "verb": "reads", "dst": "C2", "where": "a.py:10"}])
+    m["components"] = [{"id": "C1", "name": "A", "source": "a.py:1", "files": ["a.py"]},
+                       {"id": "C2", "name": "B", "source": "b.py:1", "files": ["b.py"]}]
+    stray = {"grounding": [make_vote("C1 reads C2", True, "z.py:3"),
+                           make_vote("C1 reads C2", True, "z.py:3")]}
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = write(td, m, stray)
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
+        assert load_model_path(mp).edges[0].where == "a.py:10", "a stray file must not be written"
+        err = capsys.readouterr().err
+        assert "REFUSED" in err and "z.py:3" in err and "C1, C2" in err, err
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0",
+                         "--to-reconcile", str(rec)]) == 0
+        assert not (rec.exists() and "z.py" in rec.read_text()), "nor recorded for assemble to replay"
+    far_end = {"grounding": [make_vote("C1 reads C2", True, "b.py:3"),
+                             make_vote("C1 reads C2", True, "b.py:3")]}
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = write(td, m, far_end)
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
+        assert load_model_path(mp).edges[0].where == "b.py:3"

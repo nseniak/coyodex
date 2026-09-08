@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Sequence, TypeVar
 
 from coyodex import balance_lib, prose, records, grammar
-from coyodex.anchors import FILEREF as _FILEREF
+from coyodex.anchors import FILEREF as _FILEREF, strip_anchor
 from coyodex.model import (
     resolve_map_path,
     ProjectModel,
@@ -389,6 +389,47 @@ def _move_note(claim: str, before: str | None, after: str) -> str:
         return (f"  NOTE: {claim}: the anchor moved {abs(a - b)} lines within {new_file} — further "
                 f"than a drift repair usually goes; read the new line before shipping.")
     return ""
+
+
+def _files_hold(files: list[str], path: str) -> bool:
+    """`path` is one of `files`, or sits inside a directory entry (`src/dir/`)."""
+    return any(path == f or (f.endswith("/") and path.startswith(f)) for f in files)
+
+
+def cross_file_refusals(m: ProjectModel, corrections: list[tuple[str, str]],
+                        ) -> tuple[list[tuple[str, str]], list[str]]:
+    """The corrections that may be written, and one note per correction REFUSED because it would
+    move an edge's anchor into a file neither end of the edge lists in `files`.
+
+    A cross-file move is legitimate when the operative line lives in a module one endpoint owns —
+    a call made from a sibling module, a rule's enforcing line. When the corrected file belongs
+    to NEITHER end, the anchor leaves the component's own code: on one live build `apply-drift`
+    rewrote 22 anchors with no file opened, and one put `C99 tests C41` in a file that a third
+    component lists; `validate --check-sources` passed because the path resolves, and `_move_note`
+    reported the move to a reader who was not reading. An endpoint that lists no files makes no
+    claim about any file, so a correction is refused only when at least one end lists files and
+    none of them holds the corrected one. Runs before BOTH write paths (in place and
+    `--to-reconcile`), so a refused correction never reaches `set_anchors` either."""
+    by_id = {c.id: c for c in m.components}
+    kept: list[tuple[str, str]] = []
+    notes: list[str] = []
+    for claim, corrected in corrections:
+        t = resolve_claim(m, claim).target
+        if t is None or t.kind != "edge" or not corrected:
+            kept.append((claim, corrected))
+            continue
+        e = m.edges[t.idx]
+        ends = [end for end in (e.src, e.dst) if end in by_id]
+        files = [f for end in ends for f in by_id[end].files]
+        new_file = strip_anchor(corrected)
+        if files and new_file and not _files_hold(files, new_file):
+            notes.append(f"WARNING: '{claim}': the corrected anchor {corrected} is in a file that "
+                         f"neither end of the edge lists in `files` ({', '.join(ends)}) — REFUSED, not "
+                         f"written. Open it: extend that component's `files` if the call really "
+                         f"lives there, or re-anchor by hand.")
+            continue
+        kept.append((claim, corrected))
+    return kept, notes
 
 
 def apply_anchor_corrections(m: ProjectModel,

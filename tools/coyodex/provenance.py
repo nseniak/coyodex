@@ -36,6 +36,10 @@ class SessionEntry:
     mode: str                         # build | accept | rebuild
     code_commit: str | None = None    # short sha of the analyzed repo at build time
     code_committed: str | None = None  # that commit's date, YYYY-MM-DD
+    #: The coyodex clone that built it, as `assemble` stamps the map header — but a later repair
+    #: re-assembles and re-stamps the header, so the header names the repair's tool, not the
+    #: build's. The retro's check range needs the build's, and this is where it survives.
+    tool_commit: str | None = None
 
     @staticmethod
     def from_dict(d: dict[str, object]) -> "SessionEntry":
@@ -53,6 +57,7 @@ class SessionEntry:
             mode=s("mode") or "build",
             code_commit=opt("code_commit"),
             code_committed=opt("code_committed"),
+            tool_commit=opt("tool_commit"),
         )
 
 
@@ -160,6 +165,15 @@ def dirty_paths(repo: Path) -> tuple[str, ...]:
     return tuple(line[3:].strip() for line in (status or "").splitlines() if line.strip())
 
 
+def tool_commit_here() -> str | None:
+    """The coyodex clone this command runs from, spelled as `assemble` spells the map header's
+    `tool_commit` (`git describe --always --dirty`), or None under an ordinary install."""
+    home = Path(__file__).resolve().parents[2]
+    if not (home / ".git").exists():
+        return None
+    return git_value(home, "describe", "--always", "--dirty", "--abbrev=7")
+
+
 def pin_sha(repo: Path) -> str | None:
     """HEAD's short sha, with the `-dirty` suffix when the working tree carries uncommitted code.
 
@@ -202,6 +216,7 @@ def stamp(repo: Path, mode: str = "build", session_id: str | None = None,
         mode=mode,
         code_commit=pin_sha(repo),
         code_committed=git_value(repo, "show", "-s", "--format=%cs", "HEAD"),
+        tool_commit=tool_commit_here(),
     )
     path = coyodex_dir / PROVENANCE_NAME
     try:

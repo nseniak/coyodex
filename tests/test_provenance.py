@@ -16,7 +16,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.provenance import Provenance, main, stamp
+from coyodex.provenance import Provenance, main, stamp, tool_commit_here
 
 
 def make_repo(td: str) -> Path:
@@ -35,7 +35,8 @@ def test_stamp_writes_the_file_finalize_requires():
         assert doc["schema"] == "coyodex-provenance/v1"
         assert doc["project"] == "proj"
         assert doc["sessions"] == [{"session_id": "sess-1", "built_at": "2026-08-02 18:00",
-                                    "mode": "build", "code_commit": None, "code_committed": None}]
+                                    "mode": "build", "code_commit": None, "code_committed": None,
+                                     "tool_commit": tool_commit_here()}]
         assert entry.session_id == "sess-1"
 
 
@@ -193,3 +194,15 @@ def test_the_method_prescribes_the_flag_rather_than_a_hand_write():
     for banned in ("put that exact minute in header.json",
                    "put THAT string in header.json"):
         assert banned not in method, banned
+
+
+def test_stamp_records_the_tool_commit_the_retro_needs():
+    """The map header's `tool_commit` is re-stamped by any later repair; the retro's check range
+    needs the BUILD's tool commit, and the session entry is where it survives."""
+    from coyodex.provenance import Provenance, tool_commit_here
+    with tempfile.TemporaryDirectory() as td:
+        repo = make_repo(td)
+        path, entry, _warnings = stamp(repo, session_id="sess-1", built_at="2026-08-02 18:00")
+        assert entry.tool_commit == tool_commit_here()
+        assert isinstance(entry.tool_commit, str) and entry.tool_commit, "this package sits in a clone"
+        assert Provenance.load(path).sessions[-1].tool_commit == entry.tool_commit

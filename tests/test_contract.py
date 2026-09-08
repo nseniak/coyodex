@@ -446,3 +446,14 @@ def test_a_component_budget_is_NOT_judged_by_the_slice_kind_text():
                  "deployment scripts and the CI workflow", "the entity store adapters",
                  "T5 entities"):
         fill("harvest", _harvest_values(SLICE_KIND=kind, EXPECTED_COMPONENTS="7"))
+
+
+def test_a_path_in_a_batch_id_slot_is_refused() -> None:
+    """The contract composes `claims-«CLAIMS».json` and `verdicts-«BATCH».json` itself; a path in
+    either slot names a file that exists nowhere, in every brief — 38 of 38 on one build."""
+    values = make_slot_values("skeptic")
+    values["CLAIMS"] = ".coyodex/verify/claims-backbone-1.json"
+    with pytest.raises(ValueError, match="looks like a path"):
+        contract.fill("skeptic", values)
+    values["CLAIMS"], values["BATCH"] = "backbone-1", "backbone-1a"
+    assert "«" not in contract.fill("skeptic", values)

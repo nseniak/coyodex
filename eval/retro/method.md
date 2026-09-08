@@ -271,7 +271,9 @@ due. Without it, a method change is verified only if someone remembers it existe
 Compute the commit range from data both ends already record:
 
 - **`old`** — the `tool_commit` of the PREVIOUS build: read it from the previous ledger
-  (`findings.json`, Step 0b) or, failing that, from the previous archived map. If neither exists,
+  (`findings.json`, Step 0b) or, failing that, from the previous archived map's `provenance.json`
+  (`sessions[-1].tool_commit`, stamped at build time — the map header's own `tool_commit` is
+  re-stamped by any later repair, which once cost a retro 5 of its 13 pending checks). If neither exists,
   there is no range: run every check file still active (not yet in `verified/`) and say so.
 - **`new`** — the `tool_commit` of the map being retro'd.
 

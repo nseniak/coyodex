@@ -42,6 +42,7 @@ from coyodex.assemble import load_fragment_paths, merge_fragments
 from coyodex.anchor_drift import (apply_drift_exceptions, drift_findings, drift_records,
                                   load_verdicts)
 from coyodex.audit_model import (EDGE_CLAIM as _EDGE_CLAIM, apply_anchor_corrections,
+                                 cross_file_refusals,
                                  l2_worklist_model, security_claim as _security_claim)
 from coyodex.model import ID_ARRAYS, ProjectModel, access_rules
 from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
@@ -245,6 +246,11 @@ def apply_drift(argv: list[str]) -> int:
             continue
         corrections.append((claim, rec.get("corrected") or ""))
     _report_stuck(unparseable, not_applicable)
+    # Before EITHER write path: a correction refused here reaches neither the map nor the
+    # reconcile file's `set_anchors`, which `assemble` would otherwise replay on every rebuild.
+    corrections, refused = cross_file_refusals(m, corrections)
+    for n in refused:
+        print(n, file=sys.stderr)
     if to_reconcile:
         # DURABLE. Writing anchors into the ASSEMBLED map is exactly what the note below warns
         # about, and a live build walked into it: 14 anchors corrected here, the map re-assembled to
@@ -269,6 +275,9 @@ def apply_drift(argv: list[str]) -> int:
     # with `| tail -12`, so a total that is not on the final line is a total the reader never sees.
     tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (named above) and still "
             f"unreconciled." if stuck else "")
+    if refused:
+        tail += (f" {len(refused)} cross-file correction(s) REFUSED (named above): the corrected "
+                 f"file belongs to neither end of its edge.")
     # `sum(counts.values())`, not a hand-listed disjunction — `reconcile.py` already does it that
     # way, and the hand-listed one silently stopped writing the file the moment a fourth writer
     # existed: the correction applied in memory, printed, and was never persisted.

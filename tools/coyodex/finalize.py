@@ -652,7 +652,9 @@ def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
             f"stays so a reader can see what the escape forgave. It clears when the rules cover "
             f"those files again, or when the records are deleted. A recorded gap is still a gap — "
             f"re-read one by validating a copy with its line removed."])
-    listed = shown(lost, 8, unit="file(s)")
+    # Every file, never a `+N more`: this list IS the reading list, and a build that ran the leg
+    # would have seen 8 of its 19 names.
+    listed = ", ".join(lost)
     return Leg("access baseline", RAN, advisory=[
         f"{len(lost)} of {len(base)} file(s) that held ACCESS enforcement in {baseline.name} are "
         f"named by NO access rule in this map: {listed}. The code may be unchanged — check each one "

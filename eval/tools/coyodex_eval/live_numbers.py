@@ -323,7 +323,7 @@ LEDGER: tuple[Claim, ...] = (
                 "they are noise.",
           measure=_dashboard_steps,
           note="why interface steps are grouped by story"),
-    Claim(site="tools/coyodex/viewer/viewer.js:12737", maps=("mcpolis",),
+    Claim(site="tools/coyodex/viewer/viewer.js:12739", maps=("mcpolis",),
           quote="mcpolis's dashboard draws 141 of them from 31 different walks, and read as one "
                 "list they are noise.",
           measure=_dashboard_steps_viewer,
@@ -338,7 +338,7 @@ LEDGER: tuple[Claim, ...] = (
                 "claim.",
           measure=_rule_sites_short,
           note="the same fact, second site"),
-    Claim(site="tools/coyodex/audit_model.py:1260", maps=("mcpolis",),
+    Claim(site="tools/coyodex/audit_model.py:1301", maps=("mcpolis",),
           quote="One role drove 25 use cases at mcpolis's dashboard",
           measure=_role_use_cases_at_dashboard,
           note="why a detail line is capped through `shown` and never by hand"),

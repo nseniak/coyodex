@@ -194,6 +194,16 @@ def _slot_content_faults(name: str, values: dict[str, str]) -> list[str]:
             f"map-section name ('T5 domain model') reads like an answer and is not one: all 14 "
             f"briefs on one build filled it that way, and the harvest came back with components "
             f"carrying no backbone edge at all")
+    # A batch id filled with a PATH. The skeptic contract composes `.coyodex/verify/claims-«CLAIMS».json`
+    # and `verdicts-«BATCH».json` from these two, so a path here builds a file name that exists
+    # nowhere — 38 of 38 briefs on one build named `claims-/Users/…/claims-backbone-1.json.json`.
+    for key in ("BATCH", "CLAIMS"):
+        v = (values.get(key) or "").strip()
+        if v and ("/" in v or v.lower().endswith(".json")):
+            faults.append(
+                f"«{key}» looks like a path, not an id: {v[:80]!r}. The contract composes "
+                f"`.coyodex/verify/claims-«CLAIMS».json` and `verdicts-«BATCH».json` from these, so "
+                f"each is the bare batch id between `claims-` and `.json` (`backbone-1`)")
     # NOT CHECKED HERE: a component budget on a slice that authors no components. It was written,
     # and it is reverted. `«SLICE_KIND»` is FREE TEXT — a real value is a sentence — so matching it
     # against words like `config` or `entit` refuses legitimate structural slices: "config loading
