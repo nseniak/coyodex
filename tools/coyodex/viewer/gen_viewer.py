@@ -842,13 +842,11 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     entities (full attributes), every OTHER subdomain its entities relate to drawn as a collapsed
     member-less box (one per neighbour subdomain, labelled `Name (N)`), the focal subdomain's internal
     relations drawn in full, and one arrow (labelled by its count of crossing relations) per (focal
-    entity, neighbour subdomain) pair. It ALSO draws the structure↔domain bridge in reverse: every
-    subsystem whose components touch one of these entities is drawn as a collapsed (indigo) box with an
-    arrow into that entity labelled by the count of underlying C→E edges — the mirror of the subsystem
-    card's subdomain bridge. The entity analog of gen_subsystem_card_mermaid
+    entity, neighbour subdomain) pair. NO subsystem boxes (see the note in the body): the structure↔domain
+    bridge is drawn from the subsystem card's side only. The entity analog of gen_subsystem_card_mermaid
     — each screen stays small no matter the total model size, neighbours stay collapsed, and the viewer
-    turns a click on a neighbour subdomain box into that subdomain's card, a neighbour subsystem box into
-    that subsystem's card, and a click on a cross arrow into the two-subdomain edge card. Node ids +
+    turns a click on a neighbour subdomain box into that subdomain's card, and a click on a cross arrow
+    into the two-subdomain edge card. Node ids +
     relation shapes match the flat Domain view, so the class/relation bridge resolves a click to the
     entity panel or the relation detail."""
     members = _entities_of(graph, sdid)          # direct child entities (drawn full)

@@ -6934,7 +6934,7 @@ const BOARD_HEAD = {
   subsystem: (id) => ['Subsystem map', memberCount('component', id, 'component'),
     'The components inside this subsystem, and the subsystems, subdomains and outside services they touch.'],
   domsub: (id) => ['Subdomain map', memberCount('entity', id, 'entity', 'entities'),
-    'The entities this subdomain keeps, with their fields, and the subdomains and subsystems they are tied to.'],
+    'The entities this subdomain keeps, with their fields, and the other subdomains they relate to.'],
   deploymentUnit: () => ['Process map', '',
     'What this process runs, and the stores and message brokers it uses.'],
 };
