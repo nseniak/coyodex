@@ -734,16 +734,16 @@ ELEMENT_TINT = {
 }
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
-    """Domain Container altitude: each top-level subdomain (`SD`) a box labelled `Name (N)` (N = its
-    entity count), with inter-subdomain arrows DERIVED from the E→E relation list (a `SDa → SDb` arrow
+    """Domain Container altitude: each top-level subdomain (`SD`) an ITEM BOX — a slot the viewer fills
+    with the same box every other picture draws (see gen_flow_map_mermaid), its record count in the
+    box's band — with inter-subdomain arrows DERIVED from the E→E relation list (a `SDa → SDb` arrow
     exists iff a domain relation crosses, labelled by count). The exact mirror of
     gen_container_mermaid for components — the scalable entry point into a large domain model."""
-    lines = ["flowchart TB"]
+    lines = [SLOT_MAP_INIT, "flowchart TB"]  # no node padding: the boxes carry their own, arrows stop on them
     for nid, node in graph["nodes"].items():
         if str(node["kind"]) == "subdomain" and _parent_of(graph, nid) is None:
-            n_ent = _descendant_entity_count(graph, nid)
-            lines.append(f'  {nid}["{_safe_label(str(node["name"]))} ({n_ent})"]:::cy-{nid}')
-            lines.append(f"  class {nid} subdomain")
+            lines.append(f'  {nid}["{_slot("subdomain", "compact", nid)}"]:::cy-{nid}')
+            lines.append(f"  class {nid} itembox")
     counts: dict[tuple[str, str], int] = {}
     for e in _domain_relation_edges(graph):
         ca, cb = _top_subdomain(graph, str(e["src"])), _top_subdomain(graph, str(e["dst"]))
@@ -751,7 +751,7 @@ def gen_domain_container_mermaid(graph: GraphDict) -> str:
             counts[(ca, cb)] = counts.get((ca, cb), 0) + 1
     for (ca, cb), c in sorted(counts.items()):
         lines.append(f"  {ca} -->{_count_label(c)} {cb}")
-    lines.append(DOMAIN_SUBDOMAIN_CLASSDEF)
+    lines.append(ITEM_SLOT_CLASSDEF)
     return "\n".join(lines)
 
 
@@ -822,10 +822,10 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
     for eid, _ in members:
         out += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, True,
                                 _dep_name_map(graph))
-    for cid, cname in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed, drillable
+    for cid, _ in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed item boxes, drillable
         if keep is not None and cid not in keep:
             continue
-        out.append(f'  class {cid}["{_safe_label(cname)} ({_descendant_entity_count(graph, cid)})"]')
+        out.append(f'  class {cid}["{_slot("subdomain", "compact", cid)}"]')
     out.append("}")
     for eid, _ in members:  # tint each focal entity (light fuchsia member); `style` lives OUTSIDE the namespace
         out.append(f"  style {eid} {ENTITY_STYLE}")
@@ -889,12 +889,13 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
                 cross[(nb, bd)] = cross.get((nb, bd), 0) + 1
                 nb_sds.add(nb)
     lines = ["classDiagram", *_subdomain_namespace(graph, sdid, members)]
-    for cid in sorted(child_sd_ids):  # style the nested child-subdomain boxes (declared inside the namespace)
-        lines.append(f"  style {cid} {SUBDOMAIN_STYLE}")
-    for nb in sorted(nb_sds):  # collapsed neighbour-subdomain boxes (member-less, count-labelled)
-        n_ent = _descendant_entity_count(graph, nb)
-        lines.append(f'  class {nb}["{_safe_label(str(nodes[nb]["name"]))} ({n_ent})"]')
-        lines.append(f"  style {nb} {SUBDOMAIN_STYLE}")  # fuchsia — same as a subdomain box anywhere else
+    # A COLLAPSED SUBDOMAIN IS AN ITEM BOX, here as on the Domain overview: the class draws no shape of
+    # its own (ITEM_SLOT_STYLE) and the viewer swaps the box into its label, count in the band.
+    for cid in sorted(child_sd_ids):  # the nested child-subdomain boxes (declared inside the namespace)
+        lines.append(f"  style {cid} {ITEM_SLOT_STYLE}")
+    for nb in sorted(nb_sds):  # collapsed neighbour-subdomain boxes
+        lines.append(f'  class {nb}["{_slot("subdomain", "compact", nb)}"]')
+        lines.append(f"  style {nb} {ITEM_SLOT_STYLE}")
     # NO SUBSYSTEM BOXES. An entity diagram draws entities and the subdomains that hold them, and nothing
     # else. It used to add a collapsed box for every subsystem whose components touch one of these
     # entities, which put two different kinds of thing on one canvas: a reader could not tell whether an
@@ -951,7 +952,7 @@ def gen_domain_edge_card(graph: GraphDict, a: str, b: str) -> str:
              *_subdomain_namespace(graph, b, [x for x in ents_b if x[0] in drawn], keep=drawn)]
     for cid, _ in _child_subdomains(graph, a) + _child_subdomains(graph, b):  # style the child boxes drawn in the frames
         if cid in drawn:
-            lines.append(f"  style {cid} {SUBDOMAIN_STYLE}")
+            lines.append(f"  style {cid} {ITEM_SLOT_STYLE}")  # an item box, as on the subdomain card
     # No subsystem boxes here either — see gen_domain_subdomain_card. Entities and subdomains only.
     for e in _domain_relation_edges(graph):  # a frame's inner wiring, between two entities both drawn
         s, d = str(e["src"]), str(e["dst"])
@@ -2968,9 +2969,15 @@ def flow_client_roles(graph: GraphDict, steps: list[dict[str, Any]]) -> set[str]
 #: The label therefore holds no markup the engine's own label syntax could choke on: one span, three
 #: unquoted attributes, no angle brackets and no quotes of ours. `data-id` is URL-encoded because an
 #: actor's is a NAME, and a name may hold anything.
-FLOW_MAP_SLOT_CLASSDEF = "  classDef itembox fill:none,stroke:none;"
-# 2, not 0: an arrowhead lands ON the border at 0 and its point sits inside the box's own rule.
-FLOW_MAP_INIT = "%%{init: {'flowchart': {'padding': 2}}}%%"
+# A SLOT NODE DRAWS NO SHAPE OF ITS OWN: the item box the viewer swaps in is the box. `ITEM_SLOT_CLASSDEF`
+# is the flowchart form (a class every slot node is tagged with), `ITEM_SLOT_STYLE` the classDiagram form
+# (one `style` line per class), because the two diagram types take their styling differently.
+ITEM_SLOT_CLASSDEF = "  classDef itembox fill:none,stroke:none;"
+ITEM_SLOT_STYLE = "fill:none,stroke:none"
+# 2, not 0: an arrowhead lands ON the border at 0 and its point sits inside the box's own rule. Every
+# flowchart drawn from item-box slots leads with this (the use case map, the Data overview); a
+# classDiagram cannot, and the viewer closes that one's gap itself (see fillItemSlots).
+SLOT_MAP_INIT = "%%{init: {'flowchart': {'padding': 2}}}%%"
 
 
 def _slot(kind: str, variant: str, ident: str, pill: str = "") -> str:
@@ -3080,10 +3087,10 @@ def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     # every arrowhead ended 30 units short of the box it points at, and the drawing paid the width for
     # the gap. Set for this diagram alone, in its own source: on every other map a label is plain text
     # and needs the padding to stand off its border.
-    lines = [FLOW_MAP_INIT, "flowchart LR", *decls]
+    lines = [SLOT_MAP_INIT, "flowchart LR", *decls]
     for (a, b), ns in pairs.items():
         lines.append(f"  {a} -->|{_edge_label(_flow_map_arrow_label(ns))}| {b}")
-    lines.append(FLOW_MAP_SLOT_CLASSDEF)
+    lines.append(ITEM_SLOT_CLASSDEF)
     return "\n".join(lines)
 
 

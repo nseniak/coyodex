@@ -1097,8 +1097,15 @@ function itemSpecOf(id) {
   // A CONTAINER SAYS HOW MUCH IT HOLDS. It is the one number that makes "there is more inside this"
   // a quantity rather than a hint.
   if (n.kind === 'subsystem' || n.kind === 'subdomain') {
-    const kids = Object.values(GRAPH.nodes).filter((x) => x.parent === id).length;
-    if (kids) spec.band.push(kids + (n.kind === 'subsystem' ? ' components' : ' records'));
+    // EVERY LEAF UNDER IT, not its direct children: a nested area's children are areas, and counting
+    // them said "4 records" of an area holding 23. This is the number the Data boxes have always shown.
+    // "entities", not "records": the count takes every named thing in the area, and only some of
+    // those are saved records (the Data tab counts "82 entities" by the same rule).
+    const leaf = n.kind === 'subsystem' ? 'component' : 'entity';
+    const kids = Object.keys(GRAPH.nodes).filter((x) => GRAPH.nodes[x].kind === leaf && isAncestorOf(id, x)).length;
+    if (kids) spec.band.push(kids + (n.kind === 'subsystem' ? ' components' : ' entities'));
+    // A CONTAINER IS DASHED, as a shared sub-use case is: a dashed line says "there is more inside".
+    spec.dashed = true;
   }
   return spec;
 }
@@ -1144,6 +1151,14 @@ function slotSpec(k, id) {
   return itemSpecOf(id) || { id, k: itemKind(k), name: id, word: '', pills: [], facts: [],
                              band: [], chips: [] };
 }
+// THE CLASS DIAGRAM PADS EVERY BOX ITSELF — `class.padding`, 12 on each side — and has no per-class
+// override, so turning it off (as the flowchart's init does) would jam a record's field lines against
+// its border. A slot in one of these therefore asks for a box 24 smaller each way, and step 3 lays the
+// real box back over that padding with a negative margin: the invisible node and the item box then
+// share one outline, and an arrow that stops on the node stops on the box. Measured: the two
+// rectangles coincide to the pixel.
+const CLASS_PAD = 12;
+function isClassDiagramSrc(src) { return /^\s*(?:%%\{[\s\S]*?\}%%\s*)?classDiagram\b/.test(String(src || '')); }
 // Step 1 and 2: every slot in a drawing's source becomes a sized empty span, and its real HTML is
 // parked in `slotBoxes` for step 3.
 function expandItemSlots(src) {
@@ -1171,10 +1186,14 @@ function expandItemSlots(src) {
   });
   ruler.innerHTML = '';
   slotBoxes = built.map((html, i) => ({ html, w: (sizes[i] || [0, 0])[0], h: (sizes[i] || [0, 0])[1] }));
+  // `display:block`, not inline-block: an inline box sits on its line's baseline, and the line-height
+  // the engine sets on its label div keeps the descender's room under it — measured 6.5px of nothing
+  // below every box, which is where an arrow from below used to stop.
+  const pad = isClassDiagramSrc(src) ? CLASS_PAD : 0;
   return out.replace(/<span class=cyslot data-i=(\d+)><\/span>/g, (_m, i) => {
     const b = slotBoxes[+i] || { w: 0, h: 0 };
-    return `<span class=cyslot data-i=${i} style='display:inline-block;`
-      + `width:${b.w}px;height:${b.h}px'></span>`;
+    return `<span class=cyslot data-i=${i} data-pad=${pad} style='display:block;`
+      + `width:${Math.max(0, b.w - 2 * pad)}px;height:${Math.max(0, b.h - 2 * pad)}px'></span>`;
   });
 }
 // Step 3: the drawing is in the page, so each sized span becomes the box it was standing in for.
@@ -1182,7 +1201,15 @@ function fillItemSlots(root) {
   (root || document).querySelectorAll('span.cyslot[data-i]').forEach((slot) => {
     const b = slotBoxes[+slot.getAttribute('data-i')];
     if (!b) return;
+    const pad = +slot.getAttribute('data-pad') || 0;
+    const host = slot.parentNode;
     slot.outerHTML = b.html;
+    if (!pad || !host) return;
+    const box = host.querySelector('.ibox');
+    if (box) box.style.margin = `-${pad}px`;   // back over the engine's padding — see CLASS_PAD
+    let fo = host;   // the label's foreignObject clips to its own (shrunken) size unless told otherwise
+    while (fo && String(fo.tagName).toLowerCase() !== 'foreignobject') fo = fo.parentNode;
+    if (fo && fo.style) fo.style.overflow = 'visible';
   });
 }
 
@@ -2367,9 +2394,10 @@ function relationshipLocateAction(srcId, dstId) {
   return { kind: 'locate', title: 'Locate in ' + tab, run: () => go(target) };
 }
 function decorateActionIcons(scene, s) {
-  // NO ICONS ON A WALK. Every box's NAME opens what it names now, and the icon was the older way of
-  // saying so — a control floating in the corner of a box, in a language no other screen speaks.
-  if (isFlowState(s)) return;
+  // NO ICONS ON A WALK, NOR ON A DATA PICTURE. Every box's NAME opens what it names now, and the icon
+  // was the older way of saying so — a control floating in the corner of a box, in a language no other
+  // screen speaks.
+  if (isFlowState(s) || isDataPicture(s)) return;
   for (const id in scene.nodeEls) {
     if (scene.noAction.has(id)) continue;  // the box you're already zoomed into — no self-drill icon
     const action = primaryActionFor(id);
@@ -3031,7 +3059,13 @@ function arrowCardHtml(o) {
   const full = !o.drill;
   const shown = full ? rows : rows.slice(0, ARROW_CARD_ROWS);
   const rest = rows.length - shown.length;
-  return '<div class="pane-title"><h2>' + esc(o.a) + ' \u2192 ' + esc(o.b) + '</h2>'
+  const title = esc(o.a) + ' \u2192 ' + esc(o.b);
+  // THE TITLE IS THE DOOR to the arrow's own page, where there is one — the same word in the same role
+  // as a box's name. On the Data pictures it is the only door: the arrow itself carries no drill.
+  const head = o.drill
+    ? '<button type="button" class="pane-title-link" data-drill=\'' + esc(JSON.stringify(o.drill)) + '\'>' + title + '</button>'
+    : title;
+  return '<div class="pane-title"><h2>' + head + '</h2>'
     + '<span class="badge edge">' + esc(o.badge) + '</span></div>'
     + '<div class="xcount">' + esc(noun(rows.length)) + '</div>'
     + (shown.length ? '<ul class="xlist">' + shown.join('') + '</ul>'
@@ -3093,8 +3127,17 @@ function showDomainContainerEdge(a, b, drawn) {
     a: nm(headA), b: nm(headB), badge: 'relations', noun: 'relation',
     rows: list.map((r) => arrowRow(r.srcName, r.dstName,
       esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''))),
-    drill: { kind: 'domedge', a, b },
+    drill: domainEdgeDrill(a, b, drawn),
   });
+}
+// Where an inter-subdomain arrow's card leads. Mirror of the subsystem drill: a single focal-entity
+// relation arrow lands on the pair's page with THAT entity in focus (its relations lit, the rest of the
+// pair dimmed); a box↔box arrow (the Domain overview) opens the pair unfocused. No pre-selection, for
+// the reason bindContainerEdge gives: the page is the arrow.
+function domainEdgeDrill(a, b, drawn) {
+  const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
+  const focusEnt = drawn && (isEnt(drawn.src) ? drawn.src : (isEnt(drawn.dst) ? drawn.dst : null));
+  return focusEnt ? { kind: 'domedge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'domedge', a, b };
 }
 // Selecting a BRIDGE arrow (structure↔domain): the component↔subdomain arrow in a subsystem card, or the
 // subsystem↔entity arrow in a subdomain/domain view. It bundles component→entity edges; list each as
@@ -4643,6 +4686,10 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   scene.edgeEls.push({ e, path: p, label, key: selKey });  // `key` lets coverKeys select this arrow for a synthetic-arrow drill
   attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn,
     () => selRevealsAction(scene, selKey), opts.action);
+  // HOVER ANSWERS, CLICK SETTLES — the flow map's rule, opted into per picture (`opts.hover`): the
+  // pointer resting on the arrow (its hit clones, or its label) shows the arrow's card while nothing
+  // is pinned. The Data pictures ask for it; the others still show a card on click only.
+  if (opts.hover) previewOnHover(scene, [...(p.__cyHits || []), label], showFn, p);
 }
 
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
@@ -4684,7 +4731,7 @@ function bindContainerEdge(scene, p, label, a, b, focusE) {
 // endpoints so a focus pass keeps it + both ends lit; a plain click shows the collapsed `box`'s panel,
 // a ⌘-click drills into `target` (that box's own card). The bridge has no `why`, so the default tip
 // shows nothing on hover — consistent with a why-less component edge.
-function bindBridgeEdge(scene, p, label, a, b, target) {
+function bindBridgeEdge(scene, p, label, a, b, target, hover) {
   const drawn = { src: a, dst: b };
   const kindOf = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind;
   // Focus the LEAF end (the component or entity) on drill: it's a real, selectable node in the bridge
@@ -4699,7 +4746,8 @@ function bindBridgeEdge(scene, p, label, a, b, target) {
   const tgt = { ...target };
   bindSelectEdge(scene, p, label, drawn, 'bridge:' + a + '>' + b,
     () => showBridgeEdge(drawn),
-    { onDrill: () => { if (leaf) pendingCenter = leaf; go(tgt); }, actionFn: () => actionTipEdge(a, b, drawn) });
+    { onDrill: () => { if (leaf) pendingCenter = leaf; go(tgt); }, actionFn: () => actionTipEdge(a, b, drawn),
+      hover: !!hover });
 }
 
 // `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn, opts? } or null to skip.
@@ -4987,7 +5035,12 @@ function clearPendingScroll(path) {
 function captureViewState() {  // stash the leaving entry's pan/zoom + selection + right-pane content
   if (hi < 0 || !history[hi]) { pendingLeaveContent = undefined; return; }
   if (mainPz) {
-    const vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
+    // THE SCALE ON SCREEN (`real`), beside the number `zoom()` reports. That number is relative to the
+    // fit the drawing was built with, and the same view built again may fit differently — the box is
+    // wider before the source column opens than after — so restoring the number put the same drawing
+    // back at a different size (measured: 0.809 leaving, 0.831 returning, from one saved 1.67). The
+    // on-screen scale is what the reader saw, so it is what comes back.
+    const vp = { zoom: mainPz.getZoom(), real: mainPz.getSizes().realZoom, pan: mainPz.getPan() };
     history[hi].vp = vp;
     vpByView[stateKey(history[hi])] = vp;  // remember this diagram's view so any later return reuses it
   }
@@ -5342,7 +5395,10 @@ function bindComponent() {
 // also return NULL for a box that leads nowhere from this view (an external service on the Deployment
 // overview): same treatment. A box only ever shows the drill cursor when a ⌘-click will actually take
 // you somewhere — promising a zoom and then re-rendering the same view reads as a broken control.
-function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
+// `opts.hover` gives every box the flow map's resting-pointer card (previewOnHover); a box's NAME, where
+// the picture draws item boxes, drills exactly as ⌥-click does.
+function bindGroupContainer(drillFor, edgeBinder, noDrillId, opts) {
+  const o = opts || {};
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     // A product-area container is drawn by the deployment renderer, not the model, so it has no
@@ -5355,6 +5411,7 @@ function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
     if (target) el.classList.add('drill'); else mainScene.noAction.add(id);
     bindHoverGlow(mainScene, el, id);
     attachTip(el, () => actionTipNode(id));
+    if (o.hover && GRAPH.nodes[id]) previewOnHover(mainScene, el, () => showNode(id));
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
       // Excluded by the environment filter: inert. `pointer-events:none` already stops a real cursor,
@@ -5362,7 +5419,7 @@ function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
       // of the box rather than of CSS hit-testing.
       if (el.classList.contains('envout')) return;
       e.stopPropagation();
-      if (target && isDrillClick(e)) { go(target); return; }  // ⌘-click drills in
+      if (target && (isDrillClick(e) || nameClick(e))) { go(target); return; }  // ⌥-click, double-click or the name drills in
       selectNodeFromCanvas(el, id, e);
     });
   });
@@ -5649,6 +5706,8 @@ function flowMermaidFor(uc) {
 // static markup inside the same card, shown and driven by flowInit/flowCounter, so re-rendering the
 // switch can never tear out the player's buttons.
 function isFlowState(s) { return !!(s && (s.kind === 'usecase' || s.kind === 'subflow')); }
+// The Data tab's three drawings: the areas, one area, and a pair of areas.
+function isDataPicture(s) { return !!(s && (s.kind === 'domain' || s.kind === 'domsub' || s.kind === 'domedge')); }
 function flowIdOf(s) { return s.kind === 'subflow' ? s.sf : s.uc; }
 function subflowName(sid) { return (SUBFLOW_BY_ID[sid] || {}).name || sid; }
 // THE NAME OF A WALK, whichever kind it is. A use case is a graph node; a shared sub-use case is not, so a
@@ -6030,25 +6089,16 @@ function unitThreadsHtml(unit) {
 }
 // The Domain Subdomains overview: a subdomain box ⌘-drills to its per-subdomain card; an
 // inter-subdomain arrow selects to the crossing entity→entity relations (no further drill).
-function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', sd: id }), bindDomainContainerEdge); }
-// An inter-subdomain arrow (Domain overview + subdomain-card cross arrows): a plain click SELECTS it
-// (the sidebar lists every entity→entity relation it bundles) and a ⌘-click drills into the
-// two-subdomain edge view. The domain analog of bindContainerEdge.
+function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', sd: id }), bindDomainContainerEdge, null, { hover: true }); }
+// An inter-subdomain arrow (Domain overview + subdomain-card cross arrows): resting on it shows its card
+// (every entity→entity relation it bundles), a plain click pins that card. NO DRILL GESTURE ON THE ARROW
+// ITSELF — no ⌥-click, no corner icon. The one way to the pair's page is the title of that card
+// (domainEdgeDrill says where it goes), so the picture offers one gesture per thing: rest to read,
+// click to pin, the card's title to go. The domain analog of bindContainerEdge, minus its drill.
 function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
   const drawn = focusE || { src: a, dst: b };
-  const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
-  // Mirror bindContainerEdge: ⌘-drill a single focal-entity relation arrow lands on the pair's edge
-  // card with THAT entity selected (its relations lit, the rest of the pair dimmed); a box↔box arrow
-  // (the Domain overview) opens the pair unfocused, as before.
-  const focusEnt = isEnt(drawn.src) ? drawn.src : (isEnt(drawn.dst) ? drawn.dst : null);
-  // Drill lands on the relations LIST — narrowed to the focal entity's relations for a member arrow,
-  // the whole pair for a box↔box arrow (see bindContainerEdge for the same shape). `sels` pre-selects the
-  // real relation arrows this synthetic arrow stood for, in the domain edge card.
-  const dom = focusEnt ? { kind: 'domedge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'domedge', a, b };
-  // No pre-selection, for the reason bindContainerEdge gives: the page is the arrow.
   bindSelectEdge(scene, p, label, drawn, 'dctxedge:' + drawn.src + '>' + drawn.dst,
-    () => showDomainContainerEdge(a, b, drawn),
-    { onDrill: () => go(dom), actionFn: () => actionTipEdge(a, b, drawn) });
+    () => showDomainContainerEdge(a, b, drawn), { hover: true });
 }
 // Subdomain neighbourhood (a classDiagram): the focal subdomain's entities (framed in a namespace)
 // SELECT / open-source like the flat Domain view; each collapsed neighbour-subdomain box ⌘-drills
@@ -6065,20 +6115,23 @@ function bindDomainSub(sd) {
     el.style.cursor = 'pointer';
     bindHoverGlow(mainScene, el, id);
     attachTip(el, () => actionTipNode(id));
+    previewOnHover(mainScene, el, () => showNode(id));  // resting on a box shows its card, as on a flow map
+    markClassTitle(el);  // a record's title is its name, and the name is the door
     const k = GRAPH.nodes[id].kind;
-    if (k === 'subdomain' || k === 'subsystem') {  // a collapsed neighbour box: ⌘ walks into its own card
+    if (k === 'subdomain' || k === 'subsystem') {  // a collapsed neighbour box: its name, ⌥ or a double click walk into its own card
       el.classList.add('drill');
       const target = k === 'subdomain' ? { kind: 'domsub', sd: id } : { kind: 'subsystem', sid: id };
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
-        if (isDrillClick(ev)) { go(target); return; }
+        if (isDrillClick(ev) || nameClick(ev)) { go(target); return; }
         selectNodeFromCanvas(el, id, ev);
       });
-    } else {  // the focal subdomain's own entity: select / ⌘-open-source, like the flat Domain view
+    } else {  // the focal subdomain's own entity: select / ⌘-open-source, like the flat Domain view; its name opens its page
       markOpenSrc(el, id);
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
         if (openSrcClick(id, ev)) return;
+        if (nameClick(ev)) { drillInto(id); return; }
         selectNodeFromCanvas(el, id, ev);
       });
     }
@@ -6092,10 +6145,10 @@ function bindDomainSub(sd) {
       if (!arr) return;
       const e = arr[0];
       // parallel relations of one pair share the drawn arrow — the panel lists them ALL (showPairEdges)
-      bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst + ':' + i, () => showPairEdges(arr));
+      bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst + ':' + i, () => showPairEdges(arr), { hover: true });
     } else if (kx === 'subsystem' || ky === 'subsystem') {  // a bridge arrow: subsystem -> entity (owns/reads)
       const sub = kx === 'subsystem' ? x : y;
-      bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd });  // ⌘ -> the S×SD bridge card
+      bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd }, true);  // ⌘ -> the S×SD bridge card
     } else {  // a cross arrow involving a collapsed subdomain box — disjoint pairs card, overlapping ones navigate
       const subX = kx === 'subdomain', subY = ky === 'subdomain';
       if (subX && subY) {  // box <-> box (child subdomain <-> neighbour, or child <-> child)
@@ -6118,13 +6171,12 @@ function isAncestorOf(a, node) {
 // Two group boxes can frame a two-box edge card only when neither contains the other.
 function disjointBoxes(x, y) { return x !== y && !isAncestorOf(x, y) && !isAncestorOf(y, x); }
 // An arrow whose pair OVERLAPS (one box contains the other) can't be a two-box edge card, so it instead
-// navigates to a single box: plain click shows that box's panel, ⌘-click opens its card (descend into a
-// child, or zoom out to an ancestor). Also the fallback when an edge card happens not to exist.
+// stands for a single box: resting on it or clicking it shows that box's card, and the card itself
+// opens the box (descend into a child, or zoom out to an ancestor) — no drill gesture on the arrow,
+// like every arrow on a Data picture. Also the fallback when an edge card happens not to exist.
 function bindNavEdge(p, label, a, b, target) {
-  const k = GRAPH.nodes[target] && GRAPH.nodes[target].kind;
-  const dest = k === 'subdomain' ? { kind: 'domsub', sd: target } : { kind: 'subsystem', sid: target };
   bindSelectEdge(mainScene, p, label, { src: a, dst: b }, 'navedge:' + a + '>' + b,
-    () => showNode(target), { onDrill: () => go(dest), actionFn: () => actionTipNode(target) });
+    () => showNode(target), { hover: true });
 }
 function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click on a neighbour box / cross arrow drills
   bindNodes(mainScene, (id, el, ev) => {
@@ -6294,6 +6346,15 @@ function linkifyBoxRow(row, text, title, run) {
   node.parentNode.replaceChild(link, node);
   return true;
 }
+// A classDiagram box's title is the words in its `label-group`, and the generator cannot wrap them the
+// way it wraps a flowchart name (Mermaid owns that markup), so the viewer tags them after the draw:
+// `.cyname` is what nameClick asks for, and the stylesheet gives it the pointer and the underline. A
+// slot box already carries an item box, whose name is its own door — that one is left alone.
+function markClassTitle(el) {
+  if (el.querySelector('.ibox')) return;
+  const t = el.querySelector('g.label-group .nodeLabel');
+  if (t) t.classList.add('cyname');
+}
 function bindEntityBoxLinks() {
   for (const id in mainScene.nodeEls) {
     const el = mainScene.nodeEls[id];
@@ -6325,16 +6386,23 @@ function bindDomain() {
     el.style.cursor = 'pointer';
     bindHoverGlow(mainScene, el, id);
     attachTip(el, () => actionTipNode(id));  // ⌘-hover shows the open-source action
-    if (GRAPH.nodes[id].kind === 'subsystem') {  // a bridge box (domain edge card): ⌘ drills into its card
+    previewOnHover(mainScene, el, () => showNode(id));  // resting on a box shows its card, as on a flow map
+    markClassTitle(el);  // a record's title is its name, and the name is the door
+    if (GRAPH.nodes[id].kind === 'subsystem') {  // a bridge box (domain edge card): its name or ⌥ drills into its card
       el.classList.add('drill');
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
-        if (isDrillClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
+        if (isDrillClick(ev) || nameClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
         selectNodeFromCanvas(el, id, ev);
       });
-    } else {  // a domain entity: select / ⌘-open-source
+    } else {  // a domain entity (or a collapsed child area): select / ⌘-open-source; its name opens it
       markOpenSrc(el, id);
-      el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNodeFromCanvas(el, id, ev); });
+      el.addEventListener('click', (ev) => {
+        if (isDrag(ev)) return; ev.stopPropagation();
+        if (openSrcClick(id, ev)) return;
+        if (nameClick(ev)) { drillInto(id); return; }
+        selectNodeFromCanvas(el, id, ev);
+      });
     }
   });
   bindEntityBoxLinks();  // every box is in nodeEls now — link its entity-typed fields + its store line
@@ -6342,14 +6410,14 @@ function bindDomain() {
     const ks = GRAPH.nodes[src] && GRAPH.nodes[src].kind, kd = GRAPH.nodes[dst] && GRAPH.nodes[dst].kind;
     if (ks === 'subsystem' || kd === 'subsystem') {  // a bridge arrow subsystem -> entity (owns/reads)
       const sub = ks === 'subsystem' ? src : dst, ent = ks === 'subsystem' ? dst : src;
-      bindBridgeEdge(mainScene, p, label, src, dst, { kind: 'bridge', sid: sub, sd: topSubdomainOf(ent) });  // ⌘ -> bridge card
+      bindBridgeEdge(mainScene, p, label, src, dst, { kind: 'bridge', sid: sub, sd: topSubdomainOf(ent) }, true);  // ⌘ -> bridge card
       return;
     }
     const arr = COMP_LOOKUP[src + '>' + dst];
     if (!arr) return;
     const e = arr[0];
     // parallel relations of one pair share the drawn arrow — the panel lists them ALL (showPairEdges)
-    bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst + ':' + i, () => showPairEdges(arr));
+    bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst + ':' + i, () => showPairEdges(arr), { hover: true });
   });
 }
 
@@ -7933,7 +8001,7 @@ function scheduleStage(fn) {
   refitRaf = requestAnimationFrame(() => {
     refitRaf = 0;
     if (!mainPz || !stageHasArea()) return;   // nothing to see, and measuring it would poison the matrix
-    if (stageNeedsFit) { stageNeedsFit = false; mainPz.resize(); mainPz.fit(); mainPz.center(); }
+    if (stageNeedsFit) { stageNeedsFit = false; fitStage(); }
     else fn();
     updateZoomLevel();
   });
@@ -7941,7 +8009,35 @@ function scheduleStage(fn) {
 // Re-FIT: the SAME content is re-framed in the new size (zoom resets to fit, recentered). Used when the
 // whole window resizes, or the file browser is toggled on/off — a large, discrete size change where a
 // fresh fit is the least surprising result.
-function refitStage() { scheduleStage(() => { mainPz.resize(); mainPz.fit(); mainPz.center(); }); }
+function refitStage() { scheduleStage(fitStage); }
+// THE DEFAULT ZOOM HAS A FLOOR AND A CEILING. A fit alone sizes the drawing to the window: a small
+// picture on a wide screen came out huge, a large one unreadably small (measured on a 1208px-wide
+// pane: the Data overview fitted at 0.75, one area at 0.60, its records at 0.38 — a box's name at 5px).
+// So every fit is followed by a clamp of the on-screen scale: never above FIT_MAX_SCALE (a box's name at
+// its authored 13.5px — larger only says "this picture is small") and never below FIT_MIN_SCALE (the
+// name at 9px, a record's field line at 10.7px — still readable, at the price of panning). A drawing
+// the floor makes larger than the window is aligned to its START on the overflowing axis (top, or
+// left), with a small margin, because that is where reading begins; the other axis stays centred.
+// `alignToStart` false keeps whatever is at the viewport centre there instead — for a fit that just
+// centred one box on purpose.
+const FIT_MAX_SCALE = 1;
+const FIT_MIN_SCALE = 2 / 3;
+const FIT_EDGE_PX = 24;
+function clampFitZoom(alignToStart) {
+  if (!mainPz) return;
+  const s = mainPz.getSizes();
+  if (!usableScale(s.realZoom)) return;
+  const want = Math.min(FIT_MAX_SCALE, Math.max(FIT_MIN_SCALE, s.realZoom));
+  if (Math.abs(want - s.realZoom) < 1e-6) return;
+  mainPz.zoom(mainPz.getZoom() * want / s.realZoom);   // about the viewport centre: a centred fit stays centred
+  if (!alignToStart) return;
+  const a = mainPz.getSizes();
+  const vb = a.viewBox, r = a.realZoom, pan = mainPz.getPan();
+  mainPz.pan({ x: vb.width * r > a.width ? FIT_EDGE_PX - r * vb.x : pan.x,
+               y: vb.height * r > a.height ? FIT_EDGE_PX - r * vb.y : pan.y });
+}
+// The one fit every path uses: frame the whole drawing in the current box, then clamp (above).
+function fitStage() { mainPz.resize(); mainPz.fit(); mainPz.center(); clampFitZoom(true); }
 // PRESERVE: keep the user's current zoom level and keep the point that was at the viewport centre at the
 // centre — the diagram doesn't jump. Used for EVERY drag-handle resize — the vertical info-pane split
 // AND the two horizontal splits (left-column width, file-browser width) — where re-fitting would throw
@@ -7949,15 +8045,28 @@ function refitStage() { scheduleStage(() => { mainPz.resize(); mainPz.fit(); mai
 function resizeStagePreserve() {
   scheduleStage(() => {
     const b = mainPz.getSizes();                          // container size + realZoom BEFORE the resize
-    if (!usableScale(b.realZoom)) { mainPz.resize(); mainPz.fit(); mainPz.center(); return; }  // nothing to preserve
+    if (!usableScale(b.realZoom)) { fitStage(); return; }  // nothing to preserve
     const pan = mainPz.getPan();
     const cx = (b.width / 2 - pan.x) / b.realZoom;        // SVG-space point currently under the viewport centre
     const cy = (b.height / 2 - pan.y) / b.realZoom;
-    const z = mainPz.getZoom();
-    mainPz.resize();
-    mainPz.zoom(z);                                       // resize() can snap zoom back to fit — restore it
+    mainPz.resize();                                      // re-fits: svg-pan-zoom was built with fit:true, so the base scale moves with the box
+    // THE SAME SIZE ON SCREEN, not the same zoom number. `zoom()` is relative to the fit, and the fit
+    // just moved with the box, so putting the old number back shrank the drawing with its box — the
+    // very jump this path exists to avoid. Measured: the default floor of 0.667 came out at 0.535 when
+    // the source column opened right after a flow page rendered. Restoring the absolute scale (the
+    // same arithmetic stageScaleWithColumn uses) keeps every box the size it was.
+    const a0 = mainPz.getSizes();
+    if (usableScale(a0.realZoom)) mainPz.zoom(mainPz.getZoom() * b.realZoom / a0.realZoom);
     const a = mainPz.getSizes();                          // realZoom AFTER (base fit may have shifted)
-    mainPz.pan({ x: a.width / 2 - a.realZoom * cx, y: a.height / 2 - a.realZoom * cy });  // re-centre on the same point
+    let px = a.width / 2 - a.realZoom * cx, py = a.height / 2 - a.realZoom * cy;   // re-centre on the same point
+    // A START THAT WAS ON SCREEN STAYS ON SCREEN. Re-centring a drawing wider than its box slides its
+    // left edge out when the box narrows from the right (the source column opening after a flow page
+    // rendered moved a walk's actor 103px off the left edge). If the drawing's start was visible
+    // before, it is put back at the margin; a start the reader had already panned away is left alone.
+    const vb = a.viewBox;
+    if (pan.x + b.realZoom * vb.x >= 0 && px + a.realZoom * vb.x < 0) px = FIT_EDGE_PX - a.realZoom * vb.x;
+    if (pan.y + b.realZoom * vb.y >= 0 && py + a.realZoom * vb.y < 0) py = FIT_EDGE_PX - a.realZoom * vb.y;
+    mainPz.pan({ x: px, y: py });
   });
 }
 
@@ -13014,10 +13123,19 @@ async function renderView(sArg, transient, seq) {
     // it re-aims the camera, and it must measure against the synchronously-applied fresh fit, not a
     // restored vp that svg-pan-zoom won't paint until the next frame.
     const vp = (transient || pendingMatchTextId || pendingCenterId) ? null : (s.vp || vpByView[stateKey(s)]);
-    if (vp) { mainPz.zoom(vp.zoom); mainPz.pan(vp.pan); }
-    updateZoomLevel();
+    if (vp) {
+      const base = mainPz.getSizes().realZoom;   // this build's fit — the number `zoom()` counts from
+      mainPz.zoom(usableScale(vp.real) && usableScale(base) ? mainPz.getZoom() * vp.real / base : vp.zoom);
+      mainPz.pan(vp.pan);
+    }
+    // A FRESH FIT IS CLAMPED (see clampFitZoom). Not a restored camera, which is where the reader left
+    // it; and not before a move that measures the screen (matchTextSize, a focus-drill centre, a framed
+    // step), because svg-pan-zoom paints a zoom on the next frame and the measurement would read the
+    // unclamped fit. The centre move clamps afterwards, about the box it just centred.
+    else if (!pendingMatchTextId && !pendingCenterId && !pendingFrameStep) clampFitZoom(true);
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
-    else if (pendingCenterId) applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1);  // centre only, keep the fit zoom
+    else if (pendingCenterId) { applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1); clampFitZoom(false); }  // centre only, then the clamp about that centre
+    updateZoomLevel();
     flowInit(s);  // a flow view: restore this history point's selected/saved step, or start fresh
     // One-shot: a jump that asked to FRAME its step (see selectFlowStep) does it now, after
     // flowInit has restored the selection and svgPanZoom exists.
@@ -14430,10 +14548,11 @@ document.addEventListener('keydown', (e) => {
 // for a patch of empty canvas to click. With something selected it does what Escape does — the card and
 // the diagram's dimming belong to one selection and go together. On a drilled page with nothing selected
 // (a subsystem, an arrow, a process) the card is the page's own subject, so × just closes it.
-// "Show all N connections": the card was cut to three rows, and this is the way to the rest. Delegated,
-// like the source links above, so a panel writer cannot forget to wire it.
+// An arrow card's title, and its "Show all N connections" (the card was cut to three rows, and this is
+// the way to the rest): both carry `data-drill`. Delegated, like the source links above, so a panel
+// writer cannot forget to wire it.
 PANEL_HOST.addEventListener('click', (ev) => {
-  const more = ev.target && ev.target.closest && ev.target.closest('.xmore[data-drill]');
+  const more = ev.target && ev.target.closest && ev.target.closest('[data-drill]');
   if (!more) return;
   ev.stopPropagation();
   let to = null;
@@ -15286,7 +15405,7 @@ function stageScaleWithColumn(before) {
     // `before` is snapshotted OUTSIDE this frame (at mousedown, or before the column moves), so unlike
     // the sizes read above it is not covered by scheduleStage's own check — a baseline taken while the
     // drawing had no room would divide to Infinity here. A plain re-fit is the honest fallback.
-    if (!usableScale(before.realZoom)) { mainPz.resize(); mainPz.fit(); mainPz.center(); return; }
+    if (!usableScale(before.realZoom)) { fitStage(); return; }
     const cx = (before.width / 2 - before.pan.x) / before.realZoom;   // SVG point at the old viewport centre
     const cy = (before.height / 2 - before.pan.y) / before.realZoom;
     mainPz.resize();

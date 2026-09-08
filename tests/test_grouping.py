@@ -2787,12 +2787,14 @@ def test_has_subdomains() -> None:
 
 
 def test_gen_domain_container_mermaid_boxes_and_crossing_arrow() -> None:
-    # The bounded-contexts overview: one box per context labelled by entity count, with a SDa->SDb
-    # arrow DERIVED from a crossing E->E relation (E1 in SD1 refersTo E4 in SD2), labelled by count.
+    # The bounded-contexts overview: one ITEM-BOX slot per context (the viewer fills it; the entity
+    # count rides in the box's band), with a SDa->SDb arrow DERIVED from a crossing E->E relation
+    # (E1 in SD1 refersTo E4 in SD2), labelled by count.
     mm = gen_viewer.gen_domain_container_mermaid(parse_map(make_context_map()))
-    assert mm.startswith("flowchart")
-    assert 'SD1["Ordering (2)"]' in mm and 'SD2["Catalog (1)"]' in mm   # count = #entities in the context
-    assert "class SD1 subdomain" in mm
+    assert mm.startswith("%%{init") and "\nflowchart TB\n" in mm   # no node padding: arrows stop on the boxes
+    assert 'SD1["<span class=cyslot data-k=subdomain data-v=compact data-id=SD1></span>"]:::cy-SD1' in mm
+    assert 'SD2["<span class=cyslot data-k=subdomain data-v=compact data-id=SD2></span>"]:::cy-SD2' in mm
+    assert "class SD1 itembox" in mm and "classDef itembox fill:none,stroke:none" in mm  # the slot node draws no shape of its own
     assert "SD1 --> SD2" in mm                                       # the one crossing relation
 
 
@@ -2815,7 +2817,8 @@ def test_gen_domain_subdomain_card_frames_members_collapses_neighbour_subdomains
     assert 'namespace SD1["Ordering"] {' in cx1                     # focal subdomain is a labelled frame
     assert 'class E1["Order"] {' in cx1 and "ObjectId id" in cx1        # member entity, FULL box
     assert 'class E2["LineItem"] {' in cx1                              # the other member, full
-    assert 'class SD2["Catalog (1)"]' in cx1                            # neighbour drawn as ONE collapsed subdomain box
+    assert 'class SD2["<span class=cyslot data-k=subdomain data-v=compact data-id=SD2></span>"]' in cx1  # neighbour drawn as ONE collapsed subdomain box (an item box)
+    assert "style SD2 fill:none,stroke:none" in cx1                     # …whose class draws no shape: the item box is the box
     assert 'class E4["Product"]' not in cx1                             # the neighbour's entity is NOT drawn (collapsed to SD)
     assert 'E1 "1" *-- "*" E2' in cx1                                   # intra-subdomain composition, full
     assert "E1 --> SD2" in cx1                                      # cross arrow to the collapsed neighbour box (count-labelled)
@@ -2824,7 +2827,8 @@ def test_gen_domain_subdomain_card_frames_members_collapses_neighbour_subdomains
     cx2 = cards["SD2"]
     assert 'namespace SD2["Catalog"] {' in cx2
     assert 'class E4["Product"] {' in cx2 and 'class E1["Order"] {' not in cx2
-    assert 'class SD1["Ordering (2)"]' in cx2 and "SD1 --> E4" in cx2  # inbound cross arrow from the neighbour (count-labelled)
+    assert 'class SD1["<span class=cyslot data-k=subdomain data-v=compact data-id=SD1></span>"]' in cx2
+    assert "SD1 --> E4" in cx2                                          # inbound cross arrow from the neighbour (count-labelled)
 
 
 def test_gen_domain_edge_card_two_namespaces_with_the_crossing_entities() -> None:
@@ -2879,11 +2883,11 @@ def test_an_entity_diagram_draws_entities_and_subdomains_only() -> None:
 
 def test_subdomain_card_has_no_subsystem_box_without_bridges() -> None:
     # Regression mirror: a pure domain map (no C->E edges, no subsystems) draws no subsystem box / amber
-    # styling in the subdomain card. (Neighbour SUBDOMAIN boxes are still drawn + styled magenta.)
+    # styling in the subdomain card. (Neighbour SUBDOMAIN boxes are still drawn, as item boxes.)
     sd1 = gen_viewer.domain_subdomain_mermaids(parse_map(make_context_map()))["SD1"]
     assert "class S1" not in sd1
     assert gen_viewer.SUBSYSTEM_STYLE not in sd1                # no amber (subsystem) styling
-    assert f"style SD2 {gen_viewer.SUBDOMAIN_STYLE}" in sd1     # neighbour subdomain IS styled magenta
+    assert f"style SD2 {gen_viewer.ITEM_SLOT_STYLE}" in sd1     # neighbour subdomain IS drawn, as a shapeless slot the item box fills
 
 
 def test_subsystem_card_has_no_context_box_without_bridges() -> None:
@@ -2897,7 +2901,7 @@ def test_bundle_carries_context_data() -> None:
     # view leads with the overview.
     b = bundle_of(make_context_map())
     assert b["hasSubdomains"] is True
-    assert "Ordering (2)" in b["mermaidDomainContainer"]   # the bounded-contexts overview
+    assert "data-id=SD1" in b["mermaidDomainContainer"]     # the bounded-contexts overview (item-box slots)
     assert "SD1>SD2" in b["mermaidDomainEdgeCard"]          # the subdomain edge-card (keyed by crossing pair)
 
 

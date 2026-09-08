@@ -341,7 +341,7 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "title: 'Locate in ' + tab" in locate_code
     assert "sel: 'node:' + t.selectId" in locate_code
     assert "pendingCenter = t.selectId" in locate_code
-    assert "if (isFlowState(s)) return;" in locate_code   # no icons at all on a walk
+    assert "if (isFlowState(s) || isDataPicture(s)) return;" in locate_code   # no icons at all on a walk, nor on a Data picture
     # No icons on a walk at all — the box's NAME opens what it names. Off a walk, the icon is the
     # element's own primary action.
     assert "const action = primaryActionFor(id);" in locate_code
@@ -2284,7 +2284,7 @@ def test_an_arrow_card_holds_three_calls_and_drills_for_the_rest() -> None:
         assert caller in js, caller
         body = js[js.index(caller): js.index("\n}", js.index(caller))]
         assert "arrowCardHtml({" in body, caller
-    assert "closest('.xmore[data-drill]')" in js, "the way to the rest is delegated, not wired per render"
+    assert "closest('[data-drill]')" in js, "the way to the rest is delegated, not wired per render"
 
 def test_a_deployment_arrow_has_a_page_like_every_other_arrow() -> None:
     """A Deployment arrow was the last kind with nowhere to drill. Subsystem pairs, entity pairs and
@@ -5294,7 +5294,7 @@ def test_a_walk_draws_no_corner_icons() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     fn = js[js.index("function decorateActionIcons(scene, s) {"):
             js.index("\n}", js.index("function decorateActionIcons(scene, s) {"))]
-    assert "if (isFlowState(s)) return;" in fn
+    assert "if (isFlowState(s) || isDataPicture(s)) return;" in fn
     assert "addActionIcon(el, sid, open)" not in js, "the shared sub-use case's box lost its icon too"
 
 
