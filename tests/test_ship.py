@@ -351,3 +351,17 @@ def test_an_unreadable_grounding_record_makes_ship_silent_not_wrong():
         (repo / ".coyodex" / "build-fragments" / "grounding.json").write_text(
             "{not json", encoding="utf-8")
         assert ship._coverage_line(make_inputs(repo)) == ""
+
+
+def test_step_2_counts_drift_coverage_at_the_pinned_worklists_tier():
+    """The gate block's `challenged N of M` comes from step 2; M followed the default tier always,
+    so a behavioural pass read 833 under an audit line counting 1782. The flag follows the pinned
+    worklist's own items."""
+    with tempfile.TemporaryDirectory() as td:
+        repo = make_repo(td)
+        assert "--with-behavioural" not in ship.build_plan(make_inputs(repo))[0].argv
+        (repo / ".coyodex" / "verify" / "worklist.json").write_text(
+            '{"worklist": [{"claim": "UC1 step 1: R1 → C1 — send the token", "theme": "behaviour"}]}',
+            encoding="utf-8")
+        step2 = ship.build_plan(make_inputs(repo))[0]
+        assert step2.argv[0] == "anchor-drift" and "--with-behavioural" in step2.argv, step2

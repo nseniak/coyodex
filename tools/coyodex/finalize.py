@@ -364,10 +364,15 @@ def _stale_grounding_pin(map_path: Path, live_claims: list[str],
             f"the refuted ones, so that records `refuted 0`.")
 
 
-def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path]) -> Leg:
+def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path],
+               behavioural: bool = False) -> Leg:
+    """`behavioural` (verdict-based pass only) counts coverage at the record's tier, so the
+    gate block's `challenged N of M` and its audit line count one surface."""
     argv = ["--map", str(map_path), "--repo", str(repo)]
     for v in verdicts:
         argv += ["--verdicts", str(v)]
+    if behavioural and verdicts:
+        argv.append("--with-behavioural")
     code, out, err = _run_leg("anchor-drift", argv)
     text = (out or "") + (err or "")
     rows = [ln.strip()[2:] for ln in text.splitlines() if ln.startswith("  - ")]
@@ -664,11 +669,12 @@ def build_report(map_path: Path, repo: Path, verdicts: list[Path],
     unasked = _unasked_verdicts(map_path, verdicts)
     # The audit runs at the tier the grounding record was written at, so the gate block counts
     # ONE surface and the digest is compared with the surface it hashed.
+    behavioural = _record_tier(map_path) is True
     legs = [
         _validate_leg(map_path, repo),
-        _audit_leg(map_path, verdicts, behavioural=_record_tier(map_path) is True),
+        _audit_leg(map_path, verdicts, behavioural=behavioural),
         _drift_leg(map_path, repo, []),
-        *([_drift_leg(map_path, repo, verdicts)] if verdicts else []),
+        *([_drift_leg(map_path, repo, verdicts, behavioural=behavioural)] if verdicts else []),
         *([_refutations_leg(map_path, verdicts)] if verdicts else []),
         *([_unasked_verdicts_leg(unasked)] if unasked else []),
         *([_access_baseline_leg(map_path, access_baseline)] if access_baseline else []),
@@ -815,9 +821,11 @@ def _grounding_line(map_path: Path) -> str:
             f"{g.claims_unverifiable} unverifiable.")
     live_total = g.claims_total - g.claims_superseded + g.claims_added_since
     if g.claims_live_challenged and g.claims_live_challenged < live_total:
+        from coyodex.grounding import unvoted_reason
+        unvoted = live_total - g.claims_live_challenged
         line += (f"\nGrounding (shipped map): {g.claims_live_challenged} of {live_total} claim(s) "
-                 f"have a verdict — {live_total - g.claims_live_challenged} were minted after the "
-                 f"worklist was pinned, so no skeptic saw them.")
+                 f"have a verdict — {unvoted} do not. "
+                 + unvoted_reason(unvoted, g.claims_added_since))
     elif not g.claims_live_challenged and g.claims_added_since:
         line += (f"\nGrounding (shipped map): at least {g.claims_added_since} claim(s) have NO "
                  f"verdict — minted after the worklist was pinned. This record predates "

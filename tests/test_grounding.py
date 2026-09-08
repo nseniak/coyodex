@@ -1118,3 +1118,14 @@ def test_a_note_that_states_neither_number_is_not_second_guessed():
     rows = _triple("c1")
     assert not _write_with_note("The pass was complete and the security theme was three-voted.",
                                 rows, ["c1"])
+
+
+def test_the_unvoted_reason_splits_pinned_from_minted():
+    """One sentence for three places (the gate block, `write`'s NOTE, `ship`'s coverage line), so a
+    partial pass cannot call its unchallenged pinned claims "minted after the pin" in any of them."""
+    both = G.unvoted_reason(965, 16)
+    assert "949 were pinned and never challenged" in both and "16 were minted or reworded" in both
+    assert G.unvoted_reason(16, 16).startswith("They were minted or reworded")
+    assert G.unvoted_reason(5, 0) == "They were pinned and never challenged."
+    # a delta larger than the unvoted count is a malformed record, not a negative number
+    assert G.unvoted_reason(5, 9).startswith("They were minted or reworded")

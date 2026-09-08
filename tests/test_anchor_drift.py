@@ -371,3 +371,36 @@ def test_a_why_containing_the_delimiter_does_not_swallow_the_key():
     recorded, malformed = ad.drift_exceptions(m)
     assert recorded == {claim}, f"the key must stop at its own delimiter, got {recorded}"
     assert malformed == []
+
+
+# --- coverage at the pinned worklist's tier ------------------------------------------------------
+
+def test_with_behavioural_counts_the_behavioural_surface_in_the_coverage_line():
+    """The gate block quotes `challenged N of M`, and M was the default tier always: a behavioural
+    pass read `817 of 833` beside an audit line counting 1782. Only the denominator moves — a
+    behaviour claim is never anchor-nudged — so the findings are identical at either tier."""
+    doc = {"format": FORMAT, "title": "t", "goal": "g",
+           "roles": [{"id": "R1", "name": "Admin", "kind": "human"}],
+           "components": [{"id": "C1", "name": "A", "purpose": "checks the token", "source": "a.py:1"},
+                          {"id": "C2", "name": "B", "purpose": "keeps rows", "source": "b.py:1"}],
+           "use_cases": [{"id": "UC1", "name": "Sign in", "actors": ["R1"],
+                          "trigger_outcome": "signs in → a session exists"}],
+           "flows": [{"uc": "UC1", "title": "Sign in", "steps": [
+               {"n": 1, "src": "R1", "dst": "C1", "phrase": "send the token", "where": "a.py:1"}]}]}
+    m = load_model(json.dumps(doc))
+    narrow, wide = len(l2_worklist_model(m)), len(l2_worklist_model(m, behavioural=True))
+    assert narrow < wide
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = Path(td) / "map.json", Path(td) / "verdicts.json"
+        mp.write_text(json.dumps(doc), encoding="utf-8")
+        vp.write_text(json.dumps({"grounding": [make_vote(l2_worklist_model(m)[0].claim, True, "a.py:1")]}),
+                      encoding="utf-8")
+
+        def run(*extra: str) -> str:
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                assert ad.main(["--map", str(mp), "--verdicts", str(vp), *extra]) == 0
+            return buf.getvalue()
+
+        assert f"of {narrow} worklist claim(s)" in run()
+        assert f"of {wide} worklist claim(s)" in run("--with-behavioural")

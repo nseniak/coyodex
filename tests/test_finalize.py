@@ -1167,3 +1167,45 @@ def test_build_report_counts_one_surface_the_one_the_record_hashed():
         audit = next(leg for leg in rep.legs if leg.name == "audit")
         assert f"{len(surfaces[True])} L2 claims" in (audit.note or ""), audit.note
         assert not [a for a in audit.advisory if "live_claims_digest" in a], audit.advisory
+
+
+def test_the_drift_leg_counts_coverage_at_the_records_tier():
+    """`challenged 817 of 833` sat under an audit line counting 1782 on the first behavioural build:
+    the drift leg's denominator was the default tier always. It follows the record's tier now."""
+    from coyodex.finalize import _drift_leg, _live_surfaces
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_two_tier_map(tmp)
+        surfaces = _live_surfaces(p)
+        assert surfaces is not None
+        vp = make_verdicts_file(tmp, sorted(surfaces[False]))
+        narrow, wide = len(surfaces[False]), len(surfaces[True])
+        assert f"of {narrow} worklist" in (_drift_leg(p, Path(tmp), [vp]).note or "")
+        assert f"of {wide} worklist" in (_drift_leg(p, Path(tmp), [vp], behavioural=True).note or "")
+        write_record(p, surfaces[True])
+        rep = finalize.build_report(p, Path(tmp), [vp])
+        drift = next(leg for leg in rep.legs if leg.name == "anchor-drift (verdict-based)")
+        assert f"of {wide} worklist" in (drift.note or ""), drift.note
+
+
+def test_the_gate_block_says_which_unvoted_claims_were_pinned_and_never_challenged():
+    """Under a partial pass most of the shipped map's unvoted claims were PINNED and simply not
+    challenged. The 2026-09-08 build's gate block called all 965 "minted after the worklist was
+    pinned" when 949 had been on the worklist from the start."""
+    from coyodex.finalize import _grounding_line
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        rec = {"claims_total": 1791, "claims_challenged": 842, "claims_confirmed": 823,
+               "claims_refuted": 19, "claims_unverifiable": 0, "claims_superseded": 25,
+               "claims_added_since": 16, "claims_live_challenged": 817, "live_claims_digest": "x"}
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": rec}),
+                     encoding="utf-8")
+        line = _grounding_line(p)
+        assert "817 of 1782" in line and "965 do not" in line, line
+        assert "949 were pinned and never challenged" in line, line
+        assert "16 were minted or reworded" in line, line
+        # a complete pass keeps the one-part sentence
+        rec.update({"claims_challenged": 1791, "claims_live_challenged": 1766})
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": rec}),
+                     encoding="utf-8")
+        line = _grounding_line(p)
+        assert "16 do not" in line and "never challenged" not in line, line

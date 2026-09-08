@@ -83,6 +83,9 @@ class ShipInputs:
     #: hand-run the remaining seven steps — the failure `run_plan`'s "NOT RUN:" line exists to stop.
     note_cites_other_runs: bool
     access_baseline: Path | None
+    #: The pinned worklist's tier, read off its items. Step 2's `anchor-drift` counts coverage at
+    #: that tier, so the gate block's `challenged N of M` and its audit line count ONE surface.
+    behavioural: bool = False
 
 
 def derive_inputs(repo: Path,
@@ -118,6 +121,8 @@ def derive_inputs(repo: Path,
                 "claim surface")
     rec = reconcile if reconcile is not None else out / "reconcile.json"
     rec_final: Path | None = rec if rec.is_file() else None
+    from coyodex.grounding import worklist_is_behavioural   # lazy, like `_dispatch`
+    behavioural = worklist_is_behavioural(wl)
     return ShipInputs(
         repo=repo, out=out, map_path=out / "project-map.json", fragments=frags,
         reconcile=rec_final, worklist=wl, verdicts=vd,
@@ -125,7 +130,7 @@ def derive_inputs(repo: Path,
         gate_block=out / "verify" / "gate-block.md",
         note_file=note_file, partial=partial, keep_note=keep_note,
         note_cites_other_runs=note_cites_other_runs,
-        access_baseline=access_baseline)
+        access_baseline=access_baseline, behavioural=behavioural)
 
 
 def _assemble_step(s: ShipInputs, title: str, carry_record: bool = False) -> Step:
@@ -228,7 +233,8 @@ def build_plan(s: ShipInputs) -> list[Step]:
     """The method's closing list, steps 2-12, cut at the note. Step numbers cite method.md."""
     prepare = [
         Step("anchor-drift (step 2 — what drifted)",
-             ("anchor-drift", "--map", str(s.map_path), *_verdict_flags(s))),
+             ("anchor-drift", "--map", str(s.map_path), *_verdict_flags(s),
+              *(("--with-behavioural",) if s.behavioural else ()))),
         Step("fix apply-drift --to-reconcile (step 3 — record the corrections)",
              ("fix", "apply-drift", "--map", str(s.map_path), *_verdict_flags(s),
               "--to-reconcile", str(s.reconcile if s.reconcile is not None
@@ -462,11 +468,12 @@ def _coverage_line(s: ShipInputs) -> str:
         return (f"\n\nCOVERAGE — every one of the shipped map's {live_total} claim(s) carries a "
                 f"verdict. Quote {live_total}, not the pinned worklist's {pinned}: the two are the "
                 f"same number only when nothing was reworded after the vote.")
+    from coyodex.grounding import unvoted_reason   # lazy, like `_dispatch`
+    unvoted = live_total - live_done
     return (f"\n\nCOVERAGE — say this, and NOT \"all {pinned} claims challenged\": the shipped map "
             f"carries {live_total} claim(s), of which {live_done} have a verdict and "
-            f"{live_total - live_done} do NOT. Those were minted or reworded after the worklist "
-            f"was pinned, so no skeptic saw them. `claims_total` counts the PINNED worklist and "
-            f"will keep reading as full coverage.")
+            f"{unvoted} do NOT. " + unvoted_reason(unvoted, int(g.get("claims_added_since", 0)))
+            + " `claims_total` counts the PINNED worklist and will keep reading as full coverage.")
 
 
 if __name__ == "__main__":

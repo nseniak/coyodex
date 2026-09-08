@@ -353,6 +353,25 @@ def _agreement_contradictions(note: str, rows: list[dict]) -> list[str]:
     return out
 
 
+def unvoted_reason(unvoted: int, added_since: int) -> str:
+    """WHY the shipped map's `unvoted` claims carry no verdict — the sentence after "N do NOT".
+
+    A COMPLETE pass leaves only claims minted or reworded after the pin in that number, and three
+    sentences in this codebase said exactly that, always. Under `--partial` the unvoted PINNED
+    claims are the bulk of it: the first behavioural build shipped 965 claims with no verdict,
+    949 of them pinned from the start and never challenged, and its gate block called all 965
+    "minted after the worklist was pinned". `added_since` is clamped to `unvoted`: a record whose
+    delta exceeds its unvoted count is malformed, and `validate` owns that complaint."""
+    added = max(0, min(added_since, unvoted))
+    never = unvoted - added
+    if never == 0:
+        return "They were minted or reworded after the worklist was pinned, so no skeptic saw them."
+    if added == 0:
+        return "They were pinned and never challenged."
+    return (f"{never} were pinned and never challenged; {added} were minted or reworded after the "
+            f"worklist was pinned, so no skeptic saw them.")
+
+
 def live_claims_digest(claims: "Iterable[str]") -> str:
     """sha256 over the sorted, DE-DUPLICATED claim set — the shipped map's claim surface, as one
     value a later gate can recompute.
@@ -1752,11 +1771,13 @@ def main(argv: list[str] | None = None) -> int:
         if live_claims is not None and isinstance(live_done, int):
             live_total = len(set(live_claims))
             if live_done < live_total:
+                unvoted = live_total - live_done
+                added = record.get("claims_added_since")
                 print(f"  NOTE: the SHIPPED map carries {live_total} claim(s), of which "
-                      f"{live_done} have a verdict — {live_total - live_done} do NOT. They were "
-                      f"minted after the worklist was pinned, so no skeptic saw them. Challenge "
-                      f"them, or say so in `--note`: `claims_challenged` counts the pinned "
-                      f"worklist and will keep reading as full coverage.")
+                      f"{live_done} have a verdict — {unvoted} do NOT. "
+                      + unvoted_reason(unvoted, added if isinstance(added, int) else 0)
+                      + " Challenge them, or say so in `--note`: `claims_challenged` counts the "
+                      "pinned worklist and will keep reading as full coverage.")
     elif as_json:
         print(text)
     else:

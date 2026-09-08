@@ -360,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex anchor-drift --map <map.json> [--verdicts <raw.json>]... "
-              "[--repo <root>] [--tolerance N] [--json]\n\n"
+              "[--repo <root>] [--tolerance N] [--with-behavioural] [--json]\n\n"
               "Deterministic Layer-2 anchor-drift. WITH --verdicts: for each CONFIRMED claim, flag\n"
               "when the stored `where` differs from the line the skeptics found (feed `--json` into\n"
               "`coyodex fix apply-drift` to write the corrections). `--verdicts` is REPEATABLE and\n"
@@ -368,17 +368,24 @@ def main(argv: list[str] | None = None) -> int:
               "WITHOUT --verdicts: the shape-only pass — call-site anchors pointing at a line that\n"
               "cannot be the acting statement (a `def` header, an import, a comment). Needs no\n"
               "skeptics, so a SERIAL build gets the same grounding floor as a parallel one.\n"
-              "Informational (non-gating) either way.")
+              "Informational (non-gating) either way.\n"
+              "`--with-behavioural` counts coverage over the behavioural tier — the surface a\n"
+              "worklist pinned with `audit --with-behavioural` holds — so `challenged N of M`\n"
+              "and the audit line count one surface. Drift findings do not move: a behaviour\n"
+              "claim is never anchor-nudged.")
         return 0
     map_path = repo_root = None
     verdicts_paths: list[str] = []
     tolerance = _DEFAULT_TOLERANCE
     as_json = False
+    behavioural = False
     i = 0
     while i < len(argv):
         a = argv[i]
         if a == "--json":
             as_json = True
+        elif a == "--with-behavioural":
+            behavioural = True
         elif a in ("--map", "--verdicts", "--repo", "--tolerance"):
             i += 1
             if i >= len(argv):
@@ -436,7 +443,10 @@ def main(argv: list[str] | None = None) -> int:
                       f"or set `no_call_site`. Re-run with `--verdicts` for the pass those lines "
                       f"answer.")
         return 0
-    worklist = l2_worklist_model(m)
+    # At the pinned worklist's tier when asked, so `challenged N of M` counts the surface the pass
+    # was pinned to. Only the denominator moves: a behaviour claim is never anchor-nudged
+    # (`drift_eligible=False`), so the findings are the same at either tier.
+    worklist = l2_worklist_model(m, behavioural=behavioural)
     grounding, notes = load_verdicts(verdicts_paths)
     coverage = coverage_note(worklist, grounding)
     if as_json:
