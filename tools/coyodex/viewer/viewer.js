@@ -2739,14 +2739,17 @@ function bareAnchor(v) {
 }
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
 // writes, no handler wiring. Used by showNode to fill the panel with a single element's detail.
-function nodeDetailBodyHtml(id) {
+// `noExplain`: the element PAGE leads with the card that carries the sentence, so the body skips it.
+function nodeDetailBodyHtml(id, noExplain) {
   const n = GRAPH.nodes[id];
   if (!n) return '';
   const fields = n.fields || {};
   const chg = n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '';
-  const explainKey = explanationKey(fields);
+  const explainKey = noExplain ? '' : explanationKey(fields);
   const explain = explainKey ? `<p class="explain">${mdInline(fields[explainKey])}</p>` : '';
   const dropped = new Set(REDUNDANT_FIELD_BY_KIND[n.kind] || []);
+  // …and the card's own sentence field (`Purpose`, `Meaning`) goes with it: the card said it.
+  if (noExplain) for (const k of CARD_DESC_FIELD[n.kind] || []) dropped.add(k.toLowerCase());
   // an entity's own fields aren't listed here — the class-diagram box already shows them as compartments.
   // A lifecycle renders ONE TRANSITION PER LINE (each carries its own trigger prose, so joined into a
   // single string they read as an unparseable wall); every other field stays inline.
@@ -2776,12 +2779,18 @@ function renderElementDetails(id) {
   // holding the single word `entity` with a rule under it, between the page's title and its first
   // sentence.
   const extra = kindPillsExtra(n) + chg;
+  // THE SAME CARD every page about one element leads with (see heroSubjectHtml): mark, `Type: Name`,
+  // the pills that vary within the kind, the sentence. The body below drops the sentence it used to
+  // open with, since the card now says it.
+  const c = cardFacts(id);
+  const hero = pageHeroHtml({ glyph: elementHeroGlyph(n.kind), name: c ? c.name : n.name || id,
+                              type: c ? c.type : elementLabel(n.kind), pills: extra,
+                              desc: c && c.desc ? mdInline(c.desc) : '', noDesc: false });
   // A PROCESS closes with the threads it hosts. That table is read off the map's entry points rather than
   // off the element's own fields, so the generic body cannot build it — and this page is where all of a
   // process's depth lives now that its page on the Deployment view carries only a hero.
-  diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">'
-    + (extra ? `<div class="page-hero"><p class="page-hero-pills">${extra}</p></div>` : '')
-    + `<div class="edetail">${nodeDetailBodyHtml(id)}${unitThreadsHtml(n.unit)}</div></div>`;
+  diagram.innerHTML = '<div class="usecases-wrap glossary-wrap">' + hero
+    + `<div class="edetail">${nodeDetailBodyHtml(id, true)}${unitThreadsHtml(n.unit)}</div></div>`;
   bindNodeDetailHandlers(diagram);
   bindElementCards(diagram);
 }
@@ -6764,12 +6773,23 @@ function heroDetailsLinkHtml(id) {
 // A USE CASE NO LONGER COMES THROUGH HERE. Its page draws its own head, in the page (walkHeadHtml), and
 // the `In feature` line this used to add for it went with it. `chain` stays in the signature because
 // the caller passes it for that head, and the two are the same call from syncPageHero.
+// THE MARK OF AN ELEMENT KIND, for a hero's figure column — or nothing, for a kind the map draws no
+// mark for (a process, a rule). The hero reads without one (see pageHeroHtml).
+const HERO_MARK_KINDS = new Set(['component', 'subsystem', 'entity', 'subdomain', 'dep', 'usecase', 'subflow']);
+function elementHeroGlyph(kind) {
+  return HERO_MARK_KINDS.has(kind) ? itemGlyphSvg(kind) : '';
+}
+// THE SAME CARD EVERY PAGE ABOUT ONE ELEMENT LEADS WITH: the kind's mark in the left column, the type
+// word before the name, the pills that vary within the kind, the sentence. Here it is the fixed block
+// over a drawing (a subsystem's, a subdomain's, a process's page); the element page and the rule page
+// draw the same card in the page.
 function heroSubjectHtml(id, chain) {
   const n = GRAPH.nodes[id];
   const c = n ? cardFacts(id) : null;
   if (!c) return '';
   const pills = kindPillsExtra(n) + (n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '');
-  return pageHeroHtml({ pills, desc: c.desc ? mdInline(c.desc) : '', noDesc: false,
+  return pageHeroHtml({ glyph: elementHeroGlyph(n.kind), name: c.name, type: c.type, pills,
+                        desc: c.desc ? mdInline(c.desc) : '', noDesc: false,
                         meta: n.kind === 'process' ? heroDetailsLinkHtml(id) : '' })
     + cardExtraHtml(id);
 }
@@ -6808,9 +6828,15 @@ function walkHeadHtml(s, chain) {
   // player one line below counts the same thing with a slash: `22 steps` is the one the reader can check.
   const steps = (FLOWS_NARR[id] || []).length;
   const what = sub ? 'shared sub-use case' : 'use case';
-  return hero + itemSectionHeadHtml(sub ? 'Shared sub-use case flow' : 'Use case flow',
-    `${steps} step${steps === 1 ? '' : 's'}`,
-    `Who or what acts at each step of this ${what}, on what, in the order the steps run.`);
+  // THE SAME STRIP every item page's sections wear, here attached to the drawing's own frame: the
+  // board is the pan/zoom drawing in #diagwrap, so the strip is drawn above it in this head and the
+  // stylesheet joins the two (`.item-sec-strip-stage`) — one framed section, in two hosts.
+  return hero + '<div class="item-sec-strip item-sec-strip-stage">'
+    + itemSectionHeadHtml(sub ? 'Shared sub-use case flow' : 'Use case flow',
+        `${steps} step${steps === 1 ? '' : 's'}`,
+        `Who or what acts at each step of this ${what}, on what, in the order the steps run.`,
+        itemGlyphSvg(sub ? 'subflow' : 'usecase'))
+    + '</div>';
 }
 // Drawn on every navigation, from renderChrome — so it is refreshed by the same call that repaints the
 // tabs and the trail, and can never survive onto a page that is about something else.
@@ -8050,11 +8076,10 @@ for (const e of (GRAPH.entry_points || [])) if (e.id) EP_BY_ID[e.id] = e;
 // `n` is how many things the section holds, and it is stated ONCE — on the chip, where the reader
 // meets it before scrolling. The heading used to repeat it beside the title, which read as two
 // different facts on a page where every section has a number.
-function featSection(secs, key, title, n, body) {
-  const id = 'featsec-' + key;
-  secs.push({ id, title, count: n });
-  return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}`
-    + `</h3>${body}</section>`;
+// One section of a feature's page: the same framed section with a strip head every item page draws,
+// led by the mark of what the section holds. It was a bare heading over its content.
+function featSection(secs, key, title, n, body, glyph) {
+  return itemSectionHtml(secs, 'feat-' + key, title, n, '', body, glyph);
 }
 function featEmpty(text) { return `<p class="feat-empty">${esc(text)}</p>`; }
 
@@ -8260,7 +8285,7 @@ function featureSectionsHtml(capId) {
   if (!f) return { secs: [], html: '' };
   const secs = [];
   let html = featSection(secs, 'eps', 'How you reach it', f.entryPoints.length,
-    featEntryPointsHtml(f.entryPoints));
+    featEntryPointsHtml(f.entryPoints), itemGlyphSvg('interface'));
   // WHAT IT REACHES OUT TO — the other half of a feature's outside edge, and the half no screen
   // carried before. It is EMPTY on most features until the walks step at the services themselves
   // (measured on one live map: 8 of 344 steps do), so the section states that rather than vanishing.
@@ -8271,15 +8296,17 @@ function featureSectionsHtml(capId) {
             const i = ifaceById(id);
             return i ? `<button type="button" class="featep" data-iface="${esc(id)}">${esc(i.name)}</button>` : '';
           }).join('') + '</div></div>'
-        : featEmpty('Not stated: no step of this feature\u2019s walks is drawn at an outside service.'));
+        : featEmpty('Not stated: no step of this feature\u2019s walks is drawn at an outside service.'),
+      itemGlyphSvg('dep'));
   }
   html += featSection(secs, 'rules', 'What it decides', f.rules.length,
-    featRulesHtml(f.rules));
+    featRulesHtml(f.rules));   // no mark: the map draws no glyph for a rule
   // The DATA MODEL is main implementation information, which the reader wants without drilling — so the
   // entities are full cards, each carrying where it is stored, not a row of bare names.
   html += featSection(secs, 'ents', 'What it knows', f.entities.length,
     f.entities.length ? elementCardListHtml(f.entities)
-                      : featEmpty('No entity this map records is touched by its use cases.'));
+                      : featEmpty('No entity this map records is touched by its use cases.'),
+    itemGlyphSvg('entity'));
   // The CODE is the lowest-priority thing on this page: the reader wants the story first, the main
   // implementation facts second, and the parts list a distant third. So it is the one section that
   // arrives folded — its heading still states how many components there are, which is the fact worth
@@ -8288,7 +8315,8 @@ function featureSectionsHtml(capId) {
     f.components.length
       ? '<details class="feat-fold"><summary>Show the parts</summary>'
         + featChipGroupsHtml(f.components) + '</details>'
-      : featEmpty('No use-case walk here passes through a component.'));
+      : featEmpty('No use-case walk here passes through a component.'),
+    itemGlyphSvg('component'));
   return { secs, html };
 }
 
@@ -8386,7 +8414,14 @@ function renderUseCases(sel) {
   //
   // The board leads the page, under the hero — the actor page's order — and the chip bar then indexes
   // the four sections that actually follow it.
-  const board = page ? featureRailHtml(page) : '';
+  // On a feature's page the board is the page's first section, framed and headed like the actor
+  // page's — the same strip, the same mark, the same count the chip bar states.
+  const ucTotal = shown.reduce((n, g) => n + g.ucs.length, 0);
+  const board = page
+    ? itemSectionHtml(secs, 'uc', 'Use cases', ucTotal,
+        'Every use case of this feature, in the order the happy path runs, grouped by who drives each.',
+        featureRailHtml(page), itemGlyphSvg('usecase'))
+    : '';
   const sections = shown.map((g, gi) => {
     const ids = g.ucs.map((n) => n.id);
     const secId = 'ucsec-' + gi;
@@ -9407,9 +9442,7 @@ function renderActorPage(actorName) {
   // `tabIndexHtml` and `bindTabIndex` STAY — a feature's page and the System page still build one.
   const html = itemSectionHtml(secs, 'uc', 'Use cases', ucs,
     `Every use case this actor ${drives}, in the order the happy path runs${anyIfs}.`, board,
-    // The head rides the frame as a strip, led by the use case mark: this is a board, and the one
-    // section of its page (see itemSectionHtml).
-    { headInFrame: true, glyph: itemGlyphSvg('usecase') });
+    itemGlyphSvg('usecase'));
   diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${html}</div>`;
   bindActorPage(diagram, actorName);
   // AFTER the board is in the document, because it measures drawn text. The Happy Path runs the
@@ -10688,23 +10721,18 @@ function bindProductLead() {
 // Registers itself in `secs` for the pinned chip bar (`tabIndexHtml`), which is the page's contents
 // and its summary in one strip. Two sections is the fewest that index anything; below that the bar
 // draws nothing and this still works.
-// `opts.headInFrame` puts the head INSIDE the frame, as a strip across its top, with `opts.glyph`
-// leading the title. For a BOARD only: a heading over a board sat as loose text between two boxes —
-// the hero card above and the frame below — 22px under one and 9px over the other, belonging to
-// neither. A card list keeps its page-text heading: a title bar welded to a list of cards is a title
-// bar on something that needs none (see the section rules in viewer.css).
-function itemSectionHtml(secs, key, title, count, note, body, opts) {
+// ONE SECTION OF AN ITEM PAGE: the head INSIDE the frame, as a strip across its top, `glyph` leading
+// the title. As page text the head sat between two boxes — the hero card above and the frame below,
+// 22px under one and 9px over the other — belonging to neither. Every item page's sections take this
+// shape (actor, feature, interface, decision area; the use case page's flow head is the same strip,
+// attached to the drawing's own frame — see walkHeadHtml). A section's body is whatever the page
+// holds there: a board, a card list, chip groups. The strip is outside a board, which is the thing
+// that scrolls sideways, so the strip stays put while the board scrolls under it.
+function itemSectionHtml(secs, key, title, count, note, body, glyph) {
   const id = 'itemsec-' + key;
-  const o = opts || {};
   secs.push({ id, title, count });
-  const head = itemSectionHeadHtml(title, count, note, o.glyph);
-  if (!o.headInFrame) {
-    return `<section class="item-sec" id="${id}">${head}<div class="item-sec-frame">${body}</div></section>`;
-  }
-  // The strip is outside the board, which is the thing that scrolls sideways — so the strip stays put
-  // while the board scrolls under it.
-  return `<section class="item-sec item-sec-boarded" id="${id}"><div class="item-sec-frame">`
-    + `<div class="item-sec-strip">${head}</div>`
+  return `<section class="item-sec" id="${id}"><div class="item-sec-frame">`
+    + `<div class="item-sec-strip">${itemSectionHeadHtml(title, count, note, glyph)}</div>`
     + `<div class="item-sec-body">${body}</div></div></section>`;
 }
 // The head alone — the title, its count and its sentence — for a section whose frame is not the
@@ -12477,19 +12505,27 @@ function renderInterface(s) {
     ? '<p class="feat-empty">Not stated. No walk in this map comes through this interface, so nothing here can say which features use it.</p>'
     : (i.features || []).length ? elementCardListHtml(i.features)
                                 : '<p class="feat-empty">No feature reaches this interface.</p>';
+  // The same framed sections with a strip head every item page draws, each led by the mark of what
+  // it holds. The counts are the cards' own: people on the far side, walks that cross, features.
+  const secs = [];
+  const crossCount = (i.steps || []).reduce((n, g) => n + g.steps.length, 0);
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({ name: i.name, type: elementLabel('interface'), pills, desc: i.what ? mdInline(i.what) : '',
                      noDesc: 'No description recorded for this interface.' })
-    + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
-    + '<h3 class="card-group-head">What crosses</h3>'
-    + (storyBlocks ? `<div class="ifs-cross">${storyBlocks}</div>`
-                   : '<p class="feat-empty">No step of any walk in this map is drawn at this '
-                     + 'interface, so the map cannot say what crosses it or when. Every interface '
-                     + 'owes a use case, including one an operator reaches, so this is a gap in '
-                     + 'the stories rather than a missing field.</p>')
-    + '<h3 class="card-group-head">Features through it</h3>' + feats
+    + itemSectionHtml(secs, 'far', 'Who is on the far side', actorIds.length, '', farSide, storyGlyphSvg('human'))
+    + itemSectionHtml(secs, 'cross', 'What crosses', crossCount, '',
+        storyBlocks ? `<div class="ifs-cross">${storyBlocks}</div>`
+                    : '<p class="feat-empty">No step of any walk in this map is drawn at this '
+                      + 'interface, so the map cannot say what crosses it or when. Every interface '
+                      + 'owes a use case, including one an operator reaches, so this is a gap in '
+                      + 'the stories rather than a missing field.</p>',
+        itemGlyphSvg('usecase'))
+    + itemSectionHtml(secs, 'feats', 'Features through it', i.featuresUnknown ? '' : (i.features || []).length, '',
+        feats, storyFeatureGlyphSvg())
     + ((i.components || []).length
-        ? '<h3 class="card-group-head">The code behind it</h3>' + elementCardListHtml(i.components) : '')
+        ? itemSectionHtml(secs, 'code', 'The code behind it', i.components.length, '',
+            elementCardListHtml(i.components), itemGlyphSvg('component'))
+        : '')
     + '</div>';
   bindElementCards(diagram);
   // The actor cards are the only `data-key` cards on this page, and their door is the actor's page.
@@ -12548,8 +12584,11 @@ function renderRules(s) {
       noDesc: 'No description recorded for this decision area.',
       meta: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
     })
-    + (g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id))
-                      : '<p class="empty">No rules assigned to this area yet.</p>')
+    // The rules as the page's one section, framed and headed like every item page's. No mark: the
+    // map draws no glyph for a rule.
+    + itemSectionHtml([], 'rules', 'Rules', g.rules.length, '',
+        g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id))
+                       : '<p class="empty">No rules assigned to this area yet.</p>')
     + '</div>';
   bindElementCards(diagram);
   // An area is now its own page rather than one section of a long scroll, so arriving focused on one
@@ -12569,9 +12608,9 @@ function renderRule(s) {
   const area = blk
     ? `<button type="button" class="br-blk" data-blk="${esc(blk.id)}">${esc(blk.name)}</button>`
     : '<span class="br-nowhere">not assigned to a decision area</span>';
-  const sec = (title, count, body) => '<section class="uc-group">'
-    + `<h3 class="uc-actor">${esc(title)}`
-    + (count ? `<span class="uc-actor-wants">${esc(count)}</span>` : '') + '</h3>' + body + '</section>';
+  // The same framed sections with a strip head every item page draws; the count keeps its noun.
+  const secs = [];
+  const sec = (key, title, count, body) => itemSectionHtml(secs, key, title, count, '', body);
   const nSites = (r.sites || []).length;
   const nSteps = (r.steps || []).length;
   const nEnts = (r.entities || []).length;
@@ -12583,16 +12622,17 @@ function renderRule(s) {
     ? '<div class="br-chips">' + r.entities.map((e) =>
         `<button type="button" class="br-ent" data-id="${esc(e.id)}">${esc(e.name)}</button>`).join('') + '</div>'
     : '<p class="empty">No entity is named by this rule.</p>';
+  // THE SAME CARD every page about one element leads with: no mark (the map draws none for a rule),
+  // `Business rule: <name>`, the statement as the sentence, and the area and the risk as its context.
+  const context = `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Decision area:</span> ${area}`
+    + (blk && blk.purpose ? ` ${mdInline(blk.purpose)}` : '') + '</span>'
+    + (r.risk ? `<span class="page-hero-meta-line"><span class="uc-wants-lbl">If it is wrong:</span> ${mdInline(r.risk)}</span>` : '');
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + '<section class="uc-group">'
-    + (ruleStatementLine(r) ? `<p class="br-statement">${mdInline(r.statement)}</p>` : '')
-    + `<p class="uc-wants"><span class="uc-wants-lbl">Decision area:</span> ${area}</p>`
-    + (blk && blk.purpose ? `<p class="uc-wants">${mdInline(blk.purpose)}</p>` : '')
-    + (r.risk ? `<p class="uc-wants"><span class="uc-wants-lbl">If it is wrong:</span> ${mdInline(r.risk)}</p>` : '')
-    + '</section>'
-    + sec('Where it is enforced', nSites ? `${nSites} call site${nSites === 1 ? '' : 's'}` : '', sites)
-    + sec('Enforced at these steps', nSteps ? `${nSteps} flow step${nSteps === 1 ? '' : 's'}` : '', steps)
-    + sec('Touches', nEnts ? `${nEnts} entit${nEnts === 1 ? 'y' : 'ies'}` : '', ents)
+    + pageHeroHtml({ name: ruleCrumbTitle(s.br), type: elementLabel('rule'),
+                     desc: ruleStatementLine(r) ? mdInline(r.statement) : '', noDesc: false, meta: context })
+    + sec('sites', 'Where it is enforced', nSites ? `${nSites} call site${nSites === 1 ? '' : 's'}` : '', sites)
+    + sec('steps', 'Enforced at these steps', nSteps ? `${nSteps} flow step${nSteps === 1 ? '' : 's'}` : '', steps)
+    + sec('ents', 'Touches', nEnts ? `${nEnts} entit${nEnts === 1 ? 'y' : 'ies'}` : '', ents)
     + '</div>';
   // The area chip walks back OUT to the list, landing on the area this rule belongs to — the same
   // move the breadcrumb makes, available where the reader is looking.

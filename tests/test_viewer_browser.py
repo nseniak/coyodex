@@ -2881,12 +2881,13 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
                 pills: [...document.querySelectorAll('#diaghead .ecard-pill')].map((e) => e.textContent),
                 kind: (q('#diaghead .page-hero-kind') || {}).textContent,
                 sentence: q('#diaghead .page-hero-purpose').textContent.length,
-                title: q('#diaghead .item-sec-title').firstChild.textContent.trim(),
+                title: [...q('#diaghead .item-sec-title').childNodes].filter((n) => n.nodeType === 3)
+                         .map((n) => n.textContent).join('').trim(),
                 count: q('#diaghead .item-sec-n').textContent,
                 note: q('#diaghead .item-sec-note').textContent.length,
                 player: q('#flowcount').textContent,
                 headAboveFrame: q('#diaghead').getBoundingClientRect().bottom <= wrap.getBoundingClientRect().top,
-                frame: {radius: cs.borderRadius, border: cs.borderColor},
+                frame: {radius: cs.borderRadius, border: cs.borderLeftColor},   // the top edge is the strip's
                 left: [box(q('#diaghead .page-hero')), box(wrap)].map((b) => b[0]),
                 mapInFrame: !!q('#diagram svg') && wrap.contains(q('#diagram svg')),
             };
@@ -2901,7 +2902,9 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
         assert seen["count"].endswith(" steps"), "the count keeps its noun"
         assert seen["headAboveFrame"] and seen["mapInFrame"], seen
         # The frame is the section frame's own: the actor page's colours, not the drawing's old ones.
-        assert seen["frame"] == {"radius": "12px", "border": "rgb(203, 213, 225)"}, seen
+        # The frame's top corners are square: the strip above it carries the rounded top, and the
+        # two are one box.
+        assert seen["frame"] == {"radius": "0px 0px 12px 12px", "border": "rgb(203, 213, 225)"}, seen
         assert seen["left"] == [20, 20], "the hero band and the frame share the actor page's left edge"
         # …and the actor's page is untouched, which is the whole point: it stays the reference.
         page.goto(url + "#v=actor&act=Org creator")
@@ -2929,7 +2932,8 @@ def test_a_shared_sub_use_case_s_page_draws_the_same_head_from_its_own_words() -
                 kind: (q('#diaghead .page-hero-kind') || {}).textContent,
                 sentence: !!q('#diaghead .page-hero-purpose'),
                 foot: !!q('#diaghead .ecard-extra'),
-                title: q('#diaghead .item-sec-title').firstChild.textContent.trim(),
+                title: [...q('#diaghead .item-sec-title').childNodes].filter((n) => n.nodeType === 3)
+                         .map((n) => n.textContent).join('').trim(),
                 count: q('#diaghead .item-sec-n').textContent,
                 player: q('#flowcount').textContent,
             };

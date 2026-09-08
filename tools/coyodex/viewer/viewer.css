@@ -241,6 +241,11 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    block's SHADOW is that line, and a hairline sitting one pixel above a shadow says the same thing
    twice — so the wrapper keeps only its contents. */
 #pagehero .page-hero { padding: 0; border-bottom: 0; margin-bottom: 0; }
+/* The same card the element page and the rule page lead with, here in the fixed block: the band keeps
+   its own padding over the block's zeroing rule above, and its figure fills its column. */
+#pagehero .page-hero-band { padding: 16px 22px 14px; }
+#pagehero .page-hero-figured { padding-left: 14px; }
+#pagehero .page-hero-glyph .ibox-gly, #pagehero .page-hero-glyph .story-glyph { width: 100%; height: 100%; }
 #pagehero .page-hero-pills { margin: 0; }
 /* Smaller and quieter here: one line of chrome above a drawing, not the lead of a page of prose. The
    width cap it used to lift is gone from the shared hero itself. */
@@ -258,7 +263,12 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #diaghead .page-hero-name .ibox-gly { width: 19px; height: 19px; align-self: center; }
 #diaghead .ecard-extra { margin: -6px 0 12px; }
 #diaghead .item-sec-note { margin-bottom: 0; }
-#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 9px 20px 24px; border-color: #cbd5e1; border-radius: 12px; }
+/* The strip in the head and the drawing's frame under it are ONE framed section: the strip carries the
+   frame's top and sides and the frame carries the rest, with no gap and one rounded box between them. */
+#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 0 20px 24px; border-color: #cbd5e1; border-top: 0;
+                                                 border-radius: 0 0 12px 12px; }
+#diaghead .item-sec-strip-stage { border: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;
+                                  border-radius: 12px 12px 0 0; }
 /* THE DOOR TO A PROCESS'S DETAILS PAGE. A link, not a button: it goes somewhere, it does not act on what
    is on screen — and every button in this header block (a tab, a group, a crumb) already means "switch
    what you are looking at". Set in the trail's own quiet indigo so it reads as one more step of the path
@@ -727,6 +737,8 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    thing their page is named after, and a word in front of them buys nothing. */
 .page-hero-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0;
                   font-size: 13px; color: #6b7280; }
+/* One line of context each, on a hero that has two (a rule's area, and what goes wrong without it). */
+.page-hero-meta-line { flex: 1 0 100%; }
 /* THE BAND. A named hero sits on a white card with a hairline, the width of the frames under it: on
    the page's own ground the name (16px) and the section headings (14px) weighed the same, and the
    reader had to work out which was the subject. A wash of the kind's colour and a 24px name were
@@ -764,7 +776,6 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    and read as a rule floating between two blocks, belonging to neither.
    The bar's own line keeps its tight gap to the buttons ABOVE it — that line is the bottom edge of
    the strip, not a separator between two things. */
-.item-sec + .item-sec { border-top: 1px solid #e2e8f0; padding-top: 12px; }
 .item-sec-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0;
                   font-size: 14px; font-weight: 700; color: #111827; }
 /* The count rides the title in its own pill, the same shape the chip bar's count wears, so the two
@@ -794,12 +805,13 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    below, so source order decided and the picture bled 1px past the board above it on the same page. */
 .item-sec-frame .hfade-wrap, .item-sec-frame .hfade-wrap:has(> .ifd-wrap) { margin: 0; }
 .item-sec-frame > :last-child { margin-bottom: 0; }
-/* A BOARD'S HEAD RIDES ITS FRAME. The strip runs edge to edge across the frame's top, on a quieter
-   ground with a hairline under it, and the body keeps the frame's own padding below. The title's
-   mark (the use case glyph) is centred on the title's line, since an svg has no baseline. The frame
-   drops its own padding so the strip can reach its edges, and clips so the strip's ground follows the
-   frame's rounded corners. */
-.item-sec-boarded > .item-sec-frame { padding: 0; overflow: hidden; }
+/* A SECTION'S HEAD RIDES ITS FRAME. The strip runs edge to edge across the frame's top, on a quieter
+   ground with a hairline under it, and the body keeps the frame's old padding below. The title's
+   mark is centred on the title's line, since an svg has no baseline. The frame keeps no padding of
+   its own so the strip can reach its edges, and clips so the strip's ground follows the rounded
+   corners. Framed, the sections need no grey line between them: the old `.item-sec + .item-sec`
+   rule drew one for page-text headings. */
+.item-sec-frame { padding: 0; overflow: hidden; }
 .item-sec-strip { display: flex; flex-direction: column; gap: 2px; padding: 11px 16px 9px;
                   background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
 .item-sec-strip .item-sec-note { margin: 0; }

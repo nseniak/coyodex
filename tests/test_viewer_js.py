@@ -1156,9 +1156,11 @@ def test_the_page_you_drilled_into_says_what_it_is_in_the_header_not_in_the_card
     assert "pageHeroHtml({" in sub, "one hero design, not a second one built by hand"
     assert "cardFacts(id)" in sub, "…reading the same sentence the element's own card reads"
     assert "kindPillsExtra(n)" in sub, "only what the breadcrumb's own pills did not already say"
-    assert "c.type" not in sub and "cardPillsHtml" not in sub, \
-        "the type rides the breadcrumb; printing it here says `subsystem` twice"
-    assert "o.name" not in sub and "c.name" not in sub, "the breadcrumb is the page's title, not the hero"
+    # THE SAME CARD every page about one element leads with: the kind's mark in the left column, the
+    # type as a word before the name, the pills that vary within the kind. It repeats the breadcrumb
+    # on purpose — the breadcrumb is the app's chrome and reads as a path.
+    assert "type: c.type" in sub and "name: c.name" in sub and "glyph: elementHeroGlyph(n.kind)" in sub
+    assert "cardPillsHtml" not in sub, "the type is the word before the name, not a pill after it"
     # FOUR element subjects, named in one place — and the lookup itself is the one the breadcrumb's pills
     # already use, so the trail and the hero cannot disagree about what a page is showing.
     kinds = js[js.index("const HERO_KINDS = new Set("):
@@ -1477,7 +1479,7 @@ def test_a_named_hero_sits_on_a_white_band_with_the_shared_hero_s_own_text_sizes
     assert "#diaghead .page-hero-glyph .story-glyph, #diaghead .page-hero-glyph .ibox-gly { width: 100%; height: 100%; }" in css, \
         "the figure fills its column, over the small sizes the hosts pin"
     assert "HERO_TINTS" not in js and "heroWash" not in js and "--hero-tint" not in css, "no colour of its own"
-    band = css[css.index(".page-hero-band {"): css.index("}", css.index(".page-hero-band {"))]
+    band = css[css.index("\n.page-hero-band {"): css.index("}", css.index("\n.page-hero-band {"))]
     assert "background: #fff" in band and "border: 1px solid #cbd5e1" in band and "border-radius: 12px" in band, \
         "the same white card and hairline the section frames have"
     assert ".page-hero-band .page-hero-subject" not in css and ".page-hero-band .page-hero-purpose" not in css, \
@@ -1989,7 +1991,7 @@ def test_a_process_keeps_all_its_depth_on_a_details_page() -> None:
     assert "if (!eps.length) return '';" in threads, "no threads is not an empty heading"
     det = js[js.index("function renderElementDetails(id) {"):
              js.index("\n}", js.index("function renderElementDetails(id) {"))]
-    assert "${nodeDetailBodyHtml(id)}${unitThreadsHtml(n.unit)}" in det, "under the fields, on the same page"
+    assert "${nodeDetailBodyHtml(id, true)}${unitThreadsHtml(n.unit)}" in det, "under the fields, on the same page"
     # The door, and only for a process — every other subject's page is reached from its card elsewhere.
     sub = js[js.index("function heroSubjectHtml(id, chain) {"):
              js.index("\n}", js.index("function heroSubjectHtml(id, chain) {"))]
@@ -2180,7 +2182,10 @@ def test_a_page_about_one_element_says_what_it_is_beside_its_name() -> None:
     assert "n.kind !== 'dep'" in extra, "only a dependency has axes its card does not carry"
     assert ".filter((w) => w !== kind)" in extra, \
         "a role whose word IS the kind says nothing twice — 32 of the 153 dependencies"
-    assert "extra ? `<div class=\"page-hero\">" in js, "no hero at all when nothing is left in it"
+    # The element page leads with the same card every page about one element leads with, whatever is
+    # left for the pills — the card carries the mark, the type word, the name and the sentence.
+    assert "pills: extra," in js and "nodeDetailBodyHtml(id, true)" in js, \
+        "the card, and a body that no longer repeats the card's sentence"
 
 def test_a_text_view_has_no_selection_card_and_a_diagram_only_has_one_when_it_says_something() -> None:
     """Per the spec a card list, a card grid and a details page carry no info pane: a pane beside a page
@@ -2732,9 +2737,10 @@ def test_the_section_chips_carry_the_counts_and_the_headings_do_not() -> None:
     heading repeating it read as a second fact on a page where every section has a number. The count
     stays optional per section, so the tabs indexing untallied things are untouched."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    sec = js[js.index("function featSection(secs, key, title, n, body) {"):
-             js.index("\nfunction ", js.index("function featSection(secs, key, title, n, body) {") + 10)]
-    assert "secs.push({ id, title, count: n });" in sec
+    sec = js[js.index("function featSection(secs, key, title, n, body, glyph) {"):
+             js.index("\nfunction ", js.index("function featSection(secs, key, title, n, body, glyph) {") + 10)]
+    assert "itemSectionHtml(secs, 'feat-' + key, title, n, '', body, glyph)" in sec, \
+        "one framed section with a strip head, the shape every item page draws"
     assert "uc-actor-wants" not in sec, "the heading states no count"
     idx = js[js.index("function tabIndexHtml(secs) {"):
              js.index("\nfunction ", js.index("function tabIndexHtml(secs) {") + 10)]
@@ -2780,7 +2786,7 @@ def test_a_feature_page_draws_the_walk_as_a_rail_not_a_grid() -> None:
     assert ".journey-zor {" in (VIEWER_DIR / "viewer.css").read_text()
     # The caller draws the board BARE, above the chip bar, and keeps the grid only for a list with no
     # board of its own.
-    assert "const board = page ? featureRailHtml(page) : '';" in js
+    assert "featureRailHtml(page), itemGlyphSvg('usecase'))" in js, "the rail, as the page's first section"
     assert "if (board) return '';" in js, "the use-case group emits nothing when the board draws"
     assert '<div class="usecases-wrap">${head}${board}${index}' in js
 
@@ -4572,7 +4578,7 @@ def test_a_feature_card_counts_its_joined_rules_and_hides_a_zero() -> None:
     assert "<button" not in card.split("band:")[1], "no count pill is a button"
     bind = _story_fn(js, "bindStoryDiagram")
     assert "featsec-rules" not in bind, "no count opens a section of the feature page"
-    assert "'featsec-' + key" in js, "the feature page's section ids are untouched"
+    assert "'feat-' + key" in js, "the feature page's sections keep their own keys"
 
 
 # --- the URL carries the screen -----------------------------------------------------------------
@@ -5373,13 +5379,17 @@ def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> 
     assert "itemGlyphSvg(sub ? 'subflow' : 'usecase')" in head, "the element's own glyph on the name row"
     assert "itemSectionHeadHtml(" in head, "the section head, from the one builder"
     assert "(FLOWS_NARR[id] || []).length" in head, "the count is the walk's own steps"
-    sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body, opts) {"):
-             js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body, opts) {"))]
-    assert "itemSectionHeadHtml(title, count, note, o.glyph)" in sec, "…which the framed section uses too"
+    sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph) {"):
+             js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph) {"))]
+    assert "itemSectionHeadHtml(title, count, note, glyph)" in sec, "…which the framed section uses too"
     sync = js[js.index("function syncPageHero(s, chain) {"):
               js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
     assert "const walk = isFlowState(s);" in sync and "walk ? walkHeadHtml(s, chain)" in sync
     assert "other.innerHTML = ''; other.hidden = true;" in sync, "the host not in use is emptied"
     # The frame under the head is #diagwrap, restyled to the section frame's own colours while it shows.
-    assert "#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 9px 20px 24px; border-color: #cbd5e1; border-radius: 12px; }" in css
+    # The strip in the head and the drawing's frame are ONE framed section: no gap, no top border on
+    # the frame, one rounded box between them.
+    assert "#stage:has(#diaghead:not([hidden])) #diagwrap { margin: 0 20px 24px; border-color: #cbd5e1; border-top: 0;" in css
+    assert "#diaghead .item-sec-strip-stage { border: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;" in css
+    assert "'<div class=\"item-sec-strip item-sec-strip-stage\">'" in head, "the same strip every section wears"
     assert "#diaghead { flex: 0 0 auto; padding: 0 20px; }" in css, "the actor page's left edge"
