@@ -487,7 +487,7 @@ _COYODEX_SUBCOMMANDS = frozenset({
     "anchor-drift", "archive", "arrows", "assemble", "audit", "balance", "bless", "claims",
     "compare",
     "contract", "cost", "diff", "dump", "finalize", "fix", "grounding", "hash", "judge",
-    "ledger", "lint-fragment",
+    "ledger", "lint-fragment", "live-numbers",
     "mutate", "preindex",
     "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
     "context", "run", "score", "scope", "serve", "ship", "timings", "transcript", "validate",

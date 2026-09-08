@@ -12697,7 +12697,7 @@ function renderInterface(s) {
   // the evidence are the same sentence rather than two blocks that could disagree.
   //
   // GROUPED BY STORY, because a step means little without the story it sits in — mcpolis's
-  // dashboard draws 89 of them from 20 different walks, and read as one list they are noise.
+  // dashboard draws 141 of them from 31 different walks, and read as one list they are noise.
   //
   // CAPPED PER STORY, WITH THE REST ONE CLICK AWAY IN PLACE. This is the page the rest lives on, so
   // the tail cannot be a door to somewhere else the way it is on a diagram label.

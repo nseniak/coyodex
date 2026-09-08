@@ -1257,7 +1257,7 @@ def l2_worklist_model(m: ProjectModel, *, behavioural: bool = False) -> list[Wor
             via = ("the walk step that names them both" if door else
                    "a way in their own use case drives" if ways else
                    "the dependency standing on this surface" if dep else "nothing anchorable")
-            # CAPPED THROUGH `shown`, never by hand. One role drove 27 use cases at mcpolis's
+            # CAPPED THROUGH `shown`, never by hand. One role drove 25 use cases at mcpolis's
             # dashboard and a detail line that long buries the part a skeptic reads — but a
             # hand-written `+N more` also truncates `--json`, which is meant to emit whole lists.
             # `test_no_hand_written_truncation_bypasses_the_helper` catches exactly that, and caught

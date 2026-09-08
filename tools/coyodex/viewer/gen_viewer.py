@@ -412,7 +412,7 @@ def _retention_line(node: dict[str, Any]) -> str | None:
 def _lifecycle_line(node: dict[str, Any]) -> str | None:
     """`⟳ lifecycle(3 states)` — a marker that this entity's code declares a state machine, which the
     diagram otherwise never showed (the states themselves stay in the panel, where they fit). Rare by
-    nature (2 entities across three live maps), so it costs the diagram nothing when absent."""
+    nature (5 entities across three live maps), so it costs the diagram nothing when absent."""
     n = int(node.get("states_count") or 0)
     return f"⟳ lifecycle({n} states)" if n else None
 

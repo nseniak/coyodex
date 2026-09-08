@@ -137,6 +137,12 @@ RECIPES: dict[str, tuple] = {
     # A map against ITSELF: nothing can be lost, so the sweep exercises the whole path (load,
     # source check, match, report) on a pair that is guaranteed to exit 0.
     "arrows":         (lambda t: ["arrows", str(MAP), str(MAP), "--repo", str(FIXTURE)], OK),
+    # THIS repo, so the ledger's own sentences are found and the coyodex map is the one in-tree.
+    # argus and mcpolis live outside the checkout, so their rows skip. Exit 1 whenever a row is
+    # stale — the normal state between a rebuild and the rewrite that follows it. NOT 2, which is
+    # the ledger itself being broken; accepting that here would let a run where every row crashed
+    # pass this sweep.
+    "live-numbers":   (lambda t: ["live-numbers", "--repo", str(REPO)], (0, 1)),
 }
 
 
