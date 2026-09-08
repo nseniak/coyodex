@@ -1222,8 +1222,11 @@ body.panel-dragging { user-select: none; }
    the box it draws in; padding on each number, or a heavier weight when one is picked, pushes the row
    past that box and the last number is clipped — measured, "7, 12" lost half its 12. So the lit patch
    is painted OUTSIDE the box with a spread shadow, which takes no space at all. */
-#diagram .flow-step-num { border-radius: 4px; }
-#diagram .flow-step-num:hover { background: #eef2ff; box-shadow: 0 0 0 2px #eef2ff; color: #3730a3; }
+/* ONLY A NUMBER THAT IS A DOOR LIGHTS UP. A map number carries `data-fstep` and opens its step; the
+   Happy Path writes the same class on a step's rank, which opens nothing, and it went grey under the
+   pointer for no reason. */
+#diagram .flow-step-num[data-fstep] { border-radius: 4px; }
+#diagram .flow-step-num[data-fstep]:hover { background: #eef2ff; box-shadow: 0 0 0 2px #eef2ff; color: #3730a3; }
 #diagram .flow-step-picked { background: #e0e7ff; box-shadow: 0 0 0 2px #e0e7ff; color: #3730a3; }
 /* A bundled map arrow repeats the ordinary sequence-step pane once per step. A firm divider keeps the
    full records distinct without wrapping each one in another card. */

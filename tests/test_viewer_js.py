@@ -1458,6 +1458,18 @@ def test_a_step_number_sits_at_the_middle_of_its_arrow() -> None:
     assert "centreEdgeLabels(ph);" in channels, "the Storage tab's small pictures are drawn by the same engine"
 
 
+def test_only_a_number_that_opens_a_step_lights_up_under_the_pointer() -> None:
+    """The map's step numbers are doors: each opens its step, so each lights up under the pointer. The
+    Happy Path writes the same class on a step's rank, which opens nothing — and it went grey under the
+    pointer for no reason, because the hover rule matched the class alone. A map number is the one that
+    carries `data-fstep`, so the rule keys on that."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "#diagram .flow-step-num[data-fstep]:hover {" in css
+    assert "#diagram .flow-step-num:hover" not in css, "a bare-class hover lights the Happy Path's rank too"
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "number.dataset.fstep = String(i);" in js, "the map's numbers carry the attribute the rule keys on"
+
+
 def test_clicking_an_arrow_points_the_line_at_its_number_not_its_middle() -> None:
     """A number is a door to its step, and so is the arrow that carries it. Clicking the number drew the
     line to the number; clicking the line beside it drew the line to the arrow's middle — the same card,
