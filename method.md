@@ -623,12 +623,13 @@ components/deps/entities), drawn as a flow map and read as a numbered narrative.
   browser: a config file, environment variables, a flag file an operator edits. Values a person
   types into a page of ours are `screen`.
   **`actors` is DERIVED and is NOT a field — never author it.** Who is on the far side falls out of
-  the flows, from THREE sources, and the first is the strongest. **(1) The DOORS**: any role standing
+  the flows, from TWO sources, and the first is the strongest. **(1) The DOORS**: any role standing
   at a step next to the surface, `Rn → In` or `In → Rn`, either side, on ANY surface and with no kind
-  gate — a written step is the map's own statement, not an inference. **(2)** An `ours` surface also
-  takes the roles driving the use cases behind its ways in. **(3)** A `theirs` surface also takes the
-  roles whose stories reach it, but ONLY when the kind is `hosted-screen` or `handoff`. A surface
-  none of the three reaches derives NOBODY, and that is usually the correct answer, because the
+  gate — a written step is the map's own statement, not an inference. **(2)** A `theirs` surface also
+  takes the roles whose stories reach it, but ONLY when the kind is `hosted-screen` or `handoff`.
+  A use case's `entry_points` play no part — they say which surface a flow must open at, and the
+  flow's door is what puts the person there. A surface
+  neither of the two reaches derives NOBODY, and that is usually the correct answer, because the
   product itself is what reaches most outside services — but do not read it as permission to skip a
   door. If a surface hands something OUT and derives nobody, the missing thing is a story, and
   `validate` says so. Writing it by hand was measured and is worse: one build authored a single role

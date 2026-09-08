@@ -484,16 +484,19 @@ Semantics, stated on the fields:
   which has no ways in by definition. It is also a LEVEL above `entry_points[].kind`, never a
   duplicate of it: a way in's kind names the MECHANISM (an HTTP address, a tool, a command), this
   names the SURFACE (a web UI, a CLI, an API), and `ui-route` + `http-route` together ARE a web UI.
-  **`actors` is not a field.** Who is on the far side is derived from THREE sources, and the first
+  **`actors` is not a field.** Who is on the far side is derived from TWO sources, and the first
   is the strongest. **(1) The DOORS.** Any role standing at a flow step directly next to the surface
   — `Rn → In` or `In → Rn`, either side — is at that surface. This arm takes NO `kind` gate, and
-  that is deliberate: the gate on arm (3) exists to stop a bad INFERENCE, and a written step is not
-  an inference, so gating it would throw away the map's own statement. **(2) An `ours` surface**
-  also takes the roles driving the use cases behind its ways in. **(3) A `theirs` surface** also
-  takes the roles whose stories reach it, but ONLY when the kind is `hosted-screen` or `handoff`
-  (the two that MEAN a person goes there). Anything else derives nobody, and nobody is the correct
-  answer — most surfaces are reached by the product itself, not by a person. An authored value
-  beside a derived one is the failure mode this shape exists to remove.
+  that is deliberate: the gate on arm (2) exists to stop a bad INFERENCE, and a written step is not
+  an inference, so gating it would throw away the map's own statement. **(2) A `theirs` surface**
+  also takes the roles whose stories reach it, but ONLY when the kind is `hosted-screen` or
+  `handoff` (the two that MEAN a person goes there). Anything else derives nobody, and nobody is the
+  correct answer — most surfaces are reached by the product itself, not by a person. A use case's
+  `entry_points` play NO part: "the roles driving the use cases behind an `ours` surface's ways in"
+  was a third source once, and it was the one join that did not read the flow — on mcpolis it put
+  two backend routes' surface at happy-path step 1 of a use case whose flow never steps there. An
+  `ours` surface's people are the ones the flows door at it, which is why every crossing takes a
+  door. An authored value beside a derived one is the failure mode this shape exists to remove.
   **A person derived at an `api` or a `content` surface draws a nudge**, because those two kinds are
   one program calling another. It is the only check that can ask whether a door is the RIGHT door:
   every other door check verifies a door EXISTS, and cannot tell a right one from a wrong one. Two
