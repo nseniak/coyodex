@@ -6797,7 +6797,6 @@ function walkHeadHtml(s, chain) {
   const hero = pageHeroHtml({
     glyph: itemGlyphSvg(sub ? 'subflow' : 'usecase'),
     name: sub ? subflowName(id) : n.name,
-    tint: HERO_TINTS.usecase,
     // A use case's pills are THE SAME ONES ITS CARD SHOWS, from the one function that decides them,
     // plus the change badge in diff mode — what the fixed-block hero drew for it before.
     pills: sub ? '<span class="ecard-pill">shared sub-use case</span>'
@@ -8165,19 +8164,6 @@ function featRulesHtml(ids) {
 //
 // A plain `div`, never a `<header>`: the page's own top bar is styled by a bare `header` selector (dark
 // navy, flex row), and a semantic header here inherited all of it and rendered unreadable.
-// THE BAND'S WASH, one per kind of page. A named hero sits on a tinted band so the page's subject is
-// the first thing on it: measured before the band, the name was 16px over sections headed at 14px, on
-// the same white, so the hero and the "Use cases" heading under it weighed the same. Each kind keeps
-// its own family — an actor the warm wash its figure and its `human` pill already wear, a use case the
-// indigo of the rail its steps ride, a feature the tint its zones are painted in on every board.
-const HERO_TINTS = { actor: '#fff1e6', usecase: '#eceefe', interface: '#e6f6f4', rule: '#fdf4dc' };
-// A feature's band wears the tint its zones are painted in, HALF-WAY TO WHITE: the zone washes are
-// built to tell ten features apart on one board, and at full strength the band outweighed every
-// other kind's — measured, #ffdbdb against the #fff1e6 an actor gets.
-function heroWash(tint) {
-  const c = (i) => Math.round((parseInt(tint.slice(i, i + 2), 16) + 255) / 2).toString(16).padStart(2, '0');
-  return '#' + c(1) + c(3) + c(5);
-}
 function pageHeroHtml(o) {
   // THE NAME ROW: the element's own figure, its name, and the pills it earns. Every page about ONE
   // element draws it, and it is the one place the hero repeats the breadcrumb on purpose — the
@@ -8208,10 +8194,12 @@ function pageHeroHtml(o) {
   // It also fixes what the slot got wrong: a lead word applied to the recorded-nothing case too, so a
   // map that never said what an actor wants announced "Goal: This map does not say what this actor
   // wants."
-  // The band is the NAMED hero's shape, and it is asked for (`tint`): the arrow pages, the entry-point
-  // kinds and the fixed block over a drawing have no name to lead with, and stay plain.
-  const band = o.tint ? ` page-hero-band" style="--hero-tint:${esc(o.tint)}` : '';
-  return `<div class="page-hero${band}">` + name
+  // THE BAND is the NAMED hero's shape: a white card with a hairline, the width of the frames under
+  // it, so the page's subject is set off from the sections instead of weighing the same as their
+  // headings on the same ground. The arrow pages, the entry-point kinds and the fixed block over a
+  // drawing have no name to lead with, and stay plain. A wash of the kind's colour and a 24px name
+  // were tried and dropped as too loud; the card alone does the setting-off.
+  return `<div class="page-hero${o.name ? ' page-hero-band' : ''}">` + name
     // `noDesc: false` = this page HAS no sentence by design (an entry-point kind is a bare word), as
     // opposed to a page whose sentence the map failed to record, which says so.
     + (o.desc ? `<p class="page-hero-purpose">${o.desc}</p>`
@@ -8241,7 +8229,6 @@ function featureHeadHtml(capId) {
   return pageHeroHtml({
     glyph: storyFeatureGlyphSvg(),
     name: f.name,
-    tint: heroWash(featureTint(capId)),
     pills: elementPillsHtml(capId),
     desc: f.purpose ? mdInline(f.purpose) : '',
     noDesc: 'No purpose recorded.',
@@ -8877,7 +8864,6 @@ function actorPageHeroHtml(actorName) {
     // figure the cast card and the board head give them.
     glyph: storyGlyphSvg(role && role.kind),
     name: actorName,
-    tint: HERO_TINTS.actor,
     // `actor`, and the side where it varies (`staff`, `user service`, `internal service`) — the SAME
     // pills this actor's card shows, from the one function that decides them, so a card and the page
     // one click later cannot name two different kinds of actor.
@@ -12458,7 +12444,7 @@ function renderInterface(s) {
     : (i.features || []).length ? elementCardListHtml(i.features)
                                 : '<p class="feat-empty">No feature reaches this interface.</p>';
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + pageHeroHtml({ name: i.name, tint: HERO_TINTS.interface, pills, desc: i.what ? mdInline(i.what) : '',
+    + pageHeroHtml({ name: i.name, pills, desc: i.what ? mdInline(i.what) : '',
                      noDesc: 'No description recorded for this interface.' })
     + '<h3 class="card-group-head">Who is on the far side</h3>' + farSide
     + '<h3 class="card-group-head">What crosses</h3>'
@@ -12521,7 +12507,6 @@ function renderRules(s) {
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({
       name: g.name,
-      tint: HERO_TINTS.rule,
       pills: elementPillsHtml(g.id)
         + (g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : ''),
       desc: g.purpose ? mdInline(g.purpose) : '',
