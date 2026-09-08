@@ -12510,7 +12510,9 @@ function renderInterface(s) {
   const secs = [];
   const crossCount = (i.steps || []).reduce((n, g) => n + g.steps.length, 0);
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + pageHeroHtml({ name: i.name, type: elementLabel('interface'), pills, desc: i.what ? mdInline(i.what) : '',
+    // The interface's own mark in the figure column — the one its cards and chips wear, by its kind.
+    + pageHeroHtml({ glyph: itemGlyphSvg('interface', i.kind), name: i.name, type: elementLabel('interface'), pills,
+                     desc: i.what ? mdInline(i.what) : '',
                      noDesc: 'No description recorded for this interface.' })
     + itemSectionHtml(secs, 'far', 'Who is on the far side', actorIds.length, '', farSide, storyGlyphSvg('human'))
     + itemSectionHtml(secs, 'cross', 'What crosses', crossCount, '',
