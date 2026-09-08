@@ -1,11 +1,14 @@
 # `compare` bands the rule count and the rule-site count
 
-Change (2026-09-08): `eval/tools/coyodex_eval/compare.py` and `eval/thresholds.json` gain
-`rules_shrink_pct` and `rule_sites_shrink_pct` (0.30, shrink-only, like every other count band).
+Change (2026-09-08): `eval/thresholds.json` gains `rules_shrink_pct` and `rule_sites_shrink_pct`
+(0.30, shrink-only, like every other count band). Not the code defaults: the rules layer is
+optional, and a default band notes "skipped" on every map without it.
 Rules went 102 → 79 → 95 → 88 across four mcpolis builds and nothing banded them; on the 2026-09-08
 build all 11 blocks returned exactly 8 rules against a contract asking for about 5, and 57 of the
 88 fed the security theme. The band gives the retro the number; the per-block aim stays a method
-question (the contract already states 5, and every build fills to 8).
+question (the contract already states 5, and every build fills to 8). A 30 % band would have
+fired on none of those four builds (the largest shrink was 102 → 79, 22.5 %): what it catches is a
+collapse, and the ceiling behaviour is check 3 below, which the band cannot see.
 
 Escalation: a `rules` DRIFT on a commit where no product file changed means the rule surface is
 being re-decided, not re-read — run the eval before accepting the map.
