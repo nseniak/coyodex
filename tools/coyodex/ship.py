@@ -128,8 +128,21 @@ def derive_inputs(repo: Path,
         access_baseline=access_baseline)
 
 
-def _assemble_step(s: ShipInputs, title: str) -> Step:
-    argv: list[str] = ["assemble", *map(str, s.fragments), "--out", str(s.out)]
+def _assemble_step(s: ShipInputs, title: str, carry_record: bool = False) -> Step:
+    """One assemble over the fragments `ship` found when it started — and, with `carry_record`,
+    the record fragment `grounding write` creates at `build-fragments/grounding.json`.
+
+    The fragment list is ONE glob, taken before any step runs. On the run that writes the record
+    for the first time the file is not there to be globbed, so every assemble after the write
+    carried every fragment but the one the write had just produced, and the map shipped with no
+    grounding record until `ship` was run a second time — a live build found its map without the
+    record after a clean run and re-ran the whole sequence. The steps after the write name the
+    file explicitly, in sorted position, so argument order (which decides dedup survivors) is what
+    a re-run's glob would give."""
+    frags = s.fragments
+    if carry_record:
+        frags = tuple(sorted(set(s.fragments) | {s.header.parent / "grounding.json"}))
+    argv: list[str] = ["assemble", *map(str, frags), "--out", str(s.out)]
     if s.reconcile is not None:
         argv += ["--reconcile", str(s.reconcile)]
     return Step(title, tuple(argv))
@@ -245,11 +258,11 @@ def build_plan(s: ShipInputs) -> list[Step]:
     # and grounding write's own reads that matter, and `report` would only repeat what was read.
     return prepare[:3] + [
         Step("grounding write (step 6 — the record, measured against the map)", tuple(write_argv)),
-        _assemble_step(s, "assemble (step 7 — carries the record in)"),
+        _assemble_step(s, "assemble (step 7 — carries the record in)", carry_record=True),
         Step("provenance stamp (step 8 — stamps and fills `built`)",
              ("provenance", "stamp", str(s.repo), "--mode", "build",
               "--update-header", str(s.header))),
-        _assemble_step(s, "assemble (step 9 — the filled header reaches the map)"),
+        _assemble_step(s, "assemble (step 9 — the filled header reaches the map)", carry_record=True),
         Step("lint-fragment header (step 10 — the one hand-authored fragment)",
              ("lint-fragment", str(s.header))),
         # `by-element` between the map being final and the gates reading it. `finalize`'s grounding

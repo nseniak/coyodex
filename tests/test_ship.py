@@ -120,6 +120,29 @@ def test_full_plan_runs_the_method_sequence_in_order():
         assert "--emit-gate-block" in fin and "--access-baseline" not in fin
 
 
+def test_the_record_written_at_step_6_is_named_by_every_assemble_after_it_on_the_first_run():
+    """`ship` globs the fragments once, before any step runs. On the run that writes the grounding
+    record for the first time, `build-fragments/grounding.json` does not exist yet, so an assemble
+    built from that glob carries every fragment but the one step 6 produced — and the map ships
+    with no record until `ship` runs twice. A live build found its map without the record after a
+    clean run. The assembles AFTER the write name the file; the one before it does not."""
+    with tempfile.TemporaryDirectory() as td:
+        repo = make_repo(td)
+        note = repo / "note.txt"
+        note.write_text("a note")
+        steps = ship.build_plan(make_inputs(repo, note_file=note))
+        record = str(repo / ".coyodex" / "build-fragments" / "grounding.json")
+        assert not Path(record).exists(), "the case is a record that is NOT there when ship starts"
+        assembles = [st for st in steps if st.argv[0] == "assemble"]
+        assert len(assembles) == 3, [st.title for st in assembles]
+        before_write, carry_in, header_in = assembles
+        assert record not in before_write.argv, "step 4 runs before the record exists"
+        assert record in carry_in.argv and record in header_in.argv
+        # in sorted position, never appended: argument order decides dedup survivors
+        frags = list(carry_in.argv[1:carry_in.argv.index("--out")])
+        assert frags == sorted(frags) and "half.draft.json" not in " ".join(frags)
+
+
 def test_access_baseline_reaches_finalize_and_only_finalize():
     with tempfile.TemporaryDirectory() as td:
         repo = make_repo(td)
