@@ -162,7 +162,7 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    strip of the pane between the header and the page, and the header's shadow landed on that strip
    instead of on the page — which reads as a solid band lying over the content rather than as an edge
    the content passes under. */
-#diagwrap:has(.usecases-wrap) { background: none; border: 0; border-radius: 0; margin: 0; }
+#diagwrap:has(.usecases-wrap, .glossary-wrap) { background: none; border: 0; border-radius: 0; margin: 0; }
 /* The map fills the space LEFT UNDER the header, so the header never overlaps the fitted/centered
    diagram — the view-selector row is not part of the viewable area. #stagehead takes its natural height
    at the top; the diagram area takes the rest, and svg-pan-zoom fits/centers into that box
@@ -440,7 +440,9 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
    Written as `.usecases-wrap.system-wrap`, not `.system-wrap`: the base `.usecases-wrap` sets `padding`
    as a SHORTHAND further down this file, so at equal specificity the later shorthand puts the 16px back
    and the strip returns. Measured that exact regression before this line was tightened. */
-.usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .glossary-wrap { padding-top: 0; }
+/* Two classes for the glossary case too: the bare `.glossary-wrap` lost to the later `.usecases-wrap`
+   padding rule, so an element page sat 32px under the bar — the padding AND the first child's margin. */
+.usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .usecases-wrap.glossary-wrap { padding-top: 0; }
 .system-wrap > :first-child, .glossary-wrap > :first-child { margin-top: 16px; }
 .system-wrap > .tab-index:first-child { margin-top: 0; }
 /* …and no margin either when the first child IS the table whose header is sticky. A 16px gap above a
@@ -736,6 +738,9 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    top padding is zeroed for the index's sake — the band is the first thing under the breadcrumb bar,
    and the bar's shadow landed on it. The same 16px the actor page's column keeps above its own band. */
 #diaghead .page-hero-band, .usecases-wrap:has(> .tab-index) > .page-hero-band { margin-top: 16px; }
+/* …and when a path line leads, the 16px is the LINE's, and the card keeps only the line's own 8px. */
+#diaghead > .page-path, .usecases-wrap:has(> .tab-index) > .page-path { margin-top: 16px; }
+#diaghead .page-path + .page-hero-band, .usecases-wrap:has(> .tab-index) > .page-path + .page-hero-band { margin-top: 0; }
 #diaghead > .item-sec-strip-stage:first-child { margin-top: 16px; }
 /* THE FIGURE COLUMN. An actor's person, a use case's mark, a feature's sparkle: at the card's full
    height in its left margin, centred, and the text one block beside it. The column is fixed-width so
@@ -743,19 +748,15 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    its proportions inside the column (every glyph carries a viewBox). Written with the hosts' ids
    because `#diagram .story-glyph` and `#diagram .ibox-gly` already pin the small sizes. */
 .page-hero-figured { display: flex; align-items: stretch; gap: 16px; padding-left: 14px; }
-.page-hero-glyph { flex: none; width: 52px; display: flex; align-items: center; justify-content: center; }
+/* 60px: room for the widest box a figure's ink calls for (a record card's, 59px — see sizeHeroFigures). */
+.page-hero-glyph { flex: none; width: 60px; display: flex; align-items: center; justify-content: center; }
 #diagram .page-hero-glyph .story-glyph, #diagram .page-hero-glyph .ibox-gly,
 #diaghead .page-hero-glyph .story-glyph, #diaghead .page-hero-glyph .ibox-gly { width: 100%; height: 100%; }
-.page-hero-body { flex: 1 1 auto; min-width: 0; }
-/* THE PATH LINE: the way to this page, as the head's first line — small, indigo, every item a link,
-   each followed by a ›. It sits where a breadcrumb sits in GOV.UK's and Carbon's page headers: over the
-   title, inside the same block, so it never appears or vanishes on its own. */
-.page-path { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; margin: 0 0 6px; }
-/* On a figured head the line takes a row of its own above the figure and the text, so the figure
-   centres on the name and the sentence alone; indented by the figure column and its gap (52 + 16),
-   so it starts where the name starts. */
-.page-hero-figured { flex-wrap: wrap; row-gap: 0; }   /* the line's own 6px is the gap to the name */
-.page-hero-figured > .page-path { flex: 1 0 100%; padding-left: 68px; }
+.page-hero-body { flex: 1 1 0; min-width: 0; }
+/* THE PATH LINE: the way to this page, on the page ground just above its head — small, indigo, every
+   item a link, each followed by a ›, at the head's left edge. Where GOV.UK and Carbon put a breadcrumb:
+   above the title block, not inside it, so the head stays the same object on every page. */
+.page-path { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; margin: 0 0 8px; }
 .page-path-seg { font: inherit; font-size: 12.5px; font-weight: 600; color: #4338ca; background: none;
                  border: 0; padding: 0; cursor: pointer; }
 .page-path-seg:hover { text-decoration: underline; }
