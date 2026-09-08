@@ -41,6 +41,11 @@ Commands:
            flag is set by hand and nothing checked it: one session answered 40 rows, fixed
            seven of them, and left all seven reading `landed: false` — the next retro would
            re-propose work already done. Exit 1 on any such row.
+  live-numbers  Re-measure every present-tense sentence the tools write about a LIVE map.
+           A number in a comment ("142 entities, 46 of them saved") measures a map that keeps
+           being rebuilt, so the code stays right while the sentence stops being true and no
+           gate can see it. Reads no prose: a person writes the sentence here too, and a
+           measure regenerates it from the map. Exit 1 on any stale row.
   retro-precheck  Refuse to retrospect a build that has not finished. Exit 1 when another
            session is still writing a transcript — provenance is stamped near the END of a
            build, so mid-run it still names the PREVIOUS one and a retro reads the wrong run.
@@ -98,6 +103,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "ledger":
         from coyodex_eval import ledger
         return ledger.main(rest)
+    if cmd == "live-numbers":
+        from coyodex_eval import live_numbers
+        return live_numbers.main(rest)
     if cmd == "retro-precheck":
         from coyodex_eval import retro_precheck
         return retro_precheck.main(rest)

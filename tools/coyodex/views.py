@@ -575,7 +575,7 @@ def model_to_markdown(m: ProjectModel) -> str:
                 return f"- *no anchor* — this site claims nothing{why}"
             comps = site_components(m, site, owners)
             # EVERY owner, never one: `Component.files` is not disjoint, and on this repo's own map
-            # 27% of call-site anchors sit in a file 2-5 components claim.
+            # 2% of call-site anchors sit in a file 3-4 components claim.
             who = (", ".join(f"{comp_names.get(c, c)} ({c})" for c in comps)
                    or "*unverified — no component claims this file*")
             # Labelled with the LINE, not the basename `_anchor_link` uses elsewhere: a rule is

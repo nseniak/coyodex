@@ -959,10 +959,12 @@ def record_direction_gaps(m: ProjectModel) -> dict[str, list[str]]:
     stating that the code writes that record, so a map where no story ever writes it disagrees with
     itself about one record, and the evidence is already inside it.
 
-    Measured across the two live maps: 2 of 46 saved records, both on argus — its sign-in records
-    and its page reading health each have a `writes` arrow and only ever appear in a story being
-    read. The third read-never-written record, mcpolis's pre-registered credentials, is correctly
-    SILENT here: its only arrow is a `reads`, because an admin puts that file there by hand.
+    Measured across the two live maps: 0 of 45 saved records, on neither map. The 2026-09-05 argus
+    map had two — its sign-in records and its page reading health each carried a `writes` arrow
+    while only ever appearing in a story being read — and both have since been closed, which is the
+    check doing its job rather than the check having nothing to do. A third read-never-written
+    record, mcpolis's pre-registered credentials, was correctly SILENT even then: its only arrow is
+    a `reads`, because an admin puts that file there by hand.
 
     THE ARROWS ARE THE ORACLE, NOT THE STEPS. The comparison runs one way on purpose. A step
     direction with no matching arrow is a different finding, already reported by the unbacked-entity-
@@ -1016,7 +1018,7 @@ def record_use_cases(m: ProjectModel) -> dict[str, set[str]]:
     SAVED, not every entity — `model.is_saved`, which is `collection` or `embedded`. A projection is
     a read shape over rows something else owns, a transient is built for the length of one call, an
     enum is a set of constants: none of the three is a record this codebase keeps, and demanding a
-    story for one would bury the real gaps. Measured across the two live maps: 142 entities, 46 of
+    story for one would bury the real gaps. Measured across the two live maps: 135 entities, 45 of
     them saved.
 
     TWO ARMS.
@@ -1161,8 +1163,8 @@ def interface_steps_by_use_case(m: ProjectModel) -> dict[str, list[tuple[str, li
     """The same steps, GROUPED BY THE STORY they belong to and ordered by the happy path.
 
     Grouped rather than listed flat because the reader's question at a surface is "what happens
-    here", and a step means little without the story it sits in: mcpolis's dashboard draws 89 steps
-    from 20 different walks, and read as one list they are noise. Ordered by the happy path so the
+    here", and a step means little without the story it sits in: mcpolis's dashboard draws 141 steps
+    from 31 different walks, and read as one list they are noise. Ordered by the happy path so the
     busiest surface still reads in the order the product's own story happens — the same rule
     `interface_walk_order` gives the Interfaces picture."""
     pos = {hp.uc: n for n, hp in enumerate(m.happy_path) if hp.uc}
@@ -1288,10 +1290,13 @@ def element_capabilities(m: ProjectModel) -> dict[str, set[str]]:
 #
 # TWO measured facts shape the API and must not be designed away:
 #
-#   1. `Component.files` IS NOT DISJOINT. On this repo's own map, 5 files are claimed by 2-5
-#      components each and hold 71 of its 260 call-site anchors (27%) — all decision-dense. So
-#      `site_components` returns a LIST and never picks: ambiguity is data the UI renders, not an
-#      error to resolve by taking `[0]`.
+#   1. `Component.files` IS NOT DISJOINT. On this repo's own map, 3 files are claimed by 3-4
+#      components each and hold 5 of its 245 call-site anchors (2%). THE SHARE HAS COLLAPSED —
+#      it was 5 files and 71 of 260 anchors (27%) on the 2026-08 map — and the rule is unchanged,
+#      because it never rested on the share. One file with two owners is enough: `site_components`
+#      returns a LIST and never picks, since ambiguity is data the UI renders, not an error to
+#      resolve by taking `[0]`. A rebuild that reaches 0 would be the first reason to revisit it,
+#      and 2% is not that.
 #   2. THE STEP JOIN IS WEAK ON BYTE EQUALITY. Measured on the Mio map, only 15% of security-row
 #      anchors and 23% of edge anchors are byte-equal to a flow-step anchor, while 57% merely share
 #      a file. So the join has two STRENGTHS — byte-equal, and same enclosing symbol — and sharing a

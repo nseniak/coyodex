@@ -88,6 +88,25 @@ no pattern can catch, it reads an optional git-ignored `internal/docs/.private-n
 line, so the check enforces on the machine where those projects exist without the names ever entering
 the repo.
 
+## Numbers about a live map
+
+A number measured off a real map — "142 entities, 46 of them saved", "4 of the 7 features have two
+or more drivers" — is a measurement of something that keeps being rebuilt. The code stays right and
+the sentence stops being true, and no gate can see it: every instance IS the code doing exactly what
+the code says. Measured on 2026-09-07, 23 of the 27 decidable sentences of this shape were wrong.
+
+So, when you write one:
+
+- **Past tense, naming the build** — "the 2026-09-07 mcpolis map read 4 of 43" — is a record, and
+  records do not rot. Two thirds of the number-claims in `tools/` already do this. Prefer it.
+- **Present tense about a live map** needs a row in `eval/tools/coyodex_eval/live_numbers.py`: the
+  sentence, the maps it needs, and a `measure` that regenerates it. `coyodex-eval live-numbers`
+  then re-measures it whenever someone asks, and `coyodex-eval live-numbers --list` shows what is
+  already tracked.
+
+Nothing reads your prose to work this out — you write the sentence in both places on purpose, and
+the ledger reports when the two stop agreeing in either direction.
+
 ## Local setup
 
 The skill itself needs no build — install it once from the repo root (macOS/Linux).
