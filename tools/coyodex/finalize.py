@@ -145,8 +145,56 @@ def _validate_leg(map_path: Path, repo: Path | None) -> Leg:
                note=payload.get("checked") or None)
 
 
-def _audit_leg(map_path: Path, verdicts: list[Path] | None = None) -> Leg:
-    code, out, err = _run_leg("audit", [str(map_path), "--json"])
+def _live_surfaces(map_path: Path) -> dict[bool, set[str]] | None:
+    """The map's claim surface at each tier `audit` can compute — `{False: default, True:
+    behavioural}` — or None when the file does not load as a map."""
+    try:
+        from coyodex.audit_model import l2_worklist_model
+        from coyodex.model import load_model
+        m = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
+        return {tier: {w.claim for w in l2_worklist_model(m, behavioural=tier)}
+                for tier in (False, True)}
+    except Exception:
+        return None
+
+
+def _record_tier(map_path: Path) -> bool | None:
+    """Which claim tier the map's grounding record describes, read off its own digest.
+
+    `grounding write --map` hashes the live surface at the PINNED WORKLIST'S tier
+    (`grounding.worklist_is_behavioural`), and this file re-hashed it at the default tier always.
+    On the first build that pinned a behavioural worklist the two could not agree — 1782 claims
+    hashed, 833 compared — so the one proof field in the record raised a mismatch on a record
+    that described the map exactly, and the audit leg's headline counted the smaller surface.
+    The record carries no tier field and needs none: at most one surface matches its digest.
+
+    True: behavioural. False: default. None: no digest to read, or neither surface matches —
+    the audit then runs at the default tier and `_stale_grounding_pin` says so."""
+    try:
+        doc = json.loads(map_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    g = doc.get("grounding") if isinstance(doc, dict) else None
+    digest = g.get("live_claims_digest") if isinstance(g, dict) else None
+    if not isinstance(digest, str) or not digest:
+        return None
+    surfaces = _live_surfaces(map_path)
+    if surfaces is None:
+        return None
+    from coyodex.grounding import live_claims_digest
+    for tier in (False, True):
+        if live_claims_digest(surfaces[tier]) == digest:
+            return tier
+    return None
+
+
+def _audit_leg(map_path: Path, verdicts: list[Path] | None = None,
+               behavioural: bool = False) -> Leg:
+    """`behavioural` runs the audit at the record's own tier (`_record_tier`), so the worklist
+    this leg counts and the surface the digest is checked against are the one the record was
+    written from."""
+    argv = [str(map_path), "--json"] + (["--with-behavioural"] if behavioural else [])
+    code, out, err = _run_leg("audit", argv)
     try:
         payload = json.loads(out)
     except ValueError:
@@ -272,10 +320,24 @@ def _stale_grounding_pin(map_path: Path, live_claims: list[str],
             return _recomputed_delta(g, live_set, verdicts or [])
         superseded = g.get("claims_superseded", 0)
         added = g.get("claims_added_since", 0)
+        # Name the tier, or a reader cannot tell a moved surface from a record written at the
+        # other tier — which is what this advisory reported on one live build.
+        surfaces = _live_surfaces(map_path)
+        tier_note = ""
+        if surfaces is not None and live_set in (surfaces[False], surfaces[True]):
+            mine_default = live_set == surfaces[False]
+            other = surfaces[True] if mine_default else surfaces[False]
+            here = "at the default tier" if mine_default else "with `--with-behavioural`"
+            there = "with `--with-behavioural`" if mine_default else "at the default tier"
+            if live_claims_digest(other) == stored_digest:
+                tier_note = (f" {here}; the record matches the {len(other)} {there} — the surface "
+                             f"is fine and the tier compared at is not")
+            else:
+                tier_note = f" {here} and {len(other)} {there}, and the record matches neither"
         return (f"grounding: the record's `live_claims_digest` does not match this map's claim "
                 f"surface. It was written against a map with {pinned} pinned claim(s), "
                 f"{superseded} superseded and {added} added since the pin; this map's audit "
-                f"worklist holds {len(live_set)}. Something changed the claims AFTER "
+                f"worklist holds {len(live_set)}{tier_note}. Something changed the claims AFTER "
                 f"`grounding write` ran — re-run it as the last step before the final assemble:\n"
                 f"  coyodex grounding write --worklist <pinned.json> --map {map_path} "
                 f"--verdicts <…> --out .coyodex/build-fragments/grounding.json")
@@ -600,9 +662,11 @@ def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
 def build_report(map_path: Path, repo: Path, verdicts: list[Path],
                  access_baseline: Path | None = None) -> FinalizeReport:
     unasked = _unasked_verdicts(map_path, verdicts)
+    # The audit runs at the tier the grounding record was written at, so the gate block counts
+    # ONE surface and the digest is compared with the surface it hashed.
     legs = [
         _validate_leg(map_path, repo),
-        _audit_leg(map_path, verdicts),
+        _audit_leg(map_path, verdicts, behavioural=_record_tier(map_path) is True),
         _drift_leg(map_path, repo, []),
         *([_drift_leg(map_path, repo, verdicts)] if verdicts else []),
         *([_refutations_leg(map_path, verdicts)] if verdicts else []),

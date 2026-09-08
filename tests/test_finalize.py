@@ -1082,3 +1082,88 @@ def test_no_write_does_not_point_at_the_file_it_left_alone(tmp_path, capsys):
     printed = buf.getvalue()
     assert (out / "finalize-report.md").read_text() == "OLD REPORT"
     assert "Full findings: " not in printed, printed[-400:]
+
+
+# ── the tier the record was written at ──────────────────────────────────────────────────────────
+
+def make_two_tier_map(tmp: str) -> Path:
+    """A map whose behavioural claim surface is wider than its default one: two described
+    components (the default tier) and one traced use case (three `behaviour` claims on top).
+    The source files exist, so the validate leg has anchors to resolve."""
+    root = Path(tmp)
+    (root / "src").mkdir(exist_ok=True)
+    (root / "src" / "g.py").write_text("def gate():\n    return 1\n", encoding="utf-8")
+    (root / "src" / "s.py").write_text("def store():\n    return 2\n", encoding="utf-8")
+    doc = {
+        "format": FORMAT, "title": "T", "goal": "g",
+        "roles": [{"id": "R1", "name": "Admin", "kind": "human"}],
+        "components": [
+            {"id": "C1", "name": "Gate", "purpose": "checks every call for a token",
+             "files": ["src/g.py"], "source": "src/g.py:1"},
+            {"id": "C2", "name": "Store", "purpose": "keeps the rows",
+             "files": ["src/s.py"], "source": "src/s.py:1"}],
+        "use_cases": [{"id": "UC1", "name": "Sign in", "actors": ["R1"],
+                       "trigger_outcome": "the admin signs in → a session exists"}],
+        "flows": [{"uc": "UC1", "title": "Sign in", "steps": [
+            {"n": 1, "src": "R1", "dst": "C1", "phrase": "send the token", "where": "src/g.py:1"},
+            {"n": 2, "src": "C1", "dst": "C2", "phrase": "store the session", "where": "src/s.py:1"}]}],
+    }
+    (root / ".coyodex").mkdir(exist_ok=True)
+    p = root / ".coyodex" / "project-map.json"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return p
+
+
+def write_record(p: Path, live: set[str]) -> None:
+    """The record `grounding write --map` leaves: pinned counts and the digest of the live surface
+    it was computed at."""
+    from coyodex.grounding import live_claims_digest
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    doc["grounding"] = {"claims_total": len(live), "claims_challenged": len(live),
+                        "claims_confirmed": len(live), "live_claims_digest": live_claims_digest(live)}
+    p.write_text(json.dumps(doc), encoding="utf-8")
+
+
+def test_the_digest_is_checked_at_the_tier_the_record_was_written_at():
+    """`grounding write --map` hashes the live surface at the pinned worklist's tier, and `finalize`
+    re-hashed it at the default tier always. The first build that pinned a behavioural worklist got
+    the mismatch advisory on a record that described its map exactly — 1782 claims hashed against
+    833 compared — under a gate block counting the smaller surface. The tier is read off the digest
+    itself, the audit leg runs at that tier, and a wrong-tier read says so instead of "moved"."""
+    from coyodex.finalize import _audit_leg, _live_surfaces, _record_tier
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_two_tier_map(tmp)
+        surfaces = _live_surfaces(p)
+        assert surfaces is not None and surfaces[False] < surfaces[True], surfaces
+        write_record(p, surfaces[True])
+        assert _record_tier(p) is True
+        leg = _audit_leg(p, None, behavioural=True)
+        assert not [a for a in leg.advisory if "live_claims_digest" in a], leg.advisory
+        assert f"{len(surfaces[True])} L2 claims" in (leg.note or ""), leg.note
+        # read at the default tier, the same record is the false advisory the live build printed —
+        # and the message now names the tier that does match
+        wrong_tier = [a for a in _audit_leg(p, None).advisory if "live_claims_digest" in a]
+        assert wrong_tier and "the tier compared at is not" in wrong_tier[0], wrong_tier
+        # a record written at the default tier reads as such
+        write_record(p, surfaces[False])
+        assert _record_tier(p) is False
+        assert not [a for a in _audit_leg(p, None).advisory if "live_claims_digest" in a]
+        # a digest matching neither tier is a surface that MOVED, at either tier
+        write_record(p, {"a claim this map never made"})
+        assert _record_tier(p) is None
+        moved = [a for a in _audit_leg(p, None).advisory if "live_claims_digest" in a]
+        assert moved and "matches neither" in moved[0], moved
+
+
+def test_build_report_counts_one_surface_the_one_the_record_hashed():
+    """The gate block is what a commit message quotes: one surface, counted and hashed alike."""
+    from coyodex.finalize import _live_surfaces
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_two_tier_map(tmp)
+        surfaces = _live_surfaces(p)
+        assert surfaces is not None
+        write_record(p, surfaces[True])
+        rep = finalize.build_report(p, Path(tmp), [])
+        audit = next(leg for leg in rep.legs if leg.name == "audit")
+        assert f"{len(surfaces[True])} L2 claims" in (audit.note or ""), audit.note
+        assert not [a for a in audit.advisory if "live_claims_digest" in a], audit.advisory
