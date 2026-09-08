@@ -723,6 +723,25 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    thing their page is named after, and a word in front of them buys nothing. */
 .page-hero-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0;
                   font-size: 13px; color: #6b7280; }
+/* THE BAND. A named hero sits on a wash of its kind's colour (`--hero-tint`, set by pageHeroHtml), the
+   name at 24px and the sentence at 16px: measured before it, the name was 16px over section headings
+   of 14px on the same white, so the page's subject and its first section weighed the same. The band
+   is the width of the frames under it — the same 20px edge — so it reads as the head of the same
+   column, not as a banner over the page. The hairline is a shade of black, not of the tint, so one rule
+   serves every wash. */
+.page-hero-band { padding: 18px 24px 16px; margin: 0 0 22px; border-radius: 12px;
+                  background: var(--hero-tint, #f1f5f9); border: 1px solid rgba(17, 24, 39, .08); }
+/* WHERE THE HOST KEEPS NO AIR ABOVE IT — the walk's head, and a column led by a sticky tab index, whose
+   top padding is zeroed for the index's sake — the band is the first thing under the breadcrumb bar,
+   and the bar's shadow landed on it. The same 16px the actor page's column keeps above its own band. */
+#diaghead .page-hero-band, .usecases-wrap:has(> .tab-index) > .page-hero-band { margin-top: 16px; }
+.page-hero-band .page-hero-name { gap: 10px; margin: 0 0 8px; }
+.page-hero-band .page-hero-subject { font-size: 24px; letter-spacing: -.012em; line-height: 1.2; }
+#diagram .page-hero-band .page-hero-name .story-glyph,
+#diaghead .page-hero-band .page-hero-name .ibox-gly,
+#diaghead .page-hero-band .page-hero-name .story-glyph { width: 26px; height: 26px; }
+.page-hero-band .page-hero-purpose { font-size: 16px; line-height: 1.5; color: #1f2937; }
+.page-hero-band .page-hero-meta { font-size: 13.5px; color: #4b5563; }
 /* ── ONE SECTION OF AN ITEM PAGE ──────────────────────────────────────────────────────────────────
    THE HEADING IS PAGE TEXT AND THE FRAME HOLDS ONLY THE CONTENT. Three other shapes were drawn and
    compared against this one: a panel with the heading on a strip inside the frame, the same with a

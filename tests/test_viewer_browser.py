@@ -1221,12 +1221,15 @@ def test_an_item_pages_sections_each_say_what_they_are_and_what_is_in_them() -> 
             return bad;
         }""")
         assert tall == [], tall
-        # The hero's rule went with them: the page is a stack of announced sections now, and the
-        # SPACE above the name is what sets the block off from the trail instead.
+        # The hero's rule went with them: the page is a stack of announced sections now. The hero is a
+        # BAND — a wash of its kind's colour with a hairline all the way round — so what is not there
+        # is a rule UNDER it: any border it has is the same on every side.
         hero = page.evaluate(
             "() => { const cs = getComputedStyle(document.querySelector('#diagram .page-hero'));"
-            "  return {b: cs.borderBottomWidth, p: parseFloat(cs.paddingTop)}; }")
-        assert hero["b"] == "0px" and hero["p"] >= 14, hero
+            "  return {b: cs.borderBottomWidth, t: cs.borderTopWidth, bg: cs.backgroundColor,"
+            "          p: parseFloat(cs.paddingTop)}; }")
+        assert hero["b"] == hero["t"] and hero["p"] >= 14, hero
+        assert hero["bg"] != "rgba(0, 0, 0, 0)", "a named hero sits on a band of its kind's colour"
         # …and the GREY LINE is between the sections, with room on both sides of it. Never above the
         # first: the chip bar draws its own line under itself and a second one below it is two rules
         # for one boundary.
@@ -2876,7 +2879,7 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
                 player: q('#flowcount').textContent,
                 headAboveFrame: q('#diaghead').getBoundingClientRect().bottom <= wrap.getBoundingClientRect().top,
                 frame: {radius: cs.borderRadius, border: cs.borderColor},
-                left: [box(q('#diaghead .page-hero-name')), box(wrap)].map((b) => b[0]),
+                left: [box(q('#diaghead .page-hero')), box(wrap)].map((b) => b[0]),
                 mapInFrame: !!q('#diagram svg') && wrap.contains(q('#diagram svg')),
             };
         }""")
@@ -2890,7 +2893,7 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
         assert seen["headAboveFrame"] and seen["mapInFrame"], seen
         # The frame is the section frame's own: the actor page's colours, not the drawing's old ones.
         assert seen["frame"] == {"radius": "12px", "border": "rgb(203, 213, 225)"}, seen
-        assert seen["left"] == [20, 20], "the head and the frame share the actor page's left edge"
+        assert seen["left"] == [20, 20], "the hero band and the frame share the actor page's left edge"
         # …and the actor's page is untouched, which is the whole point: it stays the reference.
         page.goto(url + "#v=actor&act=Org creator")
         _settle(page)

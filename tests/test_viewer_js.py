@@ -1456,6 +1456,33 @@ def test_a_step_number_sits_at_the_middle_of_its_arrow() -> None:
     assert "centreEdgeLabels(ph);" in channels, "the Storage tab's small pictures are drawn by the same engine"
 
 
+def test_a_named_hero_sits_on_a_band_of_its_kind_s_colour() -> None:
+    """Measured before the band, the name in an actor's hero was 16px over section headings of 14px,
+    on the same white — so the page's subject and its first section weighed the same. A named hero
+    now sits on a wash of its kind's colour, the name at 24px and the sentence at 16px, the width of
+    the frames under it.
+
+    ONLY the named pages ask for it: an arrow page, an entry-point kind and the fixed block over a
+    drawing lead with nothing, and stay plain. A feature wears the tint its zones are painted in,
+    half-way to white, so it outweighs no other kind's band."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    hero = js[js.index("function pageHeroHtml(o) {"): js.index("\n}", js.index("function pageHeroHtml(o) {"))]
+    assert "const band = o.tint ? ` page-hero-band\" style=\"--hero-tint:${esc(o.tint)}` : '';" in hero
+    assert "return `<div class=\"page-hero${band}\">`" in hero
+    assert "const HERO_TINTS = { actor:" in js and "usecase:" in js and "interface:" in js and "rule:" in js
+    for want in ("tint: HERO_TINTS.actor,", "tint: HERO_TINTS.usecase,", "tint: HERO_TINTS.interface,",
+                 "tint: HERO_TINTS.rule,", "tint: heroWash(featureTint(capId)),"):
+        assert want in js, want
+    assert js.count("tint: HERO_TINTS.") + js.count("tint: heroWash(") == 5, "five named pages, no more"
+    band = css[css.index(".page-hero-band {"): css.index("}", css.index(".page-hero-band {"))]
+    assert "background: var(--hero-tint" in band and "border-radius: 12px" in band
+    assert ".page-hero-band .page-hero-subject { font-size: 24px;" in css
+    assert ".page-hero-band .page-hero-purpose { font-size: 16px;" in css
+    assert "#diaghead .page-hero-band, .usecases-wrap:has(> .tab-index) > .page-hero-band { margin-top: 16px; }" in css, \
+        "the hosts that keep no air above the band get the same 16px the actor page's column has"
+
+
 def test_only_a_number_that_opens_a_step_lights_up_under_the_pointer() -> None:
     """The map's step numbers are doors: each opens its step, so each lights up under the pointer. The
     Happy Path writes the same class on a step's rank, which opens nothing — and it went grey under the
