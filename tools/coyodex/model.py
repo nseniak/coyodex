@@ -860,6 +860,47 @@ def expanded_flow_steps(m: ProjectModel, f: Flow) -> list[FlowStep]:
     return [st for _container, st in expanded_steps_with_container(m, f)]
 
 
+@dataclass(frozen=True)
+class UseCaseReach:
+    """The interfaces ONE use case's flow reaches, and which of them only from inside a sub-flow."""
+    interfaces: frozenset[str]
+    via_subflow_only: frozenset[str]
+
+
+def use_case_interfaces(m: ProjectModel) -> dict[str, UseCaseReach]:
+    """THE ONE RULE for "this use case reaches this interface": a step of its flow is drawn AT the
+    surface, or at a DEP the surface stands on. Sub-flows are EXPANDED, and the rule remembers which
+    surfaces came only from inside one, so a board can chip them as the sub-flow's.
+
+    Nothing else decides it. A use case's authored `entry_points` used to be a third arm — "the use
+    case names one of the surface's ways in" — in three derivations, while the viewer's use case
+    cards read the flow alone. Measured on mcpolis, that arm added 5 links no flow drew: the
+    prospect's first use case put the Dashboard at happy-path step 1, because two backend routes
+    filed under the Dashboard were listed on it. Every derivation that answers "which use cases
+    reach an interface", "where does the walk first reach it", "who stands at it" or "which
+    features come through it" reads THIS, and so does the viewer (the bundle ships it), so none of
+    them can drift from the others or from the cards. The authored list keeps its other job: the
+    gates compare it with the flows (an opening the flow owes, an interface no use case names)."""
+    iface_ids = {i.id for i in m.interfaces}
+    dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
+    direct: dict[str, set[str]] = {}
+    inside: dict[str, set[str]] = {}
+    for fl in m.flows:
+        for container, st in expanded_steps_with_container(m, fl):
+            hit: set[str] = set()
+            for end in (st.src, st.dst):
+                if end in iface_ids:
+                    hit.add(end)
+                hit.update(i for i in dep_iface.get(end, ()) if i in iface_ids)
+            (direct if container == fl.uc else inside).setdefault(fl.uc, set()).update(hit)
+    out: dict[str, UseCaseReach] = {}
+    for uc in set(direct) | set(inside):
+        d, s = direct.get(uc, set()), inside.get(uc, set())
+        if d or s:
+            out[uc] = UseCaseReach(interfaces=frozenset(d | s), via_subflow_only=frozenset(s - d))
+    return out
+
+
 def is_saved(e: Entity) -> bool:
     """Does this codebase SAVE a record of the entity — a row of its own, or one inside a parent's?
 

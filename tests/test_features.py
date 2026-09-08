@@ -471,7 +471,7 @@ def test_the_view_bundle_carries_the_feature_block_in_the_viewers_vocabulary():
     f = b["features"]
     assert sorted(f) == ["areas", "componentFeatures", "coverage", "entityOwners", "features",
                          "interfaces", "roleFeatures", "ruleFeatures", "ruleJoinUsesExtents",
-                         "story", "unassignedUseCases"]
+                         "story", "unassignedUseCases", "useCaseInterfaces"]
     assert f["features"][0]["useCases"] == ["UC1"]        # camelCase, not use_cases
     assert f["coverage"]["componentsUnreached"] == ["C3"]
     json.dumps(b)                                          # the bundle is served as JSON

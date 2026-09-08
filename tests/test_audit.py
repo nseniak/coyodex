@@ -2338,13 +2338,15 @@ def test_who_is_on_the_far_side_is_a_CLAIM_anchored_at_the_evidence_that_made_it
 
     THE ANCHOR IS THE EVIDENCE, which is what made this look unfixable — a derived fact comes from a
     JOIN and has no line of its own, but each arm of the join does. Here the role is put at the
-    surface by a way in its own use case drives, so the anchor is that entry point's source."""
+    surface by the DOOR its flow draws there (`R1 → I1`); the door carries no line of its own, so
+    the anchor is the source of the way in that use case drives."""
     from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import EntryPoint, Interface, ProjectModel, Role, UseCase
+    from coyodex.model import EntryPoint, Flow, FlowStep, Interface, ProjectModel, Role, UseCase
     m = ProjectModel(title="t", goal="g")
     m.roles = [Role(id="R1", name="Admin", kind="human", audience="user", wants="in")]
     m.use_cases = [UseCase(id="UC1", name="Do it", actors=["R1"], entry_points=["EP1"],
                            trigger_outcome="asks -> gets")]
+    m.flows = [Flow(uc="UC1", title="Do it", steps=[FlowStep(n=1, src="R1", dst="I1", phrase="opens it")])]
     m.entry_points = [EntryPoint(id="EP1", kind="http-route", trigger="GET /x", activation="external",
                                  source="src/routes.py:12", component="C1")]
     m.interfaces = [Interface(id="I1", name="Console", what="Where an admin works.", side="ours",
@@ -2386,11 +2388,12 @@ def test_a_far_side_claim_names_the_way_in_THAT_ROLE_drives_not_the_first_one():
     """Taking the surface's first way in put a dev-stub sign-in line under "who is on the far side of
     the Dashboard" — a real file, and not the one that puts that person there."""
     from coyodex.audit_model import l2_worklist_model
-    from coyodex.model import EntryPoint, Interface, ProjectModel, Role, UseCase
+    from coyodex.model import EntryPoint, Flow, FlowStep, Interface, ProjectModel, Role, UseCase
     m = ProjectModel(title="t", goal="g")
     m.roles = [Role(id="R1", name="Admin", kind="human", audience="user", wants="in")]
     m.use_cases = [UseCase(id="UC1", name="Do it", actors=["R1"], entry_points=["EP2"],
                            trigger_outcome="a -> b")]
+    m.flows = [Flow(uc="UC1", title="Do it", steps=[FlowStep(n=1, src="R1", dst="I1", phrase="opens it")])]
     m.entry_points = [
         EntryPoint(id="EP1", kind="http-route", trigger="a stub", activation="external",
                    source="src/dev_stub.py:1", component="C1"),

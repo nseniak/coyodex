@@ -4410,6 +4410,9 @@ def test_the_authored_kind_and_the_derived_actor_both_reach_the_rendered_T2b_tab
     column that silently never renders takes both of them with it."""
     m = make_interface_model()
     m.use_cases[0].entry_points = ["EP1"]
+    # The actor derives from the DOOR the flow draws at the surface, never from the way in alone.
+    m.flows = [Flow(uc="UC1", title="View order", steps=[
+        FlowStep(n=1, src="R1", dst="I1", phrase="runs the command", where="src/v.py:1")])]
     md = model_to_markdown(m)
     table = md[md.index("## T2b — Interfaces"):]
     table = table[:table.index("\n## ")]
@@ -4428,17 +4431,26 @@ def test_a_seed_kind_says_nothing_at_all():
 
 # ── `actors` — DERIVED, never authored ─────────────────────────────────────────────────────────
 
-def test_an_ours_surface_derives_its_actors_from_the_use_cases_behind_its_ways_in():
-    """The NARROW join, and only it. A story that merely PASSES THROUGH our own surface does not put
-    its actor on the far side of it — R2 walks through the command line without being the person at
-    the prompt, and the broad join would put them there."""
+def test_an_ours_surface_derives_its_actors_from_the_doors_its_flows_draw_at_it():
+    """WHO stands at an `ours` surface is what the flows DOOR there — `R1 → I1` — and nothing else.
+    The use cases behind its ways in used to vote too, through the use case's authored
+    `entry_points`; that was the one join in the product that did not read the flow, and it is what
+    put the Dashboard at happy-path step 1 on mcpolis. A program whose flow merely writes a report to
+    the command line (`C1 → I1`, no door) is not the person at the prompt, and the broad join would
+    have put them there."""
     m = make_interface_model()
     m.use_cases[0].entry_points = ["EP1"]
     m.roles.append(Role(id="R2", name="Upkeep job", kind="software", wants="tidy", drives="UC2"))
     m.use_cases.append(UseCase(id="UC2", name="Tidy up", actors=["R2"]))
-    m.flows = [Flow(uc="UC2", title="Tidy up", steps=[
-        FlowStep(n=1, src="C1", dst="I1", phrase="writes the report", where="src/v.py:9")])]
+    m.flows = [
+        Flow(uc="UC1", title="View order", steps=[
+            FlowStep(n=1, src="R1", dst="I1", phrase="runs the command", where="src/v.py:1")]),
+        Flow(uc="UC2", title="Tidy up", steps=[
+            FlowStep(n=1, src="C1", dst="I1", phrase="writes the report", where="src/v.py:9")])]
     assert interface_actors(m)["I1"] == ["R1"]
+    # …and a way in named with NO door at it derives nobody: the map owes the door, and the gate says so.
+    m.flows = [m.flows[1]]
+    assert interface_actors(m)["I1"] == []
 
 
 def test_a_theirs_surface_the_product_merely_calls_derives_NO_actor():
@@ -5107,14 +5119,18 @@ def test_a_step_drawn_at_the_dep_standing_on_it_clears_it():
     assert not _unreached_hits(m)
 
 
-def test_a_use_case_naming_one_of_its_ways_in_clears_it():
+def test_a_use_case_naming_one_of_its_ways_in_does_NOT_clear_it_only_a_step_does():
+    """"Reached" means a step of a flow drawn at the surface (`use_case_interfaces`), the same rule
+    the use case cards, the picture's order and the far side read. Naming one of the surface's ways
+    in on a use case is an authored claim, and the flow owes the step that backs it — so on its own
+    it clears nothing, and the advisory keeps asking for the story."""
     m = make_unreached_surface_model()
     assert _unreached_hits(m), "must fire before the fix"
     m.entry_points.append(EntryPoint(id="EP9", kind="http-route", trigger="GET /paid",
                                      activation="external", source="src/v.py:60", component="C1"))
     m.interfaces[1].ways_in = ["EP9"]
     m.use_cases[0].entry_points = ["EP9"]
-    assert not _unreached_hits(m)
+    assert _unreached_hits(m), "a named way in is a claim, not a story"
 
 
 def test_a_recorded_line_silences_it():

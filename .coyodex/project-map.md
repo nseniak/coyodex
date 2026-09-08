@@ -311,11 +311,11 @@ why: needs the finished build's transcript, found through the stamp from HP14
 
 | ID | Name | Side | Kind | Facing | Crosses | What it is | Actors | Ways in | Deps | Source | Conf. |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| **I1** | Map commands | ours | command-line | user |  | How a person builds a map, checks it, serves it and accepts a change into it. | R1, R2 | 32 |  | [cli.py](tools/coyodex/cli.py:105) | verified |
-| **I2** | Developer commands | ours | command-line | operator |  | How a coyodex developer scores a map's quality and reviews a finished build. | R3 | 21 |  | [cli.py](eval/tools/coyodex_eval/cli.py:47) | verified |
-| **I3** | Map viewer | ours | screen | user |  | The browser page where a reader looks at a map and the code behind any box. | R1 | 28 |  | [serve.py](tools/coyodex/viewer/serve.py:633) | verified |
-| **I4** | Agent skill | ours | agent-tools | user |  | How a coding agent is asked, in plain words, to build or update a map. | R1, R2 | 5 | D12, D13, D14 | [dispatch.md](method/dispatch.md:62) | verified |
-| **I5** | Developer skills | ours | agent-tools | operator |  | How a coyodex developer asks an agent to score a map or review a build. | R3 | 2 |  | [SKILL.md](eval/SKILL.md:28) | verified |
+| **I1** | Map commands | ours | command-line | user |  | How a person builds a map, checks it, serves it and accepts a change into it. |  | 32 |  | [cli.py](tools/coyodex/cli.py:105) | verified |
+| **I2** | Developer commands | ours | command-line | operator |  | How a coyodex developer scores a map's quality and reviews a finished build. |  | 21 |  | [cli.py](eval/tools/coyodex_eval/cli.py:47) | verified |
+| **I3** | Map viewer | ours | screen | user |  | The browser page where a reader looks at a map and the code behind any box. |  | 28 |  | [serve.py](tools/coyodex/viewer/serve.py:633) | verified |
+| **I4** | Agent skill | ours | agent-tools | user |  | How a coding agent is asked, in plain words, to build or update a map. |  | 5 | D12, D13, D14 | [dispatch.md](method/dispatch.md:62) | verified |
+| **I5** | Developer skills | ours | agent-tools | operator |  | How a coyodex developer asks an agent to score a map or review a build. |  | 2 |  | [SKILL.md](eval/SKILL.md:28) | verified |
 | **I6** | Map files in your repo | ours | file | user |  | The map coyodex writes next to the code, which a person opens and git shows. |  |  |  | [assemble.py](tools/coyodex/assemble.py:963) | verified |
 | **I7** | Settings | ours | settings | user |  | The values the person running coyodex sets: which clone, which port, what to leave out. |  |  |  | [ignorefile.py](tools/coyodex/ignorefile.py:59) | verified |
 | **I8** | Project source files | theirs | content | user |  | The code being mapped. coyodex did not write it, and reading it is the whole job. |  |  |  | [scope.py](tools/coyodex/scope.py:72) | verified |

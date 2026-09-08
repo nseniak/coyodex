@@ -67,6 +67,7 @@ from coyodex.model import (
     record_parents,
     load_model,
     subdomain_owners,
+    use_case_interfaces,
 )
 from coyodex.areas import build_areas, sorted_ids
 from coyodex.validate_analysis import (
@@ -932,32 +933,19 @@ def interface_walk_order(m: ProjectModel) -> dict[str, int]:
     the administration server, the operator console — which is the story — and it puts the one staff
     surface last WITHOUT a staff rule, because the operator's steps are the end of the walk.
 
-    THREE ARMS, the same three `interface_actors` joins on, and for the same reason: a walk reaches a
-    surface when its use case names one of that surface's ways in, when one of its steps is doored at
-    the surface, or when one of its steps is drawn at a dep the surface stands on. Only the FIRST
-    position is kept, so a surface touched at step 2 and again at step 20 sorts at 2.
+    WHAT "reaches" MEANS is decided once, in `use_case_interfaces` (model.py): a step of the use
+    case's flow drawn at the surface, or at a dep the surface stands on, sub-flows expanded. Only the
+    FIRST position is kept, so a surface touched at step 2 and again at step 20 sorts at 2.
 
     Measured: 5 of MCP Hero's 12 surfaces and 5 of coyodex's 11 are on the walk. The rest are ordered
     by their caller, not here — this function says nothing about them on purpose."""
-    uc_by_id = {u.id: u for u in m.use_cases}
-    flow_by_uc = {f.uc: f for f in m.flows}
-    iface_ids = {i.id for i in m.interfaces}
-    ways = {i.id: set(i.ways_in) for i in m.interfaces}
-    dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
+    reach = use_case_interfaces(m)
     first: dict[str, int] = {}
     for pos, hp in enumerate(m.happy_path):
-        u = uc_by_id.get(hp.uc or "")
-        if u is None:
+        r = reach.get(hp.uc or "")
+        if r is None:
             continue
-        hit = {iid for iid, w in ways.items() if set(u.entry_points or ()) & w}
-        f = flow_by_uc.get(u.id)
-        if f is not None:
-            for st in f.steps:
-                for end in (st.src, st.dst):
-                    if end in iface_ids:
-                        hit.add(end)
-                    hit.update(dep_iface.get(end, ()))
-        for iid in hit:
+        for iid in r.interfaces:
             first.setdefault(iid, pos)
     return first
 
@@ -1073,36 +1061,15 @@ def interface_use_cases(m: ProjectModel) -> dict[str, set[str]]:
     """Per interface, EVERY use case that reaches it. Empty is a legitimate answer for a surface the
     product touches outside any story (log shipping, crash reporting, an ops command line).
 
-    THE SAME THREE ARMS as `interface_walk_order` one function up, and deliberately so — that one
-    asks *where on the happy path* a surface is first reached and answers only for the spine, this
-    one asks *whether any story reaches it at all* and answers for every use case:
-
-        ways in  -> the use case names one of the surface's `ways_in`
-        step     -> a walk step is drawn AT the surface
-        dep      -> a walk step is drawn at a DEP the surface stands on
-
-    Arm three is why this cannot be `interface_walk_steps(...)` with a truth test: a story that names
-    an outside system, rather than the surface it is met at, still reaches that surface. It scores
-    zero on the two live maps (no step on either names a `Dn`), which is exactly why it must stay —
-    a check that quietly assumed steps never name a dep would report a false gap the day one does.
-
-    Sub-flows are EXPANDED, so a surface reached only from inside an `SFn` counts as reached."""
-    iface_ids = {i.id for i in m.interfaces}
-    ways = {i.id: set(i.ways_in) for i in m.interfaces}
-    dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
+    The INVERSE of `use_case_interfaces` (model.py), which is the one place that says what "reaches"
+    means — a step of the flow drawn at the surface, or at a dep the surface stands on, sub-flows
+    expanded. `interface_walk_order` one function up reads the same rule and answers only for the
+    spine; this one answers for every use case."""
     out: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
-    for u in m.use_cases:
-        named = set(u.entry_points or ())
-        for iid, w in ways.items():
-            if named & w:
-                out[iid].add(u.id)
-    for f in m.flows:
-        for st in expanded_flow_steps(m, f):
-            for end in (st.src, st.dst):
-                if end in iface_ids:
-                    out[end].add(f.uc)
-                for iid in dep_iface.get(end, ()):
-                    out[iid].add(f.uc)
+    for uc, r in use_case_interfaces(m).items():
+        for iid in r.interfaces:
+            if iid in out:
+                out[iid].add(uc)
     return out
 
 
@@ -1218,14 +1185,19 @@ def interface_actor_use_cases(m: ProjectModel) -> dict[str, dict[str, list[str]]
     surfaces, 4 of mcpolis's 12), and where a build DID author it the derivation was better — the
     mcpolis dashboard names one role while its walks show three.
 
-    THREE arms, and the first is the strongest:
+    TWO arms, and the first is the strongest:
 
         the DOORS   -> any role standing at a flow step DIRECTLY NEXT TO the surface (`Rn → In` or
                        `In → Rn`, either side). Applies to EVERY surface.
-        ours        -> also the roles driving the use cases behind its ways in
         theirs      -> also the roles whose stories reach it, but ONLY when the kind MEANS a person
                        goes there (`hosted-screen`, `handoff`)
         otherwise   -> none, AND NONE IS THE CORRECT ANSWER
+
+    A third arm went: "the roles driving the use cases behind an `ours` surface's ways in". It read
+    the use case's authored `entry_points`, the one join in the product that did not read the flow,
+    and it is what put the Dashboard at happy-path step 1 on mcpolis (see `use_case_interfaces`).
+    An `ours` surface's people are the ones the flows DOOR at it — and every crossing takes a door,
+    which the gates enforce.
 
     **THE DOOR ARM TAKES NO `kind` GATE, AND THAT IS DELIBERATE — do not "fix" it.** The gate on the
     `theirs` arm exists to stop a bad INFERENCE: an ungated "whose story reaches it" join once put
@@ -1234,12 +1206,11 @@ def interface_actor_use_cases(m: ProjectModel) -> dict[str, dict[str, list[str]]
     surface, and gating a written statement on a `kind` would discard what the map states in favour
     of what the code guesses.
 
-    The other two arms are still needed, and both are gated for the reason above. A door only exists
-    where a flow was doored; the ways-in arm reaches every `ours` surface whether or not its stories
-    were retrofitted, and the `theirs` arm reaches a surface no step ever names.
+    The `theirs` arm is still needed, and gated for the reason above: it reaches a surface no step
+    ever names a role at, because the product itself makes the call.
 
-    Which join the last two use is decided by the `kind`, because *"whose story reaches it" is not
-    "who goes there"*. A member's story reaches an upstream MCP server, but the PRODUCT calls it; a
+    Whether it applies is decided by the `kind`, because *"whose story reaches it" is not "who goes
+    there"*. A member's story reaches an upstream MCP server, but the PRODUCT calls it; a
     reader follows a code link to a hosting site themselves.
 
     Both joins were measured on the two mapped products, and the broad one is plainly wrong on a
@@ -1250,39 +1221,26 @@ def interface_actor_use_cases(m: ProjectModel) -> dict[str, dict[str, list[str]]
     Only roles that are DEFINED vote; a use case naming an undefined actor is a different defect,
     already reported by its own check."""
     role_ids = outside_actor_ids(m)
-    ways_by_iface = {i.id: set(i.ways_in) for i in m.interfaces}
     iface_ids = {i.id for i in m.interfaces}
-    dep_iface: dict[str, list[str]] = {d.id: list(d.interfaces) for d in m.deps if d.interfaces}
-    narrow: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
-    for u in m.use_cases:
-        eps = set(u.entry_points or ())
-        for iid, ways in ways_by_iface.items():
-            if eps & ways:
-                narrow[iid].add(u.id)
-    broad: dict[str, set[str]] = {iid: set(ucs) for iid, ucs in narrow.items()}
+    #: "Whose story reaches it", from the one rule (`use_case_interfaces`), for the gated `theirs` arm.
+    reached_by = interface_use_cases(m)
     #: The DOOR arm, keyed by interface id and holding ROLE ids directly — not use-case ids like the
-    #: other two arms, because a door names the role itself and does not need the use case's actor
-    #: list to reach one.
+    #: other arm, because a door names the role itself and does not need the use case's actor list
+    #: to reach one.
     #: …and WHICH WALKS doored it, so a caller can say not only who stands at a surface but what
     #: brings them. A door names one role in one walk, so this is the finest grain the map holds.
     door_ucs: dict[str, dict[str, set[str]]] = {i.id: {} for i in m.interfaces}
     for f in m.flows:
         for st in expanded_flow_steps(m, f):
             for near, far in ((st.src, st.dst), (st.dst, st.src)):
-                if near in iface_ids:
-                    broad[near].add(f.uc)
-                    if far in role_ids:
-                        door_ucs[near].setdefault(far, set()).add(f.uc)
-                for iid in dep_iface.get(near, ()):
-                    broad[iid].add(f.uc)
+                if near in iface_ids and far in role_ids:
+                    door_ucs[near].setdefault(far, set()).add(f.uc)
     uc_actors = {u.id: [a for a in (u.actors or ()) if a in role_ids] for u in m.use_cases}
     out: dict[str, dict[str, list[str]]] = {}
     for i in m.interfaces:
         kind = grammar.canonical_interface_kind(i.kind)
-        if i.side == "theirs":
-            ucs = broad[i.id] if kind in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO else set()
-        else:
-            ucs = narrow[i.id]
+        ucs = (reached_by[i.id]
+               if i.side == "theirs" and kind in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO else set())
         per: dict[str, set[str]] = {}
         # The two use-case arms name the role THROUGH the use case, so the use case comes with it.
         for u in ucs:

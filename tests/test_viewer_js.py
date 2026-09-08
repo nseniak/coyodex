@@ -1501,6 +1501,25 @@ def test_a_hero_says_its_type_in_a_word_before_the_name_not_in_a_pill_after_it()
     assert ".page-hero-kind { font-size: 16px; font-weight: 500;" in css, "the name's size, a quieter weight"
 
 
+def test_which_interfaces_a_use_case_reaches_is_read_from_the_bundle_not_re_derived() -> None:
+    """ONE RULE, decided in Python (`use_case_interfaces`, model.py) and shipped as
+    `useCaseInterfaces`: a step of the use case's flow drawn at the surface, or at a dependency the
+    surface stands on, sub-flows expanded. The Interfaces picture's order, an interface's use cases,
+    its far side and the viewer's use case cards all read it, so none can drift from the others.
+
+    The viewer used to re-derive it from the steps, and had already drifted: it never counted a step
+    drawn at a dependency the surface stands on, which the Python did. What it still reads off the
+    steps is WHO stands at each interface — a role carries no id on a step, so that is a name join,
+    not the reach rule."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    fn = js[js.index("function flowUcIfaces() {"): js.index("\n}", js.index("function flowUcIfaces() {"))]
+    assert "const reach = FEATURES.useCaseInterfaces || {};" in fn
+    assert "new Set((reach[uc].list || []).filter((id) => rank.has(id)))" in fn, "the reach, from the bundle"
+    assert "new Set((reach[uc].sub || []).filter((id) => rank.has(id)))" in fn, "…and which came only from a sub-flow"
+    assert "sfChips" not in fn and "if (rank.has(id)) hit.add(id)" not in fn, "no second derivation of the reach"
+    assert "near(st.srcId, st.src, st.dstId);" in fn, "who stands there is still read off the steps"
+
+
 def test_only_a_number_that_opens_a_step_lights_up_under_the_pointer() -> None:
     """The map's step numbers are doors: each opens its step, so each lights up under the pointer. The
     Happy Path writes the same class on a step's rank, which opens nothing — and it went grey under the

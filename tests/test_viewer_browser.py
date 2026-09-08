@@ -643,6 +643,36 @@ def test_a_surface_a_person_goes_to_draws_the_person_and_one_we_merely_call_draw
         assert not page.js_errors, page.js_errors
 
 
+def _door_named_ways_in(m: dict) -> None:
+    """EVERY CROSSING TAKES A DOOR — the map's own gate, applied to a test map. A mutator that links a
+    use case to a surface by naming one of its ways in gets the door step the gate would demand:
+    `<the use case's actor> → <the surface>`, at the start of that use case's flow. Since the reach
+    rule became the flow alone (`use_case_interfaces`), a way in named without a door reaches
+    nothing, exactly as it would on a real map that failed the gate."""
+    owner = {ep: i["id"] for i in m.get("interfaces", []) for ep in (i.get("ways_in") or [])}
+    flows = {fl["uc"]: fl for fl in m.setdefault("flows", [])}
+    for u in m.get("use_cases", []):
+        ifaces = sorted({owner[ep] for ep in (u.get("entry_points") or []) if ep in owner})
+        actor = (u.get("actors") or [None])[0]
+        if not ifaces or not actor:
+            continue
+        fl = flows.get(u["id"])
+        if fl is None:
+            fl = {"uc": u["id"], "title": u.get("name", u["id"]), "steps": []}
+            m["flows"].append(fl); flows[u["id"]] = fl
+        for k, iid in enumerate(ifaces):
+            fl["steps"].insert(k, {"n": -1 - k, "src": actor, "dst": iid, "phrase": "opens it", "note": "",
+                                   "where": None, "no_call_site": False, "subflow": None})
+
+
+def _doored(mutate: Any) -> Any:
+    """A mutator, then the doors its named ways in owe (see `_door_named_ways_in`)."""
+    def both(m: dict) -> None:
+        mutate(m)
+        _door_named_ways_in(m)
+    return both
+
+
 def _two_sided_interfaces() -> Any:
     """Two surfaces, one on each shore, and BOTH SHAPES the page has to draw: one people come to, one
     only the product reaches.
@@ -666,7 +696,7 @@ def _two_sided_interfaces() -> Any:
         for d in m["deps"]:
             if d["id"] == "D4":
                 d["interfaces"] = ["I2"]
-    return mutate
+    return _doored(mutate)
 
 
 def test_every_surface_draws_one_plain_line_to_the_product() -> None:
@@ -1342,7 +1372,7 @@ def test_the_people_at_a_surface_are_ordered_by_the_happy_path() -> None:
             {"id": "I1", "name": "The door", "what": "One surface.", "side": "ours",
              "facing": "user", "kind": "screen", "ways_in": ["EP1"] },
         ]
-    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+    with _served_map(_doored(mutate)) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         page.hover('.ifd-box[data-iface="I1"]')
         page.wait_for_timeout(250)
@@ -1377,7 +1407,7 @@ def test_a_surface_no_use_case_reaches_is_drawn_quiet_and_sorted_last() -> None:
             {"id": "I2", "name": "Used", "what": "A journey comes here.", "side": "ours",
              "facing": "user", "kind": "screen", "ways_in": ["EP1"] },
         ]
-    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+    with _served_map(_doored(mutate)) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         got = page.evaluate("""() => ({
             order: [...document.querySelectorAll('.ifd-col-ours .ifd-box')]
@@ -1677,7 +1707,7 @@ def test_a_crossings_sentence_never_covers_the_card_it_belongs_to() -> None:
             {"id": "I2", "name": "Theirs", "what": "On theirs.", "side": "theirs",
              "facing": "user", "kind": "hosted-screen", "ways_in": ["EP2"] },
         ]
-    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+    with _served_map(_doored(mutate)) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         for iid in ("I1", "I2"):     # one on each shore: they grow in opposite directions
             page.eval_on_selector(f'.ifd-box[data-iface="{iid}"]', "e => e.click()")
@@ -1724,7 +1754,7 @@ def test_a_use_case_on_the_box_is_a_door_and_the_rest_are_counted() -> None:
             {"id": "I1", "name": "Busy", "what": "One person, many journeys.", "side": "ours",
              "facing": "user", "kind": "screen", "ways_in": ["EP1"] },
         ]
-    with _served_map(mutate) as url, _page(url + "#v=interfaces") as page:
+    with _served_map(_doored(mutate)) as url, _page(url + "#v=interfaces") as page:
         _settle(page)
         page.eval_on_selector('.ifd-box[data-iface="I1"]', "e => e.click()")
         page.wait_for_timeout(300)
@@ -1920,6 +1950,7 @@ def _sixteen_surfaces(m: dict) -> None:
          "ways_in": [f"EP{n}"]}
         for n in range(1, 17)
     ]
+    _door_named_ways_in(m)
 
 
 def test_a_box_with_no_room_beside_its_arrow_takes_the_far_column_before_it_gives_up() -> None:

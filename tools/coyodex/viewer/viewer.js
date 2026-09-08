@@ -8990,15 +8990,20 @@ function flowUcIfaces() {
   const order = ifaceSorted('ours').concat(ifaceSorted('theirs'));
   const rank = new Map(order.map((i, n) => [i.id, n]));
   const key = (n) => String(authoredActorName(n) || '').trim().toLowerCase();
-  for (const uc of Object.keys(FLOWS_NARR || {})) {
-    const hit = new Set(), sub = new Set(), at = new Map();
+  // WHICH interfaces a use case reaches is THE ONE RULE, decided in Python (`use_case_interfaces`,
+  // model.py) and shipped in the bundle — the same answer the Interfaces picture's order, an
+  // interface's use cases and its far side are computed from. This used to re-derive it from the
+  // steps here, and the two had already drifted: the steps here never counted a step drawn at a
+  // dependency the interface stands on, which the Python did.
+  const reach = FEATURES.useCaseInterfaces || {};
+  for (const uc of Object.keys(reach)) {
+    const hit = new Set((reach[uc].list || []).filter((id) => rank.has(id)));
+    const sub = new Set((reach[uc].sub || []).filter((id) => rank.has(id)));
+    // WHO a step joins to each interface is read off the steps: a ROLE carries no id on a step —
+    // `srcId` is null and `src` holds the DRAWN name — so the match is by name, through the crossing
+    // every other board makes. This is a "who" join, not the reach rule.
+    const at = new Map();
     for (const st of FLOWS_NARR[uc] || []) {
-      for (const id of [st.srcId, st.dstId]) if (rank.has(id)) hit.add(id);
-      for (const c of st.sfChips || []) {
-        if (c.kind === 'interface' && rank.has(c.id)) { hit.add(c.id); sub.add(c.id); }
-      }
-      // A ROLE carries no id on a step: `srcId` is null and `src` holds the DRAWN name, so the match
-      // is by name, through the crossing every other board makes.
       const near = (id, nm, other) => {
         if (id != null || !rank.has(other)) return;
         const k = key(nm);
@@ -9006,10 +9011,6 @@ function flowUcIfaces() {
       };
       near(st.srcId, st.src, st.dstId);
       near(st.dstId, st.dst, st.srcId);
-    }
-    // An interface a DIRECT step reached is not a sub-flow-only one, however many sub-flows also hold it.
-    for (const st of FLOWS_NARR[uc] || []) {
-      for (const id of [st.srcId, st.dstId]) if (rank.has(id)) sub.delete(id);
     }
     if (hit.size) {
       FLOW_UC_IFACES[uc] = {

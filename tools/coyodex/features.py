@@ -39,13 +39,15 @@ from coyodex import grammar
 from coyodex.anchors import parse_anchor
 from coyodex.impact_git import Extents
 from coyodex.areas import DataArea, build_areas, sorted_ids
-from coyodex.model import ProjectModel, entity_owners, expanded_flow_steps
+from coyodex.model import (ProjectModel, UseCaseReach, entity_owners, expanded_flow_steps,
+                           use_case_interfaces)
 from coyodex.validate_model import (
     anchored_flow_steps,
     capability_audience,
     interface_actor_use_cases,
     interface_directions,
     interface_steps_by_use_case,
+    interface_use_cases,
     interface_walk_order,
     rule_steps,
 )
@@ -242,6 +244,9 @@ class FeatureIndex:
                                         # "Owned by" line is the field's day-one consumer, so an
                                         # authored owner cannot sit in the map unread.
     interfaces: list[InterfaceFacts] = field(default_factory=list)
+    #: Per use case, the interfaces its flow reaches — THE rule (`use_case_interfaces`), shipped so
+    #: the viewer's use case cards and boards read it rather than re-deriving it from the steps.
+    use_case_interfaces: dict[str, UseCaseReach] = field(default_factory=dict)
     rule_join_uses_extents: bool = False
 
 
@@ -498,25 +503,22 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             # feature reaches this outside system" — it cannot say which of its surfaces. Attribute
             # the step to every surface the dep sits on rather than guessing one.
             dep_iface[d.id] = list(d.interfaces)
-    ep_iface = {ep: i.id for i in m.interfaces for ep in i.ways_in}
     ep_comp = {ep.id: ep.component for ep in m.entry_points if ep.id and ep.component}
     dep_callers: dict[str, set[str]] = {}
     for ed in m.edges:
         if ed.dst in dep_iface and ed.src in comp_ids:
             dep_callers.setdefault(ed.dst, set()).add(ed.src)
 
-    iface_ucs: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
+    # WHICH USE CASES REACH A SURFACE is the one rule in `use_case_interfaces` (model.py), read here
+    # through its inverse. A use case's authored `entry_points` used to be a second route into this
+    # table (the use case names one of the surface's ways in); it went with the rule, so a surface's
+    # use cases, its features and the walk order all read the same answer the use case cards read.
+    # The loop below still walks the steps, but only to tell the DIRECTION of each reach — in through
+    # the surface, or out to it — which is a feature's `reached_through` / `reaches_out` and nothing
+    # the rule answers.
+    reach_ucs = interface_use_cases(m)
     feat_in: dict[str, set[str]] = {c: set() for c in caps}
-    for u in m.use_cases:
-        for ep in (u.entry_points or ()):
-            iid = ep_iface.get(ep)
-            if iid is None:
-                continue
-            iface_ucs[iid].add(u.id)
-            if uc_cap.get(u.id):
-                feat_in[uc_cap[u.id]].add(iid)
     feat_out: dict[str, set[str]] = {c: set() for c in caps}
-    iface_out_ucs: dict[str, set[str]] = {i.id: set() for i in m.interfaces}
     iface_ids = {i.id for i in m.interfaces}
     for f in m.flows:
         cap = uc_cap.get(f.uc)
@@ -537,18 +539,11 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
                 # outside system arriving, which is the other direction.
                 if side in iface_ids:
                     reaching_out = (st.dst == side and grammar.is_step_id(st.src))
-                    if reaching_out:
-                        iface_out_ucs[side].add(f.uc)
-                        if cap:
-                            feat_out[cap].add(side)
-                    else:
-                        iface_ucs[side].add(f.uc)
-                        if cap:
-                            feat_in[cap].add(side)
+                    if cap:
+                        (feat_out if reaching_out else feat_in)[cap].add(side)
                     continue
                 # …and the older, weaker statement: a step drawn at a DEP the surface stands on.
                 for iid in dep_iface.get(side, ()):
-                    iface_out_ucs[iid].add(f.uc)
                     if cap:
                         feat_out[cap].add(iid)
 
@@ -569,10 +564,9 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             components=sorted_ids(
                 {ep_comp[ep] for ep in i.ways_in if ep in ep_comp}
                 | {c for d in iface_deps.get(i.id, ()) for c in dep_callers.get(d, ())}),
-            use_cases=sorted_ids(iface_ucs[i.id] | iface_out_ucs[i.id]),
-            features=sorted_ids({uc_cap[u] for u in (iface_ucs[i.id] | iface_out_ucs[i.id])
-                                 if u in uc_cap}),
-            features_unknown=not (iface_ucs[i.id] or iface_out_ucs[i.id]),
+            use_cases=sorted_ids(reach_ucs[i.id]),
+            features=sorted_ids({uc_cap[u] for u in reach_ucs[i.id] if u in uc_cap}),
+            features_unknown=not reach_ucs[i.id],
             steps=[(uc, [(st.phrase, st.container, st.n, st.role, st.direction) for st in group])
                    for uc, group in iface_steps.get(i.id, ())],
             walk_pos=iface_walk.get(i.id),
@@ -627,6 +621,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
     )
     return FeatureIndex(
         features=features,
+        use_case_interfaces=use_case_interfaces(m),
         component_features={k: sorted_ids(set(v)) for k, v in comp_feats.items()},
         rule_features={k: sorted_ids(v) for k, v in rule_feats.items()},
         role_features=role_feat,
@@ -667,6 +662,9 @@ def as_bundle(ix: FeatureIndex) -> dict[str, object]:
                                             for ph, ct, n, r, dr in group]}
                        for uc, group in i.steps]}
             for i in ix.interfaces],
+        "useCaseInterfaces": {
+            uc: {"list": sorted_ids(set(r.interfaces)), "sub": sorted_ids(set(r.via_subflow_only))}
+            for uc, r in ix.use_case_interfaces.items()},
         "areas": [
             {"id": a.id, "name": a.name, "purpose": a.purpose, "entities": a.entities,
              "owners": a.owners,
