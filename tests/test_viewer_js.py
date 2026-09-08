@@ -730,19 +730,19 @@ def test_a_board_is_headed_by_its_subject_only_where_the_page_does_not_say_it() 
     assert ".journey-track::before" in css and "top: 19.5px;" in css and "height: 3px;" in css
     assert ".journey-gutter-on { grid-row: 2; padding-top: 15.75px; }" in css
 
-def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
-    """A station on the rail is a dot and a title. Its position in the whole walk was drawn over the
-    title as a number, and the number answered no question this page asks: the rail already runs left
-    to right, and which of the walk's twenty steps this one is changes nothing the reader does.
+def test_a_station_is_a_dot_and_a_title_and_the_actor_s_rail_adds_the_step_number() -> None:
+    """A station on a rail is a dot and a title. Its number in the whole walk was drawn OVER the dot
+    once, and went: a number centred on the dot starts further left the more digits it has, so the
+    title had to line up with the number, an indent rule per digit count, on the title AND on the
+    off-path list under it.
 
-    It was not free. A number centred on the dot starts further left the more digits it has, so the
-    title had to line up with the NUMBER rather than with the dot — an indent rule per digit count,
-    on the title AND on the off-path list under it, which took the indent of its box's first station.
-    All of that goes with the number. The title now starts at the dot's own left edge, the off-path
-    list starts at the box's own padding, and the two are one column because they are one number.
+    The number is back on the ACTOR'S rail, drawn as the Happy Path draws it — a small line between
+    the dot and the title, taking no width of its own, so no indent rule returns with it. An actor's
+    rail skips the steps other actors drive, and the numbers are what say where those gaps are. The
+    feature's rail zones by driver and holds every step of its feature, so it still asks for none.
 
-    The station index is gone from the data too: `actorStations` returns the walk's steps, not steps
-    wrapped in a counter that nothing reads."""
+    The station index stays out of the data: `actorStations` returns the walk's steps, and the number
+    is read off the walk (`hpStepPos`) by the one shared step box."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
     zone = js[js.index("function journeyZoneHtml(z, opts) {"):
@@ -750,20 +750,18 @@ def test_a_station_is_a_dot_and_a_title_with_no_step_number() -> None:
     assert 'class="journey-n"' not in js and ".journey-n {" not in css, "no number on the dot"
     assert "journey-d1" not in js and "journey-d2" not in css, "and no per-digit indent rule"
     assert "sideIndent" not in zone, "…nor the off-path list's copy of it"
-    # A STATION IS THE SHARED STEP BOX (flowStepBoxHtml), the one the Happy Path draws — so the dot and
-    # the title are stated once, there, and the rail asks for the box WITHOUT the number. `num` is
-    # the parameter that says so; the rail never passes it, and no stylesheet rule hides it.
-    assert "flowStepBoxHtml(s, { actor: o.actor, marks: true, ifs })" in zone
-    assert "num:" not in zone, "the rail asks for no step number"
+    # A STATION IS THE SHARED STEP BOX (flowStepBoxHtml), the one the Happy Path draws — so the dot, the
+    # number and the title are stated once, there, and a rail says whether it wants the number.
+    assert "flowStepBoxHtml(s, { actor: o.actor, marks: true, ifs, num: !!o.num })" in zone
+    actor_rail = js[js.index("function renderActorPage(actorName) {"): js.index("\nfunction ", js.index("function renderActorPage(actorName) {") + 10)]
+    assert "num: true," in actor_rail, "the actor's rail asks for the step number"
+    feature_rail = js[js.index("function featureRailHtml(capId) {"): js.index("\nfunction ", js.index("function featureRailHtml(capId) {") + 10)]
+    assert "num:" not in feature_rail, "the feature's rail asks for none"
     step = js[js.index("function flowStepBoxHtml(st, o) {"):
               js.index("\nfunction ", js.index("function flowStepBoxHtml(st, o) {") + 10)]
     assert '<span class="flow-step-dot"></span>' in step
-    assert 'opt.num ? `<span class="flow-step-num">' in step, "…and the number is the caller\'s to ask for"
-    # The counter is gone from the data, not just from the markup.
-    stations = js[js.index("function actorStations(actorName) {"):
-                  js.index("\nfunction ", js.index("function actorStations(actorName) {") + 10)]
-    assert "out.push(st);" in stations and "n: i + 1" not in stations
-    assert "s.st." not in js, "a station IS a step now, not a wrapper around one"
+    assert step.index('flow-step-dot') < step.index('opt.num ?') < step.index('flow-step-title'), \
+        "the number sits between the dot and the title, as on the Happy Path"
 
 
 def test_the_actor_pages_two_lanes_are_named_once_and_share_one_height() -> None:

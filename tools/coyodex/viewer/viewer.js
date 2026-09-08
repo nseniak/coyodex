@@ -9046,8 +9046,8 @@ function journeyDriversHtml(uc) {
 // that lit on the walk and did not on a rail. This is that box, once.
 //
 // WHAT DIFFERS IS PASSED IN, never switched on by a class the stylesheet reads. `num` is the step's
-// place in the whole walk: the Happy Path is the page whose subject that is, and both rails drop it
-// deliberately (see hpBoxHtml). `marks` are the "changed" and "not traced" footnotes a rail
+// place in the whole walk: the Happy Path and the actor's rail draw it, the feature's rail drops it
+// deliberately (see journeyZoneHtml). `marks` are the "changed" and "not traced" footnotes a rail
 // carries. `ifs` is the table of surfaces to chip. `actor` is whose designator the title may drop.
 // A caller that wants none of them passes none and gets the plain box.
 function flowStepBoxHtml(st, o) {
@@ -9199,11 +9199,12 @@ function journeyZoneHtml(z, opts) {
       + `<span>${esc(name)}</span></button>`
     : (z.stations || []).length || (z.sides || []).length
       ? '<span class="journey-zkind">not in any feature</span>' : '');
-  // A dot and a title. The station carried its position in the whole walk as a number over the
-  // title, and the number told the reader nothing they act on: the rail already runs left to right,
-  // and which of the walk's twenty steps this one is answers no question this page asks. It cost an
-  // alignment rule per digit count, because a number centred on the dot starts further left the more
-  // digits it has, and the title had to line up with the number rather than with the dot.
+  // A dot, a title, and on the ACTOR'S rail the step's number in the whole walk. The number was
+  // dropped from both rails once, when it sat over the dot and cost an alignment rule per digit
+  // count. It comes back on the actor's rail as the Happy Path draws it — a small line between the
+  // dot and the title, taking no width of its own — because an actor's rail skips the steps other
+  // actors drive, and the numbers are what say where the gaps are. The feature's rail zones by
+  // driver and holds every step of its feature, so it still asks for none.
   //
   // WHERE each use case happens rides under its title, in BOTH lanes, and only when the caller hands
   // the board an `ifs` table. The actor page hands one over; the feature page hands none, and draws
@@ -9211,10 +9212,9 @@ function journeyZoneHtml(z, opts) {
   // actors, and "where this actor stands" has no single answer to put on it.
   const ifs = o.ifs || {};
   // The SHARED step box (flowStepBoxHtml), the one the Happy Path draws. What a rail wants of it is
-  // passed: the footnote marks yes, the walk-position number no — "which of the walk's twenty steps
-  // is this" answers no question either rail asks, and it is the question the Happy Path exists for.
+  // passed: the footnote marks always, the walk-position number when the caller asks (`o.num`).
   const stations = (z.stations || []).map((s) =>
-    flowStepBoxHtml(s, { actor: o.actor, marks: true, ifs })).join('');
+    flowStepBoxHtml(s, { actor: o.actor, marks: true, ifs, num: !!o.num })).join('');
   // The chips join the name and its marks INSIDE `journey-sidet`, which is the one text column beside
   // the circle. As a third item on the circle's own row they would have been a second column, and the
   // name would break onto a line of its own as soon as the two passed 190px.
@@ -9321,6 +9321,9 @@ function renderActorPage(actorName) {
   let col = 1;
   const boxes = (list, lead) => list.map((b, i) => journeyZoneHtml(b.z,
     Object.assign({}, b.o, { col: ++col, offLane, partLane, noPath,
+      // The step's number in the whole walk, on this rail only: an actor's rail skips the steps
+      // other actors drive, and the numbers say where those gaps are.
+      num: true,
       first: lead && i === 0, last: lead && i === list.length - 1,
       // The FIRST feature the happy path never enters opens a wider gap, so the rail's right tip
       // ends in clear space instead of pointing at it.
