@@ -2,3 +2,6 @@
 # and evals have something to map. It is not part of the coyodex product, and it
 # carries two project maps (expected/, golden/) that must never be read as source.
 eval/fixtures/trapdoor/
+# The repo's own-map test fixture: a project map committed for the viewer and assembly tests,
+# which `coyodex scope` warned would be read as SOURCE and inflate every count.
+tests/fixtures/own-map/
