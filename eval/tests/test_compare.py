@@ -834,3 +834,13 @@ def test_overlap_of_two_empty_sets_does_not_divide_by_zero() -> None:
     """The guard both callers of `_overlap` need, in one place instead of two."""
     assert C._overlap(set(), set()) == (0, 1)
     assert C._overlap({"a"}, {"a", "b"}) == (1, 2)
+
+
+def test_a_source_root_the_candidate_cites_nowhere_is_noted() -> None:
+    """`internal/` left one map whole, 27 mentions to 0, with every gate green: the walker calls it
+    non-product, so no check was meant to look. Right or wrong, the move gets one line."""
+    old = make_profile(component_sources=["internal/a.py", "backend/x.py"], auth_sites=["backend/y.py:3"])
+    new = make_profile(component_sources=["backend/x.py"], auth_sites=["backend/y.py:3"])
+    r = compare(old, new)
+    assert any("1 source root(s)" in n and "internal/" in n for n in r.notes), r.notes
+    assert not any("source root(s)" in n for n in compare(old, old).notes)

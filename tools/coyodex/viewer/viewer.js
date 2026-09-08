@@ -4516,7 +4516,8 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
 // A LABEL SITS AT THE MIDDLE OF ITS ARROW. The layout engine puts an arrow's label half way between
 // the two boxes' COLUMNS and never asks how far the curve travels up or down on the way — so on a use
 // case map, where the label IS the step number, a number sat 15% along one arrow and 88% along the
-// next (mcpolis UC1: 5 of its 17 numbers more than 15px from the middle, 31px at worst). The callout
+// next (UC1 on the 2026-09-07 mcpolis map: 5 of its 17 numbers sat more than 15px from the middle,
+// 31px at worst). The callout
 // already lands half way ALONG the drawn curve (arrowMidpoint); the label is moved to that same point
 // once the drawing is on screen and before anything binds to or measures it.
 // The label group is `translate(x, y)` at the label's own centre, in the same space as the path (the
@@ -9199,8 +9200,8 @@ function journeyMarksHtml(ucId) {
 // invert it in their head.
 //
 // CHIPS, and not the eight marks alone. The marks are a smaller answer that is usually no answer: 8
-// drawings cover 19 surfaces on the mcpolis map, and of the 13 use cases that touch two surfaces or
-// more, 12 would draw one of those drawings twice. Two identical globes on one step are Dashboard
+// drawings covered 19 surfaces on the 2026-09-07 mcpolis map; of its 13 use cases touching two or
+// more surfaces, 12 would have drawn one of those drawings twice. Two identical globes on one step are Dashboard
 // and Operator console, and nothing on the board says which is which.
 //
 // INERT, like every other chip: a chip offers no click, and the thing it sits on is what opens. Here
@@ -9287,7 +9288,8 @@ function flowUcIfaceList(uc) { return (flowUcIfaces()[uc] || {}).list || []; }
 //
 // 2. A SHARED SUB-FLOW's interfaces go to whoever DRIVES the caller. A sub-flow cannot name a person:
 //    `Sign in with Google` is run by the Prospect in one use case and the Team member in another, and
-//    4 of mcpolis's 12 shared sub-flows have two drivers like that. So no door can be drawn inside
+//    4 of the 12 shared sub-flows on the 2026-09-07 mcpolis map had two drivers like that. So no
+//    door can be drawn inside
 //    one, and "the person this run is for" is the strongest statement the map can make. Without this
 //    the two use cases that reach Google sign-in only inside that sub-flow showed it nowhere.
 //
@@ -9320,8 +9322,8 @@ function actorUcIfaces(actorName) {
 // gap by reading the page.
 //
 // Two lists, two rules. Driving comes off the use case's own `actors` (who can start it); standing in
-// it comes off the doors. On the mcpolis map the second list adds 4 use cases to the Team member, 1 to
-// the Organization admin, 1 to the Headless agent, and nothing to the other three actors.
+// it comes off the doors. On the 2026-09-07 mcpolis map the second list added 4 use cases to the Team
+// member, 1 to the Organization admin, 1 to the Headless agent, and nothing to the other three actors.
 //
 // IN STORY ORDER, the order every other list on this page uses, so a use case sits at the same point
 // in the product's story wherever it is named.
@@ -9609,7 +9611,7 @@ function renderActorPage(actorName) {
   // lane holding nothing.
   const offLane = onRail.concat(off).some((b) => (b.z.sides || []).length);
   // …and the third lane on the same rule: drawn only when this actor is IN a use case they do not
-  // drive. On the mcpolis map that is 3 of the 6 actors, so the other three boards are untouched.
+  // drive. On the 2026-09-07 mcpolis map that was 3 of the 6 actors; the other three were untouched.
   const partLane = onRail.concat(off).some((b) => (b.z.parts || []).length);
   // An actor the happy path never touches (argus's Page owner is one) has no upper lane at all: the
   // row is dropped rather than drawn empty, and with one lane there is nothing for the dashed line

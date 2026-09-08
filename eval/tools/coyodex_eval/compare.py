@@ -303,6 +303,7 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
                          f"— names drift with LLM wording, so verify rather than trust: {head}{more}")
         notes.extend(_auth_site_notes(baseline, candidate))
     notes.extend(_reproducibility_notes(baseline, candidate))
+    notes.extend(_source_root_notes(baseline, candidate))
 
     if t.deployment_linkage_must_not_drop and not baseline.deployment_units:
         # Silence here is indistinguishable from "the gate passed". A baseline blessed before this
@@ -561,6 +562,29 @@ def _same_commit(baseline: MapProfile, candidate: MapProfile) -> tuple[bool, str
     note = (f" (the {' and '.join(dirty)} pin says `-dirty`, so uncommitted code could differ "
             f"between the two builds)" if dirty else "")
     return True, note
+
+
+def _source_root_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
+    """Top-level source roots the baseline's elements cite and the candidate's cite nowhere.
+
+    `internal/` left the 2026-09-08 mcpolis map whole — 27 mentions to 0, its 17 code files
+    unchanged in git — and every gate stayed green, because the walker lists `internal` as a
+    non-product directory and no check was ever meant to look there. Right or wrong, a root the
+    previous map described and this one describes nowhere is worth one line, so the move is
+    recorded rather than silent. Reported, never gated: the convention may be the reason."""
+    if baseline.component_sources is None or candidate.component_sources is None:
+        return []
+
+    def roots(p: MapProfile) -> set[str]:
+        cited = [*(p.component_sources or []), *(p.test_files or []), *(p.auth_sites or [])]
+        return {c.split("/", 1)[0] for c in cited if "/" in c}
+
+    lost = sorted(roots(baseline) - roots(candidate))
+    if not lost:
+        return []
+    return [f"{len(lost)} source root(s) the baseline's elements cite and the candidate's cite "
+            f"nowhere: {', '.join(r + '/' for r in lost)} — a scope decision or a loss, and nothing "
+            f"else here can tell which"]
 
 
 def _reproducibility_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:

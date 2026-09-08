@@ -874,7 +874,8 @@ def use_case_interfaces(m: ProjectModel) -> dict[str, UseCaseReach]:
 
     Nothing else decides it. A use case's authored `entry_points` used to be a third arm — "the use
     case names one of the surface's ways in" — in three derivations, while the viewer's use case
-    cards read the flow alone. Measured on mcpolis, that arm added 5 links no flow drew: the
+    cards read the flow alone. Measured on the 2026-09-07 mcpolis map, that arm added 5 links no
+    flow drew: the
     prospect's first use case put the Dashboard at happy-path step 1, because two backend routes
     filed under the Dashboard were listed on it. Every derivation that answers "which use cases
     reach an interface", "where does the walk first reach it", "who stands at it" or "which
