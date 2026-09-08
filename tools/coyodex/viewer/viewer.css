@@ -3038,6 +3038,17 @@ body.insp-on { cursor: crosshair; }
 .ibox-map, .ibox-compact, .ibox-tight { display: inline-block; width: auto; min-width: 200px;
                                         max-width: 300px; }
 .ibox-tight { min-width: 0; padding: 6px 10px; }
+/* NO FLOOR WITHOUT A SENTENCE. The floor above keeps room for the sentence a `map` box shows; a
+   `compact` box shows a name and a band and nothing that wraps, so the floor only left the name
+   sitting at the left of an empty box (measured on the Data pictures: "Organizations" 77px wide in a
+   200px box). It fits its text, like a `tight` box. */
+.ibox-compact { min-width: 0; text-align: center; }
+/* AND EVERYTHING IN IT IS CENTRED. The box is as wide as its wider row — the name with its glyph,
+   or the band under it — so the narrower row would otherwise sit at the left, and a name over a
+   wider band read as pushed right. Both rows centre on the box's own middle. */
+.ibox-compact .ibox-head { justify-content: center; }
+.ibox-compact .ibox-title { flex: 0 1 auto; justify-content: center; }
+.ibox-compact .ibox-band { justify-content: center; }
 .ibox-full { width: 320px; }
 /* The PERSON on a map, at the size the stick figure has always been drawn there.
    IT IS STILL A BOX. It carried `border: 0`, and a box with no border has nothing for the hover and

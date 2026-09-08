@@ -1969,7 +1969,23 @@ function padClusterTitle(g, pad, fontSize) {
     if (m) label.setAttribute('transform', 'translate(' + m[1] + ', ' + (parseFloat(m[2]) - pad) + ')');
     // let a slightly wider title overflow its layout-fixed box rather than clip
     const fo = label.querySelector ? label.querySelector('foreignObject') : null;
-    if (fo) fo.style.overflow = 'visible';
+    if (fo) {
+      fo.style.overflow = 'visible';
+      // …AND RE-CENTRE IT. The engine centred a box of the ORIGINAL text's width on the frame, and the
+      // bolder, larger text overflows that box to the right only, so the title's middle moved right by
+      // half the growth (measured: 25px on a 456px-wide frame, 1.35em). Measure the text as it lays
+      // out now — by ratio to the box, so the drawing's scale drops out — and widen the box around the
+      // same middle.
+      const text = fo.firstElementChild;
+      const w0 = parseFloat(fo.getAttribute('width'));
+      const shown = fo.getBoundingClientRect().width;
+      const w1 = (text && shown > 0) ? text.getBoundingClientRect().width / shown * w0 : 0;
+      const mm = (label.getAttribute('transform') || '').match(/translate\(\s*([-\d.]+)[ ,]+([-\d.]+)\s*\)/);
+      if (w1 > w0 + 0.5 && mm) {
+        fo.setAttribute('width', String(w1));
+        label.setAttribute('transform', 'translate(' + (parseFloat(mm[1]) - (w1 - w0) / 2) + ', ' + mm[2] + ')');
+      }
+    }
   }
   return rect;
 }
