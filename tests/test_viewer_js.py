@@ -5373,9 +5373,9 @@ def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> 
     assert "itemGlyphSvg(sub ? 'subflow' : 'usecase')" in head, "the element's own glyph on the name row"
     assert "itemSectionHeadHtml(" in head, "the section head, from the one builder"
     assert "(FLOWS_NARR[id] || []).length" in head, "the count is the walk's own steps"
-    sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body) {"):
-             js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body) {"))]
-    assert "itemSectionHeadHtml(title, count, note)" in sec, "…which the framed section uses too"
+    sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body, opts) {"):
+             js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body, opts) {"))]
+    assert "itemSectionHeadHtml(title, count, note, o.glyph)" in sec, "…which the framed section uses too"
     sync = js[js.index("function syncPageHero(s, chain) {"):
               js.index("\n}", js.index("function syncPageHero(s, chain) {"))]
     assert "const walk = isFlowState(s);" in sync and "walk ? walkHeadHtml(s, chain)" in sync

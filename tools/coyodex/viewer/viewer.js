@@ -9406,7 +9406,10 @@ function renderActorPage(actorName) {
   //
   // `tabIndexHtml` and `bindTabIndex` STAY — a feature's page and the System page still build one.
   const html = itemSectionHtml(secs, 'uc', 'Use cases', ucs,
-    `Every use case this actor ${drives}, in the order the happy path runs${anyIfs}.`, board);
+    `Every use case this actor ${drives}, in the order the happy path runs${anyIfs}.`, board,
+    // The head rides the frame as a strip, led by the use case mark: this is a board, and the one
+    // section of its page (see itemSectionHtml).
+    { headInFrame: true, glyph: itemGlyphSvg('usecase') });
   diagram.innerHTML = `<div class="usecases-wrap">${actorPageHeroHtml(actorName)}${html}</div>`;
   bindActorPage(diagram, actorName);
   // AFTER the board is in the document, because it measures drawn text. The Happy Path runs the
@@ -10685,18 +10688,31 @@ function bindProductLead() {
 // Registers itself in `secs` for the pinned chip bar (`tabIndexHtml`), which is the page's contents
 // and its summary in one strip. Two sections is the fewest that index anything; below that the bar
 // draws nothing and this still works.
-function itemSectionHtml(secs, key, title, count, note, body) {
+// `opts.headInFrame` puts the head INSIDE the frame, as a strip across its top, with `opts.glyph`
+// leading the title. For a BOARD only: a heading over a board sat as loose text between two boxes —
+// the hero card above and the frame below — 22px under one and 9px over the other, belonging to
+// neither. A card list keeps its page-text heading: a title bar welded to a list of cards is a title
+// bar on something that needs none (see the section rules in viewer.css).
+function itemSectionHtml(secs, key, title, count, note, body, opts) {
   const id = 'itemsec-' + key;
+  const o = opts || {};
   secs.push({ id, title, count });
-  return `<section class="item-sec" id="${id}">${itemSectionHeadHtml(title, count, note)}`
-    + `<div class="item-sec-frame">${body}</div></section>`;
+  const head = itemSectionHeadHtml(title, count, note, o.glyph);
+  if (!o.headInFrame) {
+    return `<section class="item-sec" id="${id}">${head}<div class="item-sec-frame">${body}</div></section>`;
+  }
+  // The strip is outside the board, which is the thing that scrolls sideways — so the strip stays put
+  // while the board scrolls under it.
+  return `<section class="item-sec item-sec-boarded" id="${id}"><div class="item-sec-frame">`
+    + `<div class="item-sec-strip">${head}</div>`
+    + `<div class="item-sec-body">${body}</div></div></section>`;
 }
 // The head alone — the title, its count and its sentence — for a section whose frame is not the
 // `item-sec-frame` this builder draws. A walk's page has one: its board is the pan/zoom drawing, and
 // the frame around that is #diagwrap, so the head is written above it and the frame stays where every
 // drawing's frame is. One builder for the words, whichever frame sits under them.
-function itemSectionHeadHtml(title, count, note) {
-  return `<h2 class="item-sec-title">${esc(title)}`
+function itemSectionHeadHtml(title, count, note, glyph) {
+  return `<h2 class="item-sec-title">${glyph || ''}${esc(title)}`
     + (count === '' || count == null ? '' : `<span class="item-sec-n">${esc(String(count))}</span>`)
     + '</h2>'
     + (note ? `<p class="item-sec-note">${esc(note)}</p>` : '');

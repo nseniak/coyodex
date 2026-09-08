@@ -1192,13 +1192,20 @@ def test_an_item_pages_sections_each_say_what_they_are_and_what_is_in_them() -> 
             _page(url + "#v=actor&act=Org creator") as page:
         _settle(page)
         secs = page.evaluate("""() => [...document.querySelectorAll('.item-sec')].map((s) => ({
-            title: s.querySelector('.item-sec-title').firstChild.textContent.trim(),
+            // The title's own words: its mark (an svg) leads it, its count pill follows it.
+            title: [...s.querySelector('.item-sec-title').childNodes].filter((n) => n.nodeType === 3)
+                     .map((n) => n.textContent).join('').trim(),
+            strip: !!s.querySelector('.item-sec-frame > .item-sec-strip .item-sec-title'),
+            mark: !!s.querySelector('.item-sec-title .ibox-gly'),
             count: s.querySelector('.item-sec-n').textContent,
             note: s.querySelector('.item-sec-note').textContent.slice(0, 24)
         }))""")
         # ONE section. The Interfaces block under it went, and with it the chip strip that only
         # exists to index several — the board names every interface on the use case itself now.
         assert [s["title"] for s in secs] == ["Use cases"], secs
+        # A BOARD'S HEAD RIDES ITS FRAME, led by the use case mark: as page text it sat between the hero
+        # card and the frame, 22px under one and 9px over the other, belonging to neither.
+        assert all(s["strip"] and s["mark"] for s in secs), secs
         assert all(s["note"] and s["count"] != "" for s in secs), secs
         # NO BAR. It indexed several sections and there is one; `tabIndexHtml` returns nothing below
         # two, and the page no longer asks it. The mechanism itself is pinned on a page that has
