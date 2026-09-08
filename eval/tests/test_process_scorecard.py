@@ -2911,3 +2911,42 @@ def test_a_ship_help_runs_nothing():
 def test_an_unknown_outcome_still_credits_the_whole_plan():
     """The optimistic default the assertions had before results were threaded through."""
     assert P._invokes("$CX ship /repo --note-file /repo/note.md", "finalize")
+
+
+# --- the prescribed `ship` path leaves a different transcript than the hand-run one --------------
+# A build that follows the method redirects `ship`'s stdout to a file, greps it, then cats the gate
+# block. On the 2026-09-08 mcpolis build that left assertion 12 `n/a` (the verdict arrived only in
+# the gate block's spelling) and scored 14 as 1.00 -> 0.00 (the delta was recorded by `ship`'s own
+# `grounding write --map`, which nobody typed).
+
+def test_12_reads_the_verdict_in_the_gate_blocks_spelling():
+    gate = "Gates: finalize ADVISORIES — 0 blocking, 16 advisory (map sha256 571862b64417…)."
+    turns = (make_turn(0, make_bash('coyodex ship . --note-file n.txt > ship.txt; cat gate-block.md',
+                                    uid="s"), results=(("s", gate),)),
+             make_turn(1, make_bash('git commit -m "Gates: finalize clean — 0 blocking, 0 advisory"')))
+    a = P.score_turns(turns).by_id()[12]
+    assert (a.observed, a.of) == (0, 1), a
+    honest = (turns[0], make_turn(1, make_bash('git commit -m "Gates: finalize ADVISORIES — 0 blocking"')))
+    assert P.score_turns(honest).by_id()[12].of == 1
+
+
+def test_14_counts_a_ship_run_as_the_recorded_delta():
+    turns = (make_turn(0, make_bash("coyodex ship . --note-file n.txt --partial", uid="s"),
+                       results=(("s", "wrote g.json: 842 of 1791 claim(s) challenged"),)),
+             make_turn(1, make_bash("cat gate-block.md", uid="g"),
+                       results=(("g", "audit: 0 blocking — 833 L2 claims on the grounding worklist"),)))
+    a = P.score_turns(turns).by_id()[14]
+    assert (a.observed, a.of) == (1, 1) and "delta recorded" in a.note, a
+
+
+def test_40_ignores_a_help_run_and_a_grep_whose_pattern_carries_an_escaped_pipe():
+    """Its only two hits on the 2026-09-08 build were `lint-fragment --help 2>&1 | head -40` and a
+    `grep -n "foo\\|coyodex lint-fragment" … | head`; the true reading was 89 of 89, not 89 of 91."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        assert _lint_calls_from("coyodex lint-fragment --help 2>&1 | head -40", Path(td)) == ()
+    with tempfile.TemporaryDirectory() as td:
+        assert _lint_calls_from(
+            'grep -n "handlePlanLimitError(\\|coyodex lint-fragment" src/*.py | head', Path(td)) == ()
+    with tempfile.TemporaryDirectory() as td:
+        assert len(_lint_calls_from("coyodex lint-fragment f.json | head -5", Path(td))) == 1

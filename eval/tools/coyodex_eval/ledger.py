@@ -176,7 +176,9 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError) as e:
         print(f"ERROR: {path} could not be read as a ledger ({e})", file=sys.stderr)
         return 2
-    rows = doc.get("findings")
+    # A bare LIST (one retro wrote its rows without the envelope) must reach the message below,
+    # not an `AttributeError` two lines short of it.
+    rows = doc.get("findings") if isinstance(doc, dict) else None
     if not isinstance(rows, list):
         print(f"ERROR: {path} has no `findings` list — is it a retro ledger?", file=sys.stderr)
         return 2

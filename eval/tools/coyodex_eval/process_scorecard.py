@@ -1016,7 +1016,13 @@ def assert_10_idle_turns_at_a_barrier(turns: Sequence[Turn]) -> Assertion:
 #: the trapdoor golden map, and that golden map was assembled from an authored fragment rather than
 #: produced by a live agent build — the blocker the design already names. 1-10 need a transcript and
 #: nothing else, so they run against any build of any repo.
-_FINALIZE_VERDICT = re.compile(r"finalize:\s+(CLEAN|ADVISORIES|BLOCKED|BLOCKING|INCOMPLETE)\s+—\s+"
+#: Both spellings the verdict reaches a transcript in: `finalize`'s own stdout line, and the first
+#: line of the gate block it writes (`Gates: finalize ADVISORIES — 0 blocking, 16 advisory`).
+#: A build that follows the prescribed `ship` path redirects `ship`'s stdout to a file and greps
+#: it, then cats the gate block — so the second spelling is the only one the transcript holds,
+#: and reading the first alone scored 12 `n/a` on the 2026-09-08 mcpolis build.
+_FINALIZE_VERDICT = re.compile(r"(?:finalize:|Gates:\s+finalize)\s+"
+                               r"(CLEAN|ADVISORIES|BLOCKED|BLOCKING|INCOMPLETE)\s+—\s+"
                                r"(\d+)\s+blocking,\s+(\d+)\s+advisory")
 #: Words a commit message uses to claim a gate passed. `clean` is the one a live build actually used.
 _CLEAN_CLAIM = re.compile(r"\b(clean|no findings|all clear|passed)\b", re.I)
@@ -1067,7 +1073,9 @@ def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Asse
     text = ""
     for turn in turns:
         for call in turn.calls_named("Bash"):
-            if _invokes(call.command, "finalize"):
+            # …or a read of the gate block `finalize` wrote: that file is the verdict's durable
+            # home, and a `cat` of it is how a `ship` build sees the verdict at all.
+            if _invokes(call.command, "finalize") or "gate-block" in call.command:
                 # Only the RESULT, never the command text: `finalize | grep "finalize: CLEAN …"`
                 # would otherwise launder a grep PATTERN into a verdict.
                 hit = _FINALIZE_VERDICT.search(results.get(call.id, ""))
@@ -1428,9 +1436,13 @@ def assert_14_grounding_total_matches_the_worklist(turns: Sequence[Turn]) -> Ass
                 # grounding record at all — the trigger was a developer WRITING the test that
                 # asserts the pass. And reassigning per match made an honest run fail when a later
                 # `cat` of an old log re-matched the counts.
-                explained = explained or (
-                    call.name == "Bash" and _invokes(call.command, "grounding")
-                    and "--map" in call.command and "write" in call.command)
+                # A `ship` FINISH run performs that very invocation in-process (`--note-file`
+                # selects the leg that runs `grounding write --map`), and scoring it as "no
+                # delta recorded" published a false 1.00 -> 0.00 about a build that recorded it.
+                explained = explained or (call.name == "Bash" and (
+                    (_invokes(call.command, "grounding")
+                     and "--map" in call.command and "write" in call.command)
+                    or (_invokes(call.command, "ship") and "--note-file" in call.command)))
             # Two shapes carry the live size: `audit`/`finalize` say "N L2 claims on the grounding
             # worklist", `anchor-drift` says "challenged N of M worklist claim(s)".
             w = (re.search(r"(\d+)\s+L2 claims on the grounding worklist", blob)
@@ -1742,6 +1754,9 @@ def read_agent_lint_calls(session: Path) -> tuple[tuple[str, str], ...]:
                     # retrospective leans on hardest for this defect.
                     joined = re.sub(r"\\\n[ \t]*", " ", cmd[m.start():])
                     seg = re.split(r"\n|;|&&", joined)[0]
+                    # A `--help` run prints usage, not a verdict; piping it narrows nothing.
+                    if "--help" in seg or re.search(r"\s-h\b", seg):
+                        continue
                     # An INVOCATION, not a mention. One agent ran
                     # `grep -rln "lint-fragment" . --include="*.py" | head` while looking for the
                     # source, and counting that as a narrowed self-check inflated the tally by one
@@ -1750,7 +1765,9 @@ def read_agent_lint_calls(session: Path) -> tuple[tuple[str, str], ...]:
                     if not re.search(r"coyodex(?:-eval)?[\s/\\]*$|\bcoyodex\s+$", before.strip() + " "):
                         if "coyodex" not in before:
                             continue
-                    if re.search(r"\b(grep|egrep|rg|ag)\b[^\n;&|]*$", before):
+                    # `\|` inside a grep pattern is an alternation, not a pipe: without the escaped
+                    # form here, `grep -n "foo\|coyodex lint-fragment"` read as an invocation.
+                    if re.search(r"\b(grep|egrep|rg|ag)\b(?:[^\n;&|]|\\\|)*$", before):
                         continue
                     out.append((str(label), seg))
     return tuple(out)

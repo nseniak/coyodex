@@ -263,3 +263,16 @@ def test_list_never_writes_anything():
         before = sorted(p.relative_to(root).as_posix() for p in root.rglob("*"))
         assert archive_map.main([str(root), "--list"]) == 0
         assert sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) == before
+
+
+def test_the_fan_out_timings_stay_put():
+    """`fanout-timings.json` is cross-build INPUT: `timings order` reads the last recording per slice
+    to order the next build's dispatch. Archived with the map, that verb started cold on a repo with
+    26 rebuilds behind it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_repo(tmp)
+        (root / ".coyodex" / "fanout-timings.json").write_text('{"harvest": []}', encoding="utf-8")
+        dest, entries = archive_map.archive(root)
+        assert (root / ".coyodex" / "fanout-timings.json").read_text() == '{"harvest": []}'
+        assert not any(p.name == "fanout-timings.json" for p in entries)
+        assert dest is not None and not (dest / "fanout-timings.json").exists()

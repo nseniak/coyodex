@@ -132,3 +132,13 @@ def test_a_file_that_is_not_a_ledger_is_refused_rather_than_read_as_empty():
         p.write_text(json.dumps({"not": "a ledger"}), encoding="utf-8")
         assert ledger.main([str(p), "--repo", str(tmp)]) == 2
         assert ledger.main([str(tmp / "absent.json")]) == 2
+
+
+def test_a_bare_list_is_refused_with_the_ledger_message_not_a_traceback():
+    """One retro wrote its rows as a bare list; the tool crashed with an `AttributeError` two lines
+    short of the diagnosis it already carries."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        p = tmp / "rows.json"
+        p.write_text(json.dumps([{"id": "x-1", "landed": False}]), encoding="utf-8")
+        assert ledger.main([str(p), "--repo", str(tmp)]) == 2

@@ -61,7 +61,10 @@ ARCHIVE_WIDTH = 4
 # `.ignore` is the repo's analysis-scope declaration and moving it rescopes E and coverage for every
 # later build and score (see WHY `.ignore` STAYS above), and archiving the archive container would
 # nest it one inside the next on every run.
-KEEP = {".gitignore", ".ignore", ARCHIVE_DIR}
+# `fanout-timings.json` is cross-build input, not build output: `timings order` reads the most
+# recent recording per slice to order the NEXT build's dispatch, and archiving it made that verb
+# start cold on a repo with 26 rebuilds behind it.
+KEEP = {".gitignore", ".ignore", "fanout-timings.json", ARCHIVE_DIR}
 
 
 def next_archive_dir(coyodex: Path) -> Path:
