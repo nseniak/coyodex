@@ -2092,21 +2092,6 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
    — the mirror question, so the mirror picture. Every rule below is shared; nothing here knows
    which of the two pages it is drawing, which is the point. */
 .journey-board { overflow-x: auto; padding: 22px 18px 16px 0; margin: 14px 0 6px; }
-/* The actor heads the board, over the gutter and ABOVE both lanes: this page is everything one actor
-   does, on the path and off it, and a figure drawn inside the upper lane made the lower one read as
-   somebody else's use cases. Outside the rail grid on purpose — a fourth cell in row 1 would grow
-   that row for every feature, opening each tinted box with 26px of empty colour above its name.
-   Sticky like the gutter under it, so the head stays put while the board scrolls sideways, and it
-   starts at the gutter's own 18px so it lines up with the lane names below.
-   ICON THEN NAME, on one line — the hand every title on this page is written in (a feature box's
-   name, a cast card's name). It was a figure with the name centred under it, which was a shape
-   nothing else on the page had. One line means the slot takes a feature's sparkle and a feature's
-   name, or any other element's, with nothing to redraw. */
-.journey-actorhead { position: sticky; left: 0; z-index: 5; background: #fff; width: max-content;
-                     padding-left: 18px; padding-right: 12px;
-                     display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-#diagram .journey-actorhead .story-glyph { width: 17px; height: 17px; }
-.journey-actorname { font-size: 13.5px; font-weight: 650; color: #1e2235; line-height: 1.3; }
 /* ONE grid for the whole board: row 1 the feature name, row 2 the happy-path lane, row 3 the lane
    for everything else this actor can do. Column 1 is the gutter that names the two lanes; every
    feature takes one column after it. Sharing the rows is the point — the dashed cut between the
@@ -2135,7 +2120,10 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .journey-zname { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .03em;
                  color: #1e2235; background: none; border: 0; padding: 0; cursor: pointer;
                  display: inline-flex; align-items: baseline; gap: 5px; }
-#diagram .journey-zname .story-glyph { width: 13px; height: 13px; }
+/* The FIGURE alone is centred on the line: on the baseline its middle sat 2.1px above the name's
+   (measured on six feature pages), and a hexagon, unlike a person, has no feet to stand on a line. The
+   names keep their baseline, so "A or B" still ends on one line. */
+#diagram .journey-zname .story-glyph { width: 13px; height: 13px; align-self: center; }
 .journey-zname:hover { color: #4f46e5; text-decoration: underline; }
 .journey-zkind { font-size: 11.5px; font-weight: 700; letter-spacing: .03em; color: #5a6072; }
 /* Between two INTERCHANGEABLE drivers of one box. Lower case and quiet, because it is the one word on

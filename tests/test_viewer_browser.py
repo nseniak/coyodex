@@ -2595,7 +2595,9 @@ def test_the_third_lane_belongs_to_the_actor_page_alone() -> None:
             chips: document.querySelectorAll('.journey-ifs').length })""")
         assert seen["board"] and seen["stations"] >= 1, seen
         assert seen["lane"] == 0 and seen["parts"] == 0, seen
-        assert seen["chips"] == 0, "…and neither do the chips, for the same reason"
+        # The chips are a different matter: a feature's board shows where each use case happens, as the
+        # Happy Path does — the WHOLE use case's interfaces, whoever holds that stretch.
+        assert seen["chips"] >= 1, "where each use case happens, as the Happy Path draws it"
         assert not page.js_errors, page.js_errors
 
 

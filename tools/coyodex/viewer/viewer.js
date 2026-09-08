@@ -9264,10 +9264,10 @@ function journeyZoneHtml(z, opts) {
   // actors drive, and the numbers are what say where the gaps are. The feature's rail zones by
   // driver and holds every step of its feature, so it still asks for none.
   //
-  // WHERE each use case happens rides under its title, in BOTH lanes, and only when the caller hands
-  // the board an `ifs` table. The actor page hands one over; the feature page hands none, and draws
-  // exactly what it drew before. A feature's board zones by DRIVER, so one box there can name several
-  // actors, and "where this actor stands" has no single answer to put on it.
+  // WHERE each use case happens rides under its title, in BOTH lanes, when the caller hands the board
+  // an `ifs` table. The actor page hands the interfaces this actor meets; the feature page hands the
+  // whole use case's, as the Happy Path does, since its zones are by driver and a zone can name
+  // several actors.
   const ifs = o.ifs || {};
   // The SHARED step box (flowStepBoxHtml), the one the Happy Path draws. What a rail wants of it is
   // passed: the footnote marks always, the walk-position number when the caller asks (`o.num`).
@@ -9347,14 +9347,6 @@ function journeyZoneHtml(z, opts) {
 // The SAME drawing the cast card gives them — person or service, in the actor tints — because one
 // figure means "who" wherever a who is drawn, and a second hand for it here would read as a second
 // kind of thing.
-// The SLOT itself: an icon, then a name, on one line. TWO callers now — an actor's figure and name
-// on the actor page, a feature's sparkle and name on a feature's page — which is the slot the one-line
-// shape was chosen for. The class names still say `actor` because the CSS is keyed on them; what they
-// draw is "the element this board is about", whichever element that is.
-function journeyHeadHtml(glyph, name) {
-  return '<div class="journey-actorhead">' + glyph
-    + `<span class="journey-actorname">${esc(name || '')}</span></div>`;
-}
 function renderActorPage(actorName) {
   const { zones, offZones } = actorJourney(actorName);
   // Built ONCE for the whole board, not per zone: every zone reads the same table, and building it
@@ -9611,8 +9603,14 @@ function featureRailHtml(capId) {
   const noPath = !hasPath;
   // Column 1 is the gutter; each driver takes the next column.
   let col = 1;
+  // WHERE EACH USE CASE HAPPENS, as the Happy Path draws it: the WHOLE use case's interfaces, whoever
+  // holds that stretch. This board zones by driver, so "where this actor stands" had no single answer
+  // and the board drew no chips at all — while the actor page and the Happy Path both drew theirs.
+  // The actor page is the one that narrows (actorUcIfaces); here the use case is the subject.
+  const ifs = {};
+  for (const uc of Object.keys(flowUcIfaces())) ifs[uc] = flowUcIfaceList(uc);
   const boxes = (list, lead) => list.map((z, i) => journeyZoneHtml(z, {
-    col: ++col, offLane, noPath, actor: z.acts,
+    col: ++col, offLane, noPath, actor: z.acts, ifs,
     first: lead && i === 0, last: lead && i === list.length - 1,
     // The FIRST driver the walk never reaches opens a wider gap, so the rail's right tip ends in
     // clear space instead of pointing at a box the rail does not run through.
@@ -9625,7 +9623,9 @@ function featureRailHtml(capId) {
   // The feature heads its own board, in the same slot and the same hand the actor page uses — icon
   // then name on one line. Every box below is named after an ACTOR, so without it a reader scanning
   // the board sees only actors and can read it as a page about them.
-  return `<div class="journey-board">${journeyHeadHtml(storyFeatureGlyphSvg(), featureName(capId))}`
+  // NO HEAD OF ITS OWN. The board named the feature with its sparkle, and the hero card one section
+  // above already says `Feature: <name>` — the same words twice, 60px apart.
+  return `<div class="journey-board">`
     + `${journeyRailHtml(hasPath, offLane, boxes(zones, true) + boxes(offZones, false))}</div>`;
 }
 // An actor's kind from their NAME, for the glyph a zone label carries. The rail speaks names (that

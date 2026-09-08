@@ -678,8 +678,8 @@ def test_a_board_is_headed_by_its_subject_only_where_the_page_does_not_say_it() 
     actor's figure and this actor's name at the top of the frame, one line under a hero that had just
     drawn the same figure and the same name, and it never said the thing a reader needed: that the
     boxes on the board are USE CASES. The section around it says that now, in a heading and a
-    sentence, so the head had nothing left to say. A feature's board keeps its head, because that
-    page has no section wrapper yet.
+    sentence, so the head had nothing left to say. A feature's board lost its head the same way once
+    its page got the same framed section under the same hero card.
 
     The head is deliberately NOT a fourth cell of the rail grid. A cell in row 1 would grow that row
     for every feature too, and each tinted box would open with 26px of empty colour above its name —
@@ -705,23 +705,11 @@ def test_a_board_is_headed_by_its_subject_only_where_the_page_does_not_say_it() 
     railfn = js[js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {"):
                 js.index("\nfunction ", js.index("function journeyRailHtml(hasPath, offLane, boxes, partLane) {") + 10)]
     assert "journey-actorhead" not in railfn, "…and it never was one of the gutter's cells"
-    # THE SLOT ITSELF SURVIVES, with one caller left: a feature's board.
-    slot = js[js.index("function journeyHeadHtml(glyph, name) {"):
-              js.index("\nfunction ", js.index("function journeyHeadHtml(glyph, name) {") + 10)]
-    assert '<span class="journey-actorname">${esc(name || \'\')}</span>' in slot
-    assert js.count("journeyHeadHtml(") == 2, "the slot, and the one board still headed by its subject"
-    assert "journeyHeadHtml(storyFeatureGlyphSvg(), featureName(capId))" in js, \
-        "a feature's board is headed by the feature, in that slot and that hand"
-    assert ".journey-actorhead { position: sticky; left: 0;" in css, \
-        "sticky like the gutter, so the head stays put when the board scrolls sideways"
-    # One LINE — icon then name — not a figure with a name under it.
-    head_css = css[css.index(".journey-actorhead { position: sticky"):
-                   css.index(".journey-actorname {")]
-    assert "display: flex; align-items: center; gap: 8px;" in head_css
-    assert "flex-direction: column" not in head_css, "icon then name, side by side"
-    assert "#diagram .journey-actorhead .story-glyph { width: 17px; height: 17px; }" in css, \
-        "icon at the size a title carries one, not a 30px portrait"
-    assert ".journey-actorname { font-size: 13.5px;" in css
+    # AND NO BOARD HEADS ITSELF ANY MORE. A feature's board named the feature with its sparkle, and the
+    # hero card one section above already says `Feature: <name>` — the same words twice, 60px apart.
+    # The slot went with its last caller.
+    assert "journeyHeadHtml" not in js and "journey-actorhead" not in js
+    assert ".journey-actorhead" not in css and ".journey-actorname" not in css, "and its styles went with it"
     # Row 1 is the feature-name row and nothing else, so the tinted boxes are untouched.
     assert ".journey-gutter-top { grid-row: 1; }" in css
     assert ".journey-zlabel { grid-row: 1; white-space: nowrap; padding-top: 8px;" in css
