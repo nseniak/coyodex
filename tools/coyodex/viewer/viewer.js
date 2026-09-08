@@ -6903,12 +6903,45 @@ function walkHeadHtml(s, chain) {
   // THE SAME STRIP every item page's sections wear, here attached to the drawing's own frame: the
   // board is the pan/zoom drawing in #diagwrap, so the strip is drawn above it in this head and the
   // stylesheet joins the two (`.item-sec-strip-stage`) — one framed section, in two hosts.
-  return hero + '<div class="item-sec-strip item-sec-strip-stage">'
-    + itemSectionHeadHtml(sub ? 'Shared sub-use case flow' : 'Use case flow',
+  return hero + stageStripHtml(
+    itemSectionHeadHtml(sub ? 'Shared sub-use case flow' : 'Use case flow',
         `${steps} step${steps === 1 ? '' : 's'}`,
         `Who or what acts at each step of this ${what}, on what, in the order the steps run.`,
-        itemGlyphSvg(sub ? 'subflow' : 'usecase'))
-    + '</div>';
+        itemGlyphSvg(sub ? 'subflow' : 'usecase')));
+}
+// THE STRIP OVER A DRAWING'S FRAME: a section head, attached to #diagwrap as the top of one framed
+// section (the stylesheet joins the two through `.item-sec-strip-stage`). One wrapper for the three
+// heads that ride it — a walk's, a landing's, a drawn element's — so the frame joins them all the same way.
+function stageStripHtml(head) {
+  return `<div class="item-sec-strip item-sec-strip-stage">${head}</div>`;
+}
+// THE DRAWN ELEMENT'S BOARD HEAD. A subsystem's page, a subdomain's and a process's each keep their hero
+// in the fixed block and their drawing under it — and that drawing wore a bare frame, where a use case's
+// board and every landing picture wear the same grey strip saying what the drawing is. A frame with no
+// head under a hero read as a leftover: the hero says what the PAGE is about, and nothing said what the
+// picture under it showed. So the three pages take the strip too, from the one head builder, with the
+// element's own glyph: a title for the drawing, its count where one lookup gives it, one sentence.
+//
+// The count is the boxes INSIDE the frame — the element's direct members, which is what the drawing
+// frames — never the neighbours around it. A process's card has no such single kind of member (it draws
+// the subsystems it runs beside the stores it uses), so its head carries no count, as the System landing
+// carries none.
+function memberCount(kind, parent, noun, plural) {
+  const n = Object.values(GRAPH.nodes || {}).filter((x) => x.kind === kind && x.parent === parent).length;
+  return `${n} ${n === 1 ? noun : (plural || noun + 's')}`;
+}
+const BOARD_HEAD = {
+  subsystem: (id) => ['Subsystem map', memberCount('component', id, 'component'),
+    'The components inside this subsystem, and the subsystems, subdomains and outside services they touch.'],
+  domsub: (id) => ['Subdomain map', memberCount('entity', id, 'entity', 'entities'),
+    'The entities this subdomain keeps, with their fields, and the subdomains and subsystems they are tied to.'],
+  deploymentUnit: () => ['Process map', '',
+    'What this process runs, and the stores and message brokers it uses.'],
+};
+function boardHeadHtml(s, id) {
+  const spec = s && BOARD_HEAD[s.kind] && GRAPH.nodes[id] ? BOARD_HEAD[s.kind](id) : null;
+  if (!spec) return '';
+  return itemSectionHeadHtml(spec[0], spec[1], spec[2], elementHeroGlyph(GRAPH.nodes[id].kind));
 }
 // Drawn on every navigation, from renderChrome — so it is refreshed by the same call that repaints the
 // tabs and the trail, and can never survive onto a page that is about something else.
@@ -7022,7 +7055,12 @@ function syncPageHero(s, chain, tv) {
       column.appendChild(sec);
     }
   } else if (landing) {
-    inHead = `<div class="item-sec-strip item-sec-strip-stage">${landing}</div>`;
+    inHead = stageStripHtml(landing);
+  } else if (id) {
+    // A drawn element's page: the hero stays in the fixed block, and the drawing's own head goes above
+    // its frame, in the same host and strip a walk's head and a landing picture's use (boardHeadHtml).
+    const board = boardHeadHtml(s, id);
+    if (board) inHead = stageStripHtml(board);
   }
   const host = walk ? diaghead : pagehero;
   const other = walk ? pagehero : diaghead;

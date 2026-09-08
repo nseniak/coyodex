@@ -5424,6 +5424,26 @@ def test_a_chip_is_one_component_that_no_page_restyles() -> None:
     assert js.count('class="ibox-chip') == 1, "one place writes a chip's markup"
 
 
+def test_a_drawn_element_s_page_heads_its_drawing_with_the_same_strip_a_walk_s_board_wears() -> None:
+    """A subsystem's, a subdomain's and a process's page keep their hero in the fixed block; the drawing
+    under it wore a bare frame where a use case's board and every landing picture wear the grey strip
+    saying what the drawing is. The three take the strip from the one head builder, over the same frame."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    board = js[js.index("const BOARD_HEAD = {"): js.index("\n}", js.index("function boardHeadHtml(s, id) {"))]
+    assert "subsystem: (id) => ['Subsystem map', memberCount('component', id, 'component')," in board
+    assert "domsub: (id) => ['Subdomain map', memberCount('entity', id, 'entity', 'entities')," in board
+    assert "deploymentUnit: () => ['Process map', ''," in board, "a process's card has no one kind of member to count"
+    assert "itemSectionHeadHtml(spec[0], spec[1], spec[2], elementHeroGlyph(GRAPH.nodes[id].kind))" in board, \
+        "the one section-head builder, with the element's own glyph"
+    count = js[js.index("function memberCount(kind, parent, noun, plural) {"):
+               js.index("\n}", js.index("function memberCount(kind, parent, noun, plural) {"))]
+    assert "x.kind === kind && x.parent === parent" in count, "the boxes inside the frame: direct members only"
+    sync = js[js.index("function syncPageHero(s, chain, tv) {"): js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
+    assert "} else if (id) {" in sync and "const board = boardHeadHtml(s, id);" in sync
+    assert "if (board) inHead = stageStripHtml(board);" in sync, "in the walk's head host, over the drawing's frame"
+    assert sync.count("stageStripHtml(") == 2, "landing and board: one wrapper, so the frame joins both the same way"
+
+
 def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> None:
     """The use case page's hero and section head are drawn in the page (#diaghead), between the fixed
     block and the frame, by one builder — and that builder assembles the SAME pieces the actor page
@@ -5454,5 +5474,5 @@ def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> 
     # the frame, one rounded box between them.
     assert "#stage:has(#diaghead .item-sec-strip-stage) #diagwrap { margin: 0 20px 24px; border-color: #cbd5e1; border-top: 0;" in css
     assert "#diaghead .item-sec-strip-stage { border: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;" in css
-    assert "'<div class=\"item-sec-strip item-sec-strip-stage\">'" in head, "the same strip every section wears"
+    assert "return hero + stageStripHtml(" in head, "the same strip every section wears"
     assert "#diaghead { flex: 0 0 auto; padding: 0 20px; }" in css, "the actor page's left edge"
