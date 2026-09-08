@@ -862,6 +862,12 @@ components/deps/entities), drawn as a flow map and read as a numbered narrative.
              under a **"Missing surfaces"** extras heading
       a report answered by neither is a row this build loses silently
 
+  The same shape, one gate later: `validate` reports a **walk jump** when a step starts at a box
+  no earlier step of that story reached. The default reading is a missing step, and the fix is to
+  write it. A story that deliberately opens a second thread (a job the first half set going)
+  records `UCn: <why this begins a new thread>` under a **"Walk jumps"** extras heading, and the
+  check skips that use case.
+
   **This has happened, and the two builds differ only in the answer.** On 2026-09-02 a tracing agent
   reported that a marketing story ends by handing the visitor to their own mail program and that no
   surface fitted; the lead minted the row 13 minutes later and sent the agent back to close the

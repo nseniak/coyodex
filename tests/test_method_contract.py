@@ -99,6 +99,7 @@ MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "persistence exceptions", "data owner exceptions", "access baseline exceptions",
     "unclaimed surfaces", "drift exceptions", "interface exceptions",
     "bucket vocabulary", "sweep debt", "naming exceptions",
+    "missing surfaces", "walk jumps",
 )
 
 
@@ -270,13 +271,27 @@ def make_tool_callers(fns: dict[str, ToolFunction], tables: dict[str, frozenset[
     return {k: frozenset(v) for k, v in out.items()}
 
 
+def make_heading_constants() -> dict[str, str]:
+    """Every `*_HEADING = "…"` constant the advisory tools define, by name.
+
+    A heading reaches a message and a reader call through a constant as often as through a
+    literal now (`MISSING_SURFACES_HEADING`, `WALK_JUMPS_HEADING`), and a scan that sees only
+    literals filed both as unread and unadvertised — one of them while its advisory shipped
+    with the escape the tools refused."""
+    src = "\n".join((TOOLS / f).read_text(encoding="utf-8") for f in ADVISORY_TOOL_FILES)
+    return dict(re.findall(r'([A-Z_]+_HEADING)\s*=\s*"([^"]+)"', src))
+
+
 def _render_str(node: ast.AST) -> str:
-    """The literal skeleton of a message expression — f-string holes become `{}`."""
+    """The literal skeleton of a message expression — f-string holes become `{}`, except a
+    hole that names a heading constant, which renders as that heading."""
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if isinstance(node, ast.JoinedStr):
         return "".join(_render_str(v) for v in node.values)
     if isinstance(node, ast.FormattedValue):
+        if isinstance(node.value, ast.Name) and node.value.id.endswith("_HEADING"):
+            return make_heading_constants().get(node.value.id, "{}")
         return "{}"
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
         return _render_str(node.left) + _render_str(node.right)
@@ -717,11 +732,15 @@ def _reads_heading(src: str, heading: str) -> bool:
     PARAMETER, so neither the direct pattern nor the transitive walk could see the literal, which
     sits at the call site. `records.recorded_keys` / `records.lines` joined it when the four
     per-family line parsers were folded into one shared reader."""
-    reader = re.compile(r"(?:_recorded_ids|extras_bodies|_recorded_line_keys"
-                        r"|records\.recorded_keys|records\.lines)\(\s*\w+\s*,\s*[\"']"
-                        + re.escape(heading) + r"[\"']", re.I)
+    readers = r"(?:_recorded_ids|extras_bodies|_recorded_line_keys|records\.recorded_keys|records\.lines)"
+    reader = re.compile(readers + r"\(\s*\w+\s*,\s*[\"']" + re.escape(heading) + r"[\"']", re.I)
     if reader.search(src):
         return True
+    # …or a constant that carries it: `records.recorded_keys(m, WALK_JUMPS_HEADING)`.
+    constants = make_heading_constants()
+    for name in re.findall(readers + r"\(\s*\w+\s*,\s*([A-Z_]+_HEADING)\b", src):
+        if constants.get(name, "").lower() == heading.lower():
+            return True
     return heading == "balance exceptions" and "_exceptions(" in src
 
 
@@ -884,7 +903,10 @@ def test_the_machine_read_heading_list_matches_the_validator():
              re.findall(r'(?:extras_bodies\(m,|_recorded_ids\(m,|_recorded_line_keys\(m,'
                         r'|records\.recorded_keys\(m,|records\.lines\(m,)'
                         r'\s*"([^"]+)"', src)}
-    found |= {h.lower() for h in re.findall(r'_EXCEPTIONS_HEADING\s*=\s*"([^"]+)"', src)}
+    # Any `*_HEADING = "…"` constant, not only the `_EXCEPTIONS_` ones: "Missing surfaces" and
+    # "Walk jumps" are read through `MISSING_SURFACES_HEADING` / `WALK_JUMPS_HEADING`, and the
+    # narrower pattern let both drop out of this list without a word.
+    found |= {h.lower() for h in re.findall(r'[A-Z_]+_HEADING\s*=\s*"([^"]+)"', src)}
     assert found == set(MACHINE_READ_HEADINGS), (
         f"MACHINE_READ_HEADINGS is stale: the tools read {sorted(found)}")
 

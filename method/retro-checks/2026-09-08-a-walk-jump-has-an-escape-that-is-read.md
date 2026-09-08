@@ -20,8 +20,8 @@ Escalation: none on its own.
    regression sign: a walk-jump row still "carried (no escape)" while the heading exists. The build
    read the message and skipped it.
 
-3. expect: the escape stays the exception. Recorded 'Walk jumps' lines are fewer than the walk-jump
-   advisories the first validate printed, each line names ONE use case, and its reason says which
-   thread the story opens.
-   regression sign: every jump recorded and no step written, which is the cheap way out; or one
-   line listing several use cases, the shape the saved-record check already caught.
+3. expect: the escape stays the exception. Recorded 'Walk jumps' use cases are fewer than the
+   walk-jump advisories the first validate printed, and each recorded reason says which thread
+   that story opens (one reason may name several use cases, which is the registry's own form).
+   regression sign: every jump recorded and no step written, which is the cheap way out; or a
+   reason that could sit under any use case ("a second thread") and names no thread.

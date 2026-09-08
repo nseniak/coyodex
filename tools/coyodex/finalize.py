@@ -52,7 +52,9 @@ from coyodex.reporting import shown
 if TYPE_CHECKING:
     from coyodex.model import ProjectModel
 
-from coyodex.model import ModelError, access_rules, load_model_path, resolve_map_path
+from coyodex.audit_model import l2_worklist_model
+from coyodex.grounding import live_claims_digest, unvoted_reason
+from coyodex.model import ModelError, access_rules, load_model, load_model_path, resolve_map_path
 
 #: The extras heading the access-baseline advisory offers as its escape, and READS. Named the way
 #: `AUDIT_EXCEPTIONS_HEADING` and `DRIFT_EXCEPTIONS_HEADING` are, so the method contract's scan for
@@ -149,8 +151,6 @@ def _live_surfaces(map_path: Path) -> dict[bool, set[str]] | None:
     """The map's claim surface at each tier `audit` can compute — `{False: default, True:
     behavioural}` — or None when the file does not load as a map."""
     try:
-        from coyodex.audit_model import l2_worklist_model
-        from coyodex.model import load_model
         m = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
         return {tier: {w.claim for w in l2_worklist_model(m, behavioural=tier)}
                 for tier in (False, True)}
@@ -181,7 +181,6 @@ def _record_tier(map_path: Path) -> bool | None:
     surfaces = _live_surfaces(map_path)
     if surfaces is None:
         return None
-    from coyodex.grounding import live_claims_digest
     for tier in (False, True):
         if live_claims_digest(surfaces[tier]) == digest:
             return tier
@@ -313,7 +312,6 @@ def _stale_grounding_pin(map_path: Path, live_claims: list[str],
     # safer than filling it in — that is the same shape as the bypass fixed one commit earlier, and
     # this is the third time it has appeared in this file's history.
     if isinstance(stored_digest, str) and stored_digest:
-        from coyodex.grounding import live_claims_digest
         if live_claims_digest(live_set) == stored_digest:
             # The surface matches. The COUNTS beside it are still unverified — check them when the
             # verdicts are at hand, because a valid digest and two invented numbers coexist happily.
@@ -821,7 +819,6 @@ def _grounding_line(map_path: Path) -> str:
             f"{g.claims_unverifiable} unverifiable.")
     live_total = g.claims_total - g.claims_superseded + g.claims_added_since
     if g.claims_live_challenged and g.claims_live_challenged < live_total:
-        from coyodex.grounding import unvoted_reason
         unvoted = live_total - g.claims_live_challenged
         line += (f"\nGrounding (shipped map): {g.claims_live_challenged} of {live_total} claim(s) "
                  f"have a verdict — {unvoted} do not. "

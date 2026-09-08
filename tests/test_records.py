@@ -270,13 +270,20 @@ def test_every_heading_an_advisory_names_is_one_the_tools_read():
     anywhere under `tools/coyodex/` must be registered — read straight off the source, so a
     renamed or newly minted heading fails here and not on a build."""
     src_dir = Path(__file__).resolve().parents[1] / "tools" / "coyodex"
-    named = re.compile(r"""['\"]([A-Z][A-Za-z -]{3,40}?)['\"]\s+extras\s+heading""")
+    texts = {p: p.read_text(encoding="utf-8") for p in sorted(src_dir.glob("*.py"))}
+    # A heading reaches an advisory either as a literal or through a `*_HEADING` constant; the
+    # constants are collected first so `'{WALK_JUMPS_HEADING}' extras heading` resolves too.
+    constants: dict[str, str] = {}
+    for text in texts.values():
+        constants.update(re.findall(r'([A-Z_]+_HEADING)\s*=\s*"([^"]+)"', text))
+    named = re.compile(r"""\**['\"](?:\{(?P<const>[A-Z_]+_HEADING)\}|(?P<lit>[A-Z][A-Za-z -]{3,40}?))"""
+                       r"""['\"]\**\s+extras\s+heading""")
     known = {h.lower() for h in records.KNOWN_HEADINGS}
     unknown: list[str] = []
-    for path in sorted(src_dir.glob("*.py")):
-        text = path.read_text(encoding="utf-8")
+    for path, text in texts.items():
         for hit in named.finditer(text):
-            if hit.group(1).lower() not in known:
+            name = hit.group("lit") or constants.get(hit.group("const") or "", "")
+            if name.lower() not in known:
                 unknown.append(f"{path.name}:{text[: hit.start()].count(chr(10)) + 1} names "
-                               f"{hit.group(1)!r}")
+                               f"{name or hit.group('const')!r}")
     assert not unknown, unknown
