@@ -796,6 +796,10 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    below, so source order decided and the picture bled 1px past the board above it on the same page. */
 .item-sec-frame .hfade-wrap, .item-sec-frame .hfade-wrap:has(> .ifd-wrap) { margin: 0; }
 .item-sec-frame > :last-child { margin-bottom: 0; }
+/* The story diagram inside its section: the frame's body gives the room the diagram's own padding
+   gave when it stood bare on the page, and the overview's prose keeps no margin below its section. */
+.item-sec-body > .story-wrap { margin: 0; padding: 4px 4px 12px; }
+.item-sec-body > .view-lead { margin: 0; }
 /* A SECTION'S HEAD RIDES ITS FRAME. The strip runs edge to edge across the frame's top, on a quieter
    ground with a hairline under it, and the body keeps the frame's old padding below. The title's
    mark is centred on the title's line, since an svg has no baseline. The frame keeps no padding of

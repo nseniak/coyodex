@@ -3575,9 +3575,9 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     assert "'goal'" not in js and "renderGoal" not in js, "the Goal tab is gone, not hidden"
     # …and the description leads the Features page, above a labelled block of feature cards.
     over = js[js.index("function renderOverview() {"): js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert over.count("productLeadHtml()") == 1
+    assert over.count("productLeadHtml(secs)") == 1, "the overview, as a framed section of the page"
     assert "'<p class=\"block-lbl\">Product features</p>' + grid" in over
-    assert "GRAPH.nodes.SYS" in js[js.index("function productLeadHtml() {"):]
+    assert "GRAPH.nodes.SYS" in js[js.index("function productLeadHtml(secs) {"):]
 
 
 def test_code_and_operations_read_as_one_question() -> None:
@@ -3997,7 +3997,9 @@ def test_the_story_diagram_rides_the_features_landing_and_replaces_the_grid() ->
     js = (VIEWER_DIR / "viewer.js").read_text()
     over = js[js.index("function renderOverview() {"):
               js.index("\nfunction ", js.index("function renderOverview() {") + 10)]
-    assert "const story = storyDiagramHtml();" in over and "bindStoryDiagram(diagram)" in over
+    assert "const drawn = storyDiagramHtml();" in over and "bindStoryDiagram(diagram)" in over
+    assert "itemSectionHtml(secs, 'story', 'Feature overview', ids.length, '', drawn)" in over, \
+        "the diagram is a titled, framed section like every block of an item page"
     assert "const below = (!story || (mode === 'diff' && hasDiff()))" in over
     assert ": cardGridHtml(looseCard);" in over, "the loose card outlives the hidden grid"
     assert "+ story + below + '</div>';" in over
@@ -4242,7 +4244,7 @@ def test_the_story_block_scrolls_sideways_only_and_never_clips_the_pillar() -> N
     the box has to hold everything: the wrap carries padding for the shadow, and the pillar may not
     use a negative margin to sit above the stage."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    wrap = css[css.index(".story-wrap {"):]
+    wrap = css[css.index("\n.story-wrap {"):]
     wrap = wrap[:wrap.index("}")]
     assert "overflow-x: auto" in wrap and "overflow-y: hidden" in wrap
     assert "padding: 10px 20px 22px" in wrap, \
@@ -4541,7 +4543,7 @@ def test_story_chrome_never_term_links_but_card_prose_does() -> None:
 
 def test_the_story_stage_scrolls_inside_its_own_wrap_never_the_page() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
-    wrap = css[css.index(".story-wrap {"): css.index("}", css.index(".story-wrap {"))]
+    wrap = css[css.index("\n.story-wrap {"): css.index("}", css.index("\n.story-wrap {"))]
     assert "overflow-x: auto" in wrap
     stage = css[css.index(".story-stage {"): css.index("}", css.index(".story-stage {"))]
     assert "width: max-content" in stage

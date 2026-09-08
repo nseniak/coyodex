@@ -8619,14 +8619,15 @@ function unreachedHtml() {
 //
 // Before that it was the Happy Path's default info pane, which was worse still: it vanished on the
 // first click, and a reader who landed on any other tab never saw it at all.
-function productLeadHtml() {
+// A SECTION like every other block on an item page: the same frame, the same strip head at the same
+// 14px, instead of a small-caps label over loose prose. `secs` is the page's section list, for a page
+// that indexes its sections; a page with none passes nothing.
+function productLeadHtml(secs) {
   const n = GRAPH.nodes.SYS || {};
   const overview = ((n.fields || {}).Overview || '').trim();
   if (!overview) return '';
-  // Labelled, in the same small caps the Group-by switch below it uses, so the two read as the two
-  // blocks of one page rather than as a stray paragraph followed by a control.
-  return '<div class="view-lead"><p class="block-lbl">Product overview</p>'
-    + `<div class="view-lead-body">${mdRefs(overview, GRAPH.nodes)}</div></div>`;
+  return itemSectionHtml(secs || [], 'overview', 'Product overview', '', '',
+    `<div class="view-lead"><div class="view-lead-body">${mdRefs(overview, GRAPH.nodes)}</div></div>`);
 }
 
 // ── The ACTOR PAGE: one actor's journey line ─────────────────────────────────────────────────────
@@ -10706,7 +10707,11 @@ function renderOverview() {
     count: `${loose.ucs.length} use case${loose.ucs.length === 1 ? '' : 's'}` }) : '';
   const grid = cardGridHtml(ids.map((id) => elementCardHtml(id, per(id))).join('') + looseCard)
     || '<p class="empty">No features recorded.</p>';
-  const story = storyDiagramHtml();
+  const secs = [];
+  // THE DIAGRAM IS A SECTION TOO, titled, framed and headed like the overview above it and like every
+  // block of an item page — it used to sit bare between the overview and the cards, with no name.
+  const drawn = storyDiagramHtml();
+  const story = drawn ? itemSectionHtml(secs, 'story', 'Feature overview', ids.length, '', drawn) : '';
   // The grid repeated every feature the diagram already shows, sentence for sentence, so it hides
   // whenever the diagram draws — EXCEPT in diff mode, whose "changed" badges only the grid carries.
   // The loose-use-cases card survives alone: it is the one card the diagram has no column for.
@@ -10716,7 +10721,7 @@ function renderOverview() {
     ? '<p class="block-lbl">Product features</p>' + grid
     : cardGridHtml(looseCard);
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + viewHeadHtml('Features') + productLeadHtml()
+    + viewHeadHtml('Features') + productLeadHtml(secs)
     + story + below + '</div>';
   bindProductLead();
   bindStoryDiagram(diagram);
