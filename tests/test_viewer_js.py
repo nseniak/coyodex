@@ -508,7 +508,7 @@ def test_the_pinned_index_sticks_to_the_wrappers_top_border() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
     # The padding-drop is now shared with every other wrap that holds a sticky line — see
     # test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding for why they all need it.
-    assert ".usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .glossary-wrap { padding-top: 0; }" in css
+    assert ".usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .usecases-wrap.glossary-wrap { padding-top: 0; }" in css
     bar = css[css.index(".usecases-wrap .tab-index {"):]
     bar = bar[:bar.index("}")]
     assert "position: sticky" in bar and "top: 0" in bar
@@ -1545,7 +1545,6 @@ def test_every_header_figure_is_sized_from_its_own_ink() -> None:
     sync = js[js.index("function syncPageHero(s, chain, tv) {"): js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "sizeHeroFigures();" in sync, "after every navigation, on whichever head the page drew"
     assert ".page-hero-glyph { flex: none; width: 60px;" in css, "room for the widest box the ink calls for"
-    assert ".page-hero-figured > .page-path { flex: 1 0 100%; padding-left: 76px; }" in css, "the path keeps the text's edge"
     assert ".page-hero-body { flex: 1 1 0; min-width: 0; }" in css, "a long sentence shrinks beside the figure, never drops under it"
 
 
@@ -2661,7 +2660,7 @@ def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> No
     css = (VIEWER_DIR / "viewer.css").read_text()
     # `.usecases-wrap.system-wrap`, not `.system-wrap`: the base class sets `padding` as a SHORTHAND
     # later in the file, and at equal specificity that shorthand puts the 16px back.
-    assert ".usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .glossary-wrap { padding-top: 0; }" in css
+    assert ".usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .usecases-wrap.glossary-wrap { padding-top: 0; }" in css
     assert ".system-wrap > :first-child, .glossary-wrap > :first-child { margin-top: 16px; }" in css
     assert ".system-wrap > .tab-index:first-child { margin-top: 0; }" in css   # the bar carries its own
     js = (VIEWER_DIR / "viewer.js").read_text()
@@ -3665,7 +3664,7 @@ def test_the_path_starts_at_the_view_and_never_at_a_level_inside_it() -> None:
     assert "if (!parents.length) return '';" in path, "a landing has no parents and draws no line"
     place = js[js.index("function placePagePath(chain) {"): js.index("\n}", js.index("function placePagePath(chain) {"))]
     assert "#diaghead .page-hero, #pagehero .page-hero, #diagram .page-hero" in place, "whichever head the page drew"
-    assert "hero.insertAdjacentHTML('afterbegin', html);" in place, "…as its first line, above the figure's row"
+    assert "hero.insertAdjacentHTML('beforebegin', html);" in place, "…on the page ground just above it"
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert ".hint.hint-empty { padding: 0; border-bottom: 0; }" in css and ".sr-only {" in css
     # No page draws its own name.
@@ -4122,7 +4121,7 @@ def test_the_outer_frame_is_the_drawing_s_and_a_page_of_cards_does_not_get_one()
     so Features, Happy Path and Interfaces drew a rounded box around the whole page for nothing, and
     the reader met a frame inside a frame inside a frame."""
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
-    assert ("#diagwrap:has(.usecases-wrap) { background: none; border: 0; border-radius: 0; margin: 0; }" in css)
+    assert ("#diagwrap:has(.usecases-wrap, .glossary-wrap) { background: none; border: 0; border-radius: 0; margin: 0; }" in css)
     # The MARGIN goes with the frame: bare, it left a strip of the pane under the header for the
     # header's shadow to land on, which reads as a solid band over the page rather than an edge.
     # It is still ON the shared board rule: a map page is exactly where it earns the frame.

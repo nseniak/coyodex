@@ -6876,8 +6876,11 @@ function landingHeadHtml(view) {
   // `landing-head`: the title takes the size an item page's name has, since this is the page's title.
   return `<div class="landing-head">${itemSectionHeadHtml(name, n, q)}</div>`;
 }
-// THE PATH TO THE PAGE, as the first line of its head: every ancestor from the view down to the
-// parent, each a link, then a closing ›. The page itself is the head's name line, so it is not here.
+// THE PATH TO THE PAGE, on the page ground just above its head: every ancestor from the view down to
+// the parent, each a link, then a closing ›. The page itself is the head's name line, so it is not here.
+// ABOVE the head, not inside it: the head is "what this is" and stays the same object on every page;
+// the path is "where you are". Inside the head it shared the card with the item, indented to the
+// text, and the figure needed rules to ignore it. GOV.UK and Carbon draw the breadcrumb here too.
 // The first item repeats the lit tab on purpose, as GOV.UK keeps "Home": a path that starts half way
 // reads as a mistake. A landing has no parents and draws no line.
 function pagePathHtml(chain) {
@@ -6894,10 +6897,8 @@ function placePagePath(chain) {
   if (!html) return;
   const hero = document.querySelector('#diaghead .page-hero, #pagehero .page-hero, #diagram .page-hero');
   if (!hero) return;
-  // ABOVE the figure's row, not inside the text column: the figure centres on the name and the
-  // sentence alone, and the line is indented to the text's left edge by the stylesheet.
-  hero.insertAdjacentHTML('afterbegin', html);
-  hero.querySelectorAll('.page-path-seg').forEach((b) =>
+  hero.insertAdjacentHTML('beforebegin', html);
+  hero.previousElementSibling.querySelectorAll('.page-path-seg').forEach((b) =>
     b.addEventListener('click', () => go(chain[+b.dataset.path])));
 }
 // EVERY HEADER FIGURE READS AS THE SAME SIZE. The figures are drawn on different squares — a sparkle
