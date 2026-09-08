@@ -124,24 +124,19 @@
             <!-- The Rules view is a PRODUCT view, not a reference one: what the product decides is read
                  straight after what it does, and long before how it is built. -->
             <button data-view="rules" data-group="product">Rules</button>  <!-- T7: the decisions this product makes (hidden when the map states none) -->
-
-            <!-- DATA — what it knows, and where that lives. -->
-            <button data-view="domain" data-group="data">Entities</button>  <!-- internal kind stays `domain`; label only -->
-            <button data-view="data" data-group="data">Storage</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores). Labelled "Storage", not "Data": beside "Entities" the word "Data" said nothing about WHICH of the two held the stores. Internal kind stays `data`. -->
+            <button data-view="domain" data-group="product">Data</button>  <!-- internal kind stays `domain`; the things the product knows about, under Product beside the rules that decide about them -->
+            <button data-view="glossary" data-group="product">Glossary</button>  <!-- term table, not a diagram (hidden when empty); the product's own words sit with the product -->
 
             <!-- UNDER THE HOOD — how the code is arranged, what it pulls in, how well it is tested,
                  and what actually runs. Code and Operations used to be two groups; they answer the same
                  second question, and keeping them apart cost a top-row tab for no reading gain. -->
             <button data-view="container" data-group="hood">Subsystems</button>
+            <button data-view="data" data-group="hood">Storage</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores). Where the data physically lives is a fact about the machine, so it sits under the hood after Subsystems. Internal kind stays `data`. -->
             <button data-view="context" data-group="hood">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
             <button data-view="tests" data-group="hood">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
 
             <button data-view="deployment" data-group="hood">Deployment</button>  <!-- processes/threads ↔ subsystems (hidden when no deployment[] units) -->
             <button data-view="system" data-group="hood">System</button>  <!-- operational reference tables: run/observability/security/config/entry-points (hidden when empty) -->
-
-            <!-- GLOSSARY — the project's own words. Its own group, with one view: it answers a question
-                 none of the other four asks, and filing it under any of them would hide it. -->
-            <button data-view="glossary" data-group="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
 
             <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
                  landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's

@@ -3798,14 +3798,16 @@ function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a 
 // is NOT here: every view button carries its own `data-group`, so the grouping lives beside the button
 // it groups and there is no second list to keep in step.
 const VIEW_GROUPS = [
-  ['product', 'Product', 'What does it do for the people who use it?'],
-  ['data', 'Data', 'What does it know about, and where does that live?'],
+  // TWO groups: what the thing IS, and the machine under it. Data and Glossary were groups of their
+  // own; the entities (the things the product knows about) and the project's words are product facts
+  // and sit with the product now, and where the data physically lives is a machine fact and sits under
+  // the hood after the subsystems. A group of one or two views cost a top-row tab for no reading gain.
+  ['product', 'Product', 'What does it do for the people who use it, and what does it know about?'],
   // Code and Operations were two groups; they are one. Both answer "how is this thing actually built
   // and run", which is the SECOND question a reader has, and splitting it put five tabs on the top row
-  // when three of them are one idea. Product and Data are what the thing IS; this is the machine.
+  // when three of them are one idea.
   ['hood', 'Under the hood',
-   'How is the code arranged, what does it pull in, how well is it tested, and what runs it?'],
-  ['glossary', 'Glossary', 'What do this project\u2019s words mean?'],
+   'How is the code arranged, where does its data live, what does it pull in, how well is it tested, and what runs it?'],
 ];
 const GROUP_OF_VIEW = {};   // view id -> its group id, filled from the buttons at boot (one source)
 const GROUP_LABEL = {};     // group id -> its label, from VIEW_GROUPS
@@ -7576,7 +7578,7 @@ function stateTitle(s) {
   if (s.kind === 'context') return 'Dependencies';
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
-  if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
+  if (s.kind === 'domain') return 'Data';  // user-facing label for the `domain` view (the tab): the things the product knows about
   if (s.kind === 'rules') {  // the view lists RULES; "business logic" named a code layer, not the content
     if (!s.blk) return 'Rules';
     const g = ruleBlockGroups().find((x) => x.id === s.blk);

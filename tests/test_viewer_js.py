@@ -3598,10 +3598,12 @@ def test_code_and_operations_read_as_one_question() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     html = (VIEWER_DIR / "viewer.html").read_text()
     table = js[js.index("const VIEW_GROUPS = ["): js.index("\n];", js.index("const VIEW_GROUPS = ["))]
-    assert [g for g in re.findall(r"\['([a-z]+)', '", table)] == ["product", "data", "hood", "glossary"]
+    assert [g for g in re.findall(r"\['([a-z]+)', '", table)] == ["product", "hood"], \
+        "two groups: Data and Glossary sit under Product now, Storage under the hood"
     assert "'Under the hood'" in table
     hood = re.findall(r'<button data-view="(\w+)" data-group="hood">', html)
-    assert set(hood) == {"container", "context", "tests", "deployment", "system"}, hood
+    # Storage is a machine fact — where the data physically lives — so it sits under the hood too.
+    assert set(hood) == {"container", "data", "context", "tests", "deployment", "system"}, hood
 
 
 def test_a_component_says_how_many_features_it_serves() -> None:

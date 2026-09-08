@@ -45,10 +45,12 @@ the code's names.
   away hand edits.
 - **viewer** — the browser page that shows a map. Served live, never committed.
 - **view** (a tab in the viewer) — one screen answering one question. Today:
-  Features, Happy Path, Actors, Rules, Entities, Storage, Subsystems,
-  Dependencies, Tests, Deployment, System, Glossary.
-- **group** — the four tabs above the views: Product, Data, Under the hood,
-  Glossary. A group is a set of tabs, never a page you can be on.
+  Overview, Features, Happy Path, Interfaces, Rules, Data, Glossary, Subsystems,
+  Storage, Dependencies, Tests, Deployment, System.
+- **group** — the two tabs above the views: Product, Under the hood. A group is a
+  set of tabs, never a page you can be on. Data (the entities) and Glossary moved
+  under Product on 2026-09-08, Storage under the hood, and the two groups they
+  made up went.
 - **box** — one thing drawn on a view. **arrow** — a relation between two boxes.
 - **code link** — the `file:line` a box points at. A box without one is
   ungrounded, which is a defect.
@@ -190,10 +192,11 @@ design principles these come from)
   the box. On a card list, scroll to the card and briefly ring it.
 - **view question** — the one sentence a view answers. It belongs to the view,
   not to any page, so it leads the content and never changes as you drill.
-- **group tab row** — the strip of group tabs: Product, Data, Under the hood,
-  Glossary. The first strip under the title bar.
+- **group tab row** — the strip of group tabs: Product, Under the hood. The
+  first strip under the title bar.
 - **view tab row** — the strip of view tabs, under the group tab row. With
-  Product open it holds Features, Happy Path, Actors, Rules.
+  Product open it holds Overview, Features, Happy Path, Interfaces, Rules, Data,
+  Glossary.
 - **the trail** — the group tab row, the view tab row and the breadcrumb, read
   as one path. Where you are is the last item in it, and nothing else names it.
   The breadcrumb's last item is the page's title, so no page draws its own
