@@ -63,6 +63,12 @@ DEFAULT_BANDS: dict[str, float] = {
     "edges_shrink_pct": 0.30,
     "hp_steps_shrink_pct": 0.30,
     "flows_shrink_pct": 0.30,
+    # The decisions, and where they are enforced. Rules went 102 -> 79 -> 95 -> 88 across four
+    # mcpolis builds with no band on them; 57 of the 88 were access rules feeding the security
+    # theme, and every one of 11 blocks came back with exactly 8, the contract's ceiling. Shrink-
+    # only, like the other counts: a shrink is a decision the map stopped stating.
+    "rules_shrink_pct": 0.30,
+    "rule_sites_shrink_pct": 0.30,
     "edges_per_component_pct": 0.25,
 }
 
