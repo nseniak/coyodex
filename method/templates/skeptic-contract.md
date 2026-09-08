@@ -176,9 +176,10 @@ copying. If you need an element's record, it is in THIS map — `coyodex dump` r
 **A guard's truth lives at its CALLERS.** When the claim is an `access: true` rule site — a check
 that refuses something — reading the guard line alone cannot settle it. Open every call site of the
 function the guard sits in and read what is passed. A guard that looks exact can be switched off by
-its only caller: on one measured map the claim said a constructor "refuses the development sign-in
-in cloud mode", the line read `if mode == "cloud" and not allow_in_cloud:`, and the one production
-caller passed `allow_in_cloud=settings.mode == "cloud"` — so in cloud mode it reads `if True and not
-True` and can never fire. Two of three voters read the guard and its comment and confirmed it; the
-one who opened the caller refuted it and was outvoted. Say in your `note` which call sites you
+its only caller: a check of the shape `if is_production and not skip_check:` refuses nothing when
+its one caller passes `skip_check=is_production`, because in production it reads `if True and not
+True`. On one measured map two of three voters read such a guard and its comment and confirmed
+it; the one who opened the caller refuted it and was outvoted. (The example is deliberately not
+any real repo's code: a contract that carries one repo's answer hands every skeptic of that repo
+the refutation, and their agreement then says nothing.) Say in your `note` which call sites you
 opened, and cite one of them in `evidence` when the caller is what decides.

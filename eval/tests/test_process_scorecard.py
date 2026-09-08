@@ -2950,3 +2950,26 @@ def test_40_ignores_a_help_run_and_a_grep_whose_pattern_carries_an_escaped_pipe(
             'grep -n "handlePlanLimitError(\\|coyodex lint-fragment" src/*.py | head', Path(td)) == ()
     with tempfile.TemporaryDirectory() as td:
         assert len(_lint_calls_from("coyodex lint-fragment f.json | head -5", Path(td))) == 1
+
+
+def test_27_follows_a_fragment_directory_bound_to_a_variable_two_hops_from_the_write():
+    """Nine of the sixteen fragment mutations on the 2026-09-08 build bound the directory first,
+    without a trailing slash, built each path from it, and wrote through that path. The literal
+    `build-fragments/` never appears, so the detector saw 2 of 16. A scratch write after a read of
+    the map, followed by the real verbs, is still not a mutation."""
+    mutation = ("python3 - <<'PY'\nimport json\n"
+                "FD=\"/repo/.coyodex/build-fragments\"\n"
+                "p=f\"{FD}/h-ops.json\"; d=json.load(open(p))\n"
+                "d[\"components\"]=[c for c in d[\"components\"] if c[\"id\"]!=\"C90\"]\n"
+                "json.dump(d,open(p,\"w\"),indent=2)\nPY")
+    assert P._hand_written_artifact(make_bash(mutation)) == "build-fragments/"
+    scratch = ("python3 - <<'PY'\nimport json\nSP=\"/tmp/scratch\"\n"
+               "m=json.load(open(\"/repo/.coyodex/project-map.json\"))\n"
+               "r=json.load(open(f\"{SP}/rules.json\"))\n"
+               "json.dump(r,open(f\"{SP}/rules.json\",\"w\"),indent=2)\nPY\n"
+               "$CX assemble .coyodex/build-fragments/*.json --out .coyodex")
+    assert P._hand_written_artifact(make_bash(scratch)) is None
+    glob_bound = ("python3 - <<'PY'\nimport glob, json\nFD=\"/repo/.coyodex/build-fragments\"\n"
+                  "for p in glob.glob(f\"{FD}/h-*.json\"):\n    d=json.load(open(p))\n"
+                  "    open(p,\"w\").write(json.dumps(d))\nPY")
+    assert P._hand_written_artifact(make_bash(glob_bound)) == "build-fragments/"

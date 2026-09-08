@@ -205,6 +205,24 @@ item 16 above).
 
 ---
 
+### Landed 2026-09-08 — from the mcpolis build of that evening (session `1fe076d7`, retro `2026-09-08_2144`)
+
+Fixed the same night on branch `claude/rebuild-maps-sequence-24c3bf`, each with a retro-check file under
+`method/retro-checks/2026-09-08-*.md` and a test; replayed on a copy of the build's map where the closing path was touched.
+
+| what | evidence |
+|---|---|
+| `record` accepts the 'Walk jumps' heading `validate` names, and `walk_jumps` reads it; a test reads every escape heading off the source | `f5f5cf2`, `00d27bb` (finding 14) |
+| `ship` carries `grounding.json` into the map on its first run | `a4ed3c4` (finding 13) |
+| `finalize` checks `live_claims_digest` at the record's own tier; the gate block counts one surface and splits the unvoted claims | `a9d8fb4`, `e25d0df` (findings 5, 6) |
+| Assertions 12, 14 and 40 read a `ship` build honestly; `ledger` refuses a bare list; `archive` keeps `fanout-timings.json` | `5b21c22` (findings 9, 10, 12, 22, 31) |
+| The gate block carries the three-way advisory disposition; `assemble` refuses a duplicate id inside one fragment; `grounding lint --help` names `--expect`; `ship` and `reconcile` say where their lists are | `aab1206` (findings 17, 33, 34) |
+| `fix apply-drift` refuses a correction into a file neither end of the edge lists; `contract --fill` refuses a path in a batch-id slot; `ship` passes the newest archived map as `--access-baseline`, and the leg names every file; `provenance stamp` records `tool_commit` | `ff4f816` (findings 2, 3, 18, 32) |
+| Six live-map sentences moved to the past; `compare` notes a source root the candidate cites nowhere | `a6e5e7f` (findings 1, 27) |
+| The skeptic contract's worked example is no longer mcpolis's own code; assertion 27 follows a fragment directory bound to a variable | this branch (findings 4, 11) |
+
+**Not fixed, by design or by size, and still open** (findings of that retro): 7 and 8 (operator decisions: the verification budget, the access-surface churn), 15 (per-family disclosure), 16 (`grounding lint` on every wave), 19–21 (`contract skeptic --from-batches`, `contract tests`, the batch floor), 23 (timings from the per-agent files), 24 (`validate --json` sweep worklist), 25 (the lost `handoff` surface), 26, 28–30.
+
 ## Open — tools
 
 What is still open. Landed items move to the table above, with the commit. `scope` here means
@@ -288,7 +306,7 @@ repeated here.
 |---|---|---|
 | 19 | The readable map file is read by nobody | False. `validate_model.py` re-renders the model and flags a stale or hand-edited `project-map.md`, and `eval/rubric.md` hands it to the judge. |
 | 20 | No use case names any entry point | False against the map it was written about: 30 of 30 use cases name entry points, 52 distinct ids. `_trigger_arm_warnings` returns `[]`, which is the check that would fire. |
-| 21 | `--agent-transcripts` never passed (open 4 retros) | Superseded. I ran the check it would have run: `evidence check covered 20 of 1000 row(s)`. The defect is the check, not the missing flag — see the KEEP row for it. |
+| 21 | `--agent-transcripts` never passed (open 4 retros) | **Measured by the retro since 2026-09-08**, on both builds of each pair: 56 of 1,180 verdict rows (4.7 %) rested on grep-only evidence against 29 of 850 (3.4 %) the build before. The row is measured, not unproven. Superseded. I ran the check it would have run: `evidence check covered 20 of 1000 row(s)`. The defect is the check, not the missing flag — see the KEEP row for it. |
 | 22 | A recorded exception silences one advisory but not its sibling | Wrong reading. The sub-flow refcount advisory is deliberately unescapable and is registered in `KNOWN_NO_ESCAPE` (`tests/test_method_contract.py`), with the reason in `method.md`. The real residual moved to the inert-record row. |
 | 23 | The prose counter reads 400 of ~1,437 fields | Duplicate of the prose-coverage row, and its totals do not reproduce (true unwalked: 1,534 and 2,208). |
 | 24 | 389 prose fields batched and dispatched on none | Duplicate of the better-evidenced dispatch row. Killing it also removes two probes that both give the wrong answer: `grep -ri 'prose batch'` returns 0 while the instruction exists in `method.md`, and `verdicts-prose-*.json` is a filename the method never asks anyone to write. |
@@ -420,6 +438,8 @@ folder. These are the parked ones, with who can answer them.
 | 2 | Which of the 17 files that lost access coverage hold enforcement the map should still be claiming? Two were verified by hand as real — a sign-in signature check and a credential encryption call — and one old anchor was a config constant rather than enforcement. The remaining fourteen are unread. | a human, or a targeted skeptic pass | 2026-08-17 |
 | 3 | ~~What actually causes the access enforcement-line churn?~~ **ANSWERED 2026-08-29 — see below** | the next build | 2026-08-19 |
 | 4 | Do the 47 access rules of the 2026-08-18 map say what the previous map's 44 said? Same shape as question 1, for the newer pair: 50 shared enforcement lines of a 181-line union, 17 files lost, 11 gained. | `/coyodex-eval` (judges) | 2026-08-19 |
+| 6 | Is the four-build "0 verdict disagreements" record evidence, or an artefact of a contract that named one repo's answer to every skeptic of that repo? The example left the contract on 2026-09-08; the cheap experiment is one wave of skeptics on the new contract against the same batch. | one skeptic wave | 2026-09-08 |
+| 7 | Which of the 19 files that lost access coverage on the 2026-09-08 mcpolis map hold enforcement the map should still be claiming? Nine are OAuth or token handling (`pending_auth.py`, `oauth_refresh.py`, `tool_router.py`, `upstream_oauth_callback.py` among them); the list is in that retro's run directory. Fourth build parked on this shape; `ship` now runs the leg that names them before the commit. | a targeted skeptic pass, or a human | 2026-09-08 |
 | 5 | Is one refuted-claim-in-the-map a pattern? `grounding report`'s `REFUTED BUT NOT SUPERSEDED` section found two on the 2026-08-18 map, both from a reconcile that corrected one copy of a row and left another. Nobody has looked at an older map with the same command. | anyone, one command per archived map | 2026-08-19 |
 
 
@@ -534,6 +554,7 @@ never per build — absolute dollars track how big the map got.
 | — | (four mcpolis builds pre-log measured $189–$207, 61–71 min active, 1,195→1,564 rows; per-role split not recorded) | | | | | |
 | 2026-08-26 | mcpolis | 1,288 | 88.9 | 382.42 | 29.69 | 74.26 / 21.50 / 6.06 / 71.98 / 208.61 |
 | 2026-08-29 | mcpolis | 1,292 | 156.9 | 493.45 | 38.19 | 82.88 / 83.63 / 87.84 / 162.67 / 76.42 |
+| 2026-09-08 | mcpolis | 1,614 | 102.9 | 398.77 | 24.71 | 66.72 / 58.54 / 70.62 / 131.72 / 71.18 |
 
 **The role buckets are not comparable across those two rows** and the totals are. Harvest ran 4
 agents then 12, trace 1 then 13, "other" 48 then 14 — the same work moved between buckets as the

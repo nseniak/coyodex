@@ -358,6 +358,35 @@ def _python_write(blob: str, needle: str) -> bool:
         var = re.escape(m.group(1))
         if re.search(r"open\s*\(\s*" + var + r"\s*,\s*['\"][wa]", blob[m.end():]):
             return True
+    # A FIFTH shape, the one nine of sixteen fragment mutations on one build took: the DIRECTORY is
+    # bound first, without a trailing slash, and each file path is built from it —
+    #     FD="…/.coyodex/build-fragments"
+    #     p=f"{FD}/h-ops.json"; d=json.load(open(p)) … json.dump(d,open(p,"w"))
+    # Two hops: the artifact binds `FD`, `FD` binds `p`, and `p` is written through. Followed for
+    # three hops at most, which is one more than any measured shape needed.
+    return _writes_through_a_bound_path(blob, esc)
+
+
+def _writes_through_a_bound_path(blob: str, esc: str, hops: int = 3) -> bool:
+    """Does the blob write through a variable derived, in up to `hops` steps, from a value that
+    names the artifact? `X = "…<art>…"` binds X; `p = f"{X}/f.json"`, `p = Path(X) / …` or
+    `for p in glob(f"{X}/*.json")` binds p from X; `open(p, "w")`, `p.write_text(`, or
+    `json.dump(…, open(p, "w"))` writes through it."""
+    bound = {m.group(1) for m in re.finditer(r"(\w+)\s*=\s*[^\n]*" + esc, blob)}
+    for _ in range(hops):
+        grown = set(bound)
+        for name in bound:
+            n = re.escape(name)
+            grown |= {m.group(1) for m in re.finditer(
+                r"(?:^|\n)\s*(?:for\s+)?(\w+)\s*(?:=|\bin\b)\s*[^\n]*\b" + n + r"\b", blob)}
+        if grown == bound:
+            break
+        bound = grown
+    for name in bound:
+        n = re.escape(name)
+        if (re.search(r"open\s*\(\s*" + n + r"\s*,\s*['\"][wa]", blob)
+                or re.search(r"\b" + n + r"\s*\.write_text\s*\(", blob)):
+            return True
     return False
 
 
@@ -2458,7 +2487,9 @@ def _hand_written_artifact(call: ToolCall) -> str | None:
         return None
     if _program_rewrites(blob, "project-map.json"):
         return "project-map.json"
-    if _program_rewrites(blob, "build-fragments/"):
+    # The directory name without its slash: a build that binds the directory to a variable writes
+    # `FD=".../build-fragments"` and never spells `build-fragments/` at all.
+    if _program_rewrites(blob, "build-fragments"):
         return "build-fragments/"
     return None
 

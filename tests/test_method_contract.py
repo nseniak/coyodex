@@ -1702,3 +1702,13 @@ def test_the_closing_step_list_carries_no_pasteable_commands():
     runnable = [l.strip() for l in block.splitlines()
                 if "coyodex " in l and "ship" not in l and l.strip().startswith(("coyodex", "."))]
     assert not runnable, f"pasteable alternatives under the ship paragraph: {runnable}"
+
+
+def test_the_skeptic_contracts_worked_example_is_not_a_live_repos_code():
+    """The caller-discipline example used to be one mapped repo's own guard, identifiers and all;
+    every skeptic of that repo was handed the refutation the build then counted as found three
+    times independently. The example stays, as a shape; the repo's names do not."""
+    text = (REPO_ROOT / "method" / "templates" / "skeptic-contract.md").read_text(encoding="utf-8")
+    assert "A guard's truth lives at its CALLERS" in text
+    for real in ("allow_in_cloud", "settings.mode", "DevStubOAuthProvider"):
+        assert real not in text, real
