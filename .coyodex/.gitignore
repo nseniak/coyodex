@@ -2,3 +2,4 @@ build-fragments/
 finalize-report.json
 finalize-report.md
 dev-rebuilds/
+fanout-timings.json

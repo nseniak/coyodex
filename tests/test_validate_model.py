@@ -5841,3 +5841,16 @@ def test_an_unrecorded_map_prints_no_disclosure_line():
     ws = warnings_of(make_unreached_surface_model())
     assert not [w for w in ws if "suppressed by recorded 'Interface exceptions'" in w
                 or "silence nothing" in w]
+
+
+def test_a_scoped_use_case_record_is_disclosed_under_its_gate_and_a_stray_key_as_idle():
+    """The retrofit gates honour `UCn/<scope>` tokens under the same heading, and a `Cn` line there
+    is honoured by nothing; the first disclosure read only the I/EP ids and saw neither."""
+    m = make_unreached_surface_model()
+    m.extras = [ExtraSection(heading="Interface exceptions",
+                             body="UC1/doors: deliberate\nC9: nothing here\nI2: fallback")]
+    ws = warnings_of(m)
+    line = next(w for w in ws if "interface advisory/advisories suppressed" in w)
+    assert "the doors gate: UC1" in line and "reached by no use case: I2" in line, line
+    stale = next(w for w in ws if "silence nothing" in w)
+    assert "C9" in stale and "UC1" not in stale and "I2" not in stale, stale

@@ -1586,6 +1586,9 @@ def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int,
     # a `--verdicts` glob in the first place; leaving it here would just move it.
     for stale in out_dir.glob("claims-*.json"):
         stale.unlink()
+    if floor > cap:
+        raise ValueError(f"--floor {floor} is above --cap {cap}: a theme would be too small for its "
+                         f"own file and too big for the shared one")
     by_theme: dict[str, list[WorkItem]] = {}
     for w in worklist:
         by_theme.setdefault(w.theme, []).append(w)
@@ -1613,18 +1616,22 @@ def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int,
                                         encoding="utf-8")
             written.append((name, len(chunk)))
     if small:
-        # One file, most-dangerous-first order kept across the merged themes (the loop above walks
-        # `_THEMES` in that order). Under the cap by construction: each theme was under `floor`.
-        payload = {
-            "schema": BATCH_SCHEMA,
-            "theme": "mixed",
-            "themes": small_themes,
-            "claims": [{"claim": w.claim, "anchor": w.anchor, "detail": w.detail,
-                        "why_risky": w.why_risky, "theme": w.theme} for w in small],
-        }
-        (out_dir / SMALL_BATCH).write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
-                                          encoding="utf-8")
-        written.append((SMALL_BATCH, len(small)))
+        # Most-dangerous-first order kept across the merged themes (the loop above walks `_THEMES`
+        # in that order), and CUT AT THE CAP like any theme: each theme is under the floor, their
+        # sum is not — eleven 4-claim themes are 44 claims, over a cap of 40.
+        chunks = _even_chunks(small, cap)
+        for n, chunk in enumerate(chunks, 1):
+            name = SMALL_BATCH if len(chunks) == 1 else f"claims-small-{n}.json"
+            payload = {
+                "schema": BATCH_SCHEMA,
+                "theme": "mixed",
+                "themes": small_themes,
+                "claims": [{"claim": w.claim, "anchor": w.anchor, "detail": w.detail,
+                            "why_risky": w.why_risky, "theme": w.theme} for w in chunk],
+            }
+            (out_dir / name).write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
+                                        encoding="utf-8")
+            written.append((name, len(chunk)))
     return written
 
 
@@ -1785,7 +1792,11 @@ def _run(argv: list[str] | None = None) -> int:
         except ValueError:
             print(f"ERROR: --floor must be an integer, got '{floor_raw}'", file=sys.stderr)
             return 2
-        written = write_theme_batches(worklist, out_dir, cap, floor=floor)
+        try:
+            written = write_theme_batches(worklist, out_dir, cap, floor=floor)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
         for name, n in written:
             print(f"{name}: {n} claim(s)")
         print(f"wrote {len(written)} theme batch(es) to {out_dir} — {len(worklist)} claim(s) total, "
@@ -1798,8 +1809,16 @@ def _run(argv: list[str] | None = None) -> int:
         # them deleting 13 batches it had just written. Minted only when asked.
         prose_written = write_prose_batches(m, out_dir, cap) if with_prose else []
         if not with_prose:
-            for stale in out_dir.glob("prose-*.json"):
+            stale_prose = sorted(out_dir.glob("prose-*.json"))
+            for stale in stale_prose:
                 stale.unlink()
+            if stale_prose:
+                # SAY SO: a lead that minted them on purpose and re-runs this for the claims files
+                # has just lost them, and a silent unlink reads like they were never there.
+                print(f"note: removed {len(stale_prose)} prose batch file(s) from an earlier run "
+                      f"({', '.join(p.name for p in stale_prose[:5])}"
+                      f"{', …' if len(stale_prose) > 5 else ''}); pass --with-prose to mint them "
+                      f"again", file=sys.stderr)
         for name, n in prose_written:
             print(f"{name}: {n} prose field(s)")
         n_fields = sum(n for _name, n in prose_written)

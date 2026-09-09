@@ -13,7 +13,7 @@ vote on the riskiest claims, N agents read one claims file and write N different
 template used to carry only «BATCH» and hardcode `claims-«BATCH».json`, so a vote forced the
 generator to append an "## Override — read this, it corrects one path above" block contradicting the
 body it had just filled in — on one build, in 6 of 30 prompts. With «CLAIMS» separate, a vote is
-`«BATCH»=security-1a, «CLAIMS»=security-1` and nothing has to be retracted.
+`«BATCH»=security-1-a, «CLAIMS»=security-1` (the spelling `contract skeptic --from-batches --votes security=3` writes) and nothing has to be retracted.
 
 One skeptic per batch, unless the lead is running a vote; batches cut by THEME and risk,
 most-dangerous first; cap each batch at ~40 claims.

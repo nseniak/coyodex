@@ -223,7 +223,7 @@ Fixed the same night on branch `claude/rebuild-maps-sequence-24c3bf`, each with 
 | `grounding lint` finds this session's agent transcripts by itself; `compare` reports enforcement-FUNCTION agreement and the interface kinds a candidate lost; `validate --json` carries the sweep worklist; `fanout-timings.json` stays out of git | `15ffdbb` (findings 8, 16, 24, 25, 22) |
 | Themes under 5 claims share one skeptic batch, security never; prose batches only on `--with-prose`; method.md says what the budget buys every build | `a080fc3` (findings 7, 20) |
 | `contract skeptic --from-batches` writes every brief from the batch directory and never rewrites one; `finalize` sums the harvest budgets against what shipped | `53314a6` (findings 19, 28) |
-| `validate` discloses every 'Interface exceptions' silence by family; `timings record --from-agents`; `contract tests`; method.md: lint after EVERY wave | this branch (findings 15, 23, 21, 16) |
+| `validate` discloses every 'Interface exceptions' silence by family; `timings record --from-agents`; `contract tests`; method.md: lint after EVERY wave | `3aaabb8` (findings 15, 23, 21, 16) |
 
 **Decided 2026-09-09 by the operator ("go for all"):** 7 (the verification budget: the behaviour theme
 every build, the prose surface on request — landed `a080fc3`) and 8 (the access churn is measured by

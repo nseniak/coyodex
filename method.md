@@ -1940,14 +1940,16 @@ synthesis → parallel trace.**
   No trace launches before dedup completes (a trace referencing an id that dedup then renumbers is
   the dangling-ref class this barrier exists to prevent — do not trade that for minutes). But dedup
   itself is fast; the SLOW synthesis work carries no id risk and should run concurrently once dedup
-  is done: fan out the **test-completeness agent** and any remaining **deployment/ops backfill**
-  WHILE the lead authors the reconcile assignments (subsystem/subdomain/runs_in/bucket). Authoring
-  first leaves every agent idle for as long as the authoring takes, and the backfill then runs
-  serially after the traces. **Treat this as a launch STEP, not advice** — it is step 1 of
-  synthesis, before you author a single rule:
+  is done: fan out any remaining **deployment/ops backfill** WHILE the lead authors the reconcile
+  assignments (subsystem/subdomain/runs_in/bucket). Authoring first leaves every agent idle for as
+  long as the authoring takes, and the backfill then runs serially after the traces. (The
+  **test-completeness agent is NOT part of this step**: its inventory includes the failure paths the
+  flows narrate, so it launches the moment the traced map is assembled — Phase 3 below says when —
+  and before the T7 rules and the Phase 4 skeptics, never after them.) **Treat this as a launch
+  STEP, not advice** — it is step 1 of synthesis, before you author a single rule:
 
   ```
-  1. dispatch the test-completeness + deployment/ops backfill agents      <- FIRST, if you dispatch
+  1. dispatch the deployment/ops backfill agents                          <- FIRST, if you dispatch
   2. THEN author the reconcile assignments while they run
   3. THEN author the T2b SURFACES, before any trace launches
   ```
@@ -2279,7 +2281,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   its vocabulary is a heuristic with known-incomplete recall, and one rule in a component clears
   every decision-sounding step naming that component. Treat an empty worklist as "nothing obvious
   was left", not as "done".
-- Test completeness (one agent, after the Phase 3 trace — it needs the finished inventory + flows).
+- Test completeness (one agent, dispatched the moment the traced map is assembled — it needs the
+  finished inventory AND the flows, whose failure paths are part of its inventory — and BEFORE the
+  T7 rules and the Phase 4 skeptics, so it is never the build's straggler).
   **Get its brief with the verb:** `coyodex contract tests --slots`, fill, `--fill … --out … --brief
   <id>`, and send the pointer — the hand-written brief lost the no-delegation block on one build and
   was the batch straggler on another, written and dispatched last.
@@ -2315,9 +2319,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   only thing that records the fan-out happened: `finalize` reads the pair, and says so when batches
   sit there with no verdicts next to them. Four builds in a row wrote batches and dispatched none —
   one of them 459 prose fields across 12 batches, read by nobody — and nothing could tell that from
-  a build that dispatched them all, because the batches look identical either way. If you decide
-  NOT to run the read fan-out on a build, delete the batch files; leaving them says a review
-  happened.
+  a build that dispatched them all, because the batches look identical either way. A build that
+  never passes `--with-prose` has no batch files to delete; one that minted them and then decides
+  not to dispatch must delete them, because leaving them says a review happened.
 
   **Write the per-theme batches with the tool, not a hand script:** `coyodex audit <map> --batches
   .coyodex/verify --cap 40` emits one claims file per theme, most-dangerous-first, each claim
@@ -2366,16 +2370,16 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   the claims into themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage),
   one fresh-context skeptic per batch — hand each one a POINTER to its filled copy of
   [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
-  contract (the pointer-dispatch rule in Phase 1), rather than composing one from this section. **Copy it with a command, not by reading
-  and retyping** — `coyodex contract skeptic >
-  <scratch>/skeptic-contract.md`, then fill the «angle-bracket» slots. **For the whole batch
-  directory, one verb writes every brief:** `coyodex contract skeptic --from-batches .coyodex/verify
-  --fill <slots.json> --out-dir <scratch>/briefs --votes security=3` fills «BATCH» and «CLAIMS» from
-  the file names, writes the voters as `security-a/b/c` over the one security claims file, skips
-  any brief that already exists, and prints the pointer prompts to send. Every build so far
-  hand-wrote that loop, with `--force` on every brief. The instruction on its own
-  does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and a
-  verb is not. The verb also prints only the agent's half: a build once filled this template with
+  contract (the pointer-dispatch rule in Phase 1), rather than composing one from this section.
+  **Get every brief with the verb, never by reading and retyping:** `coyodex contract skeptic
+  --slots` prints the slot skeleton (leave «BATCH» and «CLAIMS» empty), and `coyodex contract
+  skeptic --from-batches .coyodex/verify --fill <slots.json> --out-dir <scratch>/briefs --votes
+  security=3` writes one brief per claims file, filling «BATCH» and «CLAIMS» from the file names,
+  the voters as `security-1-a/b/c` over `claims-security-1.json`; it skips any brief that already
+  exists and prints the pointer prompts to send. Every build so far hand-wrote that loop, with
+  `--force` on every brief, and the instruction on its own does not stop this: a `Read` followed by
+  a `Write` is one keystroke away from a rewrite, and a verb is not. The verb also prints only the
+  agent's half: a build once filled this template with
   one text replacement and sent the WHOLE file, so all ten skeptics read the lead's instructions as
   their own and four were told to open a claims file that does not exist. **The WHOLE `security` theme — every batch of it — gets N skeptics + a majority
   vote, with N ODD and N ≥ 3.** The scope is the theme, never a hand-picked "riskiest" subset: a
@@ -2799,11 +2803,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 [method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every harvest
 agent a POINTER to its filled copy (the pointer-dispatch rule above), changing only the file list
 and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
-contract harvest > <scratch>/harvest-contract.md`, then fill the «angle-bracket» slots in place.
-A `contract harvest --fill` also records the brief's «EXPECTED_COMPONENTS» in
-`.coyodex/verify/budgets.json`, and `finalize` sums those budgets against what shipped (the
-`component budget` leg, held to the same ±40 % band each slice is held to): 60 budgeted and 114
-shipped is a sentence at assemble time, not a `Balance exceptions` record 450 turns later.
+contract harvest --slots` prints the slot skeleton, and `coyodex contract harvest --fill
+<slots.json> --out <scratch>/briefs/<agent-id>.md --brief <agent-id>` writes the brief and prints
+the pointer to send, one call per slice. The `--fill` is what records the brief's
+«EXPECTED_COMPONENTS» in `.coyodex/verify/budgets.json` (a hand-filled copy records nothing), and
+`finalize` sums those budgets against what shipped (the `component budget` leg, held to the same
+±40 % band each slice is held to): 60 budgeted and 114 shipped is a sentence at assemble time, not
+a `Balance exceptions` record 450 turns later.
 The verb prints the agent's half and appends the writing rules, so you never handle the template
 and the lead-facing header at its top cannot reach an agent. A harvest agent authors every
 component `purpose` in the map, the largest block of reader-facing prose there is. Do not `Read` it and `Write` your own — that is one

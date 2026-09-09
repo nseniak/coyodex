@@ -1132,6 +1132,6 @@ def test_the_profile_places_each_access_site_in_its_function_from_the_preindex_b
         (_P(td) / "preindex.json").write_text(_json.dumps(
             {"symbols": {"extents": {"a.py": [[10, 20, "delete_team", "def"]]}}}), encoding="utf-8")
         p = build_profile(mp.read_text(encoding="utf-8"), map_path=mp)
-        assert p.auth_functions == ["a.py::delete_team", "z.py:3"], p.auth_functions
+        assert p.auth_functions == ["a.py::delete_team", "z.py"], p.auth_functions   # a site outside every function keys on its FILE
         assert p.interface_kinds and p.interface_kinds.get("handoff") == 1, p.interface_kinds
         assert build_profile(mp.read_text(encoding="utf-8")).auth_functions is None

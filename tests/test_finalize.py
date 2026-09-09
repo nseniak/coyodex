@@ -1263,3 +1263,27 @@ def test_no_recorded_budgets_means_no_budget_leg():
     """Absent rather than silently clean: a build that filled its briefs by hand recorded nothing."""
     root, p = make_repo(components=10)
     assert _budget_leg_of(finalize.build_report(p, root, [])) is None
+
+
+def _budget_verdict(root: Path, p: Path, text: str) -> tuple[finalize.Leg | None, str]:
+    verify = root / ".coyodex" / "verify"
+    verify.mkdir(parents=True, exist_ok=True)
+    (verify / "budgets.json").write_text(text, encoding="utf-8")
+    report = finalize.build_report(p, root, [])
+    return _budget_leg_of(report), report.verdict
+
+
+def test_an_unreadable_budgets_file_advises_and_never_blocks():
+    """A broken telemetry file must not turn a clean map into INCOMPLETE: the first version of
+    this leg returned FAILED on bad JSON and crashed on a list where it expected a dict."""
+    root, p = make_repo(components=10)
+    for text in ("not json", '{"harvest": [1, 2]}', '{"harvest": {"t1": "six"}}'):
+        leg, verdict = _budget_verdict(root, p, text)
+        assert leg is not None and leg.ran and not leg.blocking, (text, leg)
+        assert verdict not in ("INCOMPLETE", "BLOCKED"), (text, verdict)
+
+
+def test_a_brief_with_no_numeric_budget_is_counted_not_dropped():
+    root, p = make_repo(components=10)
+    leg, _ = _budget_verdict(root, p, '{"harvest": {"t1": 5, "t2": 5, "t3": null}}')
+    assert leg is not None and "1 brief(s) with no numeric budget (t3)" in (leg.note or ""), leg

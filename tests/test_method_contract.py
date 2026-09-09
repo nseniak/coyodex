@@ -1159,12 +1159,12 @@ def test_the_method_hands_every_contract_over_with_the_verb_not_a_copy():
     Read the sentence that names the scratch file, not the whole document: method.md mentions the
     verb elsewhere, and a document-wide search would pass while one command still said `cp`."""
     flat = " ".join((REPO_ROOT / "method.md").read_text(encoding="utf-8").split())
-    for name in ("harvest", "trace", "rules", "skeptic"):
-        at = flat.find(f"<scratch>/{name}-contract.md`")
-        assert at != -1, f"method.md no longer shows a command writing <scratch>/{name}-contract.md"
-        command = flat[max(0, at - 200):at]
-        assert f"coyodex contract {name} >" in command, (
-            f"the command that builds <scratch>/{name}-contract.md does not use the verb: {command[-120:]!r}")
+    # Either shape of the verb counts: the redirect that hands over the agent's half, or the
+    # `--slots` / `--fill` / `--from-batches` forms that write the brief (and, for harvest, record
+    # the budget — a hand-filled copy records nothing, which is why the method prescribes them).
+    for name in ("harvest", "trace", "rules", "skeptic", "tests"):
+        hits = re.findall(rf"coyodex contract {name}(?: >|\s+--(?:slots|fill|from-batches))", flat)
+        assert hits, f"method.md never hands the {name} contract over with the verb"
 
 
 def test_the_method_no_longer_teaches_copying_a_template_by_hand():

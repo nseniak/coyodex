@@ -2554,3 +2554,21 @@ def test_prose_batches_are_minted_only_on_request_and_stale_ones_go(capsys) -> N
         assert audit_model.main([str(p), "--batches", str(out), "--with-prose"]) == 0
         assert list(out.glob("prose-*.json")), "asked for, so written"
     capsys.readouterr()
+
+
+def test_the_shared_small_batch_is_cut_at_the_cap_and_a_floor_above_the_cap_is_refused(tmp_path) -> None:
+    """Each merged theme is under the floor; their sum is not. Eleven 4-claim themes are 44 claims,
+    over the default cap of 40, so the shared batch is chunked like any theme."""
+    from coyodex.audit_model import WorkItem, write_theme_batches
+    from coyodex.audit_model import _THEMES
+    themes = [t for t in _THEMES if t != "security"]      # the 11 mergeable themes, real names
+    assert len(themes) == 11, themes
+    wl = [WorkItem(claim=f"{t} {i}", anchor="a.py:1", why_risky="r", theme=t)
+          for t in themes for i in range(4)]
+    written = write_theme_batches(wl, tmp_path, cap=10, floor=5)
+    names = [n for n, _ in written]
+    assert all(n.startswith("claims-small-") for n in names) and len(names) == 5, written
+    assert sum(k for _, k in written) == 44 and max(k for _, k in written) <= 10, written
+    import pytest as _pytest
+    with _pytest.raises(ValueError, match="above --cap"):
+        write_theme_batches(wl, tmp_path, cap=10, floor=20)

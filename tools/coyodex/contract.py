@@ -39,6 +39,8 @@ import re
 import sys
 from pathlib import Path
 
+from coyodex.provenance import SESSION_ENV
+
 # Contract name → template file. The name is what a lead types, so it is the phase, not the filename.
 CONTRACTS: dict[str, str] = {
     "harvest": "harvest-contract.md",
@@ -316,23 +318,50 @@ _USAGE = ("usage: coyodex contract <" + " | ".join(CONTRACTS) + "> [--slots]\n"
 BUDGETS_FILE = "budgets.json"
 
 
-def record_budget(repo: Path, agent_id: str, expected: str) -> Path | None:
+_FIRST_INT = re.compile(r"\d+")
+
+
+def budget_of(expected: str) -> int | None:
+    """The FIRST whole number in a filled «EXPECTED_COMPONENTS» slot, or None when it has none.
+
+    The first number and nothing else: real briefs wrote `**4–6**`, `~10 (8–12)` and `five`, and a
+    digit-scrape turned the first two into 46 and 10812. A range records its low end; a word
+    records None, which `finalize` then reports as a brief with no numeric budget rather than
+    dropping the slice from the sum while the shipped count keeps it."""
+    hit = _FIRST_INT.search(expected)
+    return int(hit.group(0)) if hit else None
+
+
+def record_budget(repo: Path, agent_id: str, expected: str,
+                  session: str | None = None) -> Path:
     """`<repo>/.coyodex/verify/budgets.json`: the component budget each harvest brief was handed,
     keyed by agent id. `lint-fragment --expect` checks one slice against its own budget; nothing
     summed the budgets against what shipped — 60 dispatched, 114 shipped, every slice over, and
     the guard added for an earlier build of the same shape was per fragment only. `finalize`
-    reads this file. The digits in the slot are the budget (`~8` records 8); a slot with none
-    (`a few`) records nothing, and the brief is still written."""
-    digits = "".join(ch for ch in expected if ch.isdigit())
-    if not digits:
-        return None
+    reads this file.
+
+    `session` is the build's own id (the harness's session id, from the environment). The file
+    belongs to ONE build: when it carries another session's id it is started over, because a
+    rebuild names its agents afresh (`h1..h12` one build, `h-entry-gateway…` the next) and a merge
+    across builds would sum two harvests against one map."""
     path = repo / ".coyodex" / "verify" / BUDGETS_FILE
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
-    except ValueError:
+    doc: dict[str, object] = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                doc = loaded
+        except ValueError:
+            doc = {}
+    if session and doc.get("session") != session:
         doc = {}
-    harvest = doc.setdefault("harvest", {}) if isinstance(doc, dict) else {}
-    harvest[agent_id] = int(digits)
+    harvest = doc.get("harvest")
+    if not isinstance(harvest, dict):
+        harvest = {}
+    harvest[agent_id] = budget_of(expected)
+    doc["harvest"] = harvest
+    if session:
+        doc["session"] = session
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return path
@@ -342,10 +371,13 @@ def batch_ids(batches_dir: Path) -> list[tuple[str, str]]:
     """`(batch id, theme)` for every `claims-*.json` an `audit --batches` run wrote, in name order."""
     out: list[tuple[str, str]] = []
     for f in sorted(batches_dir.glob("claims-*.json")):
+        theme = ""
         try:
-            theme = str(json.loads(f.read_text(encoding="utf-8")).get("theme", ""))
+            doc = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(doc, dict):
+                theme = str(doc.get("theme", ""))
         except (OSError, ValueError):
-            theme = ""
+            pass
         out.append((f.stem[len("claims-"):], theme))
     return out
 
@@ -357,12 +389,23 @@ def fill_from_batches(values: dict[str, str], batches_dir: Path, out_dir: Path,
     `skipped`: an existing brief is NEVER rewritten, because under pointer dispatch it may be an
     agent's running instructions — the loop every build hand-wrote passed `--force` on all 38.
     `BATCH` and `CLAIMS` are this verb's to fill; a slots file naming them is refused."""
-    if "BATCH" in values or "CLAIMS" in values:
-        raise ValueError("--from-batches fills «BATCH» and «CLAIMS» itself; leave them out of the "
-                         "slots file")
+    # An EMPTY value for either is what `--slots` prints, so it is tolerated; a filled one would be
+    # silently overwritten, so it is refused.
+    filled = [k for k in ("BATCH", "CLAIMS") if (values.get(k) or "").strip()]
+    if filled:
+        raise ValueError(f"--from-batches fills «BATCH» and «CLAIMS» itself; leave them empty or out "
+                         f"of the slots file (given: {', '.join(filled)})")
+    values = {k: v for k, v in values.items() if k not in ("BATCH", "CLAIMS")}
+    if not batches_dir.is_dir():
+        raise ValueError(f"--from-batches {batches_dir} is not a directory; it is where "
+                         f"`audit --batches` wrote the claims files")
+    batches = batch_ids(batches_dir)
+    if not batches:
+        raise ValueError(f"no claims-*.json under {batches_dir} — run `coyodex audit <map> "
+                         f"--batches {batches_dir}` first; nothing to write a brief for")
     out: list[tuple[str, Path, str]] = []
     out_dir.mkdir(parents=True, exist_ok=True)
-    for bid, theme in batch_ids(batches_dir):
+    for bid, theme in batches:
         n = votes.get(theme, 1)
         voters = [bid] if n <= 1 else [f"{bid}-{chr(ord('a') + k)}" for k in range(n)]
         for voter in voters:
@@ -507,7 +550,8 @@ def main(argv: list[str] | None = None) -> int:
                 repo_slot = values.get("REPO_ABS") or values.get("repo") or ""
                 if repo_slot and values.get("agent-id") and values.get("EXPECTED_COMPONENTS"):
                     record_budget(Path(repo_slot), str(values["agent-id"]),
-                                  str(values["EXPECTED_COMPONENTS"]))
+                                  str(values["EXPECTED_COMPONENTS"]),
+                                  session=os.environ.get(SESSION_ENV))
             print(f"filled {name} contract ({len(slots(name))} slot(s)) -> {target}",
                   file=sys.stderr)
             if brief_id is not None:

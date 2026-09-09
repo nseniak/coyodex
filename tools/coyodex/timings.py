@@ -352,14 +352,22 @@ def _minutes_from_agents(args: argparse.Namespace, slices: list[str],
                          "subagents/ dir>`, or run inside the build session so the default "
                          "(this session's directory) exists.")
     by_name: dict[str, float] = {}
-    for span in agent_spans(where):
+    seen: dict[str, list[str]] = {}
+    # The LATEST transcript wins when one name was dispatched twice (a re-run after a failure),
+    # and the choice is printed: the earlier span is a different attempt, not this slice's time.
+    for span in sorted(agent_spans(where), key=lambda s: s.started):
         for key in (span.name, span.description):
             if key:
-                by_name.setdefault(key, span.minutes)
+                by_name[key] = span.minutes
+                seen.setdefault(key, []).append(f"{span.agent_id} ({span.minutes:.1f} min)")
     missing = [name for name in slices if name.strip() not in by_name]
     if missing:
         raise ValueError(f"no transcript named {', '.join(repr(m) for m in missing)} under {where}. "
                          f"Names found: {', '.join(sorted(by_name)) or 'none'}.")
+    for name in slices:
+        if len(seen.get(name.strip(), [])) > 1:
+            print(f"note: {name.strip()!r} has {len(seen[name.strip()])} transcripts "
+                  f"({', '.join(seen[name.strip()])}); the latest was recorded", file=sys.stderr)
     return [f"{by_name[name.strip()]:.1f}" for name in slices]
 
 

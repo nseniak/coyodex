@@ -680,20 +680,36 @@ def _budget_leg(map_path: Path, repo: Path) -> Leg | None:
     budgets_path = resolve_map_path(map_path).parent / "verify" / BUDGETS_FILE
     if not budgets_path.is_file():
         return None
+    # ADVISORY on every path, including a file this leg cannot read: a budget is an aim, and a
+    # broken telemetry file must never turn a clean map into INCOMPLETE (the review's first version
+    # of this leg did exactly that, and crashed on a list where it expected a dict).
     try:
         doc = json.loads(budgets_path.read_text(encoding="utf-8"))
-        harvest = doc.get("harvest") if isinstance(doc, dict) else None
-        budgets = {k: int(v) for k, v in (harvest or {}).items()}
-    except (OSError, ValueError, TypeError):
-        return Leg("component budget", FAILED, note=f"{budgets_path} could not be read")
-    if not budgets:
-        return None
+    except (OSError, ValueError) as e:
+        return Leg("component budget", RAN, note=f"{budgets_path} could not be read ({e})",
+                   advisory=[f"{budgets_path} is not readable JSON; the harvest budgets cannot be "
+                             f"summed. Fix or delete it — it is build telemetry, not map content"])
+    harvest = doc.get("harvest") if isinstance(doc, dict) else None
+    if not isinstance(harvest, dict) or not harvest:
+        return Leg("component budget", RAN, note=f"{budgets_path} records no harvest budgets",
+                   advisory=[] if isinstance(harvest, dict) else [
+                       f"{budgets_path} has no `harvest` object; the budgets cannot be summed"])
+    budgets: dict[str, int] = {}
+    unnumbered: list[str] = []
+    for agent_id, value in harvest.items():
+        if isinstance(value, int) and not isinstance(value, bool):
+            budgets[str(agent_id)] = value
+        else:
+            unnumbered.append(str(agent_id))
     try:
         m = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
-    except Exception as e:
-        return Leg("component budget", FAILED, note=f"could not re-read {map_path}: {e}")
+    except (OSError, ValueError, ModelError) as e:
+        return Leg("component budget", RAN, note=f"could not re-read {map_path}: {e}",
+                   advisory=[f"the map could not be re-read to count its components: {e}"])
     shipped = len(m.components)
     total = sum(budgets.values())
+    uncounted = (f", {len(unnumbered)} brief(s) with no numeric budget ({', '.join(unnumbered[:6])})"
+                 if unnumbered else "")
     e_note = ""
     try:
         e = expected_components(repo).expected
@@ -705,12 +721,12 @@ def _budget_leg(map_path: Path, repo: Path) -> Leg | None:
     advisory: list[str] = []
     if total and not low <= shipped <= high:
         advisory.append(f"{shipped} component(s) shipped against {total} budgeted across "
-                        f"{len(budgets)} harvest brief(s) (band {low}-{high}{e_note}). Every "
-                        f"slice can be inside its own band while the sum is not; say in "
+                        f"{len(budgets)} harvest brief(s) (band {low}-{high}{e_note}{uncounted}). "
+                        f"Every slice can be inside its own band while the sum is not; say in "
                         f"`Balance exceptions` why the map is this size, or re-cut the slices.")
     return Leg("component budget", RAN, advisory=advisory,
                note=f"{shipped} shipped / {total} budgeted across {len(budgets)} brief(s), "
-                    f"band {low}-{high}{e_note}")
+                    f"band {low}-{high}{e_note}{uncounted}")
 
 
 def build_report(map_path: Path, repo: Path, verdicts: list[Path],

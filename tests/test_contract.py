@@ -551,4 +551,51 @@ def test_a_harvest_fill_records_its_component_budget(tmp_path: Path) -> None:
         rc = main(["harvest", "--fill", str(src), "--out", str(tmp_path / "t1.md")])
     assert rc == 0, buf.getvalue()
     doc = _json.loads((repo / ".coyodex" / "verify" / "budgets.json").read_text(encoding="utf-8"))
-    assert doc == {"harvest": {"t1": 6}}, doc
+    assert doc["harvest"] == {"t1": 6}, doc      # `session` is present only inside a build session
+
+
+# --- review round 3: what a budget slot really says, and one build per budgets file --------------
+
+def test_budget_of_reads_the_first_number_only() -> None:
+    """Real briefs wrote `**4–6**`, `~10 (8–12)` and `five`; a digit-scrape made 46 and 10812 of
+    the first two. The first number is the budget; a range records its low end; a word, None."""
+    from coyodex.contract import budget_of
+    assert [budget_of(v) for v in ("~8", "**4–6**", "~10 (8–12)", "5 to 7", "five", "")] == \
+        [8, 4, 10, 5, None, None]
+
+
+def test_a_budgets_file_belongs_to_one_build(tmp_path: Path) -> None:
+    """A rebuild names its agents afresh; merging across builds would sum two harvests against
+    one map. Another session's file is started over; a word-valued slot is kept as None."""
+    import json as _json
+    from coyodex.contract import record_budget
+    record_budget(tmp_path, "h1", "6", session="s1")
+    record_budget(tmp_path, "h2", "five", session="s1")
+    doc = _json.loads((tmp_path / ".coyodex" / "verify" / "budgets.json").read_text(encoding="utf-8"))
+    assert doc == {"harvest": {"h1": 6, "h2": None}, "session": "s1"}, doc
+    record_budget(tmp_path, "h-entry", "4-6", session="s2")
+    doc = _json.loads((tmp_path / ".coyodex" / "verify" / "budgets.json").read_text(encoding="utf-8"))
+    assert doc == {"harvest": {"h-entry": 4}, "session": "s2"}, doc
+
+
+def test_from_batches_refuses_a_missing_or_empty_batch_directory(tmp_path: Path) -> None:
+    """Exit 0 with '0 brief(s) written' on a directory that does not exist is the accepting-and-
+    misreading shape `--batches --cap` once had."""
+    _skeptic_slots_file(tmp_path)
+    rc, out = _from_batches(tmp_path)
+    assert rc == 2 and "is not a directory" in out, out
+    (tmp_path / "verify").mkdir()
+    rc, out = _from_batches(tmp_path)
+    assert rc == 2 and "no claims-*.json" in out, out
+
+
+def test_from_batches_tolerates_the_empty_batch_and_claims_slots_the_skeleton_prints(tmp_path: Path) -> None:
+    import json as _json
+    _batches_dir(tmp_path)
+    (tmp_path / "verify" / "claims-odd.json").write_text(_json.dumps([1, 2]), encoding="utf-8")
+    _skeptic_slots_file(tmp_path, BATCH="", CLAIMS="  ")
+    rc, out = _from_batches(tmp_path)
+    assert rc == 0, out
+    names = sorted(p.name for p in (tmp_path / "briefs").glob("skeptic-*.md"))
+    assert names == ["skeptic-backbone.md", "skeptic-odd.md", "skeptic-security.md",
+                     "skeptic-small.md"], names

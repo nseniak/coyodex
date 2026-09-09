@@ -421,6 +421,7 @@ class AgentSpan:
     description: str | None  # the harness's one-line description, from the meta file
     minutes: float           # first record to last record, wall clock
     records: int
+    started: str = ""        # the first record's timestamp, ISO 8601, for ordering re-dispatches
 
 
 def agent_spans(subagents_dir: Path) -> list[AgentSpan]:
@@ -466,7 +467,8 @@ def agent_spans(subagents_dir: Path) -> list[AgentSpan]:
                 pass
         minutes = (max(stamps) - min(stamps)).total_seconds() / 60
         out.append(AgentSpan(agent_id=f.stem[len("agent-"):], name=name, description=description,
-                             minutes=round(minutes, 1), records=records))
+                             minutes=round(minutes, 1), records=records,
+                             started=min(stamps).isoformat()))
     return out
 
 

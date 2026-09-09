@@ -401,7 +401,11 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
             for site in auth_sites:
                 path, _, line = site.rpartition(":")
                 ext = enclosing_extent(extents.get(path, []), int(line)) if line.isdigit() else None
-                placed.add(f"{path}::{ext[2]}" if ext else site)
+                # A site outside every function (a module-level table, a constant) keys on the
+                # FILE: 6 of mcpolis's 7 such sites were consecutive lines of one policy table, and a
+                # `path:line` key would count a rebuild citing line 47 instead of 46 as a function
+                # lost, the exact jitter this number exists to remove.
+                placed.add(f"{path}::{ext[2]}" if ext else path)
             auth_functions = sorted(placed)
     kinds: dict[str, int] = {}
     for i in m.interfaces:

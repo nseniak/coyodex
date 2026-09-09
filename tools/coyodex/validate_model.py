@@ -2567,9 +2567,14 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     #: 35 keys across five check families and `validate` disclosed 8 of them (the excused ways
     #: in below); the other 27 silences read exactly like having no findings.
     hushed: dict[str, list[str]] = {}
+    #: The recorded tokens that silenced something, spelled as they were written (`I3`, `EP9`,
+    #: `UC4/doors`). Everything else under the heading is disclosed as silencing nothing.
+    honoured: set[str] = set()
 
     def hush(family: str, iid: str) -> None:
-        hushed.setdefault(family, []).append(iid)
+        ids = hushed.setdefault(family, [])
+        if iid not in ids:
+            ids.append(iid)
 
     #: (surface id, its kind, the roles the walks put at it) for the wrong-door nudge below.
     people_at_a_machine: list[tuple[str, str, str]] = []
@@ -2838,7 +2843,12 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         gates asked only for the bare one. So the precise record was inert and the blunt one was the
         only thing that worked, which is the exact shape `_recorded_ids`' own docstring says a record
         must never have."""
-        return key in recorded_ucs or f"{key}/{scope}" in recorded_ucs
+        for token in (key, f"{key}/{scope}"):
+            if token in recorded_ucs:
+                honoured.add(token)
+                hush(f"the {scope} gate", key)
+                return True
+        return False
 
     iface_by_ep = {ep: i.id for i in m.interfaces for ep in i.ways_in}
     dep_on_surface = {d.id: d.interfaces[0] for d in m.deps if d.interfaces}
@@ -2975,8 +2985,12 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             f"'{INTERFACE_EXCEPTIONS_HEADING}' id(s), by family — {by_family}. A recorded surface "
             f"id silences EVERY family on that surface, so a why written about one of them "
             f"silences the rest too; re-read one by validating a copy with the id removed")
-    used = {i for ids in hushed.values() for i in ids} | {ep.id for ep in excused}
-    idle = sorted(k for k in recorded if "/" not in k and k not in used)
+    honoured |= {i for ids in hushed.values() for i in ids if i in recorded}
+    honoured |= {ep.id for ep in excused}
+    # EVERY key under the heading, whatever its prefix: a `Cn` line there is honoured by no check
+    # at all, and the first version of this list read only the I/EP ids and so could not say so.
+    idle = sorted(k for k in records.recorded_keys(m, INTERFACE_EXCEPTIONS_HEADING)
+                  if k not in honoured)
     if idle:
         # A record with no finding under it: stale, or written against a surface that is gone.
         warnings.append(

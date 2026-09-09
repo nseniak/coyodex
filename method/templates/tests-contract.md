@@ -9,8 +9,8 @@ WHY THIS TEMPLATE EXISTS. The test-completeness slice is the one every build has
 covered, so its brief was hand-written on every build: on 2026-08-20 the hand-written brief lost
 the no-delegation block and `--expect`; on 2026-09-08 it was written last, dispatched last, and was
 the batch's straggler (13.6 minutes against a 6.1-minute median). A hand-composed brief loses the
-shared machinery every time, and `method.md` already says this agent is dispatched FIRST, at the
-start of synthesis, so the brief has to be ready before the lead authors a single rule.
+shared machinery every time, and `method.md` says this agent launches the moment the traced map is
+assembled — before the T7 rules and the Phase 4 skeptics — so the brief has to be ready then.
 
 - **«TESTS_ARE»** — where the suites live and what each costs to run, in two or three sentences:
   the unit tree, the integration tree and whether it hits a paid service, the browser suite, and

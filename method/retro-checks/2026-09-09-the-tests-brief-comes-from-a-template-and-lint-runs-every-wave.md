@@ -13,9 +13,9 @@ Escalation: none on its own.
 
 ## Checks
 
-1. expect: the test-completeness agent's brief is a `contract tests --fill` output, dispatched in
-   the first synthesis step.
-   regression sign: a hand-written tests brief, or one dispatched after the trace fan-out.
+1. expect: the test-completeness agent's brief is a `contract tests --fill` output, dispatched
+   the moment the traced map is assembled, before the T7 rules and the Phase 4 skeptics.
+   regression sign: a hand-written tests brief, or one dispatched after the skeptic fan-out.
 
 2. expect: one `grounding lint` per skeptic wave, each naming every verdicts file so far.
    regression sign: a single lint over wave 1, or a lint naming fewer files than were dispatched.

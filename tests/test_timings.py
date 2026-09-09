@@ -393,3 +393,14 @@ def test_from_agents_refuses_hand_typed_minutes_beside_it(capsys) -> None:
         code = main(["record", "--repo", make_repo(tmp), "--phase", "harvest",
                      "--from-agents", str(d), "--slice", "h-a", "--minutes", "1"])
         assert code == 2 and "do not also pass --minutes" in capsys.readouterr().err
+
+
+def test_a_name_dispatched_twice_records_the_latest_transcript_and_says_so(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_subagents_dir(tmp)
+        make_agent_transcript(d, "a9", "h-a", "2026-09-08T23:00:00.000Z", "2026-09-08T23:04:00.000Z")
+        code = main(["record", "--repo", make_repo(tmp), "--phase", "harvest",
+                     "--from-agents", str(d), "--slice", "h-a"])
+        err = capsys.readouterr().err
+        assert code == 0 and "'h-a' has 2 transcripts" in err, err
+        assert [(r["slice"], r["minutes"]) for r in read_record(tmp)] == [("h-a", 4.0)]
