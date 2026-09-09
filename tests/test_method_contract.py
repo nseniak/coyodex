@@ -1533,7 +1533,7 @@ def test_every_populated_map_section_reaches_the_rendered_view():
 # map nine times (the rule was in `method/dispatch.md`, which only the LEAD reads).
 
 _AGENT_CONTRACTS = ("harvest-contract.md", "trace-contract.md", "rules-contract.md",
-                    "skeptic-contract.md", "gapfill-contract.md")
+                    "skeptic-contract.md", "gapfill-contract.md", "tests-contract.md")
 
 
 def _contract_agent_half(name: str) -> str:

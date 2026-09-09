@@ -219,9 +219,16 @@ Fixed the same night on branch `claude/rebuild-maps-sequence-24c3bf`, each with 
 | The gate block carries the three-way advisory disposition; `assemble` refuses a duplicate id inside one fragment; `grounding lint --help` names `--expect`; `ship` and `reconcile` say where their lists are | `aab1206` (findings 17, 33, 34) |
 | `fix apply-drift` refuses a correction into a file neither end of the edge lists; `contract --fill` refuses a path in a batch-id slot; `ship` passes the newest archived map as `--access-baseline`, and the leg names every file; `provenance stamp` records `tool_commit` | `ff4f816` (findings 2, 3, 18, 32) |
 | Six live-map sentences moved to the past; `compare` notes a source root the candidate cites nowhere | `a6e5e7f` (findings 1, 27) |
-| The skeptic contract's worked example is no longer mcpolis's own code; assertion 27 follows a fragment directory bound to a variable | this branch (findings 4, 11) |
+| The skeptic contract's worked example is no longer mcpolis's own code; assertion 27 follows a fragment directory bound to a variable | `76ca734` (findings 4, 11) |
+| `grounding lint` finds this session's agent transcripts by itself; `compare` reports enforcement-FUNCTION agreement and the interface kinds a candidate lost; `validate --json` carries the sweep worklist; `fanout-timings.json` stays out of git | `15ffdbb` (findings 8, 16, 24, 25, 22) |
+| Themes under 5 claims share one skeptic batch, security never; prose batches only on `--with-prose`; method.md says what the budget buys every build | `a080fc3` (findings 7, 20) |
+| `contract skeptic --from-batches` writes every brief from the batch directory and never rewrites one; `finalize` sums the harvest budgets against what shipped | `53314a6` (findings 19, 28) |
+| `validate` discloses every 'Interface exceptions' silence by family; `timings record --from-agents`; `contract tests`; method.md: lint after EVERY wave | this branch (findings 15, 23, 21, 16) |
 
-**Not fixed, by design or by size, and still open** (findings of that retro): 7 and 8 (operator decisions: the verification budget, the access-surface churn), 15 (per-family disclosure), 16 (`grounding lint` on every wave), 19–21 (`contract skeptic --from-batches`, `contract tests`, the batch floor), 23 (timings from the per-agent files), 24 (`validate --json` sweep worklist), 25 (the lost `handoff` surface), 26, 28–30.
+**Decided 2026-09-09 by the operator ("go for all"):** 7 (the verification budget: the behaviour theme
+every build, the prose surface on request — landed `a080fc3`) and 8 (the access churn is measured by
+function now, and the 19 lost files are answered under question 7 below). **Still open, as
+recorded:** 26, 29 and 30, the method-wording rows.
 
 ## Open — tools
 
@@ -439,7 +446,7 @@ folder. These are the parked ones, with who can answer them.
 | 3 | ~~What actually causes the access enforcement-line churn?~~ **ANSWERED 2026-08-29 — see below** | the next build | 2026-08-19 |
 | 4 | Do the 47 access rules of the 2026-08-18 map say what the previous map's 44 said? Same shape as question 1, for the newer pair: 50 shared enforcement lines of a 181-line union, 17 files lost, 11 gained. | `/coyodex-eval` (judges) | 2026-08-19 |
 | 6 | ~~Is the four-build "0 verdict disagreements" record evidence, or an artefact of a contract that named one repo's answer to every skeptic of that repo?~~ **ANSWERED 2026-09-09 — see below** | one skeptic wave | 2026-09-08 |
-| 7 | Which of the 19 files that lost access coverage on the 2026-09-08 mcpolis map hold enforcement the map should still be claiming? Nine are OAuth or token handling (`pending_auth.py`, `oauth_refresh.py`, `tool_router.py`, `upstream_oauth_callback.py` among them); the list is in that retro's run directory. Fourth build parked on this shape; `ship` now runs the leg that names them before the commit. | a targeted skeptic pass, or a human | 2026-09-08 |
+| 7 | ~~Which of the 19 files that lost access coverage on the 2026-09-08 mcpolis map hold enforcement the map should still be claiming?~~ **ANSWERED 2026-09-09 — see below.** Nine are OAuth or token handling (`pending_auth.py`, `oauth_refresh.py`, `tool_router.py`, `upstream_oauth_callback.py` among them); the list is in that retro's run directory. Fourth build parked on this shape; `ship` now runs the leg that names them before the commit. | a targeted skeptic pass, or a human | 2026-09-08 |
 | 5 | Is one refuted-claim-in-the-map a pattern? `grounding report`'s `REFUTED BUT NOT SUPERSEDED` section found two on the 2026-08-18 map, both from a reconcile that corrected one copy of a row and left another. Nobody has looked at an older map with the same command. | anyone, one command per archived map | 2026-08-19 |
 
 
@@ -512,6 +519,55 @@ about the three-vote rule should rest on whether that keeps happening, not on th
 **Method note the same wave produced.** Both confirming voters read the anchored line and stopped;
 the dissenter read the callers. The difference was not care but reach, which is an argument for the
 contract telling a skeptic to follow a guard to its call sites — cheap to state, and untested.
+
+### Answered 2026-09-09 — question 7, the 19 files that lost access coverage
+
+One skeptic read every old enforcement line in the 19 files against the current map's 68 access
+rules and the code (report in the fix session's scratchpad, `wave/report.md`; the two inputs are
+the previous map's rules for those files and the current access rules).
+
+| verdict | files |
+|---|---|
+| covered elsewhere — the current map claims the same decision at a different line, usually the shared guard rather than the call site | 11 |
+| should be claimed — a real decision no current rule states | 4 |
+| not an access decision — the old rule was about shape, cleanup or validity, not a caller | 3 |
+| enforced nowhere — the file switches a protection OFF and checks nothing | 1 |
+
+The 4 files carry **3 missing rules**, each a candidate for the next mcpolis build (not added by
+hand; a rule is authored in a T7 fragment):
+
+- **P1 — the returning sign-in must prove who began it.** The signed link a member follows back from
+  an outside server binds team, server, person and original state, lives ten minutes, and a bad or
+  expired signature or a server outside the team is refused (`pending_auth.py:86`,
+  `upstream_oauth_callback.py:110`/`:154`). Block: BLK2, beside BR22, which anchors the expiry half
+  of the same helper.
+- **P2 — the startup sandbox sweep also crosses every team.** The restart sweep reads every team's
+  rented machines with no operator behind it (`mongo_sandbox_persistence_repository.py:107`), a
+  second crossing BR63 does not mention. Block: BLK4.
+- **P3 — whose account an outbound call runs on.** A call to an outside server goes out on the
+  caller's own connection, or on the admin-fixed one when the server is configured that way
+  (`tool_router.py:922`, `:887`, `:920`). Block: BLK1 or BLK10; the skeptic was not sure.
+
+Two corrections to the retro's own list: `reconciler.py` was never lost from the map, only from the
+access rules, and correctly (it is non-access BR146); the two SSRF call sites are covered by BR141
+at the transport. So of the "19 lost files" the map owes 4, and the other 15 are the churn the
+by-function reading below already predicted.
+
+### Measured 2026-09-09 — questions 1 and 4, read by function rather than by line
+
+`compare` now reports enforcement-line agreement AND enforcement-function agreement (the function
+each auth site sits in, from the pre-index beside the map). On the 2026-09-08 mcpolis pair:
+
+| | previous | current | shared | agreement |
+|---|---|---|---|---|
+| enforcement lines | 194 | 153 | 76 | 28 % |
+| enforcement functions | 128 | 108 | 65 | 38 % |
+
+Ten points of the line churn is placement inside one function; the rest is real: two builds pick
+different guards for the same decision, and the wave above shows most of those picks are covered
+elsewhere rather than lost. The 2026-08-29 answer to question 3 ("mostly placement jitter") does
+not hold on this pair. Questions 1 and 4 stay open on their own terms (whether the surviving
+statements cover the same decisions), but the number to judge them by is now the function one.
 
 ### Open 2026-09-07 — the 45 number-claims in the tools that can go stale
 

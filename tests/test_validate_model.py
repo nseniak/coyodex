@@ -5816,3 +5816,28 @@ def test_validate_json_carries_the_sweep_worklist_as_rows():
     assert isinstance(rows, list)
     for row in rows:
         assert set(row) == {"container", "step", "where", "phrase"}, row
+
+
+# --- what a recorded 'Interface exceptions' id silenced, by family (retro 2026-09-08, row 15) ----
+
+def test_a_recorded_interface_id_is_disclosed_by_the_family_it_silenced():
+    """One heading forgave 35 keys across five check families on a live build and `validate`
+    disclosed 8 (the excused ways in). Every silence is now on screen, one line by family, and a
+    recorded id that silences nothing is named as stale."""
+    m = make_unreached_surface_model()
+    m.interfaces[1].facing = ""
+    m.extras = [ExtraSection(heading="Interface exceptions",
+                             body="I2: the paid reader is a deliberate fallback\nI9: gone")]
+    ws = warnings_of(m)
+    assert not _unreached_hits(m) and not [w for w in ws if w.startswith("I2 (") and "facing" in w]
+    line = next(w for w in ws if "interface advisory/advisories suppressed" in w)
+    assert "no `facing`: I2" in line and "reached by no use case: I2" in line, line
+    assert line.startswith("2 interface")
+    stale = next(w for w in ws if "silence nothing" in w)
+    assert "I9" in stale and "I2" not in stale, stale
+
+
+def test_an_unrecorded_map_prints_no_disclosure_line():
+    ws = warnings_of(make_unreached_surface_model())
+    assert not [w for w in ws if "suppressed by recorded 'Interface exceptions'" in w
+                or "silence nothing" in w]

@@ -222,3 +222,23 @@ def test_the_sessions_agent_transcripts_are_found_from_the_repo_path_and_the_ses
         d.mkdir(parents=True)
         assert session_agent_transcripts(repo, session_id="s1", home=home) == d
         assert session_agent_transcripts(repo, session_id="", home=home) is None
+
+
+def test_agent_spans_read_the_name_under_both_pointer_shapes_and_the_meta_description():
+    from coyodex.provenance import agent_spans
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        verb = "h-x\n/tmp/h-x.md\nRead it COMPLETELY and follow it — it is your entire brief.\n"
+        rows = [{"type": "user", "timestamp": "2026-09-08T10:00:00Z",
+                 "message": {"role": "user", "content": [{"type": "text", "text": verb}]}},
+                {"type": "assistant", "timestamp": "2026-09-08T10:06:30Z", "message": {}}]
+        (d / "agent-a1.jsonl").write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+        (d / "agent-a1.meta.json").write_text(json.dumps({"description": "Harvest x"}), encoding="utf-8")
+        rows2 = [{"type": "user", "timestamp": "2026-09-08T10:00:00.5Z",
+                  "message": {"role": "user", "content": "You are agent h-y. Your brief is /tmp/h-y.md"}},
+                 {"type": "assistant", "timestamp": "2026-09-08T10:00:30.5Z", "message": {}}]
+        (d / "agent-a2.jsonl").write_text("\n".join(json.dumps(r) for r in rows2), encoding="utf-8")
+        (d / "agent-a3.jsonl").write_text("not json\n", encoding="utf-8")   # no stamps: skipped
+        spans = agent_spans(d)
+    assert [(s.agent_id, s.name, s.description, s.minutes, s.records) for s in spans] == [
+        ("a1", "h-x", "Harvest x", 6.5, 2), ("a2", "h-y", None, 0.5, 2)]

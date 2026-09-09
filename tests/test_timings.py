@@ -339,3 +339,57 @@ def test_the_split_advice_has_an_absolute_floor(capsys):
     """It advised splitting a slice to recover twelve seconds, in a message whose own last sentence
     says launch order is worth seconds and therefore not worth thinking about."""
     assert "SPLIT" not in _order_out([0.4, 0.2, 0.2], capsys)
+
+
+# --- minutes read off the agents' own transcripts (retro 2026-09-08, row 23) ---------------------
+
+def make_agent_transcript(d: Path, agent_id: str, name: str, start: str, end: str,
+                          pointer_shape: bool = False) -> None:
+    """One sub-agent's transcript: the pointer prompt that named it, then its last record."""
+    prompt = (f"{name}\n/x/{name}.md\nRead it COMPLETELY and follow it — it is your entire brief.\n"
+              if pointer_shape else f"You are agent {name}.\nYour entire brief is the file /x/{name}.md")
+    rows = [{"type": "user", "timestamp": start, "message": {"role": "user", "content": prompt}},
+            {"type": "assistant", "timestamp": end, "message": {"role": "assistant", "content": []}}]
+    (d / f"agent-{agent_id}.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n",
+                                               encoding="utf-8")
+    (d / f"agent-{agent_id}.meta.json").write_text(json.dumps({"description": f"Harvest {name}"}),
+                                                   encoding="utf-8")
+
+
+def make_subagents_dir(tmp: str) -> Path:
+    d = Path(tmp) / "subagents"
+    d.mkdir()
+    make_agent_transcript(d, "a1", "h-a", "2026-09-08T22:35:35.633Z", "2026-09-08T22:48:05.633Z")
+    make_agent_transcript(d, "a2", "h-b", "2026-09-08T22:35:40.000Z", "2026-09-08T22:38:40.000Z",
+                          pointer_shape=True)
+    return d
+
+
+def test_from_agents_records_each_slice_at_its_transcripts_span(capsys) -> None:
+    """11 of 12 hand-read timings on one build were exact; the twelfth understated the batch
+    straggler by 14 minutes, the one number `order` exists to carry forward."""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_subagents_dir(tmp)
+        code = main(["record", "--repo", make_repo(tmp), "--phase", "harvest",
+                     "--from-agents", str(d), "--slice", "h-a", "--slice", "h-b"])
+        assert code == 0, capsys.readouterr().err
+        rows = read_record(tmp)
+        assert [(r["slice"], r["minutes"]) for r in rows] == [("h-a", 12.5), ("h-b", 3.0)]
+
+
+def test_from_agents_names_the_transcripts_it_found_when_a_slice_has_none(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_subagents_dir(tmp)
+        code = main(["record", "--repo", make_repo(tmp), "--phase", "harvest",
+                     "--from-agents", str(d), "--slice", "h-a", "--slice", "h-zz"])
+        err = capsys.readouterr().err
+        assert code == 2 and "'h-zz'" in err and "h-a" in err and "h-b" in err, err
+        assert not record_path(tmp).exists(), "a batch with one bad row writes nothing"
+
+
+def test_from_agents_refuses_hand_typed_minutes_beside_it(capsys) -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        d = make_subagents_dir(tmp)
+        code = main(["record", "--repo", make_repo(tmp), "--phase", "harvest",
+                     "--from-agents", str(d), "--slice", "h-a", "--minutes", "1"])
+        assert code == 2 and "do not also pass --minutes" in capsys.readouterr().err

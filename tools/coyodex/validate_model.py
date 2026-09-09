@@ -2562,6 +2562,15 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                 f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading if this product genuinely has none")
         return problems, warnings
     recorded = _recorded_ids(m, INTERFACE_EXCEPTIONS_HEADING, ("I", "EP"))
+    #: (family -> surface ids) a recorded id swallowed, DISCLOSED at the end one line per family,
+    #: the granularity family's discipline. On the 2026-09-08 mcpolis build one heading forgave
+    #: 35 keys across five check families and `validate` disclosed 8 of them (the excused ways
+    #: in below); the other 27 silences read exactly like having no findings.
+    hushed: dict[str, list[str]] = {}
+
+    def hush(family: str, iid: str) -> None:
+        hushed.setdefault(family, []).append(iid)
+
     #: (surface id, its kind, the roles the walks put at it) for the wrong-door nudge below.
     people_at_a_machine: list[tuple[str, str, str]] = []
     role_names = {r.id: r.name for r in m.roles}
@@ -2623,7 +2632,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             problems.append(f"{iface.id} ({iface.name}) is grounded by nothing — it needs at least "
                             f"one of: ways in, a dependency naming it, or its own `source` (the "
                             f"router, the command table, the file writer)")
-        if not iface.facing and iface.id not in recorded:
+        if not iface.facing and iface.id in recorded:
+            hush("no `facing`", iface.id)
+        elif not iface.facing:
             warnings.append(f"{iface.id} ({iface.name}) has no `facing` — say whether this surface "
                             f"serves a user or an operator, or record "
                             f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' "
@@ -2631,30 +2642,41 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # ── `kind`: SHAPE, never purpose. Seeded-open, so NOTHING here blocks. ──────────────────
         canon = grammar.canonical_interface_kind(iface.kind)
         escaped = iface.id in recorded
-        if not canon and not escaped:
-            warnings.append(f"{iface.id} ({iface.name}) has no `kind` — say what SHAPE this surface "
-                            f"is ({', '.join(grammar.INTERFACE_KIND_SEEDS)}), so the picture can "
-                            f"draw it. Or record '{iface.id}: <why>' under an "
-                            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
-        elif canon.lower() in grammar.INTERFACE_KIND_PURPOSE_WORDS and not escaped:
-            warnings.append(f"{iface.id} ({iface.name}) kind='{iface.kind}' says what the surface "
-                            f"is FOR, not what SHAPE it is — that axis is the dependency's "
-                            f"`bucket`, which already holds it in a richer vocabulary. A payment "
-                            f"processor and a crash reporter are both `api`. Record "
-                            f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
-                            f"heading if this really is the surface's shape")
-        elif canon and canon not in grammar.INTERFACE_KIND_SEEDS and not escaped:
-            minted_kinds.setdefault(canon, []).append(iface.id)
-        elif canon and canon != (iface.kind or "").strip() and not escaped:
-            warnings.append(f"{iface.id} ({iface.name}) kind='{iface.kind}' — the canonical "
-                            f"spelling is '{canon}'. One spelling per shape, or two builds of one "
-                            f"repo split the same surface. Record '{iface.id}: <why>' under an "
-                            f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading to keep this spelling")
+        kind_advice: str | None = None
+        if not canon:
+            kind_advice = (f"{iface.id} ({iface.name}) has no `kind` — say what SHAPE this surface "
+                           f"is ({', '.join(grammar.INTERFACE_KIND_SEEDS)}), so the picture can "
+                           f"draw it. Or record '{iface.id}: <why>' under an "
+                           f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
+        elif canon.lower() in grammar.INTERFACE_KIND_PURPOSE_WORDS:
+            kind_advice = (f"{iface.id} ({iface.name}) kind='{iface.kind}' says what the surface "
+                           f"is FOR, not what SHAPE it is — that axis is the dependency's "
+                           f"`bucket`, which already holds it in a richer vocabulary. A payment "
+                           f"processor and a crash reporter are both `api`. Record "
+                           f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras "
+                           f"heading if this really is the surface's shape")
+        elif canon not in grammar.INTERFACE_KIND_SEEDS:
+            if escaped:
+                hush("a minted `kind`", iface.id)
+            else:
+                minted_kinds.setdefault(canon, []).append(iface.id)
+        elif canon != (iface.kind or "").strip():
+            kind_advice = (f"{iface.id} ({iface.name}) kind='{iface.kind}' — the canonical "
+                           f"spelling is '{canon}'. One spelling per shape, or two builds of one "
+                           f"repo split the same surface. Record '{iface.id}: <why>' under an "
+                           f"'{INTERFACE_EXCEPTIONS_HEADING}' extras heading to keep this spelling")
+        if kind_advice and escaped:
+            hush("`kind`", iface.id)
+        elif kind_advice:
+            warnings.append(kind_advice)
         # A surface whose kind MEANS a person goes there, and no walk shows anyone going. This is a
         # finding about the WALKS, not about a field somebody forgot: `actors` is derived, so the
         # only way to answer it is to write the story that opens at that door.
-        if (canon in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO and not actors_by_iface.get(iface.id)
-                and iface.id not in recorded):
+        nobody_drawn = (canon in grammar.INTERFACE_KINDS_A_PERSON_GOES_TO
+                        and not actors_by_iface.get(iface.id))
+        if nobody_drawn and escaped:
+            hush("a person-shaped surface nobody is drawn at", iface.id)
+        elif nobody_drawn:
             warnings.append(f"{iface.id} ({iface.name}) is a '{canon}' surface — the kind means a "
                             f"person goes there — but no walk in this map shows anyone going. "
                             f"`actors` is DERIVED, so this is a gap in the stories, not a field to "
@@ -2670,8 +2692,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # minted a new kind for. A NUDGE, never a gate, and silent on a MINTED kind, because an
         # unknown word cannot say whether anybody stands there.
         at_it = [r for r in actors_by_iface.get(iface.id, ()) if r in people]
-        if (canon in grammar.INTERFACE_KINDS_NOBODY_STANDS_AT and at_it
-                and iface.id not in recorded):
+        if canon in grammar.INTERFACE_KINDS_NOBODY_STANDS_AT and at_it and escaped:
+            hush("a person at a machine-shaped surface", iface.id)
+        elif canon in grammar.INTERFACE_KINDS_NOBODY_STANDS_AT and at_it:
             people_at_a_machine.append(
                 (iface.id, canon, ", ".join(f"{r} {role_names.get(r, '')}".strip() for r in at_it)))
         # (a) OUR surface, something goes OUT of it, and nobody is derived on the far side. An `ours`
@@ -2681,8 +2704,10 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         # gated on `kind`, unlike the advisory above: `file`, `settings` and `api` are all shapes a
         # product hands something over through, and none of them means a person goes anywhere.
         hands_over_to_nobody = (iface.side == "ours" and "out" in dirs_by_iface.get(iface.id, ())
-                                and not actors_by_iface.get(iface.id) and iface.id not in recorded)
-        if hands_over_to_nobody:
+                                and not actors_by_iface.get(iface.id))
+        if hands_over_to_nobody and escaped:
+            hush("OUR surface that sends to nobody", iface.id)
+        elif hands_over_to_nobody:
             warnings.append(f"{iface.id} ({iface.name}) is OUR surface and something crosses OUT of "
                             f"it, but the map derives nobody on the far side — so it says the "
                             f"product hands something over and never says to whom. `actors` is "
@@ -2705,7 +2730,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
         #
         # Still ADVISORY, and the escape stays: a genuinely write-only surface that no person ever
         # reads is a real answer, and forcing a story there would have someone invent a reader.
-        if (not ucs_by_iface.get(iface.id) and iface.id not in recorded):
+        if not ucs_by_iface.get(iface.id) and escaped:
+            hush("reached by no use case", iface.id)
+        elif not ucs_by_iface.get(iface.id):
             warnings.append(f"{iface.id} ({iface.name}) is reached by NO use case — the map meets "
                             f"the outside world here and tells no story that crosses it, so nothing "
                             f"can say what goes through or when. Draw the step where it belongs: "
@@ -2716,7 +2743,9 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
                             f"a use case naming one of its `ways_in`, or by a step drawn at a dep "
                             f"standing on it. Record '{iface.id}: <why no story crosses it>' under "
                             f"an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading")
-        if iface.side == "theirs" and not iface.evidence and iface.id not in recorded:
+        if iface.side == "theirs" and not iface.evidence and escaped:
+            hush("`theirs` with no evidence", iface.id)
+        elif iface.side == "theirs" and not iface.evidence:
             warnings.append(f"{iface.id} ({iface.name}) is a `theirs` surface with no evidence — "
                             f"whose data crosses is not visible at the call site (a search over the "
                             f"product's own records is not an interface; a search over the open web "
@@ -2895,7 +2924,10 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
     if any(u.entry_points for u in m.use_cases):
         reached = {ep for u in m.use_cases for ep in u.entry_points}
         for iface in m.interfaces:
-            if iface.ways_in and not (set(iface.ways_in) & reached) and iface.id not in recorded:
+            unreached = bool(iface.ways_in) and not (set(iface.ways_in) & reached)
+            if unreached and iface.id in recorded:
+                hush("ways in that no use case names", iface.id)
+            elif unreached:
                 warnings.append(f"{iface.id} ({iface.name}) is reached by no use case — either a "
                                 f"dead surface, or a use case nobody wrote down. Record "
                                 f"'{iface.id}: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' "
@@ -2932,6 +2964,25 @@ def _check_interfaces(m: ProjectModel) -> tuple[list[str], list[str]]:
             f"or the surface may be MISSING a way in that this step proves exists. Record "
             f"'UCn/doors: <why>' under an '{INTERFACE_EXCEPTIONS_HEADING}' extras heading when the "
             f"anchor is deliberate")
+
+    if hushed:
+        # DISCLOSE, never erase — one line, by family. A silence you cannot see reads exactly like
+        # having no findings, and this heading had 27 of them on one live build.
+        total = sum(len(ids) for ids in hushed.values())
+        by_family = "; ".join(f"{fam}: {', '.join(ids)}" for fam, ids in hushed.items())
+        warnings.append(
+            f"{total} interface advisory/advisories suppressed by recorded "
+            f"'{INTERFACE_EXCEPTIONS_HEADING}' id(s), by family — {by_family}. A recorded surface "
+            f"id silences EVERY family on that surface, so a why written about one of them "
+            f"silences the rest too; re-read one by validating a copy with the id removed")
+    used = {i for ids in hushed.values() for i in ids} | {ep.id for ep in excused}
+    idle = sorted(k for k in recorded if "/" not in k and k not in used)
+    if idle:
+        # A record with no finding under it: stale, or written against a surface that is gone.
+        warnings.append(
+            f"{len(idle)} recorded '{INTERFACE_EXCEPTIONS_HEADING}' id(s) silence nothing: "
+            f"{_shown(idle, 10)}. A record with no finding under it is stale, or names a surface "
+            f"that no longer exists; drop it, or keep it knowingly")
 
     return problems, warnings
 

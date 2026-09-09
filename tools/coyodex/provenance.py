@@ -404,3 +404,87 @@ def _write_header_built(header: Path, built_at: str, commit: str | None = None) 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+#: The build's own name for a sub-agent, from the pointer prompt that dispatched it. The verb's
+#: brief is `<agent id>\n<path>\n<sentence>`; a build that composes its own writes "You are agent
+#: <id>." instead, and both shapes are read.
+_YOU_ARE_AGENT = re.compile(r"You are agent (\S+?)[.,]?(?:\s|$)")
+
+
+@dataclasses.dataclass(frozen=True)
+class AgentSpan:
+    """One sub-agent's transcript, reduced to what a fan-out timing needs."""
+
+    agent_id: str            # the harness's id, from the file name
+    name: str | None         # the build's own name for it, from the pointer prompt
+    description: str | None  # the harness's one-line description, from the meta file
+    minutes: float           # first record to last record, wall clock
+    records: int
+
+
+def agent_spans(subagents_dir: Path) -> list[AgentSpan]:
+    """Every `agent-*.jsonl` under the session's transcripts, with its wall span.
+
+    `timings record --from-agents` reads minutes off these instead of off the lead's memory of the
+    barrier: 11 of 12 recorded fan-out timings on the 2026-09-08 mcpolis build were exact and the
+    twelfth understated the batch straggler by 14 minutes, which is the one number `timings order`
+    exists to carry to the next build."""
+    out: list[AgentSpan] = []
+    for f in sorted(subagents_dir.glob("agent-*.jsonl")):
+        stamps: list[datetime] = []
+        name: str | None = None
+        records = 0
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            records += 1
+            ts = row.get("timestamp")
+            if isinstance(ts, str):
+                try:
+                    stamps.append(datetime.fromisoformat(ts.replace("Z", "+00:00")))
+                except ValueError:
+                    pass
+            if name is None and row.get("type") == "user":
+                name = _agent_name(row.get("message"))
+        if not stamps:
+            continue
+        meta = f.with_name(f.stem + ".meta.json")
+        description: str | None = None
+        if meta.is_file():
+            try:
+                doc = json.loads(meta.read_text(encoding="utf-8"))
+                if isinstance(doc, dict) and isinstance(doc.get("description"), str):
+                    description = doc["description"]
+            except ValueError:
+                pass
+        minutes = (max(stamps) - min(stamps)).total_seconds() / 60
+        out.append(AgentSpan(agent_id=f.stem[len("agent-"):], name=name, description=description,
+                             minutes=round(minutes, 1), records=records))
+    return out
+
+
+def _agent_name(message: object) -> str | None:
+    """The agent's name in a user record's text, under either pointer-prompt shape."""
+    if not isinstance(message, dict):
+        return None
+    content = message.get("content")
+    if isinstance(content, list):
+        text = " ".join(str(c.get("text", "")) for c in content if isinstance(c, dict))
+    elif isinstance(content, str):
+        text = content
+    else:
+        return None
+    hit = _YOU_ARE_AGENT.search(text)
+    if hit:
+        return hit.group(1)
+    lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
+    if len(lines) >= 3 and lines[0].split() == [lines[0]] and lines[2].startswith("Read it COMPLETELY"):
+        return lines[0]
+    return None

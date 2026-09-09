@@ -61,12 +61,16 @@ CONTRACTS: dict[str, str] = {
     # Appended to ONE harvest brief only — the T5 owner's. The entity-card spec used to sit in the
     # shared harvest contract, where 13 of ~14 agents read a detailed job they were forbidden to do.
     "harvest-t5": "t5-addendum.md",
+    # The test-completeness slice: every build has it, no template covered it, and the hand-written
+    # brief lost the no-delegation block once (2026-08-20) and was the batch straggler once
+    # (2026-09-08, written and dispatched last).
+    "tests": "tests-contract.md",
 }
 
 # Which contracts author reader-facing prose, and therefore carry the writing rules. A skeptic
 # judges claims and a trace agent writes flow steps; neither authors a sentence a reader meets in a
 # box, and a rule an agent cannot act on is prompt weight every one of them pays for.
-AUTHORING: frozenset[str] = frozenset({"harvest", "rules"})
+AUTHORING: frozenset[str] = frozenset({"harvest", "rules", "tests"})   # a gap row is read in the viewer
 
 WRITING_RULES = "writing-rules.md"
 _TEMPLATES = "method/templates"

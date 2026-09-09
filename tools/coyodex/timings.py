@@ -45,6 +45,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from coyodex.provenance import agent_spans, session_agent_transcripts
+
 #: The fan-out phases a build actually has. A typo'd phase would record fine and then be found by
 #: nothing at `order` time, so an unknown one is refused with the list — the same choice
 #: `coyodex record` makes for extras headings.
@@ -308,6 +310,8 @@ def cmd_record(args: argparse.Namespace) -> int:
                 f"every line or on none. Filling the rest with 0 would write a number nobody typed "
                 f"into telemetry the next build orders by.")
         item_args += have
+    if getattr(args, "from_agents", None) is not None:
+        minute_args = _minutes_from_agents(args, slice_args, minute_args)
     pairs = _pair_slices(slice_args, minute_args)
     if not pairs:
         raise ValueError("nothing to record: pass at least one --slice with its --minutes.")
@@ -325,6 +329,38 @@ def cmd_record(args: argparse.Namespace) -> int:
     for name, value in sorted(pairs, key=lambda p: -p[1]):
         print(f"  {value:6.1f} min  {name}")
     return 0
+
+
+def _minutes_from_agents(args: argparse.Namespace, slices: list[str],
+                         minutes: list[str]) -> list[str]:
+    """The named slices' minutes, read off their agents' transcripts.
+
+    Each `--slice` names an agent the way its brief was sent (the pointer prompt's first word), or
+    by the harness's description of it. `--from-agents` with no value is this session's own
+    transcripts directory. Nothing here is estimated: the span is the transcript's first record to
+    its last, which is what the barrier actually waited for."""
+    if minutes:
+        raise ValueError("--from-agents reads each slice's minutes off its transcript; do not also "
+                         "pass --minutes.")
+    if not slices:
+        raise ValueError("--from-agents needs the --slice names of the agents to record — the id "
+                         "each brief was sent as.")
+    repo = Path(_repo_of(args))
+    where = Path(args.from_agents) if args.from_agents else session_agent_transcripts(repo)
+    if where is None or not where.is_dir():
+        raise ValueError("no agent transcripts found. Pass `--from-agents <the session's "
+                         "subagents/ dir>`, or run inside the build session so the default "
+                         "(this session's directory) exists.")
+    by_name: dict[str, float] = {}
+    for span in agent_spans(where):
+        for key in (span.name, span.description):
+            if key:
+                by_name.setdefault(key, span.minutes)
+    missing = [name for name in slices if name.strip() not in by_name]
+    if missing:
+        raise ValueError(f"no transcript named {', '.join(repr(m) for m in missing)} under {where}. "
+                         f"Names found: {', '.join(sorted(by_name)) or 'none'}.")
+    return [f"{by_name[name.strip()]:.1f}" for name in slices]
 
 
 def cmd_order(args: argparse.Namespace) -> int:
@@ -404,13 +440,19 @@ rather than by the method's folklore about which slice is heaviest.
 
   record --phase <phase> --slice "<name>" --minutes <m> [--items <n>] ...
   record --phase <phase> --lines-from <file|->
+  record --phase <phase> --from-agents [<subagents dir>] --slice "<name>" ...
       Append what one fan-out's slices took. `--slice` and `--minutes` REPEAT and pair by
       position — one process, one write. A count mismatch is refused, not paired off.
       `--lines-from` reads `<slice> <minutes> [items]` per line instead, which is the shape
       with no shell loop in it: three real builds wrote `for s in ...; do set -- $s; ...; done`,
       and zsh does not word-split an unquoted `$s`, so all 35 calls got empty arguments, exited
       2 into `/dev/null`, and no timings file was ever written.
-      Read the minutes off the barrier you just waited at; nothing here times anything.
+      Read the minutes off the barrier you just waited at; nothing here times anything —
+      except `--from-agents`, which reads each named slice's minutes off its agent's transcript
+      (first record to last), so the straggler is recorded at what it took: one of 12 hand-read
+      timings on one build understated its batch's straggler by 14 minutes. Name each slice as
+      its brief was sent (the pointer prompt's first word). With no value, the directory is this
+      session's own transcripts.
 
   order --phase <phase> [--slice "<name>" ...] [--json]
       Print that phase's slices longest-first, from the last build that recorded each. With
@@ -443,6 +485,7 @@ def build_parser() -> argparse.ArgumentParser:
     rec.add_argument("--minutes", action="append")
     rec.add_argument("--items", action="append", type=int)
     rec.add_argument("--lines-from")
+    rec.add_argument("--from-agents", nargs="?", const="", default=None)
     rec.add_argument("--commit")
     rec.set_defaults(func=cmd_record)
 

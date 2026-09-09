@@ -2280,6 +2280,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   every decision-sounding step naming that component. Treat an empty worklist as "nothing obvious
   was left", not as "done".
 - Test completeness (one agent, after the Phase 3 trace — it needs the finished inventory + flows).
+  **Get its brief with the verb:** `coyodex contract tests --slots`, fill, `--fill … --out … --brief
+  <id>`, and send the pointer — the hand-written brief lost the no-delegation block on one build and
+  was the batch straggler on another, written and dispatched last.
   Walk the assembled map (use cases, T4 entry points, T5 entities, failure modes, critical-path
   branches) and for each ask "is there a test that exercises it?", emitting the risk-ranked gap table
   `tests[]` + `tests_note` (the **Test completeness** section above carries the full recipe — don't
@@ -2521,13 +2524,16 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   **LINT the verdicts as they land, at the barrier — `coyodex grounding lint`.** It is the one
   mechanical check on the pass and it goes unrun because nothing named it: on one build it appeared
   zero times in the transcript, zero times in this file, and zero times in the skill, while the lead
-  hand-wrote half of it twice.
+  hand-wrote half of it twice. **Run it after EVERY wave, over every verdicts file so far** — never
+  once on wave 1: the 2026-09-08 build linted 6 of its 38 files, and 56 of 1,180 rows cited evidence
+  the lint would have caught. `--agent-transcripts` now defaults to this session's own directory, so
+  the citation check runs without the flag.
 
   ```
   coyodex grounding lint --verdicts .coyodex/verify/verdicts-a.json \
                          --verdicts .coyodex/verify/verdicts-b.json … \
                          --expect security-1,security-2,rule-1,…      # every batch you dispatched
-                         --agent-transcripts <the session's subagents/ dir>
+                         --agent-transcripts <dir>    # optional: defaults to this session's subagents/
   ```
 
   **`--expect` NAMES THE BATCHES, and it is the half that makes this a barrier.** Without it the
