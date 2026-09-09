@@ -323,7 +323,7 @@ LEDGER: tuple[Claim, ...] = (
                 "they are noise.",
           measure=_dashboard_steps,
           note="why interface steps are grouped by story"),
-    Claim(site="tools/coyodex/viewer/viewer.js:12818", maps=("mcpolis",),
+    Claim(site="tools/coyodex/viewer/viewer.js:12825", maps=("mcpolis",),
           quote="mcpolis's dashboard draws 141 of them from 31 different walks, and read as one "
                 "list they are noise.",
           measure=_dashboard_steps_viewer,

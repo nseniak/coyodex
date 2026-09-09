@@ -5158,7 +5158,7 @@ window.addEventListener('popstate', (ev) => {
     // already uses.
     const jump = Math.abs(target - hi);
     hi = target;
-    driveTransition(from, jump > 1);
+    driveTransition(from, jump > 1, true);   // a browser step: the screen returns as it was left
     return;
   }
   adoptUrlState(from);
@@ -5317,7 +5317,8 @@ function selectLeftContainer(fromF) {
   }
 }
 // Decide whether a navigation is a container drill and, if so, animate it; otherwise render straight.
-function driveTransition(from, instant) {
+// `viaHistory`: the browser's Back or Forward, which returns a screen AS IT WAS LEFT.
+function driveTransition(from, instant, viaHistory) {
   const to = history[hi];
   // A content-only step (same diagram view — a file switch, or a browser open/close): leave the diagram
   // untouched and just restore the right pane (+ any selection change) and refresh the chrome.
@@ -5347,12 +5348,18 @@ function driveTransition(from, instant) {
   const fromF = related ? focusOf(from) : null, toF = related ? focusOf(to) : null;
   const inChain = related ? drillChain(fromF, toF) : null;   // null `fromF` = the family's own overview
   const isOut = related && !!fromF && !!drillChain(toF, fromF);   // …and null `toF` = back up to it
-  if (REDUCE_MOTION || !from) {  // no animation — still select the left-behind container on a zoom-out
-    render().then(() => { if (my === navSeq && isOut) selectLeftContainer(fromF); });
+  // WHERE YOU CAME OUT OF IS MARKED on a fresh climb — the breadcrumb, a frame's name, ⌥ on a box you
+  // are inside — so the reader keeps their place on the wider view. NOT on the browser's Back: that
+  // returns the screen as it was left, and the selection it restores is the truth. A container the
+  // reader had not selected before going down into it came back selected, which read as a choice
+  // nobody made; one they had selected comes back selected because it was.
+  const mark = isOut && !viaHistory ? fromF : null;
+  if (REDUCE_MOTION || !from) {  // no animation — still mark the left-behind container on a fresh climb
+    render().then(() => { if (my === navSeq && mark) selectLeftContainer(mark); });
     return;
   }
   if (inChain && inChain.length) { runDrill(inChain, my).catch(() => { clearDiveStyle(); render(); }); return; }
-  if (isOut) { runDrillOut(my, fromF).catch(() => { clearDiveStyle(); render(); }); return; }
+  if (isOut) { runDrillOut(my, mark).catch(() => { clearDiveStyle(); render(); }); return; }
   render();  // lateral / unrelated navigation — no dive
 }
 async function runDrill(chain, my) {
@@ -5371,7 +5378,7 @@ async function runDrillOut(my, leftF) {
   await diveOut(null, false); if (my !== navSeq) return;
   diagram.style.transition = 'none'; diagram.style.transform = 'none';
   await render(); if (my !== navSeq) return;
-  selectLeftContainer(leftF);  // highlight the container we zoomed out from, so the reader keeps their place
+  if (leftF) selectLeftContainer(leftF);  // a fresh climb marks the container we zoomed out from; Back marks nothing
   await diveIn(false);
 }
 
