@@ -224,6 +224,7 @@ Fixed the same night on branch `claude/rebuild-maps-sequence-24c3bf`, each with 
 | Themes under 5 claims share one skeptic batch, security never; prose batches only on `--with-prose`; method.md says what the budget buys every build | `a080fc3` (findings 7, 20) |
 | `contract skeptic --from-batches` writes every brief from the batch directory and never rewrites one; `finalize` sums the harvest budgets against what shipped | `53314a6` (findings 19, 28) |
 | `validate` discloses every 'Interface exceptions' silence by family; `timings record --from-agents`; `contract tests`; method.md: lint after EVERY wave | `3aaabb8` (findings 15, 23, 21, 16) |
+| Review round 3 (8 MED, 6 LOW, all reconciled): the budget leg never blocks and reads the first number of a range, one budgets file per build; the shared small batch is cut at the cap; every scoped `UCn/<gate>` record and stray key is disclosed; `--from-batches` refuses an empty directory; the method prescribes `--fill` for harvest and the tests agent runs after the traced map is assembled | `99c93b8` |
 
 **Decided 2026-09-09 by the operator ("go for all"):** 7 (the verification budget: the behaviour theme
 every build, the prose surface on request — landed `a080fc3`) and 8 (the access churn is measured by
