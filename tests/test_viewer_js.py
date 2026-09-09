@@ -4781,6 +4781,29 @@ def test_back_and_forward_belong_to_the_browser_alone() -> None:
     assert js.count("window.addEventListener('popstate'") == 1
 
 
+def test_a_dive_plays_only_between_a_container_and_what_it_holds() -> None:
+    """The zoom-in / zoom-out dive says "you went down into this box" or "you came back up out of it".
+    So it plays only between two views of ONE family of containers — the Subsystems overview and its
+    cards, the Data overview and its cards, the Deployment overview and its process cards — and only
+    when one view's container sits inside the other's. Everything else cuts straight, even when it lands
+    on a container's card: a neighbour's card, the pair page, a component's page back to its subsystem.
+
+    Before this, any page with no container of its own counted as "the overview": a jump from a
+    component's page to its subsystem's card played the zoom-IN dive for a step back OUT."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    fam = js[js.index("function containerFamily(s) {"): js.index("\n}", js.index("function containerFamily(s) {"))]
+    assert "if (s.kind === 'container' || s.kind === 'subsystem') return 'subsystem';" in fam
+    assert "if (s.kind === 'domain' || s.kind === 'domsub') return 'subdomain';" in fam
+    assert "if (s.kind === 'deployment' || s.kind === 'deploymentUnit') return 'process';" in fam
+    assert "return null;" in fam, "a pair page, an element's page, a rule, a feature: no family, no dive"
+    drive = js[js.index("function driveTransition(from, instant) {"): js.index("async function runDrill(")]
+    assert "const related = !!fam && fam === containerFamily(to);" in drive
+    assert "const inChain = related ? drillChain(fromF, toF) : null;" in drive   # down: into what the view holds
+    assert "const isOut = related && !!fromF && !!drillChain(toF, fromF);" in drive   # up: out to what holds it
+    assert "fromKind === 'subsystem' && to.kind === 'container'" not in drive, "the per-kind overview list is gone: the family says it"
+    assert "render();  // lateral / unrelated navigation — no dive" in drive
+
+
 def test_the_drill_zoom_survives_the_browser_buttons() -> None:
     """The zoom-in / zoom-out between two screens is decided by `driveTransition` from the screen being
     LEFT and the screen ARRIVING, and by nothing else — not by the history stack. So a step driven by the

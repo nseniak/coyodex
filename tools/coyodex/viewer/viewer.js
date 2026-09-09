@@ -5234,6 +5234,16 @@ function focusOf(s) {  // the container a view sits "inside" (null = an overview
   if (s.kind === 'deploymentUnit') return unitProcessNodeId(s.unit);  // a process card sits "inside" its process box
   return null;
 }
+// THE FAMILY OF CONTAINER VIEWS a state belongs to, or null for a view that is not a container's: the
+// Subsystems overview and a subsystem's card, the Data overview and a subdomain's card, the Deployment
+// overview and a process's card. A dive only ever plays between two views of ONE family (below).
+function containerFamily(s) {
+  if (!s) return null;
+  if (s.kind === 'container' || s.kind === 'subsystem') return 'subsystem';
+  if (s.kind === 'domain' || s.kind === 'domsub') return 'subdomain';
+  if (s.kind === 'deployment' || s.kind === 'deploymentUnit') return 'process';
+  return null;
+}
 function cardStateFor(fid) {  // the view that shows container `fid` as its own card
   const n = GRAPH.nodes[fid];
   if (!n) return null;
@@ -5311,14 +5321,20 @@ function driveTransition(from, instant) {
   // A tab switch is not a drill — render the target straight (its remembered camera restored inside
   // render), never the zoom-in/out dive, regardless of how the two views nest.
   if (instant) { render(); return; }
-  const fromF = from ? focusOf(from) : null, toF = focusOf(to);
-  const inChain = (from && toF) ? drillChain(fromF, toF) : null;
-  // drill OUT: leaving a container UP to an ancestor container's card, or to the overview tab it belongs to
-  // (NOT a lateral tab switch — going from a card to Dependencies/Domain/Happy Path stays instant).
-  const fromKind = fromF && GRAPH.nodes[fromF] && GRAPH.nodes[fromF].kind;
-  const isOut = !!fromF && ((toF && drillChain(toF, fromF))
-    || (toF == null && ((fromKind === 'subsystem' && to.kind === 'container') || (fromKind === 'subdomain' && to.kind === 'domain')
-      || (fromKind === 'process' && to.kind === 'deployment'))));
+  // ONLY A DESCENT OR AN ASCENT DIVES. The dive says "you went down into this box" or "you came back up
+  // out of it", so it plays only between two views of ONE family of containers (containerFamily) and
+  // only when one view's container sits inside the other's: the overview down to a card, a card down to
+  // a child's card (through every level between), and the same ways back up. Everything else cuts
+  // straight, even when it lands on a container's card: a neighbour's card from a sibling box, the pair
+  // page from an arrow card, a subsystem's card from a component's page, a rule, a feature, a search
+  // hit. Before this, any page with no container of its own counted as "the overview", so the jump from
+  // a component's page back to its subsystem's card played the zoom-IN dive for a step back OUT, and the
+  // pair page dived into a card it sat beside.
+  const fam = containerFamily(from);
+  const related = !!fam && fam === containerFamily(to);
+  const fromF = related ? focusOf(from) : null, toF = related ? focusOf(to) : null;
+  const inChain = related ? drillChain(fromF, toF) : null;   // null `fromF` = the family's own overview
+  const isOut = related && !!fromF && !!drillChain(toF, fromF);   // …and null `toF` = back up to it
   if (REDUCE_MOTION || !from) {  // no animation — still select the left-behind container on a zoom-out
     render().then(() => { if (my === navSeq && isOut) selectLeftContainer(fromF); });
     return;
