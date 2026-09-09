@@ -1226,3 +1226,40 @@ def test_the_gate_block_carries_the_advisory_disposition_counts():
     assert line, block
     counted = sum(int(n) for n in _re.findall(r": (\d+)", line.split(". An UNANSWERED")[0]))
     assert counted == report.advisory_total, (line, report.advisory_total)
+
+
+# --- the component budgets summed against what shipped (retro 2026-09-08, row 28) ---------------
+
+def _with_budgets(root: Path, budgets: dict[str, int]) -> None:
+    verify = root / ".coyodex" / "verify"
+    verify.mkdir(parents=True, exist_ok=True)
+    (verify / "budgets.json").write_text(json.dumps({"harvest": budgets}), encoding="utf-8")
+
+
+def _budget_leg_of(report) -> finalize.Leg | None:
+    return next((leg for leg in report.legs if leg.name == "component budget"), None)
+
+
+def test_the_budget_leg_sums_the_harvest_briefs_against_what_shipped():
+    """60 budgeted, 114 shipped, every slice over, and the whole-map reading arrived ~450 turns
+    later. The sum is held to the same ±40 % band each slice is held to."""
+    root, p = make_repo(components=10)
+    _with_budgets(root, {"t1": 3, "t2": 2})
+    leg = _budget_leg_of(finalize.build_report(p, root, []))
+    assert leg is not None and leg.ran
+    assert leg.note and leg.note.startswith("10 shipped / 5 budgeted across 2 brief(s), band 3-7")
+    assert leg.advisory and "10 component(s) shipped against 5 budgeted" in leg.advisory[0]
+    assert not leg.blocking, "a budget is an aim; the leg advises, never blocks"
+
+
+def test_a_map_inside_the_summed_band_gets_a_quiet_budget_leg():
+    root, p = make_repo(components=10)
+    _with_budgets(root, {"t1": 5, "t2": 5})
+    leg = _budget_leg_of(finalize.build_report(p, root, []))
+    assert leg is not None and leg.ran and not leg.advisory, leg
+
+
+def test_no_recorded_budgets_means_no_budget_leg():
+    """Absent rather than silently clean: a build that filled its briefs by hand recorded nothing."""
+    root, p = make_repo(components=10)
+    assert _budget_leg_of(finalize.build_report(p, root, [])) is None

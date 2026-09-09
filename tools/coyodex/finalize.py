@@ -54,7 +54,9 @@ if TYPE_CHECKING:
 
 from coyodex.audit_model import l2_worklist_model
 from coyodex.grounding import live_claims_digest, unvoted_reason
+from coyodex.contract import BUDGETS_FILE
 from coyodex.model import ModelError, access_rules, load_model, load_model_path, resolve_map_path
+from coyodex.preindex_lib import expected_components, granularity_band
 
 #: The extras heading the access-baseline advisory offers as its escape, and READS. Named the way
 #: `AUDIT_EXCEPTIONS_HEADING` and `DRIFT_EXCEPTIONS_HEADING` are, so the method contract's scan for
@@ -665,6 +667,52 @@ def _access_baseline_leg(map_path: Path, baseline: Path) -> Leg:
         f"deliberate{excused_note}."])
 
 
+def _budget_leg(map_path: Path, repo: Path) -> Leg | None:
+    """The sum of the component budgets the harvest briefs were handed, against what shipped and
+    against the code-derived expectation E. None when no budgets were recorded (a build that did
+    not fill its briefs with the tool), so the leg is absent rather than silently clean.
+
+    `lint-fragment --expect` holds one slice to its own budget; nothing summed them. 60 budgeted,
+    114 shipped, every slice over and 7 of 10 past their own band, and the whole-map reading
+    arrived ~450 turns later in a `Balance exceptions` record. Advisory: a budget is an aim, and a
+    map that shipped twice its aim may be right — but somebody should have said so at assemble.
+    """
+    budgets_path = resolve_map_path(map_path).parent / "verify" / BUDGETS_FILE
+    if not budgets_path.is_file():
+        return None
+    try:
+        doc = json.loads(budgets_path.read_text(encoding="utf-8"))
+        harvest = doc.get("harvest") if isinstance(doc, dict) else None
+        budgets = {k: int(v) for k, v in (harvest or {}).items()}
+    except (OSError, ValueError, TypeError):
+        return Leg("component budget", FAILED, note=f"{budgets_path} could not be read")
+    if not budgets:
+        return None
+    try:
+        m = load_model(resolve_map_path(map_path).read_text(encoding="utf-8"))
+    except Exception as e:
+        return Leg("component budget", FAILED, note=f"could not re-read {map_path}: {e}")
+    shipped = len(m.components)
+    total = sum(budgets.values())
+    e_note = ""
+    try:
+        e = expected_components(repo).expected
+        if e:
+            e_note = f", code-derived expectation E {e}"
+    except (OSError, ValueError):
+        pass
+    low, high = granularity_band(total)      # the same ±40 % band each slice is held to
+    advisory: list[str] = []
+    if total and not low <= shipped <= high:
+        advisory.append(f"{shipped} component(s) shipped against {total} budgeted across "
+                        f"{len(budgets)} harvest brief(s) (band {low}-{high}{e_note}). Every "
+                        f"slice can be inside its own band while the sum is not; say in "
+                        f"`Balance exceptions` why the map is this size, or re-cut the slices.")
+    return Leg("component budget", RAN, advisory=advisory,
+               note=f"{shipped} shipped / {total} budgeted across {len(budgets)} brief(s), "
+                    f"band {low}-{high}{e_note}")
+
+
 def build_report(map_path: Path, repo: Path, verdicts: list[Path],
                  access_baseline: Path | None = None) -> FinalizeReport:
     unasked = _unasked_verdicts(map_path, verdicts)
@@ -679,6 +727,7 @@ def build_report(map_path: Path, repo: Path, verdicts: list[Path],
         *([_refutations_leg(map_path, verdicts)] if verdicts else []),
         *([_unasked_verdicts_leg(unasked)] if unasked else []),
         *([_access_baseline_leg(map_path, access_baseline)] if access_baseline else []),
+        *([leg for leg in (_budget_leg(map_path, repo),) if leg is not None]),
         *([leg for leg in (_undispatched_prose_leg(map_path),) if leg is not None]),
         _balance_leg(map_path),
     ]

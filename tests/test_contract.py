@@ -465,3 +465,90 @@ def test_the_closer_contracts_claims_block_may_carry_paths() -> None:
     values = make_slot_values("closer")
     values["CLAIMS"] = "- C1 reads E1 [backend/src/app.py:12]\n  dump: {\"where\": \"backend/src/app.py:12\"}"
     assert "«" not in contract.fill("closer", values)
+
+
+# --- N skeptic briefs from an `audit --batches` directory (retro 2026-09-08, row 19) -------------
+
+def _batches_dir(tmp: Path) -> Path:
+    import json as _json
+    d = tmp / "verify"
+    d.mkdir()
+    for bid, theme in (("security", "security"), ("backbone", "backbone"), ("small", "mixed")):
+        (d / f"claims-{bid}.json").write_text(_json.dumps({"theme": theme, "claims": []}),
+                                               encoding="utf-8")
+    return d
+
+
+def _skeptic_slots_file(tmp: Path, **over: str) -> Path:
+    import json as _json
+    from coyodex.contract import slots
+    values = {k: "x" for k in slots("skeptic") if k not in ("BATCH", "CLAIMS")}
+    values.update(over)
+    src = tmp / "slots.json"
+    src.write_text(_json.dumps(values), encoding="utf-8")
+    return src
+
+
+def _from_batches(tmp: Path, extra: list[str] | None = None) -> tuple[int, str]:
+    import contextlib, io
+    from coyodex.contract import main
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = main(["skeptic", "--from-batches", str(tmp / "verify"), "--fill",
+                   str(tmp / "slots.json"), "--out-dir", str(tmp / "briefs"), *(extra or [])])
+    return rc, buf.getvalue()
+
+
+def test_from_batches_writes_one_brief_per_claims_file_and_votes_by_theme(tmp_path: Path) -> None:
+    """Every build hand-wrote this loop, with `--force` on all 38 briefs. One brief per
+    `claims-*.json`, BATCH and CLAIMS filled from the file name; `--votes security=3` writes
+    three voters over the one security claims file."""
+    _batches_dir(tmp_path)
+    _skeptic_slots_file(tmp_path)
+    rc, out = _from_batches(tmp_path, ["--votes", "security=3"])
+    assert rc == 0, out
+    names = sorted(p.name for p in (tmp_path / "briefs").glob("skeptic-*.md"))
+    assert names == ["skeptic-backbone.md", "skeptic-security-a.md", "skeptic-security-b.md",
+                     "skeptic-security-c.md", "skeptic-small.md"], names
+    voter = (tmp_path / "briefs" / "skeptic-security-b.md").read_text(encoding="utf-8")
+    assert "claims-security.json" in voter and "security-b" in voter and "«" not in voter
+    assert "5 brief(s) written, 0 skipped" in out and out.count("Read it COMPLETELY") == 5, out
+
+
+def test_from_batches_never_rewrites_an_existing_brief(tmp_path: Path) -> None:
+    _batches_dir(tmp_path)
+    _skeptic_slots_file(tmp_path)
+    (tmp_path / "briefs").mkdir()
+    (tmp_path / "briefs" / "skeptic-backbone.md").write_text("AN AGENT IS READING THIS",
+                                                              encoding="utf-8")
+    rc, out = _from_batches(tmp_path)
+    assert rc == 0, out
+    assert (tmp_path / "briefs" / "skeptic-backbone.md").read_text(encoding="utf-8") == \
+        "AN AGENT IS READING THIS"
+    assert "2 brief(s) written, 1 skipped" in out, out
+
+
+def test_from_batches_refuses_a_slots_file_that_names_batch_or_claims(tmp_path: Path) -> None:
+    _batches_dir(tmp_path)
+    _skeptic_slots_file(tmp_path, BATCH="b1")
+    rc, out = _from_batches(tmp_path)
+    assert rc == 2 and "fills «BATCH» and «CLAIMS» itself" in out, out
+    assert not (tmp_path / "briefs").exists() or not list((tmp_path / "briefs").glob("*"))
+
+
+def test_a_harvest_fill_records_its_component_budget(tmp_path: Path) -> None:
+    """`lint-fragment --expect` holds one slice to its budget; nothing summed them (60 budgeted,
+    114 shipped). The fill records each brief's budget where `finalize` adds them up."""
+    import contextlib, io, json as _json
+    from coyodex.contract import main
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    values = _harvest_values(REPO_ABS=str(repo), **{"agent-id": "t1"}, EXPECTED_COMPONENTS="~6")
+    src = tmp_path / "slots.json"
+    src.write_text(_json.dumps(values), encoding="utf-8")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        rc = main(["harvest", "--fill", str(src), "--out", str(tmp_path / "t1.md")])
+    assert rc == 0, buf.getvalue()
+    doc = _json.loads((repo / ".coyodex" / "verify" / "budgets.json").read_text(encoding="utf-8"))
+    assert doc == {"harvest": {"t1": 6}}, doc

@@ -2365,7 +2365,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
   contract (the pointer-dispatch rule in Phase 1), rather than composing one from this section. **Copy it with a command, not by reading
   and retyping** — `coyodex contract skeptic >
-  <scratch>/skeptic-contract.md`, then fill the «angle-bracket» slots. The instruction on its own
+  <scratch>/skeptic-contract.md`, then fill the «angle-bracket» slots. **For the whole batch
+  directory, one verb writes every brief:** `coyodex contract skeptic --from-batches .coyodex/verify
+  --fill <slots.json> --out-dir <scratch>/briefs --votes security=3` fills «BATCH» and «CLAIMS» from
+  the file names, writes the voters as `security-a/b/c` over the one security claims file, skips
+  any brief that already exists, and prints the pointer prompts to send. Every build so far
+  hand-wrote that loop, with `--force` on every brief. The instruction on its own
   does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and a
   verb is not. The verb also prints only the agent's half: a build once filled this template with
   one text replacement and sent the WHOLE file, so all ten skeptics read the lead's instructions as
@@ -2789,6 +2794,10 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 agent a POINTER to its filled copy (the pointer-dispatch rule above), changing only the file list
 and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
 contract harvest > <scratch>/harvest-contract.md`, then fill the «angle-bracket» slots in place.
+A `contract harvest --fill` also records the brief's «EXPECTED_COMPONENTS» in
+`.coyodex/verify/budgets.json`, and `finalize` sums those budgets against what shipped (the
+`component budget` leg, held to the same ±40 % band each slice is held to): 60 budgeted and 114
+shipped is a sentence at assemble time, not a `Balance exceptions` record 450 turns later.
 The verb prints the agent's half and appends the writing rules, so you never handle the template
 and the lead-facing header at its top cannot reach an agent. A harvest agent authors every
 component `purpose` in the map, the largest block of reader-facing prose there is. Do not `Read` it and `Write` your own — that is one

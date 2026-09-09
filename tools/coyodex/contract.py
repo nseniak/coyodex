@@ -275,10 +275,16 @@ def brief(agent_id: str, path: Path) -> str:
 
 _USAGE = ("usage: coyodex contract <" + " | ".join(CONTRACTS) + "> [--slots]\n"
           "       coyodex contract <name> --fill <slots.json|-> --out <file> [--brief <agent-id>]\n"
-          "                                                                   [--force]\n\n"
+          "                                                                   [--force]\n"
+          "       coyodex contract skeptic --from-batches <dir> --fill <slots.json> --out-dir <dir>\n"
+          "                                [--votes <theme>=N]...\n\n"
           "Print exactly the text one fan-out agent should receive: the contract's agent half,\n"
           "with the writing rules appended for the phases whose agents author map prose\n"
           "(" + ", ".join(sorted(AUTHORING)) + ").\n\n"
+          "  --from-batches  one skeptic brief per claims-*.json in <dir>, BATCH and CLAIMS filled\n"
+          "            from the file names, --votes <theme>=N writing N voters (-a, -b, -c) over one\n"
+          "            claims file. An existing brief is SKIPPED, never rewritten; the pointer\n"
+          "            prompts to send are printed. Every build hand-wrote this loop with --force.\n"
           "  --slots   print a ready-to-fill JSON skeleton — every slot of THIS contract as a\n"
           "            key with an empty value, so no slot name is ever typed by hand.\n"
           "  --force   overwrite an existing --out. Without it an existing file is REFUSED: under\n"
@@ -301,6 +307,69 @@ _USAGE = ("usage: coyodex contract <" + " | ".join(CONTRACTS) + "> [--slots]\n"
           "The lead never handles the template itself, so the lead's own instructions at the top\n"
           "of that file cannot reach an agent. COYODEX_HOME overrides where the templates are\n"
           "read from.\n")
+
+
+BUDGETS_FILE = "budgets.json"
+
+
+def record_budget(repo: Path, agent_id: str, expected: str) -> Path | None:
+    """`<repo>/.coyodex/verify/budgets.json`: the component budget each harvest brief was handed,
+    keyed by agent id. `lint-fragment --expect` checks one slice against its own budget; nothing
+    summed the budgets against what shipped — 60 dispatched, 114 shipped, every slice over, and
+    the guard added for an earlier build of the same shape was per fragment only. `finalize`
+    reads this file. The digits in the slot are the budget (`~8` records 8); a slot with none
+    (`a few`) records nothing, and the brief is still written."""
+    digits = "".join(ch for ch in expected if ch.isdigit())
+    if not digits:
+        return None
+    path = repo / ".coyodex" / "verify" / BUDGETS_FILE
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    except ValueError:
+        doc = {}
+    harvest = doc.setdefault("harvest", {}) if isinstance(doc, dict) else {}
+    harvest[agent_id] = int(digits)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def batch_ids(batches_dir: Path) -> list[tuple[str, str]]:
+    """`(batch id, theme)` for every `claims-*.json` an `audit --batches` run wrote, in name order."""
+    out: list[tuple[str, str]] = []
+    for f in sorted(batches_dir.glob("claims-*.json")):
+        try:
+            theme = str(json.loads(f.read_text(encoding="utf-8")).get("theme", ""))
+        except (OSError, ValueError):
+            theme = ""
+        out.append((f.stem[len("claims-"):], theme))
+    return out
+
+
+def fill_from_batches(values: dict[str, str], batches_dir: Path, out_dir: Path,
+                      votes: dict[str, int], root: Path | None = None) -> list[tuple[str, Path, str]]:
+    """One skeptic brief per batch file (`votes` per theme: `{"security": 3}` writes `-a`, `-b`,
+    `-c` voters over one claims file). Returns `(batch id, path, state)` with state `written` or
+    `skipped`: an existing brief is NEVER rewritten, because under pointer dispatch it may be an
+    agent's running instructions — the loop every build hand-wrote passed `--force` on all 38.
+    `BATCH` and `CLAIMS` are this verb's to fill; a slots file naming them is refused."""
+    if "BATCH" in values or "CLAIMS" in values:
+        raise ValueError("--from-batches fills «BATCH» and «CLAIMS» itself; leave them out of the "
+                         "slots file")
+    out: list[tuple[str, Path, str]] = []
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for bid, theme in batch_ids(batches_dir):
+        n = votes.get(theme, 1)
+        voters = [bid] if n <= 1 else [f"{bid}-{chr(ord('a') + k)}" for k in range(n)]
+        for voter in voters:
+            target = out_dir / f"skeptic-{voter}.md"
+            if target.exists():
+                out.append((voter, target, "skipped"))
+                continue
+            text = fill("skeptic", {**values, "BATCH": voter, "CLAIMS": bid}, root)
+            target.write_text(text, encoding="utf-8")
+            out.append((voter, target, "written"))
+    return out
 
 
 def _read_values(source: str) -> dict[str, str]:
@@ -327,6 +396,9 @@ def main(argv: list[str] | None = None) -> int:
     fill_from: str | None = None
     out_path: str | None = None
     brief_id: str | None = None
+    from_batches: str | None = None
+    out_dir: str | None = None
+    votes: dict[str, int] = {}
     i = 1
     while i < len(args):
         a = args[i]
@@ -334,7 +406,7 @@ def main(argv: list[str] | None = None) -> int:
             want_slots = True
         elif a == "--force":
             force = True
-        elif a in ("--fill", "--out", "--brief"):
+        elif a in ("--fill", "--out", "--brief", "--from-batches", "--out-dir", "--votes"):
             i += 1
             if i >= len(args):
                 print(f"ERROR: {a} needs a value", file=sys.stderr)
@@ -343,6 +415,16 @@ def main(argv: list[str] | None = None) -> int:
                 fill_from = args[i]
             elif a == "--out":
                 out_path = args[i]
+            elif a == "--from-batches":
+                from_batches = args[i]
+            elif a == "--out-dir":
+                out_dir = args[i]
+            elif a == "--votes":
+                theme, _, n = args[i].partition("=")
+                if not theme or not n.isdigit():
+                    print(f"ERROR: --votes expects <theme>=<count>, got '{args[i]}'", file=sys.stderr)
+                    return 2
+                votes[theme] = int(n)
             else:
                 brief_id = args[i]
         else:
@@ -360,6 +442,24 @@ def main(argv: list[str] | None = None) -> int:
     if brief_id and not fill_from:
         print("ERROR: --brief names the file --fill writes, so it needs --fill", file=sys.stderr)
         return 2
+    if from_batches is not None:
+        if name != "skeptic" or not fill_from or not out_dir:
+            print("ERROR: --from-batches is `contract skeptic --from-batches <dir> --fill <slots> "
+                  "--out-dir <dir> [--votes <theme>=N]`", file=sys.stderr)
+            return 2
+        try:
+            results = fill_from_batches(_read_values(fill_from), Path(from_batches), Path(out_dir), votes)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+        for voter, target, state in results:
+            print(f"{state:8} {voter:20} {target}")
+        written = [(v, t) for v, t, s in results if s == "written"]
+        print(f"{len(written)} brief(s) written, {len(results) - len(written)} skipped (existing "
+              f"briefs are never rewritten). Pointer prompts to SEND, one per agent:")
+        for voter, target in written:
+            print(); print(brief(voter, target.resolve()))
+        return 0
     if fill_from and not out_path:
         # Never to stdout: the point of the pair is that the agent reads a FILE and the lead sends
         # a pointer to it. A filled contract on stdout is one pipe away from being pasted.
@@ -372,7 +472,8 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({k: "" for k in slots(name)}, indent=2, ensure_ascii=False))
             return 0
         if fill_from is not None and out_path is not None:
-            text = fill(name, _read_values(fill_from))
+            values = _read_values(fill_from)
+            text = fill(name, values)
             target = Path(out_path)
             # REFUSE an existing file. Under pointer dispatch a filled contract IS an agent's whole
             # brief, and the agent reads it whenever it gets round to it — so overwriting one is
@@ -397,6 +498,12 @@ def main(argv: list[str] | None = None) -> int:
                 pointer = brief(brief_id, target)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(text, encoding="utf-8")
+            if name == "harvest":
+                # The budget this brief hands its agent, recorded where `finalize` sums them.
+                repo_slot = values.get("REPO_ABS") or values.get("repo") or ""
+                if repo_slot and values.get("agent-id") and values.get("EXPECTED_COMPONENTS"):
+                    record_budget(Path(repo_slot), str(values["agent-id"]),
+                                  str(values["EXPECTED_COMPONENTS"]))
             print(f"filled {name} contract ({len(slots(name))} slot(s)) -> {target}",
                   file=sys.stderr)
             if brief_id is not None:
