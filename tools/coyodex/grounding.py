@@ -25,16 +25,17 @@ Stdlib-only (the cli.py firewall).
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
 from coyodex.audit_model import ClaimTarget, l2_worklist_model, resolve_claim
-from coyodex.provenance import session_agent_transcripts
+from coyodex.provenance import SESSION_ENV, session_agent_transcripts
 from coyodex.model import ModelError, ProjectModel, load_model, resolve_map_path
 
 USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>] [--expect <batch,…>]
@@ -1435,7 +1436,12 @@ def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> VerdictLint:
     return found
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, env: Mapping[str, str] | None = None) -> int:
+    """`env` is the process environment the verb reads its session id from (`lint` defaults
+    `--agent-transcripts` to the running session's sub-agent transcripts). Injected, not read
+    straight off the process, so a caller — a test linting two throwaway files inside a Claude Code
+    session — can say "no session" with `env={}` instead of clearing a variable behind the verb's
+    back. `None` reads the real environment, as the command line does."""
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(USAGE)
@@ -1535,7 +1541,11 @@ def main(argv: list[str] | None = None) -> int:
                       "verdict set and would have to be redone.", file=sys.stderr)
                 return 1
         if agent_dir is None:
-            found = session_agent_transcripts(Path.cwd())
+            # THE SESSION ID COMES FROM `env`, never straight from the process: three tests that lint
+            # throwaway files failed in any Claude Code session that had spawned a sub-agent, because
+            # the lint picked up THAT session's transcripts and rejected a citation they never held.
+            sid = (os.environ if env is None else env).get(SESSION_ENV)
+            found = session_agent_transcripts(Path.cwd(), session_id=sid) if sid else None
             if found is not None:
                 agent_dir = str(found)
                 print(f"agent transcripts: {found} (this session's, found without "

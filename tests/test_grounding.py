@@ -599,7 +599,9 @@ def test_verdicts_accepts_several_paths_after_one_flag():
         tmp = Path(td)
         a = _verdict_file(tmp, "a.json", "claim one")
         b = _verdict_file(tmp, "b.json", "claim two")
-        assert main(["lint", "--verdicts", str(a), str(b)]) == 0
+        # `env={}`: no session, so the lint reads no transcripts. Without it these two files' `a.py`
+        # citation was checked against whatever sub-agents the RUNNING Claude Code session had spawned.
+        assert main(["lint", "--verdicts", str(a), str(b)], env={}) == 0
 
 
 def test_the_repeated_flag_form_still_works():
@@ -608,7 +610,7 @@ def test_the_repeated_flag_form_still_works():
         tmp = Path(td)
         a = _verdict_file(tmp, "a.json", "claim one")
         b = _verdict_file(tmp, "b.json", "claim two")
-        assert main(["lint", "--verdicts", str(a), "--verdicts", str(b)]) == 0
+        assert main(["lint", "--verdicts", str(a), "--verdicts", str(b)], env={}) == 0
 
 
 def test_a_flag_after_the_paths_is_still_a_flag():
@@ -805,8 +807,8 @@ def test_lint_expect_refuses_when_a_named_batch_has_no_verdicts_file(tmp_path, c
         {"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1", "skeptic": "security-1"}]}),
         encoding="utf-8")
 
-    assert main(["lint", "--verdicts", str(v), "--expect", "security-1"]) == 0
-    assert main(["lint", "--verdicts", str(v), "--expect", "security-1,cadence"]) == 1
+    assert main(["lint", "--verdicts", str(v), "--expect", "security-1"], env={}) == 0   # env={}: no session's transcripts
+    assert main(["lint", "--verdicts", str(v), "--expect", "security-1,cadence"], env={}) == 1
     err = capsys.readouterr().err
     assert "VERDICTS INCOMPLETE" in err and "cadence" in err, err
     assert "grounding write" in err, "it must name what not to run yet"
