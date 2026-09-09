@@ -1554,7 +1554,14 @@ def _even_chunks(items: list[_Chunkable], cap: int) -> list[list[_Chunkable]]:
     return out
 
 
-def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> list[tuple[str, int]]:
+#: Themes that NEVER share a batch: the whole access theme is three-voted, and the lead finds
+#: its batches by their `claims-security*` name.
+UNMERGED_THEMES: frozenset[str] = frozenset({"security"})
+SMALL_BATCH = "claims-small.json"
+
+
+def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int,
+                        floor: int = 0) -> list[tuple[str, int]]:
     """One file per theme (split at `cap` claims), each claim carrying its ANCHOR and `detail`.
 
     This exists because the batching step was hand-scripted on every build, and the hand-script threw
@@ -1565,7 +1572,13 @@ def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> li
     404 items all along.
 
     Not a quality claim: on that build the anchored theme refuted at 1.8% and the unanchored ones at
-    1.7%, so this is hygiene — the prompt stops lying to the agent — not a measured grounding gain."""
+    1.7%, so this is hygiene — the prompt stops lying to the agent — not a measured grounding gain.
+
+    `floor`: a theme with fewer claims than this shares ONE batch, `claims-small.json`, with the
+    other small themes (`theme: "mixed"`, plus a `themes` list). `--cap 40` bounded the top and
+    nothing bounded the bottom: one build dispatched `claims-lifecycle` and `claims-messaging`
+    with 1 claim each as two whole fresh-context skeptics. The security theme never merges — its
+    batches are three-voted by name."""
     out_dir.mkdir(parents=True, exist_ok=True)
     # Clear our OWN previous output first. Two runs at different caps left the smaller run's extra
     # files behind, so a `claims-*.json` glob dispatched 207 claims for a 184-claim worklist — 23
@@ -1577,9 +1590,15 @@ def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> li
     for w in worklist:
         by_theme.setdefault(w.theme, []).append(w)
     written: list[tuple[str, int]] = []
+    small: list[WorkItem] = []
+    small_themes: list[str] = []
     for theme in _THEMES:                      # most-dangerous-first, so batch 1 is the risky one
         items = by_theme.get(theme, [])
         if not items:
+            continue
+        if floor and len(items) < floor and theme not in UNMERGED_THEMES:
+            small.extend(items)
+            small_themes.append(theme)
             continue
         chunks = _even_chunks(items, cap) or [[]]
         for n, chunk in enumerate(chunks, 1):
@@ -1593,6 +1612,19 @@ def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> li
             (out_dir / name).write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
                                         encoding="utf-8")
             written.append((name, len(chunk)))
+    if small:
+        # One file, most-dangerous-first order kept across the merged themes (the loop above walks
+        # `_THEMES` in that order). Under the cap by construction: each theme was under `floor`.
+        payload = {
+            "schema": BATCH_SCHEMA,
+            "theme": "mixed",
+            "themes": small_themes,
+            "claims": [{"claim": w.claim, "anchor": w.anchor, "detail": w.detail,
+                        "why_risky": w.why_risky, "theme": w.theme} for w in small],
+        }
+        (out_dir / SMALL_BATCH).write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
+                                          encoding="utf-8")
+        written.append((SMALL_BATCH, len(small)))
     return written
 
 
@@ -1639,7 +1671,9 @@ def _run(argv: list[str] | None = None) -> int:
               "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.\n"
               "--verbose adds each worklist claim's `risk:` rationale (collapsed by default).\n"
               "--json emits {findings, worklist, themes, theme_counts} as machine-readable JSON.\n"
-              "--batches <dir> [--cap N] writes one Phase-4 claims file per theme (default cap 40),\n"
+              "--batches <dir> [--cap N] [--floor N] writes one Phase-4 claims file per theme (default\n"
+              "cap 40); themes under the floor (default 5) share claims-small.json; --with-prose also\n"
+              "writes the prose-N.json reader batches, which are not part of the default budget.\n"
               "  most-dangerous-first, each claim carrying its anchor + detail so the skeptics are\n"
               "  not handed a bare `C1 calls C2`. Not build-fragments/ — assemble globs that.\n"
               "  Each worklist item carries `theme` (a closed, most-dangerous-first set) and\n"
@@ -1651,7 +1685,9 @@ def _run(argv: list[str] | None = None) -> int:
     as_json = "--json" in argv
     batches_out = _opt_value(argv, "--batches")
     cap_raw = _opt_value(argv, "--cap")
-    for flag, val in (("--batches", batches_out), ("--cap", cap_raw)):
+    floor_raw = _opt_value(argv, "--floor")
+    with_prose = "--with-prose" in argv
+    for flag, val in (("--batches", batches_out), ("--cap", cap_raw), ("--floor", floor_raw)):
         if flag in argv and val is None:
             print(f"ERROR: {flag} needs a value (a value starting with '-' is not one)",
                   file=sys.stderr)
@@ -1659,7 +1695,8 @@ def _run(argv: list[str] | None = None) -> int:
     # Reject unknown options rather than ignoring them. `--jsonn` used to produce the human report and
     # exit 0: a build asking for JSON silently got prose, with no signal that its flag was a typo.
     # Every sibling command already refuses; these two were the exceptions.
-    _known = ("--verbose", "--json", "--batches", "--cap", "--with-behavioural")
+    _known = ("--verbose", "--json", "--batches", "--cap", "--floor", "--with-behavioural",
+              "--with-prose")
     unknown = [a for a in argv if a.startswith("-") and a not in _known
                and not any(a.startswith(k + "=") for k in _known)]
     if unknown:
@@ -1676,7 +1713,7 @@ def _run(argv: list[str] | None = None) -> int:
         if skip:
             skip = False
             continue
-        if a in ("--batches", "--cap"):
+        if a in ("--batches", "--cap", "--floor"):
             skip = True
             continue
         if not a.startswith("-"):
@@ -1743,7 +1780,12 @@ def _run(argv: list[str] | None = None) -> int:
                   f"contradiction(s). Fix them first; run `coyodex audit <map>` to see them.",
                   file=sys.stderr)
             return 1
-        written = write_theme_batches(worklist, out_dir, cap)
+        try:
+            floor = int(floor_raw) if floor_raw is not None else 5
+        except ValueError:
+            print(f"ERROR: --floor must be an integer, got '{floor_raw}'", file=sys.stderr)
+            return 2
+        written = write_theme_batches(worklist, out_dir, cap, floor=floor)
         for name, n in written:
             print(f"{name}: {n} claim(s)")
         print(f"wrote {len(written)} theme batch(es) to {out_dir} — {len(worklist)} claim(s) total, "
@@ -1751,7 +1793,13 @@ def _run(argv: list[str] | None = None) -> int:
         # The read fan-out rides the same flag: one command cuts both kinds of work, so a lead
         # cannot dispatch the skeptics and silently skip the read. Its findings are ADVICE about how
         # the map READS, never about whether it is true, so they never gate anything.
-        prose_written = write_prose_batches(m, out_dir, cap)
+        # The prose surface is NOT part of the default budget: the reader fan-out is judgement,
+        # it never gates, and four builds in a row minted its batches and dispatched none, one of
+        # them deleting 13 batches it had just written. Minted only when asked.
+        prose_written = write_prose_batches(m, out_dir, cap) if with_prose else []
+        if not with_prose:
+            for stale in out_dir.glob("prose-*.json"):
+                stale.unlink()
         for name, n in prose_written:
             print(f"{name}: {n} prose field(s)")
         n_fields = sum(n for _name, n in prose_written)

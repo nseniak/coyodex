@@ -2294,7 +2294,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   OAuth provider; the Happy Path starts after sign-in`. A recorded line silences exactly one
   `(check, id)` pair — never a family — and `audit` REPORTS what it silenced, plus any line that
   matched nothing), take the audit's **L2 grounding worklist** and disprove it against the code.
-  **The same command also cuts the READ fan-out.** Beside the claims files it writes `prose-N.json`,
+  **What the budget buys, decided once (2026-09-09): the behaviour theme on every build; the prose
+  surface only when the operator asks.** `--with-behavioural` is passed every build. The read
+  fan-out below runs only on instruction: `audit --batches` writes no `prose-N.json` unless
+  `--with-prose` is passed, so a build never mints batches it must then delete.
+
+  **With `--with-prose`, the same command also cuts the READ fan-out.** Beside the claims files it writes `prose-N.json`,
   every reader-facing prose field in the map, each batch carrying the instructions with it. Dispatch
   those to a CHEAP model (Haiku is enough; the whole map is roughly 35k tokens, about eight cents)
   and fold what comes back into the audit report as advice. That fan-out judges exactly two of the
@@ -2313,7 +2318,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
   **Write the per-theme batches with the tool, not a hand script:** `coyodex audit <map> --batches
   .coyodex/verify --cap 40` emits one claims file per theme, most-dangerous-first, each claim
-  carrying its `anchor` and `detail`. A hand-rolled batcher drops the anchor, and the claims then
+  carrying its `anchor` and `detail`; themes with fewer than 5 claims share `claims-small.json`
+  (`theme: mixed`), because a 1-claim batch still costs a whole skeptic — the security theme never
+  shares. A hand-rolled batcher drops the anchor, and the claims then
   reach the skeptics as a bare `C140 calls C78` while the prompt promised them a `path:line`. (read
   it with `coyodex audit --json` — the machine-readable `{findings, worklist, themes, theme_counts}`
   payload built for this batching step; never regex-parse the human report; the same rule covers the

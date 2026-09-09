@@ -2516,3 +2516,41 @@ def test_the_behavioural_note_does_not_repeat_a_limit_that_is_gone(capsys):
         assert stale not in note, (
             f"the note tells operators {stale!r}, which the record path stopped doing. That "
             f"sentence is why three builds left the behavioural half of their map unwarranted")
+
+
+def test_small_themes_share_one_batch_and_security_never_does(tmp_path) -> None:
+    """`--cap 40` bounded the top; nothing bounded the bottom, and two 1-claim themes each cost a
+    whole fresh-context skeptic. Themes under the floor share `claims-small.json`; the security
+    theme never shares, because its batches are three-voted by name."""
+    import json as _json
+    from coyodex.audit_model import SMALL_BATCH, WorkItem, write_theme_batches
+    def item(theme: str, n: int) -> WorkItem:
+        return WorkItem(claim=f"{theme} claim {n}", anchor="a.py:1", why_risky="r", theme=theme)
+    wl = [item("security", 1), item("lifecycle", 1), item("messaging", 1)] + [item("backbone", i) for i in range(8)]
+    written = dict(write_theme_batches(wl, tmp_path, cap=40, floor=5))
+    assert written == {"claims-security.json": 1, "claims-backbone.json": 8, SMALL_BATCH: 2}, written
+    small = _json.loads((tmp_path / SMALL_BATCH).read_text(encoding="utf-8"))
+    assert small["theme"] == "mixed" and small["themes"] == ["messaging", "lifecycle"], "most-dangerous-first"
+    assert {c["theme"] for c in small["claims"]} == {"lifecycle", "messaging"}
+    assert dict(write_theme_batches(wl, tmp_path, cap=40)) == {
+        "claims-security.json": 1, "claims-lifecycle.json": 1, "claims-messaging.json": 1,
+        "claims-backbone.json": 8}, "no floor: one file per theme, as before"
+
+
+def test_prose_batches_are_minted_only_on_request_and_stale_ones_go(capsys) -> None:
+    """Four builds in a row minted the prose batches and dispatched none; one deleted 13 files it
+    had just written. `--batches` writes none unless `--with-prose` is passed, and clears any left
+    from an earlier run, so a stale batch cannot trip finalize's unread-prose check."""
+    from coyodex import audit_model
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "map.json"
+        p.write_text(make_precedence_map(bad=False), encoding="utf-8")
+        out = Path(td) / "verify"
+        out.mkdir()
+        (out / "prose-9.json").write_text("{}", encoding="utf-8")
+        assert audit_model.main([str(p), "--batches", str(out)]) == 0
+        assert list(out.glob("prose-*.json")) == [], "no prose batch without --with-prose"
+        assert list(out.glob("claims-*.json")), "the claims batches are still written"
+        assert audit_model.main([str(p), "--batches", str(out), "--with-prose"]) == 0
+        assert list(out.glob("prose-*.json")), "asked for, so written"
+    capsys.readouterr()

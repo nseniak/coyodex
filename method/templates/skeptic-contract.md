@@ -142,7 +142,8 @@ that is the lead's problem, not yours.
 ## Your inputs and output
 
 - **Claims file**: `.coyodex/verify/claims-«CLAIMS».json`
-  — written by `coyodex audit <map> --batches .coyodex/verify --cap 40`.
+  — written by `coyodex audit <map> --batches .coyodex/verify --cap 40`. A `claims-small.json`
+  holds several small themes at once; each claim there carries its own `theme`.
 - **Map**: `«MAP»` · **Repo root**: `«REPO»`
 - **Write your verdicts to**: `.coyodex/verify/verdicts-«BATCH».json`
 
