@@ -133,15 +133,20 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   inter-subsystem edges **derived** from the component edge list (count-labelled). Drilling replaces
   the diagram **in place** (no popups) and is tracked as a back/forward **history** (stepping back
   or forward restores each view's pan/zoom as you left it):
-  - Click a **box** → its *neighbourhood* view: the subsystem framed around its **immediate** children
+  - Every box is an **item box** — its kind glyph, its name, a container's component count in the band,
+    a dashed border where there is more inside — and the pictures take the walk's three gestures, the
+    same three the Data pictures use: **rest** on a box or an arrow to read its card, **click** to pin
+    it, and a box's **name** (or ⌥-click / a double click on a container) to open it. No corner icons.
+  - A subsystem's name → its *neighbourhood* view: the subsystem framed around its **immediate** children
     (its direct components inline, plus any **child subsystems as drillable boxes**), with the deps those
     direct components touch outside the frame, and every other subsystem its members link to/from drawn
     as a collapsed box joined by a count-labelled arrow (like the overview; a subdomain the components
-    touch is bridged the same way). Click a child box to drill **deeper** (nesting goes to any depth);
-    click a neighbour box to re-center on it; click a cross arrow to open that pair's edge view.
-  - Click an `S→S` **arrow** → its edge view: the two subsystems framed with the concrete crossings
+    touch is bridged the same way). A child box's name drills **deeper** (nesting goes to any depth); a
+    neighbour box's name re-centers on it; a component's name opens its own page.
+  - An `S→S` **arrow** carries no drill of its own: its card lists the concrete crossings it bundles, and
+    the card's **title** opens the pair's edge view — the two subsystems framed with the crossings
     between them. A cross arrow into a box that *contains* (or is contained by) the current one instead
-    **navigates** to that box (drill in / zoom out), since one can't frame the other.
+    stands for that box: its card opens the box (drill in / zoom out), since one can't frame the other.
   - Component nodes/arrows are clickable for details + `file:line`; the side panel
     shows the group you're on **plus its immediate children** (child groups annotated with how many
     leaves nest under them). **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or **⌥+←/→**, or by

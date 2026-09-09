@@ -2410,10 +2410,10 @@ function relationshipLocateAction(srcId, dstId) {
   return { kind: 'locate', title: 'Locate in ' + tab, run: () => go(target) };
 }
 function decorateActionIcons(scene, s) {
-  // NO ICONS ON A WALK, NOR ON A DATA PICTURE. Every box's NAME opens what it names now, and the icon
-  // was the older way of saying so — a control floating in the corner of a box, in a language no other
-  // screen speaks.
-  if (isFlowState(s) || isDataPicture(s)) return;
+  // NO ICONS ON A WALK, NOR ON A DATA OR A STRUCTURE PICTURE. Every box's NAME opens what it names now,
+  // and the icon was the older way of saying so — a control floating in the corner of a box, in a
+  // language no other screen speaks.
+  if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s)) return;
   for (const id in scene.nodeEls) {
     if (scene.noAction.has(id)) continue;  // the box you're already zoomed into — no self-drill icon
     const action = primaryActionFor(id);
@@ -3130,7 +3130,7 @@ function showContainerEdge(a, b, drawn) {
   panel.innerHTML = arrowCardHtml({
     a: nm(headA), b: nm(headB), badge: 'connections', noun: 'connection',
     rows: list.map((r) => arrowRow(r.srcName, r.dstName, r.why ? mdInline(r.why) : '')),
-    drill: { kind: 'edge', a, b },
+    drill: pairPageDrill('edge', 'component', a, b, drawn),
   });
 }
 // Selecting an inter-subdomain arrow (Domain overview): list every entity→entity relation it bundles as
@@ -3143,17 +3143,21 @@ function showDomainContainerEdge(a, b, drawn) {
     a: nm(headA), b: nm(headB), badge: 'relations', noun: 'relation',
     rows: list.map((r) => arrowRow(r.srcName, r.dstName,
       esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''))),
-    drill: domainEdgeDrill(a, b, drawn),
+    drill: pairPageDrill('domedge', 'entity', a, b, drawn),
   });
 }
-// Where an inter-subdomain arrow's card leads. Mirror of the subsystem drill: a single focal-entity
-// relation arrow lands on the pair's page with THAT entity in focus (its relations lit, the rest of the
-// pair dimmed); a box↔box arrow (the Domain overview) opens the pair unfocused. No pre-selection, for
-// the reason bindContainerEdge gives: the page is the arrow.
-function domainEdgeDrill(a, b, drawn) {
-  const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
-  const focusEnt = drawn && (isEnt(drawn.src) ? drawn.src : (isEnt(drawn.dst) ? drawn.dst : null));
-  return focusEnt ? { kind: 'domedge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'domedge', a, b };
+// WHERE AN ARROW'S CARD LEADS: the pair page of the two groups it joins. `kind` names the page (`edge`
+// for two subsystems, `domedge` for two subdomains) and `leaf` the member kind a drawn end may be
+// (`component` or `entity`). A single member's cross arrow lands on that page with THAT member in
+// focus (its crossings lit, the rest of the pair dimmed); a box↔box arrow (either overview) opens the
+// pair unfocused. NO PRE-SELECTION: the page is ABOUT this arrow, so opening it is not a request to
+// pick something on it out (measured once: selecting everything on the page marked nothing out, and
+// the stacked cards took 97% of the drawing's height). ONE RULE FOR BOTH FAMILIES, so the two arrow
+// cards cannot drift apart.
+function pairPageDrill(kind, leaf, a, b, drawn) {
+  const isLeaf = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === leaf;
+  const focus = drawn && (isLeaf(drawn.src) ? drawn.src : (isLeaf(drawn.dst) ? drawn.dst : null));
+  return focus ? { kind, a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind, a, b };
 }
 // Selecting a BRIDGE arrow (structure↔domain): the component↔subdomain arrow in a subsystem card, or the
 // subsystem↔entity arrow in a subdomain/domain view. It bundles component→entity edges; list each as
@@ -4709,39 +4713,22 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   if (opts.hover) previewOnHover(scene, [...(p.__cyHits || []), label], showFn, p);
 }
 
-// An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
-// the sidebar lists every component→component crossing it bundles — and a ⌘-click drills into the
-// two-subsystem edge view. Reuses the select-edge machinery with a container-edge panel + tip.
-// `focusE` overrides the endpoints used for the focus/dim pass (not the select/drill, which always act
-// on the subsystem pair a→b). In the Subsystems overview the drawn arrow IS a→b, so it's omitted; in a
+// An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): resting on it shows its card
+// (every component→component crossing it bundles), a plain click pins that card. NO DRILL GESTURE ON THE
+// ARROW ITSELF — no ⌥-click, no corner icon. The one way to the pair's page is the title of that card
+// (pairPageDrill says where it goes), so the picture offers one gesture per thing: rest to read,
+// click to pin, the card's title to go — the same three the Data pictures offer (bindDomainContainerEdge).
+// `focusE` overrides the endpoints used for the focus/dim pass (not the select, which always acts on
+// the subsystem pair a→b). In the Subsystems overview the drawn arrow IS a→b, so it's omitted; in a
 // subsystem card the arrow is drawn component→neighbour, so the caller passes the DRAWN endpoints —
 // otherwise selecting the component wouldn't keep its own cross arrow + the neighbour box lit.
+// Key the selection by the DRAWN endpoints, not the collapsed pair: a card can draw several arrows to
+// the same neighbour (one per member component), and each is its own selectable arrow with its own
+// filtered panel.
 function bindContainerEdge(scene, p, label, a, b, focusE) {
   const drawn = focusE || { src: a, dst: b };
-  const isComp = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'component';
-  // When the clicked arrow is a single member component's cross arrow, ⌘-drill lands on the pair's edge
-  // card with THAT component selected (its crossings lit, the rest of the pair dimmed) — so the zoom
-  // keeps the same focus as the click instead of widening to the whole subsystem. A box↔box arrow (the
-  // Subsystems overview) has no component end, so it opens the pair unfocused, as before. If the picked
-  // component isn't drawn in the edge card, render falls back to the plain two-subsystem panel.
-  const focusComp = isComp(drawn.src) ? drawn.src : (isComp(drawn.dst) ? drawn.dst : null);
-  // Drill lands on the crossings LIST. For a member's cross-arrow, carry the drawn endpoints as `efocus`
-  // so the list is narrowed to just that member's crossings; a box↔box arrow lists the whole pair. `sels`
-  // pre-selects, in the edge card, exactly the real arrows this one synthetic arrow stood for.
-  const edge = focusComp ? { kind: 'edge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'edge', a, b };
-  // NO PRE-SELECTION. The drill used to carry `selCover` — the real arrows this one synthetic arrow stood
-  // for — so the card opened with them selected and their cards stacked over the drawing. Measured on one
-  // pair: 2 of the 2 arrow groups on the page were selected, and selecting everything on a page marks
-  // nothing out; the stack ran 9 connections deep, taking 26% of the drawing area and 97% of its height.
-  // The page is ABOUT this arrow, so opening it is not a request to pick something on it out.
-  // `sels`, the reader's OWN selection coming back through history, and the `selCover` a LOCATE carries
-  // (which exists to point at one thing among many) are untouched.
-  // Key the selection by the DRAWN endpoints, not the collapsed pair: a card can draw several arrows to
-  // the same neighbour (one per member component), and each is its own selectable arrow with its own
-  // filtered panel.
   bindSelectEdge(scene, p, label, drawn, 'sedge:' + drawn.src + '>' + drawn.dst,
-    () => showContainerEdge(a, b, drawn),
-    { onDrill: () => go(edge), actionFn: () => actionTipEdge(a, b, drawn) });
+    () => showContainerEdge(a, b, drawn), { hover: true });
 }
 // A bridge arrow across the structural↔domain groupings (component↔subdomain in a subsystem card,
 // subsystem↔entity in a subdomain card, labelled owns/reads). Registered as an edge with its DRAWN
@@ -5447,7 +5434,7 @@ function bindGroupContainer(drillFor, edgeBinder, noDrillId, opts) {
     edgeBinder(mainScene, p, label, a, b);
   });
 }
-function bindContainer() { bindGroupContainer((id) => ({ kind: 'subsystem', sid: id }), bindContainerEdge); }
+function bindContainer() { bindGroupContainer((id) => ({ kind: 'subsystem', sid: id }), bindContainerEdge, null, { hover: true }); }
 // The Deployment view (overview + per-process card): a process box ⌘-drills to its unit card, a
 // subsystem box ⌘-drills (cross-navigates) to its subsystem card, a store/broker box opens its
 // Data-tab section, and anything else returns null — bindGroupContainer then leaves it without a drill
@@ -5725,6 +5712,8 @@ function flowMermaidFor(uc) {
 function isFlowState(s) { return !!(s && (s.kind === 'usecase' || s.kind === 'subflow')); }
 // The Data tab's three drawings: the areas, one area, and a pair of areas.
 function isDataPicture(s) { return !!(s && (s.kind === 'domain' || s.kind === 'domsub' || s.kind === 'domedge')); }
+// The Subsystems tab's three drawings: the boxes, one box, and a pair of boxes — the Data pictures' twins.
+function isStructurePicture(s) { return !!(s && (s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge')); }
 function flowIdOf(s) { return s.kind === 'subflow' ? s.sf : s.uc; }
 function subflowName(sid) { return (SUBFLOW_BY_ID[sid] || {}).name || sid; }
 // THE NAME OF A WALK, whichever kind it is. A use case is a graph node; a shared sub-use case is not, so a
@@ -6110,7 +6099,7 @@ function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', s
 // An inter-subdomain arrow (Domain overview + subdomain-card cross arrows): resting on it shows its card
 // (every entity→entity relation it bundles), a plain click pins that card. NO DRILL GESTURE ON THE ARROW
 // ITSELF — no ⌥-click, no corner icon. The one way to the pair's page is the title of that card
-// (domainEdgeDrill says where it goes), so the picture offers one gesture per thing: rest to read,
+// (pairPageDrill says where it goes), so the picture offers one gesture per thing: rest to read,
 // click to pin, the card's title to go. The domain analog of bindContainerEdge, minus its drill.
 function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
   const drawn = focusE || { src: a, dst: b };
@@ -6195,27 +6184,35 @@ function bindNavEdge(p, label, a, b, target) {
   bindSelectEdge(mainScene, p, label, { src: a, dst: b }, 'navedge:' + a + '>' + b,
     () => showNode(target), { hover: true });
 }
-function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click on a neighbour box / cross arrow drills
+// A BOX ON A STRUCTURE PICTURE (a subsystem's card, a pair of subsystems) takes the Data pictures'
+// gestures: resting on it shows its card, a plain click pins it, and its NAME opens it — a component's or
+// a dependency's own page, a collapsed subsystem's or bridge subdomain's card (which ⌥-click and a double
+// click open too, as any container). bindNodes keeps the shared parts: the focus set, and ⌥-click on a
+// leaf with a source ref opening the source. The flowchart twin of bindDomainSub's box loop.
+function bindStructureBoxes() {
   bindNodes(mainScene, (id, el, ev) => {
-    // A neighbour subsystem box: plain click shows its info, ⌘-click walks into it. A bridge subdomain
-    // box: ⌘-click crosses into that subdomain's card (the structural↔domain bridge). A component: select.
-    if (GRAPH.nodes[id].kind === 'subsystem' && isDrillClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
-    if (GRAPH.nodes[id].kind === 'subdomain' && isDrillClick(ev)) { go({ kind: 'domsub', sd: id }); return; }
+    const k = GRAPH.nodes[id].kind;
+    const box = k === 'subsystem' || k === 'subdomain';   // a collapsed group: ⌥ / a double click walk in as well
+    if (nameClick(ev) || (box && isDrillClick(ev))) { drillInto(id); return; }
     selectNodeFromCanvas(el, id, ev);
   });
-  // Neighbour subsystem + bridge subdomain boxes drill on ⌘-click, so tag them `drill` for the cursor.
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     const k = id && GRAPH.nodes[id] && GRAPH.nodes[id].kind;
-    if (k === 'subsystem' || k === 'subdomain') el.classList.add('drill');
+    if (!k) return;
+    if (k === 'subsystem' || k === 'subdomain') el.classList.add('drill');  // the cursor says a box walks in
+    previewOnHover(mainScene, el, () => showNode(id));  // resting on a box shows its card, as on a flow map
   });
+}
+function bindSubsystem(sid) {  // neighbourhood: every box and arrow with the Data pictures' gestures
+  bindStructureBoxes();
   eachEdge(diagram, (p, label, m) => {
     const a = m[1], b = m[2];
     const ka = GRAPH.nodes[a] && GRAPH.nodes[a].kind;
     const kb = GRAPH.nodes[b] && GRAPH.nodes[b].kind;
     if (ka === 'subdomain' || kb === 'subdomain') {  // bridge arrow: a member component <-> a subdomain box
       const sd = ka === 'subdomain' ? a : b;
-      bindBridgeEdge(mainScene, p, label, a, b, { kind: 'bridge', sid: sid, sd: sd });  // ⌘ -> the S×SD bridge card
+      bindBridgeEdge(mainScene, p, label, a, b, { kind: 'bridge', sid: sid, sd: sd }, true);  // ⌘ -> the S×SD bridge card
       return;
     }
     const subA = ka === 'subsystem', subB = kb === 'subsystem';
@@ -6231,7 +6228,7 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
       return;
     }
     const r = resolveComponentEdge(m);  // member <-> member: the real labelled component edge
-    if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
+    if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn, Object.assign({}, r.opts || {}, { hover: true }));
   });
 }
 // `a`/`b` are the two framed subsystems. Most arrows are direct member<->member links (real component
@@ -6241,7 +6238,7 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
 // never resolves via resolveComponentEdge (its endpoints aren't a real edge) and bindEdges silently
 // drops it — never registered in scene.edgeEls, so it never dims and never responds to clicks.
 function bindEdgePair(a, b) {
-  bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
+  bindStructureBoxes();
   eachEdge(diagram, (p, label, m) => {
     const s1 = m[1], s2 = m[2];
     const k1 = GRAPH.nodes[s1] && GRAPH.nodes[s1].kind, k2 = GRAPH.nodes[s2] && GRAPH.nodes[s2].kind;
@@ -6252,7 +6249,7 @@ function bindEdgePair(a, b) {
       return;
     }
     const r = resolveComponentEdge(m);
-    if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
+    if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn, Object.assign({}, r.opts || {}, { hover: true }));
   });
   bindFrameDrill(mainScene);  // ⌘-click either subsystem frame to open its card
 }

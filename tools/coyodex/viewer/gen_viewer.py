@@ -1042,13 +1042,15 @@ def bridge_card_mermaids(graph: GraphDict) -> dict[str, str]:
 
 
 def gen_container_mermaid(graph: GraphDict) -> str:
-    """C4 Container: top-level subsystems as boxes, with inter-subsystem edges DERIVED from the
-    component edge list (an S->S arrow exists iff a component edge crosses), labeled by count."""
-    lines = ["flowchart TB"]
+    """C4 Container: each top-level subsystem an ITEM BOX — a slot the viewer fills with the same box
+    every other picture draws (see gen_flow_map_mermaid), its component count in the box's band — with
+    inter-subsystem edges DERIVED from the component edge list (an S->S arrow exists iff a component
+    edge crosses), labeled by count. The exact mirror of gen_domain_container_mermaid for entities."""
+    lines = [SLOT_MAP_INIT, "flowchart TB"]  # no node padding: the boxes carry their own, arrows stop on them
     for nid, node in graph["nodes"].items():
         if str(node["kind"]) == "subsystem" and _parent_of(graph, nid) is None:
-            lines.append(f'  {nid}["{_safe_label(str(node["name"]))}"]:::cy-{nid}')
-            lines.append(f"  class {nid} subsystem")
+            lines.append(f'  {nid}["{_slot("subsystem", "compact", nid)}"]:::cy-{nid}')
+            lines.append(f"  class {nid} itembox")
     counts: dict[tuple[str, str], int] = {}
     for e in graph["edges"]:
         sa, sb = _top_subsystem(graph, str(e["src"])), _top_subsystem(graph, str(e["dst"]))
@@ -1056,7 +1058,7 @@ def gen_container_mermaid(graph: GraphDict) -> str:
             counts[(sa, sb)] = counts.get((sa, sb), 0) + 1
     for (sa, sb), c in sorted(counts.items()):
         lines.append(f"  {sa} -->{_count_label(c)} {sb}")
-    lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
+    lines.append(ITEM_SLOT_CLASSDEF)
     return "\n".join(lines)
 
 
@@ -1175,19 +1177,21 @@ def _component_subgraph(graph: GraphDict, sid: str, indent: str = "  ",
     actually touch, since a box at neither end of that arrow is not part of what the arrow stands for.
     `None` (the subsystem card) draws every member: there the frame IS the subject, so a member with no
     wiring is still one of the parts it is made of."""
-    open_b, close_b = SHAPE["component"]
     shown = (lambda cid: keep is None or cid in keep)
     out = [f'{indent}subgraph {sid}["{_safe_label(str(graph["nodes"][sid]["name"]))}"]']
-    for cid, name in _components_of(graph, sid):
+    # EVERY BOX IS AN ITEM BOX, as on a use case map: a component tight (a glyph, its name, its kind said
+    # by the colour), a nested child subsystem compact (dashed, its component count in the band). The
+    # slot node draws no shape of its own; the viewer swaps the box in (see gen_flow_map_mermaid).
+    for cid, _ in _components_of(graph, sid):
         if not shown(cid):
             continue
-        out.append(f"{indent}  {cid}{open_b}{_safe_label(name)}{close_b}:::cy-{cid}")
-        out.append(f"{indent}  class {cid} component")
-    for ssid, sname in _child_subsystems(graph, sid):  # nested child subsystems: collapsed, drillable
+        out.append(f'{indent}  {cid}["{_slot("component", "tight", cid)}"]:::cy-{cid}')
+        out.append(f"{indent}  class {cid} itembox")
+    for ssid, _ in _child_subsystems(graph, sid):  # nested child subsystems: collapsed item boxes, drillable
         if not shown(ssid):
             continue
-        out.append(f'{indent}  {ssid}["{_safe_label(sname)}"]:::cy-{ssid}')
-        out.append(f"{indent}  class {ssid} subsystem")
+        out.append(f'{indent}  {ssid}["{_slot("subsystem", "compact", ssid)}"]:::cy-{ssid}')
+        out.append(f"{indent}  class {ssid} itembox")
     out.append(f"{indent}end")
     return out
 
@@ -1248,18 +1252,19 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
                 neighbours.add(nb)
                 cross[(nb, bd)] = cross.get((nb, bd), 0) + 1
     keep = members | deps  # the set whose internal (labelled) edges are drawn
-    lines = ["flowchart TB", *_component_subgraph(graph, sid)]
-    for nb in sorted(neighbours):  # collapsed neighbour-subsystem boxes
-        lines.append(f'  {nb}["{_safe_label(str(graph["nodes"][nb]["name"]))}"]:::cy-{nb}')
-        lines.append(f"  class {nb} subsystem")
-    open_b, close_b = SHAPE["dep"]
+    # Item-box slots throughout, as on the Data pictures: the slot init drops the engine's node padding
+    # so an arrow tip reaches the box it points at (see SLOT_MAP_INIT).
+    lines = [SLOT_MAP_INIT, "flowchart TB", *_component_subgraph(graph, sid)]
+    for nb in sorted(neighbours):  # collapsed neighbour-subsystem boxes (compact: count in the band)
+        lines.append(f'  {nb}["{_slot("subsystem", "compact", nb)}"]:::cy-{nb}')
+        lines.append(f"  class {nb} itembox")
     for did in sorted(deps):  # deps belong to no subsystem — draw them outside the frame
-        lines.append(f'  {did}{open_b}{_safe_label(str(graph["nodes"][did]["name"]))}{close_b}:::cy-{did}')
-        lines.append(f"  class {did} dep")
+        lines.append(f'  {did}["{_slot("dep", "tight", did)}"]:::cy-{did}')
+        lines.append(f"  class {did} itembox")
     bridge_sd = {sd for (_, sd) in bridges}
     for sd in sorted(bridge_sd):  # collapsed subdomain boxes the subsystem's data bridges to
-        lines.append(f'  {sd}["{_safe_label(str(graph["nodes"][sd]["name"]))}"]:::cy-{sd}')
-        lines.append(f"  class {sd} subdomain")
+        lines.append(f'  {sd}["{_slot("subdomain", "compact", sd)}"]:::cy-{sd}')
+        lines.append(f"  class {sd} itembox")
     for src, verb, dst in _diagram_edges(graph, None, keep):  # internal + dep edges (labelled)
         lines.append(f"  {src} -->|{_edge_label(verb)}| {dst}")
     for (src, dst), c in sorted(cross.items()):  # neighbourhood arrows (click -> edge card)
@@ -1268,11 +1273,7 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         lines.append(f"  {src} -->{_count_label(c)} {dst}")
     for (src, sd), c in sorted(bridges.items()):  # bridge arrows: member -> subdomain (underlying edge count)
         lines.append(f"  {src} -->{_count_label(c)} {sd}")
-    lines.append(f"  classDef component {COMPONENT_STYLE};")
-    lines.append(f"  classDef dep {DEP_STYLE};")
-    lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
-    if bridge_sd:
-        lines.append(DOMAIN_SUBDOMAIN_CLASSDEF)
+    lines.append(ITEM_SLOT_CLASSDEF)
     return "\n".join(lines)
 
 
@@ -1316,7 +1317,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
              | {box for pair in agg for box in pair})
     members_a = {cid for cid, _ in _components_of(graph, a)} & drawn
     members_b = {cid for cid, _ in _components_of(graph, b)} & drawn
-    lines = ["flowchart LR",
+    lines = [SLOT_MAP_INIT, "flowchart LR",  # item-box slots: no node padding, arrows stop on the boxes
              *_component_subgraph(graph, a, keep=drawn),
              *_component_subgraph(graph, b, keep=drawn)]
     for src, verb, dst in _diagram_edges(graph, None, members_a):  # a's inner links, between drawn boxes
@@ -1327,9 +1328,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
         lines.append(f"  {s} -->|{_edge_label(verb)}| {d}")
     for (src, dst), c in sorted(agg.items()):
         lines.append(f"  {src} -->{_count_label(c)} {dst}")
-    lines.append(f"  classDef component {COMPONENT_STYLE};")
-    if drawn & {sid for sid, _ in _child_subsystems(graph, a) + _child_subsystems(graph, b)}:
-        lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")  # a child box is drawn -> style it
+    lines.append(ITEM_SLOT_CLASSDEF)
     return "\n".join(lines)
 
 

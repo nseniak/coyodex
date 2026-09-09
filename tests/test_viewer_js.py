@@ -341,7 +341,7 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "title: 'Locate in ' + tab" in locate_code
     assert "sel: 'node:' + t.selectId" in locate_code
     assert "pendingCenter = t.selectId" in locate_code
-    assert "if (isFlowState(s) || isDataPicture(s)) return;" in locate_code   # no icons at all on a walk, nor on a Data picture
+    assert "if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s)) return;" in locate_code   # no icons at all on a walk, nor on a Data or a structure picture
     # No icons on a walk at all — the box's NAME opens what it names. Off a walk, the icon is the
     # element's own primary action.
     assert "const action = primaryActionFor(id);" in locate_code
@@ -5307,13 +5307,54 @@ def test_the_name_is_the_words_and_every_box_s_name_opens_a_page() -> None:
     assert ".ibox-name:focus-visible {" in css
 
 
+def test_the_subsystems_pictures_take_the_data_pictures_gestures() -> None:
+    """The Subsystems overview, a subsystem's card and a pair of subsystems offer the same three gestures
+    the Data pictures do: rest on a box or an arrow to read its card, click to pin it, a box's NAME to
+    open it. No corner icon on a box, and no ⌥ / double-click drill on an arrow: the arrow card's title
+    is the one door to the pair's page."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    # the overview asks bindGroupContainer for the resting-pointer card, exactly as the Data overview does
+    assert ("function bindContainer() { bindGroupContainer((id) => ({ kind: 'subsystem', sid: id }), "
+            "bindContainerEdge, null, { hover: true }); }") in js
+    assert ("function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', sd: id }), "
+            "bindDomainContainerEdge, null, { hover: true }); }") in js
+    # an inter-subsystem arrow: hover card, no drill gesture, the card's title leads to the pair's page
+    edge = js[js.index("function bindContainerEdge(scene, p, label, a, b, focusE) {"):
+              js.index("\n}", js.index("function bindContainerEdge(scene, p, label, a, b, focusE) {"))]
+    assert "{ hover: true }" in edge and "onDrill" not in edge and "actionFn" not in edge
+    card = js[js.index("function showContainerEdge(a, b, drawn) {"):
+              js.index("\n}", js.index("function showContainerEdge(a, b, drawn) {"))]
+    assert "drill: pairPageDrill('edge', 'component', a, b, drawn)," in card
+    # …and the Data arrow card asks the SAME rule, so the two families cannot drift apart
+    dcard = js[js.index("function showDomainContainerEdge(a, b, drawn) {"):
+               js.index("\n}", js.index("function showDomainContainerEdge(a, b, drawn) {"))]
+    assert "drill: pairPageDrill('domedge', 'entity', a, b, drawn)," in dcard
+    drill = js[js.index("function pairPageDrill(kind, leaf, a, b, drawn) {"):
+               js.index("\n}", js.index("function pairPageDrill(kind, leaf, a, b, drawn) {"))]
+    assert "efocus: { src: drawn.src, dst: drawn.dst }" in drill   # a member's cross arrow keeps its focus
+    assert "containerEdgeDrill" not in js and "domainEdgeDrill" not in js   # the twins are gone
+    # every box on a card or a pair: one binder, hover card, the name opens, a container drills
+    boxes = js[js.index("function bindStructureBoxes() {"):
+               js.index("\n}", js.index("function bindStructureBoxes() {"))]
+    assert "previewOnHover(mainScene, el, () => showNode(id));" in boxes
+    assert "if (nameClick(ev) || (box && isDrillClick(ev))) { drillInto(id); return; }" in boxes
+    for fn in ("function bindSubsystem(sid) {", "function bindEdgePair(a, b) {"):
+        body = js[js.index(fn): js.index("\n}", js.index(fn))]
+        assert "bindStructureBoxes();" in body, fn
+        assert "Object.assign({}, r.opts || {}, { hover: true })" in body, fn   # a member arrow's card on hover too
+    assert "{ kind: 'bridge', sid: sid, sd: sd }, true);" in js   # the bridge arrow in a subsystem card, hover too
+    # no corner icons on a structure picture, as on a walk and a Data picture
+    assert ("function isStructurePicture(s) { return !!(s && (s.kind === 'container' || s.kind === 'subsystem' "
+            "|| s.kind === 'edge')); }") in js
+
+
 def test_a_walk_draws_no_corner_icons() -> None:
     """The icon floating in a box's corner was the older way of saying "this opens something", in a
     language no other screen speaks. The name says it now, and it says it the way a card's title does."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     fn = js[js.index("function decorateActionIcons(scene, s) {"):
             js.index("\n}", js.index("function decorateActionIcons(scene, s) {"))]
-    assert "if (isFlowState(s) || isDataPicture(s)) return;" in fn
+    assert "if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s)) return;" in fn
     assert "addActionIcon(el, sid, open)" not in js, "the shared sub-use case's box lost its icon too"
 
 

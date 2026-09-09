@@ -1585,14 +1585,19 @@ def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
     assert "subgraph S1[" in s1                         # the subsystem reads as a labelled frame
     assert "C1" in s1 and "C3" in s1                    # both S1 components present
     assert "C1 -->|\"routes\"| C3" in s1                    # internal wiring kept
-    assert "class S2 subsystem" in s1                   # the neighbour S2 drawn as a collapsed box
+    assert f'S2["<span class=cyslot data-k=subsystem data-v=compact data-id=S2></span>"]:::cy-S2' in s1  # the neighbour S2 drawn as a collapsed item box
+    assert "class S2 itembox" in s1                     # …whose node draws no shape: the item box is the box
+    assert 'C1["<span class=cyslot data-k=component data-v=tight data-id=C1></span>"]:::cy-C1' in s1  # a member is a tight item box
+    assert s1.startswith("%%{init") and "\nflowchart TB\n" in s1   # no node padding: arrows stop on the boxes
     assert "C1 --> S2" in s1 and "C3 --> S2" in s1  # cross arrows: component -> neighbour box, labelled by edge count
     assert "C2" not in s1                               # the sibling's component itself is NOT drawn
     s2 = by_sub["S2"]
     assert "subgraph S2[" in s2
     assert "C2" in s2 and "D1" in s2                    # Q1=B keeps the dep the component touches
     assert "C2 -->|\"reads\"| D1" in s2                     # ...with its component->dep edge (ground-level, real verb)
-    assert "class S1 subsystem" in s2                   # the neighbour S1 box
+    assert f'S1["<span class=cyslot data-k=subsystem data-v=compact data-id=S1></span>"]:::cy-S1' in s2  # the neighbour S1 box, an item box
+    assert 'D1["<span class=cyslot data-k=dep data-v=tight data-id=D1></span>"]:::cy-D1' in s2  # the dep too
+    assert "classDef itembox fill:none,stroke:none" in s2 and "classDef dep" not in s2
     assert "S1 -->|×2| C2" in s2                        # inbound cross arrow, ×2 folded (C1->C2 + C3->C2)
 
 
@@ -1625,7 +1630,8 @@ def test_nested_parent_card_shows_child_subsystem_box_not_flattened() -> None:
     s1 = by_sub["S1"]
     assert "subgraph S1[" in s1
     assert "C1" in s1                       # direct member
-    assert "class S2 subsystem" in s1       # child subsystem as a (drillable) collapsed box
+    assert f'S2["<span class=cyslot data-k=subsystem data-v=compact data-id=S2></span>"]:::cy-S2' in s1  # child subsystem as a (drillable) collapsed item box
+    assert "class S2 itembox" in s1
     assert "C2" not in s1                   # grandchild NOT flattened into the parent card
     assert "C1 --> S2" in s1             # member -> child-subsystem box (aggregated, count-labelled, drills in)
 
@@ -1637,7 +1643,7 @@ def test_nested_crossing_resolves_at_card_level() -> None:
     by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_nested_subsystem_map()))
     s1 = by_sub["S1"]
     assert "S2 --> S3" in s1
-    assert "class S3 subsystem" in s1       # the sibling neighbour box
+    assert 'S3["<span class=cyslot data-k=subsystem data-v=compact data-id=S3></span>"]:::cy-S3' in s1  # the sibling neighbour box, an item box
     s2 = by_sub["S2"]
     assert "C2" in s2 and "C2 --> S3" in s2
 
@@ -1646,8 +1652,9 @@ def test_container_overview_shows_only_top_level_subsystems() -> None:
     # The Subsystems overview draws only top-level groups (S1, S3); the nested S2 is reachable by
     # drilling S1, not as a top-level box. The nested C2->C3 edge aggregates to the top S1->S3 arrow.
     cont = gen_viewer.gen_container_mermaid(parse_map(make_nested_subsystem_map()))
-    assert 'S1["' in cont and 'S3["' in cont
+    assert f'S1["<span class=cyslot data-k=subsystem data-v=compact data-id=S1></span>"]:::cy-S1' in cont and 'S3["' in cont   # item-box slots, as the Data overview
     assert 'S2["' not in cont
+    assert cont.startswith("%%{init") and "class S1 itembox" in cont and "classDef itembox fill:none,stroke:none" in cont
     assert "S1 --> S3" in cont
 
 
@@ -2858,9 +2865,9 @@ def test_subsystem_card_bridges_to_contexts_show_edge_count() -> None:
     s1 = by_sub["S1"]
     # The subsystem->subdomain bridge is a SYNTHESIZED arrow: it collapses a component's C→E edges into
     # its subdomain box, labelled by the COUNT of those edges (like the container arrows), never a verb.
-    assert "class SD1 subdomain" in s1 and "C1 --> SD1" in s1   # C1 has 1 edge into SD1
+    assert f'SD1["<span class=cyslot data-k=subdomain data-v=compact data-id=SD1></span>"]:::cy-SD1' in s1 and "C1 --> SD1" in s1   # C1 has 1 edge into SD1; the box is an item box
     s2 = by_sub["S2"]
-    assert "class SD1 subdomain" in s2 and "C2 --> SD1" in s2   # C2 has 1 edge into SD1
+    assert f'SD1["<span class=cyslot data-k=subdomain data-v=compact data-id=SD1></span>"]:::cy-SD1' in s2 and "C2 --> SD1" in s2   # C2 has 1 edge into SD1
 
 
 def test_an_entity_diagram_draws_entities_and_subdomains_only() -> None:
@@ -2878,7 +2885,7 @@ def test_an_entity_diagram_draws_entities_and_subdomains_only() -> None:
     assert "S1 --> E1" not in sd1 and "S2 --> E1" not in sd1
     assert gen_viewer.SUBSYSTEM_STYLE not in sd1                       # no amber box on an entity canvas
     # …and the structural side still carries it: the subsystem card draws the subdomain it writes into.
-    assert "class SD1 subdomain" in gen_viewer.subsystem_component_mermaids(g)["S1"]
+    assert f'SD1["<span class=cyslot data-k=subdomain data-v=compact data-id=SD1></span>"]' in gen_viewer.subsystem_component_mermaids(g)["S1"]
 
 
 def test_subdomain_card_has_no_subsystem_box_without_bridges() -> None:
