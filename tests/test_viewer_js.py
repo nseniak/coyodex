@@ -4796,7 +4796,7 @@ def test_a_dive_plays_only_between_a_container_and_what_it_holds() -> None:
     assert "if (s.kind === 'domain' || s.kind === 'domsub') return 'subdomain';" in fam
     assert "if (s.kind === 'deployment' || s.kind === 'deploymentUnit') return 'process';" in fam
     assert "return null;" in fam, "a pair page, an element's page, a rule, a feature: no family, no dive"
-    drive = js[js.index("function driveTransition(from, instant, viaHistory) {"): js.index("async function runDrill(")]
+    drive = js[js.index("function driveTransition(from, instant) {"): js.index("async function runDrill(")]
     assert "const related = !!fam && fam === containerFamily(to);" in drive
     assert "const inChain = related ? drillChain(fromF, toF) : null;" in drive   # down: into what the view holds
     assert "const isOut = related && !!fromF && !!drillChain(toF, fromF);" in drive   # up: out to what holds it
@@ -4804,23 +4804,21 @@ def test_a_dive_plays_only_between_a_container_and_what_it_holds() -> None:
     assert "render();  // lateral / unrelated navigation — no dive" in drive
 
 
-def test_back_marks_no_container_the_reader_had_not_chosen() -> None:
-    """Climbing out of a container by the breadcrumb or a frame marks the container you came out of, so
-    you keep your place on the wider view. The browser's Back does not: it returns the screen as it was
-    left, and the selection it restores is the truth. A container the reader had not selected before
-    going down into it came back selected, which read as a choice nobody made; one they had selected
-    comes back selected because it was."""
+def test_no_way_up_chooses_anything_for_you() -> None:
+    """A climb out of a container used to arrive with the container you came out of selected — its
+    card open, the rest dimmed, `sel=` in the link — so the reader "kept their place". That is a
+    selection nobody made, and the browser's Back gave a different screen (as it was left) from the
+    breadcrumb (marked). Every way up now returns the wider view with exactly the selection the reader
+    had there before going down, or none: Back restores it from history, a fresh climb starts clean."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
-    pop = js[js.index("window.addEventListener('popstate'"): js.index("window.addEventListener('hashchange'")]
-    assert "driveTransition(from, jump > 1, true);" in pop
-    drive = js[js.index("function driveTransition(from, instant, viaHistory) {"): js.index("async function runDrill(")]
-    assert "const mark = isOut && !viaHistory ? fromF : null;" in drive
-    assert "if (my === navSeq && mark) selectLeftContainer(mark);" in drive   # the no-motion path too
-    assert "runDrillOut(my, mark)" in drive
-    out = js[js.index("async function runDrillOut(my, leftF) {"): js.index("\n}", js.index("async function runDrillOut(my, leftF) {"))]
-    assert "if (leftF) selectLeftContainer(leftF);" in out
-    # no other caller marks a container on arrival
-    assert js.count("selectLeftContainer(") == 3, "one definition, two gated callers"
+    assert "selectLeftContainer" not in js, "the marker is gone, with its callers"
+    drive = js[js.index("function driveTransition(from, instant) {"): js.index("async function runDrill(")]
+    assert "if (REDUCE_MOTION || !from) { render(); return; }" in drive
+    assert "if (isOut) { runDrillOut(my).catch(" in drive
+    out = js[js.index("async function runDrillOut(my) {"): js.index("\n}", js.index("async function runDrillOut(my) {"))]
+    assert "selectNode" not in out and "selAdd" not in out
+    # what a screen shows on return is what history saved for it, and nothing else
+    assert "else if (!transient && restoreSelection(mainScene, s)) {" in js
 
 
 def test_the_drill_zoom_survives_the_browser_buttons() -> None:
@@ -4835,9 +4833,9 @@ def test_the_drill_zoom_survives_the_browser_buttons() -> None:
     pop = js[js.index("window.addEventListener('popstate'"): js.index("window.addEventListener('hashchange'")]
     assert "const from = history[hi];" in pop and "captureViewState();" in pop
     assert "const jump = Math.abs(target - hi);" in pop
-    assert "driveTransition(from, jump > 1, true);" in pop   # …and says it is a browser step
+    assert "driveTransition(from, jump > 1);" in pop
     # The animation reads only the two states, which is why it needs no change at all here.
-    drive = js[js.index("function driveTransition(from, instant, viaHistory) {"): js.index("async function runDrill(")]
+    drive = js[js.index("function driveTransition(from, instant) {"): js.index("async function runDrill(")]
     assert "history" not in drive.replace("history[hi]", ""), "the zoom must not read the stack"
 
 
