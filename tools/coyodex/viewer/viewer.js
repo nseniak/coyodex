@@ -6,6 +6,12 @@
 // These were `const … = __PLACEHOLDER__` back when the data was baked into a standalone HTML file; that
 // portable file:// mode was retired when the data moved server-side, so there is nothing to open offline.
 let GRAPH;
+// How much of its kind's stroke a resting item box's border shows, over white (see injectItemTintCss).
+// A member's is a pale hairline; a container's has to hold its own on a frame of the same colour.
+// UP HERE, not beside the function: the tint rules are injected while the map is still booting, and a
+// `const` declared further down is not yet initialised at that moment — the boot threw on it once.
+const MEMBER_BORDER_MIX = 34;
+const CONTAINER_BORDER_MIX = 65;
 let MERMAID_BASE, MERMAID_DIFF, MERMAID_CONTEXT, MERMAID_CONTAINER;
 let MERMAID_BY_SUB;         // subsystem neighbourhood: sid -> sub-diagram
 let MERMAID_EDGE_CARD;      // edge pair: 'A>B' -> two-subsystem sub-diagram
@@ -1236,8 +1242,16 @@ function injectItemTintCss() {
     // hover rule alone — so it appeared on the way in and vanished on the way out. `:where` costs
     // the selector one class, which is what puts every state rule back in front of it.
     out.push(`.ibox-tinted.ibox-k-${k}{background:${t.fill}}`);
+    // A CONTAINER'S BORDER IS DARKER. A collapsed subsystem or subdomain box wears its kind's deep
+    // fill, and inside a drilled frame of the same kind it sits on that very colour: at the members'
+    // 34% mix its dashed hairline vanished into the frame (measured on the Foundations card: box
+    // #c7d2fe on frame #c7d2fe, border #bbb9e0). The container tints are the ones that carry a stroke
+    // width (see gen_viewer's `_fill_stroke`), so that is the discriminator. 65% (#7d78c3 for a
+    // subsystem) stays duller and lighter than the hover blue (#4f46e5), so a resting box, a hovered
+    // one and a picked one still read as three weights of one line.
+    const mix = t.strokeWidth ? CONTAINER_BORDER_MIX : MEMBER_BORDER_MIX;
     out.push(`.ibox-tinted:where(.ibox-k-${k})`
-      + `{border-color:color-mix(in srgb, ${t.stroke} 34%, #fff)}`);
+      + `{border-color:color-mix(in srgb, ${t.stroke} ${mix}%, #fff)}`);
     out.push(`.ibox-k-${k} .ibox-pill{background:${t.fill};color:${t.stroke}}`);
     // NO RULE FOR THE CHIP. A chip is a plain box with a grey hairline, and its GLYPH is the only
     // thing on it wearing the kind's colour — `itemGlyphSvg` strokes that in, so the identity costs
@@ -3148,16 +3162,21 @@ function showDomainContainerEdge(a, b, drawn) {
 }
 // WHERE AN ARROW'S CARD LEADS: the pair page of the two groups it joins. `kind` names the page (`edge`
 // for two subsystems, `domedge` for two subdomains) and `leaf` the member kind a drawn end may be
-// (`component` or `entity`). A single member's cross arrow lands on that page with THAT member in
-// focus (its crossings lit, the rest of the pair dimmed); a box↔box arrow (either overview) opens the
-// pair unfocused. NO PRE-SELECTION: the page is ABOUT this arrow, so opening it is not a request to
-// pick something on it out (measured once: selecting everything on the page marked nothing out, and
-// the stacked cards took 97% of the drawing's height). ONE RULE FOR BOTH FAMILIES, so the two arrow
-// cards cannot drift apart.
+// (`component` or `entity`). A MEMBER'S cross arrow lands on that page with THAT member selected and
+// centred — its crossings lit, the rest of the pair dimmed, its card open — the way a locate points at
+// one thing among many; a box↔box arrow (either overview) opens the pair with nothing chosen. The
+// bundled arrows themselves are never pre-selected: the page is ABOUT this arrow, and selecting
+// everything on it marked nothing out (measured once: the stacked cards took 97% of the drawing's
+// height). `center` is a one-shot hint the card's click handler turns into `pendingCenter`; it never
+// enters the state. ONE RULE FOR BOTH FAMILIES, so the two arrow cards cannot drift apart.
+//
+// This focus was promised and lost twice: an earlier drill selected the member, then the page opened on
+// a crossings list narrowed to it, then that opening card went — and the field carrying the member was
+// written for two commits with nothing left to read it.
 function pairPageDrill(kind, leaf, a, b, drawn) {
   const isLeaf = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === leaf;
-  const focus = drawn && (isLeaf(drawn.src) ? drawn.src : (isLeaf(drawn.dst) ? drawn.dst : null));
-  return focus ? { kind, a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind, a, b };
+  const member = drawn && (isLeaf(drawn.src) ? drawn.src : (isLeaf(drawn.dst) ? drawn.dst : null));
+  return member ? { kind, a, b, sel: 'node:' + member, center: member } : { kind, a, b };
 }
 // Selecting a BRIDGE arrow (structure↔domain): the component↔subdomain arrow in a subsystem card, or the
 // subsystem↔entity arrow in a subdomain/domain view. It bundles component→entity edges; list each as
@@ -14631,7 +14650,21 @@ PANEL_HOST.addEventListener('click', (ev) => {
   ev.stopPropagation();
   let to = null;
   try { to = JSON.parse(more.getAttribute('data-drill')); } catch (_) { return; }
-  if (to) go(to);
+  if (!to) return;
+  // A drill that names one box to land on (`center`, set beside `sel` by pairPageDrill) centres it on
+  // arrival — the one-shot `pendingCenter` a locate uses. The hint is consumed here, so the state that
+  // enters history carries only what the address can say back.
+  const center = to.center; delete to.center;
+  const cur = history[hi];
+  if (to.sel && cur && stateKey(cur) === stateKey(to) && mainScene && mainScene.selectors[to.sel]) {
+    // Already on this page (stateKey ignores `sel`, so go() would no-op): select the member in place,
+    // the same fallback selectFlowStep uses for a step on the use case already showing.
+    selClear(mainScene); mainScene.selectors[to.sel]();
+    if (center && mainScene.nodeEls[center]) applyZoomAndCenter(mainScene.nodeEls[center], 1);
+    return;
+  }
+  if (center) pendingCenter = center;
+  go(to);
 });
 // --- dragging the card by its bar, and resizing it from its corner -----------------
 // The bar is the only grab handle: dragging on the card's own text would fight selecting that text, and

@@ -1240,10 +1240,12 @@ def test_an_arrow_page_opens_on_the_drawing_with_nothing_chosen_for_you() -> Non
     connections deep, taking 26% of the drawing area and 97% of its height.
 
     The page is ABOUT that arrow, so opening it is not a request to pick something on it out. All three
-    arrow drills stop making a selection.
+    arrow drills stop making a selection of the ARROWS.
 
-    Two pre-selections are untouched, because both point at ONE thing among many: `sels`, the reader's own
-    selection coming back through history, and the `selCover` a LOCATE carries."""
+    Three pre-selections are untouched, because each points at ONE thing among many: `sels`, the reader's
+    own selection coming back through history, the `selCover` a LOCATE carries, and — since the arrow
+    card's title became the way in — the one MEMBER a member's cross arrow names, which pairPageDrill
+    selects and centres on the pair page (see test_the_subsystems_pictures_take_the_data_pictures_gestures)."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     for binder in ("function bindContainerEdge(", "function bindDomainContainerEdge(",
                    "function bindBridgeEdge("):
@@ -5331,8 +5333,16 @@ def test_the_subsystems_pictures_take_the_data_pictures_gestures() -> None:
     assert "drill: pairPageDrill('domedge', 'entity', a, b, drawn)," in dcard
     drill = js[js.index("function pairPageDrill(kind, leaf, a, b, drawn) {"):
                js.index("\n}", js.index("function pairPageDrill(kind, leaf, a, b, drawn) {"))]
-    assert "efocus: { src: drawn.src, dst: drawn.dst }" in drill   # a member's cross arrow keeps its focus
+    # A MEMBER'S cross arrow lands with that member selected and centred; a box↔box arrow with nothing chosen.
+    assert "return member ? { kind, a, b, sel: 'node:' + member, center: member } : { kind, a, b };" in drill
+    assert "efocus" not in js, "the field that promised a focus nothing read is gone"
     assert "containerEdgeDrill" not in js and "domainEdgeDrill" not in js   # the twins are gone
+    # …and the card's click handler turns the centre hint into the one-shot pendingCenter, off the state.
+    handler = js[js.index("PANEL_HOST.addEventListener('click', (ev) => {"):
+                 js.index("\n});", js.index("PANEL_HOST.addEventListener('click', (ev) => {"))]
+    assert "const center = to.center; delete to.center;" in handler
+    assert "if (center) pendingCenter = center;" in handler
+    assert "selClear(mainScene); mainScene.selectors[to.sel]();" in handler   # already on the page: select in place
     # every box on a card or a pair: one binder, hover card, the name opens, a container drills
     boxes = js[js.index("function bindStructureBoxes() {"):
                js.index("\n}", js.index("function bindStructureBoxes() {"))]
@@ -5346,6 +5356,23 @@ def test_the_subsystems_pictures_take_the_data_pictures_gestures() -> None:
     # no corner icons on a structure picture, as on a walk and a Data picture
     assert ("function isStructurePicture(s) { return !!(s && (s.kind === 'container' || s.kind === 'subsystem' "
             "|| s.kind === 'edge')); }") in js
+
+
+def test_a_container_box_border_holds_its_own_on_a_frame_of_its_colour() -> None:
+    """A collapsed subsystem (or subdomain) box has its kind's deep fill, and inside a drilled frame of
+    the same kind it sits on that very colour: at the members' pale border mix its dashed line vanished
+    into the frame. Container tints are the ones carrying a stroke width, and they take a darker mix —
+    still lighter and duller than the one hover/picked blue, so the three states keep their weights."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert "const MEMBER_BORDER_MIX = 34;" in js and "const CONTAINER_BORDER_MIX = 65;" in js
+    fn = js[js.index("function injectItemTintCss() {"): js.index("\n}", js.index("function injectItemTintCss() {"))]
+    assert "const mix = t.strokeWidth ? CONTAINER_BORDER_MIX : MEMBER_BORDER_MIX;" in fn
+    assert "color-mix(in srgb, ${t.stroke} ${mix}%, #fff)" in fn
+    # the discriminator is real: only the container styles carry a stroke width in the tint table
+    from coyodex.viewer import gen_viewer
+    with_width = {k for k, v in gen_viewer.ELEMENT_TINT.items() if v.get("strokeWidth")}
+    assert {"subsystem", "subdomain"} <= with_width
+    assert not ({"component", "entity", "dep", "interface"} & with_width)
 
 
 def test_a_walk_draws_no_corner_icons() -> None:

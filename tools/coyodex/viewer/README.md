@@ -145,8 +145,10 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     neighbour box's name re-centers on it; a component's name opens its own page.
   - An `S→S` **arrow** carries no drill of its own: its card lists the concrete crossings it bundles, and
     the card's **title** opens the pair's edge view — the two subsystems framed with the crossings
-    between them. A cross arrow into a box that *contains* (or is contained by) the current one instead
-    stands for that box: its card opens the box (drill in / zoom out), since one can't frame the other.
+    between them. From a **member's** cross arrow (a component's, on its card) the pair page opens with
+    that member selected and centred: its crossings lit, the rest dimmed, its card open. A cross arrow
+    into a box that *contains* (or is contained by) the current one instead stands for that box: its
+    card opens the box (drill in / zoom out), since one can't frame the other.
   - Component nodes/arrows are clickable for details + `file:line`; the side panel
     shows the group you're on **plus its immediate children** (child groups annotated with how many
     leaves nest under them). **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or **⌥+←/→**, or by
