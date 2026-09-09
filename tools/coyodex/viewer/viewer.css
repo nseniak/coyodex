@@ -3026,7 +3026,7 @@ body.insp-on { cursor: crosshair; }
    diagram, so a scoped rule does not reach it and every box on a map comes out too narrow. The same
    trap `.ifd-glyph` records, and it once cost a box reading "Gatew". */
 .ibox { display: block; box-sizing: border-box; text-align: left; background: #fff;
-        border: 1.5px solid #dcdff0; border-radius: 10px; padding: 8px 11px 9px;
+        --ibox-rest: #dcdff0; border: 1.5px solid var(--ibox-rest); border-radius: 10px; padding: 8px 11px 9px;
         font: 400 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
 /* A box on a picture FITS ITS TEXT, with a floor so a short name still leaves the sentence room and
    a ceiling so a long one does not run away. Measured on MCP Hero's 11-step walk: a fixed 300px box
@@ -3144,6 +3144,13 @@ body.insp-on { cursor: crosshair; }
    feature's own colour survives, and `border-width` is a shorthand that would flatten it. That trap
    has now caught this file twice. */
 .ibox:hover { border-color: #4f46e5; }
+/* A POINTER THAT HAS NOT MOVED since the drawing changed under it is not hovering (holdPointer in
+   viewer.js): the box keeps its resting line (`--ibox-rest`, set per kind by injectItemTintCss), its
+   name its plain face, a board box its flat face — until the pointer moves. A PICKED box is untouched:
+   a pick is a decision, not a hover. */
+#diagram.pointer-held .ibox:hover:not(.ibox-picked) { border-color: var(--ibox-rest); }
+#diagram.pointer-held .ibox-name:hover, #diagram.pointer-held .cyname:hover { text-decoration: none; }
+#diagram.pointer-held .pickbox:hover:not(.ibox-picked) { box-shadow: none; }
 .ibox.ibox-picked, .ibox.ibox-picked:hover {
   border-top-color: #4f46e5; border-right-color: #4f46e5; border-bottom-color: #4f46e5;
   border-top-width: 2px; border-right-width: 2px; border-bottom-width: 2px;

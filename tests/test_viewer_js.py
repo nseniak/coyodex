@@ -5398,6 +5398,40 @@ def test_a_container_box_border_holds_its_own_on_a_frame_of_its_colour() -> None
     assert not ({"component", "entity", "dep", "interface"} & with_width)
 
 
+def test_a_pointer_that_did_not_move_is_not_hovering() -> None:
+    """A new drawing lands under a cursor that may be sitting on one of its boxes or arrows — after a
+    drill, a link, the browser's Back — and the browser reports that as an entry: the card opened and
+    the border lit for a thing nobody pointed at. Until the pointer MOVES, a hover on the new drawing
+    is not a hover; the enters denied meanwhile are delivered on the move, so the reader need not
+    leave the box and come back. Movement, not events: a re-reported cursor at the same place does
+    not count."""
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
+    scene = js[js.index("function makeScene(root, defaultPanel) {"): js.index("\n}", js.index("function makeScene(root, defaultPanel) {"))]
+    assert "holdPointer();" in scene, "every new drawing holds the pointer"
+    hold = js[js.index("function holdPointer() {"): js.index("\n}", js.index("function holdPointer() {"))]
+    assert "pointerFresh = false;" in hold and "cursorHeldAt = pointerAt ? { ...pointerAt } : { x: NaN, y: NaN };" in hold
+    assert "diagram.classList.add('pointer-held')" in hold
+    mv = js[js.index("document.addEventListener('mousemove', (e) => {\n  const still = cursorHeldAt"):]
+    mv = mv[: mv.index("}, true);")]
+    assert "Math.abs(e.clientX - cursorHeldAt.x) < POINTER_MOVE_PX" in mv, "a move is a change of place, not an event"
+    assert "if (!pointerFresh && !still) releasePointer();" in mv
+    # the three hovers read the gate, keep the denied enter, and drop it on a leave
+    for fn, enter in (("function previewOnHover(scene, els, show, anchor) {", "whenPointerMoves(enter)"),
+                      ("function bindHoverGlow(scene, el, id) {", "whenPointerMoves(on)"),
+                      ("function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected, action) {", "whenPointerMoves(on)")):
+        body = js[js.index(fn): js.index("\n}", js.index(fn))]
+        assert "if (!pointerFresh) { " + enter + "; return; }" in body, fn
+        assert "forgetPointerMove(" in body, fn
+    rel = js[js.index("function releasePointer() {"): js.index("\n}", js.index("function releasePointer() {"))]
+    assert "for (const fn of pendingHovers.splice(0)) fn();" in rel, "the move delivers the hover the box is owed"
+    # …and the stylesheet's own :hover reads the same gate, through the resting-colour variable
+    assert "--ibox-rest: #dcdff0; border: 1.5px solid var(--ibox-rest);" in css
+    assert "#diagram.pointer-held .ibox:hover:not(.ibox-picked) { border-color: var(--ibox-rest); }" in css
+    assert "#diagram.pointer-held .ibox-name:hover, #diagram.pointer-held .cyname:hover { text-decoration: none; }" in css
+    assert "{--ibox-rest:color-mix(in srgb, ${t.stroke} ${mix}%, #fff)}" in js, "the per-kind resting line is the variable"
+
+
 def test_a_walk_draws_no_corner_icons() -> None:
     """The icon floating in a box's corner was the older way of saying "this opens something", in a
     language no other screen speaks. The name says it now, and it says it the way a card's title does."""

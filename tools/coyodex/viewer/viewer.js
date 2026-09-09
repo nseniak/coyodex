@@ -1250,8 +1250,11 @@ function injectItemTintCss() {
     // subsystem) stays duller and lighter than the hover blue (#4f46e5), so a resting box, a hovered
     // one and a picked one still read as three weights of one line.
     const mix = t.strokeWidth ? CONTAINER_BORDER_MIX : MEMBER_BORDER_MIX;
+    // Written as `--ibox-rest`, the variable `.ibox` draws its border from, so the held-pointer rule
+    // (`#diagram.pointer-held .ibox:hover`, viewer.css) can put the resting line back without knowing
+    // the kind.
     out.push(`.ibox-tinted:where(.ibox-k-${k})`
-      + `{border-color:color-mix(in srgb, ${t.stroke} ${mix}%, #fff)}`);
+      + `{--ibox-rest:color-mix(in srgb, ${t.stroke} ${mix}%, #fff)}`);
     out.push(`.ibox-k-${k} .ibox-pill{background:${t.fill};color:${t.stroke}}`);
     // NO RULE FOR THE CHIP. A chip is a plain box with a grey hairline, and its GLYPH is the only
     // thing on it wearing the kind's colour — `itemGlyphSvg` strokes that in, so the identity costs
@@ -1523,6 +1526,7 @@ let sceneGen = 0;
 function makeScene(root, defaultPanel) {
   sceneGen++;
   hoverPreview = null;   // nothing on the new drawing is being previewed yet
+  holdPointer();         // …and the cursor already over it is not hovering until it moves
   // dimEls: a flat list of extra focusable elements (the Happy Path's actor figures, lifelines and
   // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
   // selection: the ordered list of selected-element DESCRIPTORS (click order = card/stack order; the LAST
@@ -4151,8 +4155,12 @@ function glowNode(el, revealAction = true) {
 // Skipped while the node is the active selection, so glowNode's HILITE wins over a lingering hover.
 function bindHoverGlow(scene, el, id) {
   const shape = shapeOf(el);
-  el.addEventListener('mouseenter', () => { if (!selHas(scene, 'node:' + id)) shape.style.filter = HOVER; });
-  el.addEventListener('mouseleave', () => { if (!selHas(scene, 'node:' + id)) shape.style.filter = ''; });
+  // A pointer that has not moved since the drawing changed is not hovering (see holdPointer): the glow
+  // waits for the move, and a leave in the meantime cancels the wait.
+  const on = () => { if (!pointerFresh) { whenPointerMoves(on); return; } if (!selHas(scene, 'node:' + id)) shape.style.filter = HOVER; };
+  const off = () => { forgetPointerMove(on); if (!selHas(scene, 'node:' + id)) shape.style.filter = ''; };
+  el.addEventListener('mouseenter', on);
+  el.addEventListener('mouseleave', off);
 }
 // A node's focus contribution: its own box + its immediate neighbours (kept lit), and its own edges. null
 // when the node isn't drawn in this scene (a neighbourhood's external box) — so it doesn't dim everything.
@@ -4501,6 +4509,10 @@ function bindEdgeActionIcon(p, hits, label, action, isSelected) {
 // `onDrill` (falsy for a non-drillable edge) controls the ⌘-held cursor and direct drill gesture.
 // `action` can instead put another explicit action on the arrow, such as Locate on a flow relationship.
 function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected, action) {
+  // A pointer that has not moved since the drawing changed is not hovering (see holdPointer): the glow
+  // waits for the move, and a leave in the meantime cancels the wait.
+  const on = () => { if (!pointerFresh) { whenPointerMoves(on); return; } hoverOn(); };
+  const off = () => { forgetPointerMove(on); hoverOff(); };
   // ONE overlay per segment: a self-arrow is three paths, and an overlay on only one of them would leave
   // two thirds of the loop unclickable — the exact "hovering it does nothing" the loop had before.
   const hits = edgeSegs(p).map((seg) => {
@@ -4514,8 +4526,8 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
     h.classList.add('cy-edgehit');   // findable: an arrow's real hit area is these clones, not the path
     if (onDrill) h.classList.add('drill');  // ⌘-held cursor affordance
     h.addEventListener('click', onClick);
-    h.addEventListener('mouseenter', hoverOn);
-    h.addEventListener('mouseleave', hoverOff);
+    h.addEventListener('mouseenter', on);
+    h.addEventListener('mouseleave', off);
     seg.parentNode.appendChild(h);
     return h;
   });
@@ -4524,8 +4536,8 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
     label.style.setProperty('pointer-events', 'all', 'important');
     if (onDrill) label.classList.add('drill');
     label.addEventListener('click', onClick);
-    label.addEventListener('mouseenter', hoverOn);
-    label.addEventListener('mouseleave', hoverOff);
+    label.addEventListener('mouseenter', on);
+    label.addEventListener('mouseleave', off);
   }
   // THE ARROW'S REAL HIT AREA, kept on the drawn path. A caller that wants to listen on the whole arrow
   // cannot find these otherwise: every edge's clones are appended into the SAME parent group, so a
@@ -7189,6 +7201,39 @@ function rectsOverlap(a, b) {
 // shows a card before you commit to a click, so the line has to follow the pointer or it would point at
 // the last thing you clicked while describing something else.
 let hoverPreview = null;
+// ── A POINTER THAT DID NOT MOVE ────────────────────────────────────────────────────────────────
+// A new drawing lands under a cursor that may be sitting on one of its boxes or arrows — after a
+// drill, a link, the browser's Back — and the browser reports that as an entry: the card opened and
+// the border lit for a thing nobody pointed at. Until the pointer MOVES, a hover on the new drawing
+// is not a hover. Movement, not events: Chrome re-reports the cursor after a layout change without
+// the mouse moving, so a mousemove at the same place does not count. `pointerFresh` is the gate every
+// hover reads (the card, a box's glow, an arrow's glow), `#diagram.pointer-held` the same gate for the
+// stylesheet's :hover, and the enters a held pointer was denied are kept, so the move delivers the
+// hover the thing under the cursor is owed instead of making the reader leave it and come back.
+let pointerFresh = true;
+let cursorHeldAt = null;                // where the cursor was when the drawing changed under it
+                                        // (`pointerAt`, below, is where it was last seen)
+const pendingHovers = [];               // the enters denied while held, run on the move
+const POINTER_MOVE_PX = 2;              // a jitter smaller than this is not a move
+function holdPointer() {
+  pointerFresh = false;
+  cursorHeldAt = pointerAt ? { ...pointerAt } : { x: NaN, y: NaN };
+  pendingHovers.length = 0;
+  if (diagram) diagram.classList.add('pointer-held');
+}
+function releasePointer() {
+  pointerFresh = true;
+  cursorHeldAt = null;
+  if (diagram) diagram.classList.remove('pointer-held');
+  for (const fn of pendingHovers.splice(0)) fn();
+}
+function whenPointerMoves(fn) { if (!pendingHovers.includes(fn)) pendingHovers.push(fn); }
+function forgetPointerMove(fn) { const i = pendingHovers.indexOf(fn); if (i >= 0) pendingHovers.splice(i, 1); }
+document.addEventListener('mousemove', (e) => {
+  const still = cursorHeldAt && Math.abs(e.clientX - cursorHeldAt.x) < POINTER_MOVE_PX
+    && Math.abs(e.clientY - cursorHeldAt.y) < POINTER_MOVE_PX;
+  if (!pointerFresh && !still) releasePointer();
+}, true);
 // THE ONE NUMBER A PICKED STEP'S LINE POINTS AT. An arrow carries several steps and its middle names
 // all of them, so a line to the middle says which ARROW you picked and never which step. Set by the
 // step's own glow and cleared when it goes.
@@ -7234,6 +7279,7 @@ function previewOnHover(scene, els, show, anchor) {
   let inTimer = null;
   let outTimer = null;
   const enter = () => {
+    if (!pointerFresh) { whenPointerMoves(enter); return; }   // not a hover yet — see holdPointer
     clearTimeout(outTimer); outTimer = null;
     inTimer = setTimeout(() => {
       if (gen !== sceneGen || !at.isConnected) return;
@@ -7251,6 +7297,7 @@ function previewOnHover(scene, els, show, anchor) {
     }, HOVER_CARD_MS);
   };
   const leave = () => {
+    forgetPointerMove(enter);
     clearTimeout(inTimer); inTimer = null;
     if (gen !== sceneGen || hoverPreview !== at) return;
     outTimer = setTimeout(() => {
