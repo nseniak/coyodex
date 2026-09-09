@@ -1,0 +1,193 @@
+{
+ "grounding": [
+  {
+   "claim": "Role 'Map owner' may do everything 'Map reader' may do",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:633",
+   "skeptic": "security-3",
+   "note": "I read the whole request path in serve.py: do_GET (633-652), do_POST (654-667), _root_api (670-689), _open/_forget (691-710) and _project's api routes (760-828). There is no identity, login, session or role anywhere in the server, and a grep for authenticate/authorization/permission/role/login over serve.py returns only an unrelated comment at line 559. So nothing in the running product withholds any Map-reader action from a Map owner: both reach the same loopback pages with no check. The claim holds, but by the ABSENCE of any check, not by a grant site -- which is why the map has no anchor for it."
+  },
+  {
+   "claim": "Rule 'A served map is reachable only from the machine that runs the server.' is enforced at tools/coyodex/viewer/serve.py:885 — Opens the listening address on this machine alone, so a connection from another machine never arrives.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:885",
+   "skeptic": "security-3",
+   "note": "Line 885 is `httpd = ThreadingHTTPServer((\"127.0.0.1\", port), Handler)` inside serve(). The bind address is the hardcoded loopback literal, not 0.0.0.0 and not configurable -- serve()'s signature (869-870) takes no host parameter -- so the socket never accepts a connection from another machine."
+  },
+  {
+   "claim": "Rule 'A served map is reachable only from the machine that runs the server.' is enforced at tools/coyodex/viewer/serve.py:634 — Refuses a page request whose address names any host other than this machine.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:634",
+   "skeptic": "security-3",
+   "note": "Line 634 is the first statement of do_GET: `if not _loopback_host(self.headers.get(\"Host\", \"\")): return self._send(403, ..., b\"host not allowed\")`. I read _loopback_host at 583-594: it strips an optional :port or IPv6 brackets and tests membership in {127.0.0.1, localhost, ::1}. Every GET route is behind it. Note: an ABSENT Host is allowed on purpose (588-589), which the claim's wording still covers -- an absent Host names no other host."
+  },
+  {
+   "claim": "Rule 'A served map is reachable only from the machine that runs the server.' is enforced at tools/coyodex/viewer/serve.py:655 — Refuses the same way for a request that changes the remembered project list.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:655",
+   "skeptic": "security-3",
+   "note": "Line 655 is the first statement of do_POST, the same `_loopback_host(self.headers.get(\"Host\", \"\"))` test returning 403 at 656. do_POST is the only verb that mutates the remembered project list (it routes api/open, api/forget and api/reorder at 661-666), so the remembered list is behind the same host check as the pages."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyodex/viewer/serve.py:883 — Builds the served set from the remembered folder list alone, with no search of the disk.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:883",
+   "skeptic": "security-3",
+   "note": "Line 883 is `Handler.projects = build_projects(store.list())` in serve(). I read build_projects at 269-283: it iterates exactly the folder strings it is handed and calls load_project on each -- no glob, no walk, no discovery. store.list() (recents.py:88-89) returns a copy of the remembered folder list. The only other assignments to Handler.projects (676, 701, 709) also pass store.list(), so the served set is never widened by a disk search."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyodex/viewer/serve.py:697 — Refuses to add a folder that holds no coyodex data folder inside it.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:697",
+   "skeptic": "security-3",
+   "note": "Line 697 is `if not _has_coyodex(p):` in _open, returning 400 'that folder has no .coyodex/ folder' at 698, before store.add(str(p)) at 700. _has_coyodex (104-110) is `(folder / \".coyodex\").is_dir()`. _open is the only handler behind api/open (666), so a folder cannot enter the remembered list through the web UI without that marker."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyodex/viewer/serve.py:878 — Applies the same check to a folder named when the server is started.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:878",
+   "skeptic": "security-3",
+   "note": "Line 878 is `if _has_coyodex(folder):` in the serve() loop over add_folders (the folders named on the command line); the else branch at 880-881 prints 'skipping ... no .coyodex/ folder' instead of adding. Same _has_coyodex helper (104-110) the web path uses at 697, so the command-line entry point applies the same check."
+  },
+  {
+   "claim": "Rule 'A project folder is served only when it was deliberately added, never because the server found it.' is enforced at tools/coyodex/viewer/serve.py:658 — Refuses a change to the remembered list unless the request came from this server's own start page.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:658",
+   "skeptic": "security-3",
+   "note": "Line 658 is `if self.headers.get(\"X-Coyodex\") != \"serve\":` -> 403 at 659, guarding every POST including api/open and api/forget. I grepped X-Coyodex across the viewer tree: the only sender is line 1041 inside INDEX_HTML, the landing/start page the server itself serves (`const H={'Content-Type':'application/json','X-Coyodex':'serve'};`). A cross-origin page cannot set a custom header without a CORS preflight the server never answers. Precision on the wording: any LOCAL non-browser client (curl) can also set the header, so what is really enforced is 'no foreign web page', not literally 'only the start page'."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyodex/viewer/serve.py:778 — Rejects a file request whose path is absolute or climbs above the project folder.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:778",
+   "skeptic": "security-3",
+   "note": "Line 778 is `if not _safe_rel(path):` -> 400 'bad path' at 779, at the head of the api/src route where path comes straight from the query string (777). I read _safe_rel at 339-343: it rejects an empty path, a leading '/', a backslash, a NUL byte, and any '..' component. Both downstream reads (worktree_read at 784, git_blob_size/git_show at 792/797) re-check it themselves (314, 333, 380)."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyodex/viewer/serve.py:380 — Rejects a working copy read that escapes the project or names the version history folder.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:380",
+   "skeptic": "security-3",
+   "note": "Line 380 is worktree_read's first statement: `if not _safe_rel(path) or path.split(\"/\", 1)[0] == \".git\": return None`. _safe_rel (339-343) is the absolute/traversal test; the second half is the version-history folder. I opened the only call site, serve.py:784 (api/src with at=WORKTREE), which passes proj.repo_root and the already-_safe_rel-checked path -- no flag or argument the caller could pass to switch the guard off."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyodex/viewer/serve.py:387 — Refuses a file whose real location, after following a shortcut, sits outside the project folder.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:387",
+   "skeptic": "security-3",
+   "note": "Line 387 is `if not real.is_relative_to(real_root) or \".git\" in real.relative_to(real_root).parts: return None`, where real and real_root come from resolve(strict=True) at 383-384 -- symlinks followed. So a tracked symlink pointing outside the repo is refused on its REAL location, which the string check at 380 could not catch. Only call site is 784."
+  },
+  {
+   "claim": "Rule 'A request for a file can only ever reach inside the mapped project's own folder.' is enforced at tools/coyodex/viewer/serve.py:849 — Hands back a shared page asset only when the requested name is one of the two allowed names.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:849",
+   "skeptic": "security-3",
+   "note": "Lines 848-849 are `ctype = _STATIC_FILES.get(name)` / `if ctype is None: return self._send(404, ...)` in _static, and _STATIC_FILES (59-62) holds exactly two keys, 'viewer.js' and 'viewer.css'. An exact-name dict lookup makes traversal impossible. Precision: this route serves _FRONTEND_DIR (the tool's own folder, line 58), not the mapped project's folder, so what it enforces at this line is a two-name whitelist rather than project containment."
+  },
+  {
+   "claim": "Rule 'A file that version history deliberately ignores is never handed back to the browser.' is enforced at tools/coyodex/viewer/serve.py:391 — Allows a working copy read when version history already tracks the file.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:391",
+   "skeptic": "security-3",
+   "note": "Line 391 is `code, _out = _git(root, [\"ls-files\", \"--error-unmatch\", \"--\", path])` in worktree_read; code == 0 means git tracks the file and control falls through to the read at 397. A tracked file cannot be an ignored one, so this branch is the 'already tracked -> allow' half of the rule. Only call site is 784."
+  },
+  {
+   "claim": "Rule 'A file that version history deliberately ignores is never handed back to the browser.' is enforced at tools/coyodex/viewer/serve.py:393 — Allows an untracked file only when no ignore rule covers it.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:393",
+   "skeptic": "security-3",
+   "note": "Lines 392-395: when the file is untracked, git is re-run as `ls-files --others --exclude-standard -- path` (393) and the read is refused at 395 unless the path appears in that output. --exclude-standard applies the ignore rules, so an ignored secrets file is absent from the listing and never reaches read_bytes() at 397."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyodex/viewer/serve.py:790 — Refuses a requested version that is not a plain commit identifier.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:790",
+   "skeptic": "security-3",
+   "note": "Line 790 is `if not _valid_commit(at):` -> 400 'bad at= commit' at 791, where `at` is the query-string value (782). _valid_commit (94-101) is `_SHA_RE.fullmatch` against `[0-9a-fA-F]{7,64}` -- a bare hex SHA only, so a leading '-' or any ref syntax is refused before git_blob_size/git_show put it in git's argv."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyodex/viewer/serve.py:366 — Refuses a branch or tag name that opens with a dash or carries unusual characters.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:366",
+   "skeptic": "security-3",
+   "note": "Line 366 is `if not _safe_ref(ref): return None` in resolve_ref. _safe_ref (352-357) requires a non-empty ref, refuses one starting with '-' (which git would read as a flag) and requires a fullmatch of `[0-9A-Za-z_./~^@{}+-]{1,200}`. The WORKTREE sentinel is short-circuited above it at 364-365 and never reaches git."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyodex/viewer/serve.py:368 — Marks where the options end, so the name after it can never be read as one.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:368",
+   "skeptic": "security-3",
+   "note": "Line 368 is `_git(repo_root, [\"rev-parse\", \"--verify\", \"--end-of-options\", f\"{ref}^{{commit}}\"])`. The literal `--end-of-options` sits before the ref, so git cannot parse the ref as an option; _git itself (291-293) uses subprocess.run with an argv list and no shell. Belt-and-braces with _safe_ref at 366, and the result is re-checked by _valid_commit at 372."
+  },
+  {
+   "claim": "Rule 'A version name arriving in a web address is refused unless it reads as an ordinary commit name.' is enforced at tools/coyodex/viewer/serve.py:301 — Skips the history read entirely when the map's own recorded commit is not plain.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:301",
+   "skeptic": "security-3",
+   "note": "Line 301 is `if not _valid_commit(commit): return []` at the head of git_ls_files, returning before the ls-tree call at 303. I opened its one caller, serve.py:491, which passes proj.commit -- the commit recorded in the map (Project.commit, 70-72, with '-dirty' already stripped by _strip_dirty). So a map whose recorded commit is not a bare SHA yields an empty file set and no git invocation at all."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyodex/viewer/viewer.html:17 — Pins the expected fingerprint of the picture panning library.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:17",
+   "skeptic": "security-3",
+   "note": "Lines 16-18 are the svg-pan-zoom@3.6.1 script tag; line 17 is `integrity=\"sha384-yc/c2Lk1s2V2ir1rxvjo8YyVD9PlOlYTqpNr3Wm1WIuAA30GlDYNx6U5104OiavY\"` with crossorigin=\"anonymous\" on 18. svg-pan-zoom is the pan/zoom library for the diagrams, and the version in the URL is pinned exactly."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyodex/viewer/viewer.html:20 — Pins the expected fingerprint of the diagram drawing library.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:20",
+   "skeptic": "security-3",
+   "note": "Lines 19-21 are the mermaid@11.15.0 script tag; line 20 is `integrity=\"sha384-yQ4mmBBT+vhTAwjFH0toJXNYJ6O4usWnt6EPIdWwrRvx2V/n5lXuDZQwQFeSFydF\"` with crossorigin=\"anonymous\" on 21. Mermaid is the diagram-drawing library, and the comment at 13-15 records why the self-contained UMD bundle is used (an ESM entry would leave its runtime chunks outside SRI's cover)."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyodex/viewer/viewer.js:14094 — Pins the expected fingerprint of the styling that colours source code.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:14094",
+   "skeptic": "security-3",
+   "note": "Line 14094 is `css.rel = 'stylesheet'; css.href = HLJS_CSS; css.integrity = HLJS_CSS_SRI; css.crossOrigin = 'anonymous';` in ensureHljs. HLJS_CSS (14085) is highlight.js's github.min.css at the pinned version 11.9.0 (14082) and HLJS_CSS_SRI (14086) is its sha384 -- the stylesheet that colours source code, fingerprinted before the <link> is appended at 14095."
+  },
+  {
+   "claim": "Rule 'Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one.' is enforced at tools/coyodex/viewer/viewer.js:14097 — Pins the expected fingerprint of the code colouring library itself.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:14097",
+   "skeptic": "security-3",
+   "note": "Line 14097 is `s.src = HLJS_JS; s.integrity = HLJS_JS_SRI; s.crossOrigin = 'anonymous';` -- HLJS_JS (14083) is highlight.min.js at the pinned 11.9.0 and HLJS_JS_SRI (14084) its sha384 -- set before the <script> is appended at 14100. I also grepped every remote URL in the viewer: viewer.html has exactly two (16, 19) and viewer.js exactly two (14083, 14085), and all four carry an integrity pin, so no remote code loads unpinned."
+  },
+  {
+   "claim": "Rule 'A source link may open only through an address belonging to a known code editor.' is enforced at tools/coyodex/viewer/viewer.js:14880 — Offers no link when the built address is not one a known editor answers.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:14880",
+   "skeptic": "security-3",
+   "note": "Line 14880 is `return ALLOWED_OPEN_SCHEMES.has(uriScheme(uri)) ? uri : null;` -- the last statement of editorUri, so the built URI is returned only when its scheme is in the set. ALLOWED_OPEN_SCHEMES (14811-14815) is a 23-entry Set of editor schemes (vscode, cursor, idea, subl, emacs, ...); the comment at 14809-14810 states it blocks javascript:/data:/file:/http(s):. uriScheme (14863) lowercases the scheme before the test."
+  },
+  {
+   "claim": "Rule 'A source link may open only through an address belonging to a known code editor.' is enforced at tools/coyodex/viewer/viewer.js:15011 — Refuses to save a hand-typed link pattern whose address is not a known editor one.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:15011",
+   "skeptic": "security-3",
+   "note": "Line 15011 is `if (!ALLOWED_OPEN_SCHEMES.has(uriScheme(custom))) {` in saveSettings, which sets the error 'Scheme not allowed -- use an editor scheme (vscode://, subl://, ...)' and returns at 15012-15013 BEFORE the lsSet writes at 15020-15021. `custom` is the hand-typed template read at 15007, and the check runs whenever the chosen target id is 'custom' (15009). Same Set as the render-time check at 14880, so the value is refused at save AND again at use."
+  },
+  {
+   "claim": "Rule 'A run refuses to read or overwrite coyodex's own map unless the operator declares coyodex is the project being mapped.' is enforced at tools/coyodex/model.py:1443 — Refuses to read a map stored inside coyodex's own copy unless the run declared that coyodex is the project.",
+   "grounded": true,
+   "evidence": "tools/coyodex/model.py:1443",
+   "skeptic": "security-3",
+   "note": "Lines 1437-1448 in resolve_map_path: unless COYODEX_SELF_MAP is 1/true/yes (1437), the resolved path is tested with relative_to(COYODEX_HOME / '.coyodex') (1439) and, when it IS inside, line 1443 raises WrongMapError. COYODEX_HOME (1382) is the clone this code runs from. Every read verb goes through it -- I grepped the callers: finalize.py:154/782/815, assemble.py:183, anchor_drift.py:409, audit_model.py:1689, context.py:196, balance.py:271, validate_model.py:6583, grounding.py:1572/1672, plus load_model_path at model.py:1455."
+  },
+  {
+   "claim": "Rule 'A run refuses to read or overwrite coyodex's own map unless the operator declares coyodex is the project being mapped.' is enforced at tools/coyodex/model.py:1408 — Refuses the same target for a write, so a stray build cannot overwrite the accepted map of coyodex.",
+   "grounded": true,
+   "evidence": "tools/coyodex/model.py:1408",
+   "skeptic": "security-3",
+   "note": "Lines 1401-1411 in guard_wrong_map: same COYODEX_SELF_MAP escape (1402) and same relative_to test (1405), and line 1408 raises WrongMapError naming a WRITE. I opened the one call site, assemble.py:976 -- `guard_wrong_map(out_dir / \"project-map.json\")` runs BEFORE out_dir.mkdir (977) and before the two write_text calls (978-979), so the caller cannot reach the write past a refusal, and passes no flag that could disable it."
+  },
+  {
+   "claim": "Rule 'A run refuses to read or overwrite coyodex's own map unless the operator declares coyodex is the project being mapped.' is enforced at method.md:1369 — Tells the build the refusal exists, and warns that a hand written script is not covered by the refusal.",
+   "grounded": true,
+   "evidence": "method.md:1369",
+   "skeptic": "security-3",
+   "note": "Lines 1369-1371 of method.md read: 'coyodex refuses to read the clone's own .coyodex/ unless COYODEX_SELF_MAP=1 is set, which catches the verbs -- but a bare python3 heredoc is not a coyodex verb, so the rule still has to be obeyed rather than relied on.' That is both halves of the claim, and it matches the code I read at model.py:1437-1448."
+  }
+ ]
+}

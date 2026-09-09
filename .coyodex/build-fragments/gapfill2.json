@@ -1,0 +1,459 @@
+{
+  "edges": [
+    {
+      "src": "C20",
+      "verb": "calls",
+      "dst": "C5",
+      "why": "dispatches the self-check a helper runs on its own piece of the map",
+      "where": "tools/coyodex/cli.py:189"
+    },
+    {
+      "src": "C25",
+      "verb": "calls",
+      "dst": "C5",
+      "why": "self-checks the one hand-written piece of the map as a closing step",
+      "where": "tools/coyodex/ship.py:326"
+    },
+    {
+      "src": "C5",
+      "verb": "calls",
+      "dst": "C4",
+      "why": "parses a piece through the merger's own reader, so the two never read it differently",
+      "where": "tools/coyodex/lint_fragment.py:590"
+    },
+    {
+      "src": "C5",
+      "verb": "calls",
+      "dst": "C6",
+      "why": "opens every file and line the piece cites, to prove each code link exists",
+      "where": "tools/coyodex/lint_fragment.py:198"
+    },
+    {
+      "src": "C5",
+      "verb": "calls",
+      "dst": "C7",
+      "why": "checks the piece's flows for step numbering, an actor on each step and an anchor",
+      "where": "tools/coyodex/lint_fragment.py:161"
+    },
+    {
+      "src": "C5",
+      "verb": "calls",
+      "dst": "C8",
+      "why": "checks that each business rule in the piece states a decision and names code lines",
+      "where": "tools/coyodex/lint_fragment.py:180"
+    },
+    {
+      "src": "C5",
+      "verb": "calls",
+      "dst": "C9",
+      "why": "checks each message channel in the piece for a broker, participants and the record it carries",
+      "where": "tools/coyodex/lint_fragment.py:153"
+    },
+    {
+      "src": "C5",
+      "verb": "calls",
+      "dst": "C10",
+      "why": "checks that each record in the piece names a real store and an allowed storage mode",
+      "where": "tools/coyodex/lint_fragment.py:149"
+    },
+    {
+      "src": "C5",
+      "verb": "calls",
+      "dst": "C27",
+      "why": "asks which of the project's files are uncommitted, so the piece's recorded commit can be flagged",
+      "where": "tools/coyodex/lint_fragment.py:280"
+    },
+    {
+      "src": "C80",
+      "verb": "calls",
+      "dst": "C7",
+      "why": "takes every flow step that carries a code link, before joining rules to steps",
+      "where": "tools/coyodex/views.py:1003"
+    },
+    {
+      "src": "C81",
+      "verb": "calls",
+      "dst": "C7",
+      "why": "takes every flow step that carries a code link, before working out what each feature owns",
+      "where": "tools/coyodex/features.py:467"
+    },
+    {
+      "src": "C112",
+      "verb": "calls",
+      "dst": "C7",
+      "why": "re-counts the saved records whose arrows claim a direction no flow step ever shows",
+      "where": "eval/tools/coyodex_eval/live_numbers.py:192"
+    },
+    {
+      "src": "C7",
+      "verb": "reads",
+      "dst": "C1",
+      "why": "walks the map's flows to catch a use case told twice",
+      "where": "tools/coyodex/validate_model.py:404"
+    },
+    {
+      "src": "C80",
+      "verb": "calls",
+      "dst": "C8",
+      "why": "asks which flow steps enforce a rule, to draw the rule beside them",
+      "where": "tools/coyodex/views.py:1024"
+    },
+    {
+      "src": "C81",
+      "verb": "calls",
+      "dst": "C8",
+      "why": "asks which flow steps enforce a rule, to give that rule to the right feature",
+      "where": "tools/coyodex/features.py:469"
+    },
+    {
+      "src": "C21",
+      "verb": "calls",
+      "dst": "C8",
+      "why": "resolves which components own a rule's code line, through the rule family's one join",
+      "where": "tools/coyodex/audit_model.py:1055"
+    },
+    {
+      "src": "C8",
+      "verb": "calls",
+      "dst": "C49",
+      "why": "asks which function encloses a rule's line, so a rule and a step there count as one place",
+      "where": "tools/coyodex/validate_model.py:1453"
+    },
+    {
+      "src": "C80",
+      "verb": "calls",
+      "dst": "C9",
+      "why": "asks which way data crosses each interface, from the flow steps drawn at it",
+      "where": "tools/coyodex/views.py:1175"
+    },
+    {
+      "src": "C81",
+      "verb": "calls",
+      "dst": "C9",
+      "why": "asks which way data crosses each interface a feature reaches",
+      "where": "tools/coyodex/features.py:554"
+    },
+    {
+      "src": "C21",
+      "verb": "calls",
+      "dst": "C9",
+      "why": "asks which way data crosses each interface someone else designs, to word the finding about it",
+      "where": "tools/coyodex/audit_model.py:1243"
+    },
+    {
+      "src": "C9",
+      "verb": "calls",
+      "dst": "C48",
+      "why": "reads the recorded exceptions that silence a channel advisory, through the one reader for them",
+      "where": "tools/coyodex/validate_model.py:3640"
+    },
+    {
+      "src": "C80",
+      "verb": "calls",
+      "dst": "C10",
+      "why": "asks which writes into a store no saved record explains, for the storage page's coverage strip",
+      "where": "tools/coyodex/views.py:952"
+    },
+    {
+      "src": "C10",
+      "verb": "calls",
+      "dst": "C21",
+      "why": "counts how many claims the map offers, to say what share of them was challenged",
+      "where": "tools/coyodex/validate_model.py:3928"
+    },
+    {
+      "src": "C20",
+      "verb": "calls",
+      "dst": "C21",
+      "why": "dispatches the pass that makes a finished map contradict itself",
+      "where": "tools/coyodex/cli.py:159"
+    },
+    {
+      "src": "C22",
+      "verb": "calls",
+      "dst": "C21",
+      "why": "takes the ranked list of claims a map offers, before recording how the votes on them fell",
+      "where": "tools/coyodex/grounding.py:1585"
+    },
+    {
+      "src": "C47",
+      "verb": "calls",
+      "dst": "C21",
+      "why": "applies the recorded anchor corrections through the one function that rewrites a code link",
+      "where": "tools/coyodex/reconcile.py:680"
+    },
+    {
+      "src": "C103",
+      "verb": "calls",
+      "dst": "C21",
+      "why": "takes the ranked list of claims a map offers, to hand the top of it to the doubters",
+      "where": "eval/tools/coyodex_eval/judge.py:234"
+    },
+    {
+      "src": "C20",
+      "verb": "calls",
+      "dst": "C27",
+      "why": "dispatches the stamp that records which session built a map, and when",
+      "where": "tools/coyodex/cli.py:213"
+    },
+    {
+      "src": "C26",
+      "verb": "calls",
+      "dst": "C27",
+      "why": "asks which of the project's files are uncommitted, so the briefing names the pin it will use",
+      "where": "tools/coyodex/scope.py:68"
+    },
+    {
+      "src": "C50",
+      "verb": "calls",
+      "dst": "C27",
+      "why": "stamps the map through the same code the command line runs, so one shape is written",
+      "where": "tools/map_backup.py:293"
+    },
+    {
+      "src": "C110",
+      "verb": "reads",
+      "dst": "C27",
+      "why": "reads the build log to learn which session made the map a review would read",
+      "where": "eval/tools/coyodex_eval/retro_precheck.py:179"
+    },
+    {
+      "src": "C27",
+      "verb": "queries",
+      "dst": "D90",
+      "why": "asks the code history for the commit a map is pinned to",
+      "where": "tools/coyodex/provenance.py:125"
+    },
+    {
+      "src": "C27",
+      "verb": "reads",
+      "dst": "D95",
+      "why": "reads the conversation name the agent publishes, so a map records which chat built it",
+      "where": "tools/coyodex/provenance.py:209"
+    },
+    {
+      "src": "C27",
+      "verb": "writes",
+      "dst": "D91",
+      "why": "writes the build log beside the map, as a file the project commits",
+      "where": "tools/coyodex/provenance.py:232"
+    },
+    {
+      "src": "C83",
+      "verb": "calls",
+      "dst": "C49",
+      "why": "works out which parts of the map a code change touches, for the browser page to show",
+      "where": "tools/coyodex/viewer/serve.py:476"
+    },
+    {
+      "src": "C82",
+      "verb": "calls",
+      "dst": "C49",
+      "why": "reads how far each mapped code link stretches, before deriving what every feature owns",
+      "where": "tools/coyodex/viewer/gen_viewer.py:3345"
+    },
+    {
+      "src": "C49",
+      "verb": "queries",
+      "dst": "D90",
+      "why": "runs read-only history commands to compare the project's code at two commits",
+      "where": "tools/coyodex/impact_git.py:50"
+    },
+    {
+      "src": "C50",
+      "verb": "writes",
+      "dst": "D91",
+      "why": "copies the whole map folder into a dated archive folder on disk",
+      "where": "tools/map_backup.py:391"
+    },
+    {
+      "src": "C47",
+      "verb": "writes",
+      "dst": "E56",
+      "why": "expands the build's path rules into an explicit list of assignments beside the map",
+      "where": "tools/coyodex/reconcile_build.py:480"
+    },
+    {
+      "src": "C62",
+      "verb": "calls",
+      "dst": "C63",
+      "why": "wires each drawn box and arrow to what a click does, once the picture exists",
+      "where": "tools/coyodex/viewer/viewer.js:13113"
+    },
+    {
+      "src": "C63",
+      "verb": "calls",
+      "dst": "C64",
+      "why": "shows the picked box in the info pane instead of drilling into it",
+      "where": "tools/coyodex/viewer/viewer.js:5349"
+    },
+    {
+      "src": "C63",
+      "verb": "calls",
+      "dst": "C65",
+      "why": "opens the screen a held key drills to, so the address follows the move",
+      "where": "tools/coyodex/viewer/viewer.js:5348"
+    },
+    {
+      "src": "C64",
+      "verb": "calls",
+      "dst": "C61",
+      "why": "draws the selected thing as the same card every list shows",
+      "where": "tools/coyodex/viewer/viewer.js:2881"
+    },
+    {
+      "src": "C64",
+      "verb": "calls",
+      "dst": "C69",
+      "why": "highlights the selected thing's file in the file browser beside the picture",
+      "where": "tools/coyodex/viewer/viewer.js:2891"
+    },
+    {
+      "src": "C62",
+      "verb": "calls",
+      "dst": "C65",
+      "why": "redraws the tabs, the trail and the address for the screen just rendered",
+      "where": "tools/coyodex/viewer/viewer.js:13242"
+    },
+    {
+      "src": "C62",
+      "verb": "calls",
+      "dst": "C66",
+      "why": "draws the happy path when that is the screen asked for",
+      "where": "tools/coyodex/viewer/viewer.js:13024"
+    },
+    {
+      "src": "C62",
+      "verb": "calls",
+      "dst": "C67",
+      "why": "draws the storage screen when that is the screen asked for",
+      "where": "tools/coyodex/viewer/viewer.js:13068"
+    },
+    {
+      "src": "C62",
+      "verb": "calls",
+      "dst": "C68",
+      "why": "draws the decision areas when that is the screen asked for",
+      "where": "tools/coyodex/viewer/viewer.js:13077"
+    },
+    {
+      "src": "C65",
+      "verb": "calls",
+      "dst": "C62",
+      "why": "draws the screen the address now names",
+      "where": "tools/coyodex/viewer/viewer.js:5307"
+    },
+    {
+      "src": "C66",
+      "verb": "calls",
+      "dst": "C61",
+      "why": "draws each feature as the same card every list shows",
+      "where": "tools/coyodex/viewer/viewer.js:10919"
+    },
+    {
+      "src": "C67",
+      "verb": "calls",
+      "dst": "C61",
+      "why": "draws the operational lists as the same cards every other screen shows",
+      "where": "tools/coyodex/viewer/viewer.js:11720"
+    },
+    {
+      "src": "C67",
+      "verb": "calls",
+      "dst": "C65",
+      "why": "opens one store's screen when a reader picks a record out of the table",
+      "where": "tools/coyodex/viewer/viewer.js:11535"
+    },
+    {
+      "src": "C68",
+      "verb": "calls",
+      "dst": "C61",
+      "why": "draws each decision area as the same card every list shows",
+      "where": "tools/coyodex/viewer/viewer.js:12810"
+    },
+    {
+      "src": "C68",
+      "verb": "calls",
+      "dst": "C65",
+      "why": "opens one decision area's screen when a reader picks its card",
+      "where": "tools/coyodex/viewer/viewer.js:12894"
+    },
+    {
+      "src": "C69",
+      "verb": "calls",
+      "dst": "C83",
+      "why": "asks the server for the project's file list at the commit the map is pinned to",
+      "where": "tools/coyodex/viewer/viewer.js:13892"
+    },
+    {
+      "src": "C69",
+      "verb": "requests",
+      "dst": "D161",
+      "why": "fetches the code-colouring library the first time a file is opened",
+      "where": "tools/coyodex/viewer/viewer.js:14100"
+    },
+    {
+      "src": "C82",
+      "verb": "calls",
+      "dst": "C81",
+      "why": "works out what each feature owns, and folds the answer into the browser page's data",
+      "where": "tools/coyodex/viewer/gen_viewer.py:3348"
+    },
+    {
+      "src": "C83",
+      "verb": "calls",
+      "dst": "C82",
+      "why": "builds every diagram, timeline and flow of one map for the browser page",
+      "where": "tools/coyodex/viewer/serve.py:516"
+    },
+    {
+      "src": "C112",
+      "verb": "calls",
+      "dst": "C82",
+      "why": "re-counts the records whose lifecycle line a drawn box would actually show",
+      "where": "eval/tools/coyodex_eval/live_numbers.py:293"
+    },
+    {
+      "src": "C83",
+      "verb": "calls",
+      "dst": "D92",
+      "why": "opens the map's address in the person's browser once the server is listening",
+      "where": "tools/coyodex/viewer/serve.py:895"
+    },
+    {
+      "src": "C70",
+      "verb": "calls",
+      "dst": "D93",
+      "why": "hands the chosen editor a file and a line, which the machine then opens",
+      "where": "tools/coyodex/viewer/viewer.js:14925"
+    },
+    {
+      "src": "C70",
+      "verb": "requests",
+      "dst": "D94",
+      "why": "opens the file on the code host in a new tab, pinned to the map's commit",
+      "where": "tools/coyodex/viewer/viewer.js:14928"
+    },
+    {
+      "src": "C70",
+      "verb": "requests",
+      "dst": "D96",
+      "why": "fetches the drawing library at a pinned version, and checks it against a stored fingerprint",
+      "where": "tools/coyodex/viewer/viewer.html:19"
+    },
+    {
+      "src": "C105",
+      "verb": "queries",
+      "dst": "D90",
+      "why": "asks the code history which files changed between the two commits the maps pin",
+      "where": "eval/tools/coyodex_eval/arrows.py:184"
+    },
+    {
+      "src": "C113",
+      "verb": "reads",
+      "dst": "D91",
+      "why": "reads a cited file to pick a real line that is not the one enforcing the rule",
+      "where": "eval/tools/coyodex_eval/mutate.py:112"
+    }
+  ]
+}

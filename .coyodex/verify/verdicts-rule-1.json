@@ -1,0 +1,263 @@
+{
+ "grounding": [
+  {
+   "claim": "Rule 'A code link claiming an action must name the acting line, never a definition, an import or a comment.' is enforced at tools/coyodex/anchors.py:131 — Refuses every line shape that can never act.",
+   "grounded": true,
+   "evidence": "tools/coyodex/anchors.py:131",
+   "skeptic": "rule-1",
+   "note": "I read anchors.py:121-133. `non_operative_reason` strips the line, returns 'a blank line' for an empty one, then at line 130-132 loops the `_NON_OPERATIVE` table (def/class/function/func/fn headers, imports, comments, docstring delimiters, lines 102-118) and line 131 `if pat.match(text):` is the statement that decides a line shape can never act. Correct anchor."
+  },
+  {
+   "claim": "Rule 'A code link claiming an action must name the acting line, never a definition, an import or a comment.' is enforced at tools/coyodex/validate_model.py:5957 — Reports each stored link sitting on a line that cannot act.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:5957",
+   "skeptic": "rule-1",
+   "note": "I read validate_model.py:5929-5960. `check_operative_lines_model` walks every call-site anchor, reads the cited line, calls `non_operative_reason`, and line 5957 `if why:` is where a stored link sitting on a non-acting line becomes a reported row (5958-5959). Correct anchor."
+  },
+  {
+   "claim": "Rule 'A code link claiming an action must name the acting line, never a definition, an import or a comment.' is enforced at method.md:1314 — Tells the map builder to link the write, call or enforce line itself.",
+   "grounded": true,
+   "evidence": "method.md:1314",
+   "skeptic": "rule-1",
+   "note": "I read method.md:1306-1325. Line 1314 carries '**Anchor the exact operative statement** — the write / call / enforce line itself' (continuing on 1315 with 'not the enclosing `def` or the surrounding assignment'). That is exactly the instruction the claim describes."
+  },
+  {
+   "claim": "Rule 'A decision's evidence is exactly one numbered line, or a note saying no single line enforces the decision.' is enforced at tools/coyodex/validate_model.py:1686 — Refuses evidence that names no line and does not declare the absence.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:1686",
+   "skeptic": "rule-1",
+   "note": "I read validate_model.py:1662-1695 (`rule_row_problems`). Line 1686 `if not where and not site.no_call_site:` raises a problem for a rule site that neither names a line nor declares `no_call_site`. That is the 'names no line and does not declare the absence' half of the rule."
+  },
+  {
+   "claim": "Rule 'A decision's evidence is exactly one numbered line, or a note saying no single line enforces the decision.' is enforced at tools/coyodex/validate_model.py:1689 — Refuses evidence that names a line and also declares there is none.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:1689",
+   "skeptic": "rule-1",
+   "note": "Same function, line 1689 `elif where and site.no_call_site:` — a site that carries a `where` AND sets `no_call_site` is refused with 'a site is one or the other'. Read at 1684-1691."
+  },
+  {
+   "claim": "Rule 'A decision's evidence is exactly one numbered line, or a note saying no single line enforces the decision.' is enforced at tools/coyodex/validate_model.py:1692 — Refuses evidence naming only a file, with no line number.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:1692",
+   "skeptic": "rule-1",
+   "note": "Same function, line 1692 `elif where and not FILE_LINE_ANCHOR.match(where):` refuses an anchor that names a whole file with no `:line` (message at 1693-1695). Read at 1684-1695."
+  },
+  {
+   "claim": "Rule 'A decision's evidence is exactly one numbered line, or a note saying no single line enforces the decision.' is enforced at tools/coyodex/validate_model.py:5579 — Repeats the same refusal when the whole map is checked, not one piece.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:5579",
+   "skeptic": "rule-1",
+   "note": "I read validate_model.py:5531-5582. Line 5579 `if site.where and not FILE_LINE_ANCHOR.match(site.where):` inside `_check_anchor_format` repeats the line-number requirement for a rule site. CAVEAT on the claim's trailing description ('when the whole map is checked, not one piece'): `_check_anchor_format` is ALSO run by the fragment self-check — tools/coyodex/lint_fragment.py:134 imports and calls it — so it is not whole-map-only. The enforcement relationship itself holds."
+  },
+  {
+   "claim": "Rule 'A decision's evidence is exactly one numbered line, or a note saying no single line enforces the decision.' is enforced at method/model.md:570 — States that a decision's link is the one link whose line number is required.",
+   "grounded": true,
+   "evidence": "method/model.md:570",
+   "skeptic": "rule-1",
+   "note": "I read method/model.md:560-581. Lines 569-571 name `rules[].sites[].where` as 'the OPERATIVE line a business rule is enforced at — the only anchor whose `:line` is REQUIRED ... `null` with `no_call_site: true` = enforced by construction'. Line 570 carries the REQUIRED clause itself."
+  },
+  {
+   "claim": "Rule 'Only a link claiming an action fires there is checked against the line. A link showing where a thing is defined is not.' is enforced at tools/coyodex/validate_model.py:5907 — Skips a relation the definition heading itself declares, like one type extending another.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:5907",
+   "skeptic": "rule-1",
+   "note": "I read validate_model.py:5896-5926 (`call_site_anchors`). Line 5907 `if e.where and e.verb not in (\"extends\", \"implements\"):` keeps declaration-style relations out of the acting-line list; the comment at 5905-5906 says `class Sub(Base):` IS the operative statement for them."
+  },
+  {
+   "claim": "Rule 'Only a link claiming an action fires there is checked against the line. A link showing where a thing is defined is not.' is enforced at tools/coyodex/validate_model.py:5924 — Includes a decision's own line, the strongest claim in the map that a line acts.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:5924",
+   "skeptic": "rule-1",
+   "note": "Same function, lines 5920-5925: every business-rule site with a `where` is added to the acting-line list, and the comment at 5921-5922 calls it 'the strongest \"this line acts\" claim in the map'. Line 5924 `if site.where:` is the including statement."
+  },
+  {
+   "claim": "Rule 'Only a link claiming an action fires there is checked against the line. A link showing where a thing is defined is not.' is enforced at tools/coyodex/validate_model.py:5945 — Skips a link into a written document, where no line acts.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:5945",
+   "skeptic": "rule-1",
+   "note": "I read validate_model.py:5936-5960 plus `_PROSE_SUFFIXES` at 5893 (.md/.markdown/.rst/.txt/.adoc). Line 5945 `if src.suffix.lower() in _PROSE_SUFFIXES:` skips with the comment '\"the operative statement\" means nothing in prose'."
+  },
+  {
+   "claim": "Rule 'A code link on the wrong line is only a warning, because the claim it carries can still be true.' is enforced at tools/coyodex/validate_model.py:6269 — Files each wrongly placed link under warnings, never under failures.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:6269",
+   "skeptic": "rule-1",
+   "note": "I read validate_model.py:6256-6270. Line 6269 `warnings.extend(check_operative_lines_model(m, roots))` files the findings under warnings, while the existence check one line up (6265) goes into `problems`. I also read the exit at 6657 `return 1 if problems else 0`, so warnings cannot fail the run."
+  },
+  {
+   "claim": "Rule 'A code link on the wrong line is only a warning, because the claim it carries can still be true.' is enforced at tools/coyodex/lint_fragment.py:626 — Shows the same finding to the map builder as advice, so the check still passes.",
+   "grounded": true,
+   "evidence": "tools/coyodex/lint_fragment.py:626",
+   "skeptic": "rule-1",
+   "note": "I read lint_fragment.py:604-655. Line 624 collects `check_operative_lines_model` into `drift`, and line 626 `say(f\"{p.name}: warning: {w}\", kind=\"warning\")` prints it as advice. The verdict at 648-655 sets the exit code from `clean`/`n_prob` only, and line 683 says '`warning:` lines are advisory heuristics — they do not fail the lint'."
+  },
+  {
+   "claim": "Rule 'A stored link is judged out of date only when most reviewers agreed the claim it carries is true.' is enforced at tools/coyodex/anchor_drift.py:90 — Skips a claim whose votes are tied or missing.",
+   "grounded": true,
+   "evidence": "tools/coyodex/anchor_drift.py:90",
+   "skeptic": "rule-1",
+   "note": "I read anchor_drift.py:79-96. Line 90 `if not vs or len(grounded) * 2 <= len(vs): continue` skips a claim with no votes and any claim without a STRICT majority of grounded votes — a 1-1 or 2-2 tie falls in the `<=` and is skipped before `anchor_drift` is ever called."
+  },
+  {
+   "claim": "Rule 'A stored link is judged out of date only when most reviewers agreed the claim it carries is true.' is enforced at method.md:2383 — States that two reviewers cannot form a majority.",
+   "grounded": true,
+   "evidence": "method.md:2383",
+   "skeptic": "rule-1",
+   "note": "I read method.md:2370-2388. Line 2383 carries the sentence 'Two skeptics cannot form a majority, and a tie broken by the lead reading the code is the build-context blind spot the fresh-context rule exists to break'. Exactly the stated instruction."
+  },
+  {
+   "claim": "Rule 'A claim whose code link deliberately points at a declaration is never moved onto the line a reviewer read.' is enforced at tools/coyodex/anchor_drift.py:86 — Skips the comparison for a claim marked as report only.",
+   "grounded": true,
+   "evidence": "tools/coyodex/anchor_drift.py:86",
+   "skeptic": "rule-1",
+   "note": "I read anchor_drift.py:55-96. Line 86 `if not w.drift_eligible: continue` — the first statement of the per-claim loop, with the inline comment 'report-only claim: grounded/refuted still counts, drift does not'. The docstring at 55-60 states the reason (a store claim is anchored at the type definition, so a skeptic's write site is not drift)."
+  },
+  {
+   "claim": "Rule 'A claim whose code link deliberately points at a declaration is never moved onto the line a reviewer read.' is enforced at tools/coyodex/audit_model.py:1213 — Marks a claim about where records are kept as report only.",
+   "grounded": true,
+   "evidence": "tools/coyodex/audit_model.py:1213",
+   "skeptic": "rule-1",
+   "note": "I read audit_model.py:1193-1215. The store-claim WorkItem (an entity persisted in a dep/container — 'where records are kept') is built with `anchor=_anchor(en.source ...)` and line 1213 `drift_eligible=False, theme=\"persistence\",`. The comment at 1196-1200 states the reason: the anchor is the type definition, not the write site."
+  },
+  {
+   "claim": "Rule 'A claim whose code link deliberately points at a declaration is never moved onto the line a reviewer read.' is enforced at tools/coyodex/audit_model.py:472 — Refuses to write a correction for a kind of claim that has no movable link.",
+   "grounded": true,
+   "evidence": "tools/coyodex/audit_model.py:472",
+   "skeptic": "rule-1",
+   "note": "I read audit_model.py:441-475, plus `_WRITABLE_KINDS` at 325 and `_unwritable_note` at 340-351. Line 472 `if t is None or t.kind not in _WRITABLE_KINDS:` skips the correction and emits the note 'it carries no anchor a correction may move'; the note's own comment (346-349) says such a claim is anchored at a DECLARING line, which is the rule this site enforces."
+  },
+  {
+   "claim": "Rule 'A corrected code link is refused when it lands in a file that neither end of the relation claims.' is enforced at tools/coyodex/audit_model.py:431 — Refuses the correction and names the two parts whose files were checked.",
+   "grounded": true,
+   "evidence": "tools/coyodex/audit_model.py:431",
+   "skeptic": "rule-1",
+   "note": "I read audit_model.py:405-438 (`cross_file_refusals`). Line 431 `if files and new_file and not _files_hold(files, new_file):` refuses, and the message at 432-435 names the two endpoint components whose `files` were checked (`', '.join(ends)`), built at 428-429 from `e.src`/`e.dst`."
+  },
+  {
+   "claim": "Rule 'A corrected code link is refused when it lands in a file that neither end of the relation claims.' is enforced at tools/coyodex/fix.py:251 — Runs the refusal before any correction is written into the map.",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:251",
+   "skeptic": "rule-1",
+   "note": "I read fix.py:230-264. Line 251 `corrections, refused = cross_file_refusals(m, corrections)` runs before BOTH write paths — the durable `--to-reconcile` return at 260 and the in-place `apply_anchor_corrections` at 261 — with the comment at 249-250 saying exactly that."
+  },
+  {
+   "claim": "Rule 'A corrected code link is refused when it lands in a file that neither end of the relation claims.' is enforced at tools/coyodex/reconcile.py:678 — Runs the same refusal when a recorded correction is replayed later.",
+   "grounded": true,
+   "evidence": "tools/coyodex/reconcile.py:678",
+   "skeptic": "rule-1",
+   "note": "I read reconcile.py:671-684. Line 678 runs the same `cross_file_refusals` over `rec.set_anchors` — the corrections recorded durably in the reconcile file — before `apply_anchor_corrections` at 680, so a refused correction is refused again on every replay (comment at 676-677)."
+  },
+  {
+   "claim": "Rule 'A person may excuse one code link a check called out. The note must quote the whole claim, then give the reason.' is enforced at tools/coyodex/anchor_drift.py:195 — Accepts a written excuse only in the form that quotes a claim and gives a reason.",
+   "grounded": true,
+   "evidence": "tools/coyodex/anchor_drift.py:195",
+   "skeptic": "rule-1",
+   "note": "I read anchor_drift.py:176-200 and the `_DRIFT_RECORD` pattern at 169: `^\\s*(?:[-*]\\s+)?\\**\\s*anchor-drift\\s+([`'\\\"])(.+?)\\1\\s*[:—-]\\s*\\S` — it requires the whole claim inside a matched pair of delimiters AND a non-empty reason after the separator. Line 195 `hit = _DRIFT_RECORD.match(line)` is where that form is accepted; anything else falls to the malformed branch at 198."
+  },
+  {
+   "claim": "Rule 'A person may excuse one code link a check called out. The note must quote the whole claim, then give the reason.' is enforced at tools/coyodex/anchor_drift.py:229 — Drops exactly the one finding whose claim the note quotes.",
+   "grounded": true,
+   "evidence": "tools/coyodex/anchor_drift.py:229",
+   "skeptic": "rule-1",
+   "note": "I read anchor_drift.py:211-232. `_drift_key` (203-208) is the claim verbatim, and line 229 `if key in recorded:` drops that one finding and keeps every other. Exact string match, so one record silences exactly one finding."
+  },
+  {
+   "claim": "Rule 'Two maps are scored against each other only when both describe the same code. A run over changed code refuses.' is enforced at eval/method.md:176 — orders the run to stop as soon as any same-code check fails",
+   "grounded": true,
+   "evidence": "eval/method.md:176",
+   "skeptic": "rule-1",
+   "note": "I read eval/method.md:165-186. Line 176 'Any clause failing → **REFUSE** and stop:' followed by the quoted refusal text (177-180) about comparing two maps of the SAME code. The clauses above it are the same-code checks (code delta between pins, dirty tree, HEAD ahead, changed .ignore)."
+  },
+  {
+   "claim": "Rule 'Two maps are scored against each other only when both describe the same code. A run over changed code refuses.' is enforced at eval/method.md:48 — states that a score across two different states of the code is not a verdict on the instructions",
+   "grounded": true,
+   "evidence": "eval/method.md:48",
+   "skeptic": "rule-1",
+   "note": "I read eval/method.md:40-49. Item 3 begins on line 48: '**Same code both sides** (Step 1) and **same judge model both sides** (Step 4).' The completing sentence 'A comparison where either differs is not a method comparison.' starts at the end of 48 and runs onto 49, so the anchor is on the rule's own line."
+  },
+  {
+   "claim": "Rule 'Two maps are scored against each other only when both describe the same code. A run over changed code refuses.' is enforced at eval/tools/coyodex_eval/arrows.py:258 — blocks the dropped-relation check when source files moved between the two maps",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/arrows.py:258",
+   "skeptic": "rule-1",
+   "note": "I read arrows.py:233-274 and `source_unchanged` at 166-195. Line 258 `if not ok and not ns.allow_different_commits:` returns 2 with an error BEFORE `compare(...)` at 263, so the lost-arrow comparison never runs when git says source files moved between the two maps' pins (190-194). Note: the refusal is overridable with `--allow-different-commits`, and the verdicts are then advisory (243-244)."
+  },
+  {
+   "claim": "Rule 'A map built over uncommitted code can never be scored, and nobody may waive that refusal.' is enforced at eval/method.md:90 — orders an outright refusal when a map's recorded commit says the code was uncommitted",
+   "grounded": true,
+   "evidence": "eval/method.md:90",
+   "skeptic": "rule-1",
+   "note": "I read eval/method.md:82-105. Line 90 '**First, refuse a `-dirty` pin outright.**' — and 91-92 explain that a build over uncommitted code records `<short-sha>-dirty`. That is the refusal the claim describes."
+  },
+  {
+   "claim": "Rule 'A map built over uncommitted code can never be scored, and nobody may waive that refusal.' is enforced at eval/method.md:97 — says this one refusal cannot be overridden, unlike every other same-code check",
+   "grounded": true,
+   "evidence": "eval/method.md:97",
+   "skeptic": "rule-1",
+   "note": "Same block: line 97 ends 'This one is **not overridable**; the code it describes is gone.' Line 182 confirms the contrast — every other same-code clause has an Override, '(never available for a `-dirty` pin)'."
+  },
+  {
+   "claim": "Rule 'Two quality scores compare only when one judging setup produced both, so a changed setup forces a fresh judging.' is enforced at eval/tools/coyodex_eval/compare.py:485 — flags the comparison when the two sides were judged under different setups",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:485",
+   "skeptic": "rule-1",
+   "note": "I read compare.py:477-518. When both sides carry a judge protocol fingerprint and they differ (479-481), line 485 appends `JudgeBand(\"judge_protocol_mismatch\", 1.0, 0.0, 1.0, 0.0, False)` — a breached band, which line 513 turns into DRIFT — and the note at 486-490 tells the reader to re-judge the baseline."
+  },
+  {
+   "claim": "Rule 'Two quality scores compare only when one judging setup produced both, so a changed setup forces a fresh judging.' is enforced at eval/tools/coyodex_eval/run.py:455 — tells the caller to judge again when the stored scores came from another setup",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:455",
+   "skeptic": "rule-1",
+   "note": "I read run.py:426-459. The current protocol is built at 436-441 (model, n_skeptics, grounding_cap, rubric sha, prompt version); line 455 `if cached != current:` prints 'protocol MISMATCH ... delete <path> and re-judge' and returns 1."
+  },
+  {
+   "claim": "Rule 'Two quality scores compare only when one judging setup produced both, so a changed setup forces a fresh judging.' is enforced at eval/tools/coyodex_eval/run.py:451 — treats stored scores that record no setup at all as unusable",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:451",
+   "skeptic": "rule-1",
+   "note": "Same function: line 451 `if cached is None:` — a cached judge report that records no protocol fingerprint at all is reported as 'protocol MISMATCH ... (pre-fingerprint cache) — delete it and re-judge' and returns 1, so it is treated as unusable rather than reusable."
+  },
+  {
+   "claim": "Rule 'Two quality scores compare only when one judging setup produced both, so a changed setup forces a fresh judging.' is enforced at eval/method.md:283 — pins every doubter and every scorer to one named model",
+   "grounded": true,
+   "evidence": "eval/method.md:283",
+   "skeptic": "rule-1",
+   "note": "I read eval/method.md:275-292. Line 283 '**The pinned judge model.** All grounding skeptics and rubric judges run on the model named in ... `judge.grounding_model`' — one named model for both the doubters (skeptics) and the scorers (rubric judges); 284-286 add that a changed pin invalidates the cached scores."
+  },
+  {
+   "claim": "Rule 'A map that grew is never marked down for growing, because only lost content breaches an allowance.' is enforced at eval/tools/coyodex_eval/compare.py:201 — lets a count rise freely and breaches only on a fall past the allowance",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:201",
+   "skeptic": "rule-1",
+   "note": "I read compare.py:197-202. Line 201 `within = delta >= -(allowed + 1e-9) if shrink_only else abs(delta) <= allowed + 1e-9` — under shrink_only any positive delta (growth) is within, only a fall past the allowance breaches. I also read compare.py:461-475 and eval/thresholds.json lines 12-22: every raw count band is keyed `*_shrink_pct`, so shrink_only is what the counts use."
+  },
+  {
+   "claim": "Rule 'A map that grew is never marked down for growing, because only lost content breaches an allowance.' is enforced at eval/tools/coyodex_eval/compare.py:224 — scores a quality measure on its drop alone, never on its rise",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:224",
+   "skeptic": "rule-1",
+   "note": "I read compare.py:205-236. Lines 220-224 build the grounding pass-rate JudgeBand from `drop = baseline - candidate` and line 224 sets within as `drop <= pr_allowed + 1e-9`, so a risen pass rate gives a negative drop and is always within; only a fall past the allowance breaches."
+  },
+  {
+   "claim": "Rule 'Losing a check the accepted map passed blocks the run. A number that moved too far only asks for a human look.' is enforced at eval/tools/coyodex_eval/compare.py:511 — one failed check makes the whole verdict a block",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:511",
+   "skeptic": "rule-1",
+   "note": "I read compare.py:511-518. Line 511 `if any(not g.passed for g in gates): verdict = REGRESSED` — one failed hard gate sets the blocking verdict, ahead of the band branch at 513."
+  },
+  {
+   "claim": "Rule 'Losing a check the accepted map passed blocks the run. A number that moved too far only asks for a human look.' is enforced at eval/tools/coyodex_eval/compare.py:513 — a number outside its allowance makes the verdict a look rather than a block",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:513",
+   "skeptic": "rule-1",
+   "note": "Same block: line 513 `elif (any(not b.within for b in bands) or any(not j.within for j in jbands) or (granularity is not None and not granularity.within)): verdict = DRIFT` — a number outside its allowance gives DRIFT, the non-blocking 'needs a human look' verdict, not REGRESSED."
+  },
+  {
+   "claim": "Rule 'How many boxes a map should hold is worked out from the code, never from the accepted map.' is enforced at eval/tools/coyodex_eval/compare.py:458 — checks the fresh map's box count, and only that one, against what the code expects",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:458",
+   "skeptic": "rule-1",
+   "note": "I read compare.py:440-458. `e_c` is the CANDIDATE profile's code-derived component expectation (443-444), both deltas are computed at 452-453, and line 458 `within=abs(c_delta) <= t.granularity_band_pct + 1e-9` gates on the candidate's delta alone — `b_delta` is reported at 456 but never gates. A differing baseline expectation only becomes a note (448-451)."
+  }
+ ]
+}

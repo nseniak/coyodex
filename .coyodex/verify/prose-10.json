@@ -1,0 +1,51 @@
+{
+ "schema": "coyodex/prose-batch/v1",
+ "prompt_version": "v1",
+ "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
+ "fields": [
+  {
+   "where": "glossary 'fragment'",
+   "text": "One worker's structured rows, written to a file and later merged into the map."
+  },
+  {
+   "where": "glossary 'gate'",
+   "text": "An automatic check a map must pass. Failing one is a defect in the map."
+  },
+  {
+   "where": "glossary 'advisory'",
+   "text": "A check that reports rather than blocks. It is answered by a fix or by a recorded reason."
+  },
+  {
+   "where": "glossary 'claim'",
+   "text": "One statement the map makes about the code, which a fresh reader can try to disprove."
+  },
+  {
+   "where": "glossary 'skeptic'",
+   "text": "A fresh reader given a batch of claims and the code, told to disprove each one."
+  },
+  {
+   "where": "glossary 'verdict'",
+   "text": "One skeptic's answer on one claim: it held up, the code contradicts it, or the code cannot settle it."
+  },
+  {
+   "where": "glossary 'grounding record'",
+   "text": "The count of how many claims were challenged and how they came out, stored in the map."
+  },
+  {
+   "where": "glossary 'pre-index'",
+   "text": "A measurement of the code tree, taken before the map is drawn. It says how heavy each folder is and where each name is defined."
+  },
+  {
+   "where": "glossary 'eval'",
+   "text": "Scoring two maps of one project to say whether a change to the instructions helped or hurt."
+  },
+  {
+   "where": "glossary 'retro'",
+   "text": "Reading a finished build and its chat to find what went wrong in the run."
+  },
+  {
+   "where": "glossary 'Coyote Effect'",
+   "text": "The situation this product exists for. Your agent wrote a lot of code, it runs, and you no longer know what is under your feet."
+  }
+ ]
+}

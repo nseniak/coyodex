@@ -4,164 +4,164 @@
  "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
  "fields": [
   {
-   "where": "BR123 statement",
-   "text": "A pass that left statements unchecked is refused until the operator declares that stopping early was deliberate. The declaration must name what was checked first."
+   "where": "BR127 statement",
+   "text": "Grouping is worth doing only once a map passes about fifteen boxes. A smaller map stays flat."
   },
   {
-   "where": "BR123 risk",
-   "text": "A pass that stopped early and a pass whose checkers died look identical from inside the tool. Without the declaration the map cannot say which happened."
+   "where": "BR127 risk",
+   "text": "Groups on a small map add levels the reader must click through to reach a list they could already see."
   },
   {
-   "where": "BR124 statement",
-   "text": "How much of a map was checked is counted against the statement list as it stood before any fixes. Statements nobody voted on stay in that list."
+   "where": "BR1 statement",
+   "text": "A map covers the files a project's version control accounts for, including new files it does not already skip."
   },
   {
-   "where": "BR124 risk",
-   "text": "Counting against the fixed map shows nothing was ever disproved. The disproved statements are exactly the ones the fixes removed."
+   "where": "BR1 risk",
+   "text": "Reading everything on disk instead would pull generated output into the map and describe code nobody wrote."
   },
   {
-   "where": "BR125 statement",
-   "text": "A statement the checkers disproved may not remain in the map word for word. A run that finds one fails."
+   "where": "BR2 statement",
+   "text": "Packaged output, copied-in libraries and lock files never count as a project's own code."
   },
   {
-   "where": "BR125 risk",
-   "text": "The map would keep asserting something its own checkers proved wrong. Every count in the testing record would still read clean."
+   "where": "BR2 risk",
+   "text": "The map would swell with files nobody wrote, burying the code the team actually maintains."
   },
   {
-   "where": "BR126 statement",
-   "text": "Correcting the code link under a statement never counts against the statement itself. The check that finds a moved link reports it and never fails a run."
+   "where": "BR3 statement",
+   "text": "A project can list committed code that its map must leave out."
   },
   {
-   "where": "BR126 risk",
-   "text": "If a moved line read as a disproof, ordinary code moves would make a true map look wrong. The real defects would drown in the noise."
+   "where": "BR3 risk",
+   "text": "A fixture tree or a copied-in library would count as product code and warp every size and gap number."
+  },
+  {
+   "where": "BR4 statement",
+   "text": "Every run reports what a project's own skip list removed, one pattern at a time."
+  },
+  {
+   "where": "BR4 risk",
+   "text": "A map could read as complete because the proof of a gap was removed before anyone looked."
+  },
+  {
+   "where": "BR5 statement",
+   "text": "One box covers about one folder of code, at most ten files or three thousand lines."
+  },
+  {
+   "where": "BR5 risk",
+   "text": "Drawn too big, a box hides whole modules the reader needed to see."
+  },
+  {
+   "where": "BR6 statement",
+   "text": "Findings about how coarsely a map is drawn are advice, because deliberate abstraction is allowed."
+  },
+  {
+   "where": "BR6 risk",
+   "text": "A build would be stopped over a fold its author chose on purpose and can defend."
+  },
+  {
+   "where": "BR7 statement",
+   "text": "A map can record a deliberate coarse decision, and the advice about that decision then stops."
+  },
+  {
+   "where": "BR7 risk",
+   "text": "Without the record, a defended decision nags at every check and trains the reader to wave advice through."
+  },
+  {
+   "where": "BR8 statement",
+   "text": "The map a build replaces is never an input to the new one."
+  },
+  {
+   "where": "BR8 risk",
+   "text": "A rebuild could copy the old wording, so nobody can tell whether the new map is right."
   },
   {
    "where": "BR140 statement",
-   "text": "What coyodex does next is decided by the working tree, never by what the project's history still holds."
+   "text": "Every thing the map records belongs to exactly one screen."
   },
   {
    "where": "BR140 risk",
-   "text": "A person who deleted the map to start fresh gets the old map handed back instead."
+   "text": "Two screens claiming one thing send a reader to different places for the same answer."
   },
   {
    "where": "BR141 statement",
-   "text": "Before any work starts, the person is told which files will be read and what the pin means."
+   "text": "A label that would be true of nearly every card is left off."
   },
   {
    "where": "BR141 risk",
-   "text": "Whole folders can be left out of the map, and nobody ever learns they were skipped."
+   "text": "A word on every card separates no card from another, so the cards that differ stop standing out."
   },
   {
    "where": "BR142 statement",
-   "text": "A rebuild never opens the map it is replacing, so the new map cannot copy the old one."
+   "text": "A screen leaves off a fact it already shows beside the same thing."
   },
   {
    "where": "BR142 risk",
-   "text": "Two maps that agree because one copied the other read as confirmation, and the old mistakes survive."
+   "text": "Saying one fact twice fills the screen with dead words, so the reader stops reading carefully."
   },
   {
    "where": "BR143 statement",
-   "text": "A map built on uncommitted code records a commit marked as not containing that code."
+   "text": "A box drops the type word wherever its colour and mark already say what kind of thing it is."
   },
   {
    "where": "BR143 risk",
-   "text": "A pin that hides uncommitted code sends every later reader, and every later comparison, to the wrong lines."
+   "text": "Printing the word on every box widens a large picture until it no longer fits a screen."
   },
   {
    "where": "BR144 statement",
-   "text": "Nothing the user owns is committed, stashed or overwritten unless the user asks for it."
+   "text": "A screen is offered only when the map holds something to draw on it."
   },
   {
    "where": "BR144 risk",
-   "text": "A reviewed map, or a commit the person never intended, is lost, and coyodex cannot undo either."
+   "text": "A tab opening onto nothing makes a small map look broken rather than small."
   },
   {
    "where": "BR145 statement",
-   "text": "Clearing the way for a rebuild files the old map away instead of deleting it."
+   "text": "Where the map records nothing, the screen says so instead of leaving empty space."
   },
   {
    "where": "BR145 risk",
-   "text": "A deleted map takes its recorded exceptions and corrections with it, and nothing can rebuild them."
+   "text": "Blank space reads as a screen that failed, so a real gap in the map goes unnoticed."
   },
   {
    "where": "BR146 statement",
-   "text": "A review of a build is refused while anything is still writing that build's map."
+   "text": "A line between two things offers no code link, because the place it names is only one example."
   },
   {
    "where": "BR146 risk",
-   "text": "A report about a half-written map describes a run that has not happened yet."
+   "text": "One example presented as the location claims the two things meet only there."
   },
   {
-   "where": "BR160 statement",
-   "text": "The map server answers only the person sitting at this machine. It listens on the loopback address and nowhere else. A request that names any other site is refused. A request that changes the remembered project list must carry a private marker header."
+   "where": "BR147 statement",
+   "text": "A picture of one flow draws only the connections that flow itself makes."
   },
   {
-   "where": "BR160 risk",
-   "text": "Without this limit, a web page open in the reader's browser could read the whole project's source code."
+   "where": "BR147 risk",
+   "text": "Drawing every known connection makes a reader believe this flow does things it never does."
   },
   {
-   "where": "BR161 statement",
-   "text": "The server shows only project folders the user has opened before. It never searches the disk for maps. An address naming any other project is refused. A folder can be added only when it already holds a coyodex folder."
+   "where": "BR180 statement",
+   "text": "A served map is reachable only from the machine that runs the server."
   },
   {
-   "where": "BR161 risk",
-   "text": "Without this limit, a page could name any folder on the machine and read the code inside it."
+   "where": "BR180 risk",
+   "text": "A map opens every line of a project's source, so a reachable server would let strangers read private code."
   },
   {
-   "where": "BR162 statement",
-   "text": "The code viewer opens a file only when it sits inside the project being shown. A path that climbs out of the project is refused. A link that points outside the project is refused too. From the working tree only files version control accounts for are served."
+   "where": "BR181 statement",
+   "text": "A project folder is served only when it was deliberately added, never because the server found it."
   },
   {
-   "where": "BR162 risk",
-   "text": "Without this limit, a reader could pull any file on the machine, including secrets kept out of version control."
+   "where": "BR181 risk",
+   "text": "One careless start could otherwise put every repository on the machine in front of the browser."
   },
   {
-   "where": "BR163 statement",
-   "text": "What a reader sees always matches the map. Each file is read from version control at the commit the map was pinned to, not from the working copy. A map edited while the server runs is picked up on the next page load."
+   "where": "BR182 statement",
+   "text": "A request for a file can only ever reach inside the mapped project's own folder."
   },
   {
-   "where": "BR163 risk",
-   "text": "A reader trusting a code link would be shown lines that have moved. The map would look wrong where it is right."
-  },
-  {
-   "where": "BR164 statement",
-   "text": "The file browser never presents a shortened tree as the whole project. When the skip list hid files, the tree carries a note. The note says how many files went, which pattern removed each one, and which pattern removed nothing."
-  },
-  {
-   "where": "BR165 statement",
-   "text": "A link that leaves the page may open only a known code editor. The address must start with one of a fixed list of editor schemes. A hand-typed link template using any other scheme is refused."
-  },
-  {
-   "where": "BR165 risk",
-   "text": "Without this limit a typed link template could run script inside the viewer. A reader could also be sent to an attacker's site."
-  },
-  {
-   "where": "BR166 statement",
-   "text": "The viewer page loads its two diagram libraries from the internet at exact pinned versions. Each one carries a fingerprint of the expected file. The browser refuses to run a file whose content does not match that fingerprint."
-  },
-  {
-   "where": "BR166 risk",
-   "text": "Without this check, a changed library file could run any code inside the viewer and read the project it shows."
-  },
-  {
-   "where": "D1 used for",
-   "text": "Reads project files at a pinned commit. The map server shows each file as it was when the map was built."
-  },
-  {
-   "where": "D2 used for",
-   "text": "Runs every coyodex command. Setup builds a private environment inside the coyodex folder, so no package lands in the machine's own Python."
-  },
-  {
-   "where": "D3 used for",
-   "text": "Parses code in many languages. The file survey uses tree-sitter to count symbols and imports before an altitude is chosen."
-  },
-  {
-   "where": "D4 used for",
-   "text": "Supplies the grammar for each language the survey parses. Without the pack no non-Python file can be surveyed."
-  },
-  {
-   "where": "D5 used for",
-   "text": "Runs the coyodex test suite. Only a coyodex developer installs pytest."
+   "where": "BR182 risk",
+   "text": "Any page open in the browser could otherwise read private files anywhere on the machine."
   }
  ]
 }

@@ -1,0 +1,263 @@
+{
+  "grounding": [
+    {
+      "claim": "Rule 'How many boxes a map should hold is worked out from the code, never from the accepted map.' is enforced at eval/tools/coyodex_eval/profile.py:357 — works the expected box count out of the code tree at scoring time",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:357",
+      "skeptic": "rule-2",
+      "note": "Read the line: `e = expected_components(root).expected`, inside `build_profile_from_model` and guarded by `if repo_root is not None`. I opened `expected_components` at tools/coyodex/preindex_lib.py:564 — it walks `iter_source_files(root)` and counts files and LOC per directory, so the expected box count comes from the code tree at scoring time, never from a stored map. The import comment at profile.py:32 says the same."
+    },
+    {
+      "claim": "Rule 'A run that cannot get one of the two sides refuses to report, instead of reporting that nothing got worse.' is enforced at eval/tools/coyodex_eval/run.py:242 — stops when the accepted map's folder is missing, rather than scoring one map alone",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:242",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if not (bl := Path(bd)).exists():` then an ERROR naming --baseline-dir and `return 2`, inside the `--baseline-dir` branch. So asking for a baseline whose folder is missing stops the run instead of falling through to a verdict of BASELINE with exit 0."
+    },
+    {
+      "claim": "Rule 'A run that cannot get one of the two sides refuses to report, instead of reporting that nothing got worse.' is enforced at eval/tools/coyodex_eval/run.py:247 — stops when that folder holds no stored numbers to compare against",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:247",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if baseline_profile is None:` right after `load_baseline(bl)`, printing \"holds no profile.json, so there is nothing to compare against\" and `return 2`. A baseline folder with no stored profile stops the run rather than producing a one-sided verdict."
+    },
+    {
+      "claim": "Rule 'A run that cannot get one of the two sides refuses to report, instead of reporting that nothing got worse.' is enforced at eval/tools/coyodex_eval/compare.py:491 — marks the comparison drifted when only one of the two maps carries quality scores",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:491",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if (baseline_judge is None) != (candidate_judge is None):`, which appends the breached band `JudgeBand(\"judge_report_missing\", 1.0, 0.0, 1.0, 0.0, False)` at line 501. I followed it to lines 511-515, where `any(not j.within for j in jbands)` sets `verdict = DRIFT`. So exactly one side carrying judge (quality) scores drifts the comparison, in both directions."
+    },
+    {
+      "claim": "Rule 'A map edited after it was frozen cannot be scored, so the run stops on any later change to it.' is enforced at eval/tools/coyodex_eval/run.py:219 — stops the run when the map no longer matches the fingerprint taken at freeze time",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:219",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if actual != expected.strip():` where `actual = map_sha256(map_path)` (line 218) and `expected` is `--expect-map-hash`. It prints \"was modified after freeze ... Refusing to score an edited artifact\" and `return 1`. The candidate map failing its freeze fingerprint stops the run."
+    },
+    {
+      "claim": "Rule 'A map edited after it was frozen cannot be scored, so the run stops on any later change to it.' is enforced at eval/tools/coyodex_eval/run.py:212 — stops when the freeze fingerprint was asked for but arrived empty, rather than skipping the check",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:212",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if expected is None or not expected.strip():` inside `if \"--expect-map-hash\" in argv:`, with the comment \"Fail CLOSED\" and `return 2`. The flag present but empty stops the run instead of silently skipping the freeze check."
+    },
+    {
+      "claim": "Rule 'A map edited after it was frozen cannot be scored, so the run stops on any later change to it.' is enforced at eval/method.md:41 — states that editing either map during a run voids the run",
+      "grounded": true,
+      "evidence": "eval/method.md:41",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"1. **Both maps are READ-ONLY.** Never edit a map to improve a number; a map edited mid-run voids the run.\" under the heading \"Rules that keep a run honest\" (line 40). It states the rule for both maps. Lines 42-44 add that only the candidate is mechanically guarded, which narrows the enforcement but not the statement the claim is about."
+    },
+    {
+      "claim": "Rule 'A claim is settled only when most reviewers gave the same answer. A split with no majority stays unsettled.' is enforced at tools/coyodex/grounding.py:105 — calls a claim confirmed only when more than half the votes on it say so",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:105",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if grounded * 2 > len(rows): return \"confirmed\"` in `_verdict_bucket`, where `grounded` (line 101) counts rows whose `grounded` is exactly True. Strictly more than half the votes on a claim is what makes it confirmed."
+    },
+    {
+      "claim": "Rule 'A claim is settled only when most reviewers gave the same answer. A split with no majority stays unsettled.' is enforced at tools/coyodex/grounding.py:107 — calls a claim disproved only when more than half the votes on it say so",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:107",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if refuted * 2 > len(rows): return \"refuted\"`, with `refuted` (line 102) counting rows whose `grounded` is exactly False. Same strict-majority test as the confirmed branch two lines above."
+    },
+    {
+      "claim": "Rule 'A claim is settled only when most reviewers gave the same answer. A split with no majority stays unsettled.' is enforced at tools/coyodex/grounding.py:121 — sends a split with no majority to the unsettled outcome instead of crediting either side",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:121",
+      "skeptic": "rule-2",
+      "note": "Read the line: `return \"unverifiable\"` — the fall-through of `_verdict_bucket`, reached only when neither majority test at 105 and 107 held and no explicit unverifiable vote was seen (109). The comment at 111-112 says a tie is not credited to either side. A split with no majority lands here."
+    },
+    {
+      "claim": "Rule 'A reviewer answers holds up, disproved, or cannot tell. Any other word is refused rather than counted.' is enforced at tools/coyodex/grounding.py:422 — refuses to build the honesty record when a vote carries a word outside the three",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:422",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if bad:` in `build_record`, where `bad` (418-421) is every `grounded` value that is not True, not False and not the string \"unverifiable\". It appends to `errors`, and I followed `errors` to line 1739-1744: \"REFUSED: the record would misstate what was challenged; nothing was written.\" with `return 1`."
+    },
+    {
+      "claim": "Rule 'A reviewer answers holds up, disproved, or cannot tell. Any other word is refused rather than counted.' is enforced at tools/coyodex/grounding.py:1119 — fails the early check on the vote files for the same unknown word, while the reviewer is still nearby",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:1119",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if bad:` in `lint_verdicts`, over the same three-word vocabulary test (1115-1118), appending to `out.problems`. I followed problems to lines 1540-1547: \"VERDICTS FAILED\" and `return 1`, with the message saying `grounding write` refuses the same shapes at the end of the build. So this is the early check on the raw vote files."
+    },
+    {
+      "claim": "Rule 'A reviewer answers holds up, disproved, or cannot tell. Any other word is refused rather than counted.' is enforced at method.md:2496 — tells every reviewer to answer cannot tell when the code settles nothing, so the third answer stays reachable",
+      "grounded": true,
+      "evidence": "method.md:2496",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"the THREE-WAY verdict honestly: **refuted when the code contradicts the claim; `unverifiable` when\", continuing at 2497 \"the code cannot settle it either way**. Do not tell a skeptic to 'default to refuted on doubt'\" and 2499 \"a third verdict nobody can reach is a record that cannot be honest\". It instructs the reviewers to keep the third answer reachable."
+    },
+    {
+      "claim": "Rule 'A claim counts as challenged only when a reviewer voted on it.' is enforced at tools/coyodex/grounding.py:469 — counts the challenged claims as the captured list minus every claim that drew no vote",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:469",
+      "skeptic": "rule-2",
+      "note": "Read the line: `\"claims_challenged\": len(worklist_claims) - len(unvoted),` in the `record` dict, where `unvoted` (line 445) is `[c for c in worklist_claims if c not in votes]` and `votes` is keyed by claim text from the verdict rows. Challenged is the pinned list minus every claim that drew no vote."
+    },
+    {
+      "claim": "Rule 'A claim counts as challenged only when a reviewer voted on it.' is enforced at method.md:2432 — defines the challenged number as how many claims got a verdict, not how many were sent out",
+      "grounded": true,
+      "evidence": "method.md:2432",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"it in the model's **`grounding`** object: `claims_total` (the worklist size), `claims_challenged`\" — the parenthetical \"(how many got a verdict)\" runs onto line 2433. The sentence starting at the anchor defines challenged as verdicts received, against total as the worklist size."
+    },
+    {
+      "claim": "Rule 'A pass that leaves claims unvoted is refused unless someone declares that stopping early was deliberate. The declaration must say which claims were prioritized.' is enforced at tools/coyodex/grounding.py:446 — refuses the honesty record when a captured claim has no vote and nobody declared the stop",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:446",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if unvoted and not partial:` in `build_record`, appending an error saying \"worklist claim(s) have NO verdict ... Ground them, or pass `--partial`\". Followed to line 1739-1744 where any error prints REFUSED and returns 1. So an unvoted claim refuses unless the partial flag declares the stop."
+    },
+    {
+      "claim": "Rule 'A pass that leaves claims unvoted is refused unless someone declares that stopping early was deliberate. The declaration must say which claims were prioritized.' is enforced at tools/coyodex/grounding.py:457 — refuses a declared partial pass that does not say what it prioritized",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:457",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if partial and not note.strip():` appending \"`--partial` needs a `--note` saying which claims were prioritized\". Same errors list as above, so it reaches the REFUSED path at 1739-1744. A declared partial pass with no note is refused."
+    },
+    {
+      "claim": "Rule 'A pass that leaves claims unvoted is refused unless someone declares that stopping early was deliberate. The declaration must say which claims were prioritized.' is enforced at method.md:2435 — states the refusal, because a planned stop and a dead batch of reviewers look identical from inside the tool",
+      "grounded": true,
+      "evidence": "method.md:2435",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"is recorded: `--partial`.** `grounding write` refuses a worklist claim with no verdict, because\", continuing at 2436-2437: \"'we stopped at the top slice' and 'a batch of skeptics died on the way home' look identical from inside the tool. `--partial` is you saying which one it was\"."
+    },
+    {
+      "claim": "Rule 'A pass that leaves claims unvoted is refused unless someone declares that stopping early was deliberate. The declaration must say which claims were prioritized.' is enforced at method.md:2468 — requires the written reason, because the counts say how many claims were checked and never why those ones",
+      "grounded": true,
+      "evidence": "method.md:2468",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"remainder is visible in the record itself rather than in prose. The `--note` is required (the\", continuing at 2469 \"counts say how many, never why those), and passing `--partial` on a pass that turns out to be complete is refused too.\" That is the written reason the claim describes."
+    },
+    {
+      "claim": "Rule 'A pass that checked only part of the map still records the size of the whole claim surface.' is enforced at tools/coyodex/grounding.py:468 — sets the total from the whole captured list, whatever share of it drew votes",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:468",
+      "skeptic": "rule-2",
+      "note": "Read the line: `\"claims_total\": len(worklist_claims),` — the de-duplicated pinned worklist (414-415), not the voted subset. It is set from the whole captured list regardless of how many claims drew votes, which is what `claims_challenged` on the next line reports separately."
+    },
+    {
+      "claim": "Rule 'A pass that checked only part of the map still records the size of the whole claim surface.' is enforced at method.md:2470 — forbids cutting the captured list down to what was checked as a way past the refusal",
+      "grounded": true,
+      "evidence": "method.md:2470",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"like a complete pass over a small map. **Never shrink the `--worklist` file to what you challenged** to get past\", continuing at 2471 \"the refusal: that makes `claims_total` the reduced size, and a 319-of-1,608 pass ships looking like a complete pass\". It forbids exactly the shortcut the claim names."
+    },
+    {
+      "claim": "Rule 'A vote about a claim missing from the list captured for the reviewers is refused.' is enforced at tools/coyodex/grounding.py:428 — refuses the record when a vote names a claim the captured list never held",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:428",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if orphans:` where `orphans` (line 427) is `sorted(c for c in votes if c not in pinned)` and `pinned = set(worklist_claims)` (416). It appends an error saying the worklist is a different snapshot from the one the skeptics were given; via 1739-1744 any error means REFUSED and exit 1."
+    },
+    {
+      "claim": "Rule 'A vote about a claim missing from the list captured for the reviewers is refused.' is enforced at method.md:2548 — requires capturing the list before any correction lands, so the two sides still describe one moment",
+      "grounded": true,
+      "evidence": "method.md:2548",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"(the pass did not challenge everything). Pin the worklist — re-deriving it after the refutations\", continuing at 2549 \"land makes `claims_challenged` exceed `claims_total`, which `validate` blocks on.\" Line 2546-2547 states the orphan refusal this pinning serves, so the anchor sits on the instruction to capture the list before corrections land."
+    },
+    {
+      "claim": "Rule 'A build stops when the map still carries a claim its reviewers disproved, word for word.' is enforced at tools/coyodex/grounding.py:1591 — fails the check when a disproved claim still matches a row of the finished map",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:1591",
+      "skeptic": "rule-2",
+      "note": "Read the line: `return 1 if surviving else 0` closing the `refutations` verb, where `surviving = surviving_refutations(live, rows)` (1579) walks the verdicts and keeps a refuted claim only when `resolve_claim(m, claim).target` still resolves against the loaded live map (922-947). I opened `resolve_claim` at tools/coyodex/audit_model.py:211 — it re-derives each candidate element's claim string and matches, so 'still in the map, word for word' is right."
+    },
+    {
+      "claim": "Rule 'A build stops when the map still carries a claim its reviewers disproved, word for word.' is enforced at tools/coyodex/finalize.py:416 — turns each surviving disproved claim into a blocking finding of the closing report",
+      "grounded": true,
+      "evidence": "tools/coyodex/finalize.py:416",
+      "skeptic": "rule-2",
+      "note": "Read the line: `blocking = [f\"{s['claim']} — REFUTED by {s['refuted_by']} skeptic(s) and still in the map, ...\"` built by a comprehension over `surviving` (414). It is returned as `Leg(\"grounding refutations\", ..., blocking=blocking, ...)` at 495-498, and the Leg docstring at 78-80 says `blocking` decides the exit code. One blocking finding per surviving refutation."
+    },
+    {
+      "claim": "Rule 'A file cited as evidence that the reviewer's own record never names fails the check. A file it only saw printed by a search is flagged, not failed.' is enforced at tools/coyodex/grounding.py:1417 — fails the check for a cited file that appears nowhere in the reviewer's own turn record",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:1417",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if ghosts:` in `_fabricated_evidence`, where `ghosts` (1413) are cited files that resolve against neither the mentioned nor the opened set built from the agent transcripts. It appends to `found.problems`, merged into the lint at 1141 and failing it at 1540-1547."
+    },
+    {
+      "claim": "Rule 'A file cited as evidence that the reviewer's own record never names fails the check. A file it only saw printed by a search is flagged, not failed.' is enforced at tools/coyodex/grounding.py:1425 — reports a file the reviewer only saw printed as worth a second look, without failing it",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:1425",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if unopened:` — files that appear in the transcript but only as printed text — appending to `found.notes`, whose text ends \"row(s) are worth a second look\". Notes are merged at 1142 and only printed at 1538-1539; only `problems` fail the lint. So this reports without failing, exactly as the claim says."
+    },
+    {
+      "claim": "Rule 'Every screen of the map should hold between three and nine boxes. Five is the number it aims for.' is enforced at method.md:1609 — states the target of five boxes a screen and the readable range of three to nine",
+      "grounded": true,
+      "evidence": "method.md:1609",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"components), so each screen should carry **5±2 boxes** — advisory band **[3, 9]**.\" That is the target of five and the readable range three to nine, in one sentence."
+    },
+    {
+      "claim": "Rule 'Every screen of the map should hold between three and nine boxes. Five is the number it aims for.' is enforced at tools/coyodex/balance_lib.py:613 — counts a screen as reading well only when its box count falls inside that range",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance_lib.py:613",
+      "skeptic": "rule-2",
+      "note": "Read the line: `return {sid: (FANOUT_LO <= len(children.get(sid, [])) <= FANOUT_SOFT_HI` in `fanout_band_by_diagram`, with FANOUT_LO = 3 and FANOUT_SOFT_HI = 9 at lines 36 and 38. A diagram is in band only inside 3..9 — or, per the `or` clause at 614-615, a homogeneous family up to 15, which is the separate exemption rule."
+    },
+    {
+      "claim": "Rule 'Every screen of the map should hold between three and nine boxes. Five is the number it aims for.' is enforced at tools/coyodex/balance.py:67 — marks a screen holding ten boxes or more as past the readable range",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance.py:67",
+      "skeptic": "rule-2",
+      "note": "Read the line: `elif n > balance_lib.FANOUT_SOFT_HI:` (FANOUT_SOFT_HI = 9), whose branch at 68 labels the diagram \"soft (10–12)\" unless it is homogeneous. Ten boxes or more is past the [3,9] band. Counts above 12 are caught one branch earlier at 65-66 as DENSE, so this line is the 10-to-12 half of 'past the readable range'."
+    },
+    {
+      "claim": "Rule 'A screen whose boxes are all the same kind reads as a list, so fifteen boxes are fine there.' is enforced at method.md:1614 — grants the one exemption, for a screen of same-kind neighbours sharing a folder or a name ending",
+      "grounded": true,
+      "evidence": "method.md:1614",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"level pulling no weight — inline it or grow it). One exemption: a **homogeneous family** — a dense\", continuing at 1615-1616: \"screen of same-kind siblings (11 repositories, 14 plugins) sharing a directory or a name suffix — reads fine as a list up to ~15.\" One exemption, keyed on a shared folder or name ending."
+    },
+    {
+      "claim": "Rule 'A screen whose boxes are all the same kind reads as a list, so fifteen boxes are fine there.' is enforced at tools/coyodex/balance_lib.py:309 — holds back the crowded-screen advice for such a screen until it passes fifteen boxes",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance_lib.py:309",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if n > FANOUT_HOMOG_HI:` (FANOUT_HOMOG_HI = 15, line 40), nested inside `elif n > FANOUT_HARD_HI:` (307) and `if is_homogeneous(m, kids):` (308). So for a same-kind screen the crowded warning at 310-311 is held back until the count passes fifteen; a non-homogeneous screen gets the warning at 313 from twelve."
+    },
+    {
+      "claim": "Rule 'A screen whose boxes are all the same kind reads as a list, so fifteen boxes are fine there.' is enforced at tools/coyodex/balance.py:66 — labels the same screen exempt in the report instead of crowded",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance.py:66",
+      "skeptic": "rule-2",
+      "note": "Read the line: `flag = \"exempt (homogeneous)\" if homog else \"DENSE\"` under `elif n > balance_lib.FANOUT_HARD_HI:` (65, FANOUT_HARD_HI = 12). A same-kind screen of 13 to 15 is labelled exempt instead of DENSE in the per-diagram table; above 15 line 63-64 labels it \"DENSE (homogeneous family)\" instead."
+    },
+    {
+      "claim": "Rule 'Only the first screen is faulted for holding too few boxes. A screen deeper down may be small.' is enforced at method.md:1612 — says too few boxes is a fault at the first screen only, and normal deeper down",
+      "grounded": true,
+      "evidence": "method.md:1612",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"top screen tells the reader the tech stack, not the product — sparseness is an anti-pattern *at the\", continuing at 1613 \"root only*; a mid-tree 2-child subsystem is normal)\". Too few boxes is a fault at the first screen and normal deeper down."
+    },
+    {
+      "claim": "Rule 'Only the first screen is faulted for holding too few boxes. A screen deeper down may be small.' is enforced at tools/coyodex/balance_lib.py:290 — raises the too-few-boxes advice for the first screen and for no other",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance_lib.py:290",
+      "skeptic": "rule-2",
+      "note": "Read the line: `if n_root < FANOUT_LO and n_leaves >= SUBSYSTEMS_RECOMMENDED_ABOVE:` inside the `if \"root\" not in skip:` block (289), under the comment \"Root: the one diagram where SPARSE is an anti-pattern\" (287). I read the loop over the other diagrams at 299-315: it skips `gid is None`, and its only low-count branch is the single-child one at 303 — no too-few-boxes advice is raised for a non-root screen anywhere in `_forest_warnings`."
+    },
+    {
+      "claim": "Rule 'Only the first screen is faulted for holding too few boxes. A screen deeper down may be small.' is enforced at tools/coyodex/balance.py:147 — names the thin deeper screens in the report while saying they are not a fault",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance.py:147",
+      "skeptic": "rule-2",
+      "note": "Read the line: `out.append(f\"  {len(thin)} below the band and NOT a finding (sparse counts only at the \"` with the ids joined at 148, over `thin` (139) — the out-of-band diagrams with at least one child that carry no flag. The report names them and says in the same line that they are not a finding."
+    },
+    {
+      "claim": "Rule 'A group holding exactly one thing is reported, because that level costs a click and adds no meaning.' is enforced at method.md:1613 — names a group with one member as a level pulling no weight, to be removed or grown",
+      "grounded": true,
+      "evidence": "method.md:1613",
+      "skeptic": "rule-2",
+      "note": "Read the line: \"root only*; a mid-tree 2-child subsystem is normal) and the **single-child subsystem** (a wrapper\", continuing at 1614 \"level pulling no weight — inline it or grow it)\". A group of exactly one is named as a level pulling no weight, to be inlined or grown."
+    }
+  ]
+}

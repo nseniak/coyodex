@@ -1,0 +1,256 @@
+{
+ "grounding": [
+  {
+   "claim": "UC11 step 15: I12 → R3 — leave the score sheet where the method author reads it",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:420",
+   "skeptic": "behaviour-4",
+   "note": "Read the retro recipe's Step 2 command block: `coyodex-eval process <transcript> --map ... --out .coyodex-eval/retro/<ts>/process.json`, and process_scorecard.py:3590-3597 which writes that file and then prints the formatted scorecard plus `wrote <out>`. The score sheet is left in the retro reports folder and echoed in chat, which is where the person running the retro reads it."
+  },
+  {
+   "claim": "UC11 step 16: C136 → C107 — print one slice of the chat for each fresh reader",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:562",
+   "skeptic": "behaviour-4",
+   "note": "Read method.md:556-568: it says to cut the run into phases and 'Give each phase to one fresh-context sub-agent with its exact turn range', and the fenced command on line 562 is `coyodex-eval transcript <transcript> --from <lo> --to <hi> --full`. I checked transcript.py:1172-1196 and 1238-1246 that --from/--to/--full are real options that slice the printed turns."
+  },
+  {
+   "claim": "UC11 step 17: C136 → I5 [out] — hand over the findings, the proposals and what could not be checked",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:814",
+   "skeptic": "behaviour-4",
+   "note": "Read method.md:812-861 (Step 6 - Report): line 814 says to write `.coyodex-eval/retro/<ts>/report.md` and summarise it in chat, and the structure block that follows names `## Findings` (839), `## Proposals` (844) and `## Not assessed` (854) plus `## Verification status` (849) for what came back unverifiable. All three halves of the phrase are on the page the anchor opens."
+  },
+  {
+   "claim": "UC11 step 18: I5 → R3 — put the finished review in front of the method author",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:814",
+   "skeptic": "behaviour-4",
+   "note": "Same Step 6 block, read for the hand-back rather than the content: line 814 instructs the reviewer to write the report file AND 'summarise it in chat', so the finished review reaches the person who asked for it. No separate delivery mechanism exists in the recipe; this line is it."
+  },
+  {
+   "claim": "UC1 step 1: R1 → I1 — run `make install` in the cloned coyodex folder",
+   "grounded": true,
+   "evidence": "Makefile:70",
+   "skeptic": "behaviour-4",
+   "note": "Read the Makefile: line 70 declares the `install:` target (depends on `deps`), and the comment at 65-69 says it installs the skill for all agents and builds the venv/CLI so 'a one-time `make install` covers everything'. The command the step names exists in the cloned folder."
+  },
+  {
+   "claim": "UC1 step 2: I1 → C20 [in] — create the folder-local Python environment and install the map tool into it",
+   "grounded": true,
+   "evidence": "Makefile:40",
+   "skeptic": "behaviour-4",
+   "note": "Read Makefile:29-40. Line 39 is `deps: venv`, so the `venv` target (lines 29-35, `python3 -m venv \"$(VENV)\"` at 35) makes the repo-local environment first, and line 40 runs `$(PY) -m pip install -e '$(REPO)[preindex]'` into it. Both halves of the phrase happen; the anchor sits on the install half."
+  },
+  {
+   "claim": "UC1 step 3: I1 → C134 [in] — copy the skill pointer into every coding agent's skills folder, with this clone's path written into it",
+   "grounded": true,
+   "evidence": "Makefile:74",
+   "skeptic": "behaviour-4",
+   "note": "Read Makefile:70-76. The loop runs over `SKILLS_DIRS` (~/.claude/skills and ~/.agents/skills, defined at line 18) and line 74 is `sed 's|__COYODEX_HOME__|$(REPO)|g' skill/coyodex/SKILL.md > \"$$dir/coyodex/SKILL.md\"` - the copy into every skills folder, with this clone's absolute path substituted in."
+  },
+  {
+   "claim": "UC1 step 4: C134 → I4 [out] — point the coding agent at the method's entry document inside this clone",
+   "grounded": true,
+   "evidence": "skill/coyodex/SKILL.md:27",
+   "skeptic": "behaviour-4",
+   "note": "Read skill/coyodex/SKILL.md:22-29. Line 27 reads 'Read `__COYODEX_HOME__/method/dispatch.md` and follow it end to end. It is the entry point'. `__COYODEX_HOME__` is the placeholder the Makefile replaces with this clone's path, so the installed file points the agent at the method's entry document inside this clone."
+  },
+  {
+   "claim": "UC1 step 5: I4 → R1 — give the person's coding agent a `/coyodex` command it can run",
+   "grounded": true,
+   "evidence": "skill/coyodex/SKILL.md:2",
+   "skeptic": "behaviour-4",
+   "note": "Read the frontmatter: `name: coyodex` on line 2, with a description listing the triggers. That name is what the agent exposes as `/coyodex`, and Makefile:73-74 installs this file as `<skills dir>/coyodex/SKILL.md`. I found no other declaration of the command name."
+  },
+  {
+   "claim": "UC1 step 6: R1 → I1 — run `make install-dev` to add the two developer skills as well",
+   "grounded": true,
+   "evidence": "Makefile:107",
+   "skeptic": "behaviour-4",
+   "note": "Read Makefile:102-108: `install-dev: install-eval install-retro`, with the comment saying both developer skills are opt-in, always wanted together, and that the user skill `install` is deliberately NOT included. So `make install-dev` adds exactly the two developer skills."
+  },
+  {
+   "claim": "UC1 step 7: I1 → C135 [in] — copy the map-scoring instructions into every skills folder",
+   "grounded": true,
+   "evidence": "Makefile:86",
+   "skeptic": "behaviour-4",
+   "note": "Read Makefile:82-88. The `install-eval` loop runs over the same SKILLS_DIRS list and line 86 copies `eval/SKILL.md` into `$$dir/coyodex-eval/SKILL.md` with the clone path substituted. Note: what is copied is the eval skill pointer; the scoring recipe itself (eval/method.md) stays in the clone and is read live, per lines 78-81."
+  },
+  {
+   "claim": "UC1 step 8: C135 → I5 [out] — point the coding agent at the scoring recipe inside this clone",
+   "grounded": true,
+   "evidence": "eval/SKILL.md:28",
+   "skeptic": "behaviour-4",
+   "note": "Read eval/SKILL.md:23-30. Line 28 reads 'Read `__COYODEX_HOME__/eval/method.md` and follow it end to end. It is the entry point'. With __COYODEX_HOME__ substituted by Makefile:86, the installed pointer sends the agent to the scoring recipe inside this clone."
+  },
+  {
+   "claim": "UC1 step 9: I1 → C136 [in] — copy the build-review instructions into every skills folder",
+   "grounded": true,
+   "evidence": "Makefile:98",
+   "skeptic": "behaviour-4",
+   "note": "Read Makefile:94-100. The `install-retro` loop copies `eval/retro/SKILL.md` into `$$dir/coyodex-retro/SKILL.md` for every skills folder, path substituted. Same shape as the eval leg; the review recipe itself (eval/retro/method.md) is read live from the clone."
+  },
+  {
+   "claim": "UC1 step 10: C136 → I5 [out] — point the coding agent at the build-review recipe inside this clone",
+   "grounded": true,
+   "evidence": "eval/retro/SKILL.md:28",
+   "skeptic": "behaviour-4",
+   "note": "Read eval/retro/SKILL.md:23-30. Line 28 reads 'Read `__COYODEX_HOME__/eval/retro/method.md` and follow it end to end. It is the entry point', so the installed pointer aims the agent at the build-review recipe inside this clone."
+  },
+  {
+   "claim": "UC1 step 11: I5 → R1 — give the coding agent the `/coyodex-eval` and `/coyodex-retro` commands",
+   "grounded": true,
+   "evidence": "eval/SKILL.md:2",
+   "skeptic": "behaviour-4",
+   "note": "Read both frontmatters: `name: coyodex-eval` at eval/SKILL.md:2 and `name: coyodex-retro` at eval/retro/SKILL.md:2. Those names are the two slash commands, and Makefile:85-86 and 97-98 install them as `<skills dir>/coyodex-eval` and `<skills dir>/coyodex-retro`."
+  },
+  {
+   "claim": "UC4 step 1: R1 → I1 — run `coyodex serve` to put every mapped project on one page",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:166",
+   "skeptic": "behaviour-4",
+   "note": "Read cli.py:166-168 (`if cmd == \"serve\": ... return serve.main(rest)`) and serve.py:905-915, the usage text: 'usage: coyodex serve [FOLDER ...] [--port N] [--open] [--dev]' and 'The server does NOT scan the disk: it serves the folders you have opened before'. The typed command exists and its job is one page listing the remembered projects."
+  },
+  {
+   "claim": "UC4 step 2: I1 → C20 [in] — hand the typed command, its port and its options to the tool",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:139",
+   "skeptic": "behaviour-4",
+   "note": "Read cli.py:129-150. Line 137 splits argv into `cmd, rest`, and line 139 is `return _dispatch(cmd, rest)` - the subcommand name and every remaining option (including `--port` and `--open`) handed straight to the dispatcher. The surrounding try/except only turns a wrong-map refusal into a one-line error."
+  },
+  {
+   "claim": "UC4 step 3: C20 → C83 — start the local map server on the requested port",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:168",
+   "skeptic": "behaviour-4",
+   "note": "Read cli.py:166-168: `if cmd == \"serve\": from coyodex.viewer import serve; return serve.main(rest)`. The dispatcher hands the remaining args (the port among them) to the server's own main, and serve() at serve.py:885 binds ThreadingHTTPServer to 127.0.0.1 on that port."
+  },
+  {
+   "claim": "UC4 step 4: C83 → C85 — read the project folders remembered from earlier sessions",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:883",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:869-889. Line 883 is `Handler.projects = build_projects(store.list())`, where `store` is the RecentsStore created at 876; the docstring at 871-872 says 'No disk scan - the served set is exactly the recents list'. So startup reads the folders remembered from earlier sessions."
+  },
+  {
+   "claim": "UC4 step 5: C83 → E1 [in] — read each remembered folder's map for its title, goal and pinned commit",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:123",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:114-135 (load_project). Line 123 parses the folder's `.coyodex/project-map.json` into a graph, and lines 126, 134 and 135 take the pinned commit, the title and the goal off it for the Project record. That is exactly the three fields the phrase names."
+  },
+  {
+   "claim": "UC4 step 6: C83 → I1 [out] — report how many projects are being served and the address to open",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:889",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:886-889. Line 888 prints `coyodex serve: {len(Handler.projects)} project(s): {names}` - how many are served - and line 889 prints `listening on {url}`, the address to open. The phrase spans the pair; the anchor sits on the address half."
+  },
+  {
+   "claim": "UC4 step 7: I1 → R1 — show the address the maps are served at, and how to stop the server",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:889",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:889: `print(f\"coyodex serve: listening on {url}  (Ctrl-C to stop)\")`, with url built at 886 as http://127.0.0.1:{port}/. Both halves of the phrase - the address and how to stop - are in that one printed line, and 898-899 confirms Ctrl-C really stops it."
+  },
+  {
+   "claim": "UC4 step 8: C83 → I3 [out] — open the landing page in the person's browser",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:895",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:894-895: `if open_browser: webbrowser.open(url)`, url being the server root that serves INDEX_HTML (the landing page, returned at line 640). Conditional on the `--open` flag documented at serve.py:914, which the map's own step note already states."
+  },
+  {
+   "claim": "UC4 step 9: I3 → C83 [in] — carry the landing page's request for the remembered projects",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:642",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:633-652 (do_GET routing). Line 641-642 sends any `/api/...` path to `self._root_api(parts[1:], query)`, and _root_api at 670-677 answers `recents` - the landing page's request for the remembered projects. The landing page's script fetches '/api/recents' (serve.py:1054)."
+  },
+  {
+   "claim": "UC4 step 10: C83 → C85 — re-read the remembered folders, so a project mapped since startup appears without a restart",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:675",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:670-677. Under the state lock, line 675 is `self.store.reload()` and 676 rebuilds `Handler.projects` from the reloaded list; the comment at 672-673 says this is so 'a just-built project shows up as a card AND is openable, no restart needed'."
+  },
+  {
+   "claim": "UC4 step 11: C83 → I3 [out] — return one card per remembered project, saying which of their maps can be opened",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:677",
+   "skeptic": "behaviour-4",
+   "note": "Read serve.py:677 (`return self._json(_recents_payload(self.store, self.projects))`) and _recents_payload at 597-620: one dict per remembered folder, carrying path, name, title, goal, commit and `ok`/`rendered`/`slug` - which is exactly 'which of their maps can be opened' (a folder with no loadable map gets slug None and ok False)."
+  },
+  {
+   "claim": "UC4 step 12: I3 → R1 — list every mapped project on one page, each one openable or removable",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:1068",
+   "skeptic": "behaviour-4",
+   "note": "Read the landing page inside INDEX_HTML: serve.py:1054 fetches '/api/recents', 1058-1059 makes one `.card` element per returned item, and 1068 ends each card's markup with `<button class=\"x\" title=\"Remove from list\">`. A valid map's card is `clickable` (CSS at 999) and opens the project; the ✕ removes it. One page, every remembered project, openable or removable."
+  },
+  {
+   "claim": "UC5 step 2: R2 → I3 — pick the Features tab",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:15586",
+   "skeptic": "behaviour-4",
+   "note": "Read viewer.html:118, the `<button data-view=\"usecases\" data-group=\"product\">Features</button>` in the view tab row, and viewer.js:15573-15587 where every such button gets `b.addEventListener('click', () => goTab(b.dataset.view))`. Clicking the Features tab is a real gesture the page answers."
+  },
+  {
+   "claim": "UC5 step 3: I3 → C70 [in] — pass the chosen tab to the page frame",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:118",
+   "skeptic": "behaviour-4",
+   "note": "Read viewer.html:111-118: line 118 is the Features tab button, carrying `data-view=\"usecases\"` (the internal name, as its own comment says). The shell's handler at viewer.js:15586 reads that attribute off the clicked button and passes it to goTab, so line 118 is where the chosen tab is named."
+  },
+  {
+   "claim": "UC5 step 4: C70 → C65 — record the new screen and write its address",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:5116",
+   "skeptic": "behaviour-4",
+   "note": "Read viewer.js:5109-5118 (`go`). Line 5114 pushes the new screen onto the internal history and 5116 calls `pushUrl()` - 'one browser entry per internal point, so the two stacks step together'. goTab (5180-5185) calls go, so a tab click lands here. Both halves - record the screen, write its address - are on those two lines."
+  },
+  {
+   "claim": "UC5 step 5: C65 → C66 — draw the product description and one card per feature",
+   "grounded": false,
+   "evidence": "tools/coyodex/viewer/viewer.js:10935",
+   "skeptic": "behaviour-4",
+   "note": "REFUTED on the first half. Line 13006 dispatches the Features tab to renderOverview(), and I read renderOverview whole (10897-10940): its page is `viewHeadHtml('Features') + story + below` at 10934-10935. viewHeadHtml (6750-6754) returns an empty string when no description argument is passed, and none is - so the Features page draws NO product description. The description is drawn only by renderOverviewTab (8840-8843, via productLeadHtml 8833-8838), on the separate Overview tab; the comment at 8828-8832 says it was deliberately moved off the Features landing. The second half holds: one card per feature is drawn, by storyFeatureCardHtml in the story diagram's Features column (10537-10538)."
+  },
+  {
+   "claim": "UC5 step 6: C66 → C61 — build one card for each feature",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10919",
+   "skeptic": "behaviour-4",
+   "note": "Read viewer.js:10897-10940. Line 10919 maps every feature id through `elementCardHtml(id, per(id))` (the shared element card, C61's own function at 1264) into a card grid - literally one card per feature. Caveat read at 10931-10933: that grid is only put on the page when the story diagram does not draw or in diff mode; otherwise the feature cards the reader sees are the story diagram's own (10538)."
+  },
+  {
+   "claim": "UC5 step 7: C61 → E40 [in] — read each box's name, its type and its one sentence",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:1265",
+   "skeptic": "behaviour-4",
+   "note": "Read elementCardHtml at 1264-1292 and cardFacts at 723 onwards. Line 1265 is `const c = cardFacts(id)`, and cardFacts reads `GRAPH.nodes[id]` - the graph box built by build_graph.py's Node (id, kind, name, fields) - returning the name (used at 1276), the type word (1292) and the one-sentence description (1272) off its fields."
+  },
+  {
+   "claim": "UC5 step 8: C66 → I3 [out] — put the feature cards on the page",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10934",
+   "skeptic": "behaviour-4",
+   "note": "Read viewer.js:10934-10938: `diagram.innerHTML = '<div class=\"usecases-wrap\">' + viewHeadHtml('Features') + story + below + '</div>'`, then bindStoryDiagram and bindElementCards wire the cards. `story` is the three-column diagram whose middle column is one feature card per feature (10537-10538); `below` is the element-card grid when the diagram does not draw."
+  },
+  {
+   "claim": "UC5 step 9: I3 → R2 — show what the product does, feature by feature",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10538",
+   "skeptic": "behaviour-4",
+   "note": "Read storyDiagramHtml at 10496-10543: the Features column is `(st.column || []).map((id) => storyFeatureCardHtml(id))`, and storyFeatureCardHtml (10321-10360) puts each feature's name, its purpose sentence and its use-case and rule counts on a card. So the finished page reads feature by feature. Its wrapper section is titled 'Feature overview' at 10925."
+  },
+  {
+   "claim": "UC5 step 10: R2 → I3 — click one feature's card",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10859",
+   "skeptic": "behaviour-4",
+   "note": "Read the click bindings for both card shapes. In the story diagram, viewer.js:10859-10863 binds every `.story-card .ibox-name` so a feature card's name runs `go({ kind: 'capability', cap })` - the feature's own page. For the plain element card grid, bindElementCards binds the whole card at 1442. Either way, clicking one feature's card is a live gesture."
+  }
+ ]
+}

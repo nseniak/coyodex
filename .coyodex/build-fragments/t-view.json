@@ -1,0 +1,463 @@
+{
+  "flows": [
+    {
+      "uc": "UC5",
+      "title": "Explore a project's map",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R2",
+          "dst": "C62",
+          "subflow": "SF20"
+        },
+        {
+          "n": 2,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "pick the Features tab"
+        },
+        {
+          "n": 3,
+          "src": "I3",
+          "dst": "C70",
+          "phrase": "pass the chosen tab to the page frame",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.html:118"
+        },
+        {
+          "n": 4,
+          "src": "C70",
+          "dst": "C65",
+          "phrase": "record the new screen and write its address",
+          "where": "tools/coyodex/viewer/viewer.js:5116"
+        },
+        {
+          "n": 5,
+          "src": "C65",
+          "dst": "C66",
+          "phrase": "draw one card per feature, in the story column",
+          "where": "tools/coyodex/viewer/viewer.js:13006"
+        },
+        {
+          "n": 6,
+          "src": "C66",
+          "dst": "C61",
+          "phrase": "build one card for each feature",
+          "where": "tools/coyodex/viewer/viewer.js:10919"
+        },
+        {
+          "n": 7,
+          "src": "C61",
+          "dst": "E40",
+          "phrase": "read each box's name, its type and its one sentence",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:1265"
+        },
+        {
+          "n": 8,
+          "src": "C66",
+          "dst": "I3",
+          "phrase": "put the feature cards on the page",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:10934"
+        },
+        {
+          "n": 9,
+          "src": "I3",
+          "dst": "R2",
+          "phrase": "show what the product does, feature by feature"
+        },
+        {
+          "n": 10,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "click one feature's card"
+        },
+        {
+          "n": 11,
+          "src": "I3",
+          "dst": "C61",
+          "phrase": "pass the feature's address to the cards",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:13016"
+        },
+        {
+          "n": 12,
+          "src": "C61",
+          "dst": "C65",
+          "phrase": "open that feature's own page",
+          "where": "tools/coyodex/viewer/viewer.js:1401"
+        },
+        {
+          "n": 13,
+          "src": "C65",
+          "dst": "C66",
+          "phrase": "list the feature's use cases and the people who drive them",
+          "where": "tools/coyodex/viewer/viewer.js:8719"
+        },
+        {
+          "n": 14,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "drill from one use case into its numbered steps"
+        },
+        {
+          "n": 15,
+          "src": "I3",
+          "dst": "C62",
+          "phrase": "pass the use case's address to the canvas",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:6503"
+        },
+        {
+          "n": 16,
+          "src": "C62",
+          "dst": "I3",
+          "phrase": "draw the use case's flow, one box per thing it touches",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:13104"
+        },
+        {
+          "n": 17,
+          "src": "I3",
+          "dst": "R2",
+          "phrase": "show every step of that feature, in order"
+        },
+        {
+          "n": 18,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "click one box on the picture"
+        },
+        {
+          "n": 19,
+          "src": "I3",
+          "dst": "C63",
+          "phrase": "pass the box click to the click rules",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:5895"
+        },
+        {
+          "n": 20,
+          "src": "C63",
+          "dst": "C64",
+          "phrase": "show that box's card in the info pane",
+          "where": "tools/coyodex/viewer/viewer.js:4158"
+        },
+        {
+          "n": 21,
+          "src": "C64",
+          "dst": "I3",
+          "phrase": "put the box's card beside the picture",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:2881"
+        },
+        {
+          "n": 22,
+          "src": "I3",
+          "dst": "R2",
+          "phrase": "show one box's name, type, sentence and code link"
+        }
+      ]
+    },
+    {
+      "uc": "UC6",
+      "title": "Open the code behind a box",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R2",
+          "dst": "C62",
+          "subflow": "SF20"
+        },
+        {
+          "n": 2,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "open one box's own page"
+        },
+        {
+          "n": 3,
+          "src": "I3",
+          "dst": "C60",
+          "phrase": "pass the element's address to the page",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:13011"
+        },
+        {
+          "n": 4,
+          "src": "C60",
+          "dst": "E40",
+          "phrase": "read that box's name, file and line",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:2818"
+        },
+        {
+          "n": 5,
+          "src": "C60",
+          "dst": "I3",
+          "phrase": "render the box's page with its code link",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:2837"
+        },
+        {
+          "n": 6,
+          "src": "I3",
+          "dst": "R2",
+          "phrase": "show everything the map holds about that one box"
+        },
+        {
+          "n": 7,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "pick the code link on the box"
+        },
+        {
+          "n": 8,
+          "src": "I3",
+          "dst": "C69",
+          "phrase": "pass the picked code link to the source column",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:223"
+        },
+        {
+          "n": 9,
+          "src": "C69",
+          "dst": "C83",
+          "phrase": "fetch that file's text at the map's own commit",
+          "where": "tools/coyodex/viewer/viewer.js:14537"
+        },
+        {
+          "n": 10,
+          "src": "C83",
+          "dst": "C69",
+          "phrase": "return the file exactly as the pinned commit holds it",
+          "where": "tools/coyodex/viewer/serve.py:797"
+        },
+        {
+          "n": 11,
+          "src": "C69",
+          "dst": "I3",
+          "phrase": "show the file, scrolled to the box's line",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:14396"
+        },
+        {
+          "n": 12,
+          "src": "I3",
+          "dst": "R2",
+          "phrase": "show the code behind the box, beside the map"
+        },
+        {
+          "n": 13,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "press the open button on the file's header"
+        },
+        {
+          "n": 14,
+          "src": "I3",
+          "dst": "C69",
+          "phrase": "pass the open request to the source column",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/viewer.js:13930"
+        },
+        {
+          "n": 15,
+          "src": "C69",
+          "dst": "I9",
+          "phrase": "open the file at that line in the reader's own editor",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:14925"
+        },
+        {
+          "n": 16,
+          "src": "I9",
+          "dst": "R2",
+          "phrase": "put the reader in their editor, at the mapped line"
+        },
+        {
+          "n": 17,
+          "src": "C69",
+          "dst": "I10",
+          "phrase": "open the file on the code host at the pinned commit",
+          "note": "the fallback path: the reader chose the code host, or no editor link could be built",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:14928"
+        },
+        {
+          "n": 18,
+          "src": "I10",
+          "dst": "R2",
+          "phrase": "show the file on the web, pinned to the map's commit"
+        }
+      ]
+    }
+  ],
+  "subflows": [
+    {
+      "id": "SF20",
+      "name": "Open a project's map in the browser",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "open the map server's home address"
+        },
+        {
+          "n": 2,
+          "src": "I3",
+          "dst": "C83",
+          "phrase": "pass the browser's request to the map server",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/serve.py:640"
+        },
+        {
+          "n": 3,
+          "src": "C83",
+          "dst": "C85",
+          "phrase": "re-read the project folders this machine remembers",
+          "where": "tools/coyodex/viewer/serve.py:675"
+        },
+        {
+          "n": 4,
+          "src": "C83",
+          "dst": "I3",
+          "phrase": "list every remembered project with its title and its commit",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/serve.py:677"
+        },
+        {
+          "n": 5,
+          "src": "I3",
+          "dst": "R2",
+          "phrase": "show one card per remembered project"
+        },
+        {
+          "n": 6,
+          "src": "R2",
+          "dst": "I3",
+          "phrase": "pick a project card"
+        },
+        {
+          "n": 7,
+          "src": "I3",
+          "dst": "C83",
+          "phrase": "pass the chosen project's address to the server",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/serve.py:730"
+        },
+        {
+          "n": 8,
+          "src": "C83",
+          "dst": "C70",
+          "phrase": "send back the page frame every map is drawn with",
+          "where": "tools/coyodex/viewer/serve.py:730"
+        },
+        {
+          "n": 9,
+          "src": "C70",
+          "dst": "C60",
+          "phrase": "start the script that loads the map",
+          "where": "tools/coyodex/viewer/viewer.html:359"
+        },
+        {
+          "n": 10,
+          "src": "C60",
+          "dst": "C83",
+          "phrase": "ask the server for this map's whole drawing data",
+          "where": "tools/coyodex/viewer/viewer.js:172"
+        },
+        {
+          "n": 11,
+          "src": "C83",
+          "dst": "E1",
+          "phrase": "read the stored project map",
+          "direction": "in",
+          "where": "tools/coyodex/viewer/serve.py:509"
+        },
+        {
+          "n": 12,
+          "src": "C83",
+          "dst": "C80",
+          "phrase": "turn the stored map into the graph the browser draws",
+          "where": "tools/coyodex/viewer/serve.py:511"
+        },
+        {
+          "n": 13,
+          "src": "C80",
+          "dst": "E39",
+          "phrase": "assemble the graph, one box per element",
+          "direction": "out",
+          "where": "tools/coyodex/views.py:1282"
+        },
+        {
+          "n": 14,
+          "src": "C83",
+          "dst": "C82",
+          "phrase": "pre-render every diagram, timeline and flow of this map",
+          "where": "tools/coyodex/viewer/serve.py:516"
+        },
+        {
+          "n": 15,
+          "src": "C83",
+          "dst": "C60",
+          "phrase": "return the finished drawing data",
+          "where": "tools/coyodex/viewer/serve.py:752"
+        },
+        {
+          "n": 16,
+          "src": "C60",
+          "dst": "C62",
+          "phrase": "draw the screen the address names",
+          "where": "tools/coyodex/viewer/viewer.js:15892"
+        },
+        {
+          "n": 17,
+          "src": "C62",
+          "dst": "I3",
+          "phrase": "put the drawn map on the page",
+          "direction": "out",
+          "where": "tools/coyodex/viewer/viewer.js:13104"
+        },
+        {
+          "n": 18,
+          "src": "I3",
+          "dst": "R2",
+          "phrase": "show the reader the product's map"
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "src": "C83",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "reads the stored project map on every request it serves for that project",
+      "where": "tools/coyodex/viewer/serve.py:509"
+    },
+    {
+      "src": "C80",
+      "verb": "writes",
+      "dst": "E39",
+      "why": "builds the whole graph the browser draws from the stored map",
+      "where": "tools/coyodex/views.py:1282"
+    },
+    {
+      "src": "C61",
+      "verb": "reads",
+      "dst": "E40",
+      "why": "reads a box's name, type and sentence to draw its card",
+      "where": "tools/coyodex/viewer/viewer.js:1265"
+    },
+    {
+      "src": "C60",
+      "verb": "reads",
+      "dst": "E40",
+      "why": "reads a box's name, file and line for its details page",
+      "where": "tools/coyodex/viewer/viewer.js:2818"
+    }
+  ]
+}

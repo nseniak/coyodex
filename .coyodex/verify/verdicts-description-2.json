@@ -1,0 +1,277 @@
+{
+ "grounding": [
+  {
+   "claim": "Component C129 (Map model spec) is described as: States every field a map may hold and the exact shape of each. Names, code links and closed word lists are all fixed here. It also says how each part of the map is drawn on screen.",
+   "grounded": true,
+   "evidence": "method/model.md:43",
+   "skeptic": "description-2",
+   "note": "Read method/model.md whole-structure: line 43 opens 'The document', the JSON object whose every field and shape is spelled out; the ID table at lines 19-35 fixes names, 'Anchor formats' at line 560 fixes the one canonical path:line code-link form, and the closed word lists (store.mode collection/embedded/transient/cache/in-code/enum/projection) are fixed at lines 136 and 257. method/diagrams.md (in this component's file list) carries the last clause: it maps each zoom level to what it draws from the map. Every clause holds."
+  },
+  {
+   "claim": "Component C130 (Mode dispatch instructions) is described as: Decides which job to do when someone calls coyodex on a project. Build a first map, report a code change, or fold a report in. It briefs the person on what will be read before anything starts.",
+   "grounded": true,
+   "evidence": "method/dispatch.md:64",
+   "skeptic": "description-2",
+   "note": "Read method/dispatch.md whole. Line 64 names the three modes — build, analyze, accept — which are exactly 'build a first map, report a code change, or fold a report in' (the accept step folds the change-impact report into the baseline, per the same file's Step 2). Line 12, 'Step 0 — brief the user BEFORE doing anything else', runs `coyodex scope` and shows it verbatim as the first message, which is the third clause. No clause fails."
+  },
+  {
+   "claim": "Component C131 (Change impact instructions) is described as: Says how to report what a code change does to an existing map. The report carries the exact new text for every box it touches. Folding the report in is then mechanical, with no fresh reading of code.",
+   "grounded": true,
+   "evidence": "method/change-impact.md:78",
+   "skeptic": "description-2",
+   "note": "Read method/change-impact.md whole. Line 77 heads 'The report is patch-complete; accept is mechanical'; line 78-79 states 'Accept does no new inference and re-reads no code', and the table at lines 87-93 requires the exact was->now text for every touched element including ripples. All three clauses hold."
+  },
+  {
+   "claim": "Component C132 (Fan-out worker contracts) is described as: Holds the briefs handed word for word to the agents a build fans out to. One brief per job, from gathering the pieces to disproving the finished claims. A shared file carries the writing rules every brief appends.",
+   "grounded": false,
+   "evidence": "tools/coyodex/contract.py:69",
+   "skeptic": "description-2",
+   "note": "The third clause fails. tools/coyodex/contract.py:69 is `AUTHORING = frozenset({\"harvest\", \"rules\"})` and line 120 appends method/templates/writing-rules.md only when the contract is in that set — so 2 of the 8 briefs append the writing rules, not every brief. The comment above line 69 says so outright ('a skeptic judges claims and a trace agent writes flow steps; neither authors a sentence a reader meets in a box'), and method.md:1333 says 'Every AUTHORING contract'. The first two clauses hold: I listed method/templates/ (10 files) and read the head of each — every contract opens 'Copy this file; do not retype it from prose', and they run from harvest-contract.md to skeptic-contract.md. One further wrinkle for the lead: project-map.template.md in that folder is a map template, not an agent brief."
+  },
+  {
+   "claim": "Component C133 (Method regression checks) is described as: Holds one written promise per change to the method or the tools. Each file says what the next build should do differently, and what a backfire would look like. A review of a finished build runs every check the change range added.",
+   "grounded": true,
+   "evidence": "method/retro-checks/README.md:15",
+   "skeptic": "description-2",
+   "note": "Read method/retro-checks/README.md whole and listed the directory (41 check files + README + verified/). Line 15: 'Any commit that changes `method/` or `tools/` in a way that should change build behaviour also adds one file here. One file per change.' Lines 30-32 require both an `expect:` and a `regression sign:` per item, which is the backfire clause. Line 9 and eval/retro/method.md:262 (Step 0c) confirm the last clause: the retro diffs this directory across the two builds' tool commits and runs every check the range added or modified."
+  },
+  {
+   "claim": "Component C134 (Build skill pointer) is described as: Points a coding agent at this repository so the map commands work. Kept deliberately thin, because a copy is installed into the agent and goes stale. It names the clone path and the one document to read.",
+   "grounded": true,
+   "evidence": "skill/coyodex/SKILL.md:27",
+   "skeptic": "description-2",
+   "note": "Read the whole 29-line file. Lines 16-20 say the repo is the source of truth and this file is a deliberately thin pointer because `make install` bakes a copy that goes stale; line 22 names the clone path (COYODEX_HOME); line 27 names the single doc to read, method/dispatch.md. Every clause holds."
+  },
+  {
+   "claim": "Component C135 (Map quality eval instructions) is described as: Says how to score two maps of the same code and tell which one is better. A map is scored on counts, well-formedness, coverage and a model's judgement. Both maps must describe the same code, or the comparison means nothing.",
+   "grounded": true,
+   "evidence": "eval/method.md:48",
+   "skeptic": "description-2",
+   "note": "Read eval/method.md's first 60 lines and grepped its scoring steps. Line 8 states it compares two maps of the same code and reports whether the method got better or worse; line 48 rule 3 is 'Same code both sides ... A comparison where either differs is not a method comparison'. The scoring dimensions are the deterministic profile (counts), `validate`/`audit` well-formedness (lines 45-47), coverage (lines 170-172) and the LLM judge of Step 4 (line 280). No clause fails."
+  },
+  {
+   "claim": "Component C136 (Build retrospective instructions) is described as: Says how to review one finished build from its map and its chat. The review reports what the run revealed about the tools and the method. It changes nothing, and a standing backlog carries every proposal forward.",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:6",
+   "skeptic": "description-2",
+   "note": "Read eval/retro/method.md's opening and grepped for the backlog. Line 3-4: two artifacts survive a build, the map and the transcript, and the method reads both and reports what the run says about the tools and the method. Line 6: 'Report only. Change nothing on disk'. Lines 939-943 and eval/retro/backlog.md's own opening confirm the standing backlog carries proposals forward across runs. All clauses hold."
+  },
+  {
+   "claim": "Component C137 (Public documentation) is described as: Explains to a newcomer what coyodex is, why it exists and how to install it. A longer page walks through how a map gets built, phase by phase. Both are read on the web by a person, never by a mapping agent.",
+   "grounded": true,
+   "evidence": "README.md:13",
+   "skeptic": "description-2",
+   "note": "Read README.md's opening 40 lines and its install section (lines 58-78): what coyodex is (line 13), why it exists (the Coyote Effect, line 18-22), and how to install it (`make install`). docs/how-coyodex-works.html is 45,359 bytes against the README's 6,548 and its section 5 is 'How a map gets built' with a phase walk. Last clause checked by grep: nothing in method.md or method/ points an agent at either file, so no mapping agent reads them."
+  },
+  {
+   "claim": "Component C138 (Contributor guide) is described as: Says how to work on coyodex itself, for a person and for an agent alike. It names what each folder is for and which tests a given change needs. It also holds the design philosophy and the words this project uses.",
+   "grounded": true,
+   "evidence": "CONTRIBUTING.md:157",
+   "skeptic": "description-2",
+   "note": "Read CONTRIBUTING.md's headings and the named sections. 'How the repo is laid out' (line 23) names what each folder is for; 'How to test a change' (line 157) is a four-tier table saying which tests a given change needs. The agent half of the first clause is in the same component's CLAUDE.md, whose only two sections are 'Design philosophy' (line 3) and 'Glossary' (line 33) — the last clause. No clause fails."
+  },
+  {
+   "claim": "Component C139 (Method rationale record) is described as: Keeps the story of the build that made each method rule necessary. Storing those stories here keeps them out of the text every build agent reads. A test checks that each entry still quotes a rule that exists.",
+   "grounded": true,
+   "evidence": "internal/docs/method-rationale.md:20",
+   "skeptic": "description-2",
+   "note": "Read the file's opening 28 lines. Lines 7-12: the incident record — the build that made each rule necessary — moved here out of the prose every build agent reads. Line 20: every entry carries an `Anchor`, a verbatim phrase that must still appear in the named method doc, and tests/test_method_rationale.py checks every one (the file exists; RATIONALE is set at its line 30). All three clauses hold. Line 24 notes the same accounts also survive in CLI --help text and docstrings, which does not contradict any clause."
+  },
+  {
+   "claim": "Component C20 (Command line) is described as: Routes each typed coyodex command to the tool that runs it. The same layer decides how much of a long finding list a reader sees.",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:139",
+   "skeptic": "description-2",
+   "note": "Read cli.py:130-160: line 139 is `return _dispatch(cmd, rest)` and `_dispatch` maps each typed verb (preindex, validate, audit, contract, ...) to the module that runs it. The second clause is reporting.py, in this component's file list: its docstring says every check that names a set of ids or files truncates the list for a reader, and `--json` / `set_full_lists(True)` emits it whole. Both clauses hold."
+  },
+  {
+   "claim": "Component C21 (Map checks) is described as: Reads a finished map and reports where it contradicts itself. The same family flags a code link pointing at a line that cannot act.",
+   "grounded": true,
+   "evidence": "tools/coyodex/anchor_drift.py:275",
+   "skeptic": "description-2",
+   "note": "audit_model.py's docstring (lines 2-6) and its `audit_model(m)` call at line 1693 are the L1 self-contradiction pass — the first clause. The second: anchor_drift.py:275 returns `check_operative_lines_model(m, roots)`, whose docstring at validate_model.py:5930 is 'ADVISORY: a call-site anchor pointing at a line that cannot be the acting statement' — a code link pointing at a line that cannot act. Both clauses hold."
+  },
+  {
+   "claim": "Component C22 (Grounding record) is described as: Turns the skeptics' verdict files into the map's honesty record. The four counts a gate blocks on are derived, never hand-tallied.",
+   "grounded": true,
+   "evidence": "tools/coyodex/grounding.py:1704",
+   "skeptic": "description-2",
+   "note": "Read grounding.py's docstring and line 1704, `record, errors = build_record(claims, rows, note, ...)` — the record is built from the parsed verdict files, not typed. The docstring's first paragraph names the four counts `validate` blocks on (confirmed + refuted + unverifiable == challenged) and says a hand-written honesty record is a contradiction in terms. Both clauses hold."
+  },
+  {
+   "claim": "Component C23 (Map editor) is described as: Applies one mechanical correction to a stored map in place. An edit matching no row, or more than one, is refused rather than guessed.",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:1070",
+   "skeptic": "description-2",
+   "note": "Read fix.py's docstring (each verb loads the map, mutates the tree and writes it back through the one serializer — the anchor at line 119 is that in-place write) and then the selection code: line 1070 is `if len(idxs) != 1:` and prints 'that selector matches N security row(s); exactly one is required, and nothing was written' — a refusal for 0 matches and for more than 1. Both clauses hold."
+  },
+  {
+   "claim": "Component C24 (Map reader) is described as: Reads a map and never changes it. Three answers: one element's stored record, what two maps differ on, and the evidence behind a claim.",
+   "grounded": true,
+   "evidence": "tools/coyodex/dump.py:303",
+   "skeptic": "description-2",
+   "note": "Read the docstrings of all three files in this component. dump.py is 'Stdlib-only, read-only' and line 303 writes the parsed model to stdout; `--record <ID>` gives one element's full stored record. mapdiff.py answers what changed between two maps row by row. context.py bundles, per claim, the map records of every element the claim names plus the lines around its anchor — the evidence behind a claim. Nothing here writes the map."
+  },
+  {
+   "claim": "Component C25 (Build closer) is described as: Runs a build's closing steps in order and stops at the first failure. The last step writes one pre-commit verdict to a file.",
+   "grounded": true,
+   "evidence": "tools/coyodex/ship.py:439",
+   "skeptic": "description-2",
+   "note": "Read ship.py's docstring and line 439, `rc = run_plan(build_plan(inputs), default_runner)`, followed by `if rc != 0: return rc`. The docstring names the ordered closing sequence and states 'A failed step STOPS the run and names itself'. The last step is `finalize --emit-gate-block`, whose own docstring (finalize.py:2-5) is 'one command, one verdict, one durable record' writing `.coyodex/finalize-report.{json,md}`. Both clauses hold."
+  },
+  {
+   "claim": "Component C26 (Build briefing) is described as: Says which files a build will read and which commit its map will name. A second command prints the exact brief each helper agent is sent.",
+   "grounded": true,
+   "evidence": "tools/coyodex/scope.py:171",
+   "skeptic": "description-2",
+   "note": "Read scope.py's docstring and main(): line 168 describes the command as 'Say which files coyodex will analyze and what the map will be pinned to' and line 171 prints `scope_report`; `read_pin` at line 55 is the commit half. The second clause is contract.py, in this component's file list: its docstring line 1 is '`coyodex contract <name>` — print exactly the text one fan-out agent should receive.' Both clauses hold."
+  },
+  {
+   "claim": "Component C27 (Build log) is described as: Records which session built a map, and when. Beside that it records how long each slice of the build took.",
+   "grounded": true,
+   "evidence": "tools/coyodex/provenance.py:327",
+   "skeptic": "description-2",
+   "note": "Read provenance.py's docstring ('record WHICH session built the map, and WHEN') and line 327, the `stamp(repo, mode=..., session_id=..., built_at=...)` call that writes it. timings.py, the other file in this component, records what each fan-out slice actually took, per its docstring at lines 2-15. Both clauses hold."
+  },
+  {
+   "claim": "Component C80 (Map rendering) is described as: Turns a stored map into the readable file kept beside the code. Also builds the boxes and arrows the browser draws.",
+   "grounded": true,
+   "evidence": "tools/coyodex/views.py:299",
+   "skeptic": "description-2",
+   "note": "Read views.py:299, `def model_to_markdown(m)` — 'The canonical markdown view', the readable file kept beside the code (`.coyodex/project-map.md`, regenerated by `coyodex render`). The module docstring's second half is the graph view that feeds `gen_viewer.build_view_bundle` the browser's boxes and arrows. Both clauses hold."
+  },
+  {
+   "claim": "Component C81 (Feature facts) is described as: Works out what each feature owns: its people, its decisions, its records and the doors reaching it.",
+   "grounded": true,
+   "evidence": "tools/coyodex/features.py:410",
+   "skeptic": "description-2",
+   "note": "Read features.py:410, `def build_index(m, extents)` — 'Join every part of the map onto the feature it belongs to' — and the FeatureFacts fields at lines 71-90: roles (its people), rules 'what it decides', entities 'what it knows about', and entry_points / reached_through, 'the surfaces this feature is entered by, via its use cases' ways in' — the doors reaching it. Every clause holds, and the docstring at line 8 confirms it is derived, never authored."
+  },
+  {
+   "claim": "Component C82 (Diagram builder) is described as: Draws every diagram, timeline and flow of one map, ready for the browser page to show.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:3348",
+   "skeptic": "description-2",
+   "note": "Read gen_viewer.py's docstring and `build_view_bundle` at line 3322: it computes every derived view artifact for one map — every altitude's Mermaid source, the use-case flows, colours and source-link config — served at /p/<slug>/api/view for the frontend to render. Line 3348 folds in `as_bundle(build_index(model, extents))`, and features.py:681-687 shows that bundle carries the `story` (spine, off, column, cast, edges) the timeline is drawn from. All three drawings are covered."
+  },
+  {
+   "claim": "Component C83 (Map server) is described as: Serves every map on this machine at a local web address. Reads a project's own code from its version history.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:19",
+   "skeptic": "description-2",
+   "note": "Read serve.py's module docstring and `serve()` at line 869. Second clause confirmed at lines 10-19: the file browser and code viewer read from git AT THE MAP'S COMMIT via `git ls-tree` / `git show <commit>:<path>`, so local edits never leak in. First clause holds in the ordinary case but is not exhaustive, and the lead may want to tighten it: line 871 says 'No disk scan — the served set is exactly the recents list', and recents.py:23 says the list only grows when a folder is opened in the UI or a build registers one (assemble.py:983 and render.py:56 auto-register), so a map built elsewhere and cloned in is absent until someone opens it."
+  },
+  {
+   "claim": "Component C84 (File browser) is described as: Lists a project's folders and files, marking each one by how far the map covers it.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/filetree.py:214",
+   "skeptic": "description-2",
+   "note": "Read filetree.py's docstring and `build_tree` at line 214: it nests the repo-relative file paths into folders and then overlays map coverage, tagging every entry self / under / has / none — 'nothing in the map points here' through 'a node's source ref points exactly at this path'. Both halves of the one sentence hold."
+  },
+  {
+   "claim": "Component C85 (Remembered projects) is described as: Keeps the list of project folders a person has opened, so each map is one click away next time.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/recents.py:22",
+   "skeptic": "description-2",
+   "note": "Read recents.py:1-45. Line 22 is `class RecentsStore`, 'The ordered (most-recent first) list of project folders the user has opened, persisted to a small JSON file' at ~/.coyodex/serve-recents.json, shown as cards on the landing page — which is the one-click-away clause. Holds."
+  },
+  {
+   "claim": "Component C60 (Map loader) is described as: Loads the whole map from the server when the page opens, before any screen is drawn. Glossary words in the text then become definitions you can read in place.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:172",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:160-200. Line 172 is `const _res = await fetch(API_BASE + 'view', ...)` — a top-level await, and the comment above it says every statement below needs the data in place, so nothing is drawn first. Second clause read at lines 293-294 and 409-512: the glossary term-linking engine turns every occurrence of a glossary term in narrative prose into an in-place definition (`autolinkTerms`, line 443). Both clauses hold."
+  },
+  {
+   "claim": "Component C61 (Element cards) is described as: Draws one card for anything on the map: its name, a tag saying its type, one sentence. Clicking a card opens that thing.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:1264",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:1255-1300. Line 1264 is `function elementCardHtml(id, opts)` — 'One card' — which renders the element's name, its type pill ('The type is on EVERY card, everywhere') and its description sentence. The click is at line 1434, `root.querySelectorAll('.ecard[data-id]')`, which opens the card's own element. Both clauses hold."
+  },
+  {
+   "claim": "Component C62 (Diagram canvas) is described as: Draws a view's picture from the drawing the map recorded. Selecting a box lights it and dims everything else.",
+   "grounded": false,
+   "evidence": "tools/coyodex/viewer/viewer.js:4136",
+   "skeptic": "description-2",
+   "note": "First clause holds: line 13096 renders the view's picture from the Mermaid source the map recorded (`mermaid.render(...expandItemSlots(mermaidFor(s)))`). The second clause fails. A plain click runs `nodeDesc` -> `nodeFocus` at viewer.js:4136-4141, which builds `keep = {this box} + every box on the other end of an edge touching it`, and `applyFocus` (line 1647) dims only what is NOT in that set. The code's own comment at line 4142 says 'dim to its NEIGHBOURHOOD', and line 1678 says 'keep the UNION of every selected element's neighbourhood lit, dim the rest'. So selecting a box lights it and its neighbours and dims the rest, not 'everything else' — the reader sees connected boxes stay bright on every click."
+  },
+  {
+   "claim": "Component C63 (Diagram clicks) is described as: Decides what a click does on each drawn box and arrow, view by view. Holding a key drills into a box instead of selecting it.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:2456",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:5346, `function bindContext()`, one of a family of per-view bind functions that says what a click does on each box and each arrow of that view (`bindNodes` / `bindEdges`, with special cases for the System box, the Libraries fold and store boxes). The key clause is line 2456: `const drill = !!e && (e.altKey || e.detail >= 2)` inside `isDrillClick`, and line 5350 shows drill returning early instead of selecting. Both clauses hold."
+  },
+  {
+   "claim": "Component C64 (Info pane) is described as: Shows what you selected: a card floating over the picture, or a drawer along the bottom. What the pane holds changes with the kind of thing selected.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:2881",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:2870-2905. Line 2881 fills the pane with the selected element's card. The two shapes are real: `drawerMode` at line 6764 switches between the card floating over the drawing (comments at lines 3065, 6612) and the bottom drawer (`drawerShow`/`drawerHide`). The content varies by kind — `showNodeDetailSynced` routes a deployment group to `showDeploymentGroup`, and arrows use `showEdge` (line 2905 onward). Both clauses hold."
+  },
+  {
+   "claim": "Component C65 (Trail and screen address) is described as: Keeps the tabs, the trail and the browser address in step with the screen on show. Copying that address gives someone else the same screen.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:7896",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:7885-7920. Line 7896 is `function renderChrome(s)`; it lights the open group tab, shows only that group's view tabs, and draws the trail from `ancestors(s)` (line 7885 onward). The address half is lines 4991-5011 (pushState/replaceState of the state hash) and 5165, `stateFromUrl(location.hash)`, which rebuilds the same screen from a pasted address. Both clauses hold."
+  },
+  {
+   "claim": "Component C66 (Product pages) is described as: Draws the pages that say what the product is for and what it does. Covers the overview, the features, the happy path, actor pages and the glossary.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10088",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:10080-10105 (line 10088 `function renderHappyPath`) and located the sibling page renderers in the same block: renderGlossary (8178), renderOverviewTab (8840), renderActorPage (9602), renderOverview (10897, the Features cards — the dispatch at line 13006 sends kind 'usecases' there). That is exactly the five the sentence lists, and viewer.js:3881 states the Features question: 'What can this product do, feature by feature?'"
+  },
+  {
+   "claim": "Component C67 (Storage, tests and system pages) is described as: Draws the tables for where data is kept, how far the tests reach, and the operational lists.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:11399",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:11399, `function renderData(s)` — the Storage view, built from DATA_VIEW stores as rail + panes of collection rows with writer/reader chips. `renderTests` sits in the same block (found by scanning function definitions from 11400), and `renderSystem` at 11275 draws the System view's three bands, 'The running system' / 'Notes about the code' / 'About this map' (SYS_BANDS, line 11267) — the operational lists. All three are covered."
+  },
+  {
+   "claim": "Component C68 (Rules and interfaces pages) is described as: Draws the decisions the product makes and the places it meets the outside world. Each rule and each interface has a page of its own.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:12797",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:12790-12812. Line 12797 is `function renderRules(s)` — the decisions, one card per decision area drilling to the rules inside. `renderInterfaces` is at 12675, the places the product meets the outside world. The per-element pages are real and separate: `renderInterface(s)` at 12695 and `renderRule(s)` at 12855. Both clauses hold."
+  },
+  {
+   "claim": "Component C69 (Source column) is described as: Shows the mapped project's files, and the source of the one you open, at the map's commit. Selecting a box on a picture opens its file here.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:13775",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:13885-13910: `loadServerTree` fetches the file tree and the code viewer's comment says it fetches the file from the server at git @ commit. The second clause is line 13775, inside `syncTreeToNode`: `if (n) syncCodeView(n.file, n.line, n.files)` — 'mirror the node's source into the code viewer', called from `showNode` (line 2891) whenever a box is selected. Both clauses hold."
+  },
+  {
+   "claim": "Component C70 (Viewer shell) is described as: Holds the page frame: the title bar, the tab rows, the panes and the settings dialog. Also wires the keyboard and the first-run guide.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:15049",
+   "skeptic": "description-2",
+   "note": "Read viewer.html's chrome (title bar with meta + zoom + search/help/settings buttons at lines 28-42, the 'Map areas' tab nav at 105, #leftcol/#stage panes at 93-94, the settings modal) and viewer.js's startup block at 14608-14623, which wires the document keydown handler (flow arrows, Escape). The first-run guide is line 15049: `if (lsGet(LS.coach) !== '1') coach.hidden = false; // first visit -> show the guide once`. Every clause holds."
+  },
+  {
+   "claim": "Component C71 (Map search) is described as: Finds anything in the map by name as you type: elements, files, folders, glossary words. Picking a result opens it where it lives.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:15250",
+   "skeptic": "description-2",
+   "note": "Read `sbBuildStatic` at viewer.js:15112 — every named node, each entity's field, every glossary term, plus System reference rows — and `sbFileItems` at 15250, which adds every file and folder with a 'file'/'folder' badge. Line 15345 concatenates the three into the as-you-type index. Each result carries its own `run`: selectFromTree for an element, sbGotoGlossary for a term, openInCodeViewer for a file, sbGotoDir for a folder. Both clauses hold."
+  },
+  {
+   "claim": "Component C72 (Impact explorer) is described as: Projects a code change onto the map and marks what that change touches, plus what ripples out from it. Hidden from the title bar for now.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:48",
+   "skeptic": "description-2",
+   "note": "Read viewer.js:15640-15668: the impact explorer projects an arbitrary diff onto the map, `impactProjection()` marking each element 'direct' (what the change touches) or 'rippled' (what ripples out), with a strength threshold. The second clause is viewer.html:45-48: 'HIDDEN FOR NOW: the feature works but is not good enough to advertise' — the whole `#impactctl` control carries the `hidden` attribute in the title bar. Both clauses hold."
+  },
+  {
+   "claim": "Component C73 (Viewer styles) is described as: Holds every colour, size and layout rule the viewer page draws itself with. One stylesheet covers every view.",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.css:1",
+   "skeptic": "description-2",
+   "note": "Read viewer.css's head (3,205 lines: the reset, body font/colour, the focus ring, the title bar's colours and sizes) and confirmed by grep of viewer.html that `/static/viewer.css` is the only stylesheet the page links, and the only .css file in the viewer folder — so one stylesheet does cover every view. One qualifier for the lead, not a refutation: a few runtime colours are set in JS rather than CSS — the diff badge colours, the selection glow and the dim opacity at viewer.js:182-187 — so 'every colour' is not literally exhaustive."
+  }
+ ]
+}

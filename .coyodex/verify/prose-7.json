@@ -4,164 +4,164 @@
  "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
  "fields": [
   {
-   "where": "D6 used for",
-   "text": "Checks types across the coyodex code. Only a coyodex developer installs pyright."
+   "where": "BR183 statement",
+   "text": "A file that version history deliberately ignores is never handed back to the browser."
   },
   {
-   "where": "D7 used for",
-   "text": "Builds and installs coyodex into its private environment. The install is editable, so an edit takes effect with no reinstall."
+   "where": "BR183 risk",
+   "text": "A local settings file holding passwords is kept out of version history, and would otherwise be readable in the map."
   },
   {
-   "where": "D8 used for",
-   "text": "Draws every diagram in the viewer. The browser fetches Mermaid from a pinned web address and rejects a tampered copy."
+   "where": "BR184 statement",
+   "text": "Code shown beside the map is the version the map was built from, not whatever sits on disk now."
   },
   {
-   "where": "D9 used for",
-   "text": "Lets a reader pan and zoom a diagram. The browser fetches svg-pan-zoom from a pinned web address with an integrity hash."
+   "where": "BR184 risk",
+   "text": "A reader comparing a box against edited code would blame the map for a mismatch the map never made."
   },
   {
-   "where": "D10 used for",
-   "text": "Colours the code shown in the source column. The fetch happens only the first time a file is opened."
+   "where": "BR185 statement",
+   "text": "A version name arriving in a web address is refused unless it reads as an ordinary commit name."
   },
   {
-   "where": "D11 used for",
-   "text": "Shows the viewer. Starting the map server opens the landing page in the reader's default browser."
+   "where": "BR185 risk",
+   "text": "A crafted name could otherwise be taken as an instruction and make the history reader do something else."
   },
   {
-   "where": "D12 used for",
-   "text": "Runs the coyodex method. Installing copies the skill into the Claude Code skills folder, with this clone's path baked in."
+   "where": "BR186 statement",
+   "text": "Code fetched from the public internet runs in the viewer only when its fingerprint matches the expected one."
   },
   {
-   "where": "D13 used for",
-   "text": "Runs the coyodex method. Installing copies the skill into the shared cross-agent skills folder Codex reads."
+   "where": "BR186 risk",
+   "text": "A tampered drawing or highlighting library would run inside a page that already shows every line of the project's source."
   },
   {
-   "where": "D14 used for",
-   "text": "Runs the coyodex method. Cursor reads both skills folders the installer writes, so it needs no folder of its own."
+   "where": "BR187 statement",
+   "text": "A source link may open only through an address belonging to a known code editor."
   },
   {
-   "where": "D15 used for",
-   "text": "Opens a box's source file in a browser. The link is pinned to the commit the map was built from."
+   "where": "BR187 risk",
+   "text": "A hand-typed link pattern could otherwise run script in the page or send the reader somewhere unexpected."
   },
   {
-   "where": "D16 used for",
-   "text": "Opens a box's source file at its line. The reader picks one editor once, from a list of eleven."
+   "where": "BR40 statement",
+   "text": "Data the product writes only to read back crosses no interface, unless the map records an outside reader."
   },
   {
-   "where": "R1 wants",
-   "text": "To understand a codebase top down, and to drop into the code only where it matters."
+   "where": "BR40 risk",
+   "text": "The map draws the product's own database as an outside edge, so where the product ends disappears."
   },
   {
-   "where": "R2 wants",
-   "text": "To follow the written method end to end and produce a map every gate accepts."
+   "where": "BR41 statement",
+   "text": "A step names the service on the far side, never the proxy or the library that carries the call."
   },
   {
-   "where": "R3 wants",
-   "text": "To know whether a change to the method made the maps better or worse."
+   "where": "BR41 risk",
+   "text": "The map names the log shipper and never the log store, so the reader cannot tell who receives the data."
   },
   {
-   "where": "HP2 why",
-   "text": "needs the skill installed at HP1, so the agent knows what coyodex means"
+   "where": "BR42 statement",
+   "text": "Each outside system names the interfaces it stands on, or records why it is none, never both."
   },
   {
-   "where": "HP3 why",
-   "text": "needs the file set agreed at HP2"
+   "where": "BR42 risk",
+   "text": "A deliberate exclusion looks exactly like nobody having looked, so the whole edge of the product stops being trustworthy."
   },
   {
-   "where": "HP4 why",
-   "text": "needs the slice sizes from HP3"
+   "where": "BR43 statement",
+   "text": "An interface is labelled by what it is, never by what it is for."
   },
   {
-   "where": "HP5 why",
-   "text": "needs the briefing handed over at HP4"
+   "where": "BR43 risk",
+   "text": "A payment service and a crash reporter get labels nobody can compare, so the picture stops grouping the edge."
   },
   {
-   "where": "HP6 why",
-   "text": "needs every worker's fragment on disk from HP5"
+   "where": "BR44 statement",
+   "text": "Who stands on the far side of an interface is read from the flows, never written by hand."
   },
   {
-   "where": "HP7 why",
-   "text": "needs the merged identifiers from HP6"
+   "where": "BR44 risk",
+   "text": "A hand-written far side disagrees with the stories, and the reader gets two answers with no way to choose."
   },
   {
-   "where": "HP8 why",
-   "text": "needs a written map from HP6"
+   "where": "BR45 statement",
+   "text": "A person meets the product through an interface at every step, not only the first and the last."
   },
   {
-   "where": "HP9 why",
-   "text": "needs the map to be well formed, from HP8"
+   "where": "BR45 risk",
+   "text": "The picture shows one person on both sides of one wall, so the edge of the product reads as optional."
   },
   {
-   "where": "HP10 why",
-   "text": "needs the ranked claim list from HP9"
+   "where": "BR46 statement",
+   "text": "Work the product schedules for itself is never an outsider, so it crosses no interface."
   },
   {
-   "where": "HP11 why",
-   "text": "needs the skeptics' verdicts from HP10"
+   "where": "BR46 risk",
+   "text": "The map counts its own timer as a customer, so an interface handing data to nobody looks answered."
   },
   {
-   "where": "HP12 why",
-   "text": "needs every verdict file from HP10"
+   "where": "BR20 statement",
+   "text": "A command is a way in only when it acts on the running product or its stored data."
   },
   {
-   "where": "HP13 why",
-   "text": "needs the grounding record from HP12"
+   "where": "BR20 risk",
+   "text": "A build or test command counted as a way in makes the outside edge look wider than it is."
   },
   {
-   "where": "HP14 why",
-   "text": "needs a map that passed the gates at HP13"
+   "where": "BR21 statement",
+   "text": "A command judged not to be a way in must still be recorded as a run or build command."
   },
   {
-   "where": "HP16 why",
-   "text": "needs the server running from HP15 and a committed map from HP14"
+   "where": "BR21 risk",
+   "text": "A command decided against and never rewritten disappears from the map. No check can see a row nobody wrote."
   },
   {
-   "where": "HP17 why",
-   "text": "needs the map open from HP16"
+   "where": "BR22 statement",
+   "text": "A way in is recorded once, at the thing that does the acting, and never again at whatever calls it."
   },
   {
-   "where": "HP18 why",
-   "text": "needs a box on screen from HP17"
+   "where": "BR22 risk",
+   "text": "Counting a wrapper and the command it wraps as two doors inflates the outside edge with duplicate rows."
   },
   {
-   "where": "HP19 why",
-   "text": "needs the pinned baseline from HP14"
+   "where": "BR23 statement",
+   "text": "A timer, a boot hook or a queue reader is work the product does to itself, not a way in."
   },
   {
-   "where": "HP20 why",
-   "text": "needs the report from HP19 and the reader's agreement"
+   "where": "BR23 risk",
+   "text": "Placing the product's own scheduled work on the outside edge makes it look reachable where nobody outside can reach it."
   },
   {
-   "where": "HP21 why",
-   "text": "needs a baseline worth comparing against, from HP20"
+   "where": "BR24 statement",
+   "text": "A way in of a kind nobody recognises is treated as one somebody outside asks for."
   },
   {
-   "where": "HP22 why",
-   "text": "needs the archived baseline from HP21"
+   "where": "BR24 risk",
+   "text": "Guessing self-started instead would quietly drop a real door out of every count of the outside edge."
   },
   {
-   "where": "HP23 why",
-   "text": "needs both maps profiled at HP22"
+   "where": "BR25 statement",
+   "text": "Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded."
   },
   {
-   "where": "HP24 why",
-   "text": "needs the verdict and the judgements from HP22 and HP23"
+   "where": "BR25 risk",
+   "text": "A way in claimed twice, or by nothing, breaks any honest count of where the product meets the world."
   },
   {
-   "where": "HP25 why",
-   "text": "needs the finished build's transcript, found through the stamp from HP14"
+   "where": "BR26 statement",
+   "text": "Work every request passes through on its way in is not itself a way in, so it joins no interface."
   },
   {
-   "where": "glossary 'map'",
-   "text": "The whole picture coyodex produces for a project: diagrams, plain-language text on every box, and code links."
+   "where": "BR26 risk",
+   "text": "Demanding an interface for shared request handling raises a complaint nobody can ever clear, so readers stop reading complaints."
   },
   {
-   "where": "glossary 'baseline'",
-   "text": "The map as currently accepted, pinned to one commit. A code change is compared against it."
+   "where": "BR27 statement",
+   "text": "A way in that no story reaches is reported, including the ones the product starts for itself."
   },
   {
-   "where": "glossary 'build'",
-   "text": "Analysing a project from scratch and producing a new map. Hand edits are thrown away."
+   "where": "BR27 risk",
+   "text": "Exempting scheduled work hides a whole background behaviour, with no signal anywhere that it is missing."
   }
  ]
 }

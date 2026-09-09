@@ -1,0 +1,116 @@
+{
+ "grounding": [
+  {
+   "claim": "I8 'Project source' is an interface the product exchanges data through with Git",
+   "grounded": true,
+   "evidence": "tools/coyodex/impact_git.py:50",
+   "skeptic": "interface",
+   "note": "Line 50 is the single `subprocess.run(['git', '-C', str(repo), ...])` helper every git read goes through, and its callers ask git for the MAPPED project's content: `blob_lines` runs `git show <sha>:<path>` (impact_git.py:122) and `changes_between` runs `git diff` (impact_git.py:166). What comes back is the user's own source and history, which the product never wrote, so this is data crossing in from outside the product, not its own output read back."
+  },
+  {
+   "claim": "I9 'Code editor' is an interface the product exchanges data through with Code editor",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:14925",
+   "skeptic": "interface",
+   "note": "`doOpenSource` calls `editorUri(n.file, n.line)` and, at line 14925, `fireUri(uri)` — which creates an anchor and clicks it, navigating the browser to a scheme URI. `editorUri` (14868-14881) fills a template with `{abspath}` = the reader's local source root + the mapped path, plus line and column, and only allows a scheme in ALLOWED_OPEN_SCHEMES. So a file path and a line leave the product for a separate desktop application; the editor is the far side, not a pipe."
+  },
+  {
+   "claim": "I10 'Code host' is an interface the product exchanges data through with GitHub",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:14928",
+   "skeptic": "interface",
+   "note": "Line 14928 is `window.open(gh, '_blank', 'noopener')` on the URL built by `ghUrl` (14897-14904): the saved/build-time repo URL plus `/blob/<commit>/<path>#L<line>`, with `ghRef()` (14891) reducing the map's commit field to a real sha. The page fetched at that URL is served by the code host, not by this product, so the far side is GitHub itself."
+  },
+  {
+   "claim": "I11 'Coding agent chat logs' is an interface the product exchanges data through with Coding agent chat logs",
+   "grounded": true,
+   "evidence": "tools/map_backup.py:130",
+   "skeptic": "interface",
+   "note": "Line 130 globs `CLAUDE_PROJECTS` — `Path.home() / '.claude' / 'projects'` (line 40) — for `<session-id>.jsonl` transcript files, and the module then reads their contents (`_cwd_of_transcript` opens the jsonl at line 141; `_WRITE_TOOLS` at 138 scans the recorded tool calls). Those files are written by the coding agent's own harness, never by this product, so this is data crossing in from a store the product does not own."
+  },
+  {
+   "claim": "I1 'Command line': R1 'Map owner' is on its far side",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:168",
+   "skeptic": "interface",
+   "note": "cli.py:166-168 dispatches the typed word `serve` to `serve.main(rest)`; the file is the argv-driven entry point installed as the `coyodex` console script (pyproject.toml:36-37). A person typing `coyodex serve` or `make install` (Makefile:70) is the one on the far side, and that person is the map's Map owner — the human who wants a map of their own project."
+  },
+  {
+   "claim": "I2 'Method quality command line': R3 'Method author' is on its far side",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:75",
+   "skeptic": "interface",
+   "note": "cli.py:73-75 dispatches the typed word `run` to `run.run_cli(rest)`, and `coyodex-eval` is a console script (pyproject.toml:37 `coyodex-eval = \"coyodex_eval.cli:main\"`), so a human types it. run.py's own header (lines 2-5) says the run scores a built map against the blessed baseline — the question the Method author has, and the Makefile calls the eval skill a developer surface \"not meant for a user of coyodex\" (Makefile:104)."
+  },
+  {
+   "claim": "I3 'Map viewer': R1 'Map owner' is on its far side",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:640",
+   "skeptic": "interface",
+   "note": "The claim carries no anchor, so I read the server's routing. serve.py:639-642 serves INDEX_HTML at `/` and routes `/api` to `_root_api` — the landing page, described at line 910 as \"add a project by browsing to its folder, or to open / remove a recent one\". The remove button posts to `/api/forget` (viewer index script, serve.py:1077) which calls `self.store.remove(path)` (serve.py:708). Adding and removing your own mapped projects is the Map owner's action, not a reader's, so the owner does stand at this page."
+  },
+  {
+   "claim": "I3 'Map viewer': R2 'Map reader' is on its far side",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:645",
+   "skeptic": "interface",
+   "note": "The claim's anchor (serve.py:640) is the landing page that lists projects; the route a reader actually uses is the next branch, serve.py:645-650, `/p/<slug>/...`, which looks the project up and serves its map plus that project's API. The page it serves is the browser viewer (viewer.js) whose whole job is showing a map's tabs, cards and code links to someone reading it. So the reader is on the far side of this interface; I moved the line, not the verdict."
+  },
+  {
+   "claim": "I4 'Build skill': R1 'Map owner' is on its far side",
+   "grounded": true,
+   "evidence": "skill/coyodex/SKILL.md:27",
+   "skeptic": "interface",
+   "note": "Line 27 is the skill's single instruction: read `__COYODEX_HOME__/method/dispatch.md` and follow it end to end. Makefile:70-76 copies this exact file into each agent's skills home with the clone path substituted, so it becomes the `/coyodex` command a person invokes. The human asking their agent for a map of their project is the Map owner, so the owner is on this interface's far side."
+  },
+  {
+   "claim": "I5 'Developer skills': R1 'Map owner' is on its far side",
+   "grounded": false,
+   "evidence": "Makefile:104",
+   "skeptic": "interface",
+   "note": "The anchor (Makefile:17, SKILLS_DIRS) is real, but the code around the install-dev target contradicts the claim. Makefile:102-108 says the eval and retro skills are opt-in, and verbatim: \"neither is meant for a user of coyodex\" and \"installing the developer surface should never be a side effect of setting up the tool\" — which is why `install-dev` (Makefile:107) is separate from `install` (Makefile:70). The Map owner is the map's USER actor; the README never mentions install-dev or coyodex-eval at all. The far side of the developer skills is the Method author (eval/SKILL.md:28, EP2), and the map's own I5 record is facing \"operator\". The join looks to have carried UC1's single actor onto steps that belong to the method author."
+  },
+  {
+   "claim": "I5 'Developer skills': R3 'Method author' is on its far side",
+   "grounded": true,
+   "evidence": "eval/SKILL.md:28",
+   "skeptic": "interface",
+   "note": "Line 28 tells the agent to read `__COYODEX_HOME__/eval/method.md` and follow it end to end; Makefile:82-88 installs this file as the `coyodex-eval` skill, and Makefile:102-104 states the eval answers \"did my change make the maps worse?\" and is a developer, not user, surface. The person asking that question is the Method author, so the author is on the far side."
+  },
+  {
+   "claim": "I6 'Map folder': R1 'Map owner' is on its far side",
+   "grounded": true,
+   "evidence": "tools/coyodex/assemble.py:978",
+   "skeptic": "interface",
+   "note": "Lines 976-983 write `project-map.json` and `project-map.md` into the mapped project's `.coyodex/` folder and register that folder with the server. The comment at 973-975 calls this the only verb that writes a map. The folder is written into the user's own repo beside their code for them to read and commit, so the Map owner is on the far side of it."
+  },
+  {
+   "claim": "I7 'Settings': R1 'Map owner' is on its far side",
+   "grounded": true,
+   "evidence": "tools/coyodex/ignorefile.py:183",
+   "skeptic": "interface",
+   "note": "The claim's anchor (assemble.py:978) is the map-file write, not settings, so I read the settings input itself. `load_ignore` at ignorefile.py:182-195 reads `<root>/.coyodex/.ignore`, and the module header (lines 12-19) shows a hand-written, commented pattern file: \"the repo declares it once, next to the map\". Nothing in the product writes that file, so a person does — the owner of the mapped project. Verdict true; the line I cite is where the hand-written value is actually read."
+  },
+  {
+   "claim": "I9 'Code editor': R2 'Map reader' is on its far side",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:14925",
+   "skeptic": "interface",
+   "note": "Line 14925 fires the editor scheme URI built at 14879 from `srcRoot()` — a value the person saves in the viewer's Settings dialog (LS.root, viewer.js:14816, saved at 15021). It runs only from a click inside the served map page, and the comment at 14914-14916 says the first click routes through Settings so the user confirms the root. So the human who opened the viewer and clicked a code link is who lands in the editor: the Map reader."
+  },
+  {
+   "claim": "I10 'Code host': R2 'Map reader' is on its far side",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:14928",
+   "skeptic": "interface",
+   "note": "Line 14928 opens the GitHub blob URL in a new browser tab, reached from `doOpenSource` when the reader's chosen open target is `github` (14923) or when no editor URI resolves. The I10 record calls this the path for \"a reader without the project on their machine\", and the code matches: it needs no local root, only the repo URL and the map's commit (14898-14899). The person clicking in the served map page is the Map reader."
+  },
+  {
+   "claim": "I12 'Score and review reports': R3 'Method author' is on its far side",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:169",
+   "skeptic": "interface",
+   "note": "The claim carries no anchor, so I read the eval run orchestrator. Lines 156-169 make the run directory and write `project-map.json`, `project-map.md`, `profile.json`, `judge.json` and `delta.md` into it; `delta.md` is the human-readable verdict (line 123 writes \"No baseline yet — `coyodex-eval bless` this run to establish one\"). Nothing downstream in the product consumes those files; they exist for the person who ran the eval to read, and that person is the Method author (Makefile:102-104 calls the eval a developer surface)."
+  }
+ ]
+}

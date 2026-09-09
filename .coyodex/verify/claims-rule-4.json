@@ -3,225 +3,225 @@
  "theme": "rule",
  "claims": [
   {
-   "claim": "Rule 'A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead.' is enforced at tools/coyodex/preindex_lib.py:616 — goes inside a folder that is over the limits, so its parts are counted one by one",
-   "anchor": "tools/coyodex/preindex_lib.py:616",
-   "detail": "In: Pre-index (C33)",
+   "claim": "Rule 'Every thing the map records belongs to exactly one screen.' is enforced at tools/coyodex/viewer/viewer.js:13472 — Picks, for each kind of thing, the single screen that draws it.",
+   "anchor": "tools/coyodex/viewer/viewer.js:13472",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead.' is enforced at tools/coyodex/preindex_lib.py:615 — counts an oversized folder with no sub-folders as several boxes, never as one",
-   "anchor": "tools/coyodex/preindex_lib.py:615",
-   "detail": "In: Pre-index (C33)",
+   "claim": "Rule 'Every thing the map records belongs to exactly one screen.' is enforced at tools/coyodex/viewer/viewer.js:7647 — Reads that same choice to decide which tab a thing's own page sits under.",
+   "anchor": "tools/coyodex/viewer/viewer.js:7647",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:577 — drops documentation, settings and other text files before counting anything",
-   "anchor": "tools/coyodex/preindex_lib.py:577",
-   "detail": "In: Pre-index (C33)",
+   "claim": "Rule 'Every thing the map records belongs to exactly one screen.' is enforced at tools/coyodex/viewer/viewer.js:7651 — Sends a page about one thing to the tab that thing lives under.",
+   "anchor": "tools/coyodex/viewer/viewer.js:7651",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:579 — drops test folders, internal folders and asset folders such as icons, images and translations",
-   "anchor": "tools/coyodex/preindex_lib.py:579",
-   "detail": "In: Pre-index (C33)",
+   "claim": "Rule 'Every thing the map records belongs to exactly one screen.' is enforced at method/diagrams.md:54 — Tells the map builder that a link to a thing lands on that thing's home screen.",
+   "anchor": "method/diagrams.md:54",
+   "detail": "In: Map model spec (C129)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:609 — folds a nearly empty sub-folder into its parent rather than counting a box for it",
-   "anchor": "tools/coyodex/preindex_lib.py:609",
-   "detail": "In: Pre-index (C33)",
+   "claim": "Rule 'A label that would be true of nearly every card is left off.' is enforced at tools/coyodex/viewer/viewer.js:8219 — Leaves off the word saying who a feature serves when the answer is the ordinary one.",
+   "anchor": "tools/coyodex/viewer/viewer.js:8219",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number.' is enforced at tools/coyodex/preindex_lib.py:619 — counts the loose files of a folder as a box only when they hold real code",
-   "anchor": "tools/coyodex/preindex_lib.py:619",
-   "detail": "In: Pre-index (C33)",
+   "claim": "Rule 'A label that would be true of nearly every card is left off.' is enforced at tools/coyodex/viewer/viewer.js:721 — Gives a person on the customer's side no word saying whose side they are on.",
+   "anchor": "tools/coyodex/viewer/viewer.js:721",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes.' is enforced at tools/coyodex/validate_model.py:4481 — files the box-count comparison under notes, never under failures",
-   "anchor": "tools/coyodex/validate_model.py:4481",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'A screen leaves off a fact it already shows beside the same thing.' is enforced at tools/coyodex/viewer/viewer.js:730 — Drops a card's sentence when the sentence only repeats the card's own name.",
+   "anchor": "tools/coyodex/viewer/viewer.js:730",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes.' is enforced at tools/coyodex/validate_model.py:4501 — files the crowded-screen and thin-screen findings under notes, never under failures",
-   "anchor": "tools/coyodex/validate_model.py:4501",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'A screen leaves off a fact it already shows beside the same thing.' is enforced at tools/coyodex/viewer/viewer.js:6915 — Drops the feature line when the path above the page already names that feature.",
+   "anchor": "tools/coyodex/viewer/viewer.js:6915",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes.' is enforced at tools/coyodex/validate_analysis.py:382 — says nothing at all while the number of boxes stays inside the forty percent margin",
-   "anchor": "tools/coyodex/validate_analysis.py:382",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'A screen leaves off a fact it already shows beside the same thing.' is enforced at tools/coyodex/viewer/viewer.js:8345 — Skips a group heading that would only repeat the section heading above it.",
+   "anchor": "tools/coyodex/viewer/viewer.js:8345",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them.' is enforced at tools/coyodex/balance_lib.py:613 — counts a screen as reading well while it carries three to nine boxes",
-   "anchor": "tools/coyodex/balance_lib.py:613",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A box drops the type word wherever its colour and mark already say what kind of thing it is.' is enforced at tools/coyodex/viewer/viewer.js:987 — Prints the type word only for the box sizes that ask for it, and for every interface.",
+   "anchor": "tools/coyodex/viewer/viewer.js:987",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them.' is enforced at tools/coyodex/balance_lib.py:294 — raises the crowding note when the first screen carries more than twelve boxes",
-   "anchor": "tools/coyodex/balance_lib.py:294",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A box drops the type word wherever its colour and mark already say what kind of thing it is.' is enforced at tools/coyodex/viewer/gen_viewer.py:3057 — Asks for the small box on a flow picture, which carries no type word.",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:3057",
+   "detail": "In: Diagram builder (C82)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them.' is enforced at tools/coyodex/balance_lib.py:307 — raises the same crowding note when a group carries more than twelve boxes",
-   "anchor": "tools/coyodex/balance_lib.py:307",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A box drops the type word wherever its colour and mark already say what kind of thing it is.' is enforced at method/diagrams.md:56 — Tells the map builder to colour each box on a flow picture by its kind.",
+   "anchor": "method/diagrams.md:56",
+   "detail": "In: Map model spec (C129)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes.' is enforced at tools/coyodex/balance_lib.py:194 — reads the children as one family when two thirds of them sit in the same folder",
-   "anchor": "tools/coyodex/balance_lib.py:194",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A screen is offered only when the map holds something to draw on it.' is enforced at tools/coyodex/viewer/viewer.js:15584 — Hides the decisions tab on a map that states no decision.",
+   "anchor": "tools/coyodex/viewer/viewer.js:15584",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes.' is enforced at tools/coyodex/balance_lib.py:198 — reads the children as one family when two thirds of their names end in the same word",
-   "anchor": "tools/coyodex/balance_lib.py:198",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A screen is offered only when the map holds something to draw on it.' is enforced at tools/coyodex/viewer/viewer.js:15585 — Hides the interfaces tab on a map that records no interface.",
+   "anchor": "tools/coyodex/viewer/viewer.js:15585",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A screen may stay crowded when its boxes are same-kind siblings sharing one folder or one name ending. Such a family is only called crowded above fifteen boxes.' is enforced at tools/coyodex/balance_lib.py:309 — leaves such a family alone until it passes fifteen boxes",
-   "anchor": "tools/coyodex/balance_lib.py:309",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A screen is offered only when the map holds something to draw on it.' is enforced at tools/coyodex/viewer/viewer.js:15595 — Drops a whole group of tabs once every tab inside it has been hidden.",
+   "anchor": "tools/coyodex/viewer/viewer.js:15595",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out.' is enforced at tools/coyodex/balance_lib.py:290 — raises the thin note when the first screen shows under three boxes and the map holds many",
-   "anchor": "tools/coyodex/balance_lib.py:290",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A screen is offered only when the map holds something to draw on it.' is enforced at tools/coyodex/viewer/gen_viewer.py:3417 — Works out from the map whether there is any interface for a tab to show.",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:3417",
+   "detail": "In: Diagram builder (C82)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out.' is enforced at tools/coyodex/balance_lib.py:303 — raises a note when a group holds exactly one box, so the level earns nothing",
-   "anchor": "tools/coyodex/balance_lib.py:303",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'Where the map records nothing, the screen says so instead of leaving empty space.' is enforced at tools/coyodex/viewer/viewer.js:8541 — Says a feature reaches no outside service, rather than showing an empty block.",
+   "anchor": "tools/coyodex/viewer/viewer.js:8541",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A thin screen is a fault on the first screen of a large map. Deeper in the map only a group holding exactly one box is called out.' is enforced at tools/coyodex/balance.py:147 — names the thin screens deeper in the map and states plainly that none of them is a fault",
-   "anchor": "tools/coyodex/balance.py:147",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'Where the map records nothing, the screen says so instead of leaving empty space.' is enforced at tools/coyodex/viewer/viewer.js:12874 — Says no flow step reaches this decision, rather than showing an empty block.",
+   "anchor": "tools/coyodex/viewer/viewer.js:12874",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested.' is enforced at tools/coyodex/balance_lib.py:524 — starts from exactly the boxes already on the screen, so none is created and none is dropped",
-   "anchor": "tools/coyodex/balance_lib.py:524",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'Where the map records nothing, the screen says so instead of leaving empty space.' is enforced at tools/coyodex/viewer/viewer.js:12757 — Says no flow comes through this interface, so no feature can be named here.",
+   "anchor": "tools/coyodex/viewer/viewer.js:12757",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested.' is enforced at tools/coyodex/balance.py:103 — the only thing a suggestion adds to the map is a group row",
-   "anchor": "tools/coyodex/balance.py:103",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A line between two things offers no code link, because the place it names is only one example.' is enforced at tools/coyodex/viewer/viewer.js:3052 — Builds a relation row as plain text, with no link to a line of code.",
+   "anchor": "tools/coyodex/viewer/viewer.js:3052",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A re-grouping suggestion may only move a box into another group. Merging two boxes into one, or cutting one box in two, is never suggested.' is enforced at tools/coyodex/balance.py:107 — the only change asked of an existing box is which group it belongs to",
-   "anchor": "tools/coyodex/balance.py:107",
-   "detail": "In: Diagram balance report (C15)",
+   "claim": "Rule 'A line between two things offers no code link, because the place it names is only one example.' is enforced at tools/coyodex/viewer/viewer.js:2957 — Clears the code viewer when a relation line is picked, rather than pointing it somewhere.",
+   "anchor": "tools/coyodex/viewer/viewer.js:2957",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:1693 — reports a feature claiming the story must reach it, when no story step does",
-   "anchor": "tools/coyodex/validate_model.py:1693",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'A line between two things offers no code link, because the place it names is only one example.' is enforced at tools/coyodex/viewer/viewer.js:14163 — Marks a line of code from a flow step's own place, never from a relation line.",
+   "anchor": "tools/coyodex/viewer/viewer.js:14163",
+   "detail": "In: Info pane (C64), Viewer shell (C70)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:1726 — reports a story step whose work sits in a feature claiming the story skips it",
-   "anchor": "tools/coyodex/validate_model.py:1726",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'A picture of one flow draws only the connections that flow itself makes.' is enforced at tools/coyodex/viewer/gen_viewer.py:3081 — Builds each arrow from the flow's own steps, grouped by the pair of things they join.",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:3081",
+   "detail": "In: Diagram builder (C82)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:1701 — separates a feature that answered nothing from a feature claiming the story skips it",
-   "anchor": "tools/coyodex/validate_model.py:1701",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'A picture of one flow draws only the connections that flow itself makes.' is enforced at method/diagrams.md:58 — Tells the map builder that the arrows are the flow's steps, never the general connection list.",
+   "anchor": "method/diagrams.md:58",
+   "detail": "In: Map model spec (C129)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Each feature states by hand whether the product story must reach it. The map reports every feature whose claim the story contradicts. A feature that states nothing is reported too.' is enforced at tools/coyodex/validate_model.py:2883 — rejects any answer outside the two allowed words, so an unanswered feature stays visible",
-   "anchor": "tools/coyodex/validate_model.py:2883",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'Code shown beside the map is the version the map was built from, not whatever sits on disk now.' is enforced at tools/coyodex/viewer/serve.py:782 — Answers a file request at the map's own commit unless the address asks for another version.",
+   "anchor": "tools/coyodex/viewer/serve.py:782",
+   "detail": "In: Map server (C83)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver.' is enforced at tools/coyodex/validate_model.py:1803 — blocks a use case that names no driving party at all",
-   "anchor": "tools/coyodex/validate_model.py:1803",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'Code shown beside the map is the version the map was built from, not whatever sits on disk now.' is enforced at tools/coyodex/viewer/serve.py:491 — Builds the file list from version history at the map's commit rather than from the folder on disk.",
+   "anchor": "tools/coyodex/viewer/serve.py:491",
+   "detail": "In: Map server (C83)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver.' is enforced at tools/coyodex/validate_model.py:1820 — reports a use case naming a person and a program together, because the program is usually delivery machinery",
-   "anchor": "tools/coyodex/validate_model.py:1820",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'Code shown beside the map is the version the map was built from, not whatever sits on disk now.' is enforced at method.md:3108 — The instructions tell the reader that data and source both come from history at the map's commit.",
+   "anchor": "method.md:3108",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'The party driving a use case is the one whose goal it serves. Machinery that only carries somebody's action inward is not a driver.' is enforced at tools/coyodex/audit_model.py:692 — reports a traced scenario whose opening party is not one of the declared drivers",
-   "anchor": "tools/coyodex/audit_model.py:692",
-   "detail": "In: Map auditor (C14)",
+   "claim": "Rule 'Data the product writes only to read back crosses no interface, unless the map records an outside reader.' is enforced at method.md:511 — Keeps the product's own database, cache and queue off the outside edge.",
+   "anchor": "method.md:511",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/validate_model.py:725 — sorts each driving party's vote by whether that party is a person or a program",
-   "anchor": "tools/coyodex/validate_model.py:725",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'Data the product writes only to read back crosses no interface, unless the map records an outside reader.' is enforced at method.md:515 — Lets a reader the map records overturn that exclusion, so a store a person browses counts again.",
+   "anchor": "method.md:515",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/validate_model.py:726 — counts the people's votes, and falls back to the programs only when no person voted",
-   "anchor": "tools/coyodex/validate_model.py:726",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'Data the product writes only to read back crosses no interface, unless the map records an outside reader.' is enforced at method/model.md:460 — Repeats the same exclusion on the page that fixes every field a map may hold.",
+   "anchor": "method/model.md:460",
+   "detail": "In: Map model spec (C129)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/features.py:353 — the feature's record takes the derived answer, so nothing on the feature can contradict its parties",
-   "anchor": "tools/coyodex/features.py:353",
-   "detail": "In: Feature index (C17)",
+   "claim": "Rule 'A step names the service on the far side, never the proxy or the library that carries the call.' is enforced at method.md:516 — Names a reverse proxy and a log shipper as carriers, and the log store as the real edge.",
+   "anchor": "method.md:516",
+   "detail": "In: Product description instructions (C120), Code inventory instructions (C121), Outside edge instructions (C122), Data and step instructions (C123), Operations and decision instructions (C124), Cross-cutting build instructions (C125), Fan-out phase instructions (C126), Verification phase instructions (C127), Closing sequence instructions (C128)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'Who a feature is for is never written on the feature itself. The people who drive it decide, and a program votes only when no person does. A feature that customers and the company's own staff both drive is flagged for a re-read.' is enforced at tools/coyodex/validate_model.py:3057 — reports a feature whose people pull to opposite sides, unless the map records why",
-   "anchor": "tools/coyodex/validate_model.py:3057",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'A step names the service on the far side, never the proxy or the library that carries the call.' is enforced at tools/coyodex/validate_model.py:2840 — Flags a story step that stops at a carrier standing in front of an interface.",
+   "anchor": "tools/coyodex/validate_model.py:2840",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/features.py:193 — uses the author's named neighbour when the feature carries one",
-   "anchor": "tools/coyodex/features.py:193",
-   "detail": "In: Feature index (C17)",
+   "claim": "Rule 'A step names the service on the far side, never the proxy or the library that carries the call.' is enforced at tools/coyodex/validate_model.py:2851 — Flags the same shortcut inside shared steps, where one carrier is drawn in every story running them.",
+   "anchor": "tools/coyodex/validate_model.py:2851",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/features.py:203 — falls back to the last walk step the feature's own parties drive",
-   "anchor": "tools/coyodex/features.py:203",
-   "detail": "In: Feature index (C17)",
+   "claim": "Rule 'Each outside system names the interfaces it stands on, or records why it is none, never both.' is enforced at tools/coyodex/validate_model.py:2744 — Stops a map where an outside system neither claims an interface nor gives a reason.",
+   "anchor": "tools/coyodex/validate_model.py:2744",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/features.py:207 — puts a feature with nothing to hang on at the end of the column",
-   "anchor": "tools/coyodex/features.py:207",
-   "detail": "In: Feature index (C17)",
+   "claim": "Rule 'Each outside system names the interfaces it stands on, or records why it is none, never both.' is enforced at tools/coyodex/validate_model.py:2531 — Stops a system that claims an interface and also gives a reason for having none.",
+   "anchor": "tools/coyodex/validate_model.py:2531",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/validate_model.py:2915 — rejects a named neighbour that is not a defined feature",
-   "anchor": "tools/coyodex/validate_model.py:2915",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'Each outside system names the interfaces it stands on, or records why it is none, never both.' is enforced at method/model.md:530 — Demands the reason on every outside system that names no interface.",
+   "anchor": "method/model.md:530",
+   "detail": "In: Map model spec (C129)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   },
   {
-   "claim": "Rule 'A feature the walk never reaches still holds a place in the one story column. Its author names the feature it reads beside. Without that name the map guesses from the feature's own parties, and otherwise puts it last.' is enforced at tools/coyodex/validate_model.py:2899 — blocks a story place on a code area or a data area, because only a feature sits in the column",
-   "anchor": "tools/coyodex/validate_model.py:2899",
-   "detail": "In: Map validator (C13)",
+   "claim": "Rule 'An interface is labelled by what it is, never by what it is for.' is enforced at tools/coyodex/validate_model.py:2630 — Flags a label that answers what the interface is for, such as payments or analytics.",
+   "anchor": "tools/coyodex/validate_model.py:2630",
+   "detail": "In: Shape checks (C6), Story checks (C7), Rule checks (C8), Wiring checks (C9), Data checks (C10)",
    "why_risky": "a product DECISION and the line that enforces it — a false claim here reads as a fact about the business, and the map's decision layer is the part a reader trusts most."
   }
  ]

@@ -438,7 +438,7 @@ folder. These are the parked ones, with who can answer them.
 | 2 | Which of the 17 files that lost access coverage hold enforcement the map should still be claiming? Two were verified by hand as real — a sign-in signature check and a credential encryption call — and one old anchor was a config constant rather than enforcement. The remaining fourteen are unread. | a human, or a targeted skeptic pass | 2026-08-17 |
 | 3 | ~~What actually causes the access enforcement-line churn?~~ **ANSWERED 2026-08-29 — see below** | the next build | 2026-08-19 |
 | 4 | Do the 47 access rules of the 2026-08-18 map say what the previous map's 44 said? Same shape as question 1, for the newer pair: 50 shared enforcement lines of a 181-line union, 17 files lost, 11 gained. | `/coyodex-eval` (judges) | 2026-08-19 |
-| 6 | Is the four-build "0 verdict disagreements" record evidence, or an artefact of a contract that named one repo's answer to every skeptic of that repo? The example left the contract on 2026-09-08; the cheap experiment is one wave of skeptics on the new contract against the same batch. | one skeptic wave | 2026-09-08 |
+| 6 | ~~Is the four-build "0 verdict disagreements" record evidence, or an artefact of a contract that named one repo's answer to every skeptic of that repo?~~ **ANSWERED 2026-09-09 — see below** | one skeptic wave | 2026-09-08 |
 | 7 | Which of the 19 files that lost access coverage on the 2026-09-08 mcpolis map hold enforcement the map should still be claiming? Nine are OAuth or token handling (`pending_auth.py`, `oauth_refresh.py`, `tool_router.py`, `upstream_oauth_callback.py` among them); the list is in that retro's run directory. Fourth build parked on this shape; `ship` now runs the leg that names them before the commit. | a targeted skeptic pass, or a human | 2026-09-08 |
 | 5 | Is one refuted-claim-in-the-map a pattern? `grounding report`'s `REFUTED BUT NOT SUPERSEDED` section found two on the 2026-08-18 map, both from a reconcile that corrected one copy of a row and left another. Nobody has looked at an older map with the same command. | anyone, one command per archived map | 2026-08-19 |
 
@@ -482,6 +482,36 @@ result.
 
 The write-up came out of a build scratchpad that would have been swept. `method.md`'s closing list
 now carries step 12b — write an experiment's answer somewhere durable before the commit.
+
+### Answered 2026-09-09 — question 6, whether the voters ever disagree
+
+The coyodex self-map build of 2026-09-09 ran the wave the question asked for: the whole `security`
+theme, three independent skeptics, on the revised contract (the one whose example stopped naming a
+repo's own answer, commit `76ca734`).
+
+| | rows |
+|---|---|
+| multi-voted claims | 27 |
+| verdict disagreements | **2** |
+| evidence-anchor disagreements | **4** |
+
+**The record is broken, and the dissenter was right.** Two voters confirmed that a rule refusing an
+odd version name is enforced at two lines of the map server. The third followed every call site of
+that function and ran it: the only production caller passes a value already forced to a bare commit
+id, and the refs that really arrive in a web address are guarded somewhere else entirely. An
+independent closer, denied the map, upheld both refutations. The map's two citations were dropped
+and the line the closer named was added.
+
+**What this says about the four earlier builds.** 160 redundant rows / 0 / 1, then 40 / 0 / 0, then
+100 / 0 / 0 — and now 54 / 2 / 4. One run is not a cause, and this build differs from those in two
+ways at once (a different repo AND the revised contract), so it does not isolate the contract. What
+it does settle is the weaker claim the question was really about: unanimity was not a law of the
+method, and the vote can still find something a single voter would have shipped. The next decision
+about the three-vote rule should rest on whether that keeps happening, not on the old run of zeros.
+
+**Method note the same wave produced.** Both confirming voters read the anchored line and stopped;
+the dissenter read the callers. The difference was not care but reach, which is an argument for the
+contract telling a skeptic to follow a guard to its call sites — cheap to state, and untested.
 
 ### Open 2026-09-07 — the 45 number-claims in the tools that can go stale
 

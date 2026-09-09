@@ -1,0 +1,263 @@
+{
+ "grounding": [
+  {
+   "claim": "UC9 step 10: I1 → C23 [in] — carry one addressed row rewrite, refusing an address that matches none or many",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:1961",
+   "skeptic": "behaviour-3",
+   "note": "Read fix.py:1945-1961: `main` takes the typed verb and dispatches it with `return fn(rest)` into the map editor's verb table (_VERBS, fix.py:1820). Read the `row` verb it carries (fix.py:1690-1743) and `_resolve` (fix.py:1487-1508), whose docstring is 'a refusal on 0 or >1, never a guess': 0 owners returns 'no fragment declares a row with this id' and >1 returns 'declared by N fragment rows — refusing rather than guessing which'. The step phrase matches the code."
+  },
+  {
+   "claim": "UC9 step 11: C23 → C4 — merge the harvest pieces first, so an edit that would mint or retire an id is refused",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:1436",
+   "skeptic": "behaviour-3",
+   "note": "Read fix.py:1420-1442: `_surviving_ids` calls `load_fragment_paths` then, at line 1436, `merge_fragments(loaded.parts)` — the map-assembly merge (assemble.py:363). Read its two call sites at fix.py:1607 (before the edit) and fix.py:1646 (after, over temp copies): fix.py:1651-1665 compares the two id sets and prints 'that edit changes which rows survive assembly — nothing was written', naming ids that would DISAPPEAR or APPEAR. Merge first, then refuse a mint/retire: exactly the step."
+  },
+  {
+   "claim": "UC9 step 12: C23 → E1 [out] — rewrite the named rows in the piece that authored them",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:1668",
+   "skeptic": "behaviour-3",
+   "note": "Read fix.py:1613-1675. The edits are applied to the in-memory fragment documents (1623-1624) and, after the id guard passes, line 1668 `path.write_text(text_of[path], encoding='utf-8')` writes each TOUCHED fragment — `_resolve` (1487-1493) picked those paths as the fragments that declare the addressed rows. So the rewrite lands in the piece that authored them. Note: the file written is a build fragment, not `.coyodex/project-map.json` itself, though a fragment is a project-map document."
+  },
+  {
+   "claim": "UC9 step 13: C23 → C47 — repoint every use case step that rode an arrow the change removed",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:480",
+   "skeptic": "behaviour-3",
+   "note": "Read fix.py:431-496 (`drop_edge`). Line 472-477 removes the matching edge, line 478 collects `riding = riding_steps(m, src, dst)`, and line 480 calls `repoint_riding(riding, dst, new_dst)` — defined at reconcile.py:245, the same module C47 is anchored in. Line 481-482 then prints 're-pointed N riding step(s)'. The riding steps are flow steps, so the phrase holds."
+  },
+  {
+   "claim": "UC9 step 14: C23 → E36 [out] — note under its own heading the warning the person judged acceptable",
+   "grounded": true,
+   "evidence": "tools/coyodex/record.py:101",
+   "skeptic": "behaviour-3",
+   "note": "Read record.py:78-117. `append_line` looks for an ExtraSection whose heading matches (97-98) and, when there is none, creates one and appends it at line 101 `m.extras.append(section)`; the heading must be one the checks read (`_resolve_heading`, 78-87, else it 'silences nothing'). C23's own member list names `coyodex record` as noting one advisory the operator judged acceptable, so the write of an Extra section under its own heading is what this line does."
+  },
+  {
+   "claim": "UC9 step 15: C23 → I1 [out] — name every field that changed, old value then new",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:1672",
+   "skeptic": "behaviour-3",
+   "note": "Read fix.py:1667-1679. The per-field report is the loop at 1670-1673: line 1672 prints `{edit.label}.{field_name}: {before[field_name]!r} → {value!r}` for EVERY changed field, old value then new; `before` was captured at 1622 before the write. The stored anchor 1674 is the summary line ('rewrote N field(s)') two lines below the same block."
+  },
+  {
+   "claim": "UC9 step 16: I1 → R1 — show what changed before the checks run",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:1676",
+   "skeptic": "behaviour-3",
+   "note": "Read fix.py:1667-1680 and fix.py:494-496. After printing what changed, `row` prints at 1676-1679 'Re-assemble to see it in the map... re-run `coyodex grounding write` AFTER the final assemble, or `finalize` will refuse', and `drop_edge` ends at 495 with 'Re-run: validate --check-sources → audit → render.' The operator sees the change and is then pointed at the checks."
+  },
+  {
+   "claim": "UC10 step 1: R3 → I5 — ask for a score on the change to the instructions",
+   "grounded": true,
+   "evidence": "eval/SKILL.md:9",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/SKILL.md:1-15. The skill's front matter names it `coyodex-eval` and its description says it runs 'the method-quality regression eval', triggering on '/coyodex-eval', 'eval this map', 'method-quality eval' (line 8-10). That is the developer asking for a score on a method change, and the skill is the only door for it."
+  },
+  {
+   "claim": "UC10 step 2: I5 → C135 [in] — hand the agent the scoring recipe to follow",
+   "grounded": true,
+   "evidence": "eval/SKILL.md:28",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/SKILL.md:17-30. The file is deliberately a pointer: line 28 says 'Read `__COYODEX_HOME__/eval/method.md` and follow it end to end. It is the entry point, and it names every other doc, tool and precondition'. C135 is anchored at eval/method.md:8, so this line is the handoff of the scoring recipe to the agent."
+  },
+  {
+   "claim": "UC10 step 3: R3 → I2 — type the eval commands the recipe names, over the two maps",
+   "grounded": true,
+   "evidence": "eval/method.md:352",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/method.md:345-364. The recipe has the person type `coyodex-eval hash` over both maps (350-351) and then `coyodex-eval run` (352-359) with `--map .coyodex/project-map.json` and `--baseline-dir .coyodex-eval/cache/$BASE` — the candidate and the archived baseline. Two maps, typed commands, named by the recipe."
+  },
+  {
+   "claim": "UC10 step 4: I2 → C100 [in] — route each typed sub-command to the checker that answers it",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:65",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/tools/coyodex_eval/cli.py:56-123. Line 65 takes the typed argument list, line 69 splits off the sub-command, and lines 70-120 route it: score→profile, run/hash/claims/judge/protocol/bless→run, arrows→arrows, compare→compare, process→process_scorecard, ledger, retro-precheck, transcript, cost, mutate; line 121 refuses an unknown one. Each sub-command goes to the checker that answers it."
+  },
+  {
+   "claim": "UC10 step 5: C100 → C101 — reduce each map to the numbers two builds can be compared on",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:72",
+   "skeptic": "behaviour-3",
+   "note": "Read cli.py:70-72: `score` imports `profile` and returns `profile.main(rest)`. Read profile.py:583-603 and the MapProfile it builds at profile.py:430-442 — counts of use cases, subsystems, subdomains, components, deps, entities, edges and so on. Those are the numbers compare.py later bands two builds on, so 'reduce each map to the numbers two builds can be compared on' is what this dispatch reaches."
+  },
+  {
+   "claim": "UC10 step 6: C101 → E1 [in] — read the built map and count what it holds",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/profile.py:595",
+   "skeptic": "behaviour-3",
+   "note": "Read profile.py:583-603. Line 583-586 resolves the map path (default `.coyodex/project-map.json`) and refuses if it is missing; line 595 `load_model_tolerating_legacy(path.read_text(encoding='utf-8'))` reads the built map, and line 598 `build_profile_from_model` counts what it holds. Read and count, as the step says."
+  },
+  {
+   "claim": "UC10 step 7: C100 → C104 — hand over the doubters' votes and the scorers' marks",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:84",
+   "skeptic": "behaviour-3",
+   "note": "Read cli.py:82-84: `judge` returns `run.judge_cli(rest)`. Read run.py:375-410, the body it reaches: line 391 loads the `--verdicts` file and line 394-397 passes `raw.get('grounding', [])` (the skeptics' votes) and `raw.get('judges', [])` (the rubric scorers' marks) into `report_from_verdicts`. Both are handed over on this one command."
+  },
+  {
+   "claim": "UC10 step 8: C104 → C103 — fold the votes and the marks into one quality report",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:394",
+   "skeptic": "behaviour-3",
+   "note": "Read run.py:391-403 and judge.py:250-261. Line 394 calls `report_from_verdicts` (judge.py:318) with the grounding rows and the judge rows; judge.py:257-261 returns one JudgeReport carrying n_grounded/grounding_passrate (the votes), the rubric `dimensions` and `overall` (the marks), plus the anchor-drift counts. run.py:403 writes that single report out. One quality report from both inputs."
+  },
+  {
+   "claim": "UC10 step 9: C100 → C105 — list the relations the rebuild dropped while the code still makes them",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:93",
+   "skeptic": "behaviour-3",
+   "note": "Read cli.py:91-93: `arrows` returns `arrows.main(rest)`. Read arrows.py:1-30 and 146-152: `compare` keeps every baseline pair absent from the candidate and judges each with `judge_one`, which reads the recorded call site and returns LOST_TRUTH when the line 'still reads' as live code (line 143) versus CORRECT_DROP when it is non-operative (142). Dropped by the rebuild, still made by the code."
+  },
+  {
+   "claim": "UC10 step 10: C100 → C104 — run one scoring pass over the frozen candidate map",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:75",
+   "skeptic": "behaviour-3",
+   "note": "Read cli.py:73-75: `run` returns `run.run_cli(rest)`. Read run_cli at run.py:200-275: lines 210-224 are the freeze guard — `--expect-map-hash` recomputes `map_sha256(map_path)` and refuses with 'Refusing to score an edited artifact' on a mismatch — and line 259 then calls `run_eval` on the candidate map. One scoring pass over a frozen candidate."
+  },
+  {
+   "claim": "UC10 step 11: C104 → E55 [in] — read the accepted map's stored numbers",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:78",
+   "skeptic": "behaviour-3",
+   "note": "Read run.py:74-82 (`load_baseline`). Line 76 names `profile.json` in the baseline dir and line 78 `MapProfile.from_json(prof_p.read_text(encoding='utf-8'))` reads the accepted map's stored numbers (line 81 reads its judge.json beside it). Read its caller at run.py:246, which is reached only when `--baseline-dir` was given and refuses at 242-251 when the dir or its profile.json is missing."
+  },
+  {
+   "claim": "UC10 step 12: C104 → C102 — check the fresh map's numbers against the accepted one's",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:67",
+   "skeptic": "behaviour-3",
+   "note": "Read run.py:55-69 (`run_eval`). Line 60 profiles the candidate map, and line 66-68 — only when a baseline profile was loaded — calls `compare(baseline_profile, profile, thresholds, baseline_judge, jr)` (compare.py:252) and takes its verdict. That is the fresh map's numbers checked against the accepted one's."
+  },
+  {
+   "claim": "UC10 step 13: C102 → C104 — return the verdict: as good, drifted, or worse",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:518",
+   "skeptic": "behaviour-3",
+   "note": "Read compare.py:511-518. A failed hard gate sets REGRESSED (512), a breached count/judge/granularity band sets DRIFT (513-515), otherwise PASS (517); line 518 returns the DeltaReport carrying that verdict back to its caller `run_eval` (run.py:67-68). Read compare.py:40-42 for the three names — PASS, DRIFT, REGRESSED — which are 'as good, drifted, or worse'."
+  },
+  {
+   "claim": "UC10 step 14: C104 → E55 [out] — file the fresh map's numbers with the run",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:166",
+   "skeptic": "behaviour-3",
+   "note": "Read run.py:150-172 (`write_run`) and its caller run.py:266-267, which runs when `--out` is given. Line 166 `(out_dir / 'profile.json').write_text(result.profile.to_json(), encoding='utf-8')` files the fresh map's numbers into the run directory, beside the map, the md view, judge.json and delta.md."
+  },
+  {
+   "claim": "UC10 step 15: C104 → I2 [out] — print the verdict with the gates and bands that moved",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:274",
+   "skeptic": "behaviour-3",
+   "note": "Read run.py:266-275 and `delta_md` at run.py:85-124. Line 274 prints delta_md, which leads with 'Verdict: **<verdict>**' (91), then the judge block (100-106), the profile counts (107-119), and — when a baseline was compared — '## Comparison vs baseline' with `format_report(result.delta)` (121), which is where the gates and bands that moved are listed."
+  },
+  {
+   "claim": "UC10 step 16: I2 → R3 — show the verdict and where the run was filed",
+   "grounded": true,
+   "evidence": "eval/method.md:388",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/method.md:382-391. The report to the user must give the verdict 'PASS / DRIFT / REGRESSED with the gates/bands that moved' (385) and 'the path to the run's `delta.md` and `project-map.view.json`' (388-389) — the verdict and where the run was filed. The run directory itself is `.coyodex-eval/runs/<ts>` (line 359)."
+  },
+  {
+   "claim": "UC11 step 1: R3 → I5 — ask for a review of the build that just finished",
+   "grounded": true,
+   "evidence": "eval/retro/SKILL.md:9",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/retro/SKILL.md:1-15. The front matter names the skill `coyodex-retro`, says it reviews 'a coyodex build that has ALREADY finished' (line 5) and triggers on 'review the build', 'retro the map build' or '/coyodex-retro' (8-10). That is the ask this step describes."
+  },
+  {
+   "claim": "UC11 step 2: I5 → C136 [in] — point the reviewer at the review recipe and its preconditions",
+   "grounded": true,
+   "evidence": "eval/retro/SKILL.md:28",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/retro/SKILL.md:17-30. Line 28 says 'Read `__COYODEX_HOME__/eval/retro/method.md` and follow it end to end. It is the entry point, and it names every other doc, tool and precondition'. C136 is anchored at eval/retro/method.md:4, so this line points the reviewer at the recipe AND at its preconditions."
+  },
+  {
+   "claim": "UC11 step 3: C136 → C110 — refuse the review while anything is still writing the map",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:62",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/retro/method.md:54-70. Under the heading 'First, refuse if the build has not finished', line 62 runs `coyodex-eval retro-precheck` with the comment 'exit 1 = do not proceed', and 65-70 warn not to pipe it because a REFUSED precheck would read as exit 0. The precheck is C110."
+  },
+  {
+   "claim": "UC11 step 4: C110 → E1 [in] — parse the stored map to catch one a build is still writing",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/retro_precheck.py:185",
+   "skeptic": "behaviour-3",
+   "note": "Read retro_precheck.py:170-193. Line 185 `json.loads(map_path.read_text(encoding='utf-8'))` parses `.coyodex/project-map.json`, and the very next lines return not-ok with 'does not parse ... a build may be writing it right now', over the comment 'A half-written map is exactly what a mid-run build leaves behind.' Parse the stored map to catch one still being written: exact."
+  },
+  {
+   "claim": "UC11 step 5: C110 → I11 [in] — look for another chat still being appended to",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/retro_precheck.py:216",
+   "skeptic": "behaviour-3",
+   "note": "Read retro_precheck.py:212-231. Line 216 globs `*.jsonl` in the transcript directory, skips the session that built the map and this one (218), keeps only files touched inside the idle window (220-222), then confirms with `last_content_age_seconds` (226) so a touched-but-unwritten file is not counted. That is looking for another chat still being appended to."
+  },
+  {
+   "claim": "UC11 step 6: C136 → C111 — ask the code history whether the last review's finished rows really shipped",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:221",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/retro/method.md:213-228. Line 221 says 'Before writing it, run `coyodex-eval ledger <the previous findings.json> --repo <the coyodex clone>`', and 226-228 explain it: 'Exit 1 names each row whose `landed_in` commit is merged while the row still calls itself open.' Asking the code history whether the last review's finished rows really shipped. C111 is the ledger check."
+  },
+  {
+   "claim": "UC11 step 7: C136 → C107 — cut the build's chat into one turn per model answer",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:421",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/retro/method.md:414-422; line 421 is `coyodex-eval transcript <transcript> --stats`, routed by cli.py:112-114 to the transcript reader (C107). Read transcript.py:281-297: `iter_turns` groups 'every record of one API message into one Turn', holding a group open across interleaved tool results and closing it when a new assistant `message.id` appears. One turn per model answer."
+  },
+  {
+   "claim": "UC11 step 8: C107 → I11 [in] — read the build's own chat file",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/transcript.py:328",
+   "skeptic": "behaviour-3",
+   "note": "Read transcript.py:318-345. Line 328 `with Path(path).open(encoding='utf-8') as fh:` opens the build's chat file and lines 329-345 stream it record by record, skipping blank and malformed lines and keeping only assistant/user records. Streaming, per the note at 297 that the files are 2-3 MB."
+  },
+  {
+   "claim": "UC11 step 9: C136 → C108 — price the build in minutes and tokens per row of map",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:444",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/retro/method.md:441-452. Under 'What it cost', line 444 runs `coyodex-eval cost <transcript> --map .coyodex/project-map.json`, and line 448 states what it gives: 'Wall time, tokens, and both PER ROW of map produced, plus the straggler waste in each fan-out.' Minutes and tokens per row of map."
+  },
+  {
+   "claim": "UC11 step 10: C108 → I11 [in] — read every helper's chat file beside the lead's",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cost.py:272",
+   "skeptic": "behaviour-3",
+   "note": "Read cost.py:260-288. `subagent_dir` (260-264) points at `<session-dir>/<session-id>/subagents/` beside the lead's session file, with the note that sub-agents are 90% of a build's spend, and line 272 `for path in sorted(directory.glob('agent-*.jsonl')):` opens every one of them, reading each with `read_turns` at 283. Every helper's chat file beside the lead's."
+  },
+  {
+   "claim": "UC11 step 11: C136 → C109 — score the run against the method's checked rules",
+   "grounded": true,
+   "evidence": "eval/retro/method.md:419",
+   "skeptic": "behaviour-3",
+   "note": "Read eval/retro/method.md:414-427. Line 419-420 runs `coyodex-eval process <transcript> --map .coyodex/project-map.json --out ...`, routed by cli.py:97-99 to the process scorecard (C109), and 424-427 explain that without `--map` three of its numbered assertions stop measuring. The scorecard is the run scored against the method's checked rules (assertions 3, 6, 23, 24, 33, 39, 40 are named in process_scorecard.py:3315-3319)."
+  },
+  {
+   "claim": "UC11 step 12: C109 → C107 — take the run's turns from the reader that groups them",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/process_scorecard.py:3335",
+   "skeptic": "behaviour-3",
+   "note": "Read process_scorecard.py:3324-3344. Line 3335 `turns = read_turns(p)` takes the run's turns from the transcript reader (transcript.py:440-442, which materialises `iter_turns`, the message-id grouping I read at transcript.py:281-297); line 3344 also passes `grouping_is_consistent(p)` so a broken grouping assumption is reported rather than silently scored."
+  },
+  {
+   "claim": "UC11 step 13: C109 → E1 [in] — load the finished map for the checks whose subject is the map",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/process_scorecard.py:1851",
+   "skeptic": "behaviour-3",
+   "note": "Read process_scorecard.py:1840-1865 (`read_score_context`, reached from score_transcript at 3338). Line 1851 `model = load_model(p.read_text(encoding='utf-8'))` loads the finished map, and 1852-1858 derive from it the validator warnings, the access-rule count, how many carry a risk, and whether security granularity was recorded — the inputs of the checks whose subject is the map."
+  },
+  {
+   "claim": "UC11 step 14: C109 → I12 [out] — write the run's score sheet into the reports folder",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/process_scorecard.py:3592",
+   "skeptic": "behaviour-3",
+   "note": "Read process_scorecard.py:3575-3598. Line 3588 scores the transcript, line 3590 resolves the output path from `--out` (the retro method passes `.coyodex-eval/retro/<ts>/process.json`, method.md:420), 3591 creates the directory and line 3592 `out.write_text(json.dumps(card.as_json(), indent=2))` writes the score sheet there; 3597 prints where it went."
+  }
+ ]
+}

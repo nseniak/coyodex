@@ -1,0 +1,10 @@
+{
+  "schema": "coyodex/prose-batch-verdicts/v1",
+  "verdicts": [
+    {
+      "where": "BR185 risk",
+      "issue": "lost precision",
+      "detail": "\"do something else\" is vague about what action the attack accomplishes; should specify whether it navigates to an unexpected URL, executes code, or performs another specific attack outcome"
+    }
+  ]
+}

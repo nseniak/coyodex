@@ -1,0 +1,267 @@
+{
+  "components": [
+    {
+      "id": "C120",
+      "name": "Product description instructions",
+      "purpose": "Tells the mapping agent to describe the product before reading code. It orders the goal, the shared words, the people and their goals. The one successful run through those goals comes last.",
+      "source": "method.md:28",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C121",
+      "name": "Code inventory instructions",
+      "purpose": "Says how to list what the product is made of, area by area. Every box gets a plain sentence, a code link and a confidence label. Outside services and the ways in are listed the same way.",
+      "source": "method.md:414",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C122",
+      "name": "Outside edge instructions",
+      "purpose": "Says how to name every place the product meets the outside world. Each place gets one word for what it is, and a side saying whose design it is. It also says how a story crosses one, in both directions.",
+      "source": "method.md:506",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C123",
+      "name": "Data and step instructions",
+      "purpose": "Says how to write the records the product keeps and the steps of each goal. A step names who acts, on what, and which way the data moves. Machinery shared by several goals is written once and referenced.",
+      "source": "method.md:879",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C124",
+      "name": "Operations and decision instructions",
+      "purpose": "Says how to record what runs, what is watched, what is configured and what the product decides. A decision is only worth recording when a product person could have chosen otherwise. Test coverage is measured against the map, never against line counts.",
+      "source": "method.md:1068",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C125",
+      "name": "Cross-cutting build instructions",
+      "purpose": "Holds the rules that apply to every part of a build. It says how to write text a reader meets alone, with no page around it. It also sets the order of work, the tools to reach for, and how big one box may be.",
+      "source": "method.md:1332",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C126",
+      "name": "Fan-out phase instructions",
+      "purpose": "Plans the parallel work of a build in three phases. Many agents gather the pieces, one agent merges them, then many agents trace the goals. It says how to size each slice, brief it and wait for the batch.",
+      "source": "method.md:1728",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C127",
+      "name": "Verification phase instructions",
+      "purpose": "Plans what happens once every goal has been traced. Fresh agents try to disprove each claim the map makes, against the code. Two more passes write what the product decides and measure what the tests cover.",
+      "source": "method.md:2152",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C128",
+      "name": "Closing sequence instructions",
+      "purpose": "Runs the closing steps that turn a finished map into a committed one. Corrections land, the record of what was checked is written, then the gates run. It ends by telling the reader where to open the map.",
+      "source": "method.md:2651",
+      "confidence": "verified",
+      "files": [
+        "method.md"
+      ]
+    },
+    {
+      "id": "C129",
+      "name": "Map model spec",
+      "purpose": "States every field a map may hold and the exact shape of each. Names, code links and closed word lists are all fixed here. It also says how each part of the map is drawn on screen.",
+      "source": "method/model.md:45",
+      "confidence": "inferred",
+      "files": [
+        "method/model.md",
+        "method/domain-cards.md",
+        "method/diagrams.md",
+        "method/project-map.schema.json"
+      ]
+    },
+    {
+      "id": "C130",
+      "name": "Mode dispatch instructions",
+      "purpose": "Decides which job to do when someone calls coyodex on a project. Build a first map, report a code change, or fold a report in. It briefs the person on what will be read before anything starts.",
+      "source": "method/dispatch.md:3",
+      "confidence": "verified",
+      "files": [
+        "method/dispatch.md"
+      ]
+    },
+    {
+      "id": "C131",
+      "name": "Change impact instructions",
+      "purpose": "Says how to report what a code change does to an existing map. The report carries the exact new text for every box it touches. Folding the report in is then mechanical, with no fresh reading of code.",
+      "source": "method/change-impact.md:3",
+      "confidence": "verified",
+      "files": [
+        "method/change-impact.md"
+      ]
+    },
+    {
+      "id": "C132",
+      "name": "Fan-out worker contracts",
+      "purpose": "Holds the briefs handed word for word to the agents a build fans out to. One brief per job, from gathering the pieces to disproving the finished claims. The two briefs whose agents write map prose also carry the shared writing rules.",
+      "source": "method/templates/",
+      "confidence": "verified",
+      "files": [
+        "method/templates/harvest-contract.md",
+        "method/templates/t5-addendum.md",
+        "method/templates/trace-contract.md",
+        "method/templates/doors-contract.md",
+        "method/templates/rules-contract.md",
+        "method/templates/skeptic-contract.md",
+        "method/templates/closer-contract.md",
+        "method/templates/gapfill-contract.md",
+        "method/templates/writing-rules.md",
+        "method/templates/project-map.template.md"
+      ]
+    },
+    {
+      "id": "C133",
+      "name": "Method regression checks",
+      "purpose": "Holds one written promise per change to the method or the tools. Each file says what the next build should do differently, and what a backfire would look like. A review of a finished build runs every check the change range added.",
+      "source": "method/retro-checks/",
+      "confidence": "inferred",
+      "files": [
+        "method/retro-checks/README.md"
+      ]
+    },
+    {
+      "id": "C134",
+      "name": "Build skill pointer",
+      "purpose": "Points a coding agent at this repository so the map commands work. Kept deliberately thin, because a copy is installed into the agent and goes stale. It names the clone path and the one document to read.",
+      "source": "skill/coyodex/SKILL.md:27",
+      "confidence": "verified",
+      "files": [
+        "skill/coyodex/SKILL.md"
+      ]
+    },
+    {
+      "id": "C135",
+      "name": "Map quality eval instructions",
+      "purpose": "Says how to score two maps of the same code and tell which one is better. A map is scored on counts, well-formedness, coverage and a model's judgement. Both maps must describe the same code, or the comparison means nothing.",
+      "source": "eval/method.md:8",
+      "confidence": "verified",
+      "files": [
+        "eval/SKILL.md",
+        "eval/method.md",
+        "eval/rubric.md",
+        "eval/README.md",
+        "eval/blind-build.md"
+      ]
+    },
+    {
+      "id": "C136",
+      "name": "Build retrospective instructions",
+      "purpose": "Says how to review one finished build from its map and its chat. The review reports what the run revealed about the tools and the method. It changes nothing, and a standing backlog carries every proposal forward.",
+      "source": "eval/retro/method.md:4",
+      "confidence": "inferred",
+      "files": [
+        "eval/retro/SKILL.md",
+        "eval/retro/method.md",
+        "eval/retro/backlog.md"
+      ]
+    },
+    {
+      "id": "C137",
+      "name": "Public documentation",
+      "purpose": "Explains to a newcomer what coyodex is, why it exists and how to install it. A longer page walks through how a map gets built, phase by phase. Both are read on the web by a person, never by a mapping agent.",
+      "source": "README.md:13",
+      "confidence": "inferred",
+      "files": [
+        "README.md",
+        "docs/how-coyodex-works.html"
+      ]
+    },
+    {
+      "id": "C138",
+      "name": "Contributor guide",
+      "purpose": "Says how to work on coyodex itself, for a person and for an agent alike. It names what each folder is for and which tests a given change needs. It also holds the design philosophy and the words this project uses.",
+      "source": "CONTRIBUTING.md:48",
+      "confidence": "verified",
+      "files": [
+        "CONTRIBUTING.md",
+        "CLAUDE.md",
+        ".github/PULL_REQUEST_TEMPLATE.md",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+        ".github/ISSUE_TEMPLATE/idea.yml",
+        ".github/ISSUE_TEMPLATE/config.yml"
+      ]
+    },
+    {
+      "id": "C139",
+      "name": "Method rationale record",
+      "purpose": "Keeps the story of the build that made each method rule necessary. Storing those stories here keeps them out of the text every build agent reads. A test checks that each entry still quotes a rule that exists.",
+      "source": "internal/docs/method-rationale.md:3",
+      "confidence": "inferred",
+      "files": [
+        "internal/docs/method-rationale.md"
+      ]
+    }
+  ],
+  "entry_points": [
+    {
+      "kind": "agent-tools",
+      "trigger": "A person types `/coyodex`, and their coding agent reads this file to find the method.",
+      "source": "skill/coyodex/SKILL.md:27",
+      "component": "C134",
+      "activation": "external"
+    },
+    {
+      "kind": "agent-tools",
+      "trigger": "A person types `/coyodex-eval`, and their agent reads this file to find the scoring recipe.",
+      "source": "eval/SKILL.md:28",
+      "component": "C135",
+      "activation": "external"
+    },
+    {
+      "kind": "agent-tools",
+      "trigger": "A person types `/coyodex-retro`, and their agent reads this file to find the review recipe.",
+      "source": "eval/retro/SKILL.md:28",
+      "component": "C136",
+      "activation": "external"
+    }
+  ],
+  "deps": [],
+  "observability": [],
+  "config": [],
+  "deployment": [],
+  "run_commands": [
+    {
+      "action": "Regenerate the map schema file after the model changes",
+      "command": "python -m coyodex.json_schema > method/project-map.schema.json",
+      "source": "method/model.md:210"
+    },
+    {
+      "action": "Replay saved build transcripts through the process checks",
+      "command": "COYODEX_L3_CORPUS=1 .venv/bin/pytest eval/tests/test_process_corpus.py -q -s",
+      "source": "CONTRIBUTING.md:165"
+    }
+  ]
+}

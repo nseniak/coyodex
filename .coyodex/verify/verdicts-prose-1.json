@@ -1,0 +1,24 @@
+{
+ "verdicts": [
+  {
+   "where": "C103 purpose",
+   "category": "unknown word",
+   "flag": "doubters and scorers — eval system roles not explained in field; reader unfamiliar with coyodex would not know what these terms mean"
+  },
+  {
+   "where": "C111 purpose",
+   "category": "lost precision",
+   "flag": "row — what is a row in a retrospective context? Sentence says 'A row saying it is still open' but rows don't say things; should specify what a row is"
+  },
+  {
+   "where": "C112 purpose",
+   "category": "lost precision",
+   "flag": "A person writes the sentence twice — vague and unexplained; why write something twice and how does that prevent guessing? Missing the specific action or mechanism"
+  },
+  {
+   "where": "C113 purpose",
+   "category": "unknown word",
+   "flag": "doubters — eval system role not explained; reader unfamiliar with coyodex would not know what doubters are"
+  }
+ ]
+}

@@ -1,0 +1,263 @@
+{
+ "grounding": [
+  {
+   "claim": "Rule 'An interface is labelled by what it is, never by what it is for.' is enforced at tools/coyodex/lint_fragment.py:244 — Catches the same purpose label while one part of the map is still being written.",
+   "grounded": true,
+   "evidence": "tools/coyodex/lint_fragment.py:244",
+   "skeptic": "rule-5",
+   "note": "Read lines 215-252 of the fragment self-check. Line 244 is `if canon and canon.lower() in grammar.INTERFACE_KIND_PURPOSE_WORDS:` and the problem it appends says the kind 'says what the surface is FOR, not what SHAPE it is', naming a payment processor and a crash reporter as both `api`. It runs per-fragment, i.e. while the map is still being written."
+  },
+  {
+   "claim": "Rule 'An interface is labelled by what it is, never by what it is for.' is enforced at method.md:564 — States that a payment service and a crash reporter are the same kind of thing.",
+   "grounded": true,
+   "evidence": "method.md:564",
+   "skeptic": "rule-5",
+   "note": "Read method.md 555-575. Line 564 opens '**WHAT IT IS, never WHAT IT IS FOR.** A payment processor and a crash reporter are both `api`' and 565-566 send the purpose axis to the dependency's `bucket`. Exactly the claimed statement, at the claimed line."
+  },
+  {
+   "claim": "Rule 'Who stands on the far side of an interface is read from the flows, never written by hand.' is enforced at tools/coyodex/validate_model.py:1248 — Takes each person standing at a step next to an interface as its far side.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:1248",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 1225-1265, the derivation of who stands at an interface. Line 1248 is `if near in iface_ids and far in role_ids:` inside a loop over every flow step, with both orderings of (src, dst) — so a role standing beside an interface in any step is taken as its far side. It is computed, never read off an authored field."
+  },
+  {
+   "claim": "Rule 'Who stands on the far side of an interface is read from the flows, never written by hand.' is enforced at method/model.md:487 — States that the far side has no field of its own.",
+   "grounded": true,
+   "evidence": "method/model.md:487",
+   "skeptic": "rule-5",
+   "note": "Read method/model.md 478-495. Line 487 begins '**`actors` is not a field.** Who is on the far side is derived from TWO sources', then lists the doors arm and the gated `theirs` arm. Exactly the claimed statement."
+  },
+  {
+   "claim": "Rule 'Who stands on the far side of an interface is read from the flows, never written by hand.' is enforced at method.md:625 — Forbids writing the far side by hand, and names the two ways it is worked out.",
+   "grounded": true,
+   "evidence": "method.md:625",
+   "skeptic": "rule-5",
+   "note": "Read method.md 618-648. Line 625 is '**`actors` is DERIVED and is NOT a field — never author it.**' and 626-629 name the two sources: the doors (any role at a step beside the surface) and, for a `theirs` surface of kind hosted-screen/handoff, the roles whose stories reach it."
+  },
+  {
+   "claim": "Rule 'A person meets the product through an interface at every step, not only the first and the last.' is enforced at tools/coyodex/validate_model.py:2947 — Calls a step a crossing when a person is at one end, code at the other, and no interface between.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2947",
+   "skeptic": "rule-5",
+   "note": "Read `_is_undoored_crossing`, validate_model.py 2930-2947. Line 2947 is `return not (st.src in iface_ids or st.dst in iface_ids)`, reached only after line 2945 has required exactly one end to be a role — so a role at one end, product code at the other, and no interface on either end is a crossing."
+  },
+  {
+   "claim": "Rule 'A person meets the product through an interface at every step, not only the first and the last.' is enforced at tools/coyodex/validate_model.py:2837 — Reports every such step of a story, so a crossing in the middle is heard about too.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2837",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 2820-2870. Line 2837 appends `f\"{f.uc} step {st.n} ...\"` inside `for st in f.steps` — every step of the flow, not the first and last only; the comment at 2820-2827 says the endpoints-only rule was withdrawn. Line 2863 turns the list into a reported warning."
+  },
+  {
+   "claim": "Rule 'A person meets the product through an interface at every step, not only the first and the last.' is enforced at method.md:661 — States that a crossing in the middle of a story owes a door like the two ends.",
+   "grounded": true,
+   "evidence": "method.md:661",
+   "skeptic": "rule-5",
+   "note": "Read method.md 649-670. Line 661 is '**EVERY crossing, not only the two ends.** A step with an actor at one end and the product at the other is a crossing, wherever it sits in the story', and 670 names '(3) EVERY EXCHANGE IN BETWEEN'."
+  },
+  {
+   "claim": "Rule 'Work the product schedules for itself is never an outsider, so it crosses no interface.' is enforced at tools/coyodex/validate_model.py:918 — Drops a role that is both a machine and internal from the list of outsiders.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:918",
+   "skeptic": "rule-5",
+   "note": "Read `outside_actor_ids`, validate_model.py 895-919. Lines 917-919 return every role except those with kind 'service' AND audience 'internal'; line 918 is the kind half. One caveat for the lead, not a refutation: the docstring at 904-908 stresses it reads `service` LITERALLY, not any machine role, so an internal `ai-agent` is NOT dropped — the claim's wording 'both a machine and internal' is wider than the code."
+  },
+  {
+   "claim": "Rule 'Work the product schedules for itself is never an outsider, so it crosses no interface.' is enforced at method.md:652 — States that the product's own scheduled work is not an actor for the door rule.",
+   "grounded": true,
+   "evidence": "method.md:652",
+   "skeptic": "rule-5",
+   "note": "Read method.md 649-660. Line 652 carries '**The product's OWN scheduled work is not an actor for this rule**', and 653-656 define it as kind `service` plus audience `internal` and say it takes no arrival door and never stands on the far side of a surface."
+  },
+  {
+   "claim": "Rule 'A command is a way in only when it acts on the running product or its stored data.' is enforced at method.md:466 — States the only test that decides a command: what the command acts on, not its name and not its purpose.",
+   "grounded": true,
+   "evidence": "method.md:466",
+   "skeptic": "rule-5",
+   "note": "Read method.md 460-487. Line 466 is '**A command is an entry point ONLY when it acts on the DEPLOYED product — otherwise it is a T3 row', and 467 states the single test: 'What the command acts on decides, and nothing else: not its name, not what it is for.'"
+  },
+  {
+   "claim": "Rule 'A command is a way in only when it acts on the running product or its stored data.' is enforced at method/templates/harvest-contract.md:95 — Hands the same test to the agent that mints the way-in rows. A table shows what counts on each side.",
+   "grounded": true,
+   "evidence": "method/templates/harvest-contract.md:95",
+   "skeptic": "rule-5",
+   "note": "Read the harvest contract 88-131. Line 95 states '**A command is a way in ONLY when it acts on the DEPLOYED product.** What it acts on decides, and nothing else', and lines 99-102 are a two-row table listing what counts as the deployed product and what counts as a copy the command owns."
+  },
+  {
+   "claim": "Rule 'A command judged not to be a way in must still be recorded as a run or build command.' is enforced at method.md:482 — Says the decision is only half the work. The other half is writing the command into the run-and-build list.",
+   "grounded": true,
+   "evidence": "method.md:482",
+   "skeptic": "rule-5",
+   "note": "Read method.md 476-487. Line 482 is '**Moving it is a WRITE, not a decision** — deciding a command is not an entry point is half the work, and the other half is its T3 row, written in the same edit', with the measured 11-of-36 loss quoted at 485-487."
+  },
+  {
+   "claim": "Rule 'A command judged not to be a way in must still be recorded as a run or build command.' is enforced at method/templates/harvest-contract.md:125 — Makes the mover count and name every command it took out, so the second half becomes visible in the reply.",
+   "grounded": true,
+   "evidence": "method/templates/harvest-contract.md:125",
+   "skeptic": "rule-5",
+   "note": "Read the harvest contract 113-131. Line 125 is '**Moving it is a WRITE, not a decision.**' and 126-127 add '**Then count them: your reply says how many commands you moved out of `entry_points`, and names them.**' — the count is what makes the second half visible."
+  },
+  {
+   "claim": "Rule 'A way in is recorded once, at the thing that does the acting, and never again at whatever calls it.' is enforced at method/templates/harvest-contract.md:115 — Says a command calling one of the product's own addresses adds no new way in. The address already is one.",
+   "grounded": true,
+   "evidence": "method/templates/harvest-contract.md:115",
+   "skeptic": "rule-5",
+   "note": "Read the harvest contract 113-118. Line 115 is '- **A command that CALLS one of the product's own addresses is not a NEW way in.** The address is,' continuing on 116 'and the slice holding it records it.'"
+  },
+  {
+   "claim": "Rule 'A way in is recorded once, at the thing that does the acting, and never again at whatever calls it.' is enforced at method/templates/harvest-contract.md:117 — Says a wrapper and the command it wraps are one way in, recorded at the command that acts.",
+   "grounded": true,
+   "evidence": "method/templates/harvest-contract.md:117",
+   "skeptic": "rule-5",
+   "note": "Read the harvest contract 113-118. Line 117 is '- **A wrapper and the command it wraps are ONE way in**, recorded once, at the command that acts.', with the make-target example on 118."
+  },
+  {
+   "claim": "Rule 'A way in is recorded once, at the thing that does the acting, and never again at whatever calls it.' is enforced at method.md:477 — States both cuts in the method itself, so the rule survives outside the worker brief.",
+   "grounded": true,
+   "evidence": "method.md:477",
+   "skeptic": "rule-5",
+   "note": "Read method.md 476-481. Line 477 opens the three cuts: 'CALLS one of the product's own addresses is not a NEW entry point (the address is, and the slice' and runs straight into the wrapper cut on 478 ('a wrapper and the command it wraps are ONE entry point, recorded at the command that acts'). Both cuts are stated in method.md, not only in the worker contract."
+  },
+  {
+   "claim": "Rule 'A timer, a boot hook or a queue reader is work the product does to itself, not a way in.' is enforced at tools/coyodex/validate_model.py:2594 — Rejects an interface that claims a self-started way in, and says the work is the product acting on itself.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2594",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 2579-2604. Line 2594 is the `elif grammar.effective_activation(ep_by_id[ep].activation, ep_by_id[ep].kind) != \"external\":` branch, and the problem it appends (2595-2597) says the named way in 'is self-activated — a timer, loop or boot hook is work the product does to itself, not a way in from outside'. It is appended to `problems`, so it blocks."
+  },
+  {
+   "claim": "Rule 'A timer, a boot hook or a queue reader is work the product does to itself, not a way in.' is enforced at tools/coyodex/validate_model.py:770 — Keeps only the outside-driven ways in, so every outside-edge check reads the same shorter list.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:770",
+   "skeptic": "rule-5",
+   "note": "Read `external_entry_points`, validate_model.py 765-771. Lines 770-771 return only the entry points whose `grammar.effective_activation` is 'external'; the docstring says the self-activated rows (crons, workers, consumers) are the automatic internal cut. Every outside-edge check reads this one list — `_external_ways_in` at 2500 wraps it."
+  },
+  {
+   "claim": "Rule 'A timer, a boot hook or a queue reader is work the product does to itself, not a way in.' is enforced at tools/coyodex/grammar.py:575 — Fixes, per kind of way in, which ones are self-started and which ones somebody outside asks for.",
+   "grounded": true,
+   "evidence": "tools/coyodex/grammar.py:575",
+   "skeptic": "rule-5",
+   "note": "Read grammar.py 568-608. Line 575 builds KIND_ACTIVATION as `{k: \"external\" for k in ENTRY_POINT_KINDS_EXTERNAL} | {k: \"self\" for k in ENTRY_POINT_KINDS_SELF}` — a fixed per-kind answer, and the comment at 572-573 says a seed's activation is fixed by what the kind means because the substring heuristic misfiles `job`."
+  },
+  {
+   "claim": "Rule 'A way in of a kind nobody recognises is treated as one somebody outside asks for.' is enforced at tools/coyodex/grammar.py:599 — Answers outside-driven whenever no self-starting word matches the kind of the way in.",
+   "grounded": true,
+   "evidence": "tools/coyodex/grammar.py:599",
+   "skeptic": "rule-5",
+   "note": "Read `classify_activation`, grammar.py 588-599. Line 599 is `return \"self\" if any(s in k for s in _SELF_START_SIGNATURES) else \"external\"`, reached only when the kind matched no seed at 596-597. So an unrecognised kind with no self-starting word in it is answered 'external', and the docstring at 594 says so: 'Unrecognised -> \"external\"'."
+  },
+  {
+   "claim": "Rule 'Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded.' is enforced at method.md:641 — States the one-interface rule and the recorded line that excuses a deliberate exception.",
+   "grounded": true,
+   "evidence": "method.md:641",
+   "skeptic": "rule-5",
+   "note": "Read method.md 639-648. The sentence starting mid-line 641 is 'Every EXTERNALLY-activated entry point belongs to exactly one surface, except the plumbing kinds', and 647-648 give the recorded escape: 'Record a deliberate exception as `In: <why>` or `EPn: <why>` under an \"Interface exceptions\" extras heading.'"
+  },
+  {
+   "claim": "Rule 'Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded.' is enforced at tools/coyodex/validate_model.py:2598 — Blocks a way in that more than one interface claims, and blocks one interface listing it twice.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2598",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 2574-2604. `claimed_by` (2574-2577) counts the interfaces claiming each way in; line 2598 is `elif len(claimed_by.get(ep, [])) > 1:` and its message has both arms — 'listed twice by {iface.id} ... a way in belongs to a surface once' when one owner, and 'claimed by {n} interfaces ... belongs to exactly one surface' otherwise. Both go to `problems`, so both block."
+  },
+  {
+   "claim": "Rule 'Every way in that somebody outside asks for belongs to exactly one interface, or its absence is recorded.' is enforced at tools/coyodex/validate_model.py:2764 — Collects the ways in that no interface claims and that no recorded line excuses.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2764",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 2750-2778. Line 2764-2765 is `unassigned = [ep for ep in external if ep.id not in claimed_by and ep.id not in recorded]` — externally-activated ways in that no interface claims and that no recorded 'Interface exceptions' line excuses. It is reported as a warning at 2773."
+  },
+  {
+   "claim": "Rule 'Work every request passes through on its way in is not itself a way in, so it joins no interface.' is enforced at tools/coyodex/validate_model.py:2486 — Names shared request handling as the one kind excused from belonging to an interface.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2486",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 2483-2500. Line 2486 is `_PLUMBING_EP_KINDS = frozenset({\"middleware\"})` and the comment at 2487-2488 says request middleware 'runs on the way to a way in and is not one itself, so the \"belongs to no interface\" advisory excludes it'. `middleware` is the only member; 2490-2495 explains why the built-asset route and the catch-all are deliberately NOT in the set."
+  },
+  {
+   "claim": "Rule 'Work every request passes through on its way in is not itself a way in, so it joins no interface.' is enforced at tools/coyodex/validate_model.py:2500 — Drops that kind before every check that asks which interface a way in belongs to.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2500",
+   "skeptic": "rule-5",
+   "note": "Read `_external_ways_in`, validate_model.py 2498-2500. Line 2500 is `return [ep for ep in external_entry_points(m) if ep.kind not in _PLUMBING_EP_KINDS]`. I grepped its callers: 2541 (the no-interfaces-authored warning), 2750/2764 (the belongs-to-no-interface pair) and 3085 (the per-kind naming advisory) — every check asking which interface a way in belongs to reads this filtered list."
+  },
+  {
+   "claim": "Rule 'A way in that no story reaches is reported, including the ones the product starts for itself.' is enforced at method.md:212 — States that self-started ways in are not exempt, because a scheduled job is an actor with a goal.",
+   "grounded": true,
+   "evidence": "method.md:212",
+   "skeptic": "rule-5",
+   "note": "Read method.md 205-218. Line 212 carries '**Self-activated entry points (crons, workers, consumers, startup' continuing on 213 'hooks) are NOT exempt.** A scheduled job is an actor with a goal by the Roles rule above, so exempting them would hide a whole background capability with no signal at all.'"
+  },
+  {
+   "claim": "Rule 'A way in that no story reaches is reported, including the ones the product starts for itself.' is enforced at tools/coyodex/validate_model.py:2142 — Reports the outside-driven ways in that no story reaches, grouped by the part of the product that owns them.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2142",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 2137-2156. Line 2142 is `for cid, eps in unclaimed_surface_components(m, silenced):` and the warning it builds is keyed by component id and name — 'Cn (name): N externally-activated entry point(s) unclaimed by any use case'. Grouped by the owning component, as claimed."
+  },
+  {
+   "claim": "Rule 'A way in that no story reaches is reported, including the ones the product starts for itself.' is enforced at tools/coyodex/validate_model.py:2149 — Reports the self-started ways in that no story reaches, in the same grouped shape.",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2149",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 2149-2156. Line 2149 is `for cid, eps in unclaimed_self_components(m, silenced):`, the same per-component shape one loop later, and its message reads 'N self-activated entry point(s) no use case reaches ... a scheduled job or consumer is an actor with a goal'."
+  },
+  {
+   "claim": "Rule 'An advisory never stops a build; only a gate does.' is enforced at tools/coyodex/validate_model.py:6657 — fails a build on gate findings alone, however many advisories were printed",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:6657",
+   "skeptic": "rule-5",
+   "note": "Read validate_model.py 6640-6693. Line 6657 is `return 1 if problems else 0` on the `--json` path: the exit code reads `problems` only, and `warnings` are serialised beside them without affecting it. The text path agrees — 6680-6684 returns 1 on problems, and 6664-6667 prints the warnings under 'VALIDATION WARNINGS (non-blocking)' before returning 0 at 6693."
+  },
+  {
+   "claim": "Rule 'An advisory never stops a build; only a gate does.' is enforced at tools/coyodex/lint_fragment.py:654 — passes one fragment, counting its advisories, when no gate finding was found",
+   "grounded": true,
+   "evidence": "tools/coyodex/lint_fragment.py:654",
+   "skeptic": "rule-5",
+   "note": "Read lint_fragment.py 586-665. Line 654 is the clean branch: `verdict, code = (f\"LINT OK — 0 problems, {n_warn} advisory warning(s)...\"), 0` — exit 0 with the advisory count printed. I checked what sets `clean`: only a schema error (593) or a lint problem (599), and the comment at 604 states 'advisory warnings never fail the lint'."
+  },
+  {
+   "claim": "Rule 'An advisory never stops a build; only a gate does.' is enforced at method.md:1604 — states that the component count check advises, and that a justified exception stays a judgement call",
+   "grounded": true,
+   "evidence": "method.md:1604",
+   "skeptic": "rule-5",
+   "note": "Read method.md 1594-1604. The sentence at 1602-1604 says `validate --check-coverage` and the eval 're-compute E from the tree independently ... and nudge when the map's component count leaves the band — the nudge is advisory; a justified exception stays a judgement call', which is line 1604 verbatim."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyodex/finalize.py:693 — calls a build incomplete when a gate that should have run did not",
+   "grounded": true,
+   "evidence": "tools/coyodex/finalize.py:693",
+   "skeptic": "rule-5",
+   "note": "Read finalize.py 670-701. `failed` at 687 collects legs whose status is FAILED, and line 693 sets `verdict = \"INCOMPLETE\"` for them, ordered after the blocking case. The comment at 688-689 and the stderr line at 1277 both say what it means: a check that should have run did not, so the run does not know whether the map is clean."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyodex/finalize.py:695 — calls a build advisory when only advisories were found, which is not clean",
+   "grounded": true,
+   "evidence": "tools/coyodex/finalize.py:695",
+   "skeptic": "rule-5",
+   "note": "Read finalize.py 686-697. Line 695 sets `verdict = \"ADVISORIES\"` in the `elif advisory:` branch, so CLEAN at 697 is reached only with zero blocking, zero failed legs and zero advisories. finalize.py:1280-1284 prints 'advisories are not a pass' for that verdict."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyodex/finalize.py:1286 — exits with failure on an incomplete build, so a skipped gate cannot read as a pass",
+   "grounded": true,
+   "evidence": "tools/coyodex/finalize.py:1286",
+   "skeptic": "rule-5",
+   "note": "Read finalize.py 1270-1286. Line 1286 is `return 1 if (report.blocking_total or report.verdict == \"INCOMPLETE\") else 0`, with the comment above it: 'the gate did not run must not read as the gate passed'. One caveat for the lead: an ADVISORIES verdict still exits 0, so the no-advisory-left-open half of the rule is carried by the printed verdict at 1280-1284, not by the exit code."
+  },
+  {
+   "claim": "Rule 'A build is clean only when every gate ran and no advisory is left open.' is enforced at tools/coyodex/ship.py:353 — stops the closing sequence at the first failing step, and names the steps that never ran",
+   "grounded": true,
+   "evidence": "tools/coyodex/ship.py:353",
+   "skeptic": "rule-5",
+   "note": "Read `run_plan`, ship.py 343-362. Line 353 is `if rc != 0:` and the block returns immediately after printing 'SHIP STOPPED at [i/n] <step>' plus 'NOT RUN: ' joined over the remaining step titles (354-361). The docstring at 344-347 states the intent: a skipped step must never read as a clean one."
+  },
+  {
+   "claim": "Rule 'An advisory the operator decides to live with is silenced only by a reason recorded in the map.' is enforced at method.md:1620 — says a durably justified exception is recorded in the map and silences its own advisory",
+   "grounded": true,
+   "evidence": "method.md:1620",
+   "skeptic": "rule-5",
+   "note": "Read method.md 1606-1628. Line 1620 carries 'A durably justified exception is recorded in the model's' continuing on 1621 '`extras` under the heading **\"Balance exceptions\"** and silences the matching advisory', then lists the id families that each scope one advisory."
+  }
+ ]
+}

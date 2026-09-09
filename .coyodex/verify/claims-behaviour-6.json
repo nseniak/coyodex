@@ -1,0 +1,222 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "behaviour",
+ "claims": [
+  {
+   "claim": "SF1 step 8: C130 → I6 [in] — look for a map already in the project's map folder",
+   "anchor": "method/dispatch.md:75",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF2 step 1: C20 → C6 — run every name, link, story and record check over the map",
+   "anchor": "tools/coyodex/cli.py:156",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF2 step 2: C6 → E1 [in] — read the stored map back and refuse one whose shape is wrong",
+   "anchor": "tools/coyodex/validate_model.py:6585",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF2 step 3: C6 → I8 [in] — open every cited file and line to prove the code links exist",
+   "anchor": "tools/coyodex/validate_model.py:6265",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF2 step 4: C20 → C21 — make the map's stories and its arrows refute each other",
+   "anchor": "tools/coyodex/cli.py:159",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF2 step 5: C20 → C80 — render the map's readable view",
+   "anchor": "tools/coyodex/cli.py:165",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF2 step 6: C80 → I6 [out] — write the readable view beside the stored map",
+   "anchor": "tools/coyodex/viewer/render.py:53",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 1: R2 → I3 — open the map server's home address",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 2: I3 → C83 [in] — pass the browser's request to the map server",
+   "anchor": "tools/coyodex/viewer/serve.py:640",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 3: C83 → C85 — re-read the project folders this machine remembers",
+   "anchor": "tools/coyodex/viewer/serve.py:675",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 4: C83 → I3 [out] — list every remembered project with its title and its commit",
+   "anchor": "tools/coyodex/viewer/serve.py:677",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 5: I3 → R2 — show one card per remembered project",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 6: R2 → I3 — pick a project card",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 7: I3 → C83 [in] — pass the chosen project's address to the server",
+   "anchor": "tools/coyodex/viewer/serve.py:730",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 8: C83 → C70 — send back the page frame every map is drawn with",
+   "anchor": "tools/coyodex/viewer/serve.py:730",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 9: C70 → C60 — start the script that loads the map",
+   "anchor": "tools/coyodex/viewer/viewer.html:359",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 10: C60 → C83 — ask the server for this map's whole drawing data",
+   "anchor": "tools/coyodex/viewer/viewer.js:172",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 11: C83 → E1 [in] — read the stored project map",
+   "anchor": "tools/coyodex/viewer/serve.py:509",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 12: C83 → C80 — turn the stored map into the graph the browser draws",
+   "anchor": "tools/coyodex/viewer/serve.py:511",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 13: C80 → E39 [out] — assemble the graph, one box per element",
+   "anchor": "tools/coyodex/views.py:1282",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 14: C83 → C82 — pre-render every diagram, timeline and flow of this map",
+   "anchor": "tools/coyodex/viewer/serve.py:516",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 15: C83 → C60 — return the finished drawing data",
+   "anchor": "tools/coyodex/viewer/serve.py:752",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 16: C60 → C62 — draw the screen the address names",
+   "anchor": "tools/coyodex/viewer/viewer.js:15892",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 17: C62 → I3 [out] — put the drawn map on the page",
+   "anchor": "tools/coyodex/viewer/viewer.js:13104",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "SF20 step 18: I3 → R2 — show the reader the product's map",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC1 Install coyodex into a coding agent: Someone who has cloned this project asks to install it. Their coding agent gains a new command, and the tools it drives are built and ready.",
+   "anchor": "Makefile:40",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC2 Build a project's first map: A person asks their coding agent for a map of a project that has none. A map of that project exists, pinned to the commit it describes.",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC3 Leave code off the map: A person names committed code the map is not meant to describe. Later maps leave that code out, and every count the tools print says so.",
+   "anchor": "tools/coyodex/ignorefile.py:195",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC4 Serve the maps on this machine: A person starts the local map server. Every project they have mapped is listed on one page in their browser.",
+   "anchor": "tools/coyodex/cli.py:139",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC5 Explore a project's map: A person opens a project's map. They see what the product does and drill from one feature down to a single box.",
+   "anchor": "tools/coyodex/viewer/viewer.html:118",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC6 Open the code behind a box: A reader picks the code link on a box. The file opens at that line, in their own editor or on the code host.",
+   "anchor": "tools/coyodex/viewer/viewer.js:13011",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC7 See what a code change did to the map: The code has moved on since the map was pinned. A report names the parts of the map the change touched.",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC8 Fold a change report into the baseline: A person agrees the change report is right. The map is edited to match, re-pinned, and checked again.",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC9 Change the map by asking: A person asks in plain language for a part of the map to move, split or be renamed. The map is edited in place and passes its checks.",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC10 Score whether the method got better: Someone changed the instructions and wants to know the cost. Two maps of one project are scored and compared, with a verdict.",
+   "anchor": "eval/SKILL.md:28",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  },
+  {
+   "claim": "UC11 Review a finished build: A build has finished and its chat is on disk. A report names the friction, the bugs and the gaps that run revealed.",
+   "anchor": "eval/retro/SKILL.md:28",
+   "detail": null,
+   "why_risky": "the headline sentence of the behavioural layer — a reader takes the trigger and the outcome away as what the product does."
+  }
+ ]
+}

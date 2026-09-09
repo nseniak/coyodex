@@ -1,0 +1,263 @@
+{
+ "grounding": [
+  {
+   "claim": "C63 calls C64",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:5349",
+   "skeptic": "backbone-3",
+   "note": "Opened bindContext (viewer.js:5346, C63): line 5349 calls selectNodeFromCanvas, defined at 4157, which runs pickSelBox -> pickSel -> selReplace -> selAdd -> selApply (1539) -> renderSelPanel (1700), and the node descriptor's show() (nodeDesc, 4146) is showNodeDetailSynced -> showNode, whose body IS C64's anchor line 2881. A canvas box click fills the info pane."
+  },
+  {
+   "claim": "C63 calls C65",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:5348",
+   "skeptic": "backbone-3",
+   "note": "Read line 5348 in bindContext: the System box's drill calls go(t). go (5109) calls pushUrl (4983) and driveTransition (5292), which calls renderChrome at 5300 \u2014 renderChrome (7895) is the function C65's anchor line 7896 sits in. So the click path updates the browser address and the trail."
+  },
+  {
+   "claim": "C64 calls C61",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:2881",
+   "skeptic": "backbone-3",
+   "note": "Read showNode: line 2881 sets the pane's HTML from elementCardHtml(id, {bare: true}). elementCardHtml is defined at 1264 and C61's anchor 1265 is its first body line, so the info pane is drawn with the shared element card."
+  },
+  {
+   "claim": "C64 calls C69",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:2891",
+   "skeptic": "backbone-3",
+   "note": "Read showNode: line 2891 calls syncTreeToNode(id). syncTreeToNode (13763) sets the code-viewer header element, calls setTreeSelection / highlightTreePath on the file browser and syncCodeView on the source \u2014 all the source column C69 anchors (loadServerTree/renderFileTree, 13890-13894)."
+  },
+  {
+   "claim": "C62 calls C65",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:13242",
+   "skeptic": "backbone-3",
+   "note": "Read the tail of renderView: line 13242 is renderChrome(s), the last statement before the function closes at 13243. renderChrome (7895) is C65's anchor function, so drawing a diagram refreshes the tabs, trail and address."
+  },
+  {
+   "claim": "C62 calls C66",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:13024",
+   "skeptic": "backbone-3",
+   "note": "Read renderView's Happy Path branch: line 13023-13024 is `if (s.kind === 'hp') { renderHappyPath(); `. renderHappyPath is defined at 10088 and C66's anchor 10089 is its first body line."
+  },
+  {
+   "claim": "C62 calls C67",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:13068",
+   "skeptic": "backbone-3",
+   "note": "Read renderView's Data branch: line 13068 calls renderData(s). renderData is defined at 11399 and C67's anchor is 11400, the first line of that function."
+  },
+  {
+   "claim": "C62 calls C68",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:13077",
+   "skeptic": "backbone-3",
+   "note": "Read renderView's Rules branch: line 13076-13077 is `if (s.kind === 'rules') { renderRules(s); `. renderRules is defined at 12797 and C68's anchor 12798 is its first body line."
+  },
+  {
+   "claim": "C65 calls C62",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:5307",
+   "skeptic": "backbone-3",
+   "note": "Read driveTransition (5292), the navigation step go() hands off to at 5117: line 5307 calls render() for an instant (tab-switch) move. render (12957) awaits renderView (12979), which reaches the mermaid draw at 13096 \u2014 C62's anchor. Navigation therefore drives the diagram canvas."
+  },
+  {
+   "claim": "C66 calls C61",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:10919",
+   "skeptic": "backbone-3",
+   "note": "Read the Features page builder: line 10919 maps the feature ids through elementCardHtml(id, per(id)) into cardGridHtml. elementCardHtml is C61 (1264/1265)."
+  },
+  {
+   "claim": "C67 calls C61",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:11720",
+   "skeptic": "backbone-3",
+   "note": "Read ruleAnalysisGapsHtml (11717), the 'Rule analysis gaps' section of the System page (built by systemSections, called at 11123): line 11720 calls elementCardGroupsHtml, which at 1382-1391 delegates to elementCardListHtml (1349), which calls elementCardHtml (1264) per id \u2014 C61."
+  },
+  {
+   "claim": "C67 calls C65",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:11535",
+   "skeptic": "backbone-3",
+   "note": "Read the Data view's binding block inside renderData's region (renderData 11399, renderTests 11568): line 11534-11535 binds each `.dv-jump` button to go({kind:'data', entity:...}). go (5109) writes the URL and calls renderChrome (5300), which is C65's anchor function (7895)."
+  },
+  {
+   "claim": "C68 calls C61",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:12810",
+   "skeptic": "backbone-3",
+   "note": "Read renderRules (12797): line 12809-12810 builds each rule-area card with elementCardHtml(g.id, {extra, desc}) when the area is a real map node, falling back to plainCardHtml otherwise. elementCardHtml is C61 (1264/1265)."
+  },
+  {
+   "claim": "C68 calls C65",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:12894",
+   "skeptic": "backbone-3",
+   "note": "Read renderRule (12855): line 12893-12894 binds the area chip to go({kind:'rules', blk: ...}), the walk back out to the rules list. go (5109) is the history/address function whose driveTransition calls renderChrome (7895) \u2014 C65."
+  },
+  {
+   "claim": "C69 calls C83",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:13892",
+   "skeptic": "backbone-3",
+   "note": "Read loadServerTree (13890): line 13892 is `await fetch(API_BASE + 'tree', {cache:'no-store'})`, and API_BASE (line 93) is './api/' on the serving origin. serve.py:767 handles `rest == ['tree']`, so the source column really does ask the map server for the file tree."
+  },
+  {
+   "claim": "C82 calls C81",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:3348",
+   "skeptic": "backbone-3",
+   "note": "Read build_view_bundle (gen_viewer.py:3322, C82): line 3348 is `feature_block = as_bundle(build_index(model, extents)) if model else {}`. build_index is defined at features.py:410, which is C81's anchor."
+  },
+  {
+   "claim": "C83 calls C82",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:516",
+   "skeptic": "backbone-3",
+   "note": "Read the server's view-bundle builder: lines 516-517 call build_view_bundle(graph, report, proj.map_json.parent, model=model, extents=extents) and cache it on proj.view. build_view_bundle is gen_viewer.py:3322, C82's anchor."
+  },
+  {
+   "claim": "C112 calls C82",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/live_numbers.py:293",
+   "skeptic": "backbone-3",
+   "note": "Read _entities_with_a_lifecycle (live_numbers.py:285): line 286 imports coyodex.viewer.gen_viewer as GV and line 293 calls GV._lifecycle_line({'states_count': count}) to count entities the diagram builder would draw a lifecycle line for. gen_viewer.py is C82."
+  },
+  {
+   "claim": "C4 calls C47",
+   "grounded": true,
+   "evidence": "tools/coyodex/assemble.py:939",
+   "skeptic": "backbone-3",
+   "note": "Read assemble.py around the reconcile step: line 932 validates the reconcile file and line 939 calls apply_reconcile(model, rec, rec_stats). apply_reconcile is reconcile.py:618 and C47's anchor line 692 (`el.subsystem = sd.subsystem`) is inside its set-directive loop."
+  },
+  {
+   "claim": "C23 calls C4",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:119",
+   "skeptic": "backbone-3",
+   "note": "Read fix.py's _write (117): line 118 imports dump_preserving from coyodex.assemble and line 119 writes the map with it. _load (110-114) likewise calls assemble.load_map_or_fragment. assemble.py is C4."
+  },
+  {
+   "claim": "C100 calls C101",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:72",
+   "skeptic": "backbone-3",
+   "note": "Read the eval CLI dispatch: lines 70-72 are `if cmd == 'score': from coyodex_eval import profile; return profile.main(rest)`. profile.main is at profile.py:556 and C101's anchor 430 is the `return MapProfile(...)` inside build_profile in the same module."
+  },
+  {
+   "claim": "C100 calls C104",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:75",
+   "skeptic": "backbone-3",
+   "note": "Read the dispatch: lines 73-75 are `if cmd == 'run': from coyodex_eval import run; return run.run_cli(rest)`. run_cli is run.py:191, in the module C104 anchors at run.py:69."
+  },
+  {
+   "claim": "C100 calls C102",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:96",
+   "skeptic": "backbone-3",
+   "note": "Read the dispatch: lines 94-96 are `if cmd == 'compare': from coyodex_eval import compare; return compare.main(rest)`. compare.main is compare.py:755 and C102's anchor 518 is the `return DeltaReport` inside compare() in that file."
+  },
+  {
+   "claim": "C100 calls C105",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:93",
+   "skeptic": "backbone-3",
+   "note": "Read the dispatch: lines 91-93 are `if cmd == 'arrows': from coyodex_eval import arrows; return arrows.main(rest)`. arrows.main is arrows.py:233; C105's anchor 152 is the lost-arrow judging return in the same file."
+  },
+  {
+   "claim": "C100 calls C106",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:102",
+   "skeptic": "backbone-3",
+   "note": "Read the dispatch: lines 100-102 are `if cmd == 'archive': from coyodex_eval import archive; return archive.main(rest)`. archive.main is archive.py:161 and C106's anchor 110 is the shutil.move that moves the map aside."
+  },
+  {
+   "claim": "C100 calls C112",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:108",
+   "skeptic": "backbone-3",
+   "note": "Read the dispatch: lines 106-108 are `if cmd == 'live-numbers': from coyodex_eval import live_numbers; return live_numbers.main(rest)`. live_numbers.main is live_numbers.py:573, and C112's anchor 540 is inside the ledger's holds/STALE loop in the same file."
+  },
+  {
+   "claim": "C100 calls C113",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cli.py:120",
+   "skeptic": "backbone-3",
+   "note": "Read the dispatch: lines 118-120 are `if cmd == 'mutate': from coyodex_eval import mutate; return mutate.main(rest)`. mutate.main is mutate.py:241 and C113's anchor 236 is the planted/caught recall summary returned in that file."
+  },
+  {
+   "claim": "C104 calls C101",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:60",
+   "skeptic": "backbone-3",
+   "note": "Read run_eval (run.py:53): line 60 is `profile = build_profile(map_text, repo_root=repo_root)`, imported at line 31 from coyodex_eval.profile. C101's anchor profile.py:430 is the `return MapProfile()` that ends build_profile."
+  },
+  {
+   "claim": "C104 calls C102",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:67",
+   "skeptic": "backbone-3",
+   "note": "Read run_eval: line 66-67 are `if baseline_profile is not None: delta = compare(baseline_profile, profile, thresholds, baseline_judge, jr)`, imported at line 21 from coyodex_eval.compare. C102's anchor compare.py:518 is that function's `return DeltaReport(...)`."
+  },
+  {
+   "claim": "C104 calls C103",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:394",
+   "skeptic": "backbone-3",
+   "note": "Read run.py's judge-from-verdicts CLI: line 394 calls report_from_verdicts (judge.py:318) with the map text, rubric and the skeptics' grounding rows. run_eval also calls build_judge_report at run.py:63, and C103's anchor judge.py:257 is the `return JudgeReport(...)` inside that function \u2014 both call sites are into judge.py."
+  },
+  {
+   "claim": "C109 calls C107",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/process_scorecard.py:3335",
+   "skeptic": "backbone-3",
+   "note": "Read score_transcript (process_scorecard.py:3324): line 3335 is `turns = read_turns(p)` before the assertions run at 3318-3319. read_turns is transcript.py:440 and C107's anchor 442 is its body."
+  },
+  {
+   "claim": "C108 calls C107",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/cost.py:283",
+   "skeptic": "backbone-3",
+   "note": "Read cost.py's per-agent collector: line 283 is `turns = read_turns(path, include_sidechains=True)`, and the Actor built at 286-287 carries those turns. read_turns is transcript.py:440-442, C107."
+  },
+  {
+   "claim": "C20 starts C83",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:168",
+   "skeptic": "backbone-3",
+   "note": "Read _dispatch (cli.py:150): lines 166-168 are `if cmd == 'serve': from coyodex.viewer import serve; return serve.main(rest)`. serve.main (serve.py:919) ends at line 944 calling serve(), which builds and runs the ThreadingHTTPServer at serve.py:885 \u2014 C83's anchor is that serve() at 869."
+  },
+  {
+   "claim": "C83 reads C85",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:883",
+   "skeptic": "backbone-3",
+   "note": "Read serve() (serve.py:869): line 876 builds `store = store or RecentsStore()` and line 883 is `Handler.projects = build_projects(store.list())` \u2014 the served set is exactly the remembered folders. RecentsStore is recents.py:22 (C85), whose list() is at recents.py:88."
+  },
+  {
+   "claim": "C83 updates C85",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:700",
+   "skeptic": "backbone-3",
+   "note": "Read the /api/open handler: after the folder checks at 693-698, line 700 is `self.store.add(str(p))` under the state lock, then line 701 rebuilds Handler.projects. RecentsStore.add (recents.py:48) reloads and rewrites ~/.coyodex/serve-recents.json, so the remembered list is really changed. _forget does the same with remove() at 708."
+  },
+  {
+   "claim": "C51 starts C83",
+   "grounded": true,
+   "evidence": "tools/devserve.py:55",
+   "skeptic": "backbone-3",
+   "note": "Read spawn() (devserve.py:52), called from main at 87/94/103: lines 55-57 are subprocess.Popen of [<repo>/.venv/bin/coyodex, 'serve', <repo>, '--port', port, '--dev'] in its own session. That is the map server process (serve.py:869 via serve.main)."
+  },
+  {
+   "claim": "C134 points at C130",
+   "grounded": true,
+   "evidence": "skill/coyodex/SKILL.md:27",
+   "skeptic": "backbone-3",
+   "note": "Read SKILL.md whole (29 lines): line 27 says `Read __COYODEX_HOME__/method/dispatch.md and follow it end to end. It is the entry point`. method/dispatch.md exists and its line 3 is the mode-deciding instruction C130 anchors."
+  }
+ ]
+}

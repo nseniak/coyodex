@@ -1,0 +1,180 @@
+{
+  "rules": [
+    {
+      "id": "BR140",
+      "name": "One home screen per thing",
+      "statement": "Every thing the map records belongs to exactly one screen.",
+      "access": false,
+      "risk": "Two screens claiming one thing send a reader to different places for the same answer.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/viewer.js:13472",
+          "why": "Picks, for each kind of thing, the single screen that draws it."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:7647",
+          "why": "Reads that same choice to decide which tab a thing's own page sits under."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:7651",
+          "why": "Sends a page about one thing to the tab that thing lives under."
+        },
+        {
+          "where": "method/diagrams.md:54",
+          "why": "Tells the map builder that a link to a thing lands on that thing's home screen."
+        }
+      ]
+    },
+    {
+      "id": "BR141",
+      "name": "Ordinary case wears no label",
+      "statement": "A label that would be true of nearly every card is left off.",
+      "access": false,
+      "risk": "A word on every card separates no card from another, so the cards that differ stop standing out.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/viewer.js:8219",
+          "why": "Leaves off the word saying who a feature serves when the answer is the ordinary one."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:721",
+          "why": "Gives a person on the customer's side no word saying whose side they are on."
+        }
+      ]
+    },
+    {
+      "id": "BR142",
+      "name": "Nothing said twice on one screen",
+      "statement": "A screen leaves off a fact it already shows beside the same thing.",
+      "access": false,
+      "risk": "Saying one fact twice fills the screen with dead words, so the reader stops reading carefully.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/viewer.js:730",
+          "why": "Drops a card's sentence when the sentence only repeats the card's own name."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:6915",
+          "why": "Drops the feature line when the path above the page already names that feature."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:8345",
+          "why": "Skips a group heading that would only repeat the section heading above it."
+        }
+      ]
+    },
+    {
+      "id": "BR143",
+      "name": "Colour and mark replace the type word",
+      "statement": "A box drops the type word wherever its colour and mark already say what kind of thing it is.",
+      "access": false,
+      "risk": "Printing the word on every box widens a large picture until it no longer fits a screen.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/viewer.js:987",
+          "why": "Prints the type word only for the box sizes that ask for it, and for every interface."
+        },
+        {
+          "where": "tools/coyodex/viewer/gen_viewer.py:3057",
+          "why": "Asks for the small box on a flow picture, which carries no type word."
+        },
+        {
+          "where": "method/diagrams.md:56",
+          "why": "Tells the map builder to colour each box on a flow picture by its kind."
+        }
+      ]
+    },
+    {
+      "id": "BR144",
+      "name": "Empty screen is not offered",
+      "statement": "A screen is offered only when the map holds something to draw on it.",
+      "access": false,
+      "risk": "A tab opening onto nothing makes a small map look broken rather than small.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/viewer.js:15584",
+          "why": "Hides the decisions tab on a map that states no decision."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:15585",
+          "why": "Hides the interfaces tab on a map that records no interface."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:15595",
+          "why": "Drops a whole group of tabs once every tab inside it has been hidden."
+        },
+        {
+          "where": "tools/coyodex/viewer/gen_viewer.py:3417",
+          "why": "Works out from the map whether there is any interface for a tab to show."
+        }
+      ]
+    },
+    {
+      "id": "BR145",
+      "name": "A gap is stated, never blank",
+      "statement": "Where the map records nothing, the screen says so instead of leaving empty space.",
+      "access": false,
+      "risk": "Blank space reads as a screen that failed, so a real gap in the map goes unnoticed.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/viewer.js:8541",
+          "why": "Says a feature reaches no outside service, rather than showing an empty block."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:12874",
+          "why": "Says no flow step reaches this decision, rather than showing an empty block."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:12757",
+          "why": "Says no flow comes through this interface, so no feature can be named here."
+        }
+      ]
+    },
+    {
+      "id": "BR146",
+      "name": "A relation line never points at code",
+      "statement": "A line between two things offers no code link, because the place it names is only one example.",
+      "access": false,
+      "risk": "One example presented as the location claims the two things meet only there.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/viewer.js:3052",
+          "why": "Builds a relation row as plain text, with no link to a line of code."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:2957",
+          "why": "Clears the file browser's highlighted row, so an earlier pick cannot read as this line's place."
+        },
+        {
+          "where": "tools/coyodex/viewer/viewer.js:14163",
+          "why": "Marks a line of code from a flow step's own place, never from a relation line."
+        }
+      ]
+    },
+    {
+      "id": "BR147",
+      "name": "A flow picture draws only that flow",
+      "statement": "A picture of one flow draws only the connections that flow itself makes.",
+      "access": false,
+      "risk": "Drawing every known connection makes a reader believe this flow does things it never does.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/viewer/gen_viewer.py:3081",
+          "why": "Builds each arrow from the flow's own steps, grouped by the pair of things they join."
+        },
+        {
+          "where": "method/diagrams.md:58",
+          "why": "Tells the map builder that the arrows are the flow's steps, never the general connection list."
+        }
+      ]
+    }
+  ]
+}

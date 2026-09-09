@@ -1,0 +1,228 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "behaviour",
+ "claims": [
+  {
+   "claim": "UC2 step 1: R1 → I4 — ask the coding agent for a map of this project",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 2: I4 → C134 [in] — point the agent at the coyodex clone and the one document to read",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 4: C130 → C126 — read the method end to end and plan the build as waves of helper agents",
+   "anchor": "method/dispatch.md:83",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 5: C126 → C45 — size each helper's slice from a survey of the project's code",
+   "anchor": "method.md:1769",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 6: C45 → I8 [in] — count the files, lines and symbols of the project's own code",
+   "anchor": "tools/coyodex/preindex.py:557",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 7: C126 → C26 — fill each helper's brief from the shared contract",
+   "anchor": "method.md:1750",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 8: C126 → C5 — make each helper self-check its own piece before handing it in",
+   "anchor": "method.md:1784",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 9: C126 → C47 — turn the path rules into one assignment for every mapped thing",
+   "anchor": "method.md:2049",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 10: C47 → E56 [out] — record where every mapped thing belongs before the merge",
+   "anchor": "tools/coyodex/reconcile_build.py:480",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 11: C126 → C4 — merge every returned piece into one map",
+   "anchor": "method.md:2033",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 12: C4 → E65 [out] — gather every piece the helpers wrote, and name the ones that failed",
+   "anchor": "tools/coyodex/assemble.py:298",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 13: C4 → E1 [out] — write the merged map into the project's map folder",
+   "anchor": "tools/coyodex/assemble.py:978",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 14: C126 → C127 — hand the finished map to fresh agents that try to disprove it",
+   "anchor": "method.md:2149",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 15: C127 → C128 — hand the corrected map to the closing sequence",
+   "anchor": "method.md:2650",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 16: C128 → C25 — run the closing steps in order and stop at the first failure",
+   "anchor": "method.md:2656",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 17: C25 → C22 — turn the skeptics' votes into the map's honesty record",
+   "anchor": "tools/coyodex/ship.py:320",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 18: C22 → E37 [out] — write how much of the map was challenged and how the votes fell",
+   "anchor": "tools/coyodex/grounding.py:1749",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 19: C25 → C27 — stamp which session built the map, and when",
+   "anchor": "tools/coyodex/ship.py:323",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 21: C128 → I4 [out] — name the finished map's files and the address that opens it",
+   "anchor": "method.md:3104",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC2 step 22: I4 → R1 — hand back the finished map and the checks it passed",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 1: R1 → I4 — ask what the newer code did to the map",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 2: I4 → C134 [in] — point the coding agent at the method in the coyodex clone",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 4: C130 → C131 — read the change-impact instructions and follow them",
+   "anchor": "method/dispatch.md:167",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 5: C131 → E1 [in] — read the commit the map is pinned to",
+   "anchor": "method/change-impact.md:41",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 6: C131 → I8 [in] — diff the pinned commit against the working tree, untracked files included",
+   "anchor": "method/change-impact.md:57",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 7: C131 → I8 [in] — read the changed code and classify each change as modified, added or deleted",
+   "anchor": "method/change-impact.md:63",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 8: C131 → E1 [in] — follow the map's arrows out to every element the change reaches",
+   "anchor": "method/change-impact.md:64",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 9: C131 → E46 [out] — write the report, carrying the exact new text of every element it touches",
+   "anchor": "method/change-impact.md:84",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 10: C131 → I6 [out] — leave the report on disk beside the map",
+   "anchor": "method/change-impact.md:13",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC7 step 11: I6 → R1 — name every part of the map the change touched, and what each should now say",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 1: R1 → I4 — agree the report is right and ask to fold it into the map",
+   "anchor": null,
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 2: I4 → C134 [in] — point the coding agent at the method in the coyodex clone",
+   "anchor": "skill/coyodex/SKILL.md:27",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 4: C130 → C131 — read the accept steps and follow them",
+   "anchor": "method/dispatch.md:170",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 5: C131 → E46 [in] — read back the new text the report already carries for every element it touches",
+   "anchor": "method/change-impact.md:80",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 6: C131 → C23 — apply each was-to-now block to the stored map",
+   "anchor": "method/change-impact.md:123",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 7: C23 → E1 [out] — write the corrected rows back into the stored map",
+   "anchor": "tools/coyodex/fix.py:119",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  },
+  {
+   "claim": "UC8 step 8: C131 → C27 — stamp this accept session and re-pin the map to the code commit",
+   "anchor": "method/change-impact.md:125",
+   "detail": null,
+   "why_risky": "the walk a reader follows — a step phrase is read as what the code does, and nothing else checks it against the line it names."
+  }
+ ]
+}

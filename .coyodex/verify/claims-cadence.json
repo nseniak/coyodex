@@ -3,68 +3,20 @@
  "theme": "cadence",
  "claims": [
   {
-   "claim": "Entry point [poller] The server checks whether its own code changed since it started, and warns once runs on cadence 'every 2s'",
-   "anchor": "tools/coyodex/viewer/serve.py:145",
+   "claim": "Entry point [poller] A map page opened in developer mode asks the server every second whether the viewer's files changed. runs on cadence 'every 1s'",
+   "anchor": "tools/coyodex/viewer/serve.py:222",
    "detail": null,
    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
   },
   {
-   "claim": "Entry point [poller] The server checks whether a map changed on disk, and drops what it cached runs on cadence 'on every project request'",
-   "anchor": "tools/coyodex/viewer/serve.py:592",
+   "claim": "Entry point [startup-hook] Starting the server reads the remembered folders and loads every map still found there. runs on cadence 'on-boot'",
+   "anchor": "tools/coyodex/viewer/serve.py:885",
    "detail": null,
    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
   },
   {
-   "claim": "Entry point [worker-thread] Each browser request gets its own worker thread runs on cadence 'one per request'",
-   "anchor": "tools/coyodex/viewer/serve.py:800",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [startup-hook] Starting with the open option pops the landing page up in a browser runs on cadence 'on-boot'",
-   "anchor": "tools/coyodex/viewer/serve.py:805",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [server-loop] The server takes requests until someone stops it runs on cadence 'continuous'",
-   "anchor": "tools/coyodex/viewer/serve.py:808",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [signal-handler] Pressing the stop key closes the listening port runs on cadence 'on stop'",
-   "anchor": "tools/coyodex/viewer/serve.py:810",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [event-consumer] The browser window changes size, so the drawing refits itself to the new space runs on cadence 'continuous'",
-   "anchor": "tools/coyodex/viewer/viewer.js:10593",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [startup-hook] A reader opens a map for the first time in this browser, so the guide to getting around opens by itself runs on cadence 'on-boot'",
-   "anchor": "tools/coyodex/viewer/viewer.js:10853",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [startup-hook] The map's page loads, so the viewer checks the server is alive and loads the project's file tree runs on cadence 'on-boot'",
-   "anchor": "tools/coyodex/viewer/viewer.js:11366",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [startup-hook] The map's page loads, so the viewer fetches the whole map from the server before drawing anything runs on cadence 'on-boot'",
-   "anchor": "tools/coyodex/viewer/viewer.js:154",
-   "detail": null,
-   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
-  },
-  {
-   "claim": "Entry point [event-consumer] Any screen writes new text, so every glossary word inside that text becomes a link with no reader action runs on cadence 'continuous'",
-   "anchor": "tools/coyodex/viewer/viewer.js:479",
+   "claim": "Entry point [poller] The viewer's code changed on disk, so the map server restarts. runs on cadence 'every 1s'",
+   "anchor": "tools/devserve.py:91",
    "detail": null,
    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
   }

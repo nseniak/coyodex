@@ -1,0 +1,214 @@
+{
+  "grounding": [
+    {
+      "claim": "C71 reads E39",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:15114",
+      "note": "Opened the anchor: line 15114 is `const nodes = GRAPH.nodes || {};` inside sbBuildStatic, the search index builder; it then walks n.attrs and GRAPH.glossary. GRAPH is assigned from the server bundle at viewer.js:98 (`GRAPH = b.graph`), and b.graph is the GraphDict built by build_graph/views.model_to_graph, so the search really does read E39.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C72 reads E46",
+      "grounded": false,
+      "evidence": "tools/coyodex/viewer/viewer.js:15650",
+      "note": "The anchor line 15650 is `for (const id in IMPACT.impacts)` in impactProjection. IMPACT is set only at viewer.js:15799 from `fetch(API_BASE + 'impact')`, i.e. serve.py:452 project_impact -> impact_ripple.build_impact_result, whose payload is {spec, files, impacts} — nothing like E46's four fields (base/new/changes/new_edges, build_graph.py:198 DiffDict), and the map has no entity for that live payload. E46 is only ever produced by build_diff (build_graph.py:285) parsing the written change report, reaches the browser as the derived id->status dict `b.diffState` (viewer.js:121), and is consumed by the map loader; the impact explorer's sole touch of it is restoring that derived dict at viewer.js:15627 (`DIFF_STATE = BAKED_DIFF_STATE || {}`), which is not a read of the record. The real relationship at this anchor is to a change-impact payload the map does not model.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C84 reads E39",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/filetree.py:107",
+      "note": "Line 107 is `for nid, node in graph[\"nodes\"].items():` inside node_path_index(graph: GraphDict), which then reads each node's `file`/`line`/`kind` to build the path->node index the file browser overlays. filetree.py imports GraphDict from coyodex.viewer.build_graph (line 40), so the parameter is E39.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C47 writes E56",
+      "grounded": true,
+      "evidence": "tools/coyodex/reconcile_build.py:481",
+      "note": "The anchor 480 is `out.parent.mkdir(...)`; the actual write is the next line, `out.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + \"\\n\")`, where `doc` carries `set` plus the carried-forward directive keys (see lines 257, 423, 449). That file is `.coyodex/reconcile.json` (_DEFAULT_RECONCILE, line 65), the container E56 names. reconcile_build.py is listed in C47's own files, so the site is in-component; one line of anchor drift.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C4 writes E65",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:298",
+      "note": "Line 298 is exactly `return FragmentLoad(parts=parts, notes=notes, errors=errors)` at the end of the fragment-reading loop, which fills `errors` on unreadable files and `notes` on skipped verdicts files. FragmentLoad is the dataclass at assemble.py:226 that E65 is anchored to, so the construction is the write.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C4 persists E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:978",
+      "note": "Line 978 is `(out_dir / \"project-map.json\").write_text(to_canonical_json(model), encoding=\"utf-8\")`, guarded one line earlier by guard_wrong_map. `model` is a ProjectModel (model.py:761 = E1) and project-map.json is E1's declared container, so this is the persist.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C22 persists E37",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:1749",
+      "note": "Line 1749 is `Path(out_path).write_text(text + \"\\n\", encoding=\"utf-8\")`, where text is `json.dumps({\"grounding\": record})` built four lines above. The printed summary right after cites record['claims_challenged'], ['claims_total'], ['claims_confirmed'], ['claims_refuted'], ['claims_unverifiable'] — the fields of the Grounding dataclass at model.py:680 (E37). This is `grounding write`, C22's own entry point.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C6 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:6585",
+      "note": "Line 6585 is `m = load_model(resolved.read_text(encoding=\"utf-8\"))` in the validate CLI, wrapped in a ModelError handler that prints VALIDATION FAILED (schema). It returns the ProjectModel every shape check below runs against, so the read of E1 is at the anchor exactly.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C80 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/render.py:48",
+      "note": "Read render.py whole (62 lines). Line 48 is `model = load_model(src.read_text(encoding=\"utf-8\"))`, after the guards that refuse anything but a .json input; line 53 then writes model_to_markdown(model). render.py is one of C80's two files, so the map-rendering component does read E1 at this line.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C131 reads E1",
+      "grounded": true,
+      "evidence": "method/change-impact.md:51",
+      "note": "This component is an instructions file, so 'reads' means the instructions direct the agent at the map. Line 3 sets the whole task as 'the impact on the existing baseline map'; line 51 is the '**baseline guides** (anti-drift + consistent names; catches MODIFIED/DELETED)' principle, and 52-53 say walking the baseline's elements is required. The anchor line 41 states 'the pin = the last accepted point', and line 125 confirms the pin IS a field of the map ('the model's `commit` and `committed` fields'), so the anchor is on-topic but line 51 is where the read is actually instructed.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C131 writes E46",
+      "grounded": true,
+      "evidence": "method/change-impact.md:13",
+      "note": "The anchor is exact: the lifecycle table's step 2 row reads 'diff the code against the baseline | `.coyodex/analysis-changes/<date>.md` (the report) | **no** — written to disk, uncommitted'. Lines 16-25 and 100-109 spell out the report's structure. Caveat for the lead: the filename here is analysis-changes/<date>.md, while serve.py:51 reads `.coyodex/change-report.md` into E46 via build_diff — same record, two different filenames in the product.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C131 reads E46",
+      "grounded": true,
+      "evidence": "method/change-impact.md:80",
+      "note": "The anchor is exact: line 80 reads 'it transcribes the report into the baseline, bumps the pin, and commits', inside 'Accept does no new inference and re-reads no code' (79). Line 123 repeats it as an action: 'Apply the report's `was -> now` blocks to the MODEL'. So the accept step's input is the report, which is E46.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C23 writes E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/fix.py:119",
+      "note": "Line 119 is `map_path.write_text(dump_preserving(m, present), encoding=\"utf-8\")` — the body of _write(map_path, m: ProjectModel, present), the single write path every `fix` subcommand goes through. The notes printed below it discuss editing the assembled map versus a fragment, confirming the target is the map file (E1's container).",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C45 writes E50",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex_lib.py:249",
+      "note": "Line 249 is the head of `return WalkResult(files=files, root=root, used_git=used_git, skipped_excluded=skipped, skipped_ignored=ignored, ignore=ignore, ignore_hits=tuple(hits))`, closing the loop that filters excluded and ignored paths. WalkResult is the dataclass at preindex_lib.py:156 that E50 is anchored to, and preindex_lib.py is one of C45's files.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C24 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/dump.py:138",
+      "note": "Line 138 is `el = all_elements(m).get(eid)` in record_of(m: ProjectModel, eid), the `--record` slice; the surrounding slices (edges_of at 142-146, legend_of at 149) read m.edges and the element lists the same way. The CLI at dump.py:298 loads that model with load_map_or_fragment, so C24 reads E1.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C23 writes E36",
+      "grounded": true,
+      "evidence": "tools/coyodex/record.py:101",
+      "note": "Line 101 is `m.extras.append(section)` in append_line, two lines after `section = ExtraSection(heading=heading, body=\"\")` — it creates and attaches a new extra section when no matching heading exists, then writes into section.body at 111/116. ExtraSection is model.py:673 = E36, and record.py is one of C23's files (the `coyodex record` entry point).",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C101 reads E1",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:595",
+      "note": "Line 595 is `model, notes = load_model_tolerating_legacy(path.read_text(encoding=\"utf-8\"))`, and line 598 feeds it to build_profile_from_model(model, repo_root=repo_root). The comment above explains the read-only legacy tolerance, so this is unambiguously the map load.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C103 reads E1",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/judge.py:234",
+      "note": "Line 234 is `worklist = audit_model.l2_worklist_model(load_model(map_text))` — the first statement of build_judge_report, which turns the map text into the model and then into the risk-ranked claim worklist the skeptics and judges score. load_model returns the ProjectModel (E1).",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C105 reads E1",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/arrows.py:251",
+      "note": "Line 251 is `baseline = json.loads(Path(ns.baseline).read_text(encoding=\"utf-8\"))`, with the candidate map on 252. The parser at 239-240 takes positional `baseline` and `candidate`, and the module docstring (lines 1-24) says both are maps of the same commit whose edges are compared. So both reads are of E1's stored file.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C112 reads E1",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/live_numbers.py:498",
+      "note": "Line 498 is `return {name: M.load_model_path(p) for name, p in paths.items()}` in load_maps, wrapped in the COYODEX_SELF_MAP set/restore the docstring explains (coyodex's own map is one of the three loaded). load_model_path returns the ProjectModel, so the ledger reads E1.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C106 moves E1",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/archive.py:110",
+      "note": "The anchor is exact: line 110 is `shutil.move(str(p), str(dest / p.name))` inside archive(), over the entries from movable_entries (line 91: every child of .coyodex/ not in KEEP, which includes project-map.json), moving them into the dev-rebuilds archive dir; the except block at 112-121 moves them back on failure. 'moves' is the right verb — nothing is rewritten.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C104 reads E55",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:78",
+      "note": "Line 78 is `prof = MapProfile.from_json(prof_p.read_text(encoding=\"utf-8\")) if prof_p.exists() else None` in load_baseline, where prof_p is `baseline_dir / \"profile.json\"` (line 76) — E55's declared container, and MapProfile at profile.py:39 is E55 itself.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C104 writes E55",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:166",
+      "note": "Line 166 is `(out_dir / \"profile.json\").write_text(result.profile.to_json(), encoding=\"utf-8\")` in the archive-the-run function, beside the map, judge.json and delta.md writes. result.profile is a MapProfile (E55), serialized to the profile.json container the record names.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C102 reads E55",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:247",
+      "note": "Line 247 is `return MapProfile.from_json(text)` in _load_profile, whose docstring explains it turns from_json's refusal of a stale profile into a clean CLI error. The compare() function two lines below takes baseline and candidate MapProfile arguments, so the comparator's input really is E55.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C110 reads E1",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/retro_precheck.py:185",
+      "note": "Line 185 is `json.loads(map_path.read_text(encoding=\"utf-8\"))`, and map_path is set at line 173 to `coy / \"project-map.json\"`. It is a parse check — the comment at 187 says a half-written map is what a mid-run build leaves behind — but it does read E1's file.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C109 reads E1",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/process_scorecard.py:1851",
+      "note": "Line 1851 is `model = load_model(p.read_text(encoding=\"utf-8\"))`, after importing access_rules/load_model and validate_model on 1849-1850; lines 1852-1858 then run validate_model(model), access_rules(model) and recorded_security_granularity(model) to fill the ScoreContext the assertions read. So the scorecard loads E1.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C83 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:509",
+      "note": "Line 509 is `model = load_model(proj.map_json.read_text(encoding=\"utf-8\"))` in the cached project-view builder, followed by load_map_extents and model_to_graph on 510-511. The docstring above says the frontend fetches this at boot from /p/<slug>/api/view, which is C83's own `/api/view` entry point.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C80 writes E39",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:1282",
+      "note": "Line 1282 is the `return {` that builds the dict of commit/committed/built/format/title/goal/nodes/edges/happy_path/flows/subflows..., inside `def model_to_graph(m: ProjectModel, extents) -> GraphDict` (views.py:1049). GraphDict is build_graph.py:116 = E39, so this return is where the graph is written.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C61 reads E40",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:724",
+      "note": "The anchor 1265 is `const c = cardFacts(id);`, the first line of elementCardHtml. I opened cardFacts: line 723-724 is `function cardFacts(id) { const n = GRAPH.nodes[id];` and it goes on to read n.fields, n.name and n.kind — the Node record at build_graph.py:29 (E40). The read is one hop down, at 724, inside the card's own fact builder.",
+      "skeptic": "ownership"
+    },
+    {
+      "claim": "C60 reads E40",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:2818",
+      "note": "The anchor is exact: line 2818 is `const n = GRAPH.nodes[id];` opening renderElementDetails, which then reads n.change and n.kind for the hero. That serves C60's own entry point 'Opening an element's address shows everything the map holds about that one thing', and GRAPH comes from the bundle at viewer.js:98, so the box being read is E40.",
+      "skeptic": "ownership"
+    }
+  ]
+}

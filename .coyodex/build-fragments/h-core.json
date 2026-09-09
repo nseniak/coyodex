@@ -1,0 +1,130 @@
+{
+  "components": [
+    {
+      "id": "C1",
+      "name": "Map model",
+      "purpose": "Defines every kind of thing a map can hold. Reads a map file back and refuses one whose shape is wrong.",
+      "source": "tools/coyodex/model.py:1153",
+      "confidence": "verified",
+      "files": [
+        "tools/coyodex/model.py"
+      ]
+    },
+    {
+      "id": "C2",
+      "name": "Shared map grammar",
+      "purpose": "Holds the shared words and formats every other part of the map reads.",
+      "source": "tools/coyodex/grammar.py:21",
+      "confidence": "verified",
+      "files": [
+        "tools/coyodex/grammar.py",
+        "tools/coyodex/anchors.py",
+        "tools/coyodex/records.py",
+        "tools/coyodex/pathmatch.py",
+        "tools/coyodex/pysrc.py"
+      ]
+    },
+    {
+      "id": "C3",
+      "name": "Map schema document",
+      "purpose": "Writes a machine-readable description of the map file, for editors and other tools to read.",
+      "source": "tools/coyodex/json_schema.py:505",
+      "confidence": "verified",
+      "files": [
+        "tools/coyodex/json_schema.py"
+      ]
+    },
+    {
+      "id": "C4",
+      "name": "Map assembly",
+      "purpose": "Merges the pieces each build agent returned into one map. Refuses two pieces that name the same thing twice.",
+      "source": "tools/coyodex/assemble.py:408",
+      "confidence": "verified",
+      "files": [
+        "tools/coyodex/assemble.py"
+      ]
+    },
+    {
+      "id": "C5",
+      "name": "Fragment self-check",
+      "purpose": "Checks one agent's piece of the map before it is handed in. The agent that made a mistake is the one that fixes it.",
+      "source": "tools/coyodex/lint_fragment.py:134",
+      "confidence": "verified",
+      "files": [
+        "tools/coyodex/lint_fragment.py"
+      ]
+    },
+    {
+      "id": "C6",
+      "name": "Shape checks",
+      "purpose": "Checks that every name in the map points at something real. Also checks that each code link is well formed and really exists.",
+      "source": "tools/coyodex/validate_model.py:195",
+      "confidence": "verified",
+      "files": [
+        "tools/coyodex/validate_model.py",
+        "tools/coyodex/validate_analysis.py"
+      ]
+    },
+    {
+      "id": "C7",
+      "name": "Story checks",
+      "purpose": "Checks the use cases, their flows and the happy path against each other. Reports the parts of the code no story covers.",
+      "source": "tools/coyodex/validate_model.py:405",
+      "confidence": "inferred",
+      "files": [
+        "tools/coyodex/validate_model.py"
+      ]
+    },
+    {
+      "id": "C8",
+      "name": "Rule checks",
+      "purpose": "Checks that each business rule names real code lines. Also writes down which files the map says guard access.",
+      "source": "tools/coyodex/validate_model.py:1748",
+      "confidence": "verified",
+      "files": [
+        "tools/coyodex/validate_model.py",
+        "tools/coyodex/access_surface.py"
+      ]
+    },
+    {
+      "id": "C9",
+      "name": "Wiring checks",
+      "purpose": "Checks how the product connects: its interfaces, its ways in, the services it calls and the processes it runs in.",
+      "source": "tools/coyodex/validate_model.py:2700",
+      "confidence": "inferred",
+      "files": [
+        "tools/coyodex/validate_model.py"
+      ]
+    },
+    {
+      "id": "C10",
+      "name": "Data checks",
+      "purpose": "Checks the saved records, their stores, who owns each data area, and how much of the map was verified.",
+      "source": "tools/coyodex/validate_model.py:4205",
+      "confidence": "inferred",
+      "files": [
+        "tools/coyodex/validate_model.py",
+        "tools/coyodex/areas.py"
+      ]
+    }
+  ],
+  "entry_points": [],
+  "deps": [],
+  "observability": [],
+  "config": [
+    {
+      "key": "COYODEX_SELF_MAP",
+      "purpose": "Says this run really is mapping coyodex itself, so reading or writing the tool's own map is allowed.",
+      "default": "unset, which makes the tool refuse to touch its own map",
+      "per_env": "Not set per environment. One shell session sets it for that session only."
+    }
+  ],
+  "deployment": [],
+  "run_commands": [
+    {
+      "action": "Regenerate the map's schema document",
+      "command": "python -m coyodex.json_schema > method/project-map.schema.json",
+      "source": "tools/coyodex/json_schema.py:16"
+    }
+  ]
+}

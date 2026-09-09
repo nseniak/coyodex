@@ -1,0 +1,42 @@
+[
+  {
+    "where": "S2 purpose",
+    "finding": "unknown word",
+    "detail": "worker"
+  },
+  {
+    "where": "S12 purpose",
+    "finding": "unknown word",
+    "detail": "fan-out"
+  },
+  {
+    "where": "S20 purpose",
+    "finding": "unknown word",
+    "detail": "worker"
+  },
+  {
+    "where": "S30 purpose",
+    "finding": "unknown word",
+    "detail": "briefing"
+  },
+  {
+    "where": "S50 purpose",
+    "finding": "unknown word",
+    "detail": "challenger"
+  },
+  {
+    "where": "S52 purpose",
+    "finding": "lost precision",
+    "detail": "which numbers and where in the code they are written"
+  },
+  {
+    "where": "SD2 purpose",
+    "finding": "unknown word",
+    "detail": "worker"
+  },
+  {
+    "where": "SD3 purpose",
+    "finding": "unknown word",
+    "detail": "row"
+  }
+]

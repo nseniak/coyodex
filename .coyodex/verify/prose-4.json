@@ -4,164 +4,164 @@
  "instructions": "You are reading the plain-language text of a codebase map. A reader meets each field ALONE, inside one box, with no paragraph around it, and does not read code.\n\nJudge ONLY these two things:\n  1. UNKNOWN WORD — a term the reader has not met and the field does not explain. Product words and words already in the map's Glossary are fine; jargon, an internal codename, or an unexplained abbreviation is not.\n  2. LOST PRECISION — the sentence is short and plain but says nothing specific. \"The system checks the user\" is the shape: grammatical, readable, and it names no decision, no data and no actor. This is the worse failure, because it looks correct.\n\nDo NOT report sentence length, em dashes, code names or an opening \"It\" — those are counted deterministically and the lead already has the numbers.\nBe conservative. Report a field only when you can say WHICH word is unknown, or WHAT the sentence should have said. If in doubt, pass the field.\n\nFor each field you flag, return its `where` exactly as given, one of `unknown word` or `lost precision`, and one short line naming the word or the missing specific.",
  "fields": [
   {
-   "where": "BR182 risk",
-   "text": "Judging zoom against the accepted map would lock its own wrong zoom into every map that follows it."
+   "where": "BLK5 purpose",
+   "text": "Decides what counts as a claim being challenged, and what a partial pass is allowed to record."
   },
   {
-   "where": "BR183 statement",
-   "text": "Judging that did not happen never becomes a score, for the map or against it."
+   "where": "BLK6 purpose",
+   "text": "Decides which line stands as evidence for a claim, and when a stored one has drifted."
   },
   {
-   "where": "BR183 risk",
-   "text": "A failed reading counted as a disproof blames the map for a broken run. Counted as a pass, it hides that nothing was read."
+   "where": "BLK7 purpose",
+   "text": "Decides how many boxes a screen may hold, and what regrouping is allowed to change."
   },
   {
-   "where": "BR184 statement",
-   "text": "A check that cannot run is reported as skipped, because silence would read as a check that passed."
+   "where": "BLK8 purpose",
+   "text": "Decides which view a thing belongs to, and which facts a picture may leave off a box."
   },
   {
-   "where": "BR184 risk",
-   "text": "A quietly disabled check leaves the reader believing a whole class of loss was looked for and not found."
+   "where": "BLK9 purpose",
+   "text": "Decides which files a build may open, and where a change has to be written to survive."
   },
   {
-   "where": "BR185 statement",
-   "text": "The run refuses a verdict when the map changed after freezing, or when the accepted map is missing."
+   "where": "BLK10 purpose",
+   "text": "Decides which requests the local map server answers, and which files it will hand back."
   },
   {
-   "where": "BR185 risk",
-   "text": "A run that compared nothing still reports success, so a later map is measured against a standard nobody ever set."
+   "where": "BLK11 purpose",
+   "text": "Decides whether two scores are comparable at all, and how far a measurement may move."
   },
   {
-   "where": "BR186 statement",
-   "text": "Judgements kept from an earlier run are thrown away when the judging method has changed since."
+   "where": "UC1 trigger/outcome",
+   "text": "Someone who has cloned this project asks to install it. Their coding agent gains a new command, and the tools it drives are built and ready."
   },
   {
-   "where": "BR186 risk",
-   "text": "Scores from two different judging methods are not comparable as one number. A change in the method then reads as a change in map quality."
+   "where": "UC2 trigger/outcome",
+   "text": "A person asks their coding agent for a map of a project that has none. A map of that project exists, pinned to the commit it describes."
   },
   {
-   "where": "BR187 statement",
-   "text": "The checkers are scored on how many deliberately false claims they refuse to confirm."
+   "where": "UC3 trigger/outcome",
+   "text": "A person names committed code the map is not meant to describe. Later maps leave that code out, and every count the tools print says so."
   },
   {
-   "where": "BR187 risk",
-   "text": "Without a known answer, a low count of disproved claims cannot tell a good map from lazy checking."
+   "where": "UC4 trigger/outcome",
+   "text": "A person starts the local map server. Every project they have mapped is listed on one page in their browser."
   },
   {
-   "where": "BR20 statement",
-   "text": "A relationship, a step or a decision must name the code line that proves it, or the map is refused."
+   "where": "UC5 trigger/outcome",
+   "text": "A person opens a project's map. They see what the product does and drill from one feature down to a single box."
   },
   {
-   "where": "BR20 risk",
-   "text": "An unwitnessed claim cannot be checked. A wrong map then reads exactly like a right one."
+   "where": "UC6 trigger/outcome",
+   "text": "A reader picks the code link on a box. The file opens at that line, in their own editor or on the code host."
   },
   {
-   "where": "BR21 statement",
-   "text": "A claim may declare that no single line enforces it. Declaring no line and naming a line at once is refused."
+   "where": "UC7 trigger/outcome",
+   "text": "The code has moved on since the map was pinned. A report names the parts of the map the change touched."
   },
   {
-   "where": "BR21 risk",
-   "text": "A blank left by accident and an absence chosen on purpose look identical. Nobody can then tell which claims were really read."
+   "where": "UC8 trigger/outcome",
+   "text": "A person agrees the change report is right. The map is edited to match, re-pinned, and checked again."
   },
   {
-   "where": "BR22 statement",
-   "text": "A code link must name one line, never a whole file. The line must exist in the file. A comment, a blank line or the opening line of a function cannot be the line that acts."
+   "where": "UC9 trigger/outcome",
+   "text": "A person asks in plain language for a part of the map to move, split or be renamed. The map is edited in place and passes its checks."
   },
   {
-   "where": "BR22 risk",
-   "text": "A link nobody can open proves nothing. A link resting on a line that never runs proves nothing either, and it still looks grounded."
+   "where": "UC10 trigger/outcome",
+   "text": "Someone changed the instructions and wants to know the cost. Two maps of one project are scored and compared, with a verdict."
   },
   {
-   "where": "BR23 statement",
-   "text": "A relationship shows one example line where it happens. A step shows the exact line, which the reader can open. A change to that line hits the step it belongs to."
+   "where": "UC11 trigger/outcome",
+   "text": "A build has finished and its chat is on disk. A report names the friction, the bugs and the gaps that run revealed."
   },
   {
-   "where": "BR23 risk",
-   "text": "Reading a relationship's single line as the whole story hides every other place the same thing happens."
+   "where": "BR100 statement",
+   "text": "A code link claiming an action must name the acting line, never a definition, an import or a comment."
   },
   {
-   "where": "BR24 statement",
-   "text": "Two workers reporting the same relationship at the same line are folded into one claim. Two different lines are both kept, so a person decides which one is right."
+   "where": "BR100 risk",
+   "text": "A reader follows the link and lands on a heading instead of the work."
   },
   {
-   "where": "BR24 risk",
-   "text": "Folding two different lines together would silently throw away the one that was right."
+   "where": "BR101 statement",
+   "text": "A decision's evidence is exactly one numbered line, or a note saying no single line enforces the decision."
   },
   {
-   "where": "BR25 statement",
-   "text": "A link found at the wrong line is reported, never taken as proof the claim is false. A reader may silence one report by writing down why the stored line is right."
+   "where": "BR101 risk",
+   "text": "Evidence naming a whole file cannot be checked, so nobody can prove the decision wrong."
   },
   {
-   "where": "BR25 risk",
-   "text": "Failing a whole map over a moved link would throw away true claims. Hiding the report instead would let wrong lines pile up unseen."
+   "where": "BR102 statement",
+   "text": "Only a link claiming an action fires there is checked against the line. A link showing where a thing is defined is not."
   },
   {
-   "where": "BR26 statement",
-   "text": "Where a unit runs, how it is reached, and where a signal is emitted stay plain words. No single code line is that place."
+   "where": "BR102 risk",
+   "text": "Correct links to definitions would be reported as wrong, drowning the real findings."
   },
   {
-   "where": "BR26 risk",
-   "text": "Forcing a link here would make the author invent one. An invented link is worse than plain words."
+   "where": "BR103 statement",
+   "text": "A code link on the wrong line is only a warning, because the claim it carries can still be true."
   },
   {
-   "where": "BR40 statement",
-   "text": "A finding stops the work only when whoever receives it can still fix it. A judgement call only advises."
+   "where": "BR103 risk",
+   "text": "A map can ship with links pointing at the wrong lines."
   },
   {
-   "where": "BR41 statement",
-   "text": "A check that did not run never counts as a check that passed. The run names each check that was missing."
+   "where": "BR104 statement",
+   "text": "A stored link is judged out of date only when most reviewers agreed the claim it carries is true."
   },
   {
-   "where": "BR42 statement",
-   "text": "Closing a finding for good takes a written line that names the finding and gives the reason. A line that misses the name, or misses the reason, is refused."
+   "where": "BR104 risk",
+   "text": "A single doubtful reading would move a link that was right all along."
   },
   {
-   "where": "BR43 statement",
-   "text": "A written reason answers only the findings it names. A line that would silence a whole family of findings silences none of them."
+   "where": "BR105 statement",
+   "text": "A claim whose code link deliberately points at a declaration is never moved onto the line a reviewer read."
   },
   {
-   "where": "BR44 statement",
-   "text": "A run always says what each written reason did. The count of findings that reason silenced is shown, or the fact that it silenced none."
+   "where": "BR105 risk",
+   "text": "A record's link would slide off its definition onto one write line."
   },
   {
-   "where": "BR45 statement",
-   "text": "A map with open advice is never reported as clean. A run marks one piece of advice answered only where it can name the written line that answers it."
+   "where": "BR106 statement",
+   "text": "A corrected code link is refused when it lands in a file that neither end of the relation claims."
   },
   {
-   "where": "BR46 statement",
-   "text": "When two workers state the same thing differently, the merge stops and writes nothing. Neither version is quietly chosen over the other."
+   "where": "BR106 risk",
+   "text": "A link could point into a third part's code."
   },
   {
-   "where": "BR60 statement",
-   "text": "A folder of at most ten code files and three thousand lines counts as one box. A bigger folder is expected to hold several boxes instead."
+   "where": "BR107 statement",
+   "text": "A person may excuse one code link a check called out. The note must quote the whole claim, then give the reason."
   },
   {
-   "where": "BR60 risk",
-   "text": "A box that quietly holds a whole subsystem cannot be opened. The reader sees one name where a dozen units live."
+   "where": "BR107 risk",
+   "text": "One short note could silence every finding about one part of the product."
   },
   {
-   "where": "BR61 statement",
-   "text": "The expected number of boxes counts product code only. Documentation, configuration, tests, asset folders and nearly empty folders add no box to that number."
+   "where": "BR200 statement",
+   "text": "Two maps are scored against each other only when both describe the same code. A run over changed code refuses."
   },
   {
-   "where": "BR61 risk",
-   "text": "A project full of tiny pictures or settings files would be told to draw hundreds of boxes. Those boxes describe nothing about the product."
+   "where": "BR200 risk",
+   "text": "A change in the code would read as a change in the map's quality. A scoring run must never confuse the two."
   },
   {
-   "where": "BR62 statement",
-   "text": "How coarse a map is can never fail a build, because every coarseness check only leaves a note. The note also stays quiet while the map sits within forty percent of the expected number of boxes."
+   "where": "BR201 statement",
+   "text": "A map built over uncommitted code can never be scored, and nobody may waive that refusal."
   },
   {
-   "where": "BR62 risk",
-   "text": "A guessed number with the power to block would force every map to the size a formula picked. The right size is the one that explains the product."
+   "where": "BR201 risk",
+   "text": "The code such a map describes exists in no commit. Scoring it badly hands the other map a free pass on every check."
   },
   {
-   "where": "BR63 statement",
-   "text": "One screen reads well with three to nine boxes. Once a screen passes twelve boxes the map is told to group them."
+   "where": "BR202 statement",
+   "text": "Two quality scores compare only when one judging setup produced both, so a changed setup forces a fresh judging."
   },
   {
-   "where": "BR63 risk",
-   "text": "A screen nobody can take in at one look is not a map. The reader is back to the file listing it was meant to replace."
+   "where": "BR202 risk",
+   "text": "Scores kept from an older judging setup read as a quality change that never happened."
   }
  ]
 }

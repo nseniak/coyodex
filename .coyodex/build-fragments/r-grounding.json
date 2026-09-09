@@ -1,0 +1,164 @@
+{
+  "rules": [
+    {
+      "id": "BR80",
+      "name": "Majority settles a claim",
+      "statement": "A claim is settled only when most reviewers gave the same answer. A split with no majority stays unsettled.",
+      "access": false,
+      "risk": "A tie credited to one side turns an open disagreement into a fact the map presents as checked.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:105",
+          "why": "calls a claim confirmed only when more than half the votes on it say so"
+        },
+        {
+          "where": "tools/coyodex/grounding.py:107",
+          "why": "calls a claim disproved only when more than half the votes on it say so"
+        },
+        {
+          "where": "tools/coyodex/grounding.py:121",
+          "why": "sends a split with no majority to the unsettled outcome instead of crediting either side"
+        }
+      ]
+    },
+    {
+      "id": "BR81",
+      "name": "Three answers, nothing else",
+      "statement": "A reviewer answers holds up, disproved, or cannot tell. Any other word is refused rather than counted.",
+      "access": false,
+      "risk": "An unrecognised word quietly folded into a bucket credits an outcome nobody voted for.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:422",
+          "why": "refuses to build the honesty record when a vote carries a word outside the three"
+        },
+        {
+          "where": "tools/coyodex/grounding.py:1119",
+          "why": "fails the early check on the vote files for the same unknown word, while the reviewer is still nearby"
+        },
+        {
+          "where": "method.md:2496",
+          "why": "tells every reviewer to answer cannot tell when the code settles nothing, so the third answer stays reachable"
+        }
+      ]
+    },
+    {
+      "id": "BR82",
+      "name": "Vote makes a challenge",
+      "statement": "A claim counts as challenged only when a reviewer voted on it.",
+      "access": false,
+      "risk": "Counting a claim as checked because it was handed out inflates how verified the map looks.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:469",
+          "why": "counts the challenged claims as the captured list minus every claim that drew no vote"
+        },
+        {
+          "where": "method.md:2432",
+          "why": "defines the challenged number as how many claims got a verdict, not how many were sent out"
+        }
+      ]
+    },
+    {
+      "id": "BR83",
+      "name": "Stopping early must be declared",
+      "statement": "A pass that leaves claims unvoted is refused unless someone declares that stopping early was deliberate. The declaration must say which claims were prioritized.",
+      "access": false,
+      "risk": "An undeclared gap reads as a finished check, so nobody learns that a thousand claims went unread.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:446",
+          "why": "refuses the honesty record when a captured claim has no vote and nobody declared the stop"
+        },
+        {
+          "where": "tools/coyodex/grounding.py:457",
+          "why": "refuses a declared partial pass that does not say what it prioritized"
+        },
+        {
+          "where": "method.md:2435",
+          "why": "states the refusal, because a planned stop and a dead batch of reviewers look identical from inside the tool"
+        },
+        {
+          "where": "method.md:2468",
+          "why": "requires the written reason, because the counts say how many claims were checked and never why those ones"
+        }
+      ]
+    },
+    {
+      "id": "BR84",
+      "name": "Full surface stays in the record",
+      "statement": "A pass that checked only part of the map still records the size of the whole claim surface.",
+      "access": false,
+      "risk": "Recording the smaller number lets a pass over a fifth of the map ship looking complete.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:468",
+          "why": "sets the total from the whole captured list, whatever share of it drew votes"
+        },
+        {
+          "where": "method.md:2470",
+          "why": "forbids cutting the captured list down to what was checked as a way past the refusal"
+        }
+      ]
+    },
+    {
+      "id": "BR85",
+      "name": "Judged against the list reviewers saw",
+      "statement": "A vote about a claim missing from the list captured for the reviewers is refused.",
+      "access": false,
+      "risk": "A record built against a later snapshot describes a check that never happened on the map being shipped.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:428",
+          "why": "refuses the record when a vote names a claim the captured list never held"
+        },
+        {
+          "where": "method.md:2548",
+          "why": "requires capturing the list before any correction lands, so the two sides still describe one moment"
+        }
+      ]
+    },
+    {
+      "id": "BR86",
+      "name": "Disproved claim may not ship",
+      "statement": "A build stops when the map still carries a claim its reviewers disproved, word for word.",
+      "access": false,
+      "risk": "Reducing a whole pass to counts hides a wrong claim, because a correction and an ignored refutation look the same.",
+      "confidence": "inferred",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:1591",
+          "why": "fails the check when a disproved claim still matches a row of the finished map"
+        },
+        {
+          "where": "tools/coyodex/finalize.py:416",
+          "why": "turns each surviving disproved claim into a blocking finding of the closing report"
+        }
+      ]
+    },
+    {
+      "id": "BR87",
+      "name": "Cited but never opened",
+      "statement": "A file cited as evidence that the reviewer's own record never names fails the check. A file it only saw printed by a search is flagged, not failed.",
+      "access": false,
+      "risk": "A check that fails honest reading teaches the next reviewer to hide how it read.",
+      "confidence": "verified",
+      "sites": [
+        {
+          "where": "tools/coyodex/grounding.py:1417",
+          "why": "fails the check for a cited file that appears nowhere in the reviewer's own turn record"
+        },
+        {
+          "where": "tools/coyodex/grounding.py:1425",
+          "why": "reports a file the reviewer only saw printed as worth a second look, without failing it"
+        }
+      ]
+    }
+  ]
+}

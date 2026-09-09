@@ -3,106 +3,106 @@
  "theme": "dep-usage",
  "claims": [
   {
-   "claim": "C4 invokes D2",
-   "anchor": "Makefile:33",
-   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: D2 = Python (platform: language runtime, version 3.10 or newer — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C4's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+   "claim": "C27 queries D90",
+   "anchor": "tools/coyodex/provenance.py:125",
+   "detail": "From: C27 = Build log (tools/coyodex/provenance.py:327); entry points: An operator runs `coyodex provenance show` to list the sessions that built this map. (tools/coyodex/provenance.py:308); An operator runs `coyodex provenance stamp` to record which session built this map, and when. (tools/coyodex/provenance.py:327); An operator runs `coyodex timings record` to write down what each fan-out slice took. (tools/coyodex/timings.py:439); An operator runs `coyodex timings order` to see one phase's slices, longest first. (tools/coyodex/timings.py:449); An operator runs `coyodex timings show` to see every phase that has a timing record. (tools/coyodex/timings.py:456); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C27's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
   },
   {
-   "claim": "C4 writes D12",
-   "anchor": "Makefile:58",
-   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: D12 = Claude Code (platform: AI coding agent that hosts the coyodex skill — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C4's code to confirm it reaches D12; ground the call site against the code (the audit→Elastic false-edge class)."
+   "claim": "C27 reads D95",
+   "anchor": "tools/coyodex/provenance.py:209",
+   "detail": "From: C27 = Build log (tools/coyodex/provenance.py:327); entry points: An operator runs `coyodex provenance show` to list the sessions that built this map. (tools/coyodex/provenance.py:308); An operator runs `coyodex provenance stamp` to record which session built this map, and when. (tools/coyodex/provenance.py:327); An operator runs `coyodex timings record` to write down what each fan-out slice took. (tools/coyodex/timings.py:439); An operator runs `coyodex timings order` to see one phase's slices, longest first. (tools/coyodex/timings.py:449); An operator runs `coyodex timings show` to see every phase that has a timing record. (tools/coyodex/timings.py:456); To: D95 = Coding agent (platform: AI coding assistant — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C27's code to confirm it reaches D95; ground the call site against the code (the audit→Elastic false-edge class)."
   },
   {
-   "claim": "C4 writes D13",
-   "anchor": "Makefile:58",
-   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: D13 = Codex (platform: AI coding agent that hosts the coyodex skill — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C4's code to confirm it reaches D13; ground the call site against the code (the audit→Elastic false-edge class)."
+   "claim": "C27 writes D91",
+   "anchor": "tools/coyodex/provenance.py:232",
+   "detail": "From: C27 = Build log (tools/coyodex/provenance.py:327); entry points: An operator runs `coyodex provenance show` to list the sessions that built this map. (tools/coyodex/provenance.py:308); An operator runs `coyodex provenance stamp` to record which session built this map, and when. (tools/coyodex/provenance.py:327); An operator runs `coyodex timings record` to write down what each fan-out slice took. (tools/coyodex/timings.py:439); An operator runs `coyodex timings order` to see one phase's slices, longest first. (tools/coyodex/timings.py:449); An operator runs `coyodex timings show` to see every phase that has a timing record. (tools/coyodex/timings.py:456); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C27's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
   },
   {
-   "claim": "C4 writes D14",
-   "anchor": "Makefile:17",
-   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: D14 = Cursor (platform: AI coding agent, and a code editor — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C4's code to confirm it reaches D14; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C43 calls D11",
-   "anchor": "tools/coyodex/viewer/serve.py:806",
-   "detail": "From: C43 = Map server (tools/coyodex/viewer/serve.py:800); entry points: The server checks whether its own code changed since it started, and warns once (tools/coyodex/viewer/serve.py:180); The server checks whether a map changed on disk, and drops what it cached (tools/coyodex/viewer/serve.py:210); GET / (tools/coyodex/viewer/serve.py:583); GET /static/<file> (tools/coyodex/viewer/serve.py:586); GET /api/recents (tools/coyodex/viewer/serve.py:614); GET /api/browse?path= (tools/coyodex/viewer/serve.py:621); +17 more; To: D11 = web browser (platform: desktop application the reader already has — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C43's code to confirm it reaches D11; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C64 reads D12",
-   "anchor": "eval/tools/coyodex_eval/transcript.py:305",
-   "detail": "From: C64 = Build transcript reader and spend report (eval/tools/coyodex_eval/transcript.py:305); entry points: coyodex-eval cost (eval/tools/coyodex_eval/cost.py:674); coyodex-eval transcript (eval/tools/coyodex_eval/transcript.py:1067); To: D12 = Claude Code (platform: AI coding agent that hosts the coyodex skill — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C64's code to confirm it reaches D12; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C66 reads D12",
-   "anchor": "eval/tools/coyodex_eval/retro_precheck.py:216",
-   "detail": "From: C66 = Map archive and build guard (eval/tools/coyodex_eval/archive.py:107); entry points: coyodex-eval archive (eval/tools/coyodex_eval/archive.py:159); coyodex-eval retro-precheck (eval/tools/coyodex_eval/retro_precheck.py:249); python tools/map_backup.py stamp (tools/map_backup.py:452); python tools/map_backup.py backup (tools/map_backup.py:478); To: D12 = Claude Code (platform: AI coding agent that hosts the coyodex skill — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C66's code to confirm it reaches D12; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C75 queries D1",
-   "anchor": "method/change-impact.md:57",
-   "detail": "From: C75 = The build method (method.md:3); entry points: A person asks coyodex to analyze, when a map exists and the code has moved on since it was pinned. (method/dispatch.md:151); A person says the change report looks right, so coyodex folds the report into the map. (method/dispatch.md:154); A person asks in plain words to move, rename, split or drill deeper into a part of the map. (method/dispatch.md:156); A person explicitly asks to regenerate the whole map from scratch, and confirms the warning. (method/dispatch.md:171); A person types the coyodex command in a project that has no map yet, so a first map is built. (method/dispatch.md:83); To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C75's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C25 queries D1",
-   "anchor": "tools/coyodex/provenance.py:159",
-   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C25's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C43 calls D1",
-   "anchor": "tools/coyodex/viewer/serve.py:236",
-   "detail": "From: C43 = Map server (tools/coyodex/viewer/serve.py:800); entry points: The server checks whether its own code changed since it started, and warns once (tools/coyodex/viewer/serve.py:180); The server checks whether a map changed on disk, and drops what it cached (tools/coyodex/viewer/serve.py:210); GET / (tools/coyodex/viewer/serve.py:583); GET /static/<file> (tools/coyodex/viewer/serve.py:586); GET /api/recents (tools/coyodex/viewer/serve.py:614); GET /api/browse?path= (tools/coyodex/viewer/serve.py:621); +17 more; To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C43's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C44 calls D1",
-   "anchor": "tools/coyodex/viewer/gen_viewer.py:60",
-   "detail": "From: C44 = Diagram builder (tools/coyodex/viewer/gen_viewer.py:3303); entry points: python -m coyodex.viewer.gen_viewer <graph file> <output file> (tools/coyodex/viewer/gen_viewer.py:3366); To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C44's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C58 calls D16",
-   "anchor": "tools/coyodex/viewer/viewer.js:10729",
-   "detail": "From: C58 = Source column (tools/coyodex/viewer/viewer.js:10343); entry points: The map's page loads, so the viewer checks the server is alive and loads the project's file tree (tools/coyodex/viewer/viewer.js:11366); To: D16 = code editor (platform: desktop editor, opened by a link scheme — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C58's code to confirm it reaches D16; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C58 calls D15",
-   "anchor": "tools/coyodex/viewer/viewer.js:10732",
-   "detail": "From: C58 = Source column (tools/coyodex/viewer/viewer.js:10343); entry points: The map's page loads, so the viewer checks the server is alive and loads the project's file tree (tools/coyodex/viewer/viewer.js:11366); To: D15 = GitHub (service: code-hosting website, reached as a plain link — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C58's code to confirm it reaches D15; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C33 calls D1",
-   "anchor": "tools/coyodex/preindex_lib.py:289",
-   "detail": "From: C33 = Pre-index (tools/coyodex/preindex.py:604); entry points: A coding agent reads an already measured codebase back as a readable summary. (tools/coyodex/preindex.py:518); A coding agent sizes a codebase before choosing how coarse the map should be. (tools/coyodex/preindex.py:557); To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C33's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C4 calls D1",
-   "anchor": "tools/coyodex/scope.py:48",
-   "detail": "From: C4 = Command shell and build setup (tools/coyodex/cli.py:123); entry points: Running `coyodex` with no command, or asking for help or the version, prints a summary. (tools/coyodex/cli.py:115); `coyodex contract` prints the brief one fan-out worker should receive. (tools/coyodex/contract.py:109); `coyodex scope` says which files will be analysed and which commit the map will name. (tools/coyodex/scope.py:167); To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C4's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C25 calls D1",
-   "anchor": "tools/coyodex/provenance.py:120",
-   "detail": "From: C25 = Assignment pass (tools/coyodex/reconcile_build.py:358); entry points: Running `coyodex provenance show` prints the conversations that built this map, newest last. (tools/coyodex/provenance.py:293); Running `coyodex provenance stamp` records this conversation's id, the build minute and the code commit. (tools/coyodex/provenance.py:308); Running `coyodex reconcile` expands path rules into an assignment file and names every rule that matched nothing. (tools/coyodex/reconcile_build.py:329); To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C25's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
-  },
-  {
-   "claim": "C34 queries D1",
+   "claim": "C49 queries D90",
    "anchor": "tools/coyodex/impact_git.py:50",
-   "detail": "From: C34 = Change impact (tools/coyodex/impact_git.py:285); To: D1 = git (platform: version-control program, run as a separate process — an external system, not a code module)",
-   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C34's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+   "detail": "From: C49 = Change impact (tools/coyodex/impact_git.py:285); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C49's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C50 writes D91",
+   "anchor": "tools/map_backup.py:391",
+   "detail": "From: C50 = Map and transcript backup (tools/map_backup.py:391); entry points: A build records which conversation produced this map. (tools/map_backup.py:452); An operator archives a project's map with the conversation that built it. (tools/map_backup.py:478); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C50's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C69 requests D161",
+   "anchor": "tools/coyodex/viewer/viewer.js:14100",
+   "detail": "From: C69 = Source column (tools/coyodex/viewer/viewer.js:13894); To: D161 = cdnjs (service: content delivery network — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C69's code to confirm it reaches D161; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C83 calls D92",
+   "anchor": "tools/coyodex/viewer/serve.py:895",
+   "detail": "From: C83 = Map server (tools/coyodex/viewer/serve.py:869); entry points: A map page opened in developer mode asks the server every second whether the viewer's files changed. (tools/coyodex/viewer/serve.py:225); Opening the server's home address lists every project folder opened before, each one openable or removable. (tools/coyodex/viewer/serve.py:640); Asking `/api/recents` re-reads the remembered folders and says which of their maps can be opened. (tools/coyodex/viewer/serve.py:677); Asking `/api/browse` lists the folders inside one folder, marking each folder that holds a map. (tools/coyodex/viewer/serve.py:688); Posting to `/api/open` remembers a folder and starts serving the map inside it. (tools/coyodex/viewer/serve.py:700); Posting to `/api/forget` drops a folder from the remembered list and stops serving its map. (tools/coyodex/viewer/serve.py:708); +14 more; To: D92 = Web browser (platform: desktop browser — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C83's code to confirm it reaches D92; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C70 calls D93",
+   "anchor": "tools/coyodex/viewer/viewer.js:14925",
+   "detail": "From: C70 = Viewer shell (tools/coyodex/viewer/viewer.js:14609); entry points: Opening `#v=overview` shows the sentences saying what the product is for. (tools/coyodex/viewer/viewer.html:117); Opening `#v=features` lists everything the product does, one card per feature. (tools/coyodex/viewer/viewer.html:118); Opening `#v=hp` shows the product's one successful run, end to end. (tools/coyodex/viewer/viewer.html:119); Opening `#v=interfaces` shows every place the product meets the outside world. (tools/coyodex/viewer/viewer.html:120); Opening `#v=rules` shows the decisions the product makes, grouped by area. (tools/coyodex/viewer/viewer.html:126); Opening `#v=domain` shows the things the product knows about. (tools/coyodex/viewer/viewer.html:127); +7 more; To: D93 = Code editor (platform: desktop editor — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C70's code to confirm it reaches D93; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C70 requests D94",
+   "anchor": "tools/coyodex/viewer/viewer.js:14928",
+   "detail": "From: C70 = Viewer shell (tools/coyodex/viewer/viewer.js:14609); entry points: Opening `#v=overview` shows the sentences saying what the product is for. (tools/coyodex/viewer/viewer.html:117); Opening `#v=features` lists everything the product does, one card per feature. (tools/coyodex/viewer/viewer.html:118); Opening `#v=hp` shows the product's one successful run, end to end. (tools/coyodex/viewer/viewer.html:119); Opening `#v=interfaces` shows every place the product meets the outside world. (tools/coyodex/viewer/viewer.html:120); Opening `#v=rules` shows the decisions the product makes, grouped by area. (tools/coyodex/viewer/viewer.html:126); Opening `#v=domain` shows the things the product knows about. (tools/coyodex/viewer/viewer.html:127); +7 more; To: D94 = GitHub (service: code host — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C70's code to confirm it reaches D94; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C70 requests D96",
+   "anchor": "tools/coyodex/viewer/viewer.html:19",
+   "detail": "From: C70 = Viewer shell (tools/coyodex/viewer/viewer.js:14609); entry points: Opening `#v=overview` shows the sentences saying what the product is for. (tools/coyodex/viewer/viewer.html:117); Opening `#v=features` lists everything the product does, one card per feature. (tools/coyodex/viewer/viewer.html:118); Opening `#v=hp` shows the product's one successful run, end to end. (tools/coyodex/viewer/viewer.html:119); Opening `#v=interfaces` shows every place the product meets the outside world. (tools/coyodex/viewer/viewer.html:120); Opening `#v=rules` shows the decisions the product makes, grouped by area. (tools/coyodex/viewer/viewer.html:126); Opening `#v=domain` shows the things the product knows about. (tools/coyodex/viewer/viewer.html:127); +7 more; To: D96 = jsDelivr (service: content delivery network — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C70's code to confirm it reaches D96; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C105 queries D90",
+   "anchor": "eval/tools/coyodex_eval/arrows.py:184",
+   "detail": "From: C105 = Lost arrows (eval/tools/coyodex_eval/arrows.py:152); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C105's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C113 reads D91",
+   "anchor": "eval/tools/coyodex_eval/mutate.py:112",
+   "detail": "From: C113 = Skeptic recall test (eval/tools/coyodex_eval/mutate.py:236); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C113's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C107 reads D105",
+   "anchor": "eval/tools/coyodex_eval/transcript.py:328",
+   "detail": "From: C107 = Transcript reader (eval/tools/coyodex_eval/transcript.py:442); To: D105 = Coding agent chat logs (platform: agent harness — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C107's code to confirm it reaches D105; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C108 reads D105",
+   "anchor": "eval/tools/coyodex_eval/cost.py:272",
+   "detail": "From: C108 = Build cost (eval/tools/coyodex_eval/cost.py:620); To: D105 = Coding agent chat logs (platform: agent harness — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C108's code to confirm it reaches D105; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C110 reads D105",
+   "anchor": "eval/tools/coyodex_eval/retro_precheck.py:216",
+   "detail": "From: C110 = Retro precheck (eval/tools/coyodex_eval/retro_precheck.py:198); To: D105 = Coding agent chat logs (platform: agent harness — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C110's code to confirm it reaches D105; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C111 queries D90",
+   "anchor": "eval/tools/coyodex_eval/ledger.py:87",
+   "detail": "From: C111 = Ledger check (eval/tools/coyodex_eval/ledger.py:110); To: D90 = Git (platform: version control program — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C111's code to confirm it reaches D90; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C85 persists D91",
+   "anchor": "tools/coyodex/viewer/recents.py:44",
+   "detail": "From: C85 = Remembered projects (tools/coyodex/viewer/recents.py:22); To: D91 = Local file system (platform: operating system storage — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C85's code to confirm it reaches D91; ground the call site against the code (the audit→Elastic false-edge class)."
   }
  ]
 }

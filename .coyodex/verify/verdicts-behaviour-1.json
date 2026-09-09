@@ -1,0 +1,263 @@
+{
+  "grounding": [
+    {
+      "claim": "UC2 step 1: R1 → I4 — ask the coding agent for a map of this project",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:6",
+      "skeptic": "behaviour-1",
+      "note": "Read SKILL.md whole (29 lines). Lines 6-9 of the frontmatter description are the trigger list the person's agent matches on: 'generate / build a project map or codebase map', 'map this repo', triggers 'coyodex', 'project map', 'codebase map'. That is the crossing where a person asks for a map."
+    },
+    {
+      "claim": "UC2 step 2: I4 → C134 [in] — point the agent at the coyodex clone and the one document to read",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:27",
+      "skeptic": "behaviour-1",
+      "note": "Opened the anchor. Line 27 reads: Read `__COYODEX_HOME__/method/dispatch.md` and follow it end to end. Lines 22-25 above it define COYODEX_HOME as the coyodex clone and separate it from the repo being mapped, so the line does point the agent at the clone and at one document."
+    },
+    {
+      "claim": "UC2 step 4: C130 → C126 — read the method end to end and plan the build as waves of helper agents",
+      "grounded": true,
+      "evidence": "method/dispatch.md:83",
+      "skeptic": "behaviour-1",
+      "note": "Opened dispatch.md lines 1-100. Line 83 is the 'No baseline -> Build' branch: 'Create it. Read `method.md` (+ method/model.md, method/domain-cards.md, method/diagrams.md)... agents return structured rows and `coyodex assemble` writes the model + views', and lines 88-91 insist it be read in 650-line windows with no gaps. Note: method.md:1720 orders the build 'parallel harvest -> barrier synthesis -> parallel trace', but method.md:1730 explicitly forbids waves INSIDE the harvest ('as one concurrent batch... not in waves'), so 'waves' is true of the phase barriers and false of the harvest itself."
+    },
+    {
+      "claim": "UC2 step 5: C126 → C45 — size each helper's slice from a survey of the project's code",
+      "grounded": true,
+      "evidence": "method.md:1769",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 1720-1800. Line 1769 reads 'Pre-size the slices from the pre-index so no slice becomes the critical path', and 1771 'The pre-index already counts files/symbols per area'. The pre-index is C45 (Code survey, tools/coyodex/preindex.py), so the step is what the line says."
+    },
+    {
+      "claim": "UC2 step 6: C45 → I8 [in] — count the files, lines and symbols of the project's own code",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex.py:557",
+      "skeptic": "behaviour-1",
+      "note": "Opened preindex.py 540-620. Line 557 `walk = iter_source_files(root)` is where the mapped repo's own files are enumerated; 562-563 then run build_weight (LOC) and build_symbols, and the coverage block at 568-592 records files_counted and LOC. Files, lines and symbols are all counted from that walk."
+    },
+    {
+      "claim": "UC2 step 7: C126 → C26 — fill each helper's brief from the shared contract",
+      "grounded": true,
+      "evidence": "method.md:1750",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 1745-1768. Line 1750 is the `coyodex contract <phase> --fill <slots.json> --out ... --brief <agent-id>` line, under 'Both halves are a command, so neither is typed'; 1757 says --fill refuses an unfilled slot. The contract is the shared brief and --fill is what fills one agent's copy."
+    },
+    {
+      "claim": "UC2 step 8: C126 → C5 — make each helper self-check its own piece before handing it in",
+      "grounded": true,
+      "evidence": "method.md:1784",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 1775-1793. Line 1784 reads 'The rename is the lint's exit, not a separate step: `coyodex lint-fragment --finalize <id>.draft.json`', and 1785 'It renames to <id>.json only on a CLEAN lint'. So the helper's own piece is checked before it can be handed in for assembly."
+    },
+    {
+      "claim": "UC2 step 9: C126 → C47 — turn the path rules into one assignment for every mapped thing",
+      "grounded": true,
+      "evidence": "method.md:2049",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 2020-2060. Line 2049 reads 'Generate the file — `coyodex reconcile`', and 2052-2054 say to write RULES against the source path and let the tool resolve them into ids, pointed at the fragments. That is path rules turned into per-element assignments."
+    },
+    {
+      "claim": "UC2 step 10: C47 → E56 [out] — record where every mapped thing belongs before the merge",
+      "grounded": true,
+      "evidence": "tools/coyodex/reconcile_build.py:480",
+      "skeptic": "behaviour-1",
+      "note": "Opened reconcile_build.py 440-487. Line 480 `out.write_text(json.dumps(doc, ...))` writes the reconcile file; 481 prints 'N assignment(s) in M group(s)' and 482 prints 'Next: coyodex assemble ... --reconcile', so the write does precede the merge. 'Every mapped thing' is looser than the code, which records only the ids the rules match."
+    },
+    {
+      "claim": "UC2 step 11: C126 → C4 — merge every returned piece into one map",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:978",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 2020-2060 for the anchor: line 2033 is `coyodex assemble <fragments…> --out .coyodex --reconcile ...` 'applies it AFTER the fragment merge', which names assemble as the merger. The merge itself is in tools/coyodex/assemble.py (fragments loaded at 267-298, map written at 978), which I opened."
+    },
+    {
+      "claim": "UC2 step 12: C4 → E65 [out] — gather every piece the helpers wrote, and name the ones that failed",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:298",
+      "skeptic": "behaviour-1",
+      "note": "Opened assemble.py 260-320. The loop at 270-297 reads each fragment path, skipping *.draft.json (276) and verdicts files (293), and appends a message to `errors` for a missing file (279), an unreadable one (287) or an invalid one (297). Line 298 returns FragmentLoad(parts, notes, errors) — the gathered pieces plus the named failures."
+    },
+    {
+      "claim": "UC2 step 13: C4 → E1 [out] — write the merged map into the project's map folder",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:978",
+      "skeptic": "behaviour-1",
+      "note": "Opened assemble.py 955-995. Line 978 `(out_dir / 'project-map.json').write_text(to_canonical_json(model))` writes the merged model, and 979 writes the markdown view, into out_dir, which is the mapped repo's .coyodex folder."
+    },
+    {
+      "claim": "UC2 step 14: C126 → C127 — hand the finished map to fresh agents that try to disprove it",
+      "grounded": true,
+      "evidence": "method.md:2290",
+      "skeptic": "behaviour-1",
+      "note": "Opened the anchor (method.md:2146-2165). Line 2149 only mentions in passing that a serial build still fans out 'for the T7 rules and for Phase 4', with 2150 'fresh context is the point'. The step itself is at 2290: 'Phase 4 Adversarial verify (fan out, fresh context)... take the audit's L2 grounding worklist and disprove it against the code' (2973 calls them fresh-context skeptics). True, with the anchor a line-level drift."
+    },
+    {
+      "claim": "UC2 step 15: C127 → C128 — hand the corrected map to the closing sequence",
+      "grounded": true,
+      "evidence": "method.md:2650",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 2640-2660. Line 2650 ends the fresh-context verification block with 'Re-validate -> re-audit -> render after fixes', and 2651 immediately opens 'Ordering — ONE sequence, and `coyodex ship` RUNS it'. The anchor sits exactly at the handover from verification to the closing sequence (C128 is method.md:2651)."
+    },
+    {
+      "claim": "UC2 step 16: C128 → C25 — run the closing steps in order and stop at the first failure",
+      "grounded": true,
+      "evidence": "method.md:2656",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 2651-2667. Line 2656 is `.venv/bin/coyodex ship <repo>`, and 2652-2653 say the verb runs steps 2-12 'stops at the first failing step and names every step that did not run'. Verified in the code too: tools/coyodex/ship.py:349-361 loops the steps and on rc != 0 prints SHIP STOPPED plus 'NOT RUN: ...' and returns."
+    },
+    {
+      "claim": "UC2 step 17: C25 → C22 — turn the skeptics' votes into the map's honesty record",
+      "grounded": true,
+      "evidence": "tools/coyodex/ship.py:320",
+      "skeptic": "behaviour-1",
+      "note": "Opened ship.py 290-340. Line 320 `return grounding.main(rest)` in default_runner is the call site where ship invokes the grounding tool; the step it dispatches is ship.py:281, Step('grounding write (step 6 — the record, measured against the map)'). So the closer is what turns the skeptics' verdict files into the record."
+    },
+    {
+      "claim": "UC2 step 18: C22 → E37 [out] — write how much of the map was challenged and how the votes fell",
+      "grounded": true,
+      "evidence": "tools/coyodex/grounding.py:1749",
+      "skeptic": "behaviour-1",
+      "note": "Opened grounding.py 1700-1760. Line 1704 builds the record from claims + rows; 1745-1749 wrap it as {'grounding': record} and `Path(out_path).write_text(text)`. The print at 1750-1755 states claims_challenged of claims_total, plus confirmed / refuted / unverifiable — how much was challenged and how the votes fell."
+    },
+    {
+      "claim": "UC2 step 19: C25 → C27 — stamp which session built the map, and when",
+      "grounded": true,
+      "evidence": "tools/coyodex/ship.py:323",
+      "skeptic": "behaviour-1",
+      "note": "Opened ship.py 290-340. Line 323 `return provenance.main(rest)` is where ship invokes the stamper; the step is ship.py:283, Step('provenance stamp (step 8 — stamps and fills `built`)'). provenance.py:327 calls stamp(repo, mode, session_id, built_at) and 318-321 show each stored session carries built_at, mode and session id."
+    },
+    {
+      "claim": "UC2 step 21: C128 → I4 [out] — name the finished map's files and the address that opens it",
+      "grounded": true,
+      "evidence": "method.md:3104",
+      "skeptic": "behaviour-1",
+      "note": "Opened method.md 3090-3113. Line 3104 reads 'Finish by reporting the artifacts as links' — the model (.coyodex/project-map.json) and the markdown view (3105) — and 3106 'Then give the reader the URL to open the interactive map in a browser', with the concrete address at 3110."
+    },
+    {
+      "claim": "UC2 step 22: I4 → R1 — hand back the finished map and the checks it passed",
+      "grounded": true,
+      "evidence": "method.md:3013",
+      "skeptic": "behaviour-1",
+      "note": "No anchor on this claim, so I read the two places the build reports back. method.md:3013 says to quote finalize's verdict line when reporting the gates, in chat and in the commit message, and 3017 that `finalize --emit-gate-block` writes that block; method.md:3104-3106 is where the map's files and the viewer URL are handed over. Both halves of the step are prescribed."
+    },
+    {
+      "claim": "UC7 step 1: R1 → I4 — ask what the newer code did to the map",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:7",
+      "skeptic": "behaviour-1",
+      "note": "Read SKILL.md whole. Line 7 of the description names the trigger 'analyze the change impact of a diff against an existing map', and line 9 lists the literal trigger phrase 'change impact'. That is the crossing where a person asks what newer code did to the map."
+    },
+    {
+      "claim": "UC7 step 2: I4 → C134 [in] — point the coding agent at the method in the coyodex clone",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:27",
+      "skeptic": "behaviour-1",
+      "note": "Opened the anchor. Line 27, 'Read `__COYODEX_HOME__/method/dispatch.md` and follow it end to end', is the only pointer the skill carries, and lines 16-20 say the skill is deliberately a pointer into the clone. dispatch.md is then what routes to the change-impact doc (dispatch.md:167)."
+    },
+    {
+      "claim": "UC7 step 4: C130 → C131 — read the change-impact instructions and follow them",
+      "grounded": true,
+      "evidence": "method/dispatch.md:167",
+      "skeptic": "behaviour-1",
+      "note": "Opened dispatch.md 150-190. Line 166-168: 'Otherwise — the source differs ... **Analyze**: read `method/change-impact.md` and follow it. The diff it computes is `git diff <pin>` (pin -> working tree) plus any untracked files.' That is exactly the step."
+    },
+    {
+      "claim": "UC7 step 5: C131 → E1 [in] — read the commit the map is pinned to",
+      "grounded": true,
+      "evidence": "method/change-impact.md:41",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 27-46. Line 41 reads 'The **pin = the last accepted point.** Diff left endpoint = pin, right endpoint = now = the current working tree'. Line 29-30 add that the baseline always describes one past commit, its pin, which is stored in the map (E1) — the model's `commit` field, named at change-impact.md:125."
+    },
+    {
+      "claim": "UC7 step 6: C131 → I8 [in] — diff the pinned commit against the working tree, untracked files included",
+      "grounded": true,
+      "evidence": "method/change-impact.md:57",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 48-62. Line 57-60: 'The diff is `git diff <baseline-commit>` — pin to the current working tree, not commit-to-commit... A plain `git diff` omits untracked new files, so also list them (`git ls-files --others --exclude-standard`) and treat them as added.' Both halves of the step are on those lines."
+    },
+    {
+      "claim": "UC7 step 7: C131 → I8 [in] — read the changed code and classify each change as modified, added or deleted",
+      "grounded": true,
+      "evidence": "method/change-impact.md:63",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 63-66. Line 63-65: '**Per change.** Classify modified / added / deleted; ripple by following the changed element's relationships... Verify by reading the changed code'. The classification and the read of the changed code are both stated there."
+    },
+    {
+      "claim": "UC7 step 8: C131 → E1 [in] — follow the map's arrows out to every element the change reaches",
+      "grounded": true,
+      "evidence": "method/change-impact.md:64",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 63-66. Line 63-64 says to 'ripple by following the changed element's relationships (edge list) to downstream elements and Happy Path steps'; the edge list is the map's arrows, stored in the model (E1). Lines 54-56 add that the trace runs outward from the change rather than over every element."
+    },
+    {
+      "claim": "UC7 step 9: C131 → E46 [out] — write the report, carrying the exact new text of every element it touches",
+      "grounded": true,
+      "evidence": "method/change-impact.md:84",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 77-98. Lines 83-84: 'the report must be **patch-complete**: for every element it touches it carries the exact **was -> now** text, not just a description of impact', and the table at 86-92 spells out what must already be in the report per change kind."
+    },
+    {
+      "claim": "UC7 step 10: C131 → I6 [out] — leave the report on disk beside the map",
+      "grounded": true,
+      "evidence": "method/change-impact.md:13",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 8-25. The lifecycle table row at line 13 says step 2 Analyze writes `.coyodex/analysis-changes/<date>.md` (the report), 'no — written to disk, uncommitted', and 16-21 repeat that the report is a file from the moment it is generated. That folder is the same .coyodex/ the map lives in."
+    },
+    {
+      "claim": "UC7 step 11: I6 → R1 — name every part of the map the change touched, and what each should now say",
+      "grounded": true,
+      "evidence": "method/change-impact.md:106",
+      "skeptic": "behaviour-1",
+      "note": "No anchor on this claim, so I read the report's own structure. change-impact.md:106-107 defines section 4 as the 'Per-element annotated diff — was -> now, classification (modified/added/deleted), why, code link, confidence', and 83-84 require that text for every element touched. Line 13 puts the file in .coyodex/, which is what the reader opens."
+    },
+    {
+      "claim": "UC8 step 1: R1 → I4 — agree the report is right and ask to fold it into the map",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:8",
+      "skeptic": "behaviour-1",
+      "note": "Read SKILL.md whole. Line 8 of the description names the trigger 'or accept a change-impact report into the baseline', and line 9 lists the literal phrase 'accept the map'. That is the crossing where the person agrees the report is right and asks for it to be folded in."
+    },
+    {
+      "claim": "UC8 step 2: I4 → C134 [in] — point the coding agent at the method in the coyodex clone",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:27",
+      "skeptic": "behaviour-1",
+      "note": "Opened the anchor. Line 27 is the single pointer to `__COYODEX_HOME__/method/dispatch.md`, with lines 22-23 defining COYODEX_HOME as the clone. dispatch.md:170 is where the Accept branch then sends the agent."
+    },
+    {
+      "claim": "UC8 step 4: C130 → C131 — read the accept steps and follow them",
+      "grounded": true,
+      "evidence": "method/dispatch.md:170",
+      "skeptic": "behaviour-1",
+      "note": "Opened dispatch.md 150-190. Line 170 reads '2. **Accept** — when the user says the report looks right, read `method/change-impact.md` (Accept).' That is the step, word for word."
+    },
+    {
+      "claim": "UC8 step 5: C131 → E46 [in] — read back the new text the report already carries for every element it touches",
+      "grounded": true,
+      "evidence": "method/change-impact.md:80",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 77-98. Lines 79-81: 'Accept does no new inference and re-reads no code — it transcribes the report into the baseline, bumps the pin, and commits', and 94 adds that if accept finds itself re-reading code the report was incomplete. So accept reads back the report's own new text."
+    },
+    {
+      "claim": "UC8 step 6: C131 → C23 — apply each was-to-now block to the stored map",
+      "grounded": true,
+      "evidence": "method/change-impact.md:123",
+      "skeptic": "behaviour-1",
+      "note": "Opened change-impact.md 121-144. Line 123 is accept action 1: 'Apply the report's `was -> now` blocks to the MODEL, `.coyodex/project-map.json` (mechanical — surgical field/array edits; the report's was -> now text names the fields).' dispatch.md:177-178 states the same edit for a direct map change."
+    },
+    {
+      "claim": "UC8 step 7: C23 → E1 [out] — write the corrected rows back into the stored map",
+      "grounded": true,
+      "evidence": "tools/coyodex/fix.py:119",
+      "skeptic": "behaviour-1",
+      "note": "Opened fix.py 100-135. `_write` at 117-119 ends in `map_path.write_text(dump_preserving(m, present))`, the single write-back for every fix verb; 120-131 branch on whether the target was a fragment or the assembled map. So the corrected rows land in the stored map here."
+    },
+    {
+      "claim": "UC8 step 8: C131 → C27 — stamp this accept session and re-pin the map to the code commit",
+      "grounded": true,
+      "evidence": "method.md:3118",
+      "skeptic": "behaviour-1",
+      "note": "Opened the anchor: change-impact.md:125-129 covers only the re-pin half ('Bump its commit pin (the model's `commit` and `committed` fields) to the code commit it now describes'). I grepped change-impact.md for provenance/stamp/session and the stamp half is NOT in that file at all; it is prescribed at method.md:3118, 'bump the baseline pin, re-stamp provenance ... --mode accept ... which appends this session'. True, but the anchor covers half the step. Side note for the lead: method.md:3119 still spells that command as `tools/map_backup.py stamp` while ship and the rest of the method use `coyodex provenance stamp`."
+    }
+  ]
+}

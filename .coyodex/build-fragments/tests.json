@@ -1,0 +1,604 @@
+{
+  "tests_note": "The table was built by reading the two test suites, never by running them. No coverage numbers were measured.",
+  "tests": [
+    {
+      "targets": ["C4"],
+      "label": "Refusing to overwrite coyodex's own map",
+      "tested": "no",
+      "tests": [],
+      "gap": "Nothing exercises the refusal that protects the coyodex clone's own map. A build started in the wrong folder could overwrite it.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C20", "C24", "C21"],
+      "label": "Refusing to read coyodex's own map by mistake",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_method_contract.py:1600", "why": "Every map reader among the build commands passes through the refusal."},
+        {"file": "tests/test_method_contract.py:1626", "why": "The refusal prints one plain line, never a crash dump."},
+        {"file": "tests/test_method_contract.py:1651", "why": "Someone mapping coyodex itself can still switch the refusal off."}
+      ],
+      "gap": "Three commands are driven for real. The rest are covered only by a scan of the source text.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C83"],
+      "label": "Turning away a request that names another machine",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_serve.py:93", "why": "The name check accepts this machine and refuses every other name."}
+      ],
+      "gap": "No test sends a real request carrying a foreign name. A wiring slip in the map server would go unnoticed.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C83", "C85"],
+      "label": "Guard on requests that change the project list",
+      "tested": "no",
+      "tests": [],
+      "gap": "No test ever sends a change request to the map server. A web page you visit could edit your project list.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C85"],
+      "label": "Adding, dropping and reordering remembered projects",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_serve.py:145", "why": "The remembered project list adds, removes, de-duplicates and survives a restart."},
+        {"file": "tests/test_serve.py:197", "why": "A new order for the remembered projects is saved and read back."}
+      ],
+      "gap": "The three network addresses that drive those changes are never called. Only the storage under them is tested.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C83"],
+      "label": "Listing any folder on this machine",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_serve.py:258", "why": "Folder listing marks each folder that already holds a map."}
+      ],
+      "gap": "The address the browser calls is never exercised. Nothing checks the answer for a folder that does not exist.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C83"],
+      "label": "Health answer naming the pinned commit",
+      "tested": "no",
+      "tests": [],
+      "gap": "No test asks the map server whether it is answering. A break there shows only as a page that never loads.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C83"],
+      "label": "Serving one file's text at the pinned commit",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_impact_serve.py:89", "why": "One file's text is served at the pinned commit and at another commit."},
+        {"file": "tests/test_impact_serve.py:70", "why": "Ignored files, the version-control folder and paths that climb out are refused."},
+        {"file": "tests/test_serve.py:104", "why": "A path that climbs above the project folder is rejected."}
+      ],
+      "gap": "No test feeds a file big enough to hit the size limit. A limit that stopped working shows only as a stalled page.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C25"],
+      "label": "Closing sequence that ships a build",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_ship.py:101", "why": "The closing sequence lists its steps in the order the method sets."},
+        {"file": "tests/test_ship.py:168", "why": "A failing step stops the run and names the steps left undone."}
+      ],
+      "gap": "Every step runs against a stand-in, never the real command. A change inside one command can still break the sequence.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C21"],
+      "label": "One pre-commit verdict over every check",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_finalize.py:78", "why": "A clean map succeeds and writes both of its reports."},
+        {"file": "tests/test_finalize.py:86", "why": "A blocking problem fails the run and is recorded as blocking."},
+        {"file": "tests/test_finalize.py:97", "why": "A check that never ran can never be reported as clean."},
+        {"file": "tests/test_finalize.py:326", "why": "A faked count of challenged claims is caught by recomputing it."}
+      ],
+      "gap": "The suite feeds hand-built maps. No test runs the verdict over a map a real build just produced.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C22"],
+      "label": "Honesty record of what the doubters challenged",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_grounding.py:35", "why": "Verdict files are checked for shape, folded into votes and written back."},
+        {"file": "tests/test_element_checks.py:71", "why": "Each element gets the review outcome the votes actually support."}
+      ],
+      "gap": "Nothing checks the record against a full real build's verdict files.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C23"],
+      "label": "Editing map rows in one all-or-nothing write",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_fix.py:924", "why": "Two corrections landing on one row are both refused, so nothing half-lands."},
+        {"file": "tests/test_fix.py:394", "why": "A conflicting duplicate is reported and no change is written."},
+        {"file": "tests/test_fix.py:1110", "why": "An edit that would split a merged row is refused."}
+      ],
+      "gap": "No test interrupts a write midway. A crash during the write is not covered.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C4", "C5"],
+      "label": "Merging the build agents' fragments into one map",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_assembly_fixture.py:82", "why": "Merging the stored fragments gives the same bytes every time."},
+        {"file": "tests/test_assembly_fixture.py:141", "why": "Every stored fragment passes the self-check a build agent runs."},
+        {"file": "tests/test_assemble.py:27", "why": "Conflicts, duplicates and missing pieces across fragments are resolved or reported."},
+        {"file": "tests/test_lint_fragment.py:25", "why": "A fragment with invented ids or bad wording is refused before merging."}
+      ],
+      "gap": "The stored fragment set is one project's. A shape only another project produces would not be met.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C6", "C7", "C8", "C9", "C10"],
+      "label": "Checks a map must pass to be well formed",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_validate_model.py:116", "why": "Four hundred cases cover shape, story, rule, wiring and data checks."},
+        {"file": "tests/test_audit.py:1358", "why": "Places where a map contradicts itself are found and reported."},
+        {"file": "tests/test_trapdoor_tools.py:108", "why": "Deliberately broken maps are caught rather than passed."}
+      ],
+      "gap": "A check that is too loose still passes its own test. Only the trap maps push back on that.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C45"],
+      "label": "Survey of the code a build starts from",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_preindex.py:86", "why": "The survey walks the files, names the symbols and counts the sizes."},
+        {"file": "tests/test_granularity.py:60", "why": "Directory expectations and size bands come out at the right grain."},
+        {"file": "tests/test_source_walk_git.py:78", "why": "Only files version control tracks are walked."}
+      ],
+      "gap": "The survey reads fifteen languages. Tests feed only Python and JavaScript, so thirteen parsers are unproven.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C46"],
+      "label": "Leaving named code off the map",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_ignorefile.py:65", "why": "Ignored paths drop out of the survey, the file tree and the counts."}
+      ],
+      "gap": "No test runs a whole build with an ignore list and checks the printed counts.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C47", "C48"],
+      "label": "Assigning code to groups and balancing the diagrams",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_reconcile_build.py:51", "why": "Path rules expand into an explicit assignment for every file."},
+        {"file": "tests/test_balance.py:76", "why": "Diagrams holding too many boxes are named with a suggested split."}
+      ],
+      "gap": "Balance is judged on small hand-built maps. Nothing checks the advice on a map the size of a real project.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C1", "C2", "C3"],
+      "label": "Map data shape, shared words and schema",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_model.py:65", "why": "Every part of a map loads, saves and round-trips without loss."},
+        {"file": "tests/test_grammar_roles.py:15", "why": "The fixed word lists stay closed and agree with the model."},
+        {"file": "tests/test_json_schema.py:21", "why": "The published schema still matches the data shape it describes."},
+        {"file": "tests/test_records.py:30", "why": "Notes headings are read into the sections a map stores."}
+      ],
+      "gap": "The schema check compares shapes. Nothing validates a real map file against the schema itself.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C26"],
+      "label": "Briefing that tells a build what to read",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_scope.py:33", "why": "The list of files a build will read is produced before it starts."},
+        {"file": "tests/test_contract.py:42", "why": "Each helper agent's brief is printed complete and with the right ids."}
+      ],
+      "gap": "No test proves a brief a helper agent receives is one it can actually follow.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C27"],
+      "label": "Build log of sessions and slice timings",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_provenance.py:28", "why": "The session that built a map is stamped and listed back."},
+        {"file": "tests/test_timings.py:41", "why": "What each build slice took is recorded and sorted longest first."}
+      ],
+      "gap": "Nothing checks the log after a real build. Only hand-written entries are read back.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C49"],
+      "label": "Report of what a code change did to the map",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_impact.py:124", "why": "A change between two commits is matched to the map parts it touches."},
+        {"file": "tests/test_impact_ripple.py:96", "why": "A hit on one box spreads to the boxes and steps that depend on it."},
+        {"file": "tests/test_impact_ripple.py:236", "why": "The report also comes back correctly over the network."}
+      ],
+      "gap": "Repositories in the tests are tiny. A change touching hundreds of files is never tried.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C20"],
+      "label": "Every command surviving a realistic map",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_cli_sweep.py:237", "why": "A new command cannot ship without joining the sweep that runs it."},
+        {"file": "tests/test_cli_sweep.py:258", "why": "Every command runs against a real map without crashing."},
+        {"file": "tests/test_cli_contract.py:99", "why": "Every command refuses an option it does not know."},
+        {"file": "tests/test_cli_sweep.py:298", "why": "No command hangs waiting for a person to type."}
+      ],
+      "gap": "The map server is the one command left out, because starting it blocks. Its behaviour is checked elsewhere.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C51"],
+      "label": "Restarting the map server when the viewer changes",
+      "tested": "no",
+      "tests": [],
+      "gap": "Nothing tests the watcher that restarts the map server. A silent failure leaves developers looking at stale screens.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C50"],
+      "label": "Archiving a map with the conversation that built it",
+      "tested": "no",
+      "tests": [],
+      "gap": "Nothing tests the backup that moves a map and its chat aside. A bug there loses work with no warning.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C84"],
+      "label": "File tree marked by how far the map covers it",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_filetree.py:54", "why": "Folders and files come back marked by how much of the map reaches them."}
+      ],
+      "gap": "The tree is built from small fixtures. A repository with deep nesting is not tried.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C82", "C80", "C81"],
+      "label": "Turning a map into diagrams and cards",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_convert_and_views.py:86", "why": "Each view's diagram and text are produced from the stored map."},
+        {"file": "tests/test_grouping.py:1534", "why": "Boxes land in the right groups and lanes on every picture."},
+        {"file": "tests/test_gen_deployment.py:26", "why": "Processes, queues and the arrows between them are drawn correctly."},
+        {"file": "tests/test_features.py:91", "why": "Each feature's facts are gathered from the flows that reach it."}
+      ],
+      "gap": "The pictures are checked as data, not as drawings. A layout that overlaps still passes.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C60", "C65"],
+      "label": "Screen addresses and the trail back",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_viewer_browser.py:126", "why": "A reload comes back to the exact screen you were on."},
+        {"file": "tests/test_viewer_browser.py:140", "why": "Going back walks the real screens you visited."},
+        {"file": "tests/test_viewer_browser.py:173", "why": "A broken or stale link still draws a page with a trail."}
+      ],
+      "gap": "Eight kinds of address open a screen. Only the feature, actor and use case ones are opened in a browser.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C66"],
+      "label": "Feature, happy path and actor pages",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_viewer_browser.py:199", "why": "The happy path draws one line, broken where the person changes."},
+        {"file": "tests/test_viewer_browser.py:312", "why": "Feature boxes are equal height and the line bridges the gaps."},
+        {"file": "tests/test_viewer_browser.py:2550", "why": "An actor's board says where each use case happens."}
+      ],
+      "gap": "Coverage is measured on one stored map. A product with very many features is not drawn in a test.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C68"],
+      "label": "Interfaces and rules pages",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_viewer_browser.py:585", "why": "Each interface card says what kind of thing it is."},
+        {"file": "tests/test_viewer_browser.py:705", "why": "Every interface draws one plain line to the product."},
+        {"file": "tests/test_viewer_js.py:482", "why": "One shared section index builds every card page, the rules page included."}
+      ],
+      "gap": "Interfaces are checked in a real browser. The rules page is only read as text, so nothing proves it draws.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C67"],
+      "label": "Storage, tests and system pages",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_data_view.py:105", "why": "Each stored record's box carries where it lives and how it changes."},
+        {"file": "tests/test_convert_and_views.py:208", "why": "Coverage rows reach the browser with their targets resolved to names."},
+        {"file": "tests/test_viewer_js.py:2581", "why": "The system page is built as cards over one shared builder."}
+      ],
+      "gap": "No test opens the storage page or the coverage page in a browser. Both are checked only as data.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C69"],
+      "label": "Code column beside the map",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_viewer_browser.py:2324", "why": "Opening a use case opens the code column once, then leaves it alone."},
+        {"file": "tests/test_viewer_browser.py:2424", "why": "Opening the code column narrows the picture instead of breaking it."}
+      ],
+      "gap": "Nothing tests the code text itself, its colouring, or the side-by-side view of a change.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C71"],
+      "label": "Search across everything the map holds",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_viewer_js.py:952", "why": "A feature found by search lands on its own card."},
+        {"file": "tests/test_viewer_js.py:4553", "why": "A search result can be pinned in the picture it belongs to."}
+      ],
+      "gap": "Search is exercised outside a browser. Nothing proves the box opens, filters and closes on screen.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C72"],
+      "label": "Screen for exploring a change report",
+      "tested": "no",
+      "tests": [],
+      "gap": "Nothing tests the screen that shows what a code change did. Its data is checked, its screen is not.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C61", "C62", "C63", "C64"],
+      "label": "Cards, canvas and clicking a box",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_viewer_browser.py:2344", "why": "A selected box gets a card joined to it by a line."},
+        {"file": "tests/test_viewer_browser.py:2361", "why": "A box name opens the thing and its frame selects the box."},
+        {"file": "tests/test_viewer_browser.py:1015", "why": "The inspector answers with the record the map actually stores."},
+        {"file": "tests/test_viewer_browser.py:2100", "why": "A drawing squeezed to nothing recovers instead of staying broken."}
+      ],
+      "gap": "The written rule for what a card may show is never checked against the code that draws it.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C73"],
+      "label": "Viewer look in both light and dark",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_viewer_browser.py:372", "why": "A board that scrolls sideways shades the edge where more content sits."},
+        {"file": "tests/test_viewer_browser.py:1164", "why": "A pinned section bar casts its shadow only once it is stuck."}
+      ],
+      "gap": "Only a handful of styling rules are measured on screen. Colour and dark mode are never checked.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C70"],
+      "label": "Reader settings kept in the browser",
+      "tested": "no",
+      "tests": [],
+      "gap": "Eight saved settings decide how source links open and how panels sit. No test reads or writes any of them.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["UC6", "C69"],
+      "label": "Opening the code behind a box in your own editor",
+      "tested": "no",
+      "tests": [],
+      "gap": "Nothing tests the editor link, the code host link, or the check that refuses an unsafe link. A bad link opens whatever it names.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["UC1", "C134"],
+      "label": "Installing coyodex into a coding agent",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_skill_pointers.py:93", "why": "The install steps cover every skill the project offers."},
+        {"file": "tests/test_skill_pointers.py:48", "why": "Each skill points only at its own entry document."}
+      ],
+      "gap": "Only the install text is read. Nothing performs an install and then checks the command works.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["UC2"],
+      "label": "Building a project's first map, end to end",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_assembly_fixture.py:131", "why": "Every check reads a freshly merged map without crashing."},
+        {"file": "tests/test_cli_sweep.py:258", "why": "Each build command runs against a realistic map."}
+      ],
+      "gap": "No test drives a whole build from source code to a finished map. The agent's part cannot run in the suite.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["UC8", "UC9"],
+      "label": "Folding a change into the map and re-checking it",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_fix.py:50", "why": "Corrections land on the right rows or are refused with a reason."},
+        {"file": "tests/test_mapdiff.py:51", "why": "Two maps of the same work are compared row by row."}
+      ],
+      "gap": "Single edits are covered. Nothing walks the whole path from a change report to an accepted map.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C101", "C102"],
+      "label": "Scoring a map and comparing it with the accepted one",
+      "tested": "yes",
+      "tests": [
+        {"file": "eval/tests/test_profile.py:682", "why": "Every measurement taken from a map is computed and checked."},
+        {"file": "eval/tests/test_compare.py:60", "why": "The verdict follows the bands, and a worse hard check blocks."},
+        {"file": "eval/tests/test_profile_rules.py:82", "why": "Rule counts and rule sites are measured and banded."},
+        {"file": "eval/tests/test_model_pipeline.py:90", "why": "Scoring, comparing and judging run together on one map."}
+      ],
+      "gap": "The bands come from stored settings. No test proves today's bands are the right width.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C103", "C104", "C113"],
+      "label": "Judging a run and testing the doubters",
+      "tested": "yes",
+      "tests": [
+        {"file": "eval/tests/test_judge.py:328", "why": "Marks and votes fold into one report with a stated verdict."},
+        {"file": "eval/tests/test_run.py:108", "why": "A scoring run produces its files and files them in the right place."},
+        {"file": "eval/tests/test_mutate.py:30", "why": "Planted false claims are produced and the catches are counted."}
+      ],
+      "gap": "The judging inputs are hand-built. Nothing scores a run made by a real agent.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C105"],
+      "label": "Finding relations a rebuild dropped",
+      "tested": "yes",
+      "tests": [
+        {"file": "eval/tests/test_arrows.py:59", "why": "Arrows the old map had and the new one lost are listed."}
+      ],
+      "gap": "Loss is judged between two stored maps. Nothing checks the finding against the code itself.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C106"],
+      "label": "Moving a map aside before a rebuild",
+      "tested": "yes",
+      "tests": [
+        {"file": "eval/tests/test_archive.py:98", "why": "The whole map moves and nothing is deleted."},
+        {"file": "eval/tests/test_archive.py:168", "why": "A move that fails partway puts everything back."},
+        {"file": "eval/tests/test_archive.py:159", "why": "A rehearsal run writes nothing at all."}
+      ],
+      "gap": "Nothing tests two of these moves running at the same time on one project.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C107", "C108", "C109", "C110", "C111", "C112"],
+      "label": "Reading a build's chat and scoring how it went",
+      "tested": "yes",
+      "tests": [
+        {"file": "eval/tests/test_transcript.py:36", "why": "A build's chat log is read in slices, with its commands and results."},
+        {"file": "eval/tests/test_cost.py:92", "why": "Time and tokens for one build are counted and divided correctly."},
+        {"file": "eval/tests/test_process_scorecard.py:94", "why": "Two hundred and fifty cases score how the build agent behaved."},
+        {"file": "eval/tests/test_retro_precheck.py:64", "why": "A build that has not finished is reported instead of reviewed."},
+        {"file": "eval/tests/test_ledger.py:53", "why": "A review's finished rows are checked against the code history."},
+        {"file": "eval/tests/test_live_numbers.py:36", "why": "Numbers the tools state about a live map are re-measured."}
+      ],
+      "gap": "One small stored chat stands in for a real build. Shapes only a long build produces are untried.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C100"],
+      "label": "Every method-quality command surviving real inputs",
+      "tested": "yes",
+      "tests": [
+        {"file": "eval/tests/test_eval_cli_sweep.py:149", "why": "A new command cannot ship without joining the sweep that runs it."},
+        {"file": "eval/tests/test_eval_cli_sweep.py:161", "why": "Every command runs against a real map and a real chat log."},
+        {"file": "eval/tests/test_eval_cli_sweep.py:171", "why": "The sweep leaves the stored inputs exactly as it found them."}
+      ],
+      "gap": "The sweep only checks a command runs. What each command answers is checked elsewhere.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C120", "C121", "C122", "C123", "C124"],
+      "label": "Instructions saying what a map must contain",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_method_contract.py:444", "why": "The instructions stay consistent with the commands they tell an agent to run."},
+        {"file": "tests/test_prose.py:43", "why": "Long sentences, code names and dashes in map text are counted."}
+      ],
+      "gap": "The checks read structure and names. No test proves an agent following the instructions produces a good map.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C125", "C126", "C127", "C128", "C130", "C131"],
+      "label": "Instructions saying how a build runs",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_method_contract.py:444", "why": "Each phase names commands that exist and flags they accept."},
+        {"file": "tests/test_contract.py:42", "why": "Each helper agent's brief is printed with the right ids and rules."}
+      ],
+      "gap": "Only what the instructions say is checked. Whether a build actually follows them is measured by hand later.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C129", "C132", "C133"],
+      "label": "Model spec, worker briefs and regression checks",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_method_contract.py:444", "why": "The written model spec agrees with the data shape the tools load."},
+        {"file": "tests/test_contract.py:42", "why": "Every worker brief is complete and names only real ids."},
+        {"file": "tests/test_retro_checks.py:33", "why": "Each armed regression check is dated and can be settled."}
+      ],
+      "gap": "The regression checks are read for shape only. Nothing runs them against a finished build.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C134", "C135", "C136"],
+      "label": "Skill files that point an agent at the method",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_skill_pointers.py:48", "why": "Each skill names only its own entry document."},
+        {"file": "tests/test_skill_pointers.py:78", "why": "Each skill tells the agent to read that document first."},
+        {"file": "tests/test_skill_pointers.py:86", "why": "Each skill resolves its paths against the installed clone."}
+      ],
+      "gap": "The wording is checked. Nothing proves an agent given one of these files reaches the method.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["C137", "C138", "C139"],
+      "label": "Public documents and the record of why",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_method_rationale.py:128", "why": "Every reason entry parses and still points at a line that exists."},
+        {"file": "tests/test_method_rationale.py:233", "why": "The record names no private project."},
+        {"file": "tests/test_business_rules.py:1945", "why": "The public readme lists things in the order the tools use."}
+      ],
+      "gap": "Almost nothing checks the public readme or the contributor guide. Both can go stale without failing.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["E33", "E43", "E44"],
+      "label": "Coverage rows this table is made of",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_convert_and_views.py:208", "why": "Coverage rows reach the browser with their targets resolved to names."},
+        {"file": "tests/test_lint_fragment.py:25", "why": "A coverage row naming an invented id is refused."}
+      ],
+      "gap": "Nothing checks that a coverage row's cited files exist. A stale citation ships quietly.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["D96", "D161", "D97", "D98"],
+      "label": "Drawing libraries fetched from the internet",
+      "tested": "partial",
+      "tests": [
+        {"file": "tests/test_viewer_js.py:1377", "why": "Panning and zooming a picture is measured after the picture is painted."}
+      ],
+      "gap": "Four libraries load from two outside services. No test covers a machine with no internet, where the viewer goes blank.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": ["E31", "C22"],
+      "label": "Guarded places the map must not lose",
+      "tested": "yes",
+      "tests": [
+        {"file": "tests/test_access_surface.py:39", "why": "A file that lost its only access decision is named."},
+        {"file": "tests/test_finalize.py:424", "why": "The closing verdict states the guarded places it found."},
+        {"file": "tests/test_finalize.py:666", "why": "An access decision nobody voted on is called out."}
+      ],
+      "gap": "Loss is measured against a stored earlier map. A guard missing from both maps stays invisible.",
+      "confidence": "inferred"
+    }
+  ]
+}
