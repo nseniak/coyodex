@@ -863,3 +863,24 @@ def test_a_rules_shrink_beyond_the_band_is_drift() -> None:
     assert any(b.metric == "rules" and not b.within for b in r.bands)
     grown = compare(make_profile(rules=60), make_profile(rules=100), t)
     assert not any(b.metric == "rules" and not b.within for b in grown.bands), "growth never breaches"
+
+
+def test_enforcement_functions_are_compared_beside_the_lines() -> None:
+    """Two builds pick the same functions and different lines in them; the line number mixes that
+    jitter with real losses. The function number cannot."""
+    old = make_profile(auth_sites=["a.py:10", "b.py:5"], auth_functions=["a.py::guard", "b.py::check"])
+    new = make_profile(auth_sites=["a.py:14", "c.py:9"], auth_functions=["a.py::guard", "c.py::other"])
+    r = compare(old, new)
+    fn = [n for n in r.notes if "ENFORCEMENT FUNCTIONS" in n]
+    assert fn and "2 -> 2, 1 in both (33 % of the union)" in fn[0], r.notes
+    assert not any("ENFORCEMENT FUNCTIONS" in n
+                   for n in compare(make_profile(auth_sites=["a.py:1"]), new).notes), "None on one side: silent"
+
+
+def test_an_interface_kind_that_goes_to_zero_is_noted() -> None:
+    """`handoff` went 1 -> 0 on a rebuild with its `mailto:` still in the code and no count moved."""
+    old = make_profile(interface_kinds={"screen": 4, "handoff": 1})
+    new = make_profile(interface_kinds={"screen": 5})
+    r = compare(old, new)
+    assert any("handoff (1 -> 0)" in n for n in r.notes), r.notes
+    assert not any("interface kind(s)" in n for n in compare(old, old).notes)

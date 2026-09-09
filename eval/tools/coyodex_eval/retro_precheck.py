@@ -32,6 +32,8 @@ import sys
 import time
 from pathlib import Path
 
+from coyodex import provenance
+
 #: A transcript written within this many seconds is treated as LIVE. Generous on purpose: a build
 #: pauses for minutes at a fan-out barrier while its sub-agents work, and a false "finished" is the
 #: expensive direction — it produces a whole retrospective about the wrong run.
@@ -51,8 +53,8 @@ Checks, in order:
 
 
 def project_slug(repo: Path) -> str:
-    """`~/.claude/projects/<slug>` — the absolute path with every `/` replaced by `-`."""
-    return str(repo.resolve()).replace("/", "-")
+    """`~/.claude/projects/<slug>` — one spelling, owned by the tools (`.` becomes `-` too)."""
+    return provenance.project_slug(repo)
 
 
 def transcript_dir(repo: Path) -> Path:

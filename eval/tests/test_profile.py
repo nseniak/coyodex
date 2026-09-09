@@ -1108,3 +1108,30 @@ def test_a_step_naming_an_UNDEFINED_surface_is_not_counted_as_a_door():
     p = build_profile(json.dumps(doc))
     assert p.interface_doors == 0, "an undefined surface is a dangling reference, not a door"
     assert p.crossings_without_a_door == 1
+
+
+def test_the_profile_places_each_access_site_in_its_function_from_the_preindex_beside_the_map() -> None:
+    """The pre-index committed beside a map carries every definition's extent; with the map's PATH
+    the profile names the function holding each enforcement line, and a line with no extent keeps
+    its `path:line` spelling. Without the path the field is None, never an empty list."""
+    import json as _json
+    import tempfile
+    from pathlib import Path as _P
+    from coyodex.model import FORMAT
+    from coyodex_eval.profile import build_profile
+    doc = {"format": FORMAT, "title": "t", "goal": "g",
+           "components": [{"id": "C1", "name": "A", "purpose": "a", "source": "a.py:1"}],
+           "rules": [{"id": "BR1", "statement": "Only admins delete", "block": "BLK1", "access": True,
+                      "risk": "r", "sites": [{"where": "a.py:12", "why": "the check"},
+                                              {"where": "z.py:3", "why": "no extent here"}]}],
+           "interfaces": [{"id": "I1", "name": "Dashboard", "kind": "web-ui"},
+                          {"id": "I2", "name": "Mail", "kind": "handoff"}]}
+    with tempfile.TemporaryDirectory() as td:
+        mp = _P(td) / "project-map.json"
+        mp.write_text(_json.dumps(doc), encoding="utf-8")
+        (_P(td) / "preindex.json").write_text(_json.dumps(
+            {"symbols": {"extents": {"a.py": [[10, 20, "delete_team", "def"]]}}}), encoding="utf-8")
+        p = build_profile(mp.read_text(encoding="utf-8"), map_path=mp)
+        assert p.auth_functions == ["a.py::delete_team", "z.py:3"], p.auth_functions
+        assert p.interface_kinds and p.interface_kinds.get("handoff") == 1, p.interface_kinds
+        assert build_profile(mp.read_text(encoding="utf-8")).auth_functions is None

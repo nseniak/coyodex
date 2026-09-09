@@ -25,6 +25,8 @@ import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
+from coyodex.impact_git import load_map_extents
+from coyodex.impact_lib import enclosing_extent
 from coyodex import audit_model, balance_lib, grammar, validate_model
 from coyodex.model import FlowStep, ModelError, ProjectModel, load_model
 
@@ -273,6 +275,16 @@ class MapProfile:
     #: chose to cite are wording-independent, which is the same reason `auth_sites` beat
     #: `auth_surfaces` and `component_sources` beats `component_names`.
     test_files: list[str] | None = None
+    #: Each access-enforcement site as `path::function` (the innermost definition holding the
+    #: line, from the pre-index beside the map), or `path:line` when no extent holds it. The
+    #: line-level `auth_sites` agreement has read 22–28 % across seven rebuild pairs, and the
+    #: 2026-08-29 investigation found the builds choose the same PLACES and different LINES in
+    #: them; this is the number that separates that jitter from a function that lost its rule.
+    auth_functions: list[str] | None = None
+    #: How many interfaces of each canonical kind. A kind that goes to 0 between two builds is a
+    #: surface lost or re-kinded — `handoff` went 1 -> 0 on a rebuild with its `mailto:` still in
+    #: the code, and no count above moved.
+    interface_kinds: dict[str, int] | None = None
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
@@ -302,10 +314,10 @@ class MapProfile:
 def build_profile(map_text: str, repo_root: Path | None = None,
                   map_path: Path | None = None) -> MapProfile:
     """Reduce a project map to its deterministic `MapProfile`. `repo_root` (the mapped source) enables
-    the coverage signal; without it `coverage_flags` is None. `map_path` is kept for signature
-    compatibility (unused — view freshness is repo hygiene, not map quality)."""
-    del map_path
-    return build_profile_from_model(load_model(map_text), repo_root=repo_root)
+    the coverage signal; without it `coverage_flags` is None. `map_path` (the map file, with
+    `preindex.json` beside it) enables `auth_functions`; without it that field is None. It was an
+    unused compatibility parameter until 2026-09-09."""
+    return build_profile_from_model(load_model(map_text), repo_root=repo_root, map_path=map_path)
 
 
 def _all_step_lists(m: ProjectModel) -> list[list[FlowStep]]:
@@ -335,10 +347,13 @@ def _undoored_crossings(m: ProjectModel) -> int:
                if validate_model._is_undoored_crossing(st, roles, ids))
 
 
-def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> MapProfile:
+def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
+                             map_path: Path | None = None) -> MapProfile:
     """The MapProfile computed from a model — every signal through the model-side checks
     (`validate_model`, `audit_model`). The Phase-2 golden-equivalence run proved these score a map
-    exactly as the (now retired) markdown pipeline scored its v1 equivalent."""
+    exactly as the (now retired) markdown pipeline scored its v1 equivalent. `map_path` (the map
+    file, with `preindex.json` beside it) enables `auth_functions`: without the pre-index's
+    symbol table no line can be placed in its function, and the field is None."""
     iface_actors = validate_model.interface_actors(m)
     problems, warnings = validate_model.validate_model(m)  # no model_path: view-freshness is a
     # repo-hygiene signal, not map quality — it must not shift an eval profile
@@ -378,6 +393,20 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         + [site.where for r in m.rules if r.access for site in r.sites])
         if a and ":" in a})
     owners = validate_model.component_file_owners(m)   # built once; the derivation's shared index
+    auth_functions: list[str] | None = None
+    if map_path is not None:
+        extents = load_map_extents(map_path)
+        if extents:
+            placed: set[str] = set()
+            for site in auth_sites:
+                path, _, line = site.rpartition(":")
+                ext = enclosing_extent(extents.get(path, []), int(line)) if line.isdigit() else None
+                placed.add(f"{path}::{ext[2]}" if ext else site)
+            auth_functions = sorted(placed)
+    kinds: dict[str, int] = {}
+    for i in m.interfaces:
+        k = grammar.canonical_interface_kind(i.kind) or "unknown"
+        kinds[k] = kinds.get(k, 0) + 1
     n_components = len({c.id for c in m.components})
     n_edges = len(m.edges)
     root_fanout, max_fanout, in_band_pct, depth = balance_lib.fanout_summary(m)
@@ -501,6 +530,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
                           if m.rules else None),
         auth_surfaces=surfaces,
         auth_sites=auth_sites,
+        auth_functions=auth_functions,
+        interface_kinds=dict(sorted(kinds.items())),
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
         commit=m.commit or None,
@@ -595,7 +626,7 @@ def main(argv: list[str] | None = None) -> int:
         model, notes = load_model_tolerating_legacy(path.read_text(encoding="utf-8"))
         for note in notes:
             print(f"WARNING: {path}: {note}", file=sys.stderr)
-        profile = build_profile_from_model(model, repo_root=repo_root)
+        profile = build_profile_from_model(model, repo_root=repo_root, map_path=path)
     except ModelError as e:
         print(f"ERROR: {path}: {e}", file=sys.stderr)
         return 1

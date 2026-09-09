@@ -16,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -163,6 +164,28 @@ def dirty_paths(repo: Path) -> tuple[str, ...]:
     excludes = [f":(exclude){d}" for d in _OURS]
     status = _git_raw(repo, "status", "--porcelain", "--", ".", *excludes)
     return tuple(line[3:].strip() for line in (status or "").splitlines() if line.strip())
+
+
+def project_slug(repo: Path) -> str:
+    """`~/.claude/projects/<slug>`: the absolute path with every `/` and `.` replaced by `-`
+    (a worktree under `.claude/worktrees/` lands at `…-coyodex--claude-worktrees-…`)."""
+    return re.sub(r"[/.]", "-", str(repo.resolve()))
+
+
+def session_agent_transcripts(repo: Path, session_id: str | None = None,
+                              home: Path | None = None) -> Path | None:
+    """Where this harness keeps the running build's per-agent transcripts, or None.
+
+    `~/.claude/projects/<slug of repo>/<$CLAUDE_CODE_SESSION_ID>/subagents/`. Read only when the
+    session id is in the environment (or given) and the directory exists, so a run outside a build
+    behaves as before. `grounding lint` defaults `--agent-transcripts` to this: the flag was
+    advertised by the tool's own output and passed 0 times across four builds, which left the one
+    check that can see a fabricated citation unrun while the transcripts sat on disk."""
+    sid = session_id or os.environ.get(SESSION_ENV)
+    if not sid:
+        return None
+    d = (home or Path.home()) / ".claude" / "projects" / project_slug(repo) / sid / "subagents"
+    return d if d.is_dir() else None
 
 
 def tool_commit_here() -> str | None:

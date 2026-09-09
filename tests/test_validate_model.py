@@ -5798,3 +5798,21 @@ def test_a_machine_step_after_a_person_no_longer_hides_the_dead_end():
     m.flows[0].steps.append(FlowStep(n=2, src="I1", dst="R3", phrase="answer the assistant instead"))
     fired = validate_model_mod._walk_no_reply_warnings(m)
     assert fired and "R1" in fired[0]
+
+
+def test_validate_json_carries_the_sweep_worklist_as_rows():
+    """`audit --json` has a structured `worklist`; `validate --json` hid its sweep worklist inside one
+    clipped prose advisory. A build hand-parsed the text and then searched the JSON for a key that
+    did not exist. The rows are here now."""
+    from coyodex.validate_model import sweep_worklist
+    m = ProjectModel(title="T", goal="G")
+    m.use_cases = [UseCase(id="UC1", name="Delete")]
+    m.components = [Component(id="C1", name="A", purpose="a", source="src/a.py:1"),
+                    Component(id="C2", name="B", purpose="b", source="src/b.py:1")]
+    m.flows = [Flow(uc="UC1", title="Delete", steps=[
+        FlowStep(n=1, src="C1", dst="C2", phrase="refuse the delete unless the caller is an admin",
+                 where="src/a.py:4")])]
+    rows = sweep_worklist(m, None)
+    assert isinstance(rows, list)
+    for row in rows:
+        assert set(row) == {"container", "step", "where", "phrase"}, row

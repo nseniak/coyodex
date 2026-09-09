@@ -51,13 +51,14 @@ class RunResult:
 
 
 def run_eval(project: str, map_text: str, repo_root: Path | None = None, *,
+             map_path: Path | None = None,
              thresholds: Thresholds | None = None,
              baseline_profile: MapProfile | None = None, baseline_judge: JudgeReport | None = None,
              judge_report: JudgeReport | None = None, judge: Judge | None = None,
              rubric: str | None = None, n_judges: int = 3) -> RunResult:
     """Profile the map, attach a judge report (pre-computed `judge_report`, else built from an injected
     `judge`+`rubric`), and compare against the baseline if one is given. No baseline → verdict BASELINE."""
-    profile = build_profile(map_text, repo_root=repo_root)
+    profile = build_profile(map_text, repo_root=repo_root, map_path=map_path)
     jr = judge_report
     if jr is None and judge is not None and rubric is not None:
         jr = build_judge_report(map_text, repo_root or Path("."), rubric, judge, n_judges)
@@ -256,7 +257,7 @@ def run_cli(argv: list[str]) -> int:
 
     from coyodex.model import ModelError
     try:
-        result = run_eval(project, map_path.read_text(encoding="utf-8"), repo_root,
+        result = run_eval(project, map_path.read_text(encoding="utf-8"), repo_root, map_path=map_path,
                           thresholds=thresholds, baseline_profile=baseline_profile,
                           baseline_judge=baseline_judge, judge_report=judge_report)
     except ModelError as e:

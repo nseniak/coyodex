@@ -34,6 +34,7 @@ from pathlib import Path
 from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
 from coyodex.audit_model import ClaimTarget, l2_worklist_model, resolve_claim
+from coyodex.provenance import session_agent_transcripts
 from coyodex.model import ModelError, ProjectModel, load_model, resolve_map_path
 
 USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>] [--expect <batch,…>]
@@ -1533,6 +1534,12 @@ def main(argv: list[str] | None = None) -> int:
                       "run anchor-drift, apply-drift or grounding write yet: each consumes the "
                       "verdict set and would have to be redone.", file=sys.stderr)
                 return 1
+        if agent_dir is None:
+            found = session_agent_transcripts(Path.cwd())
+            if found is not None:
+                agent_dir = str(found)
+                print(f"agent transcripts: {found} (this session's, found without "
+                      f"--agent-transcripts)", file=sys.stderr)
         lint = lint_verdicts(verdicts, Path(agent_dir) if agent_dir else None)
         problems = lint.problems
         for n in lint.notes:

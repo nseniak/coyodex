@@ -206,3 +206,19 @@ def test_stamp_records_the_tool_commit_the_retro_needs():
         assert entry.tool_commit == tool_commit_here()
         assert isinstance(entry.tool_commit, str) and entry.tool_commit, "this package sits in a clone"
         assert Provenance.load(path).sessions[-1].tool_commit == entry.tool_commit
+
+
+def test_the_sessions_agent_transcripts_are_found_from_the_repo_path_and_the_session_id():
+    """`grounding lint --agent-transcripts` was advertised by the tool and passed 0 times across
+    four builds. The directory is derivable: the harness names it after the repo path (every `/`
+    and `.` a `-`) and the session id the environment carries."""
+    from coyodex.provenance import project_slug, session_agent_transcripts
+    assert project_slug(Path("/a/b.c/d")) == "-a-b-c-d"
+    with tempfile.TemporaryDirectory() as td:
+        home, repo = Path(td) / "home", Path(td) / "repo"
+        repo.mkdir()
+        assert session_agent_transcripts(repo, session_id="s1", home=home) is None
+        d = home / ".claude" / "projects" / project_slug(repo) / "s1" / "subagents"
+        d.mkdir(parents=True)
+        assert session_agent_transcripts(repo, session_id="s1", home=home) == d
+        assert session_agent_transcripts(repo, session_id="", home=home) is None

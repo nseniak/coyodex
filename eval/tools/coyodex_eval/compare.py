@@ -309,6 +309,7 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         notes.extend(_auth_site_notes(baseline, candidate))
     notes.extend(_reproducibility_notes(baseline, candidate))
     notes.extend(_source_root_notes(baseline, candidate))
+    notes.extend(_interface_kind_notes(baseline, candidate))
 
     if t.deployment_linkage_must_not_drop and not baseline.deployment_units:
         # Silence here is indistinguishable from "the gate passed". A baseline blessed before this
@@ -594,6 +595,24 @@ def _source_root_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]
             f"names only in `files` or ways in; read the map before deciding"]
 
 
+def _interface_kind_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
+    """Interface kinds the baseline had and the candidate has none of.
+
+    The only `handoff` surface of a map went 1 -> 0 on a rebuild while its `mailto:` sites stayed in
+    the code, and the use case that crossed it went with it — so the advisory that guards a walk's
+    reply could not fire, and no count moved. A kind at zero is a surface lost or re-kinded; the
+    map says which."""
+    if baseline.interface_kinds is None or candidate.interface_kinds is None:
+        return []
+    lost = [(k, n) for k, n in sorted(baseline.interface_kinds.items())
+            if n and not candidate.interface_kinds.get(k)]
+    if not lost:
+        return []
+    return [f"{len(lost)} interface kind(s) the baseline had and the candidate has none of: "
+            + ", ".join(f"{k} ({n} -> 0)" for k, n in lost)
+            + " — a surface lost or re-kinded; the code decides which"]
+
+
 def _reproducibility_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
     """How much of the baseline map SURVIVES a rebuild, name by name. Reported, never gated.
 
@@ -703,6 +722,18 @@ def _auth_site_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
     if gained:
         notes.append(f"{len(gained)} file(s) carry access enforcement only in the candidate — the "
                      f"baseline missed them, so neither map's surface is complete.")
+    # BY FUNCTION: the same sites with the line dropped and the enclosing definition kept. Two
+    # builds choose the same places and different lines in them (the 2026-08-29 finding), so
+    # the line number above mixes real losses with jitter inside one function. This number
+    # cannot: a function that lost its rule stays lost, a line that moved inside it agrees.
+    if baseline.auth_functions is not None and candidate.auth_functions is not None:
+        fb, fc = set(baseline.auth_functions), set(candidate.auth_functions)
+        if fb or fc:
+            fshared, funion = _overlap(fb, fc)
+            notes.append(f"auth ENFORCEMENT FUNCTIONS: {len(fb)} -> {len(fc)}, {fshared} in both "
+                         f"({100 * fshared // funion} % of the union) — the line agreement above "
+                         f"minus the jitter inside one function; the gap between the two "
+                         f"numbers is how much of the churn is placement.")
     return notes
 
 

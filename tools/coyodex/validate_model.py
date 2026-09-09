@@ -1601,6 +1601,15 @@ def sweep_debt(m: ProjectModel, extents: Extents | None = None) -> list[tuple[st
     return _sweep_debt_split(m, extents)[0]
 
 
+def sweep_worklist(m: ProjectModel, extents: Extents | None) -> list[dict[str, object]]:
+    """The sweep worklist as rows, for `--json`: the anchored flow steps that read like a decision
+    no rule claims. The advisory prints the same list clipped to ten and cut mid-phrase; a build
+    that needed the whole list hand-parsed the text, then searched the JSON for a key that did
+    not exist, silently."""
+    return [{"container": str(container), "step": st.n, "where": st.where, "phrase": st.phrase}
+            for container, st in _sweep_debt_split(m, extents)[0]]
+
+
 def _sweep_debt_split(m: ProjectModel,
                       extents: Extents | None = None) -> tuple[list[tuple[str, FlowStep]], list[str]]:
     """`(debt, silenced anchors)` — the worklist, and what a recorded line took out of it.
@@ -6652,6 +6661,8 @@ def _run(argv: list[str] | None = None) -> int:
                    # rebuilds needs to see the loose half move, which one number hides.
                    "entry_point_coverage": _entry_point_coverage_line(m) or None,
                    "checked": checked or None,
+                   # Structured, like `audit --json`'s `worklist`: the sweep rows a build acts on.
+                   "sweep_worklist": sweep_worklist(m, load_map_extents(path)),
                    "checked_counts": vstats}, sys.stdout, indent=2)
         sys.stdout.write("\n")
         return 1 if problems else 0
