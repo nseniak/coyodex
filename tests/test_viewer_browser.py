@@ -3525,48 +3525,52 @@ def _with_rules(m: Any) -> None:
         ], start=1)]
 
 
-def test_a_rule_wears_a_diamond_and_its_area_wears_two() -> None:
+def test_a_rule_wears_a_scale_and_its_area_a_scroll() -> None:
     """A business rule and a decision area were the only element kinds with nothing in the figure
     column: outside the mark vocabulary, so no glyph, and outside the colour table, so the neutral
     slate every unknown kind falls back to.
 
-    They are the third light-member / deep-container pair, on the shape a subsystem already makes out
-    of a component: the container is not designed separately, it is the member drawn TWICE with the
-    front one covering. So one diamond is a decision and two is an area of them, everywhere at once —
-    the cards, the page heroes, and the head of the section that holds them."""
+    Both marks are Lucide paths (ISC), vendored — the viewer loads no icon library. They are the one
+    pair here that is NOT "the member drawn twice": a scroll is not made of scales, so the colour is
+    what carries the family resemblance instead. That was raised against a doubled diamond that does
+    obey the rule, and chosen anyway.
+
+    Pinned: the two marks are DIFFERENT from each other, and each is the same mark wherever its kind
+    appears — a card, a page hero, the head of the section that holds it. A count of paths is not
+    pinned; that is the icon's business and would break on any redraw."""
     marks = ("() => [...document.querySelectorAll('#diagram .ibox-gly')]"
-             ".map((s) => ({stroke: s.getAttribute('stroke'), paths: s.querySelectorAll('path').length}))")
+             ".map((s) => ({stroke: s.getAttribute('stroke'),"
+             " d: [...s.querySelectorAll('path')].map((q) => q.getAttribute('d')).join('|')}))")
     with _served_map(_with_rules) as url, _page(url + "#v=rules") as page:
         _settle(page)
         seen = page.evaluate(marks)
         assert seen, "the decision areas draw no mark at all"
-        # Every card on this page is an AREA, so every mark is the doubled one.
-        assert all(m["paths"] == 2 for m in seen), f"an area's mark is two diamonds: {seen}"
+        area_d = {m["d"] for m in seen}
+        assert len(area_d) == 1, f"every card here is an area, so every mark is the same: {seen}"
         assert {m["stroke"] for m in seen} == {"#be123c"}, f"one colour, its own: {seen}"
-        blk = page.evaluate("() => (document.querySelector('#diagram .ecard, #diagram .ibox') || {})"
-                            ".getAttribute && 1")
-        assert blk, "the areas are drawn as the shared element card"
         assert not page.js_errors, page.js_errors
 
     with _served_map(_with_rules) as url, _page(url + "#v=rules&blk=BLK1") as page:
         _settle(page)
-        seen = page.evaluate("""() => ({
-            hero: (() => { const g = document.querySelector('#diagram .page-hero-glyph .ibox-gly');
-              return g ? g.querySelectorAll('path').length : 0; })(),
-            strip: (() => { const g = document.querySelector('#diagram .item-sec-title .ibox-gly');
-              return g ? g.querySelectorAll('path').length : 0; })(),
-            cards: [...document.querySelectorAll('#diagram .item-sec-body .ibox-gly')]
-              .map((s) => s.querySelectorAll('path').length),
-          })""")
-        assert seen["hero"] == 2, f"the area's own page leads with the doubled mark: {seen}"
-        assert seen["strip"] == 1, f"…and the section it holds is headed by the single one: {seen}"
-        assert seen["cards"] and all(n == 1 for n in seen["cards"]), \
-            f"every rule card in it wears one diamond: {seen}"
+        seen = page.evaluate("""() => {
+            const d = (el) => el ? [...el.querySelectorAll('path')]
+              .map((q) => q.getAttribute('d')).join('|') : '';
+            return {
+              hero: d(document.querySelector('#diagram .page-hero-glyph .ibox-gly')),
+              strip: d(document.querySelector('#diagram .item-sec-title .ibox-gly')),
+              cards: [...document.querySelectorAll('#diagram .item-sec-body .ibox-gly')].map(d),
+            }; }""")
+        assert seen["hero"] and seen["strip"] and seen["cards"], f"a mark is missing: {seen}"
+        # The AREA's own mark leads the page; the section under it is headed by the mark of what it
+        # HOLDS, which is the same mark every rule card in it wears.
+        assert seen["hero"] != seen["strip"], "the area and the rule must not share one mark"
+        assert set(seen["cards"]) == {seen["strip"]}, \
+            f"the section head and its rule cards wear one mark: {seen}"
         assert not page.js_errors, page.js_errors
 
     with _served_map(_with_rules) as url, _page(url + "#v=rule&br=BR1") as page:
         _settle(page)
-        n = page.evaluate("() => { const g = document.querySelector('#diagram .page-hero-glyph .ibox-gly');"
-                          " return g ? g.querySelectorAll('path').length : 0; }")
-        assert n == 1, f"a rule's own page leads with one diamond: {n}"
+        d = page.evaluate("""() => { const el = document.querySelector('#diagram .page-hero-glyph .ibox-gly');
+            return el ? [...el.querySelectorAll('path')].map((q) => q.getAttribute('d')).join('|') : ''; }""")
+        assert d, "a rule's own page leads with no mark"
         assert not page.js_errors, page.js_errors

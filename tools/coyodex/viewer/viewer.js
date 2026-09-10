@@ -859,6 +859,14 @@ function itemCogPath(cx, cy, ro, ri, teeth) {
 // one odd dot in three reads as an accent rather than as a meaning.
 const ITEM_FIGURE_D = '<circle cx="3.9" cy="3.5" r="1.7"/>'
   + '<path d="M3.9 5.4 V10.2 M1.6 7.3 H6.2 M2.1 14.4 L3.9 10.2 L5.7 14.4"/>';
+// A LUCIDE PATH, drawn in this hand. Lucide is a 24-unit box at stroke 2 and this family is 18 at
+// 1.4, so the group is scaled by 0.75 and given 1.4/0.75 back — which lands the stroke at 1.4 ON
+// SCREEN, the same weight as the cog and the card it sits beside. Scaling alone would have thinned
+// it to 1.05 and the mark would have read as a lighter object than its neighbours.
+function lucideMark(ds) {
+  return '<g transform="scale(0.75)" stroke-width="1.867">'
+    + ds.map((d) => `<path d="${d}"/>`).join('') + '</g>';
+}
 function itemMarkD(k, fill) {
   if (k === 'component') {
     return `<path d="${itemCogPath(9, 9, 7.4, 5.2, 6)}" stroke-linejoin="round"/>`
@@ -891,17 +899,26 @@ function itemMarkD(k, fill) {
     }
     return rows;
   }
-  // A DECISION, in the shape every flowchart already gives one. Nothing else in this hand is a
-  // diamond, so it cannot be read as a component's gear or a record's card — and it is the one
-  // candidate of five that survived being drawn at 18px AND doubled (a gate and a signpost both read
-  // as a flag that small; a pair of scales turned to specks; two funnels read as a paper plane).
-  if (k === 'rule') return '<path d="M9 2.6 L15.4 9 L9 15.4 L2.6 9 Z"/>';
-  // …and the AREA is that decision drawn twice, front one occluding — the same sentence a subsystem
-  // makes out of a component and a data area out of a record. The container is not designed
-  // separately; it is the member, twice.
+  // A WEIGHING, and the WRITTEN RULES it belongs to: Lucide's `scale` and `scroll` (ISC, the set the
+  // locate icon already comes from — see buildGlyph). Vendored rather than fetched: the viewer loads
+  // no icon library, and a handful of paths is not a dependency.
+  //
+  // THE SCALE IS THE DECISION ITSELF — a judgement that could have gone the other way, which is the
+  // sharp test a rule has to pass to be one ("could a product person have decided otherwise?"). A
+  // gavel was drawn first and read as a lollipop at 18px; the balance keeps its beam and its two
+  // pans at that size because the pans are closed shapes rather than thin strokes.
+  //
+  // THESE TWO BREAK THE CONTAINER RULE, deliberately and by the author's own call. Every other
+  // container here is its member drawn twice — a subsystem is two components, a data area two
+  // records — and a scroll is not made of scales, so a decision area is the one container in the map
+  // that does not say what it is made of. That was raised, measured against a doubled diamond that
+  // does obey the rule, and overruled: these two say RULE and RULES OF at a glance, and the pair
+  // rule is a consistency the author chose to spend.
+  if (k === 'rule') return lucideMark(['M12 3v18', 'm19 8 3 8a5 5 0 0 1-6 0zV7',
+    'M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1', 'm5 8 3 8a5 5 0 0 1-6 0zV7', 'M7 21h10']);
   if (k === 'block') {
-    return '<path d="M11.1 1.8 L16.2 6.9 L11.1 12 L6 6.9 Z"/>'
-      + `<path d="M6.7 6.6 L11.3 11.2 L6.7 15.8 L2.1 11.2 Z" style="fill:${fill}"/>`;
+    return lucideMark(['M19 17V5a2 2 0 0 0-2-2H4',
+      'M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3']);
   }
   if (k === 'subflow') {
     return '<path d="M3.4 12.6 L9 6.2 L14.6 11.4"/>'
