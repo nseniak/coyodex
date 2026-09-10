@@ -97,6 +97,15 @@ class MapProfile:
     external_entry_points: int | None = None   # effective activation (authored-if-valid, else kind)
     unclaimed_entry_points: int | None = None  # external EPs whose component no flow reaches;
     #                                            None when the map has no entry points or no flows
+    stepped_entry_points: int | None = None    # external EPs some flow step RUNS — a step anchored
+    #                                            within 3 lines of the way in's own `source`, named
+    #                                            or not. The way-in-grain evidence the component-
+    #                                            grain unclaimed count cannot see (one flow through
+    #                                            a component claims every way in it owns); same
+    #                                            None rule as unclaimed_entry_points. Report-only.
+    named_entry_points: int | None = None      # external EPs a use case NAMES (`entry_points`) —
+    #                                            the authored arm; None when the map has no entry
+    #                                            points or no use cases. Report-only.
     off_spine_ucs: int | None = None           # use cases with no HP position; None when HP empty
     unclaimed_self_entry_points: int | None = None  # SELF-activated EPs (crons, workers, consumers,
     #: The product's OUTSIDE EDGE (T2b). Optional so profiles written before it exists still load.
@@ -435,6 +444,9 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
     unclaimed_self = (len(validate_model.unclaimed_self_entry_points(m))
                       if m.entry_points and m.flows else None)
     counts = validate_model.completeness_counts(m)
+    stepped_eps = counts["entry_points_stepped"] if m.entry_points and m.flows else None
+    named_eps = (counts["entry_points_named_by_use_case"]
+                 if m.entry_points and m.use_cases else None)
     n_caps = len(m.capabilities) or None      # None on a map that has not adopted the grouping
     caps_untraced = counts["capabilities_untraced"] if m.capabilities else None
     ucs_untraced = counts["use_cases_untraced"] if m.use_cases else None
@@ -512,6 +524,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
         entry_points=len(m.entry_points),
         external_entry_points=n_external,
         unclaimed_entry_points=unclaimed,
+        stepped_entry_points=stepped_eps,
+        named_entry_points=named_eps,
         off_spine_ucs=off_spine,
         unclaimed_self_entry_points=unclaimed_self,
         capabilities=n_caps,
@@ -580,7 +594,9 @@ def _format(p: MapProfile) -> str:
         ("  completeness: n/a (profile predates the completeness fields)"
          if p.entry_points is None else
          f"  completeness: entry points {p.entry_points} ({p.external_entry_points} external, "
-         f"{'n/a' if p.unclaimed_entry_points is None else p.unclaimed_entry_points} unclaimed) "
+         f"{'n/a' if p.unclaimed_entry_points is None else p.unclaimed_entry_points} unclaimed, "
+         f"{'n/a' if p.named_entry_points is None else p.named_entry_points} named by a use case, "
+         f"{'n/a' if p.stepped_entry_points is None else p.stepped_entry_points} run by a step) "
          f"· off-spine UCs {'n/a' if p.off_spine_ucs is None else p.off_spine_ucs} "
          f"· entities in flows "
          f"{'n/a' if p.entities_in_flows is None else f'{p.entities_in_flows} ({p.entities_in_flows_pct}%)'} "

@@ -158,6 +158,50 @@ def test_entry_point_coverage_splits_the_two_arms_of_claiming():
     assert validate_model_mod._entry_point_coverage_line(ProjectModel(title="T", goal="G")) == ""
 
 
+def test_entry_point_coverage_counts_a_flow_step_at_the_way_ins_own_line():
+    """The third bucket. The traversal arm is component-grain, so one flow through a component
+    marks every way in it owns as covered — 87 of coyodex's own 97 the day this landed. A surface
+    step carries the way in's own `source` line (method.md), so a step anchored within 3 lines of a
+    way in is evidence a flow RUNS it: derived, at way-in grain, no new authored field. A number,
+    not an advisory — it is the ruler any rule about drawing steps at ways in is judged with."""
+    m = ProjectModel(title="T", goal="G")
+    m.components = [Component(id="C1", name="Doors", purpose="p", source="a.py:1")]
+    ep = lambda i, why, src: EntryPoint(id=f"EP{i}", kind="http-route", activation="external",
+                                        component="C1", trigger=why, source=src)
+    m.entry_points = [
+        ep(1, "named, and a step sits on its line", "a.py:10"),
+        ep(2, "run: a step 3 lines under its line", "a.py:20"),
+        ep(3, "loose: the nearest step is 4 lines away", "a.py:30"),
+        ep(4, "loose: same line number, other file", "b.py:40"),
+        ep(5, "run: the step sits inside a sub-flow", "a.py:50"),
+        ep(6, "named, no step anywhere near", "a.py:60"),
+    ]
+    m.use_cases = [UseCase(id="UC1", name="Do it", entry_points=["EP1", "EP6"])]
+    m.subflows = [SubFlow(id="SF1", name="Shared", steps=[
+        FlowStep(n=1, src="C1", dst="C1", phrase="shared", where="a.py:50")])]
+    m.flows = [Flow(uc="UC1", title="Do it", steps=[
+        FlowStep(n=1, src="C1", dst="C1", phrase="opens", where="a.py:10"),
+        FlowStep(n=2, src="C1", dst="C1", phrase="handles", where="a.py:23"),
+        FlowStep(n=3, src="C1", dst="C1", phrase="misses", where="a.py:34"),
+        FlowStep(n=4, src="C1", dst="C1", phrase="elsewhere", where="a.py:40"),
+        FlowStep(n=5, src="C1", dst="C1", subflow="SF1"),
+    ])]
+    assert validate_model_mod.step_anchored_entry_point_ids(m) == {"EP1", "EP2", "EP5"}
+    counts = validate_model_mod.completeness_counts(m)
+    assert counts["entry_points_named_by_use_case"] == 2
+    assert counts["entry_points_named_without_step"] == 1          # EP6
+    assert counts["entry_points_run_by_a_step"] == 2               # EP2, EP5
+    assert counts["entry_points_stepped"] == 3                     # + EP1, named AND stepped
+    assert counts["entry_points_covered_by_component_only"] == 2   # EP3, EP4
+    assert counts["entry_points_unclaimed_external"] == 0
+    line = validate_model_mod._entry_point_coverage_line(m)
+    assert "6 external way(s) in" in line and "2 named by a use case" in line
+    assert "2 run by a flow step at their own line" in line
+    assert "2 reached only through the component a walk touches" in line and "0 unclaimed" in line
+    # The tolerance is a parameter: at 0 only the exact-line step counts.
+    assert validate_model_mod.step_anchored_entry_point_ids(m, tolerance=0) == {"EP1", "EP5"}
+
+
 def test_bucket_non_seed_is_an_advisory_nudge_not_a_gate() -> None:
     m = make_valid_model()
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL", bucket="Datastores")]

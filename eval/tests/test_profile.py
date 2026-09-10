@@ -730,6 +730,27 @@ def test_unclaimed_entry_points_counts_raw_pre_escape() -> None:
     assert p.unclaimed_entry_points == 2, p
 
 
+def test_stepped_and_named_entry_points_read_the_way_in_grain() -> None:
+    # The unclaimed count is component-grain: one flow through C1 claims every way in C1 owns. Two
+    # report-only fields split that claim by evidence — a way in some flow step is anchored ON
+    # (within 3 lines of its `source`) is RUN; a way in a use case NAMES is the authored arm. Both
+    # raw, and both None when the signal is not computable (no entry points).
+    d = json.loads(make_counts_map())
+    d["flows"][0]["steps"][0]["where"] = "src/x.py:1"         # the UC1 step, anchored
+    d["entry_points"] = [
+        {"id": "EP1", "kind": "http", "trigger": "GET /orders", "source": "src/x.py:3",
+         "component": "C1", "activation": "external"},        # 2 lines from that step → run
+        {"id": "EP2", "kind": "http", "trigger": "GET /orders/{id}", "source": "src/x.py:9",
+         "component": "C1", "activation": "external"},        # C1 is in a flow, no step near
+    ]
+    d["use_cases"][0]["entry_points"] = ["EP2"]
+    p = build_profile(json.dumps(d))
+    assert p.external_entry_points == 2 and p.unclaimed_entry_points == 0, p
+    assert p.stepped_entry_points == 1 and p.named_entry_points == 1, p
+    p0 = build_profile(make_counts_map())
+    assert p0.stepped_entry_points is None and p0.named_entry_points is None, p0
+
+
 def test_off_spine_ucs_is_none_without_a_happy_path() -> None:
     d = json.loads(make_counts_map())
     d["happy_path"] = []
@@ -773,10 +794,12 @@ def test_old_baseline_without_completeness_fields_loads() -> None:
     p = build_profile(make_counts_map())
     d = json.loads(p.to_json())
     for k in ("entry_points", "external_entry_points", "unclaimed_entry_points", "off_spine_ucs",
-              "entities_in_flows", "entities_in_flows_pct"):
+              "entities_in_flows", "entities_in_flows_pct",
+              "stepped_entry_points", "named_entry_points"):
         d.pop(k)
     old = MapProfile.from_json(json.dumps(d))
     assert old.entry_points is None and old.unclaimed_entry_points is None
+    assert old.stepped_entry_points is None and old.named_entry_points is None
     assert old.external_entry_points is None and old.off_spine_ucs is None
     assert old.entities_in_flows is None and old.entities_in_flows_pct is None
 

@@ -2001,6 +2001,42 @@ def unclaimed_self_components(m: ProjectModel, silenced_out: list[str] | None = 
     return _group_unclaimed_by_component(m, unclaimed_self_entry_points(m), silenced_out)
 
 
+#: How far a flow step's anchor may sit from a way in's own line and still count as a step AT that
+#: way in. A way in's `source` is the route / decorator / command line; the step that runs it is
+#: often anchored on the handler a few lines under. Measured on the three live maps the day this
+#: landed: exact-line matches were 41 / 41 / 22 of 86 / 198 / 97 external ways in, within 3 lines
+#: 57 / 67 / 33 — and 10 lines already reaches sibling routes in a dense routes file.
+STEP_AT_WAY_IN_TOLERANCE = 3
+
+
+def step_anchored_entry_point_ids(m: ProjectModel,
+                                  tolerance: int = STEP_AT_WAY_IN_TOLERANCE) -> set[str]:
+    """Ids of the entry points some flow step actually RUNS: a step (sub-flows expanded) whose
+    `where` sits in the way in's own file, within `tolerance` lines of its `source`.
+
+    The one DERIVED signal at way-in grain. The trigger arm is authored (`use_cases[].entry_points`)
+    and the traversal arm is derived at COMPONENT grain, so one flow through a component marks every
+    way in it owns as covered — 87 of coyodex's own 97 the day this landed. The method already makes
+    a surface step carry the way in's own `source` line ("use the way in's own source line"), so the
+    evidence is in the flows and needs no new authored field. A number, never an advisory: see
+    `completeness_counts`."""
+    lines_by_path: dict[str, list[int]] = {}
+    for _uc, _container, st in anchored_flow_steps(m):
+        loc = parse_anchor(st.where or "")
+        if loc is not None and loc.lo is not None:
+            lines_by_path.setdefault(loc.path, []).append(loc.lo)
+    out: set[str] = set()
+    for ep in m.entry_points:
+        loc = parse_anchor(ep.source or "")
+        if not ep.id or loc is None or loc.lo is None:
+            continue
+        lo = loc.lo - tolerance
+        hi = (loc.hi if loc.hi is not None else loc.lo) + tolerance
+        if any(lo <= n <= hi for n in lines_by_path.get(loc.path, ())):
+            out.add(ep.id)
+    return out
+
+
 def completeness_counts(m: ProjectModel) -> dict[str, int]:
     """The completeness picture as NUMBERS rather than a wall of advisories.
 
@@ -2025,7 +2061,18 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
     of argus's 61 rows as missing a use case, which is why the derived arm carries the check). The
     cost of that coarseness was invisible: a component a story touches marks EVERY way in it owns
     as covered, including ones no walk goes near. Counting them says how much of the coverage is
-    real without adding an advisory to a check whose signal is already thin."""
+    real without adding an advisory to a check whose signal is already thin.
+
+    **`entry_points_run_by_a_step` splits that loose half by the evidence the flows already hold.**
+    A surface step carries the way in's own `source` line (method.md, "use the way in's own source
+    line"), so a step anchored within `STEP_AT_WAY_IN_TOLERANCE` lines of a way in says a flow RUNS
+    it — derived, at way-in grain, with no new authored field. Measured the day it landed, over the
+    three live maps' loose halves: argus 0 of 13, mcpolis 17 of 73, coyodex 25 of 87 had such a
+    step; the rest were covered by the component rule alone. `entry_points_stepped` is the same
+    evidence over EVERY external way in, named or not (57 / 86, 67 / 198, 33 / 97) — the ruler any
+    rule about drawing steps at ways in is judged with — and `entry_points_named_without_step` is
+    the authored arm with no step behind it (16 of 73, 64 of 112, 0 of 8). The four buckets of the
+    coverage line stay a partition: named, run, loose, unclaimed, plus the ownerless remainder."""
     traced = set(flow_endpoint_ids_by_uc(m))
     cap_of = {u.id: (u.capability or "").strip() for u in m.use_cases}
     labels = {c.id: (c.happy_path or "").strip().lower() for c in m.capabilities}
@@ -2036,14 +2083,20 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
     # own check) and is left out of both counts rather than silently swelling one.
     triggered = triggered_entry_point_ids(m)
     touched = flow_endpoint_ids(m)
+    stepped = step_anchored_entry_point_ids(m)
     comp_ids = {c.id for c in m.components}
     named = [ep for ep in ext if ep.id and ep.id in triggered]
-    loose = [ep for ep in ext
-             if (comp := ep.component.strip()) and comp in comp_ids and comp in touched
-             and not (ep.id and ep.id in triggered)]
+    reached = [ep for ep in ext
+               if (comp := ep.component.strip()) and comp in comp_ids and comp in touched
+               and not (ep.id and ep.id in triggered)]
+    run = [ep for ep in reached if ep.id in stepped]
+    loose = [ep for ep in reached if ep.id not in stepped]
     return {
         "entry_points_named_by_use_case": len(named),
+        "entry_points_named_without_step": len([ep for ep in named if ep.id not in stepped]),
+        "entry_points_run_by_a_step": len(run),
         "entry_points_covered_by_component_only": len(loose),
+        "entry_points_stepped": len([ep for ep in ext if ep.id and ep.id in stepped]),
         "use_cases": len(m.use_cases),
         "use_cases_traced": len([u for u in m.use_cases if u.id in traced]),
         "use_cases_untraced": len([u for u in m.use_cases if u.id not in traced]),
@@ -6540,7 +6593,10 @@ def _entry_point_coverage_line(m: ProjectModel) -> str:
     purpose; one reached only because some walk happens to touch its owning component is claimed by
     a rule that cannot tell a real door from a sibling row in the same file. Both count as covered,
     and until this line existed nothing said how the total split. On a live map the loose half was
-    the large half, and a reader had no way to know.
+    the large half, and a reader had no way to know. The third bucket, "run by a flow step at their
+    own line", is the loose half's evidence-backed part (`step_anchored_entry_point_ids`): the day
+    it landed it read 0 / 17 / 25 of the loose 13 / 73 / 87 on argus / mcpolis / coyodex, which is
+    how much of "covered" a reader could trust.
 
     Empty when the map has no externally activated way in — there is nothing to split."""
     c = completeness_counts(m)
@@ -6548,10 +6604,12 @@ def _entry_point_coverage_line(m: ProjectModel) -> str:
     if not total:
         return ""
     named = c["entry_points_named_by_use_case"]
+    run = c["entry_points_run_by_a_step"]
     loose = c["entry_points_covered_by_component_only"]
     unclaimed = c["entry_points_unclaimed_external"]
-    rest = total - named - loose - unclaimed
+    rest = total - named - run - loose - unclaimed
     line = (f"Entry-point coverage — {total} external way(s) in: {named} named by a use case, "
+            f"{run} run by a flow step at their own line, "
             f"{loose} reached only through the component a walk touches, {unclaimed} unclaimed")
     # The remainder is the rows with no owning component or a dangling one. Each has its own check;
     # naming the count here keeps the four numbers adding up, which is what makes the line readable.
