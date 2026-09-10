@@ -149,6 +149,14 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     that member selected and centred: its crossings lit, the rest dimmed, its card open. A cross arrow
     into a box that *contains* (or is contained by) the current one instead stands for that box: its
     card opens the box (drill in / zoom out), since one can't frame the other.
+  - **On the pair view itself**, each of the two frames is a neighbour you can open, and the way in is
+    its **name** — a plain click, underlined on hover, the same gesture a box's name offers everywhere
+    else. (⌥-click and double-click still work anywhere on the frame.) The pair view carries a header
+    naming the pair and a strip over the drawing counting the crossings; that count is the **whole**
+    pair, so it can be larger than the number on a member arrow's card, which counts only that
+    member's share.
+  - **No arrow draws a corner magnifier.** Every icon on a drawing is a box's; an arrow is opened by
+    clicking it and then its card's title, or by ⌥-click / double-click on the arrow itself.
   - Component nodes/arrows are clickable for details + `file:line`; the side panel
     shows the group you're on **plus its immediate children** (child groups annotated with how many
     leaves nest under them). **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or **⌥+←/→**, or by

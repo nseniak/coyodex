@@ -3016,6 +3016,13 @@ body.insp-on { cursor: crosshair; }
    whose name is the longest thing on any map. */
 #diagram .cyname { cursor: pointer; display: inline-block; }
 #diagram .cyname:hover { text-decoration: underline; text-decoration-color: #6366f1; }
+/* A FRAME'S NAME IS A DOOR TOO, on a pair page, where each of the two frames is a neighbour you can
+   open (bindFrameDrill). Mermaid draws a cluster's name as an SVG <g> wrapping a foreignObject, and
+   `text-decoration` does not cross that boundary into the HTML inside — the rule above computed
+   `underline` on the group and the reader saw nothing, so the door had no sign on it. The paragraph
+   Mermaid puts the words in is what has to carry it. */
+#diagram .cluster-label.cyname:hover p { text-decoration: underline; text-decoration-color: #6366f1; }
+#diagram.pointer-held .cluster-label.cyname:hover p { text-decoration: none; }
 
 /* ── THE ITEM BOX ────────────────────────────────────────────────────────────────────────────────
    One box for one thing, drawn wherever a thing is drawn. Everything below is the ONE place the box

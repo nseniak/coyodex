@@ -224,27 +224,30 @@ def test_flow_step_keeps_relationship_navigation_on_the_arrow() -> None:
 
 def test_flow_arrows_locate_all_backbone_relationships_in_structural_views() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
-    locate = js[js.index("function relationshipLocateTarget"):js.index("function decorateActionIcons")]
-    sequence = ""   # the sequence rendering was removed; the map is the one picture of a walk
     flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function syncEnvPicker")]
-    edge_action = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
 
-    assert "selCover: bundleAtoms(pairEdges)" in locate
-    assert "kind: 'subsystem'" in locate and "kind: 'edge'" in locate
-    assert "kind: 'domain'" in locate and "kind: 'domedge'" in locate
-    assert "kind: 'bridge'" in locate
-    assert "const direct = COMP_LOOKUP[srcId + '>' + dstId] || []" in locate
-    assert "direct.length" in locate
-    assert "relationshipLocateTarget(dstId, srcId)" in locate
-    assert "kind: 'locate'" in locate
-    assert "title: 'Locate in ' + tab" in locate
+    # LOCATE IS A BOX'S ACTION NOW, and only a box's. The pair that answered it for an ARROW —
+    # `relationshipLocateAction`, which built the action, and `relationshipLocateTarget` + `bundleAtoms`,
+    # which worked out which structural view drew that relationship — existed only to feed an arrow's
+    # icon, and arrows draw no icon at all. A locate an arrow cannot offer is not a locate.
+    locate_action = js[js.index("function locateActionFor(id) {"):
+                       js.index("\n}", js.index("function locateActionFor(id) {"))]
+    assert "kind: 'locate'" in locate_action
+    assert "title: 'Locate in ' + tab" in locate_action
+    assert "pendingCenter = t.selectId" in locate_action, "locate exists to point at one thing among many"
+    for gone in ("function relationshipLocateAction", "function relationshipLocateTarget", "function bundleAtoms"):
+        assert gone not in js, gone
     # …but NOT a walk arrow on the MAP. Selecting a step already opens its own code, so a drill there
     # could only repeat the click that got you here — and what it used to do instead was leave the story
     # for the aggregate arrow between the same two elements, in another view.
     assert "relationshipLocateAction(m[1], m[2])" not in flow_map
     assert "opts: {}," in flow_map
-    assert "const action = { kind: 'drill'" not in edge_action
-    assert "action || (onDrill ? { kind: 'drill'" in js
+    # AN ARROW DRAWS NO ICON AT ALL, and the machinery that drew one is gone with it: the pill builder,
+    # its label-anchored variant, the arrow-midpoint fallback anchor and the hover bridge between pill
+    # and label. It was the last place the icon survived after every box and every frame had let it go.
+    for gone in ("function bindEdgeActionIcon", "function addLabelActionIcon", "function placeLabelBridge",
+                 "function edgeMidpointAnchor", "EDGE_ICON_SEQ", "iconBridgeOverlay"):
+        assert gone not in js, gone
     assert "'edge:' + e.src + '>' + e.dst + ':' + m[3]" in js
 
 
@@ -252,7 +255,6 @@ def test_only_direct_diagram_clicks_pin_selection_action_icons() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     selection = js[js.index("function selApply"):js.index("// The full click-gesture handler")]
     sequence = ""   # the sequence rendering was removed; the map is the one picture of a walk
-    edge_action = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
     glow_edge = js[js.index("function glowEdge"):js.index("// EVERY ARROW IS DRAWN THE SAME")]
     hp_glow = js[js.index("function hpGlow"):js.index("// Glow a set of elements")]
     flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function syncEnvPicker")]
@@ -262,15 +264,16 @@ def test_only_direct_diagram_clicks_pin_selection_action_icons() -> None:
     assert "revealAction: !!revealAction" in selection
     assert "selToggle(scene, desc, true)" in selection
     assert "selReplace(scene, desc, true)" in selection
-    assert "function selRevealsAction" in selection
+    # `selRevealsAction` went with the arrow pill it answered for: an arrow has no icon to reveal, so
+    # `revealAction` now means only what a BOX and a Happy Path message do with it.
+    assert "function selRevealsAction" not in js
     assert "glowEdge(p, label, revealAction = true)" in glow_edge
-    assert "p._actionIcon._selected = !!revealAction" in glow_edge
+    assert "_actionIcon" not in glow_edge, "an arrow has no pill to pin or hide"
     assert "hpGlow(el, revealAction = true)" in hp_glow
     assert "el._actionIcon._selected = !!revealAction" in hp_glow
     assert "glowEdgeAt(arrow.path, arrow.label, reveal, stepNumEl(arrow.label, i))" in flow_map
     assert "flowPlay.showLocate" not in js
     assert "showLocate:" not in js
-    assert "const pinOnSelect" not in edge_action
 
 
 def test_node_use_cases_are_grouped_by_capability_without_a_serves_row() -> None:
@@ -341,7 +344,7 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "title: 'Locate in ' + tab" in locate_code
     assert "sel: 'node:' + t.selectId" in locate_code
     assert "pendingCenter = t.selectId" in locate_code
-    assert "if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s)) return;" in locate_code   # no icons at all on a walk, nor on a Data or a structure picture
+    assert "if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s) || (s && PAIR_PAGE[s.kind])) return;" in locate_code   # no icons on a walk, a Data or a structure picture, or a pair page
     # No icons on a walk at all — the box's NAME opens what it names. Off a walk, the icon is the
     # element's own primary action.
     assert "const action = primaryActionFor(id);" in locate_code
@@ -351,28 +354,23 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "ACTION_ICON_TIP_DELAY_MS = 250" in js
     assert "scheduleActionIconTip(actionLabel, ev)" in js
     assert "icon.setAttribute('aria-label', actionLabel)" in js
-    assert "createElementNS(SVGNS, 'title')" not in js[js.index("function addActionIcon"):js.index("function addLabelActionIcon")]
+    assert "createElementNS(SVGNS, 'title')" not in js[js.index("function addActionIcon"):js.index("function showIcon")]
 
 
 def test_all_action_icons_render_in_the_foreground_overlay() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
-    action = js[js.index("function addActionIcon"):js.index("function addLabelActionIcon")]
-    label = js[js.index("function addLabelActionIcon"):js.index("function showIcon")]
-    edge = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
+    action = js[js.index("function addActionIcon"):js.index("function showIcon")]
 
     assert "svg.appendChild(g)" in js[js.index("function ensureIconOverlay"):js.index("const ACTION_ICON_TIP_DELAY_MS")]
     assert "svg.querySelector(':scope > g')" not in js[js.index("function ensureIconOverlay"):js.index("const ACTION_ICON_TIP_DELAY_MS")]
     assert "iconOverlay.parentNode.appendChild(iconOverlay)" in js
     assert "const parent = iconOverlay || host || el" in action
     assert "const parent = host || iconOverlay || el" not in action
-    assert "const parent = iconOverlay || host" in label
-    assert "const bridgeParent = iconBridgeOverlay || parent" in label
-    assert "bridgeParent.appendChild(bridge)" in label
-    assert "host.insertBefore(bridge, label)" not in label
-    assert "pointToHostSpace(icon.parentNode, icon._anchor.x" in label
-    assert "b.setAttribute('height', String(10 * inv))" in label
-    assert "const parent = iconOverlay || host" in edge
-    assert "clientToLocal(parent, ev.clientX, ev.clientY)" in edge
+    # ONE ICON BUILDER IS LEFT, and it homes every icon in the overlay. The label-anchored pill and its
+    # hover bridge went with the arrow icons they were built for — they were the only kind that had to
+    # hang off a label instead of a box corner, and the only reason a second overlay layer existed.
+    assert "coyodex-icon-bridge-overlay" not in js
+    assert "function addLabelActionIcon" not in js and "function bindEdgeActionIcon" not in js
 
 
 def test_a_walk_has_one_rendering_and_it_is_the_map() -> None:
@@ -1224,13 +1222,27 @@ def test_a_page_that_draws_its_own_contents_does_not_also_list_them_in_a_card() 
                  "function showLibsFold(", "function showBucketFold("):
         assert kept in js, kept
     # The fold's sentence, in one place, and without the instruction the box's own sentence carries.
+    # It describes the DRAWING, so it is the strip's note now rather than the hero's — the hero carries
+    # the fold's NAME, which used to be nowhere on screen at all.
     fold = js[js.index("const FOLD_NARRATIVE = {"): js.index("};", js.index("const FOLD_NARRATIVE = {"))]
-    assert "libs:" in fold and "bucketfold:" in fold
+    assert "libs: () =>" in fold and "bucketfold: (s) =>" in fold
     assert "drill in" not in fold, "the reader is already inside"
     assert "Dependencies view" in fold, "the reader's word for the tab, not the code's `Context`"
+    # A library bucket is not an external system: one sentence for both bucket folds made `Frontend / UI`
+    # — reached through `Dependencies › Libraries ›` — announce itself as external systems.
+    assert "bucketFoldParent(s.bkid) === 'libs'" in fold, "each bucket fold says what it actually holds"
+    assert "Libraries with one job in common" in fold and "External systems grouped by purpose" in fold
+    head = js[js.index("function foldBoardHeadHtml(s) {"):
+              js.index("\n}", js.index("function foldBoardHeadHtml(s) {"))]
+    assert "itemSectionHeadHtml('What is folded here'" in head, "the one section-head builder"
+    assert "FOLD_NARRATIVE[s.kind](s)" in head, "the sentence is the strip's note"
+    assert "'dependency' : 'dependencies'" in head, "counted in the Dependencies tab's own noun"
     hero = js[js.index("function syncPageHero(s, chain, tv) {"):
               js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "FOLD_NARRATIVE[s && s.kind]" in hero
+    assert "pageHeroHtml({ name: stateTitle(s), desc: '', noDesc: false })" in hero, \
+        "the hero is the fold's name; the sentence went down to the strip"
+    assert "inHead = stageStripHtml(foldBoardHeadHtml(s));" in hero
 
 
 def test_an_arrow_page_opens_on_the_drawing_with_nothing_chosen_for_you() -> None:
@@ -1257,9 +1269,11 @@ def test_an_arrow_page_opens_on_the_drawing_with_nothing_chosen_for_you() -> Non
     keys = js[js.index("function selectionKeysFor(scene, s) {"):
               js.index("\n}", js.index("function selectionKeysFor(scene, s) {"))]
     assert "s.sels" in keys and "s.selCover" in keys, "history and locate still restore a selection"
-    loc = js[js.index("function relationshipLocateTarget(srcId, dstId) {"):
-             js.index("\nfunction ", js.index("function relationshipLocateTarget(srcId, dstId) {") + 10)]
-    assert "selCover: bundleAtoms(pairEdges)" in loc, "locate exists to point at one thing among many"
+    # NOTHING WRITES `selCover` ANY MORE. The one drill that carried it was an ARROW's locate icon, and
+    # arrows draw no icon at all now — so `relationshipLocateTarget` and `bundleAtoms`, which existed
+    # only to build that state, are gone. The READ above is kept, guarded: it is the resolve-after-render
+    # half, waiting for a future drill that stands for several arrows.
+    assert "function relationshipLocateTarget" not in js and "function bundleAtoms" not in js
     # The leaf is still CENTRED on a bridge drill — putting the reader in front of what they opened is
     # not the same as choosing something for them.
     bridge = js[js.index("function bindBridgeEdge("): js.index("\n}", js.index("function bindBridgeEdge("))]
@@ -2301,10 +2315,16 @@ def test_an_arrow_card_holds_three_calls_and_drills_for_the_rest() -> None:
     assert "class=\"xmore\" data-drill=" in fn
     for caller in ("function showContainerEdge(a, b, drawn) {",
                    "function showDomainContainerEdge(a, b, drawn) {",
-                   "function showBridgeEdge(drawn) {"):
+                   # The bridge card takes the arrow's own target, because it cannot always work one
+                   # out: on a subsystem's card neither drawn end IS the subsystem, so it found none
+                   # and drew a plain heading — and with the arrow's magnifier gone, that heading was
+                   # the door that was not there.
+                   "function showBridgeEdge(drawn, target) {"):
         assert caller in js, caller
         body = js[js.index(caller): js.index("\n}", js.index(caller))]
         assert "arrowCardHtml({" in body, caller
+    assert "drill: (target && target.kind) ? target :" in js, "the arrow's own page wins over any guess"
+    assert "showBridgeEdge(drawn, tgt)" in js, "…and the binder is what hands it over"
     assert "closest('[data-drill]')" in js, "the way to the rest is delegated, not wired per render"
 
 def test_a_deployment_arrow_has_a_page_like_every_other_arrow() -> None:
@@ -5438,7 +5458,7 @@ def test_a_pointer_that_did_not_move_is_not_hovering() -> None:
     # the three hovers read the gate, keep the denied enter, and drop it on a leave
     for fn, enter in (("function previewOnHover(scene, els, show, anchor) {", "whenPointerMoves(enter)"),
                       ("function bindHoverGlow(scene, el, id) {", "whenPointerMoves(on)"),
-                      ("function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected, action) {", "whenPointerMoves(on)")):
+                      ("function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn) {", "whenPointerMoves(on)")):
         body = js[js.index(fn): js.index("\n}", js.index(fn))]
         assert "if (!pointerFresh) { " + enter + "; return; }" in body, fn
         assert "forgetPointerMove(" in body, fn
@@ -5457,8 +5477,11 @@ def test_a_walk_draws_no_corner_icons() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     fn = js[js.index("function decorateActionIcons(scene, s) {"):
             js.index("\n}", js.index("function decorateActionIcons(scene, s) {"))]
-    assert "if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s)) return;" in fn
+    assert "if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s) || (s && PAIR_PAGE[s.kind])) return;" in fn
     assert "addActionIcon(el, sid, open)" not in js, "the shared sub-use case's box lost its icon too"
+    # The two picture tests each name ONE TAB's drawings, so the bridge — a subsystem crossed with a
+    # subdomain — was in neither and kept the icon after every page around it had let it go.
+    # `PAIR_PAGE` names every pair page, so a fourth kind cannot fall through the same gap.
 
 
 def test_hovering_a_box_shows_its_card_and_leaving_puts_back_what_was_there() -> None:
@@ -5585,7 +5608,8 @@ def test_a_drawn_element_s_page_heads_its_drawing_with_the_same_strip_a_walk_s_b
     sync = js[js.index("function syncPageHero(s, chain, tv) {"): js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "} else if (id) {" in sync and "const board = boardHeadHtml(s, id);" in sync
     assert "if (board) inHead = stageStripHtml(board);" in sync, "in the walk's head host, over the drawing's frame"
-    assert sync.count("stageStripHtml(") == 2, "landing and board: one wrapper, so the frame joins both the same way"
+    assert sync.count("stageStripHtml(") == 4, \
+        "landing, board, pair and fold: ONE wrapper, so the frame joins every head the same way"
 
 
 def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> None:

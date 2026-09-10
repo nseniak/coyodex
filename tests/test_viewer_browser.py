@@ -14,6 +14,7 @@ Conventions: top-level test functions, no classes/fixtures (helpers are `make_*`
 """
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import tempfile
@@ -3052,4 +3053,402 @@ def test_clicking_an_arrow_beside_its_number_still_points_the_line_at_the_number
         assert seen["byArrow"]["clickToNumber"] > 15, "the click was well clear of the number"
         assert seen["byArrow"]["line"] and seen["byArrow"]["onNumber"], \
             f"the line ends on the number whichever pixels of the arrow were clicked: {seen}"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_page_about_a_pair_names_the_pair_and_heads_its_drawing() -> None:
+    """A pair page's subject is a RELATION, not one element, so the hero's "which element is this page
+    about" lookup answered nothing for it — and all three of these drew NOTHING above the drawing: no
+    name, no path back, and no strip saying what the picture was of. The page's whole title lived in the
+    collapsed crumb row, which is there for a screen reader and is never on screen, so following an arrow
+    landed the reader on two framed groups with not a word saying which two.
+
+    Each now wears what every other drilled page wears: the path, a hero naming the pair (`Subsystem
+    pair: A -> B`), and the grey strip over the frame with the crossings counted. The count comes from
+    the SAME list the arrow's own card counts, so the card that offered the page and the page it opens
+    cannot report two different numbers."""
+    want = [
+        ("#v=edge&a=S1&b=S10", "Subsystem pair:", "What crosses between them", "connection", True),
+        ("#v=domedge&a=SD3&b=SD2", "Subdomain pair:", "What crosses between them", "relation", True),
+        # A bridge's two ends are different kinds, so neither mark stands for the page and it draws none.
+        ("#v=bridge&sid=S13&sd=SD3", "Subsystem and subdomain:", "What this subsystem reaches", "link", False),
+    ]
+    with _served() as url, _page(url) as page:
+        for hash_, kind, title, noun, glyph in want:
+            page.goto(url + hash_)
+            _settle(page)
+            seen = page.evaluate("""() => {
+                const q = (s) => document.querySelector(s);
+                const hero = q('#pagehero .page-hero');
+                const strip = q('#diaghead .item-sec-strip-stage');
+                return {
+                    kind: (q('#pagehero .page-hero-kind') || {}).textContent || '',
+                    name: (q('#pagehero .page-hero-subject') || {}).textContent || '',
+                    band: !!hero && hero.classList.contains('page-hero-band'),
+                    glyph: !!q('#pagehero .page-hero-glyph'),
+                    sentence: !!q('#pagehero .page-hero-purpose'),
+                    path: (q('.page-path') || {}).textContent || '',
+                    title: strip ? [...strip.querySelectorAll('.item-sec-title')[0].childNodes]
+                             .filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : '',
+                    count: strip ? (strip.querySelector('.item-sec-n') || {}).textContent || '' : '',
+                    note: strip ? ((strip.querySelector('.item-sec-note') || {}).textContent || '').length : 0,
+                    h1: (q('#crumb h1') || {}).textContent || '',
+                    drawn: !!q('#diagram svg'),
+                };
+            }""")
+            assert seen["kind"] == kind, (hash_, seen)
+            # The pair is named on screen, and it is the SAME words the document's own h1 carries.
+            assert " → " in seen["name"] and seen["name"] == seen["h1"], (hash_, seen)
+            assert seen["band"] and not seen["sentence"], \
+                f"the named hero's card, and no sentence — the map records none about a pair: {seen}"
+            assert seen["glyph"] is glyph, (hash_, seen)
+            assert seen["path"].strip(), f"the way back up is drawn: {seen}"
+            assert seen["title"] == title, (hash_, seen)
+            assert re.fullmatch(rf"\d+ {noun}s?", seen["count"]), \
+                f"the count keeps its noun: {seen}"
+            assert seen["note"] > 0 and seen["drawn"], (hash_, seen)
+        assert not page.js_errors, page.js_errors
+
+
+def test_the_pair_page_counts_the_whole_pair_however_the_reader_arrived() -> None:
+    """The page's strip counts THE PAIR. Its number is the unfiltered list, whichever arrow the reader
+    came through — which is the fact worth pinning, because a card can legitimately say something else.
+
+    An arrow drawn from a MEMBER filters the same list to the one component that was clicked, so the
+    card can read 4 where the page reads 11. Both are right about their own subject. The earlier test
+    here asserted the two are always EQUAL, and only ever checked the overview arrow, where both ends
+    are whole subsystems and nothing is filtered — so the one case that can disagree was the one case
+    it could not see."""
+    with _served() as url, _page(url + "#v=container") as page:
+        _settle(page)
+        seen = page.evaluate("""async () => {
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            const strip = () => (document.querySelector('#diaghead .item-sec-n') || {}).textContent || '';
+            const card = () => (document.querySelector('#panel .xcount') || {}).textContent || '';
+            const out = {};
+            // The pair's own page: the number every route to it must show.
+            location.hash = '#v=edge&a=S1&b=S3';
+            await sleep(900);
+            out.page = strip();
+            // Reached through the OVERVIEW arrow, where both ends are whole subsystems: nothing is
+            // filtered, so the card agrees.
+            location.hash = '#v=container&sel=sedge%3AS1%3ES3';
+            await sleep(900);
+            out.wholeArrowCard = card();
+            // …and reached through a MEMBER's arrow on a subsystem's own page, which filters.
+            location.hash = '#v=subsystem&sid=S1';
+            await sleep(900);
+            const hit = [...document.querySelectorAll('#diagram .cy-edgehit')][0];
+            if (hit) {
+              const r = hit.getBoundingClientRect();
+              for (const t of ['mousedown', 'click'])
+                hit.dispatchEvent(new MouseEvent(t, {bubbles: true, detail: 1,
+                  clientX: (r.left + r.right) / 2, clientY: (r.top + r.bottom) / 2}));
+              await sleep(700);
+              out.memberArrowCard = card();
+            }
+            return out;
+        }""")
+        assert re.fullmatch(r"\d+ connections?", seen["page"]), seen
+        assert seen["wholeArrowCard"] == seen["page"], \
+            f"an arrow between two whole subsystems filters nothing, so its card agrees: {seen}"
+        # A member arrow's card is a SUBSET of the pair — never larger than the page's own count.
+        if seen.get("memberArrowCard"):
+            n = lambda s: int(s.split(" ")[0])
+            assert n(seen["memberArrowCard"]) <= n(seen["page"]), \
+                f"a member's card counts its own share of the pair, never more: {seen}"
+        assert not page.js_errors, page.js_errors
+
+
+#: What a FOLD PAGE's head says — read once, by both fold tests, so they cannot drift into
+#: checking two different things about one screen.
+_FOLD_HEAD_JS = """() => {
+    const q = (s) => document.querySelector(s);
+    const strip = q('#diaghead .item-sec-strip-stage');
+    return {
+        name: (q('#pagehero .page-hero-subject') || {}).textContent || '',
+        heroSentence: !!q('#pagehero .page-hero-purpose'),
+        h1: (q('#crumb h1') || {}).textContent || '',
+        title: strip ? [...strip.querySelector('.item-sec-title').childNodes]
+                 .filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : '',
+        count: strip ? (strip.querySelector('.item-sec-n') || {}).textContent || '' : '',
+        note: strip ? (strip.querySelector('.item-sec-note') || {}).textContent || '' : '',
+        drawn: !!q('#diagram svg'),
+    };
+}"""
+
+
+def _with_external_bucket(m: Any) -> None:
+    """Five external systems sharing one purpose, which is what collapses a bucket into a count box —
+    the committed fixture has no bucket fold at all, and so has neither live map."""
+    m["deps"] = list(m["deps"]) + [
+        {"id": f"D9{i}", "name": f"Partner API {i}", "kind": "service", "type": "REST API",
+         "used_for": "One of the partner systems this test needs a bucket of",
+         "bucket": "Partner systems", "where_configured": "", "confidence": "inferred",
+         "deployment_linked": False}
+        for i in range(5)]
+
+
+def test_a_folded_group_is_named_and_its_drawing_headed() -> None:
+    """The same mistake one page over: a hero built with no `name` has no visible title at all, because
+    the crumb row that used to carry it is collapsed. A fold page opened on a bare sentence — nothing
+    said WHICH fold you had drilled into — and the picture under it wore a bare frame.
+
+    The two blocks are split the way every other drawn page splits them: the hero is the fold's name,
+    and the sentence (which describes the DRAWING) is the strip's note, with the fold's own count."""
+    with _served() as url, _page(url + "#v=libs") as page:
+        _settle(page)
+        seen = page.evaluate(_FOLD_HEAD_JS)
+        assert seen["name"] == "Libraries" == seen["h1"], seen
+        assert not seen["heroSentence"], f"the sentence is the strip's now, not the hero's: {seen}"
+        assert seen["title"] == "What is folded here", seen
+        assert re.fullmatch(r"\d+ dependenc(y|ies)", seen["count"]), seen
+        assert seen["note"].startswith("Frameworks and libraries linked into the process,"), seen
+        assert "drill in" not in seen["note"], "the reader is already inside"
+        assert seen["drawn"], seen
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_bucket_fold_says_what_it_actually_holds() -> None:
+    """One sentence served BOTH bucket folds, so a library bucket announced itself as external systems:
+    on the live map `Frontend / UI` — React, Vite, TanStack Query, reached through
+    `Dependencies > Libraries >` — contradicted its own trail two lines above it. Each bucket reads the
+    fold it sits in now. Neither live map has an external bucket, so this one is built."""
+    with _served_map(_with_external_bucket) as url:
+        buckets = json.loads(urlopen(url + "api/view").read().decode())["foldedBuckets"]
+        external = [b for b in buckets if b.get("parent") != "libs"]
+        assert external, f"the mutation did not fold an external bucket: {[b['id'] for b in buckets]}"
+        b = external[0]
+        with _page(url + "#v=bucketfold&bkid=" + b["id"]) as page:
+            _settle(page)
+            seen = page.evaluate(_FOLD_HEAD_JS)
+            assert seen["name"] == b["name"] == seen["h1"], seen
+            assert seen["title"] == "What is folded here", seen
+            assert seen["count"] == f"{len(b['members'])} dependencies", seen
+            assert seen["note"].startswith("External systems grouped by purpose,"), seen
+            assert not page.js_errors, page.js_errors
+
+
+def _with_deployment_arrow(m: Any) -> None:
+    """Put the component that reaches the store INTO a process, which is what draws a coupling-point
+    arrow. The committed fixture places no component in any process, so it draws no arrow at all."""
+    store = next(e for e in m["edges"]
+                 if any(d["id"] == e["dst"] and d["kind"] == "datastore" for d in m["deps"]))
+    for c in m["components"]:
+        if c["id"] == store["src"]:
+            c["runs_in"] = [m["deployment"][0]["unit"]]
+
+
+def test_a_deployment_arrow_page_names_its_two_ends() -> None:
+    """The same missing `name`, on the one arrow page that is a list instead of a drawing: it opened on a
+    pill and a count with nothing saying which two ends the arrow joins. It gets no strip, having no
+    picture to head."""
+    with _served_map(_with_deployment_arrow) as url:
+        view = json.loads(urlopen(url + "api/view").read().decode())
+        pairs = list(view.get("deploymentEdges") or {}) + list(view.get("deploymentInfraEdges") or {})
+        assert pairs, "the mutation did not draw a Deployment arrow"
+        a, b = pairs[0].split(">")
+        with _page(url + f"#v=depedge&a={a}&b={b}") as page:
+            _settle(page)
+            seen = page.evaluate("""() => ({
+                name: (document.querySelector('#diagram .page-hero-subject') || {}).textContent || '',
+                h1: (document.querySelector('#crumb h1') || {}).textContent || '',
+                pill: (document.querySelector('#diagram .ecard-pill') || {}).textContent || '',
+                meta: (document.querySelector('#diagram .page-hero-meta') || {}).textContent || '',
+                strip: !!document.querySelector('#diaghead .item-sec-strip-stage'),
+            })""")
+            assert " \u2192 " in seen["name"] and seen["name"] == seen["h1"], seen
+            assert seen["pill"] and seen["meta"], f"the kind of link and how many, as before: {seen}"
+            assert not seen["strip"], "a list page has no drawing to head"
+            assert not page.js_errors, page.js_errors
+
+
+def test_a_pair_page_offers_its_frames_by_name_not_by_a_floating_magnifier() -> None:
+    """Every box on a walk, a Data picture and a Structure picture had already lost its corner
+    magnifier — "the icon was the older way of saying so, a control floating in the corner of a box, in
+    a language no other screen speaks". The three pair pages kept theirs: two came from the frames
+    (bindFrameDrill added one per frame), and the bridge's boxes kept one too, because the two
+    picture-family tests each name ONE TAB's drawings and a subsystem crossed with a subdomain is in
+    neither. So a reader arriving from a subsystem's own card — which draws no such icon — met a
+    gesture that page had dropped.
+
+    A frame's NAME is the door now, underlined on hover, exactly as a box's name is everywhere else."""
+    pages = ["#v=edge&a=S1&b=S10", "#v=domedge&a=SD3&b=SD2", "#v=bridge&sid=S13&sd=SD3"]
+    with _served() as url, _page(url) as page:
+        for hash_ in pages:
+            page.goto(url + hash_)
+            _settle(page)
+            seen = page.evaluate("""() => ({
+                icons: document.querySelectorAll('#diagram .action-icon').length,
+                frames: document.querySelectorAll('#diagram g.cluster').length,
+                doors: document.querySelectorAll('#diagram g.cluster .cluster-label.cyname').length,
+            })""")
+            assert seen["icons"] == 0, f"no floating control on a pair page: {hash_} {seen}"
+            assert seen["frames"] and seen["doors"] == seen["frames"], \
+                f"every frame offers itself by name: {hash_} {seen}"
+        # …and the name is a door that says so, and opens what it names.
+        page.goto(url + "#v=edge&a=S1&b=S10")
+        _settle(page)
+        lab = page.locator("#diagram g.cluster .cluster-label").first
+        deco = ("() => getComputedStyle(document.querySelector('#diagram g.cluster .cluster-label p'))"
+                ".textDecorationLine")
+        assert page.evaluate(deco) == "none", "resting, a name is plain"
+        lab.hover()
+        page.wait_for_timeout(250)
+        # The underline has to reach the HTML Mermaid puts inside the label's foreignObject: set on the
+        # SVG group alone it computes and shows nothing, which is a door with no sign on it.
+        assert page.evaluate(deco) == "underline", "hovered, it says it is a door"
+        lab.click()
+        _settle(page)
+        assert page.evaluate("() => location.hash") in ("#v=subsystem&sid=S1", "#v=subsystem&sid=S10"), \
+            "a plain click on the name opens that subsystem"
+        assert not page.js_errors, page.js_errors
+
+
+def test_no_arrow_draws_a_magnifier_and_every_drillable_one_keeps_a_door() -> None:
+    """The arrow was the LAST place the corner magnifier survived, after every box and every frame had
+    let it go, so one drawing taught two languages at once: open a box by its name, open an arrow by a
+    control that appears at the pointer. It is gone from every arrow.
+
+    THE DOOR HAD TO SURVIVE IT, and on one arrow it did not: a bridge arrow drawn on a subsystem's own
+    card runs from a member COMPONENT to a subdomain frame, so the card — which re-derived its own
+    target from the two drawn ends — found no subsystem, drew a plain heading, and left the magnifier
+    as the arrow's only visible way in. The binder already knew the page; it hands it over now.
+
+    So this walks EVERY drillable arrow the map draws and demands two things at once: no magnifier
+    anywhere, and a door in every one of their cards."""
+    views = ["#v=container", "#v=subsystem&sid=S1", "#v=subsystem&sid=S2", "#v=edge&a=S1&b=S10",
+             "#v=domain", "#v=domsub&sd=SD1", "#v=bridge&sid=S13&sd=SD3", "#v=deployment"]
+    sweep = """() => new Promise(async (resolve) => {
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        const seen = new Set(); const out = [];
+        for (const h of [...document.querySelectorAll('#diagram .cy-edgehit.drill')]) {
+          const r = h.getBoundingClientRect();
+          for (const t of ['mousedown', 'click'])
+            h.dispatchEvent(new MouseEvent(t, {bubbles: true, detail: 1,
+              clientX: (r.left + r.right) / 2, clientY: (r.top + r.bottom) / 2}));
+          await sleep(200);
+          const title = (document.querySelector('#panel .pane-title h2') || {}).textContent || '';
+          if (!title || seen.has(title)) continue;
+          seen.add(title);
+          out.push({title: title.slice(0, 60),
+                    door: !!document.querySelector('#panel .pane-title-link')
+                       || !!document.querySelector('#panel .xmore')});
+        }
+        resolve(out);
+      })"""
+    with _served() as url, _page(url) as page:
+        arrows = 0
+        for hash_ in views:
+            page.goto(url + hash_)
+            _settle(page)
+            # Every icon still on the page is anchored to a BOX corner; none belongs to an arrow.
+            on_arrow = page.evaluate("""() => {
+                const boxes = [...document.querySelectorAll('#diagram g.node')];
+                return [...document.querySelectorAll('#diagram .action-icon')].filter((i) => {
+                  const r = i.getBoundingClientRect(), cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+                  return !boxes.some((b) => { const q = b.getBoundingClientRect();
+                    return Math.hypot(q.left - cx, q.top - cy) < 22; });
+                }).length; }""")
+            assert on_arrow == 0, f"an arrow still draws a magnifier on {hash_}"
+            rows = page.evaluate(sweep)
+            arrows += len(rows)
+            for r in rows:
+                assert r["door"], f"a drillable arrow with no door in its card, on {hash_}: {r}"
+        assert arrows > 0, "the sweep found no drillable arrow to check at all"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_bridge_arrow_opens_the_same_page_by_gesture_and_by_its_card() -> None:
+    """Three ways in, one destination — pinned together, because the card's target used to be worked out
+    separately from the arrow's and the two could disagree without anything saying so."""
+    click = """(alt) => {
+        const h = [...document.querySelectorAll('#diagram .cy-edgehit.drill')][0];
+        const r = h.getBoundingClientRect();
+        for (const t of ['mousedown', 'click'])
+          h.dispatchEvent(new MouseEvent(t, Object.assign({bubbles: true,
+            clientX: (r.left + r.right) / 2, clientY: (r.top + r.bottom) / 2},
+            alt ? {altKey: true} : {detail: 1})));
+      }"""
+    # S13's card draws exactly one drillable arrow, and it is the shape this test is about: a member
+    # COMPONENT to a subdomain frame, where neither drawn end is the subsystem the page opens.
+    with _served() as url, _page(url + "#v=subsystem&sid=S13") as page:
+        _settle(page)
+        assert page.evaluate("() => document.querySelectorAll('#diagram .cy-edgehit.drill').length") == 1
+        page.evaluate(click, True)
+        _settle(page)
+        by_gesture = page.evaluate("() => location.hash")
+        assert by_gesture.startswith("#v=bridge"), by_gesture
+
+        page.goto(url + "#v=subsystem&sid=S13")
+        _settle(page)
+        page.evaluate(click, False)
+        page.wait_for_timeout(400)
+        link = page.locator("#panel .pane-title-link")
+        assert link.count() == 1, "the arrow's card names its door"
+        link.click()
+        _settle(page)
+        assert page.evaluate("() => location.hash") == by_gesture, \
+            "the card's title opens exactly where the drill gesture goes"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_folds_card_and_its_page_say_the_same_sentence() -> None:
+    """The sentence was written twice and the two copies drifted. The PAGE was taught the reader's word
+    for the tab ('Dependencies', not the code's 'Context') and that a library bucket is not an external
+    system; the CARD, one click away on the same screen, went on saying 'External systems grouped by
+    purpose' over React and Vite, 'folded out of the Context view'.
+
+    Both read `FOLD_NARRATIVE` now. The card adds the gesture, because from a card you have not drilled
+    in yet; the page drops it, because there you have."""
+    with _served() as url, _page(url + "#v=libs") as page:
+        _settle(page)
+        seen = page.evaluate("""() => {
+            const strip = (document.querySelector('#diaghead .item-sec-note') || {}).textContent || '';
+            const box = [...document.querySelectorAll('#diagram g.node')].find((n) => n.__cyId || true);
+            return {strip}; }""")
+        assert "Dependencies view" in seen["strip"], seen
+        assert "Context view" not in seen["strip"], "the reader's word for the tab, not the code's"
+        # …and the card for the same fold, opened from the Dependencies view that draws its box.
+        page.goto(url + "#v=context")
+        _settle(page)
+        card = page.evaluate("""() => {
+            const el = [...document.querySelectorAll('#diagram g.node')]
+              .find((n) => (n.textContent || '').includes('Libraries'));
+            if (!el) return null;
+            el.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            return new Promise((r) => setTimeout(() =>
+              r((document.querySelector('#panel .empty') || {}).textContent || ''), 700)); }""")
+        if card:
+            assert "Context view" not in card, f"the card said the code's word for the tab: {card!r}"
+            assert "folded out of the Dependencies view" in card, card
+            assert "drill in" in card, "a card is offered BEFORE you drill, so it keeps the gesture"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_pair_page_refuses_a_link_whose_ends_are_the_wrong_kind() -> None:
+    """The guard checked that both ids EXIST, not that they are what the page is about — so a stale or
+    hand-typed link printed a confident wrong word: `#v=domedge` naming two RECORDS announced them as
+    `Subdomain pair: Organization → Membership`. These pages drew no words at all before this change,
+    so a wrong one is worse than what it replaced: the guard has to be as narrow as the sentence."""
+    wrong = ["#v=domedge&a=E1&b=E2",          # two records, not two data areas
+             "#v=bridge&sid=S1&sd=S3",        # two subsystems, not a subsystem and a data area
+             "#v=edge&a=SD1&b=SD5"]           # two data areas, not two subsystems
+    right = ["#v=edge&a=S1&b=S10", "#v=domedge&a=SD3&b=SD2", "#v=bridge&sid=S13&sd=SD3"]
+    read = """() => ({
+        kind: (document.querySelector('.page-hero-kind') || {}).textContent || '',
+        name: (document.querySelector('.page-hero-subject') || {}).textContent || '',
+      })"""
+    with _served() as url, _page(url) as page:
+        for hash_ in wrong:
+            page.goto(url + hash_)
+            _settle(page)
+            seen = page.evaluate(read)
+            assert not seen["kind"] and not seen["name"], \
+                f"{hash_} named a pair it is not: {seen}"
+        for hash_ in right:
+            page.goto(url + hash_)
+            _settle(page)
+            seen = page.evaluate(read)
+            assert seen["kind"] and " → " in seen["name"], f"{hash_} lost its header: {seen}"
         assert not page.js_errors, page.js_errors

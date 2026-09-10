@@ -1498,7 +1498,6 @@ let pendingCenter = null;
 // click drill (isDrillClick) can flash the SAME icon a direct icon-click would have used — one visual
 // language regardless of which of the three ways you triggered it.
 const ACTION_ICONS = {};
-let EDGE_ICON_SEQ = 0;  // fallback ACTION_ICONS key for a drillable edge path with no (or a stripped) DOM id
 // The front overlay layer that box + cluster action icons and diff badges are homed in. SVG has no
 // z-index — stacking is document order only — so an icon appended into its OWN node/cluster group is
 // painted over by any sibling group Mermaid draws later (a cluster's inner nodes, an overlapping
@@ -1506,10 +1505,6 @@ let EDGE_ICON_SEQ = 0;  // fallback ACTION_ICONS key for a drillable edge path w
 // so everything in it paints on top of every box/edge — which is what keeps the drill pill from hiding
 // behind a component. Recreated per render; null between renders.
 let iconOverlay = null;
-// Label-to-icon hover bridges share the overlay coordinate system but live in their own first child,
-// beneath every visible action icon. This keeps the bridge reachable above Mermaid content without a
-// later bridge stealing pointer events from an earlier icon on tightly-spaced sequence rows.
-let iconBridgeOverlay = null;
 // The step player's live context on a use-case flow view: the flow's uc, its ordered narrative steps, the
 // per-step DOM (arrow line + label) and participant columns bindFlow already resolved, and the current
 // 0-based step. null on every non-flow view (so the strip stays hidden and the arrow keys stay inert).
@@ -1579,10 +1574,6 @@ function selAdd(scene, desc, revealAction = false) {
   scene.selKeys.add(desc.key); scene.selectedKey = desc.key;
   selApply(scene);
 }
-function selRevealsAction(scene, key) {
-  const d = scene.selection.find((x) => x.key === key);
-  return !!(d && d.revealAction);
-}
 function selRemove(scene, key) {
   const i = scene.selection.findIndex((d) => d.key === key);
   if (i < 0) return;
@@ -1633,9 +1624,11 @@ function coverKeys(scene, atoms) {
   return [...keys];
 }
 // The selection keys a state wants restored on arrival, in priority order: an exact captured multi-selection
-// (`sels`, from history), else a synthetic arrow's covered arrows (`selCover`, resolved against what the
-// target card drew), else a single requested key (`sel`, a focus-drill / flow-step / bridge leaf). Filtered
-// to keys whose selectors exist in this scene.
+// (`sels`, from history), else a synthetic arrow's covered arrows (`selCover`), else a single requested key
+// (`sel`, a focus-drill / flow-step / bridge leaf). Filtered to keys whose selectors exist in this scene.
+// NOTHING WRITES `selCover` TODAY — the one drill that carried it was an arrow's locate icon, and arrows
+// draw no icon any more. The branch is kept, guarded, because it is the resolve-after-render half of the
+// pair: a future drill that stands for several arrows sets the field and this reads it.
 function selectionKeysFor(scene, s) {
   let keys = (s.sels || []).filter((k) => scene.selectors[k]);
   if (!keys.length && s.selCover) keys = coverKeys(scene, s.selCover);
@@ -2135,7 +2128,7 @@ const ICON_PAINT = {
   open: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.6px' },
   locate: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '1.8px' },
 };
-const ACTION_ICON_R = 16.5;  // the halo's radius — shared with addLabelActionIcon so its offset can clear the badge without a magic number of its own
+const ACTION_ICON_R = 16.5;  // the halo's radius: a plate a little bigger than the badge, so a box's own border cannot read as part of the badge's ring
 function paintImportant(el, props) {
   for (const k in props) el.style.setProperty(k, props[k], 'important');
 }
@@ -2144,7 +2137,8 @@ function paintImportant(el, props) {
 // show/hide is driven here in JS instead. A box pill is visible while its owner is hovered, or while a
 // DIRECT diagram click selected it; automatic selections keep the pill hover-only. A dimmed box never
 // reveals under the cursor (a box you're not focused on shouldn't invite drilling just because the
-// pointer passed over it). A label/edge pill (opts.host) keeps its own showIcon/hideIcon path.
+// pointer passed over it). Every pill is a box pill now; the label/edge pills that kept their own
+// showIcon/hideIcon path went with the arrow icons they belonged to.
 function refreshPillReveal(icon) {
   const owner = icon._owner;
   const dimmed = owner && owner.classList.contains('dim');
@@ -2164,12 +2158,9 @@ function refreshAllPills() { for (const id in ACTION_ICONS) { const ic = ACTION_
 // they lived in their box group. The old <g> is thrown away with the rest of the SVG on each re-render.
 function ensureIconOverlay(container) {
   const svg = container.querySelector('svg');
-  if (!svg) { iconBridgeOverlay = null; return null; }
+  if (!svg) return null;
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'coyodex-icon-overlay');
-  iconBridgeOverlay = document.createElementNS(SVGNS, 'g');
-  iconBridgeOverlay.setAttribute('class', 'coyodex-icon-bridge-overlay');
-  g.appendChild(iconBridgeOverlay);
   svg.appendChild(g);
   return g;
 }
@@ -2204,10 +2195,10 @@ function moveActionIconTip(ev) {
   actionIconHover.y = ev.clientY;
   if (!actionIconTipTimer) moveTip(ev.clientX, ev.clientY);
 }
-// Inject `action`'s icon (circle + glyph) into the final foreground overlay. `opts.anchor` supplies an
-// overlay-space position for an edge/label icon; `opts.host` is its fallback parent if the overlay is
-// unavailable and also marks it as independently revealed. A box icon needs neither: its own top-left
-// corner is converted from the box's local coordinates into the overlay here.
+// Inject `action`'s icon (circle + glyph) into the final foreground overlay. Every caller is a BOX
+// now (`decorateActionIcons`), so its own top-left corner is converted from the box's local coordinates
+// into the overlay here. `opts.anchor` / `opts.host` are the two hooks the edge and label pills used to
+// supply their own position and fallback parent; both pill kinds are gone and nothing passes options.
 function addActionIcon(el, id, action, opts) {
   const host = opts && opts.host;
   // The overlay comes first even for edge pills. Keeping those inside a Mermaid label/edge group lets
@@ -2280,74 +2271,17 @@ function addActionIcon(el, id, action, opts) {
     icon.addEventListener('mouseleave', () => setPillHover(icon, false));
   }
 }
-// A message label has no box to anchor a corner badge to — sit the pill just before the label's left
-// edge instead (so it reads first, like a bullet), vertically centered on it. Used for a Happy Path
-// message's text AND (see bindEdgeActionIcon) any drillable edge with a real label — same convention
-// either way: one fixed spot, not one that chases the cursor. The visible pill goes in iconOverlay so
-// every box and cluster stays behind it. Its invisible hover bridge uses the dedicated first overlay
-// child: above Mermaid content, below every icon, and ending at the label's left edge so label clicks
-// remain the label's own.
-//
-// The gap to the label must be a CONSTANT SCREEN distance, not a constant diagram-unit one: the pill's
-// own SIZE is already held constant on screen regardless of zoom (rescaleActionIcons counter-scales
-// it), so a fixed diagram-unit gap would drift — shrinking toward (and past, on a wide Happy Path
-// that needs a lot of shrink just to fit) zero as the diagram zooms out, overlapping the very label
-// it's meant to sit clear of. `_labelRef` (the zoom-invariant point this pill hangs off) + `_labelGap`
-// (the desired screen-px clearance) let rescaleActionIcons redo this placement — and the bridge below
-// — with the real zoom factor every time it changes, not just once here with an inv=1 guess.
-function addLabelActionIcon(label, id, action) {
-  let bbox; try { bbox = label.getBBox(); } catch (_) { return; }
-  const host = label.parentNode;
-  const parent = iconOverlay || host;
-  const bridgeParent = iconBridgeOverlay || parent;
-  // The pill and bridge are in sibling overlay layers with the same effective coordinate system. Keep
-  // their references separately for the fallback path where no overlay exists.
-  const ref = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, parent);
-  const bridgeRef = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, bridgeParent);
-  if (!ref || !bridgeRef) return;
-  const gap = ACTION_ICON_R + 10;
-  const anchor = { x: ref.x - gap, y: ref.y };  // inv=1 placeholder for this first paint, before mainPz exists
-  // Bridge the gap with one continuous hover strip. It starts at the pill's centre (the icon wins that
-  // overlap because its layer is above this one) and stops exactly at the label's left edge.
-  const bridge = document.createElementNS(SVGNS, 'rect');
-  bridge.style.setProperty('fill', 'transparent');
-  bridge.style.setProperty('pointer-events', 'all');
-  bridgeParent.appendChild(bridge);
-  addActionIcon(label, id, action, { host, anchor });
-  const icon = ACTION_ICONS[id];
-  // Lets hpGlow / glowEdge find this pill from the label/path element alone, so selecting the step or
-  // edge shows it without the caller threading the icon through separately.
-  label._actionIcon = icon;
-  icon._bridge = bridge;
-  icon._bridgeHost = bridgeParent;
-  icon._bridgeRef = bridgeRef;
-  icon._labelRef = ref;
-  icon._labelGap = gap;
-  placeLabelBridge(icon);
-}
-// (Re)size the bridge from the pill's CURRENT anchor (already zoom-corrected by the caller) out to
-// just past the label — kept in sync with rescaleActionIcons so it never lags the pill it bridges to.
-function placeLabelBridge(icon) {
-  const b = icon._bridge; if (!b) return;
-  const anchor = pointToHostSpace(icon.parentNode, icon._anchor.x, icon._anchor.y, icon._bridgeHost);
-  if (!anchor) return;
-  const inv = curIconInv();
-  const x = Math.min(anchor.x, icon._bridgeRef.x);
-  b.setAttribute('x', String(x));
-  b.setAttribute('y', String(icon._bridgeRef.y - 5 * inv));
-  b.setAttribute('width', String(Math.abs(icon._bridgeRef.x - anchor.x)));
-  b.setAttribute('height', String(10 * inv));
-}
 // Message pills have no enclosing g.node/g.cluster to hang the CSS :hover/.is-selected reveal rule off
 // (viewer.css), so their visibility is plain JS opacity/pointer-events toggling instead — called from
 // the same hover handlers already glowing the message's text/line.
 function showIcon(icon) { if (icon) { icon.style.setProperty('opacity', '1'); icon.style.setProperty('pointer-events', 'auto'); } }
 function hideIcon(icon) { if (icon) { icon.style.removeProperty('opacity'); icon.style.removeProperty('pointer-events'); } }
 // One pass over every box `render()` just bound (scene.nodeEls) — called once per render, alongside
-// tintClusters. Cluster frames (drilled containers shown as a NEIGHBOUR, not the card you're already
-// inside) get their icon from bindFrameDrill instead, which already knows which frames are drillable —
-// that runs INSIDE bindFor, before this, so ACTION_ICONS is reset once in render() before bindFor, not
-// here (resetting here would wipe the cluster icons bindFrameDrill just registered).
+// tintClusters. Cluster frames get NO icon at all: on a pair page each frame is a neighbour you can
+// open, and the way in is its NAME (bindFrameDrill), which is the language every other drawing speaks.
+// `decorateActionIcons` is the ONLY thing that adds an icon now, so the table could be cleared here —
+// it is cleared in render() instead, one step earlier, so a render that draws no icons at all still
+// leaves nothing behind from the render before it.
 // The action a collapsed shared-walk box offers: open the walk itself. It is the one box on a use case
 // map whose drill LEAVES the use case, and that is the point — a shared sub-use case belongs to every use case
 // that runs it, so it gets a screen of its own instead of a home inside this one.
@@ -2366,72 +2300,15 @@ function locateActionFor(id) {
     go(target);
   } };
 }
-// The structural diagram that actually draws a flow arrow's backbone relationship. The destination
-// carries `selCover`, resolved after render against the arrows the target diagram chose to draw: one
-// concrete arrow, several parallel arrows, or one collapsed arrow that represents them all.
-function relationshipLocateTarget(srcId, dstId) {
-  const src = GRAPH.nodes[srcId], dst = GRAPH.nodes[dstId];
-  const pairEdges = COMP_LOOKUP[srcId + '>' + dstId] || [];
-  if (!src || !dst || !pairEdges.length) return null;
-  const withEdges = (state) => ({ ...state, selCover: bundleAtoms(pairEdges) });
-  const parentOfKind = (node, kind) => {
-    const p = node.parent && GRAPH.nodes[node.parent];
-    return p && p.kind === kind ? p.id : null;
-  };
-
-  if (src.kind === 'component' && dst.kind === 'component') {
-    const a = parentOfKind(src, 'subsystem'), b = parentOfKind(dst, 'subsystem');
-    if (!a || !b) return withEdges({ kind: 'component' });
-    if (a === b) return withEdges({ kind: 'subsystem', sid: a });
-    if (MERMAID_EDGE_CARD[a + '>' + b]) return withEdges({ kind: 'edge', a, b });
-    if (isAncestorOf(a, b)) return withEdges({ kind: 'subsystem', sid: a });
-    if (isAncestorOf(b, a)) return withEdges({ kind: 'subsystem', sid: b });
-    return null;
-  }
-
-  if ((src.kind === 'component' && dst.kind === 'dep')
-      || (src.kind === 'dep' && dst.kind === 'component')) {
-    const component = src.kind === 'component' ? src : dst;
-    const sid = parentOfKind(component, 'subsystem');
-    return withEdges(sid ? { kind: 'subsystem', sid } : { kind: 'component' });
-  }
-
-  if (src.kind === 'entity' && dst.kind === 'entity') {
-    if (!HAS_SUBDOMAINS) return withEdges({ kind: 'domain' });
-    const a = topSubdomainOf(srcId), b = topSubdomainOf(dstId);
-    if (!a || !b) return null;
-    if (a === b) return withEdges({ kind: 'domsub', sd: a });
-    if (MERMAID_DOMAIN_EDGE_CARD[a + '>' + b]) return withEdges({ kind: 'domedge', a, b });
-    if (isAncestorOf(a, b)) return withEdges({ kind: 'domsub', sd: a });
-    if (isAncestorOf(b, a)) return withEdges({ kind: 'domsub', sd: b });
-    return null;
-  }
-
-  if (src.kind === 'component' && dst.kind === 'entity') {
-    const sid = parentOfKind(src, 'subsystem'), sd = topSubdomainOf(dstId);
-    if (sid && sd && MERMAID_BRIDGE_CARD[sid + '>' + sd]) {
-      return withEdges({ kind: 'bridge', sid, sd });
-    }
-  }
-  return null;
-}
-function relationshipLocateAction(srcId, dstId) {
-  if (!srcId || !dstId) return null;  // actor endpoints have no structural relationship to locate
-  // A sequence response commonly points opposite to the structural call it is answering. Prefer an
-  // exact directed relationship; only when none exists, locate the reverse pair's stored arrows.
-  const direct = COMP_LOOKUP[srcId + '>' + dstId] || [];
-  const target = direct.length
-    ? relationshipLocateTarget(srcId, dstId)
-    : relationshipLocateTarget(dstId, srcId);
-  if (!target) return null;
-  const tab = stateTitle({ kind: topView(target.kind, target.id) });
-  return { kind: 'locate', title: 'Locate in ' + tab, run: () => go(target) };
-}
 function decorateActionIcons(scene, s) {
   // NO ICONS ON A WALK, NOR ON A DATA OR A STRUCTURE PICTURE. Every box's NAME opens what it names now,
   // and the icon was the older way of saying so — a control floating in the corner of a box, in a
   // language no other screen speaks.
-  if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s)) return;
+  // …AND NOR ON A PAIR PAGE. The two lists above are each ONE TAB'S three drawings, so the bridge —
+  // a subsystem crossed with a subdomain — was in neither, and it was the last drawing anywhere still
+  // putting a magnifier on a box while both pages either side of it drew none. `PAIR_PAGE` names every
+  // pair page there is, so a fourth kind cannot fall through the same gap.
+  if (isFlowState(s) || isDataPicture(s) || isStructurePicture(s) || (s && PAIR_PAGE[s.kind])) return;
   for (const id in scene.nodeEls) {
     if (scene.noAction.has(id)) continue;  // the box you're already zoomed into — no self-drill icon
     const action = primaryActionFor(id);
@@ -3012,11 +2889,19 @@ function showContextEdge(ce) {
 // The collapsed "Libraries" box: a roster of the in-process deps (frameworks + libraries) folded out
 // of the C4 Context view, since they are an implementation concern, not a system the project talks to.
 // At-a-glance only — drilling the box is where each one selects to its own details.
+// ONE SENTENCE PER FOLD, in `FOLD_NARRATIVE`, read by BOTH the card and the fold's own page. They said
+// it twice and drifted: the page was taught the reader's word for the tab ('Dependencies') and that a
+// library bucket is not an external system, and the card — one click away on the same screen — went on
+// saying 'the Context view' and 'External systems grouped by purpose' over React and Vite.
+// The card adds the gesture; the page drops it, because there you have already drilled in.
+function foldCardSentence(s) {
+  return '<p class="empty">' + esc(FOLD_NARRATIVE[s.kind](s)) + ' \u2325-click to drill in.</p>';
+}
 function showLibsFold() {
   const items = FOLDED_LIBS.map((d) =>
     '<dd>• ' + esc(d.name) + (d.type ? ' <span class="muted">— ' + esc(d.type) + '</span>' : '') + '</dd>').join('');
   panel.innerHTML = '<div class="pane-title"><h2>Libraries</h2><span class="badge kind">libraries</span></div>'
-    + '<p class="empty">Frameworks &amp; libraries linked into the process — folded out of the Context view. ⌥-click to drill in.</p>'
+    + foldCardSentence({ kind: 'libs' })
     + (items ? '<dl><dt>Bundled (' + FOLDED_LIBS.length + ' in-process)</dt>' + items + '</dl>' : '');
 }
 
@@ -3033,7 +2918,7 @@ function showBucketFold(bkid) {
   if (!b) { panel.innerHTML = EMPTY_PANEL; return; }
   const items = b.members.map((m) => '<dd>• ' + esc(m.name) + '</dd>').join('');
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(b.name) + '</h2><span class="badge kind">bucket</span></div>'
-    + '<p class="empty">External systems grouped by purpose — folded out of the Context view. ⌥-click to drill in.</p>'
+    + foldCardSentence({ kind: 'bucketfold', bkid: bkid })
     + (items ? '<dl><dt>' + b.count + ' dependencies</dt>' + items + '</dl>' : '');
 }
 // Select a folded-bucket count box: roster panel + dim to its neighbourhood (SYS + the arrow), exactly
@@ -3133,14 +3018,6 @@ function domainContainerEdgeList(a, b, drawn) {
   if (dstE) list = list.filter((r) => r.dst === dstE);
   return list;
 }
-// The underlying links a synthetic arrow bundles, as endpoint atoms {src, dst}. Carried on the drill state
-// (`selCover`) and resolved AFTER the target card renders — see coverKeys — so we select whatever arrows the
-// card actually drew for these links, at whatever grouping level it chose, instead of predicting keys.
-function bundleAtoms(list) {
-  const seen = new Set(); const atoms = [];
-  for (const r of list) { const k = r.src + '>' + r.dst; if (!seen.has(k)) { seen.add(k); atoms.push({ src: r.src, dst: r.dst }); } }
-  return atoms;
-}
 function showContainerEdge(a, b, drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const list = containerEdgeList(a, b, drawn);
@@ -3203,13 +3080,20 @@ function bridgeEdgeList(drawn) {
             : true;
   }));
 }
-function showBridgeEdge(drawn) {
+// `target` is the page THIS ARROW drills to, handed over by the binder that already worked it out.
+// Without it the card had to re-derive one from the two DRAWN ends, and on a subsystem's own card
+// neither end IS a subsystem — the arrow runs from a member COMPONENT to a subdomain frame — so the
+// card found nothing, drew a plain heading, and the arrow's only visible door was the magnifier
+// floating over it. The magnifier is gone now, and an arrow whose card offers no door is an arrow a
+// reader cannot open at all. ONE ANSWER, from the binder: the title opens exactly where the drill
+// gesture goes.
+function showBridgeEdge(drawn, target) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const kindOf = (id) => (GRAPH.nodes[id] || {}).kind;
   const list = bridgeEdgeList(drawn);
-  // The bridge card is keyed by the SUBSYSTEM and the SUBDOMAIN, and the arrow can be drawn either way
-  // round — so read the ends by kind rather than by position. A component↔entity arrow (both ends are
-  // leaves) has no card of its own, so it gets no drill and its card is never cut.
+  // The FALLBACK, for the callers that hand over no target: the bridge card is keyed by the SUBSYSTEM
+  // and the SUBDOMAIN, and the arrow can be drawn either way round — so read the ends by kind rather
+  // than by position. A component↔entity arrow (both ends are leaves) drills nowhere and is never cut.
   const ends = [drawn.src, drawn.dst];
   const sid = ends.find((id) => kindOf(id) === 'subsystem');
   const sd = ends.find((id) => kindOf(id) === 'subdomain');
@@ -3217,7 +3101,7 @@ function showBridgeEdge(drawn) {
     a: nm(drawn.src), b: nm(drawn.dst), badge: 'bridge', noun: 'link',
     rows: list.map((r) => arrowRow(r.srcName, r.dstName,
       esc(r.verb) + (r.why ? ' \u2014 ' + mdInline(r.why) : ''))),
-    drill: (sid && sd) ? { kind: 'bridge', sid, sd } : null,
+    drill: (target && target.kind) ? target : ((sid && sd) ? { kind: 'bridge', sid, sd } : null),
   });
 }
 
@@ -4416,15 +4300,15 @@ function clientToLocal(referenceEl, clientX, clientY) {
 // Convert a point given in `fromEl`'s own local space (e.g. straight out of `fromEl.getBBox()`) into
 // `toEl`'s local space instead — needed whenever the two don't share a coordinate system. A Happy
 // Path message's <text> carries no transform of its own, so its bbox already happens to line up with
-// its parent's space (addLabelActionIcon relied on exactly that, harmlessly). A Mermaid edge label
+// its parent's space. A Mermaid edge label
 // (`g.edgeLabel`) is NOT so simple — Mermaid positions it via a transform on the group itself, so its
 // bbox is in a DIFFERENT space than its parent's, and anchoring a pill there with the naive bbox math
 // placed it nowhere near the label. Routing through screen space via getScreenCTM (twice) sidesteps
 // the question of whose transform is whose entirely — it folds in every transform on both ends,
 // whatever they turn out to be, the same trick clientToLocal uses for a real cursor position.
 // x/y are checked for finiteness for the same reason the matrix is: `pt.x = Infinity` is a hard
-// `TypeError: the provided float value is non-finite` on SVGPoint, and a non-finite counter-scale used
-// to reach here through placeLabelBridge (icon._labelRef.x - gap * curIconInv()).
+// `TypeError: the provided float value is non-finite` on SVGPoint, and a non-finite counter-scale did
+// once reach here through a caller that multiplied by it.
 function pointToHostSpace(fromEl, x, y, toEl) {
   const svg = fromEl.ownerSVGElement;
   const fromCtm = svg && fromEl.getScreenCTM();
@@ -4436,79 +4320,16 @@ function pointToHostSpace(fromEl, x, y, toEl) {
   const hostPt = screenPt.matrixTransform(toInv);
   return { x: hostPt.x, y: hostPt.y };
 }
-// Fallback anchor for an edge's drill pill: the arrow's own midpoint, nudged off to the side (along
-// the perpendicular to the line there) so the pill doesn't sit right on top of the stroke. Only used
-// when the pill has to show WITHOUT ever having been hovered (see bindEdgeActionIcon) — the normal
-// case anchors to the cursor instead, which needs no such geometry.
-function edgeMidpointAnchor(p) {
-  let len; try { len = p.getTotalLength(); } catch (_) { return null; }
-  if (!len) return null;
-  const mid = len / 2;
-  const a = p.getPointAtLength(Math.max(0, mid - 1));
-  const b = p.getPointAtLength(Math.min(len, mid + 1));
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const segLen = Math.hypot(dx, dy) || 1;
-  const OFFSET = 20;
-  const c = p.getPointAtLength(mid);
-  return { x: c.x + (-dy / segLen) * OFFSET, y: c.y + (dx / segLen) * OFFSET };
-}
 // A real label (not Mermaid's empty placeholder group every unlabelled arrow still gets) — content
 // check, not just existence, since an empty label would otherwise read as "has a label" and anchor a
 // pill to a bbox with no actual size.
 function edgeLabelHasContent(label) {
   return !!(label && (label.textContent || '').trim());
 }
-// A drillable edge's pill has no box corner to anchor to. Two cases:
-//  - A real label: same fixed convention as a Happy Path message (addLabelActionIcon) — sits just
-//    left of the label, one constant spot, not one that chases the cursor around as it moves along
-//    the arrow (a moving target is harder to click, not easier, once the label already tells you
-//    where to look).
-//  - No label at all: there's no fixed spot that makes sense, so the pill appears wherever the cursor
-//    first lands on the arrow instead — the pill IS the cursor's own position, so there's no gap to
-//    travel and no bridge needed. Falls back to the arrow's own midpoint the one time it has to show
-//    without a hover to anchor to (a selection restored from back/forward, or lit up by something else
-//    being selected).
-// `p` is the real (visible, styled, dimmable) path — its id and its opacity (dim state) are what
-// matter for the pill's identity and visibility. `hit` is the wide invisible clone that actually
-// catches the pointer (see attachEdgeHandlers) — hovering/leaving THAT, not the thin original stroke,
-// is what should show/hide the pill, so listeners go on it, not on `p`. `isSelected` (from
-// bindSelectEdge, matching hpGlow's selection guard) is what lets the pill stay up after a direct
-// selection even once the cursor leaves. Flow-step callers narrow it when a stepper owns the selection.
-// `hits` is one overlay per drawn segment — three for a self-arrow — so the pill answers the whole shape.
-function bindEdgeActionIcon(p, hits, label, action, isSelected) {
-  const id = p.id || ('edgepill' + (EDGE_ICON_SEQ++));
-  const isDim = () => p.style.opacity === DIM || (label && label.style.opacity === DIM);
-  const hide = () => { if (!isSelected || !isSelected()) hideIcon(icon); };
-  let icon, showAt;
-  if (edgeLabelHasContent(label)) {
-    addLabelActionIcon(label, id, action);
-    icon = ACTION_ICONS[id];
-    showAt = () => { if (!isDim()) showIcon(icon); };
-    if (icon._bridge) { icon._bridge.addEventListener('mouseenter', showAt); icon._bridge.addEventListener('mouseleave', hide); }
-  } else {
-    const host = p.parentNode;
-    const parent = iconOverlay || host;
-    const localFallback = edgeMidpointAnchor(p) || { x: 0, y: 0 };
-    const fallback = pointToHostSpace(p, localFallback.x, localFallback.y, parent) || { x: 0, y: 0 };
-    addActionIcon(p, id, action, { host, anchor: fallback });
-    icon = ACTION_ICONS[id];
-    const moveTo = (anchor) => {
-      icon._anchor = anchor;
-      icon.setAttribute('transform', `translate(${anchor.x},${anchor.y}) scale(${curIconInv()})`);
-    };
-    showAt = (ev) => { if (isDim()) return; moveTo(clientToLocal(parent, ev.clientX, ev.clientY) || fallback); showIcon(icon); };
-  }
-  icon.addEventListener('mouseenter', showAt);
-  icon.addEventListener('mouseleave', hide);
-  for (const h of hits) { h.addEventListener('mouseenter', showAt); h.addEventListener('mouseleave', hide); }
-  if (label) { label.addEventListener('mouseenter', showAt); label.addEventListener('mouseleave', hide); }
-  p._actionIcon = icon;
-}
-// Give an edge's visible path a wide transparent hit-path + make its label clickable.
 // `tipHtml` (optional) wires a hover meaning-preview on the same hit-area + label.
 // `onDrill` (falsy for a non-drillable edge) controls the ⌘-held cursor and direct drill gesture.
 // `action` can instead put another explicit action on the arrow, such as Locate on a flow relationship.
-function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected, action) {
+function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn) {
   // A pointer that has not moved since the drawing changed is not hovering (see holdPointer): the glow
   // waits for the move, and a leave in the meantime cancels the wait.
   const on = () => { if (!pointerFresh) { whenPointerMoves(on); return; } hoverOn(); };
@@ -4544,8 +4365,6 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
   // sibling query returns the other arrows' clones too.
   p.__cyHits = hits;
   if (actionFn) { for (const h of hits) attachTip(h, actionFn); if (label) attachTip(label, actionFn); }
-  const edgeAction = action || (onDrill ? { kind: 'drill', run: onDrill } : null);
-  if (edgeAction) bindEdgeActionIcon(p, hits, label, edgeAction, isSelected);
 }
 
 // A LABEL SITS AT THE MIDDLE OF ITS ARROW. The layout engine puts an arrow's label half way between
@@ -4657,10 +4476,6 @@ function glowEdge(p, label, revealAction = true) {
   // ('.is-selected' inside the diagram) answers "what on the drawing is selected", which is what the
   // callout needs and what an arrow selection could not answer before.
   p.classList.add('is-selected');
-  if (p._actionIcon) {
-    p._actionIcon._selected = !!revealAction;
-    if (revealAction) showIcon(p._actionIcon); else hideIcon(p._actionIcon);
-  }
   return () => {
     for (const k of saved) {
       if (k.s0) k.seg.style.setProperty('stroke', k.s0, k.sp0); else k.seg.style.removeProperty('stroke');
@@ -4668,7 +4483,6 @@ function glowEdge(p, label, revealAction = true) {
     }
     if (label) label.style.filter = '';
     p.classList.remove('is-selected');
-    if (p._actionIcon) { p._actionIcon._selected = false; hideIcon(p._actionIcon); }
   };
 }
 // EVERY ARROW IS DRAWN THE SAME. A bundled arrow used to be dashed and a touch thicker, borrowing the
@@ -4713,8 +4527,7 @@ function edgeDesc(scene, p, label, e, selKey, showFn, anchor) {
            focus: edgeFocus(scene, e), show: showFn };
 }
 // `opts.onDrill` (optional) makes an ⌥-click drill instead of select, and marks the arrow with the drill
-// cursor; `opts.actionFn` is its preview. `opts.action` adds an explicit icon action without changing
-// the arrow's ordinary click behavior. `opts.anchor` (optional) returns what the callout points at
+// cursor; `opts.actionFn` is its preview. `opts.anchor` (optional) returns what the callout points at
 // while the arrow is selected — see glowEdgeAt.
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
@@ -4736,8 +4549,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
   };
   scene.edgeEls.push({ e, path: p, label, key: selKey });  // `key` lets coverKeys select this arrow for a synthetic-arrow drill
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn,
-    () => selRevealsAction(scene, selKey), opts.action);
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn);
   // HOVER ANSWERS, CLICK SETTLES — the flow map's rule, opted into per picture (`opts.hover`): the
   // pointer resting on the arrow (its hit clones, or its label) shows the arrow's card while nothing
   // is pinned. The Data pictures ask for it; the others still show a card on click only.
@@ -4780,7 +4592,7 @@ function bindBridgeEdge(scene, p, label, a, b, target, hover) {
   // same as choosing something for them.
   const tgt = { ...target };
   bindSelectEdge(scene, p, label, drawn, 'bridge:' + a + '>' + b,
-    () => showBridgeEdge(drawn),
+    () => showBridgeEdge(drawn, tgt),
     { onDrill: () => { if (leaf) pendingCenter = leaf; go(tgt); }, actionFn: () => actionTipEdge(a, b, drawn),
       hover: !!hover });
 }
@@ -5624,11 +5436,15 @@ function showDeploymentInfraEdge(a, b, full) {
 function renderDeploymentEdgePage(s) {
   const r = deploymentEdgeRows(s.a, s.b);
   const count = r.rows.length + ' ' + r.noun + (r.rows.length === 1 ? '' : 's');
-  // The pair IS the page's title, drawn once by the breadcrumb, so the hero carries only what hung off
-  // it: what kind of link this arrow is, and how many it stands for. Printing `a \u2192 b` here again was
-  // the same words twenty pixels below themselves.
+  // THE PAIR IS THE PAGE'S TITLE, and this hero is where a reader reads it. It used to be left to the
+  // breadcrumb \u2014 but that row is collapsed now (it holds the page's h1 for a screen reader and is never
+  // drawn), so the page opened on a pill and a count with nothing on it naming the two ends the arrow
+  // joins. `stateTitle` is what the crumb prints, so the two cannot say different things.
+  // No type word: an arrow here joins two processes or a process and something it uses, and the pill
+  // beside the name already says which kind of link it is.
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({
+      name: stateTitle(s),
       pills: '<span class="ecard-pill">' + esc(r.badge) + '</span>',
       desc: '', noDesc: false,
       meta: esc(count),
@@ -6307,10 +6123,21 @@ function bindEdgePair(a, b) {
   });
   bindFrameDrill(mainScene);  // ⌘-click either subsystem frame to open its card
 }
-// An edge card frames two groups (subsystem subgraphs / subdomain namespaces) as Mermaid clusters.
-// Make each frame ⌘-drill into that group's card, so an edge card is no longer a dead-end. The framed
-// members + arrows keep their own handlers (they live in separate elements / stop propagation), so a
-// frame click only fires on the frame's own rect or title.
+// A pair page frames two groups (subsystem subgraphs / subdomain namespaces) as Mermaid clusters, and
+// each frame IS a neighbour you can open — it is not the card you are already inside. THE FRAME'S NAME
+// IS THE DOOR, the one language every other drawing speaks: a plain click on the name opens it, and it
+// underlines on hover to say so (`.cluster-label`, styled beside `.cyname` in the stylesheet).
+//
+// IT USED TO BE A MAGNIFIER floating at the frame's corner. `decorateActionIcons` had already dropped
+// that icon from every box on a walk, a Data picture and a Structure picture — "the icon was the older
+// way of saying so, a control floating in the corner of a box, in a language no other screen speaks" —
+// but the frames got theirs from HERE instead, so the three pair pages kept it after every page around
+// them had let it go: a subsystem's own card draws none, and its neighbour boxes open by their names.
+//
+// ⌘-click and double-click still drill anywhere on the frame, exactly as they do on a box. What went is
+// the floating control, not a way in — and the name is a way in that says what it is without one.
+// The framed members + arrows keep their own handlers (they live in separate elements / stop
+// propagation), so a frame click only fires on the frame's own rect or title.
 function bindFrameDrill(scene) {
   scene.root.querySelectorAll('g.cluster').forEach((c) => {
     const id = idOf(c);
@@ -6320,12 +6147,17 @@ function bindFrameDrill(scene) {
     if (!target) return;
     c.classList.add('drill');
     const run = () => go(target);
+    // The NAME carries its own class, so the stylesheet can offer it as a door without every cluster
+    // label on every view (a landing picture's frames open nothing) claiming to be one.
+    const name = c.querySelector('.cluster-label');
+    if (name) name.classList.add('cyname');
     c.addEventListener('click', (ev) => {
-      if (isDrag(ev) || !isDrillClick(ev)) return;  // only ⌘-click / double-click drills the frame
+      // A plain click on the NAME opens it — `nameClick` is the same test a box's name is read by, so
+      // the two cannot drift into two gestures for one idea.
+      if (isDrag(ev) || !(nameClick(ev) || isDrillClick(ev))) return;
       ev.stopPropagation();
       run();
     });
-    addActionIcon(c, id, { kind: 'drill', run });  // this frame IS a neighbour box here (not the card you're already in), so drilling it is meaningful
   });
 }
 
@@ -6870,15 +6702,45 @@ function heroSubjectId(s) {
 }
 // THE TWO FOLDED GROUPS are the one kind of page whose subject is not a map element at all: a fold is a
 // drawing decision, not a thing the map records, so it has no node, no pills and no code. What it does
-// have is a sentence saying what was folded and out of which view, and that sentence is the whole hero.
+// have is a name, a count of what it holds, and a sentence saying what was folded and out of which view.
+//
+// THE SENTENCE DESCRIBES THE DRAWING, so it rides the STRIP over the drawing's frame, with the count —
+// the division every other drawn page keeps, where the hero says what the page is and the strip says
+// what the picture is. It was the whole hero once, which left the hero describing a picture it was not
+// attached to, the picture below it wearing a bare frame, and the fold's own NAME nowhere on screen.
 //
 // It is NOT the sentence the collapsed BOX shows on the Dependencies view. That one ends "⌥-click to
 // drill in", which is an instruction for a box you are looking at — and on this page you have already
 // drilled in, so the reader was being told to do the thing they had just done.
+//
+// A LIBRARY BUCKET IS NOT AN EXTERNAL SYSTEM, and one sentence for both bucket folds said it was: the
+// `Frontend / UI` page — React, Vite, TanStack Query, reached through `Dependencies › Libraries ›` —
+// announced itself as external systems, contradicting the trail two lines above it. Each entry reads
+// the STATE now, so the bucket that sits inside the Libraries drill says what it actually holds;
+// `bucketFoldParent` is the one function that already knows which fold a bucket belongs to.
 const FOLD_NARRATIVE = {
-  libs: 'Frameworks and libraries linked into the process, folded out of the Dependencies view.',
-  bucketfold: 'External systems grouped by purpose, folded out of the Dependencies view.',
+  libs: () => 'Frameworks and libraries linked into the process, folded out of the Dependencies view.',
+  bucketfold: (s) => (bucketFoldParent(s.bkid) === 'libs'
+    ? 'Libraries with one job in common, folded out of the Libraries drawing.'
+    : 'External systems grouped by purpose, folded out of the Dependencies view.'),
 };
+// How many dependencies the fold HOLDS. Not the number of boxes under it: the Libraries drawing
+// collapses a big bucket into one box, so it holds 26 and draws 17. What it holds is the honest answer
+// to "what is folded here", and it is the number the bucket you open then accounts for.
+const FOLD_COUNT = {
+  libs: () => (FOLDED_LIBS || []).length,
+  bucketfold: (s) => ((bucketFoldOf(s.bkid) || {}).members || []).length,
+};
+// THE FOLD'S BOARD HEAD, the twin of `boardHeadHtml` for a page with no element behind it. Counted in
+// the Dependencies tab's own noun, because that is what every box under it is. No mark: a fold is not
+// an element kind and the map draws none for it, so the strip reads without one — as the landing
+// strips already do.
+function foldBoardHeadHtml(s) {
+  if (!FOLD_NARRATIVE[s && s.kind]) return '';
+  const n = FOLD_COUNT[s.kind](s);
+  return itemSectionHeadHtml('What is folded here', `${n} ${n === 1 ? 'dependency' : 'dependencies'}`,
+                             FOLD_NARRATIVE[s.kind](s));
+}
 // WHAT the hero says: the pills, the one sentence, and one line of context. NOT the name — the
 // breadcrumb two lines above is the page's title, and a second copy here says it twice.
 //
@@ -7011,6 +6873,94 @@ function boardHeadHtml(s, id) {
   if (!spec) return '';
   return itemSectionHeadHtml(spec[0], spec[1], spec[2], elementHeroGlyph(GRAPH.nodes[id].kind));
 }
+// ── A PAGE ABOUT A PAIR ───────────────────────────────────────────────────────────────────────────
+// Its subject is a RELATION, not one element, so `heroSubjectId` cannot answer for it — and all three
+// of these pages drew NOTHING above their drawing: no hero, no path, and no strip. The page's whole
+// title lived in the collapsed crumb row, which is there for a screen reader and is never on screen,
+// so a reader who followed an arrow into one landed on a bare picture of two framed groups with not a
+// word saying which two, how they got there, or what the picture was of.
+//
+// ONE table for the three, keyed the way BOARD_HEAD is, so the subsystem pair, the subdomain pair and
+// the bridge cannot drift apart — they are one page shape wearing three vocabularies.
+//   ends  — the two element ids, read off this kind's own state fields
+//   type  — the word before the name on the hero (`Subsystem pair: Auth → Billing`)
+//   title — what the DRAWING under it is, the way 'Subsystem map' names a subsystem card's drawing
+//   note  — the drawing's one sentence
+//   count — how many crossings the pair stands for, and the noun for them. THE WHOLE PAIR, from the
+//           same list builder and with the same noun the arrow's card uses — but NOT always the same
+//           number. A card opened from a MEMBER's arrow filters that list to the one component or
+//           record you clicked, so it can say 4 where this page says 11. Both are right and each is
+//           right about its own subject: the card is about that arrow, the page is about the pair,
+//           and the strip's title says `between them` so the reader is told which they are reading.
+//           (An earlier version of this comment claimed the two can never differ. They can, on any
+//           member arrow; the claim was written from the overview, where nothing is filtered.)
+const PAIR_PAGE = {
+  edge: {
+    kinds: ['subsystem', 'subsystem'],
+    ends: (s) => [s.a, s.b],
+    type: 'Subsystem pair',
+    title: 'What crosses between them',
+    note: 'Both subsystems, the components on each side, and every connection that runs from one to the other.',
+    count: (s) => [containerEdgeList(s.a, s.b).length, 'connection'],
+  },
+  domedge: {
+    kinds: ['subdomain', 'subdomain'],
+    ends: (s) => [s.a, s.b],
+    type: 'Subdomain pair',
+    title: 'What crosses between them',
+    note: 'Both subdomains, the entities on each side, and every relation that runs from one to the other.',
+    count: (s) => [domainContainerEdgeList(s.a, s.b).length, 'relation'],
+  },
+  bridge: {
+    kinds: ['subsystem', 'subdomain'],
+    ends: (s) => [s.sid, s.sd],
+    type: 'Subsystem and subdomain',
+    title: 'What this subsystem reaches',
+    note: 'The components in this subsystem, the entities this subdomain keeps, and every link between them.',
+    count: (s) => [bridgeEdgeList({ src: s.sid, dst: s.sd }).length, 'link'],
+  },
+};
+// The pair spec for a state, or null. TWO tests, and the second one matters as much as the first:
+//   * both ends are elements this map HOLDS — otherwise the hero names something the reader cannot
+//     open (`elName` prints its not-in-this-map word, and two of those on one line say nothing);
+//   * and both are OF THE KIND this page is about. Checking only existence let a stale or hand-typed
+//     link print a confident wrong word: `#v=domedge&a=E1&b=E2` names two RECORDS and announced them
+//     as `Subdomain pair: Organization → Membership`. The page drew no words at all before this
+//     change, so a wrong one is worse than what it replaced — the guard has to be as narrow as the
+//     sentence it lets through.
+function pairPageSpec(s) {
+  const spec = s && PAIR_PAGE[s.kind];
+  if (!spec) return null;
+  const ends = spec.ends(s);
+  const fits = ends.every((id, i) => id && GRAPH.nodes[id] && GRAPH.nodes[id].kind === spec.kinds[i]);
+  // The RESOLVED ids overwrite the reader that produced them, so a caller cannot pick up the function
+  // by the same name and call `.map` on it. (It went the other way round once, and every pair page
+  // threw before it drew a pixel.)
+  return fits ? Object.assign({}, spec, { ends }) : null;
+}
+// A PAIR'S MARK: the kind's own figure when both ends are the SAME kind (two subsystems, two
+// subdomains), and none for a bridge, whose two ends are different things and where either mark would
+// stand for half the page. The hero and the strip are built to read without one.
+function pairGlyph(spec) {
+  const kinds = spec.ends.map((id) => GRAPH.nodes[id].kind);
+  return kinds[0] === kinds[1] ? elementHeroGlyph(kinds[0]) : '';
+}
+// THE PAIR'S HERO: the type word, then `A → B` — the page's title, in the one place a reader sees it.
+// The NAME comes from `stateTitle`, which is what the collapsed crumb already prints, so the visible
+// title and the document's own h1 are the same words by construction.
+// NO SENTENCE: the map records nothing about a pair (it records the two ends and the arrows between
+// them), and `noDesc: false` is how a hero over a drawing says it has nothing rather than admitting a
+// gap — the count and the sentence about the picture ride the strip below, where the other drawn
+// pages put theirs.
+function pairHeroHtml(s, spec) {
+  return pageHeroHtml({ glyph: pairGlyph(spec), name: stateTitle(s), type: spec.type,
+                        desc: '', noDesc: false });
+}
+function pairBoardHeadHtml(s, spec) {
+  const [n, noun] = spec.count(s);
+  return itemSectionHeadHtml(spec.title, `${n} ${n === 1 ? noun : noun + 's'}`, spec.note,
+                             pairGlyph(spec));
+}
 // Drawn on every navigation, from renderChrome — so it is refreshed by the same call that repaints the
 // tabs and the trail, and can never survive onto a page that is about something else.
 //
@@ -7092,12 +7042,21 @@ function sizeHeroFigures() {
 function syncPageHero(s, chain, tv) {
   const walk = isFlowState(s);
   const id = heroSubjectId(s);
-  const fold = FOLD_NARRATIVE[s && s.kind] || '';
+  // A PAIR is the one subject that is not a single element, so it has its own two builders — but it
+  // takes the same two slots every drawn page takes: the hero in the fixed block, the strip over the
+  // drawing's frame.
+  const pair = pairPageSpec(s);
+  const fold = !!FOLD_NARRATIVE[s && s.kind];
   // The landing head, on a one-item trail — the view's own screen — and nowhere below it.
   const landing = chain.length === 1 && !walk && !id ? landingHeadHtml(tv) : '';
   const html = walk ? walkHeadHtml(s, chain)
              : id ? heroSubjectHtml(id, chain)
-             : fold ? pageHeroHtml({ desc: esc(fold), noDesc: false }) : '';
+             : pair ? pairHeroHtml(s, pair)
+             // A FOLD IS NAMED, and that is ALL its hero says. It used to carry the sentence and no
+             // name, so the one word telling you WHICH fold you had opened — Libraries, or the
+             // bucket's name — lived only in the collapsed crumb, which is never on screen. The
+             // sentence is about the DRAWING, so it moved down to the strip with the count.
+             : fold ? pageHeroHtml({ name: stateTitle(s), desc: '', noDesc: false }) : '';
   // WHERE THE LANDING HEAD GOES. A page whose first block is already a section (the Features diagram,
   // the Overview) gets it as that section's strip. A page of loose blocks (a board, a picture, a card
   // list, a table) is wrapped, whole, into one framed section headed by it. A view whose landing is a
@@ -7129,6 +7088,12 @@ function syncPageHero(s, chain, tv) {
     // its frame, in the same host and strip a walk's head and a landing picture's use (boardHeadHtml).
     const board = boardHeadHtml(s, id);
     if (board) inHead = stageStripHtml(board);
+  } else if (pair) {
+    // A pair's drawing takes the same strip, from its own builder — the frame under a hero wears a head
+    // on every other drawn page, and a bare one there read as a leftover.
+    inHead = stageStripHtml(pairBoardHeadHtml(s, pair));
+  } else if (fold) {
+    inHead = stageStripHtml(foldBoardHeadHtml(s));   // …and so does a fold's, from its own
   }
   const host = walk ? diaghead : pagehero;
   const other = walk ? pagehero : diaghead;
@@ -8089,14 +8054,13 @@ function renderChrome(s) {
 // at just a few CSS pixels there even though it looked fine on the small diagram. realZoom is the
 // library's own true diagram-units-to-CSS-pixel ratio (confirmed: doubles when you call zoomBy(2),
 // unlike getZoom() which resets to 1 on every fresh fit) — 1/realZoom makes 1 local SVG unit render
-// as exactly 1 CSS pixel always, regardless of diagram size or current zoom. Shared by rescaleActionIcons
-// (every icon, on a zoom change) and bindEdgeActionIcon (one icon, the moment it's repositioned to the
-// cursor) — both need the SAME factor so a freshly-moved icon doesn't render at the wrong size for the
-// instant before the next zoom event happens to re-run the loop.
+// as exactly 1 CSS pixel always, regardless of diagram size or current zoom. Read by
+// rescaleActionIcons on every zoom change, and by addActionIcon for an icon's first paint, so a fresh
+// icon is never the wrong size for the instant before the next zoom event re-runs the loop.
 // realZoom is 0 on a zero-area stage (see stageHasArea), and 1/0 is Infinity — which then reached the
 // icon transforms as `scale(Infinity)` (singular CTM -> the throw invertibleCTM now catches) and the
 // bridge anchor as -Infinity (the SVGPoint TypeError). 1 is the same fallback the no-mainPz case uses:
-// one local unit = one CSS pixel, which is what an unscaled first paint already assumes (addLabelActionIcon).
+// one local unit = one CSS pixel, which is what an unscaled first paint already assumes.
 // "Can this scale be divided by?" — the one test for every place that does. A zero-area stage is what
 // makes a realZoom 0 (see stageHasArea), and dividing by it gives Infinity, which then reaches the SVG
 // as a non-finite coordinate or a singular matrix. Shared by curIconInv and the two camera-preserving
@@ -8110,12 +8074,10 @@ function rescaleActionIcons() {
   const inv = curIconInv();
   for (const id in ACTION_ICONS) {
     const icon = ACTION_ICONS[id];
-    let a = icon._anchor;
-    // A label-anchored pill's gap to its label is a constant SCREEN distance (see addLabelActionIcon),
-    // so its anchor is re-derived here from the zoom-invariant `_labelRef` point every time inv changes
-    // — a one-off anchor (like a box's own corner, which needs no such correction) would let the gap
-    // drift with zoom instead of staying put. The bridge is re-synced right after so it never lags.
-    if (icon._labelRef) { a = { x: icon._labelRef.x - icon._labelGap * inv, y: icon._labelRef.y }; icon._anchor = a; placeLabelBridge(icon); }
+    // EVERY ICON IS ANCHORED TO A BOX CORNER now, which is a fixed point in diagram units and needs
+    // no re-derivation — only the counter-scale that holds it at one screen size. The other kind, a
+    // pill hung a constant SCREEN distance off a label, went with the arrow pills it was built for.
+    const a = icon._anchor;
     if (a) icon.setAttribute('transform', `translate(${a.x},${a.y}) scale(${inv})`);
   }
 }
@@ -13195,7 +13157,7 @@ async function renderView(sArg, transient, seq) {
   if (s.kind === 'deployment' || s.kind === 'deploymentUnit') styleDeploymentLanes(diagram);  // bold lane titles + gap
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
   iconOverlay = ensureIconOverlay(diagram);  // front layer for corner icons + badges — must exist before bindFor/decorate add any
-  for (const id in ACTION_ICONS) delete ACTION_ICONS[id];  // reset before bindFor's bindFrameDrill re-populates it
+  for (const id in ACTION_ICONS) delete ACTION_ICONS[id];  // the previous render's icons, cleared before this one draws its own
   bindFor(s);
   decorateActionIcons(mainScene, s);  // corner icon = each drawn box's one useful secondary action
   // Every drawn box gets a default re-select closure (plain-click select), so back/forward can restore
