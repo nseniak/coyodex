@@ -731,6 +731,17 @@ ELEMENT_TINT = {
     # kinds it SHARES A PICTURE WITH, not from every kind in the map.
     "feature": {"fill": "#e0f2fe", "stroke": "#0369a1"},
     "usecase": {"fill": "#f0f9ff", "stroke": "#0284c7"},
+    # A BUSINESS RULE and its DECISION AREA are the third light-member / deep-container pair, on the
+    # component/subsystem shape: ONE stroke, the container's fill deeper. Rose, and the rule above is
+    # what picks it — a rule is drawn on no diagram at all, so the only place it sits beside another
+    # kind is a card list and the search results, and rose is far from every hue those already hold.
+    # `infraSec` is the same family, and that costs nothing: it is a box on the Dependencies and
+    # Deployment pictures, which no rule card is ever drawn on.
+    #
+    # No dashed border on the area, unlike the other two containers. The dash says "there is more
+    # inside this FRAME", and a decision area is never drawn as a frame — it is a card you open.
+    "rule": {"fill": "#fff1f2", "stroke": "#be123c"},
+    "block": {"fill": "#fecdd3", "stroke": "#be123c"},
 }
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:

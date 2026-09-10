@@ -3503,3 +3503,70 @@ def test_the_faded_boxes_note_waits_for_a_faded_box() -> None:
         assert got, "no selection on this view faded a box, so the test proved nothing"
         assert got["note"] == 1, f"a real fade still gets its one explanation: {got}"
         assert not page.js_errors, page.js_errors
+
+
+def _with_rules(m: Any) -> None:
+    """A decision area holding three rules, anchored in a file a component claims. The committed
+    fixture carries no rules at all, so the Rules tab does not even appear on it."""
+    f = "backend/src/mcpolis/domain/services/policy_engine.py"
+    m["components"][0]["files"] = [f]
+    m["blocks"] = [{"id": "BLK1", "name": "Who may call which tool",
+                    "purpose": "How a team's permission sets decide whether one tool call goes out.",
+                    "parent": None, "happy_path": "", "stakes": [], "story": None, "owners": None,
+                    "source": None, "confidence": "verified", "tech": "", "tech_source": ""}]
+    m["rules"] = [
+        {"id": f"BR{i}", "name": name, "statement": stmt, "block": "BLK1", "access": True,
+         "risk": "A permissive fallback would open every shared server.", "confidence": "verified",
+         "sites": [{"where": f"{f}:{100 + i}", "why": "refuses the call", "no_call_site": False}]}
+        for i, (name, stmt) in enumerate([
+            ("No role, no access", "A caller whose role cannot be found is refused every tool."),
+            ("Admin comes from a flag", "Any role marked as an admin role grants admin power."),
+            ("Argument values gate the call", "A role may refuse a call whose argument is forbidden."),
+        ], start=1)]
+
+
+def test_a_rule_wears_a_diamond_and_its_area_wears_two() -> None:
+    """A business rule and a decision area were the only element kinds with nothing in the figure
+    column: outside the mark vocabulary, so no glyph, and outside the colour table, so the neutral
+    slate every unknown kind falls back to.
+
+    They are the third light-member / deep-container pair, on the shape a subsystem already makes out
+    of a component: the container is not designed separately, it is the member drawn TWICE with the
+    front one covering. So one diamond is a decision and two is an area of them, everywhere at once —
+    the cards, the page heroes, and the head of the section that holds them."""
+    marks = ("() => [...document.querySelectorAll('#diagram .ibox-gly')]"
+             ".map((s) => ({stroke: s.getAttribute('stroke'), paths: s.querySelectorAll('path').length}))")
+    with _served_map(_with_rules) as url, _page(url + "#v=rules") as page:
+        _settle(page)
+        seen = page.evaluate(marks)
+        assert seen, "the decision areas draw no mark at all"
+        # Every card on this page is an AREA, so every mark is the doubled one.
+        assert all(m["paths"] == 2 for m in seen), f"an area's mark is two diamonds: {seen}"
+        assert {m["stroke"] for m in seen} == {"#be123c"}, f"one colour, its own: {seen}"
+        blk = page.evaluate("() => (document.querySelector('#diagram .ecard, #diagram .ibox') || {})"
+                            ".getAttribute && 1")
+        assert blk, "the areas are drawn as the shared element card"
+        assert not page.js_errors, page.js_errors
+
+    with _served_map(_with_rules) as url, _page(url + "#v=rules&blk=BLK1") as page:
+        _settle(page)
+        seen = page.evaluate("""() => ({
+            hero: (() => { const g = document.querySelector('#diagram .page-hero-glyph .ibox-gly');
+              return g ? g.querySelectorAll('path').length : 0; })(),
+            strip: (() => { const g = document.querySelector('#diagram .item-sec-title .ibox-gly');
+              return g ? g.querySelectorAll('path').length : 0; })(),
+            cards: [...document.querySelectorAll('#diagram .item-sec-body .ibox-gly')]
+              .map((s) => s.querySelectorAll('path').length),
+          })""")
+        assert seen["hero"] == 2, f"the area's own page leads with the doubled mark: {seen}"
+        assert seen["strip"] == 1, f"…and the section it holds is headed by the single one: {seen}"
+        assert seen["cards"] and all(n == 1 for n in seen["cards"]), \
+            f"every rule card in it wears one diamond: {seen}"
+        assert not page.js_errors, page.js_errors
+
+    with _served_map(_with_rules) as url, _page(url + "#v=rule&br=BR1") as page:
+        _settle(page)
+        n = page.evaluate("() => { const g = document.querySelector('#diagram .page-hero-glyph .ibox-gly');"
+                          " return g ? g.querySelectorAll('path').length : 0; }")
+        assert n == 1, f"a rule's own page leads with one diamond: {n}"
+        assert not page.js_errors, page.js_errors

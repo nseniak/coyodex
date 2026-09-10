@@ -805,14 +805,18 @@ const ITEM_KIND = {
   human: 'human', service: 'svc', 'ai-agent': 'agent',
   component: 'component', subsystem: 'subsystem', entity: 'entity', subdomain: 'subdomain',
   dep: 'dep', interface: 'interface',
+  // A DECISION and the AREA it sits in. Both were outside this table, so both drew no mark and fell
+  // back to the neutral slate — a rule's card and its area's card were the only element cards on the
+  // viewer with nothing in the figure column.
+  rule: 'rule', block: 'block',
   // A shared sub-use case's chips name their kind as the map does — `actor` for a person.
   actor: 'human', role: 'human',
 };
 function itemKind(k) { return ITEM_KIND[k] || 'component'; }
 // …but ONLY these kinds have a MARK. The fallback above is a colour fallback, and a colour that lands
 // near a component's is harmless; a GLYPH that lands on the component's gear is not — it tells the
-// reader a decision area, a business rule, a test or a process IS a component. Everything outside the
-// vocabulary goes unmarked instead, which says nothing rather than something untrue.
+// reader a test or a process IS a component. Everything outside the vocabulary goes unmarked instead,
+// which says nothing rather than something untrue.
 function itemHasGlyph(k) { return Object.prototype.hasOwnProperty.call(ITEM_KIND, k); }
 // The kind's colour, from the ONE table the diagrams already paint themselves with (gen_viewer's
 // ELEMENT_TINT, shipped in the bundle). A kind the table has no entry for falls back to the shared
@@ -886,6 +890,18 @@ function itemMarkD(k, fill) {
         + `<path d="M12.4 ${y} H16.4"/>`;
     }
     return rows;
+  }
+  // A DECISION, in the shape every flowchart already gives one. Nothing else in this hand is a
+  // diamond, so it cannot be read as a component's gear or a record's card — and it is the one
+  // candidate of five that survived being drawn at 18px AND doubled (a gate and a signpost both read
+  // as a flag that small; a pair of scales turned to specks; two funnels read as a paper plane).
+  if (k === 'rule') return '<path d="M9 2.6 L15.4 9 L9 15.4 L2.6 9 Z"/>';
+  // …and the AREA is that decision drawn twice, front one occluding — the same sentence a subsystem
+  // makes out of a component and a data area out of a record. The container is not designed
+  // separately; it is the member, twice.
+  if (k === 'block') {
+    return '<path d="M11.1 1.8 L16.2 6.9 L11.1 12 L6 6.9 Z"/>'
+      + `<path d="M6.7 6.6 L11.3 11.2 L6.7 15.8 L2.1 11.2 Z" style="fill:${fill}"/>`;
   }
   if (k === 'subflow') {
     return '<path d="M3.4 12.6 L9 6.2 L14.6 11.4"/>'
@@ -6777,7 +6793,8 @@ function heroDetailsLinkHtml(id) {
 // the caller passes it for that head, and the two are the same call from syncPageHero.
 // THE MARK OF AN ELEMENT KIND, for a hero's figure column — or nothing, for a kind the map draws no
 // mark for (a process, a rule). The hero reads without one (see pageHeroHtml).
-const HERO_MARK_KINDS = new Set(['component', 'subsystem', 'entity', 'subdomain', 'dep', 'usecase', 'subflow']);
+const HERO_MARK_KINDS = new Set(['component', 'subsystem', 'entity', 'subdomain', 'dep', 'usecase',
+                                 'subflow', 'rule', 'block']);
 function elementHeroGlyph(kind) {
   return HERO_MARK_KINDS.has(kind) ? itemGlyphSvg(kind) : '';
 }
@@ -12878,6 +12895,7 @@ function renderRules(s) {
   // and lives with the others under System › About this map.
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({
+      glyph: itemGlyphSvg('block'),
       name: g.name,
       type: elementLabel('block'),
       pills: elementSidePillsHtml(g.id)
@@ -12886,11 +12904,12 @@ function renderRules(s) {
       noDesc: 'No description recorded for this decision area.',
       meta: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
     })
-    // The rules as the page's one section, framed and headed like every item page's. No mark: the
-    // map draws no glyph for a rule.
+    // The rules as the page's one section, framed and headed like every item page's, under the mark of
+    // what it HOLDS — a single diamond, where the hero above it wears the doubled one.
     + itemSectionHtml([], 'rules', 'Rules', g.rules.length, '',
         g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id))
-                       : '<p class="empty">No rules assigned to this area yet.</p>')
+                       : '<p class="empty">No rules assigned to this area yet.</p>',
+        itemGlyphSvg('rule'))
     + '</div>';
   bindElementCards(diagram);
   // An area is now its own page rather than one section of a long scroll, so arriving focused on one
@@ -12924,13 +12943,13 @@ function renderRule(s) {
     ? '<div class="br-chips">' + r.entities.map((e) =>
         `<button type="button" class="br-ent" data-id="${esc(e.id)}">${esc(e.name)}</button>`).join('') + '</div>'
     : '<p class="empty">No entity is named by this rule.</p>';
-  // THE SAME CARD every page about one element leads with: no mark (the map draws none for a rule),
+  // THE SAME CARD every page about one element leads with: the diamond in the figure column,
   // `Business rule: <name>`, the statement as the sentence, and the area and the risk as its context.
   const context = `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Decision area:</span> ${area}`
     + (blk && blk.purpose ? ` ${mdInline(blk.purpose)}` : '') + '</span>'
     + (r.risk ? `<span class="page-hero-meta-line"><span class="uc-wants-lbl">If it is wrong:</span> ${mdInline(r.risk)}</span>` : '');
   diagram.innerHTML = '<div class="usecases-wrap">'
-    + pageHeroHtml({ name: ruleCrumbTitle(s.br), type: elementLabel('rule'),
+    + pageHeroHtml({ glyph: itemGlyphSvg('rule'), name: ruleCrumbTitle(s.br), type: elementLabel('rule'),
                      desc: ruleStatementLine(r) ? mdInline(r.statement) : '', noDesc: false, meta: context })
     + sec('sites', 'Where it is enforced', nSites ? `${nSites} call site${nSites === 1 ? '' : 's'}` : '', sites)
     + sec('steps', 'Enforced at these steps', nSteps ? `${nSteps} flow step${nSteps === 1 ? '' : 's'}` : '', steps)
