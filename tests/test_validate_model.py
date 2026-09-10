@@ -10,6 +10,8 @@ Run either way (needs an editable install: `make deps`):
 from __future__ import annotations
 
 import ast
+import contextlib
+import io
 import json
 import re
 import tempfile
@@ -156,6 +158,144 @@ def test_entry_point_coverage_splits_the_two_arms_of_claiming():
     assert "1 with no owning component" in validate_model_mod._entry_point_coverage_line(m)
     # No externally activated way in: nothing to split, so the line stays off.
     assert validate_model_mod._entry_point_coverage_line(ProjectModel(title="T", goal="G")) == ""
+
+
+def test_entry_point_coverage_counts_a_flow_step_at_the_way_ins_own_line():
+    """The third bucket. The traversal arm is component-grain, so one flow through a component
+    marks every way in it owns as covered — 87 of coyodex's own 97 the day this landed. A surface
+    step carries the way in's own `source` line (method.md), so a step anchored within 3 lines of a
+    way in is evidence a flow RUNS it: derived, at way-in grain, no new authored field. A number,
+    not an advisory — it is the ruler any rule about drawing steps at ways in is judged with."""
+    m = ProjectModel(title="T", goal="G")
+    m.components = [Component(id="C1", name="Doors", purpose="p", source="a.py:1")]
+    ep = lambda i, why, src: EntryPoint(id=f"EP{i}", kind="http-route", activation="external",
+                                        component="C1", trigger=why, source=src)
+    m.entry_points = [
+        ep(1, "named, and a step sits on its line", "a.py:10"),
+        ep(2, "run: a step 3 lines under its line", "a.py:20"),
+        ep(3, "loose: the nearest step is 4 lines away", "a.py:30"),
+        ep(4, "loose: same line number, other file", "b.py:40"),
+        ep(5, "run: the step sits inside a sub-flow", "a.py:50"),
+        ep(6, "named, no step anywhere near", "a.py:60"),
+    ]
+    m.use_cases = [UseCase(id="UC1", name="Do it", entry_points=["EP1", "EP6"])]
+    m.subflows = [SubFlow(id="SF1", name="Shared", steps=[
+        FlowStep(n=1, src="C1", dst="C1", phrase="shared", where="a.py:50")])]
+    m.flows = [Flow(uc="UC1", title="Do it", steps=[
+        FlowStep(n=1, src="C1", dst="C1", phrase="opens", where="a.py:10"),
+        FlowStep(n=2, src="C1", dst="C1", phrase="handles", where="a.py:23"),
+        FlowStep(n=3, src="C1", dst="C1", phrase="misses", where="a.py:34"),
+        FlowStep(n=4, src="C1", dst="C1", phrase="elsewhere", where="a.py:40"),
+        FlowStep(n=5, src="C1", dst="C1", subflow="SF1"),
+    ])]
+    assert validate_model_mod.step_anchored_entry_point_ids(m) == {"EP1", "EP2", "EP5"}
+    counts = validate_model_mod.completeness_counts(m)
+    assert counts["entry_points_named_by_use_case"] == 2
+    assert counts["entry_points_named_without_step"] == 1          # EP6
+    assert counts["entry_points_run_by_a_step"] == 2               # EP2, EP5
+    assert counts["entry_points_stepped"] == 3                     # + EP1, named AND stepped
+    assert counts["entry_points_covered_by_component_only"] == 2   # EP3, EP4
+    assert counts["entry_points_unclaimed_external"] == 0
+    line = validate_model_mod._entry_point_coverage_line(m)
+    assert "6 external way(s) in" in line and "2 named by a use case" in line
+    assert "2 run by a flow step at their own line" in line
+    assert "2 reached only through the component a walk touches" in line and "0 unclaimed" in line
+    # The tolerance is a parameter: at 0 only the exact-line step counts.
+    assert validate_model_mod.step_anchored_entry_point_ids(m, tolerance=0) == {"EP1", "EP5"}
+
+
+def make_storyless_model() -> ProjectModel:
+    """Two interfaces, seven ways in: EP1 named by UC1, EP2 run by a step, EP3 and EP4 storyless on
+    I1, EP5 storyless on I2, EP6 storyless in no interface, EP7 a middleware (a pipe, never
+    listed). One component, touched by the flow, so the per-component arm sees nothing."""
+    m = ProjectModel(title="T", goal="G")
+    m.components = [Component(id="C1", name="Doors", purpose="p", source="a.py:1")]
+
+    def ep(i: int, kind: str, why: str, src: str) -> EntryPoint:
+        return EntryPoint(id=f"EP{i}", kind=kind, activation="external", component="C1",
+                          trigger=why, source=src)
+    m.entry_points = [
+        ep(1, "http-route", "named by UC1", "a.py:10"),
+        ep(2, "http-route", "run by a step", "a.py:20"),
+        ep(3, "http-route", "storyless on I1", "a.py:30"),
+        ep(4, "http-route", "storyless on I1 too", "a.py:40"),
+        ep(5, "mcp-tool", "storyless on I2", "a.py:50"),
+        ep(6, "http-route", "storyless, in no interface", "a.py:60"),
+        ep(7, "middleware", "a pipe", "a.py:70"),
+    ]
+    m.interfaces = [
+        Interface(id="I1", name="Dashboard", what="w", side="ours", facing="user",
+                  ways_in=["EP1", "EP2", "EP3", "EP4"]),
+        Interface(id="I2", name="Admin MCP", what="w", side="ours", facing="user", ways_in=["EP5"]),
+    ]
+    m.use_cases = [UseCase(id="UC1", name="Do it", entry_points=["EP1"])]
+    m.flows = [Flow(uc="UC1", title="Do it", steps=[
+        FlowStep(n=1, src="C1", dst="C1", phrase="handles", where="a.py:21")])]
+    return m
+
+
+def storyless_warnings(m: ProjectModel) -> list[str]:
+    return [w for w in warnings_of(m) if "way(s) in have no story" in w]
+
+
+def test_storyless_ways_in_warn_once_per_interface_and_honour_the_records():
+    """The walk, checked. The component arm cannot see a skipped walk: one flow through a component
+    marks every way in it owns as covered (87 of coyodex's own 97). So every way in NO use case
+    names and NO flow step runs is listed, once per interface, and each is adjudicated by a use
+    case or by a record — per way in (`EPn`), per surface (`In`), or per component (`Cn`, the
+    line that already exists). A pipe (`middleware`) is never a door, and a way in the map already
+    calls plumbing ('Interface exceptions') owes no story either."""
+    m = make_storyless_model()
+    assert {e.id for e in validate_model_mod.storyless_ways_in(m)} == {"EP3", "EP4", "EP5", "EP6"}
+    assert validate_model_mod.completeness_counts(m)["entry_points_storyless"] == 4
+    ws = storyless_warnings(m)
+    assert len(ws) == 3, ws
+    assert any(w.startswith("I1 (Dashboard): 2 of its 4 way(s) in have no story")
+               and "EP3" in w and "EP4" in w for w in ws)
+    assert any(w.startswith("I2 (Admin MCP): 1 of its 1 way(s) in have no story") for w in ws)
+    assert any(w.startswith("In no interface: 1 way(s) in have no story") and "EP6" in w for w in ws)
+    assert not any("EP7" in w or "EP1 " in w or "EP2 " in w for w in ws)
+    # Records: one way in, one whole surface, and the plumbing heading.
+    m.extras = [ExtraSection(heading="Unclaimed surfaces",
+                             body="EP3: a dev-only page.\nI2: an ops surface, deliberate."),
+                ExtraSection(heading="Interface exceptions", body="EP6: the health probe, plumbing.")]
+    ws = storyless_warnings(m)
+    assert len(ws) == 1 and ws[0].startswith("I1 (Dashboard): 1 of its 4") and "EP4" in ws[0], ws
+    assert "EP3" not in ws[0]
+    assert any("2 way(s) in with no story are suppressed" in w and "EP3" in w and "EP5" in w
+               for w in warnings_of(m))
+    # The per-component line that already exists still covers the ways in it owns.
+    m.extras[0].body += "\nC1: the whole area is dev tooling."
+    assert not storyless_warnings(m)
+    # Additivity: an untraced map whose use cases name nothing has not walked yet — silence...
+    m = make_storyless_model()
+    m.flows = []
+    m.use_cases[0].entry_points = []
+    assert not storyless_warnings(m)
+    # ...but the trigger arm ALONE lists the rest: the walk happens at synthesis, before any trace.
+    m.use_cases[0].entry_points = ["EP1"]
+    ws = storyless_warnings(m)
+    assert any(w.startswith("I1 (Dashboard): 3 of its 4") and "EP2" in w for w in ws)
+    # Needs interfaces: without them there is no "per surface" to list by.
+    m = make_storyless_model()
+    m.interfaces = []
+    assert not storyless_warnings(m)
+
+
+def test_emit_unclaimed_prints_the_storyless_ways_in_per_interface():
+    m = make_storyless_model()
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "project-map.json"
+        p.write_text(to_canonical_json(m), encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = validate_model_mod.main(["--emit-unclaimed", str(p)])
+    out = buf.getvalue()
+    assert rc == 0, out
+    assert "# I1 (Dashboard)" in out and "- EP3: <why>" in out and "- EP4: <why>" in out
+    assert "# I2 (Admin MCP)" in out and "- EP5: <why>" in out
+    assert "# in no interface" in out and "- EP6: <why>" in out
+    assert "EP7" not in out and "EP1:" not in out and "EP2:" not in out
 
 
 def test_bucket_non_seed_is_an_advisory_nudge_not_a_gate() -> None:

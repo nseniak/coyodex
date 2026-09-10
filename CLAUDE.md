@@ -135,6 +135,16 @@ the code's names.
   what you open. Not a *type pill*, which says what KIND a thing is.
 - **way in** — one address, command or tool an interface is made of. An
   interface groups many; coyodex's own command line is 32 ways in.
+- **named / run / loose** — the three ways a way in can be covered by the use
+  cases, as the validator's coverage line counts them. **Named**: a use case
+  lists the way in as where it starts; authored, never derived. **Run**: a flow
+  step sits at the way in's own code line, within 3 lines; derived from the
+  flows, and the strongest evidence the map has that a use case really goes
+  through the way in. **Loose**: nobody names it and no step sits on it, but a
+  flow touches the component that owns it, so the check counts it as covered on
+  a rule alone. A way in that is none of the three is **unclaimed**, and the
+  validator warns about those per component. On 2026-09-10 coyodex's own map
+  read 8 named, 25 run, 62 loose, 2 unclaimed of 97 ways in.
 - **far side** — who or what is on the other side of an interface.
 - **client** — what a person reaches an interface THROUGH: a browser for a web
   page, a terminal for a command line, an AI agent for an MCP address. Never an

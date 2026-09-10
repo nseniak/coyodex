@@ -1966,11 +1966,7 @@ def _group_unclaimed_by_component(m: ProjectModel, eps: list[EntryPoint],
         return []
     accepted = _recorded_ids(m, "unclaimed surfaces", ("C",))
     cov_dirs = _recorded_coverage_dirs(m)  # a 'Coverage exceptions' dir also silences its components
-    comp_dir: dict[str, str] = {}
-    for c in m.components:
-        if c.source:
-            rel = strip_anchor(c.source).rstrip("/")
-            comp_dir[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
+    comp_dir = _component_dirs(m)
     by_comp: dict[str, list[EntryPoint]] = {}
     for ep in eps:
         by_comp.setdefault(ep.component.strip(), []).append(ep)
@@ -2001,6 +1997,107 @@ def unclaimed_self_components(m: ProjectModel, silenced_out: list[str] | None = 
     return _group_unclaimed_by_component(m, unclaimed_self_entry_points(m), silenced_out)
 
 
+#: How far a flow step's anchor may sit from a way in's own line and still count as a step AT that
+#: way in. A way in's `source` is the route / decorator / command line; the step that runs it is
+#: often anchored on the handler a few lines under. Measured on the three live maps the day this
+#: landed: exact-line matches were 41 / 41 / 22 of 86 / 198 / 97 external ways in, within 3 lines
+#: 57 / 67 / 33 — and 10 lines already reaches sibling routes in a dense routes file.
+STEP_AT_WAY_IN_TOLERANCE = 3
+
+
+def step_anchored_entry_point_ids(m: ProjectModel,
+                                  tolerance: int = STEP_AT_WAY_IN_TOLERANCE) -> set[str]:
+    """Ids of the entry points some flow step actually RUNS: a step (sub-flows expanded) whose
+    `where` sits in the way in's own file, within `tolerance` lines of its `source`.
+
+    The one DERIVED signal at way-in grain. The trigger arm is authored (`use_cases[].entry_points`)
+    and the traversal arm is derived at COMPONENT grain, so one flow through a component marks every
+    way in it owns as covered — 87 of coyodex's own 97 the day this landed. The method already makes
+    a surface step carry the way in's own `source` line ("use the way in's own source line"), so the
+    evidence is in the flows and needs no new authored field. A number, never an advisory: see
+    `completeness_counts`."""
+    lines_by_path: dict[str, list[int]] = {}
+    for _uc, _container, st in anchored_flow_steps(m):
+        loc = parse_anchor(st.where or "")
+        if loc is not None and loc.lo is not None:
+            lines_by_path.setdefault(loc.path, []).append(loc.lo)
+    out: set[str] = set()
+    for ep in m.entry_points:
+        loc = parse_anchor(ep.source or "")
+        if not ep.id or loc is None or loc.lo is None:
+            continue
+        lo = loc.lo - tolerance
+        hi = (loc.hi if loc.hi is not None else loc.lo) + tolerance
+        if any(lo <= n <= hi for n in lines_by_path.get(loc.path, ())):
+            out.add(ep.id)
+    return out
+
+
+#: Kinds that are pipes, not doors: nobody ARRIVES through a middleware, so no story can name one.
+#: The same plumbing exemption the method gives surface membership.
+STORYLESS_EXEMPT_KINDS = frozenset({"middleware"})
+
+
+def storyless_ways_in(m: ProjectModel) -> list[EntryPoint]:
+    """External ways in that NO use case names and NO flow step runs — the ones the component arm
+    hides. One flow through a component marks every way in it owns as covered, so a skipped walk
+    (the method's "each way in is named, recorded, or becomes a use case") left no trace at all:
+    the day this landed the three live maps held 13 / 67 / 64 of these, and the per-component
+    advisory reported 0 / 13 / 2.
+
+    Exempt: a `middleware` row (a pipe, never a door) and a way in recorded under 'Interface
+    exceptions' (the map already calls it plumbing). Empty on an untraced map whose use cases name
+    nothing (additivity: not walked yet, not "all storyless"); the trigger arm ALONE is enough to
+    list the rest, because the walk happens at synthesis, before any trace."""
+    triggered = triggered_entry_point_ids(m)
+    if not m.flows and not triggered:
+        return []
+    stepped = step_anchored_entry_point_ids(m)
+    plumbing = _recorded_ids(m, "interface exceptions", ("EP",))
+    return [ep for ep in external_entry_points(m)
+            if ep.id and ep.kind.strip().lower() not in STORYLESS_EXEMPT_KINDS
+            and ep.id not in triggered and ep.id not in stepped and ep.id not in plumbing]
+
+
+def _component_dirs(m: ProjectModel) -> dict[str, str]:
+    """Each anchored component's directory, for the 'Coverage exceptions' escape (a recorded dir
+    silences the components under it). Shared by every unclaimed-surface grouping."""
+    out: dict[str, str] = {}
+    for c in m.components:
+        if c.source:
+            rel = strip_anchor(c.source).rstrip("/")
+            out[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
+    return out
+
+
+def storyless_by_interface(m: ProjectModel, silenced_out: list[str] | None = None
+                           ) -> list[tuple[str, list[EntryPoint]]]:
+    """The storyless ways in grouped by the interface they belong to (`""` = in no interface),
+    MINUS the adjudicated ones: the way in (`EPn`), its interface (`In`) or its owning component
+    (`Cn`) recorded under 'Unclaimed surfaces', or the component under a recorded 'Coverage
+    exceptions' dir — the same escapes the per-component advisory honours, so a decision is never
+    written twice. Interfaces first, in id order; the no-interface group last."""
+    eps = storyless_ways_in(m)
+    if not eps:
+        return []
+    accepted = _recorded_ids(m, "unclaimed surfaces", ("EP", "I", "C"))
+    cov_dirs = _recorded_coverage_dirs(m)
+    comp_dir = _component_dirs(m)
+    iface_of = {e: i.id for i in m.interfaces for e in i.ways_in}
+    groups: dict[str, list[EntryPoint]] = {}
+    for ep in eps:
+        iid = iface_of.get(ep.id, "")
+        cid = ep.component.strip()
+        if ep.id in accepted or (iid and iid in accepted) or (cid and cid in accepted):
+            if silenced_out is not None:
+                silenced_out.append(ep.id)
+            continue
+        if cov_dirs and cid in comp_dir and _under_recorded(comp_dir[cid], cov_dirs):
+            continue
+        groups.setdefault(iid, []).append(ep)
+    return sorted(groups.items(), key=lambda kv: (kv[0] == "", len(kv[0]), kv[0]))
+
+
 def completeness_counts(m: ProjectModel) -> dict[str, int]:
     """The completeness picture as NUMBERS rather than a wall of advisories.
 
@@ -2025,7 +2122,18 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
     of argus's 61 rows as missing a use case, which is why the derived arm carries the check). The
     cost of that coarseness was invisible: a component a story touches marks EVERY way in it owns
     as covered, including ones no walk goes near. Counting them says how much of the coverage is
-    real without adding an advisory to a check whose signal is already thin."""
+    real without adding an advisory to a check whose signal is already thin.
+
+    **`entry_points_run_by_a_step` splits that loose half by the evidence the flows already hold.**
+    A surface step carries the way in's own `source` line (method.md, "use the way in's own source
+    line"), so a step anchored within `STEP_AT_WAY_IN_TOLERANCE` lines of a way in says a flow RUNS
+    it — derived, at way-in grain, with no new authored field. Measured the day it landed, over the
+    three live maps' loose halves: argus 0 of 13, mcpolis 17 of 73, coyodex 25 of 87 had such a
+    step; the rest were covered by the component rule alone. `entry_points_stepped` is the same
+    evidence over EVERY external way in, named or not (57 / 86, 67 / 198, 33 / 97) — the ruler any
+    rule about drawing steps at ways in is judged with — and `entry_points_named_without_step` is
+    the authored arm with no step behind it (16 of 73, 64 of 112, 0 of 8). The four buckets of the
+    coverage line stay a partition: named, run, loose, unclaimed, plus the ownerless remainder."""
     traced = set(flow_endpoint_ids_by_uc(m))
     cap_of = {u.id: (u.capability or "").strip() for u in m.use_cases}
     labels = {c.id: (c.happy_path or "").strip().lower() for c in m.capabilities}
@@ -2036,14 +2144,21 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
     # own check) and is left out of both counts rather than silently swelling one.
     triggered = triggered_entry_point_ids(m)
     touched = flow_endpoint_ids(m)
+    stepped = step_anchored_entry_point_ids(m)
     comp_ids = {c.id for c in m.components}
     named = [ep for ep in ext if ep.id and ep.id in triggered]
-    loose = [ep for ep in ext
-             if (comp := ep.component.strip()) and comp in comp_ids and comp in touched
-             and not (ep.id and ep.id in triggered)]
+    reached = [ep for ep in ext
+               if (comp := ep.component.strip()) and comp in comp_ids and comp in touched
+               and not (ep.id and ep.id in triggered)]
+    run = [ep for ep in reached if ep.id in stepped]
+    loose = [ep for ep in reached if ep.id not in stepped]
     return {
         "entry_points_named_by_use_case": len(named),
+        "entry_points_named_without_step": len([ep for ep in named if ep.id not in stepped]),
+        "entry_points_run_by_a_step": len(run),
         "entry_points_covered_by_component_only": len(loose),
+        "entry_points_stepped": len([ep for ep in ext if ep.id and ep.id in stepped]),
+        "entry_points_storyless": len(storyless_ways_in(m)),
         "use_cases": len(m.use_cases),
         "use_cases_traced": len([u for u in m.use_cases if u.id in traced]),
         "use_cases_untraced": len([u for u in m.use_cases if u.id not in traced]),
@@ -2145,6 +2260,30 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
     phase the surviving warnings drain as traces land."""
     warnings: list[str] = []
     warnings.extend(_trigger_arm_warnings(m))
+    if m.entry_points and m.interfaces:
+        # THE WALK, CHECKED ONCE PER SURFACE. Per way in, because the component arm above cannot
+        # see a skipped walk; per surface, because a line per way in is the wall the method
+        # already paid for once (~125 unaddressed on a monorepo). Needs interfaces: the walk is
+        # "per surface", and without them every way in would land in one no-interface group.
+        iface_name = {i.id: i.name for i in m.interfaces}
+        ways_total = {i.id: len(i.ways_in) for i in m.interfaces}
+        story_silenced: list[str] = []
+        for iid, eps in storyless_by_interface(m, story_silenced):
+            shown = "; ".join(f"{ep.id} [{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
+            head = (f"{iid} ({iface_name.get(iid, iid)}): {len(eps)} of its {ways_total.get(iid, 0)} "
+                    f"way(s) in have no story" if iid
+                    else f"In no interface: {len(eps)} way(s) in have no story")
+            warnings.append(
+                f"{head} — no use case names them and no flow step runs them ({shown}). Their "
+                "component is claimed by a walk, which is why the per-component line is quiet. Each "
+                "becomes the use case it is evidence for, or is recorded 'EPn: <why>' under an "
+                f"'Unclaimed surfaces' extras heading (a whole surface: '{iid or 'In'}: <why>'); "
+                "`validate --emit-unclaimed` prints them ready to paste")
+        if story_silenced:
+            warnings.append(
+                f"{len(story_silenced)} way(s) in with no story are suppressed by a recorded "
+                f"'Unclaimed surfaces' line: {_shown(sorted(set(story_silenced)), 10, unit='way(s) in')}. "
+                "A recorded gap is still a gap")
     if m.entry_points and m.flows:
         comp_name = {c.id: c.name for c in m.components}
         silenced: list[str] = []
@@ -6540,7 +6679,10 @@ def _entry_point_coverage_line(m: ProjectModel) -> str:
     purpose; one reached only because some walk happens to touch its owning component is claimed by
     a rule that cannot tell a real door from a sibling row in the same file. Both count as covered,
     and until this line existed nothing said how the total split. On a live map the loose half was
-    the large half, and a reader had no way to know.
+    the large half, and a reader had no way to know. The third bucket, "run by a flow step at their
+    own line", is the loose half's evidence-backed part (`step_anchored_entry_point_ids`): the day
+    it landed it read 0 / 17 / 25 of the loose 13 / 73 / 87 on argus / mcpolis / coyodex, which is
+    how much of "covered" a reader could trust.
 
     Empty when the map has no externally activated way in — there is nothing to split."""
     c = completeness_counts(m)
@@ -6548,10 +6690,12 @@ def _entry_point_coverage_line(m: ProjectModel) -> str:
     if not total:
         return ""
     named = c["entry_points_named_by_use_case"]
+    run = c["entry_points_run_by_a_step"]
     loose = c["entry_points_covered_by_component_only"]
     unclaimed = c["entry_points_unclaimed_external"]
-    rest = total - named - loose - unclaimed
+    rest = total - named - run - loose - unclaimed
     line = (f"Entry-point coverage — {total} external way(s) in: {named} named by a use case, "
+            f"{run} run by a flow step at their own line, "
             f"{loose} reached only through the component a walk touches, {unclaimed} unclaimed")
     # The remainder is the rows with no owning component or a dangling one. Each has its own check;
     # naming the count here keeps the four numbers adding up, which is what makes the line readable.
@@ -6689,7 +6833,8 @@ def _run(argv: list[str] | None = None) -> int:
         # would have to hand-type.
         ext_rows = unclaimed_surface_components(m)
         self_rows = unclaimed_self_components(m)
-        if not ext_rows and not self_rows:
+        story_rows = storyless_by_interface(m) if m.interfaces else []
+        if not ext_rows and not self_rows and not story_rows:
             print("# No unclaimed surfaces — nothing to record.")
             return 0
         comp_name = {c.id: c.name for c in m.components}
@@ -6710,6 +6855,16 @@ def _run(argv: list[str] | None = None) -> int:
             for cid, eps in self_rows:
                 triggers = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
                 print(f"- {cid} ({comp_name.get(cid, cid)}): <why>   # self-activated: {triggers}")
+        if story_rows:
+            iface_name = {i.id: i.name for i in m.interfaces}
+            print("<!-- ways in with NO STORY: no use case names them and no flow step runs them, "
+                  "though a walk touches their component. Each is a use case to add, or a line "
+                  "here — `EPn: <why>`; a whole surface: `In: <why>` -->")
+            for iid, eps in story_rows:
+                head = f"{iid} ({iface_name.get(iid, iid)})" if iid else "in no interface"
+                print(f"# {head}")
+                for ep in eps:
+                    print(f"- {ep.id}: <why>   # [{ep.kind}] {_clip(ep.trigger)}")
         return 0
     vstats: dict[str, int] = {}
     problems, warnings = validate_model(m, path, check_sources=check_sources,
