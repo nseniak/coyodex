@@ -1966,11 +1966,7 @@ def _group_unclaimed_by_component(m: ProjectModel, eps: list[EntryPoint],
         return []
     accepted = _recorded_ids(m, "unclaimed surfaces", ("C",))
     cov_dirs = _recorded_coverage_dirs(m)  # a 'Coverage exceptions' dir also silences its components
-    comp_dir: dict[str, str] = {}
-    for c in m.components:
-        if c.source:
-            rel = strip_anchor(c.source).rstrip("/")
-            comp_dir[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
+    comp_dir = _component_dirs(m)
     by_comp: dict[str, list[EntryPoint]] = {}
     for ep in eps:
         by_comp.setdefault(ep.component.strip(), []).append(ep)
@@ -2037,6 +2033,71 @@ def step_anchored_entry_point_ids(m: ProjectModel,
     return out
 
 
+#: Kinds that are pipes, not doors: nobody ARRIVES through a middleware, so no story can name one.
+#: The same plumbing exemption the method gives surface membership.
+STORYLESS_EXEMPT_KINDS = frozenset({"middleware"})
+
+
+def storyless_ways_in(m: ProjectModel) -> list[EntryPoint]:
+    """External ways in that NO use case names and NO flow step runs — the ones the component arm
+    hides. One flow through a component marks every way in it owns as covered, so a skipped walk
+    (the method's "each way in is named, recorded, or becomes a use case") left no trace at all:
+    the day this landed the three live maps held 13 / 67 / 64 of these, and the per-component
+    advisory reported 0 / 13 / 2.
+
+    Exempt: a `middleware` row (a pipe, never a door) and a way in recorded under 'Interface
+    exceptions' (the map already calls it plumbing). Empty on an untraced map whose use cases name
+    nothing (additivity: not walked yet, not "all storyless"); the trigger arm ALONE is enough to
+    list the rest, because the walk happens at synthesis, before any trace."""
+    triggered = triggered_entry_point_ids(m)
+    if not m.flows and not triggered:
+        return []
+    stepped = step_anchored_entry_point_ids(m)
+    plumbing = _recorded_ids(m, "interface exceptions", ("EP",))
+    return [ep for ep in external_entry_points(m)
+            if ep.id and ep.kind.strip().lower() not in STORYLESS_EXEMPT_KINDS
+            and ep.id not in triggered and ep.id not in stepped and ep.id not in plumbing]
+
+
+def _component_dirs(m: ProjectModel) -> dict[str, str]:
+    """Each anchored component's directory, for the 'Coverage exceptions' escape (a recorded dir
+    silences the components under it). Shared by every unclaimed-surface grouping."""
+    out: dict[str, str] = {}
+    for c in m.components:
+        if c.source:
+            rel = strip_anchor(c.source).rstrip("/")
+            out[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
+    return out
+
+
+def storyless_by_interface(m: ProjectModel, silenced_out: list[str] | None = None
+                           ) -> list[tuple[str, list[EntryPoint]]]:
+    """The storyless ways in grouped by the interface they belong to (`""` = in no interface),
+    MINUS the adjudicated ones: the way in (`EPn`), its interface (`In`) or its owning component
+    (`Cn`) recorded under 'Unclaimed surfaces', or the component under a recorded 'Coverage
+    exceptions' dir — the same escapes the per-component advisory honours, so a decision is never
+    written twice. Interfaces first, in id order; the no-interface group last."""
+    eps = storyless_ways_in(m)
+    if not eps:
+        return []
+    accepted = _recorded_ids(m, "unclaimed surfaces", ("EP", "I", "C"))
+    cov_dirs = _recorded_coverage_dirs(m)
+    comp_dir = _component_dirs(m)
+    iface_of = {e: i.id for i in m.interfaces for e in i.ways_in}
+    groups: dict[str, list[EntryPoint]] = {}
+    for ep in eps:
+        iid = iface_of.get(ep.id, "")
+        cid = ep.component.strip()
+        if ep.id in accepted or (iid and iid in accepted) or (cid and cid in accepted):
+            if silenced_out is not None:
+                silenced_out.append(ep.id)
+            continue
+        if cov_dirs and cid in comp_dir and _under_recorded(comp_dir[cid], cov_dirs):
+            continue
+        groups.setdefault(iid, []).append(ep)
+    return sorted(groups.items(), key=lambda kv: (kv[0] == "", len(kv[0]), kv[0]))
+
+
 def completeness_counts(m: ProjectModel) -> dict[str, int]:
     """The completeness picture as NUMBERS rather than a wall of advisories.
 
@@ -2097,6 +2158,7 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
         "entry_points_run_by_a_step": len(run),
         "entry_points_covered_by_component_only": len(loose),
         "entry_points_stepped": len([ep for ep in ext if ep.id and ep.id in stepped]),
+        "entry_points_storyless": len(storyless_ways_in(m)),
         "use_cases": len(m.use_cases),
         "use_cases_traced": len([u for u in m.use_cases if u.id in traced]),
         "use_cases_untraced": len([u for u in m.use_cases if u.id not in traced]),
@@ -2198,6 +2260,30 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
     phase the surviving warnings drain as traces land."""
     warnings: list[str] = []
     warnings.extend(_trigger_arm_warnings(m))
+    if m.entry_points and m.interfaces:
+        # THE WALK, CHECKED ONCE PER SURFACE. Per way in, because the component arm above cannot
+        # see a skipped walk; per surface, because a line per way in is the wall the method
+        # already paid for once (~125 unaddressed on a monorepo). Needs interfaces: the walk is
+        # "per surface", and without them every way in would land in one no-interface group.
+        iface_name = {i.id: i.name for i in m.interfaces}
+        ways_total = {i.id: len(i.ways_in) for i in m.interfaces}
+        story_silenced: list[str] = []
+        for iid, eps in storyless_by_interface(m, story_silenced):
+            shown = "; ".join(f"{ep.id} [{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
+            head = (f"{iid} ({iface_name.get(iid, iid)}): {len(eps)} of its {ways_total.get(iid, 0)} "
+                    f"way(s) in have no story" if iid
+                    else f"In no interface: {len(eps)} way(s) in have no story")
+            warnings.append(
+                f"{head} — no use case names them and no flow step runs them ({shown}). Their "
+                "component is claimed by a walk, which is why the per-component line is quiet. Each "
+                "becomes the use case it is evidence for, or is recorded 'EPn: <why>' under an "
+                f"'Unclaimed surfaces' extras heading (a whole surface: '{iid or 'In'}: <why>'); "
+                "`validate --emit-unclaimed` prints them ready to paste")
+        if story_silenced:
+            warnings.append(
+                f"{len(story_silenced)} way(s) in with no story are suppressed by a recorded "
+                f"'Unclaimed surfaces' line: {_shown(sorted(set(story_silenced)), 10, unit='way(s) in')}. "
+                "A recorded gap is still a gap")
     if m.entry_points and m.flows:
         comp_name = {c.id: c.name for c in m.components}
         silenced: list[str] = []
@@ -6747,7 +6833,8 @@ def _run(argv: list[str] | None = None) -> int:
         # would have to hand-type.
         ext_rows = unclaimed_surface_components(m)
         self_rows = unclaimed_self_components(m)
-        if not ext_rows and not self_rows:
+        story_rows = storyless_by_interface(m) if m.interfaces else []
+        if not ext_rows and not self_rows and not story_rows:
             print("# No unclaimed surfaces — nothing to record.")
             return 0
         comp_name = {c.id: c.name for c in m.components}
@@ -6768,6 +6855,16 @@ def _run(argv: list[str] | None = None) -> int:
             for cid, eps in self_rows:
                 triggers = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
                 print(f"- {cid} ({comp_name.get(cid, cid)}): <why>   # self-activated: {triggers}")
+        if story_rows:
+            iface_name = {i.id: i.name for i in m.interfaces}
+            print("<!-- ways in with NO STORY: no use case names them and no flow step runs them, "
+                  "though a walk touches their component. Each is a use case to add, or a line "
+                  "here — `EPn: <why>`; a whole surface: `In: <why>` -->")
+            for iid, eps in story_rows:
+                head = f"{iid} ({iface_name.get(iid, iid)})" if iid else "in no interface"
+                print(f"# {head}")
+                for ep in eps:
+                    print(f"- {ep.id}: <why>   # [{ep.kind}] {_clip(ep.trigger)}")
         return 0
     vstats: dict[str, int] = {}
     problems, warnings = validate_model(m, path, check_sources=check_sources,

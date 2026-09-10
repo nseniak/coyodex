@@ -106,6 +106,11 @@ class MapProfile:
     named_entry_points: int | None = None      # external EPs a use case NAMES (`entry_points`) —
     #                                            the authored arm; None when the map has no entry
     #                                            points or no use cases. Report-only.
+    storyless_entry_points: int | None = None  # external EPs neither named nor run (middleware and
+    #                                            recorded plumbing excluded) — the walk's debt, RAW
+    #                                            (an 'Unclaimed surfaces' record silences the
+    #                                            advisory, not this); same None rule as
+    #                                            unclaimed_entry_points. Report-only.
     off_spine_ucs: int | None = None           # use cases with no HP position; None when HP empty
     unclaimed_self_entry_points: int | None = None  # SELF-activated EPs (crons, workers, consumers,
     #: The product's OUTSIDE EDGE (T2b). Optional so profiles written before it exists still load.
@@ -445,6 +450,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
                       if m.entry_points and m.flows else None)
     counts = validate_model.completeness_counts(m)
     stepped_eps = counts["entry_points_stepped"] if m.entry_points and m.flows else None
+    storyless_eps = counts["entry_points_storyless"] if m.entry_points and m.flows else None
     named_eps = (counts["entry_points_named_by_use_case"]
                  if m.entry_points and m.use_cases else None)
     n_caps = len(m.capabilities) or None      # None on a map that has not adopted the grouping
@@ -526,6 +532,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None,
         unclaimed_entry_points=unclaimed,
         stepped_entry_points=stepped_eps,
         named_entry_points=named_eps,
+        storyless_entry_points=storyless_eps,
         off_spine_ucs=off_spine,
         unclaimed_self_entry_points=unclaimed_self,
         capabilities=n_caps,
@@ -596,7 +603,8 @@ def _format(p: MapProfile) -> str:
          f"  completeness: entry points {p.entry_points} ({p.external_entry_points} external, "
          f"{'n/a' if p.unclaimed_entry_points is None else p.unclaimed_entry_points} unclaimed, "
          f"{'n/a' if p.named_entry_points is None else p.named_entry_points} named by a use case, "
-         f"{'n/a' if p.stepped_entry_points is None else p.stepped_entry_points} run by a step) "
+         f"{'n/a' if p.stepped_entry_points is None else p.stepped_entry_points} run by a step, "
+         f"{'n/a' if p.storyless_entry_points is None else p.storyless_entry_points} storyless) "
          f"· off-spine UCs {'n/a' if p.off_spine_ucs is None else p.off_spine_ucs} "
          f"· entities in flows "
          f"{'n/a' if p.entities_in_flows is None else f'{p.entities_in_flows} ({p.entities_in_flows_pct}%)'} "

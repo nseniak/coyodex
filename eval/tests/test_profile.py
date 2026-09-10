@@ -747,8 +747,10 @@ def test_stepped_and_named_entry_points_read_the_way_in_grain() -> None:
     p = build_profile(json.dumps(d))
     assert p.external_entry_points == 2 and p.unclaimed_entry_points == 0, p
     assert p.stepped_entry_points == 1 and p.named_entry_points == 1, p
+    assert p.storyless_entry_points == 0, p          # EP1 run, EP2 named: nothing storyless
     p0 = build_profile(make_counts_map())
     assert p0.stepped_entry_points is None and p0.named_entry_points is None, p0
+    assert p0.storyless_entry_points is None, p0
 
 
 def test_off_spine_ucs_is_none_without_a_happy_path() -> None:
@@ -795,11 +797,12 @@ def test_old_baseline_without_completeness_fields_loads() -> None:
     d = json.loads(p.to_json())
     for k in ("entry_points", "external_entry_points", "unclaimed_entry_points", "off_spine_ucs",
               "entities_in_flows", "entities_in_flows_pct",
-              "stepped_entry_points", "named_entry_points"):
+              "stepped_entry_points", "named_entry_points", "storyless_entry_points"):
         d.pop(k)
     old = MapProfile.from_json(json.dumps(d))
     assert old.entry_points is None and old.unclaimed_entry_points is None
     assert old.stepped_entry_points is None and old.named_entry_points is None
+    assert old.storyless_entry_points is None
     assert old.external_entry_points is None and old.off_spine_ucs is None
     assert old.entities_in_flows is None and old.entities_in_flows_pct is None
 
