@@ -101,6 +101,13 @@ def _ledger_file(t) -> "Path":
     return p
 
 
+def _gold_file(tmp: Path) -> Path:
+    """An empty gold: nothing to compare, so a map against itself exits 0."""
+    p = tmp / "gold.json"
+    p.write_text("{}", encoding="utf-8")
+    return p
+
+
 def _run_dir(tmp: Path, name: str) -> Path:
     """`bless` promotes a run directory to a baseline; both must exist and hold a profile."""
     d = tmp / name
@@ -143,6 +150,8 @@ RECIPES: dict[str, tuple] = {
     # the ledger itself being broken; accepting that here would let a run where every row crashed
     # pass this sweep.
     "live-numbers":   (lambda t: ["live-numbers", "--repo", str(REPO)], (0, 1)),
+    # A map against ITSELF with an empty gold: every path runs, nothing can be wrong.
+    "walk-score":     (lambda t: ["walk-score", str(MAP), str(MAP), "--gold", str(_gold_file(t))], OK),
 }
 
 

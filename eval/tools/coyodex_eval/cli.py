@@ -46,6 +46,9 @@ Commands:
            being rebuilt, so the code stays right while the sentence stops being true and no
            gate can see it. Reads no prose: a person writes the sentence here too, and a
            measure regenerates it from the map. Exit 1 on any stale row.
+  walk-score  Score a PARTIAL RUN of the front-door walk: two maps (before, after) against a
+           gold table written BEFORE the agent ran — which way in became a use case, was named
+           on one, was recorded, or was left untouched. Exit 1 on any way in outside its gold.
   retro-precheck  Refuse to retrospect a build that has not finished. Exit 1 when another
            session is still writing a transcript — provenance is stamped near the END of a
            build, so mid-run it still names the PREVIOUS one and a retro reads the wrong run.
@@ -106,6 +109,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "live-numbers":
         from coyodex_eval import live_numbers
         return live_numbers.main(rest)
+    if cmd == "walk-score":
+        from coyodex_eval import walk_score
+        return walk_score.main(rest)
     if cmd == "retro-precheck":
         from coyodex_eval import retro_precheck
         return retro_precheck.main(rest)

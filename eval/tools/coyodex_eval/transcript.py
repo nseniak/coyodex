@@ -489,7 +489,7 @@ _COYODEX_SUBCOMMANDS = frozenset({
     "contract", "cost", "diff", "dump", "finalize", "fix", "grounding", "hash", "judge",
     "ledger", "lint-fragment", "live-numbers",
     "mutate", "preindex",
-    "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
+    "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck", "walk-score",
     "context", "run", "score", "scope", "serve", "ship", "timings", "transcript", "validate",
 })
 

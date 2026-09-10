@@ -11184,8 +11184,19 @@ function systemSections() {
            (C.capabilities || 0) - (C.capabilities_untraced || 0), C.capabilities || 0,
            (C.capabilities_untraced || 0) ? 'a whole feature was never walked' : 'all reached',
            (C.capabilities_untraced || 0) ? 'warn' : 'ok') : '',
+      // The four coverage states of a way in, as validate splits them: named, run, loose,
+      // unclaimed. The one tile this used to show ("unclaimed") read 2 of 97 on a map with 64
+      // storyless ways in, because a way in counts as unclaimed only when NO walk touches its
+      // component — and one walk through a component covers every way in it owns.
+      tile('Ways in named by a use case', C.entry_points_named_by_use_case || 0,
+           C.entry_points_external || 0,
+           `${C.entry_points_run_by_a_step || 0} more run by a flow step · `
+           + `${C.entry_points_covered_by_component_only || 0} covered only through their component`, ''),
+      tile('Storyless ways in', C.entry_points_storyless || 0, C.entry_points_external || 0,
+           'no use case names them and no flow step runs them',
+           (C.entry_points_storyless || 0) ? 'warn' : 'ok'),
       tile('External surfaces unclaimed', C.entry_points_unclaimed_external || 0,
-           C.entry_points_external || 0, 'no use case reaches them',
+           C.entry_points_external || 0, 'no walk touches their component',
            (C.entry_points_unclaimed_external || 0) ? 'warn' : 'ok'),
       tile('Self-started unclaimed', C.entry_points_unclaimed_self || 0, 0,
            'crons / workers / boot hooks — often a record, not a use case',
