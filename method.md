@@ -1239,6 +1239,14 @@ pass that mints the features, so the answer never has to travel through `reconci
 record `BLKn: <why>` under a **"Decision area exceptions"** extras heading; an advisory asks either
 way. `[]` is a shape error, not an answer.
 
+**IT ASKS WHAT THE DECISION DECIDES, NOT WHERE IT IS ENFORCED.** The two readings give different
+answers on a third of a real map's areas, so the question has to be settled in one place, and this is
+it. mcpolis's "Who may call which tool" governs **Access control** — the feature whose whole job is
+deciding which people may reach which tools — even though every one of its rules is enforced inside
+the gateway's code. Where a rule is enforced is already answered, per rule, by its own call sites;
+asking `governs` the same question again would waste the one field that can say something a
+derivation cannot. Rules is a PRODUCT tab, and a decision belongs to the feature it constrains.
+
 AUTHORED, and this one was measured before it was written. Every derivation was tried on three live
 maps and every one failed: the feature a rule's steps land on is a plurality, not a home (52% and
 61% of an area's links at the median, 8 of 32 areas winning on under half, one on 23% against a

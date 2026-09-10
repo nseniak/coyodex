@@ -209,6 +209,13 @@ class Group:
                                # groups of nine and two; components fan out to 100+ per map; and the
                                # happy path ties four areas at one station.
                                #
+                               # IT ASKS WHAT THE DECISION DECIDES, NOT WHERE IT IS ENFORCED. The
+                               # two readings differ on a third of a real map's areas: mcpolis's
+                               # "Who may call which tool" governs Access control, whose whole job
+                               # is deciding who may reach which tools, though every one of its
+                               # rules is enforced inside the gateway's code. Where a rule is
+                               # enforced is already answered by its own call sites.
+                               #
                                # NOT `owners`, which is deliberately about DATA: an owner is the
                                # feature that creates a record and runs its lifecycle, and a decision
                                # area keeps nothing. Same authoring discipline, different question,
