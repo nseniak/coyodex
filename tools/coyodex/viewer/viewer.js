@@ -3043,21 +3043,27 @@ function showDomainContainerEdge(a, b, drawn) {
 }
 // WHERE AN ARROW'S CARD LEADS: the pair page of the two groups it joins. `kind` names the page (`edge`
 // for two subsystems, `domedge` for two subdomains) and `leaf` the member kind a drawn end may be
-// (`component` or `entity`). A MEMBER'S cross arrow lands on that page with THAT member selected and
-// centred — its crossings lit, the rest of the pair dimmed, its card open — the way a locate points at
-// one thing among many; a box↔box arrow (either overview) opens the pair with nothing chosen. The
-// bundled arrows themselves are never pre-selected: the page is ABOUT this arrow, and selecting
-// everything on it marked nothing out (measured once: the stacked cards took 97% of the drawing's
-// height). `center` is a one-shot hint the card's click handler turns into `pendingCenter`; it never
-// enters the state. ONE RULE FOR BOTH FAMILIES, so the two arrow cards cannot drift apart.
+// (`component` or `entity`).
 //
-// This focus was promised and lost twice: an earlier drill selected the member, then the page opened on
-// a crossings list narrowed to it, then that opening card went — and the field carrying the member was
-// written for two commits with nothing left to read it.
+// NO WAY IN CHOOSES ANYTHING FOR YOU EITHER. A member's cross arrow used to land on the pair page with
+// THAT member SELECTED — a ring round it, its card floating over the drawing, and the hint 'faded boxes
+// are just unrelated' under a page where nothing was faded, because a pair of two boxes has nothing to
+// fade. That is a selection nobody made, which is exactly what the climb out of a container stopped
+// doing (`Back` and the breadcrumb both return the wider view with the selection the reader HAD, or
+// none). A drill in owes the reader the same: arriving is not choosing.
+//
+// The member is still CENTRED. `center` is a one-shot hint the card's click handler turns into
+// `pendingCenter` and never enters the state — putting the reader in front of what they opened is not
+// the same as choosing something for them, which is the distinction `bindBridgeEdge` already draws for
+// its own leaf. The bundled arrows are not pre-selected either, and never were: the page is ABOUT this
+// arrow, and selecting everything on it marked nothing out (measured once: the stacked cards took 97%
+// of the drawing's height).
+//
+// ONE RULE FOR BOTH FAMILIES, so the two arrow cards cannot drift apart.
 function pairPageDrill(kind, leaf, a, b, drawn) {
   const isLeaf = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === leaf;
   const member = drawn && (isLeaf(drawn.src) ? drawn.src : (isLeaf(drawn.dst) ? drawn.dst : null));
-  return member ? { kind, a, b, sel: 'node:' + member, center: member } : { kind, a, b };
+  return member ? { kind, a, b, center: member } : { kind, a, b };
 }
 // Selecting a BRIDGE arrow (structure↔domain): the component↔subdomain arrow in a subsystem card, or the
 // subsystem↔entity arrow in a subdomain/domain view. It bundles component→entity edges; list each as
@@ -13184,13 +13190,19 @@ async function renderView(sArg, transient, seq) {
     const el = mainScene.nodeEls[id];
     if (el) selectNode(mainScene, el, id); else showNodeDetailSynced(id);
     if (el) pendingMatchTextId = id;
-  } else if (!transient && restoreSelection(mainScene, s)) {
-    // history revisit (the whole captured multi-selection) OR a fresh focus-drill (a single requested key)
-    // — restoreSelection replayed it above. A fresh focus-drill (pendingCenter set at drill time) centers
-    // its focused node at the fit zoom so it can't land off-screen; a plain history revisit leaves
-    // pendingCenter null and keeps the camera.
-    if (pendingCenter && s.sel === 'node:' + pendingCenter && mainScene.nodeEls[pendingCenter]) pendingCenterId = pendingCenter;
+  } else if (!transient) {
+    // A history revisit replays the whole captured selection; a focus-drill replays the single key it
+    // asked for. Either way it is `restoreSelection`'s business, and the CAMERA's is separate.
+    restoreSelection(mainScene, s);
   }
+  // CENTRING IS NOT SELECTING, so it does not hang off one. `pendingCenter` used to be honoured only
+  // inside the restore branch and only when the state's own `sel` named the very node being centred —
+  // which quietly tied the two together: the drill that stopped choosing a member for the reader
+  // (pairPageDrill) would have stopped centring it too, and the reader would arrive nowhere in
+  // particular on a drawing they had just opened one arrow of. A fresh drill centres what it names, at
+  // the fit zoom so it cannot land off-screen; a plain history revisit sets no `pendingCenter` at all
+  // and keeps the camera it captured.
+  if (!transient && pendingCenter && mainScene.nodeEls[pendingCenter]) pendingCenterId = pendingCenter;
   if (!transient) pendingCenter = null;
   const svgEl = diagram.querySelector('svg');
   if (svgEl && window.svgPanZoom) {
@@ -14666,16 +14678,17 @@ PANEL_HOST.addEventListener('click', (ev) => {
   let to = null;
   try { to = JSON.parse(more.getAttribute('data-drill')); } catch (_) { return; }
   if (!to) return;
-  // A drill that names one box to land on (`center`, set beside `sel` by pairPageDrill) centres it on
-  // arrival — the one-shot `pendingCenter` a locate uses. The hint is consumed here, so the state that
-  // enters history carries only what the address can say back.
+  // A drill that names one box to land on (`center`) centres it on arrival — the one-shot
+  // `pendingCenter` a locate uses. It is NOT a selection: `pairPageDrill` sends a `center` and no `sel`,
+  // so the reader lands in front of what they opened without anything being chosen for them. The hint
+  // is consumed here, so the state that enters history carries only what the address can say back.
   const center = to.center; delete to.center;
   const cur = history[hi];
-  if (to.sel && cur && stateKey(cur) === stateKey(to) && mainScene && mainScene.selectors[to.sel]) {
-    // Already on this page (stateKey ignores `sel`, so go() would no-op): select the member in place,
-    // the same fallback selectFlowStep uses for a step on the use case already showing.
-    selClear(mainScene); mainScene.selectors[to.sel]();
-    if (center && mainScene.nodeEls[center]) applyZoomAndCenter(mainScene.nodeEls[center], 1);
+  if (cur && stateKey(cur) === stateKey(to)) {
+    // ALREADY ON THIS PAGE, where `go()` no-ops — so act in place, and never leave `pendingCenter` set
+    // for whatever the reader does next (render() is what clears it, and render() will not run).
+    if (to.sel && mainScene && mainScene.selectors[to.sel]) { selClear(mainScene); mainScene.selectors[to.sel](); }
+    if (center && mainScene && mainScene.nodeEls[center]) applyZoomAndCenter(mainScene.nodeEls[center], 1);
     return;
   }
   if (center) pendingCenter = center;

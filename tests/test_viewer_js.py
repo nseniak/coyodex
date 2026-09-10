@@ -4838,7 +4838,11 @@ def test_no_way_up_chooses_anything_for_you() -> None:
     out = js[js.index("async function runDrillOut(my) {"): js.index("\n}", js.index("async function runDrillOut(my) {"))]
     assert "selectNode" not in out and "selAdd" not in out
     # what a screen shows on return is what history saved for it, and nothing else
-    assert "else if (!transient && restoreSelection(mainScene, s)) {" in js
+    # What a screen shows on return is what history saved for it, and nothing else — and the CAMERA is
+    # no longer decided inside that branch, so a drill can centre what it opened without also choosing it.
+    assert "restoreSelection(mainScene, s);" in js
+    assert "if (!transient && pendingCenter && mainScene.nodeEls[pendingCenter]) pendingCenterId" in js
+    assert "s.sel === 'node:' + pendingCenter" not in js, "centring is not gated on a selection"
 
 
 def test_the_drill_zoom_survives_the_browser_buttons() -> None:
@@ -5393,8 +5397,12 @@ def test_the_subsystems_pictures_take_the_data_pictures_gestures() -> None:
     assert "drill: pairPageDrill('domedge', 'entity', a, b, drawn)," in dcard
     drill = js[js.index("function pairPageDrill(kind, leaf, a, b, drawn) {"):
                js.index("\n}", js.index("function pairPageDrill(kind, leaf, a, b, drawn) {"))]
-    # A MEMBER'S cross arrow lands with that member selected and centred; a box↔box arrow with nothing chosen.
-    assert "return member ? { kind, a, b, sel: 'node:' + member, center: member } : { kind, a, b };" in drill
+    # NO WAY IN CHOOSES ANYTHING FOR YOU EITHER. A member's cross arrow used to land with that member
+    # SELECTED — a ring, a card over the drawing, and a hint about faded boxes on a page with none —
+    # which is the selection nobody made that the climb out already stopped drawing. It CENTRES the
+    # member and chooses nothing; a box↔box arrow names no member and centres nothing.
+    assert "return member ? { kind, a, b, center: member } : { kind, a, b };" in drill
+    assert "sel: 'node:' + member" not in js
     assert "efocus" not in js, "the field that promised a focus nothing read is gone"
     assert "containerEdgeDrill" not in js and "domainEdgeDrill" not in js   # the twins are gone
     # …and the card's click handler turns the centre hint into the one-shot pendingCenter, off the state.
