@@ -1644,8 +1644,16 @@ function restoreSelection(scene, s) {
   for (const k of keys) scene.selectors[k]();
   return true;
 }
-// Shown ONCE, the first time a selection dims the diagram: the fade is a focus, not a failure, and a
-// first-time reader has no way to tell those apart. Auto-clears; the guide behind `?` carries the rest.
+// Shown ONCE IN A READER'S LIFETIME, the first time a selection actually fades a box: the fade is a
+// focus, not a failure, and a first-time reader has no way to tell those apart. Auto-clears; the guide
+// behind `?` carries the rest.
+//
+// ONLY WHEN SOMETHING FADED. It used to fire on every focus, faded or not, and a focus often fades
+// nothing: on a pair page drawn as two boxes and one arrow, selecting that arrow keeps both boxes lit,
+// and the note still announced "faded boxes are just unrelated" over a page where none were. The
+// showing is spent either way — the flag is set the first time it fires — so a note that fires on the
+// wrong screen is not merely noise, it is the reader's one explanation gone, and gone on a screen that
+// had nothing to explain.
 function noteFirstDim() {
   if (lsGet(LS.dimSeen) === '1') return;
   lsSet(LS.dimSeen, '1');
@@ -1656,14 +1664,15 @@ function noteFirstDim() {
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 5200);
 }
 function applyFocus(scene, keepNode, keepEdge) {
-  noteFirstDim();
   // `.dim` mirrors the opacity (see viewer.css) so a dimmed box's corner pill stays hidden even on
   // hover — a box you're not focused on shouldn't invite drilling into it just because the cursor
   // passed over it while dimmed.
+  let faded = 0;
   for (const nid in scene.nodeEls) {
     const el = scene.nodeEls[nid], keep = keepNode(nid);
     el.style.opacity = keep ? '' : DIM;
     el.classList.toggle('dim', !keep);
+    if (!keep) faded++;
   }
   for (const x of scene.edgeEls) {
     const on = keepEdge(x.e);
@@ -1671,6 +1680,8 @@ function applyFocus(scene, keepNode, keepEdge) {
     if (x.label) x.label.style.opacity = on ? '' : DIM;
   }
   refreshAllPills();  // a box that just became dimmed must drop its pill even if it's under the cursor
+  // AFTER the pass, and only if a BOX faded — which is what the note's own words are about.
+  if (faded) noteFirstDim();
 }
 function focusNode(scene, id) {
   const keep = new Set([id]);

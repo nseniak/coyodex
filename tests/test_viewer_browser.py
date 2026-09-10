@@ -3452,3 +3452,54 @@ def test_a_pair_page_refuses_a_link_whose_ends_are_the_wrong_kind() -> None:
             seen = page.evaluate(read)
             assert seen["kind"] and " → " in seen["name"], f"{hash_} lost its header: {seen}"
         assert not page.js_errors, page.js_errors
+
+
+def test_the_faded_boxes_note_waits_for_a_faded_box() -> None:
+    """The note explains the fade to a first-time reader, and it is shown ONCE in a reader's lifetime —
+    the flag is set the first time it fires. It used to fire on every focus, faded or not, and a focus
+    often fades nothing: on a pair page drawn as two boxes and one arrow, selecting that arrow keeps
+    both boxes lit and the note still announced "faded boxes are just unrelated" over a page where none
+    were. So the one explanation could be spent on the one screen that had nothing to explain.
+
+    Each `_page` is a fresh browser, which is a fresh lifetime — so the two halves cannot borrow each
+    other's flag."""
+    read = ("() => ({dim: document.querySelectorAll('#diagram .dim').length,"
+            " note: document.querySelectorAll('#dimnote').length})")
+    # NOTHING FADES: selecting the one arrow on a pair page keeps both of its boxes lit.
+    # S1>S3 draws exactly two boxes and one arrow, so its focus keeps both lit and fades nothing.
+    with _served() as url, _page(url + "#v=edge&a=S1&b=S3") as page:
+        _settle(page)
+        page.evaluate("""() => { const h = [...document.querySelectorAll('#diagram .cy-edgehit')][0];
+            if (!h) return; const r = h.getBoundingClientRect();
+            for (const t of ['mousedown', 'click'])
+              h.dispatchEvent(new MouseEvent(t, {bubbles: true, detail: 1,
+                clientX: (r.left + r.right) / 2, clientY: (r.top + r.bottom) / 2})); }""")
+        page.wait_for_timeout(600)
+        seen = page.evaluate(read)
+        assert seen["dim"] == 0, f"this page is the one where a focus fades nothing: {seen}"
+        assert seen["note"] == 0, f"…so the note has nothing to explain and stays silent: {seen}"
+        assert not page.js_errors, page.js_errors
+
+    # A REAL FADE: the note still appears, which is the half that must not be lost.
+    with _served() as url, _page(url + "#v=container") as page:
+        _settle(page)
+        got = None
+        for i in range(8):
+            box = page.evaluate(f"""() => {{ const x = [...document.querySelectorAll('#diagram g.node')][{i}];
+                if (!x) return null; const r = x.getBoundingClientRect();
+                return [(r.left + r.right) / 2, (r.top + r.bottom) / 2]; }}""")
+            if not box:
+                break
+            page.mouse.move(box[0] - 25, box[1] - 25)
+            page.wait_for_timeout(80)
+            page.mouse.click(box[0], box[1])
+            page.wait_for_timeout(450)
+            seen = page.evaluate(read)
+            if seen["dim"]:
+                got = seen
+                break
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(200)
+        assert got, "no selection on this view faded a box, so the test proved nothing"
+        assert got["note"] == 1, f"a real fade still gets its one explanation: {got}"
+        assert not page.js_errors, page.js_errors
