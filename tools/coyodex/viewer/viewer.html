@@ -179,13 +179,12 @@
       <div id="diagwrap">
       <div id="diagram"></div>
       <!-- THE OVERLAY CONTROLS, in ONE column at the TOP-LEFT. They used to sit along the bottom edge,
-           which the drawer takes whole — so each of them had to step up by the drawer's height on every
-           selection, and unrelated things moved every time the reader clicked a box.
+           where they moved on every selection, so unrelated things shifted every time the reader
+           clicked a box.
            Top-left is also the cheaper corner. Measured over four views, a box this size covers 17 of
            the drawn shapes at the bottom-right, and 10 at the top-left. The top-right is emptier still
-           (7) but the card lives there, and this column has to work in both shapes. A flex column, so
-           whichever of them a view shows simply stack — no coordinate depends on another control's
-           height. -->
+           (7) but the card lives there. A flex column, so whichever of them a view shows simply stack —
+           no coordinate depends on another control's height. -->
       <div id="overlays">
       <!-- Deployment environment filter. Floats over the diagram (in the #overlays column) rather
            than living in the info pane: it filters what the DIAGRAM draws, so it belongs beside it — and
@@ -303,19 +302,6 @@
   <div class="modal-card">
     <h2 id="modalTitle">Settings</h2>
     <p id="modalIntro" class="modal-help"></p>
-    <!-- WHERE THE SELECTION IS SHOWN: a drawer that slides up from the bottom edge, or a card floating
-         over the drawing with a line to the element it describes. Two shapes for ONE panel, not two
-         panels — the drawer is #panel restyled, so every card, list and stack it can hold is built by the
-         same code either way. It led the dialog because it is about the MAP; everything below it is about
-         source links. It was a header button first, up among the title-bar utilities. -->
-    <label class="modal-row" id="setPanelRow">Selected element shown in
-      <select id="setPanel">
-        <option value="drawer">A drawer at the bottom</option>
-        <option value="card">A floating card, with a line to it</option>
-      </select>
-    </label>
-    <p class="modal-help" id="setPanelHelp">The drawer keeps the drawing clear; the card sits over it and
-       can be dragged. Stored only in this browser.</p>
     <label class="modal-row">Open in
       <select id="setEditor"></select>
     </label>

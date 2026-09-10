@@ -202,8 +202,8 @@ def test_glossary_autolink_skips_chrome_chips_code_and_the_glossary_view_itself(
     # stopping propagation starves the document-level click-outside closers, so the handler closes
     # those popovers itself (also from the review)
     assert "hideUcPick();" in wiring and "closeImpactPop();" in wiring
-    # a scope's seen-set starts from links it already holds, so re-inserted linked HTML (the
-    # drawer's hide animation) cannot link the next occurrence on top of the first
+    # a scope's seen-set starts from links it already holds, so re-inserted linked HTML cannot
+    # link the next occurrence on top of the first
     assert "scope.querySelectorAll('a.gloss-link')" in js
 
 
@@ -1377,11 +1377,7 @@ def test_the_line_never_outlives_the_card() -> None:
     fn = js[js.index("function paneSync() {"): js.index("\n}", js.index("function paneSync() {"))]
     assert "if (!has) { hideCallout(); return; }" in fn, "no card, no line — on the path every deselect takes"
     # …and nothing else hides the card behind paneSync's back.
-    # …and nothing hides the card behind paneSync's back. The two remaining writes are the DRAWER's own
-    # slide, which paneSync itself drives — a drawer cannot use `hidden` for the hiding, since display:none
-    # has nothing to animate, so it sets the attribute at the two ends of its transition instead.
-    outside = js.replace(js[js.index("function drawerShow() {"): js.index("\n}", js.index("function drawerHide() {"))], "")
-    assert outside.count("PANEL_HOST.hidden = true") == 0, "one rule: paneSync is what takes the card away"
+    assert js.count("PANEL_HOST.hidden = true") == 0, "one rule: paneSync is what takes the card away"
     close = js[js.index("if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;"):
                js.index("});", js.index("if (!ev.target || !ev.target.closest || !ev.target.closest('#panelclose')) return;"))]
     assert "PANEL_HOST.innerHTML = '';" in close and "paneSync();" in close
@@ -1633,8 +1629,7 @@ def test_everything_that_floats_over_the_drawing_states_its_layer() -> None:
     css = (VIEWER_DIR / "viewer.css").read_text()
     layers = {}
     for sel in ("#callout", "#panel", "#envpicker", "#flowpicker"):
-        # line-anchored: the drawer restyles several of these under `body.card-drawer`, and those rules
-        # come earlier in the file. The layer belongs to the element itself, not to one of its shapes.
+        # line-anchored, so a rule qualified by an ancestor selector cannot answer for the element.
         at = css.index("\n" + sel + " {") + 1
         block = css[at: css.index("}", at)]
         assert "z-index" in block, sel
@@ -1703,158 +1698,22 @@ def test_the_card_comes_to_what_you_picked_and_stays_put_while_it_can() -> None:
     # box its step comes from. The BOXES are what survives to the last set.
     assert "return [g([...own, rectOf(arrow), ...ends]), g([...own, ...ends]), g(ends)];" in keep
     assert "for (let s = 0; s < sets.length; s++) {" in fn
-    # The three steps happen in one order, from one function, so no caller can do them out of turn. Read
-    # from the CARD branch, which starts after the drawer's early return — a drawer has one place.
-    place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
-    card = place[place.index("placeCardNear("):]   # the card branch, past the drawer's early return
+    # The three steps happen in one order, from one function, so no caller can do them out of turn.
+    card = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
     assert card.index("placeCardNear(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
 
 
-def test_the_panel_has_two_shapes_and_the_reader_picks_one() -> None:
-    """The floating card, or a drawer that slides up from the bottom edge. ONE element in two shapes, not
-    two elements: every card, list and stack it can hold is built by the same code either way, and no
-    content builder knows which shape is on screen. The difference is a class on the body.
-
-    Measured on a 1410x709 drawing: the card is 380x171 and covers 6.5% of it; the drawer is 1410x108 and
-    covers 15.2%. The drawer FLOATS over the drawing rather than taking height from it — a drawer that took
-    height would refit and rescale the whole diagram on every click, which is the most frequent thing
-    anyone does here.
-
-    The choice is the reader's, so it is remembered, like the source column."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    html = (VIEWER_DIR / "viewer.html").read_text()
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    assert 'id="drawerbtn"' not in html, "the choice lives in Settings, not in a header button"
-    assert 'id="setPanel"' in html and 'value="drawer"' in html and 'value="card"' in html
-    assert "drawer: 'coyodex.drawer'," in js
-    # THE CARD IS THE DEFAULT, and the boot must NOT write that down. The old line wrote the default it
-    # had just computed, so every reader who ever opened the viewer had "drawer" stored whether they
-    # chose it or never opened Settings — and flipping the default then reached a brand-new browser and
-    # nobody else. The key is written only from a CHOICE, so unset really does mean unset. A reader who has never
-    # opened Settings gets the card.
-    assert "setDrawerMode(lsGet(LS.panel) === 'drawer', false);" in js
-    assert "setDrawerMode(setPanel.value === 'drawer', true)" in js   # …and only a pick writes it
-    assert "if (chose) lsSet(LS.panel," in js
-    assert "if (chose) lsSet(LS.panel, drawerMode ? 'drawer' : 'card');" in js
-    fn = js[js.index("function setDrawerMode(on, chose) {"):
-            js.index("\n}", js.index("function setDrawerMode(on, chose) {"))]
-    assert "document.body.classList.toggle('card-drawer', drawerMode)" in fn
-    assert "st.left = st.top = st.right = st.width = st.height = '';" in fn, \
-        "the other shape's inline box must not leak into this one"
-    # ONE panel, two shapes: the drawer is #panel restyled, never a second element.
-    assert html.count('id="panel"') == 1
-    assert "body.card-drawer #panel {" in css
-    # A drawer has one place, so the card's placement machinery stands down.
-    place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
-    assert "if (drawerMode) { hideCallout(); applyDrawerMax(); return; }" in place, \
-        "no remembered box, nothing to step aside from, no line — just its own ceiling"
-    # A drawer cannot be moved, resized by the corner grip, or sent back to its corner. The BAR still
-    # takes a drag there, but it drags the ceiling — see
-    # test_the_drawers_ceiling_is_dragged_and_is_a_maximum_not_a_height.
-    assert "PANEL_HOST.addEventListener('dblclick', (ev) => {\n  if (drawerMode) return;" in js
-    down = js[js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"):
-              js.index("});", js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"))]
-    assert "if (drawerMode) {" in down and "drawerSizing = {" in down, \
-        "the drawer's own branch: the bar sets its ceiling instead of moving it"
-    assert "panelDrag = {" not in down.split("if (drawerMode) {")[1].split("return;\n  }")[0], \
-        "…and it never falls through into the card's move"
-
-
-def test_the_drawer_slides_and_keeps_its_close_button() -> None:
-    """It slides up when something is selected and down when nothing is, and the × goes with it — putting
-    the panel away without hunting for empty canvas is worth as much here as on the card. Only the grip is
-    dropped, because there is nothing to drag.
-
-    SLIDING OUT NEEDS ITS CONTENT. Every caller empties the panel before paneSync decides to hide it, so a
-    drawer sliding away would be a blank white band. The last thing it showed is put back for the length
-    of the slide.
-
-    `hidden` is what the rest of the app uses to put the panel away, and display:none cannot be animated —
-    so in this shape the attribute stops meaning display and the transform does the hiding.
-
-    A TIMER, not `transitionend`: that event never fires when the motion is off (reduced motion, a
-    background tab), and the panel would stay on screen for good.
-
-    Verified in the app: 602px from the drawing's top when up, 689 mid-slide, 710 and hidden when out,
-    content cleared only at the end; the × and a canvas deselect both take it out; three selections put
-    three cards in the one drawer."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    assert "body.card-drawer #panel[hidden] { display: block; }" in css, "display:none cannot be animated"
-    assert "body.card-drawer #panelbar { cursor: ns-resize; }" in css, \
-        "the grip is back, dragging the ceiling rather than the drawer"
-    assert "@media (prefers-reduced-motion: reduce) {\n  body.card-drawer #panel," in css
-    bar = js[js.index("function stampPanelBar() {"): js.index("\n}", js.index("function stampPanelBar() {"))]
-    assert "id=\"panelclose\"" in bar, "the × is stamped for BOTH shapes"
-    pane = js[js.index("function paneSync() {"): js.index("\n}", js.index("function paneSync() {"))]
-    assert "stampPanelBar();\n    drawerShow();" in pane and "drawerHide(); return;" in pane
-    show = js[js.index("function drawerShow() {"): js.index("\n}", js.index("function drawerShow() {"))]
-    assert show.count("requestAnimationFrame") == 2, "no `before` to animate from without a frame first"
-    assert "drawerHtml = PANEL_HOST.innerHTML;" in show
-    hide = js[js.index("function drawerHide() {"): js.index("\n}", js.index("function drawerHide() {"))]
-    assert "PANEL_HOST.innerHTML = drawerHtml;" in hide, "a blank band sliding away is not the animation"
-    assert "setTimeout(" in hide and "addEventListener('transitionend'" not in js, \
-        "a timer, not transitionend: that event never fires when the motion is off"
-    assert "if (PANEL_HOST.classList.contains('drawer-up')) return;" in hide, "selected again mid-slide"
-    # Nothing steps out of its way: the controls that lined the bottom edge live at the top-left now, so a
-    # click moves ONE thing. The measuring and lifting that coupled them to the drawer is gone with them.
-    js_and_css = js + css
-    assert "--drawer-h" not in js_and_css and "drawer-open" not in js_and_css
-
-
-def test_the_drawer_is_as_tall_as_what_is_in_it() -> None:
-    """No fixed height and no floor. Measured in the app, the drawer follows its content exactly: one
-    selection 108px, two 215px, three 323px, four 430px — each within a pixel of the content, the pixel
-    being its own border.
-
-    NO FLOOR. The card carries a 90px minimum so a box that floats can never collapse to a sliver. A band
-    pinned to an edge cannot collapse, so the minimum only ever padded short content into a taller band.
-
-    A CEILING, though. Past two thirds of the drawing the content scrolls instead, because a drawer that
-    can cover the whole map has stopped being a drawer. The ceiling used to be 45%, which four selections
-    reached — and a drawer sitting at its cap is exactly what "a fixed height" looks like.
-
-    The legend gives ground as the drawer grows, sharing what is left rather than being pushed off the
-    top: with the tallest drawer its own top still sits 73px inside the drawing."""
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    drawer = css[css.index("body.card-drawer #panel {"): css.index("}", css.index("body.card-drawer #panel {"))]
-    assert "min-height: 0;" in drawer, "a band pinned to an edge cannot collapse, so it needs no floor"
-    assert "max-height: var(--drawer-max, 66%);" in drawer, \
-        "a ceiling the reader can drag, defaulting to two thirds until they do"
-    assert "height:" not in drawer.replace("min-height:", "").replace("max-height:", ""), \
-        "no fixed height anywhere — the content is what sets it"
-    assert "--drawer-h" not in css, "nothing shares the bottom edge with it any more"
-
-
-def test_the_drawer_draws_no_line_and_the_controls_left_the_bottom_edge() -> None:
-    """THE DRAWER DRAWS NO LINE. The card floats over the drawing and can be anywhere, so a line saying
-    which box it describes earns its ink. The drawer is an edge band that barely touches the drawing — so
-    the line would be the ONLY thing the panel puts ON it, and without it this shape leaves the map
-    completely clear. What the line said is still said twice: the drawer's title names the element, and
-    that element is the only bright thing left once the rest dims.
-
-    Not a length argument. Measured over nine selections the line is SHORTER in the drawer than on the
-    card — 275px against 338px in the middle, 568 against 832 at worst — because the drawer runs the full
-    width, so its edge sits directly below whatever was clicked.
-
-    AND THE CONTROLS LEFT THE BOTTOM EDGE. The environment filter and the flow player used to line the
-    bottom, which the drawer takes whole, so each stepped up by the drawer's height on every selection:
-    unrelated things moving on every click. They share one flex column at the top-left now, so no
-    coordinate depends on another's height, and a click moves ONE thing.
+def test_the_controls_left_the_bottom_edge() -> None:
+    """THE CONTROLS LEFT THE BOTTOM EDGE. The environment filter and the flow player used to line the
+    bottom, each anchored to a corner of its own and each moving on every selection: unrelated things
+    moving on every click. They share one flex column at the top-left now, so no coordinate depends on
+    another's height, and a click moves ONE thing.
 
     The top-left is also the cheaper corner. Measured over four views, a box this size covers 17 of the
     drawn shapes at the bottom-right, and 10 at the top-left. The top-right is emptier still, at 7, but
-    the card lives there and this column has to work in both shapes.
-
-    Verified in the app: card mode draws the line, switching to the drawer takes it away, selecting and
-    zooming in the drawer leave it away, switching back brings it."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
+    the card lives there."""
     html = (VIEWER_DIR / "viewer.html").read_text()
     css = (VIEWER_DIR / "viewer.css").read_text()
-    pane = js[js.index("function paneSync() {"): js.index("\n}", js.index("function paneSync() {"))]
-    assert "hideCallout();   // this shape draws no line" in pane, "cleared when the shape is decided"
-    draw = js[js.index("function syncCallout() {"): js.index("\n}", js.index("function syncCallout() {"))]
-    assert "if (drawerMode) { hideCallout(); return; }" in draw, "…and a camera move cannot bring it back"
     # ONE column, and the controls are in it rather than anchored to corners of their own.
     wrap = html[html.index('<div id="overlays">'): html.index("</div>", html.index('id="flowpicker"'))]
     for cid in ('id="envpicker"', 'id="flowpicker"'):
@@ -1899,38 +1758,6 @@ def test_closing_the_panel_is_not_deselecting() -> None:
     assert "the selection stays" in bar
 
 
-def test_the_panel_shape_is_chosen_in_settings() -> None:
-    """It was a header button first, which sat beside the legend's looking like it — two square glyphs in a
-    row, and nothing to tell them apart. It is a row in Settings now, leading the dialog because it is
-    about the MAP; everything below it is about source links. The dialog's title widened to match.
-
-    FIRST USE is about one thing, the source link the reader just clicked, so the dialog narrows to that
-    and the panel row stands down.
-
-    Saving applies it through the same function the boot call uses, so the choice takes effect on whatever
-    is already on screen instead of waiting for the next selection.
-
-    Verified in a cleared browser: the drawer is what a first visit gets, one selection gives a 1410x108
-    band flush to the bottom and no line; choosing the card in Settings switches it live to 380x171 at the
-    top right with its line back, and choosing the drawer again switches it back."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    html = (VIEWER_DIR / "viewer.html").read_text()
-    assert "<h2 id=\"modalTitle\">Settings</h2>" in html, "the dialog is no longer only about source links"
-    row = html[html.index('id="setPanelRow"'): html.index("</label>", html.index('id="setPanelRow"'))]
-    assert "Selected element shown in" in row
-    assert html.index('id="setPanelRow"') < html.index('id="setEditor"'), \
-        "the map's own setting leads; the source-link ones follow"
-    op = js[js.index("function openSettings(firstUse) {"):
-            js.index("\n}", js.index("function openSettings(firstUse) {"))]
-    assert "setPanel.value = drawerMode ? 'drawer' : 'card';" in op, "it opens showing what is in force"
-    assert "setPanelRow.hidden = !!firstUse;" in op, "first use is about one source link, nothing else"
-    assert "firstUse ? 'How should source links open?' : 'Settings'" in op
-    save = js[js.index("function saveSettings() {"): js.index("\n}", js.index("function saveSettings() {"))]
-    assert "setDrawerMode(setPanel.value === 'drawer', true)" in save, \
-        "applied through the one function, so it takes effect on what is already on screen"
-    assert "!setPanelRow.hidden" in save, "…and a first-use save leaves the shape alone"
-
-
 def test_a_composite_deployment_arrow_opens_what_it_stands_for() -> None:
     """Every other bundled arrow opens its own page on ⌥-click. The Deployment arrow was the exception,
     and it cost real facts: measured over three maps, 64 Deployment arrows stand for 246 links, 245 of
@@ -1966,45 +1793,6 @@ def test_a_composite_deployment_arrow_opens_what_it_stands_for() -> None:
     assert "depEdgeStoreLinkHtml(s.b)" in page and "bindNodeDetailHandlers(diagram);" in page
     link = js[js.index("function depEdgeStoreLinkHtml(b) {"): js.index("\n}", js.index("function depEdgeStoreLinkHtml(b) {"))]
     assert "dataDrillFor(b)" in link and "dv-seelink" in link
-
-
-def test_the_drawers_ceiling_is_dragged_and_is_a_maximum_not_a_height() -> None:
-    """Dragging the drawer's bar sets how tall it MAY get, never how tall it is. A drawer holding one card
-    stays one card tall whatever the ceiling says; only content taller than the ceiling reaches it, and
-    then the drawer scrolls inside itself.
-
-    That is the difference from the card's corner grip, which sets a SIZE. A size here would mean a drawer
-    showing one line of prose in a 400px band, which is the empty-pane problem the floating card was built
-    to end.
-
-    Verified in the app on a 709px drawing: one card is 121px under the default 66% ceiling; six cards hit
-    that ceiling at 468px with 657px of content and scroll; dragging the bar up 150px moves the ceiling to
-    618px and the drawer grows to it, still scrolling; and one card is 121px again under that same raised
-    ceiling.
-
-    Stored in pixels and clamped on every apply rather than on save — the window it was dragged in is
-    not the window it comes back to."""
-    js = (VIEWER_DIR / "viewer.js").read_text()
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    drawer = css[css.index("body.card-drawer #panel {"): css.index("}", css.index("body.card-drawer #panel {"))]
-    assert "max-height: var(--drawer-max, 66%)" in drawer, "a ceiling, and a default one until it is dragged"
-    assert "min-height: 0;" in drawer, "the content still sets the height under that ceiling"
-    panel = css[css.index("\n#panel {") + 1: css.index("}", css.index("\n#panel {"))]
-    assert "overflow: auto" in panel, "…and it scrolls when the content is taller"
-    ap = js[js.index("function applyDrawerMax() {"): js.index("\n}", js.index("function applyDrawerMax() {"))]
-    assert "Math.max(90, Math.min(px, h - 24))" in ap, "clamped on apply, against the window it is in now"
-    assert "if (!wrap || !drawerMode || !px)" in ap, "no stored ceiling, or the card shape: the default"
-    move = js[js.index("PANEL_HOST.addEventListener('pointermove'"):
-              js.index("});", js.index("PANEL_HOST.addEventListener('pointermove'"))]
-    assert "drawerSizing.h + (drawerSizing.y - ev.clientY)" in move, "dragging UP raises it"
-    end = js[js.index("const endDrawerSizing = () => {"): js.index("\n};", js.index("const endDrawerSizing = () => {"))]
-    assert "document.body.style.getPropertyValue('--drawer-max')" in end, \
-        "what the drag WROTE is what is saved, so a clamp cannot become the reader's choice"
-    assert "lsSet(LS.drawerMax," in end and "drawerMax: 'coyodex.drawerMax'," in js
-    down = js[js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"):
-              js.index("});", js.index("PANEL_HOST.addEventListener('pointerdown', (ev) => {"))]
-    assert "ev.target.closest('#panelclose')" in down, "the × is a button, not a grab handle"
-    assert "body.card-drawer #panelbar { cursor: ns-resize; }" in css, "the grip means 'how tall', not 'where'"
 
 
 def test_the_bars_closing_rule_runs_under_its_close_button() -> None:
@@ -2491,8 +2279,7 @@ def test_the_source_column_is_optional_on_every_page_including_a_diagram() -> No
     assert "window.addEventListener('resize', placeCard);" in js, "so does the window itself"
     # `placeCard` is the three steps that depend on where the card landed: it comes to the element it
     # describes, then redraws the line to it. One order, so no caller can do them out of turn.
-    place = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
-    card = place[place.index("placeCardNear("):]   # the card branch, past the drawer's early return
+    card = js[js.index("function placeCard() {"): js.index("\n}", js.index("function placeCard() {"))]
     assert card.index("placeCardNear(") < card.index("syncCallout();") < card.index("scheduleCallout(true)")
     # FIT TO SCREEN has to measure the box it is fitting into. `reset()` only sets zoom back to 1 and pan
     # back to the values svg-pan-zoom recorded when it was CONSTRUCTED, so on any view whose box has since
@@ -4559,8 +4346,8 @@ def test_a_stake_label_names_its_step_and_is_not_a_door() -> None:
         "the door class is gone, not shadowed"
 
 
-def test_a_pin_stays_on_the_page_and_never_opens_the_drawer() -> None:
-    """The drawer only ever repeated the card the reader had just clicked; the one thing it added,
+def test_a_pin_stays_on_the_page_and_never_opens_the_panel() -> None:
+    """The panel only ever repeated the card the reader had just clicked; the one thing it added,
     the door to an actor's page, is the card's NAME now. A pin lights the wires and labels and
     touches nothing else."""
     js = (VIEWER_DIR / "viewer.js").read_text()

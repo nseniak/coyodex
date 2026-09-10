@@ -299,10 +299,10 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 .feat-all:hover { background: #eef2ff; }
 /* Deployment environment picker (variants) — sits atop the deployment info panel. */
 /* THE OVERLAY COLUMN: whichever of the environment filter and the flow player a view shows, stacked at
-   the TOP-LEFT. They used to sit along the bottom edge, which the drawer takes whole — so each had to
-   step up by the drawer's height on every selection, and unrelated things moved every time the reader
-   clicked a box. Measured over four views, a box this size covers 17 of the drawn shapes at the
-   bottom-right and 10 at the top-left, so this is the cheaper corner as well as the still one.
+   the TOP-LEFT. They used to sit along the bottom edge, where they moved on every selection, so
+   unrelated things shifted every time the reader clicked a box. Measured over four views, a box this
+   size covers 17 of the drawn shapes at the bottom-right and 10 at the top-left, so this is the cheaper
+   corner as well as the still one.
    A flex column, so no coordinate depends on another control's height. The column itself catches no
    clicks — only the controls in it do — or its empty space would swallow clicks on the drawing. */
 #overlays { position: absolute; left: 12px; top: 12px; z-index: 5; display: flex; flex-direction: column;
@@ -1170,54 +1170,6 @@ body.tree-browsing #codeview { display: none; }
          background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
          box-shadow: 0 6px 22px rgba(15, 23, 42, .16); }
 #panel[hidden] { display: none; }
-/* ── THE DRAWER: the same panel, in the other shape ───────────────────────────────────────────────
-   Everything the card can hold, held instead by a band across the bottom edge. ONE element in two
-   shapes rather than two elements, so no content builder knows which is on screen.
-   Measured on a 1410x704 drawing: the card is 380x171 and covers 6.5% of it; this drawer is about 90px
-   tall at full width (the sentence stops wrapping) and covers 12.8%. It FLOATS over the drawing rather
-   than taking height from it — a drawer that took height would refit and rescale the whole diagram on
-   every single click, which is the most frequent thing anyone does here.
-   It cannot be MOVED — it has one place, which is the point of it — but its CEILING is the reader's to
-   set: drag the bar up or down. That is a maximum, never a height. A drawer holding one card is still
-   108px tall whatever the ceiling says; only content taller than the ceiling reaches it and scrolls. */
-body.card-drawer #panel {
-  top: auto; bottom: 0; left: 0; right: 0; width: auto; max-width: none; min-width: 0;
-  /* THE CONTENT SETS THE HEIGHT. No floor: the card's 90px minimum exists so a floating box never
-     collapses to a sliver, and a band pinned to an edge cannot. No fixed height either — one selection
-     is 108px here, two are 215px, four are 429px, and the drawer is each of those in turn.
-     The ceiling is the last third of the drawing: past that the content scrolls instead, because a
-     drawer that can cover the whole map stops being a drawer. It bit at four selections when the cap
-     was 45%, which is exactly what "a fixed height" looked like. */
-  min-height: 0; max-height: var(--drawer-max, 66%);
-  border-radius: 10px 10px 0 0; border-left: 0; border-right: 0; border-bottom: 0;
-  resize: none; box-shadow: 0 -6px 22px rgba(15, 23, 42, .16);
-  /* DOWN is the resting state, so the first appearance slides in like every later one. `visibility`
-     switches at the END of the slide out and at the START of the slide in, which is what keeps a drawer
-     that is away from catching a click along the bottom edge. */
-  transform: translateY(101%); visibility: hidden;
-  transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility 0s linear .24s;
-  /* ABOVE the other floaters, which the card at 4 never had to be: the card sits top-right and they sit
-     along the bottom, so they never met. A drawer lands on all three. It is the thing the reader just
-     summoned, so it wins — and its × has to be reachable, which behind a floater it was not. */
-  z-index: 7;
-}
-/* Nothing steps out of its way any more: every control that used to line the bottom edge now lives in
-   the #overlays column at the top-left, so the drawer rises into empty space. That also means a click
-   moves ONE thing — the drawer — where it used to move four. */
-body.card-drawer #panel.drawer-up {
-  transform: translateY(0); visibility: visible;
-  transition: transform .26s cubic-bezier(.2, .8, .2, 1), visibility 0s;
-}
-/* `hidden` is what every other part of the app uses to put the panel away, and display:none cannot be
-   animated — so in this shape the attribute stops meaning display and the transform does the hiding. */
-body.card-drawer #panel[hidden] { display: block; }
-/* The grip is back, and it means something different here: not "move me" (a drawer has one place) but
-   "how tall may I get". So the bar takes the resize cursor rather than the grab one. */
-body.card-drawer #panelbar { cursor: ns-resize; }
-body.drawer-sizing, body.drawer-sizing #panelbar { cursor: ns-resize; user-select: none; }
-@media (prefers-reduced-motion: reduce) {
-  body.card-drawer #panel, body.card-drawer #panel.drawer-up { transition: none; }
-}
 /* THE CALLOUT LAYER. Fills the drawing area, catches no clicks, and sits at z-index 3 — one below the
    card (4) and above the diagram — so the line ends UNDER the card's edge and never crosses its face.
    `overflow: visible` because the dot at the element end can sit on the very edge of the box.
