@@ -198,6 +198,34 @@ class Group:
                                # a shape error, not "none": say who, or leave the field out.
                                # `validate` blocks it on the other forests, and cross-examines the
                                # list against the derived touches (grounding / split / dominance).
+    governs: list[str] | None = None
+                               # BLOCK-ONLY: which feature(s) this decision area GOVERNS — the ones
+                               # its rules constrain. AUTHORED, and the reason is `owners` one field
+                               # up, one forest over: every derivation was measured on three live
+                               # maps and every one failed. The feature a rule's steps land on is a
+                               # plurality, not a home (52% and 61% at the median; 8 of 32 areas win
+                               # on under half their links, one on 23% against a runner-up at 20%);
+                               # entities reach only 10% of walked steps; actors collapse to two
+                               # groups of nine and two; components fan out to 100+ per map; and the
+                               # happy path ties four areas at one station.
+                               #
+                               # NOT `owners`, which is deliberately about DATA: an owner is the
+                               # feature that creates a record and runs its lifecycle, and a decision
+                               # area keeps nothing. Same authoring discipline, different question,
+                               # so a different word — and `validate` blocks each on the other's
+                               # forest rather than letting one field mean two things.
+                               #
+                               # NO RECONCILE DIRECTIVE, for the reason `subdomains[].owners` needs
+                               # none: a decision area is authored AT SYNTHESIS, in the same pass
+                               # that mints the features, so the answer is written straight onto the
+                               # area and never has to travel through a reconcile file the way a
+                               # rule's `block` does.
+                               #
+                               # WHAT IT BUYS: the Rules page groups by it, and because features are
+                               # already ordered by the story column, the groups arrive in the
+                               # product's own order without a second field. One id = this area
+                               # governs that feature; several = it genuinely spans them; None = not
+                               # decided (advisory asks). `[]` is a shape error, not "none".
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""

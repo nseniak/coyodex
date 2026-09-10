@@ -1231,6 +1231,30 @@ capability groups use cases — an area a product person would argue about. Rule
 the trace, one agent per block (see *After the trace*), because sweeping a rule's enforcement sites
 needs the flows.
 
+**Each block names its `governs`** — the feature(s) its rules constrain. Written ON THE BLOCK at
+synthesis, like a sub-domain's `owners` and for the same reason: the areas are authored in the same
+pass that mints the features, so the answer never has to travel through `reconcile` the way a rule's
+`block` does. Ask *which feature(s) do these decisions constrain?* One clear answer →
+`"governs": ["CAPn"]`. Several genuine ones → list them all. No answer → leave the field out and
+record `BLKn: <why>` under a **"Decision area exceptions"** extras heading; an advisory asks either
+way. `[]` is a shape error, not an answer.
+
+AUTHORED, and this one was measured before it was written. Every derivation was tried on three live
+maps and every one failed: the feature a rule's steps land on is a plurality, not a home (52% and
+61% of an area's links at the median, 8 of 32 areas winning on under half, one on 23% against a
+runner-up at 20%); entities reach only 10% of walked steps and leave 3 of 11 areas with nothing;
+actors collapse to two groups of nine and two; components fan out past 100 per map; and the happy
+path ties four areas at one station. The viewer GROUPS the Rules page by this field, and because
+features are already ordered by the story column, the groups arrive in the product's own order with
+no second field to author.
+
+`validate` blocks `governs` on a subsystem, a capability and a sub-domain (one dataclass, four
+forests), blocks an id that names no capability, a repeat, and an empty list; and it cross-examines
+the answer against the features the area's rules actually reach — reporting a governed feature no
+rule of the area reaches, never a disagreement about WHICH feature leads, since that disagreement is
+the reason the field is authored.
+
+
 Each rule carries `sites`: every place the decision is actually ENFORCED, anchored at the
 **operative line** — the one that acts, never a definition header and never a line chosen because
 it happens to join a flow step. A decision enforced by construction (a type, a schema constraint, a
