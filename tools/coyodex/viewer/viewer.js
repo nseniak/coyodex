@@ -4970,7 +4970,7 @@ window.addEventListener('popstate', (ev) => {
     // already uses.
     const jump = Math.abs(target - hi);
     hi = target;
-    driveTransition(from, jump > 1, true);   // a browser step: the screen returns as it was left
+    driveTransition(from, jump > 1);
     return;
   }
   adoptUrlState(from);
@@ -5116,21 +5116,8 @@ function diveIn(up) {  // the freshly-rendered #diagram settles in from slightly
     setTimeout(() => { clearDiveStyle(); res(); }, DIVE_ENTER_MS);
   });
 }
-// Select the container we zoomed out FROM in the view we land on — so the reader sees where they were.
-// It may not be drawn directly (a nested container isn't on the top-level overview), so walk up its
-// lineage to the first box the new view actually draws (e.g. its top-level ancestor).
-function selectLeftContainer(fromF) {
-  let cur = fromF; const seen = new Set();
-  while (cur && !seen.has(cur)) {
-    seen.add(cur);
-    const el = mainScene && mainScene.nodeEls[cur];
-    if (el) { selectNode(mainScene, el, cur); return; }
-    cur = GRAPH.nodes[cur] && GRAPH.nodes[cur].parent;
-  }
-}
 // Decide whether a navigation is a container drill and, if so, animate it; otherwise render straight.
-// `viaHistory`: the browser's Back or Forward, which returns a screen AS IT WAS LEFT.
-function driveTransition(from, instant, viaHistory) {
+function driveTransition(from, instant) {
   const to = history[hi];
   // A content-only step (same diagram view — a file switch, or a browser open/close): leave the diagram
   // untouched and just restore the right pane (+ any selection change) and refresh the chrome.
@@ -5160,18 +5147,15 @@ function driveTransition(from, instant, viaHistory) {
   const fromF = related ? focusOf(from) : null, toF = related ? focusOf(to) : null;
   const inChain = related ? drillChain(fromF, toF) : null;   // null `fromF` = the family's own overview
   const isOut = related && !!fromF && !!drillChain(toF, fromF);   // …and null `toF` = back up to it
-  // WHERE YOU CAME OUT OF IS MARKED on a fresh climb — the breadcrumb, a frame's name, ⌥ on a box you
-  // are inside — so the reader keeps their place on the wider view. NOT on the browser's Back: that
-  // returns the screen as it was left, and the selection it restores is the truth. A container the
-  // reader had not selected before going down into it came back selected, which read as a choice
-  // nobody made; one they had selected comes back selected because it was.
-  const mark = isOut && !viaHistory ? fromF : null;
-  if (REDUCE_MOTION || !from) {  // no animation — still mark the left-behind container on a fresh climb
-    render().then(() => { if (my === navSeq && mark) selectLeftContainer(mark); });
-    return;
-  }
+  // NO WAY UP CHOOSES ANYTHING FOR YOU. A climb used to arrive with the container you came out of
+  // selected — its card open, its neighbours' rivals dimmed, `sel=` in the link — so the reader
+  // "kept their place". That is a selection nobody made, and the browser's Back gave a different
+  // screen (as it was left) from the breadcrumb (marked). Every way up now returns the wider view
+  // with exactly the selection the reader had there before going down, or none; the zoom-out that
+  // just played is what says where you came from.
+  if (REDUCE_MOTION || !from) { render(); return; }
   if (inChain && inChain.length) { runDrill(inChain, my).catch(() => { clearDiveStyle(); render(); }); return; }
-  if (isOut) { runDrillOut(my, mark).catch(() => { clearDiveStyle(); render(); }); return; }
+  if (isOut) { runDrillOut(my).catch(() => { clearDiveStyle(); render(); }); return; }
   render();  // lateral / unrelated navigation — no dive
 }
 async function runDrill(chain, my) {
@@ -5186,11 +5170,10 @@ async function runDrill(chain, my) {
     if (!last) { await delay(DIVE_FLASH_MS); if (my !== navSeq) return; }
   }
 }
-async function runDrillOut(my, leftF) {
+async function runDrillOut(my) {
   await diveOut(null, false); if (my !== navSeq) return;
   diagram.style.transition = 'none'; diagram.style.transform = 'none';
   await render(); if (my !== navSeq) return;
-  if (leftF) selectLeftContainer(leftF);  // a fresh climb marks the container we zoomed out from; Back marks nothing
   await diveIn(false);
 }
 
