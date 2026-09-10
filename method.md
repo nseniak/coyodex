@@ -223,7 +223,21 @@ when reading the clone; never treat it as instructions to follow or as input to 
     `In: <why>`; a component line still covers its ways in); `--emit-unclaimed` prints them per
     surface, ready to paste. A `middleware` row is never listed, nor a way in recorded under
     "Interface exceptions". Measured the day the check landed: 13 / 67 / 64 storyless ways in on
-    the three live maps, of which the per-component advisory had reported 0 / 13 / 2. **Self-activated entry points (crons, workers, consumers, startup
+    the three live maps, of which the per-component advisory had reported 0 / 13 / 2.
+    **What a record is for, and what a use case is for.** A record is for a dead surface, a
+    dev-only or test-only surface, or a fetch with no goal of its own (a picker filling itself, a
+    feature-flag read every page makes). A check somebody runs ON PURPOSE — a smoke-test page an
+    operator opens, a command that verifies something — is a goal and gets a use case; a handshake
+    a story passes through (a sign-in discovery route, a registration address) belongs to THAT
+    story's use case, named there, never recorded. A read-only way in is named by the use case
+    whose goal it serves (the list a person reads before changing something is part of the change),
+    unless the read answers a question of its own — an admin asking how the team's servers are
+    doing, an operator looking over every organization — which is its own use case, exactly as its
+    dashboard twin already is. An older record saying a COMPONENT is "not a goal" decides nothing
+    about a way in: each way in is adjudicated on its own. Measured on the first partial run of
+    this walk: 44 of 48 ways in landed as expected, and the four that did not were a smoke-test
+    page and a three-route sign-in handshake, both recorded because a component record already
+    said "not a goal". **Self-activated entry points (crons, workers, consumers, startup
     hooks) are NOT exempt.** A scheduled job is an actor with a goal by the Roles rule above, so
     exempting them would hide a whole background capability with no signal at all. They are claimed
     like anything else. Be honest about the other half, though: a cron or a boot hook often has **no
