@@ -278,7 +278,7 @@ def _segments(command: str) -> list[str]:
 #: Subcommands that belong to `coyodex` alone. Only these may be recognised behind a shell
 #: variable (`$CX audit`), where the binary's identity cannot be read off the command itself.
 _COYODEX_SUBCOMMANDS = frozenset({
-    "preindex", "validate", "audit", "render", "serve", "assemble", "lint-fragment",
+    "preindex", "validate", "audit", "render", "serve", "url", "assemble", "lint-fragment",
     "anchor-drift", "fix", "dump", "reconcile", "balance", "provenance",
     # Added after two builds scored `n/a` on assertions 12, 13 and 30 over runs that DID the work:
     # every measured build writes its record as `$CX grounding write …`, and an alias form is only

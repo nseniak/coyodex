@@ -36,6 +36,10 @@ Commands:
   serve      Serve the interactive viewer + file browser + code viewer over a local
              HTTP server, building each map's diagram on demand from its model (files
              read from git at the map's commit). One server covers every project.
+  url        The address that opens the served map on ONE element, already selected:
+             `coyodex url UC12` prints http://127.0.0.1:<port>/coyodex/<slug>/#v=usecase&uc=UC12
+             with the running server's port, or the path alone when no server runs.
+             `--context` gives the home view with the element lit instead of its page.
   assemble   Merge build agents' structured-row fragments into the canonical
              project-map.json (+ generated views).
   lint-fragment  Self-check ONE build fragment before returning it (schema + anchor
@@ -166,6 +170,9 @@ def _dispatch(cmd: str, rest: list[str]) -> int:
     if cmd == "serve":
         from coyodex.viewer import serve  # stdlib-only (http.server + git subprocess)
         return serve.main(rest)
+    if cmd == "url":
+        from coyodex.viewer import url  # stdlib-only; asks the running server, writes nothing
+        return url.main(rest)
     if cmd == "assemble":
         from coyodex import assemble  # stdlib-only
         return assemble.main(rest)

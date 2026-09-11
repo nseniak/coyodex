@@ -3208,7 +3208,8 @@ card. Tell the reader: if the server isn't already running, start it once from t
 `make start` (or `.venv/bin/coyodex serve`) — then open `http://127.0.0.1:8765/coyodex/<repo-folder-name>/`
 (the `<repo-folder-name>` is the mapped repo's folder name), or the landing page
 `http://127.0.0.1:8765/` and click this project. (Paths like `.venv/bin/coyodex` are relative to the
-coyodex clone, like the validator above.)
+coyodex clone, like the validator above.) For the address of ONE element — a use case the reader asked
+about, a rule — `.venv/bin/coyodex url <ID> --repo <repo>` prints it, port included.
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /

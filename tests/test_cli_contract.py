@@ -31,7 +31,7 @@ COMMAND_MODULE: dict[str, str] = {
     "balance": "balance", "finalize": "finalize",
     "grounding": "grounding", "record": "record", "scope": "scope",
     "provenance": "provenance", "contract": "contract", "ship": "ship",
-    "timings": "timings", "context": "context",
+    "timings": "timings", "context": "context", "url": "viewer.url",
 }
 
 
@@ -139,6 +139,7 @@ JSON_COMMANDS: dict[str, list[str]] = {
     "balance": ["--json"],
     "dump": [],                      # no flag: `dump`'s whole stdout IS the machine contract
     "anchor-drift": ["--map", "@MAP", "--repo", "@REPO", "--json"],
+    "url": ["--map", "@MAP", "UC1", "--json"],   # the id is the positional; the map rides a flag
 }
 
 

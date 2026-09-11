@@ -10276,7 +10276,10 @@ function levelHpBoxes(root) {
 // and both are one use case to the reader: `hpstep:` a step on either board's line, `ucstop:` one of
 // the lower lanes' stops. The key is carried WHOLE — a bare id could not have said which kind it was,
 // and `hpstep:` is unchanged, so a link shared before the second kind existed still lands.
-const PICK_KEYS = ['hpstep:', 'ucstop:'];
+// `ep:` is the third: one entry point's ROW in the System tab's table. No screen could select an
+// entry point before, so a link could land on its kind's table and point at nothing; the row wears
+// the same pick every board box does, and `coyodex url EPn` is what writes the key.
+const PICK_KEYS = ['hpstep:', 'ucstop:', 'ep:'];
 function pickKeyOf(s) {
   return ((s && s.sels) || [s && s.sel]).filter(Boolean)
     .map(String).find((k) => PICK_KEYS.some((pre) => k.startsWith(pre))) || null;
@@ -10316,11 +10319,11 @@ function applyPick(scroll) {
       const br = board.getBoundingClientRect(), r = el.getBoundingClientRect();
       board.scrollLeft += (r.left - br.left) - (board.clientWidth - r.width) / 2;
     }
-    const row = el.closest('.hp-row');
-    if (row) {
-      const rr = row.getBoundingClientRect();
-      if (rr.top < 90 || rr.bottom > window.innerHeight) row.scrollIntoView({ block: 'center' });
-    }
+    // A board box is brought into view by its ROW; a box that stands in no row (a table's, say)
+    // is brought into view by itself. Same test, same move.
+    const row = el.closest('.hp-row') || el;
+    const rr = row.getBoundingClientRect();
+    if (rr.top < 90 || rr.bottom > window.innerHeight) row.scrollIntoView({ block: 'center' });
   }
   el.classList.add('ibox-picked');
 }
@@ -11281,7 +11284,10 @@ function systemSections() {
         // WS-A2: a recorded cadence renders as a small tag after the trigger ("when does it run?"
         // answered inline); clicking its source anchor is served by the Cadence md column instead.
         const cad = e.cadence ? ` <span class="sys-kind-tag">${esc(e.cadence)}</span>` : '';
-        return `<tr><td>${mdInline(e.trigger || '')}${cad}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
+        // A row with an id is PICKABLE (`.pickbox`, keyed `ep:<id>`), so a link can name it and the
+        // arrival ring lands on it; a row from a map built before ids were minted stays plain.
+        const pick = e.id ? ` class="pickbox" data-pick="ep:${esc(e.id)}" data-ep="${esc(e.id)}"` : '';
+        return `<tr${pick}><td>${mdInline(e.trigger || '')}${cad}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
       }).join('');
       const tag = act === 'self' ? '<span class="sys-kind-tag sys-kind-tag--self">auto-run</span>' : '';
       // The collection carries its KINDS, not one pre-joined page. 311 rows under a chip bar wrapping
@@ -13293,8 +13299,13 @@ async function renderView(sArg, transient, seq) {
   // rule's page does: the collection's own name and blurb head the page itself.
   if (s.kind === 'system') { renderSystem(); mainScene = null; renderChrome(s); restoreTextScroll(s); applyPendingFlash(); return; }
   if (s.kind === 'sysSection') {
-    renderSystemSection(s.sys, s.epk); mainScene = null; renderChrome(s);
-    restoreTextScroll(s); return;
+    renderSystemSection(s.sys, s.epk); mainScene = null;
+    // The picked ROW (an entry point a link named), claimed before the chrome writes the address,
+    // for the reason the Happy Path branch states; ringed after the scroll restore, for its reason.
+    pickNow = pickKeyOf(s);
+    renderChrome(s); restoreTextScroll(s);
+    applyPick(true);
+    return;
   }
   // One Deployment arrow, as a page: the list of everything it stands for. Same shape as the System
   // collection above — HTML, no mermaid, no scene.

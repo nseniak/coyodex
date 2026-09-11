@@ -141,7 +141,8 @@ clean baseline.
    browser + code viewer work): if the server isn't already running, start it from the coyodex clone
    with `make start` (or `.venv/bin/coyodex serve`), then open
    `http://127.0.0.1:8765/coyodex/<repo-folder-name>/` — or the landing page `http://127.0.0.1:8765/` and
-   click this project.
+   click this project. For the address of ONE element (a use case the report names, say),
+   `.venv/bin/coyodex url <ID> --repo <repo>` prints it, port included.
 
 ## Deliberately out of scope (for now)
 

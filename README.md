@@ -97,7 +97,9 @@ make start
 ```
 
 It serves a landing page at `http://127.0.0.1:8765/`. Every project you map shows up there as a card;
-click it to open the map. Leave the server running.
+click it to open the map. Leave the server running. A map's address starts with `/coyodex/`, and
+`.venv/bin/coyodex url <ID> --repo <repo>` prints the address of one element, already selected — ask
+your agent to "show me X in the map" and it ends with that link.
 
 ### Asking for map changes
 

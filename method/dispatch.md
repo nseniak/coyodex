@@ -65,6 +65,15 @@ If the invocation explicitly names a mode — **`build`**, **`analyze`**, or **`
 the README teaches, e.g. `/coyodex analyze`) — do that mode directly: Build → `method.md`, Analyze /
 Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall through to Step 2.)
 
+A **request to see one thing in the map** ("show me the use case about rate limiting in the map",
+"link to the component that sends invoices", "open the map on this rule") is a **Link**: no build,
+no analysis, nothing written. Find the element in `.coyodex/project-map.json` (grep for the words the
+user used; `coyodex dump --id <ID>` says what an id is), then run
+`<COYODEX_HOME>/.venv/bin/coyodex url <ID> --repo <repo>` and end the answer with the address it
+prints — clickable, opening the running map on that element. `--context` gives the element's home
+view with it lit instead of its own page. Never compose the address by hand: the part after `#` is
+the viewer's own grammar, and the port belongs to whichever server is running.
+
 A **plain-language request to change the map itself** ("move component X into subsystem Y", "rename
 this subsystem", "split this component", "add a use case for…") is also a recognized input, even
 without a verb — it is a **Direct map change** (Step 2, "Baseline exists", item 3), not Analyze. Do

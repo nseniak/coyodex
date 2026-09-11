@@ -41,6 +41,26 @@ make start                       # opens the landing page in a browser
 .venv/bin/coyodex serve ~/code/myrepo   # add + serve a folder right away
 ```
 
+### Linking to one element
+
+The part of a map's address after `#` names the screen: the view, how far it is drilled, and what is
+selected. It is written by `viewer.js` alone (`urlFromState` / `stateFromUrl`), and the words are not
+always the element's own (`v=usecase` for a use case's page, `v=features` for the Features tab; a
+pinned card, a picked step and a drawn box each ride `sel=` under a prefix of their own). So nobody
+composes one by hand — `coyodex url` does:
+
+```bash
+.venv/bin/coyodex url UC12 --repo ~/code/myrepo             # the use case's own page
+.venv/bin/coyodex url CAP3 --repo ~/code/myrepo --context   # Features, with the feature's card pinned
+```
+
+It prints `http://127.0.0.1:<port>/coyodex/<slug>/#v=usecase&uc=UC12`: the port from the running
+server (recorded in `~/.coyodex/serve-running.json` for the life of the process), the path from that
+server's own recents payload, the fragment from `url.py`. With no server running it prints the path
+and fragment alone and says so. Every element kind has a row in both of `url.py`'s tables, and
+`tests/test_viewer_browser.py` opens each in a real browser and checks the element named is the one on
+screen — that test is what keeps `url.py` and `viewer.js` from drifting apart.
+
 ### Working on the viewer
 
 ```bash

@@ -115,6 +115,9 @@ RECIPES: dict[str, tuple] = {
                                     "--out", str(t / "asm")], OK),
     "diff":          (lambda t, m: ["diff", str(MAP), str(m)], OK),
     "dump":          (lambda t, m: ["dump", str(m), "--counts"], OK),
+    # Read-only: the address of one element. With no server running it prints the path alone and
+    # says so on stderr, still exit 0 — the link is what it could give.
+    "url":           (lambda t, m: ["url", "UC1", "--map", str(m)], OK),
     "scope":         (lambda t, m: ["scope"], OK),
     "reconcile":     (lambda t, m: ["reconcile", "--rules", str(FIXTURE / "rules.json"),
                                     "--fragments", str(FIXTURE / "fragments"),

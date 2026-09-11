@@ -3687,3 +3687,125 @@ def test_a_map_that_names_no_feature_keeps_one_flat_grid_of_areas() -> None:
         assert board["grids"] == 1 and board["cards"] == 1, f"one grid, every area in it: {board}"
         assert not page.js_errors, page.js_errors
 
+
+
+# ── a link from `coyodex url` lands on the element it names ──────────────────────────────────────
+# The grammar in url.py mirrors two functions of this file's subject (`drillInto`, `selectTargetFor`),
+# and nothing but a browser can tell whether the mirror is true: a link that opens the right SCREEN
+# with nothing selected is the likely failure, and it looks fine from the outside. So every kind, in
+# both gestures, is opened cold here — a fresh page on the pasted address, the way a chat's reader
+# opens it — and the element named is looked for on the screen, by its own id.
+
+def _every_kind() -> Any:
+    """Every element kind on one map: the three-surfaces map (I1-I3, SF1, EP1) plus the rules."""
+    three = _three_ways_to_reach_a_surface()
+
+    def mutate(m: dict) -> None:
+        three(m)
+        _with_rules(m)
+    return mutate
+
+
+def _every_kind_model() -> Any:
+    from coyodex.model import load_model
+    m = json.loads(_FIXTURE_MAP.read_text(encoding="utf-8"))
+    _every_kind()(m)
+    return load_model(json.dumps(m))
+
+
+#: (element id, in context?, how the screen is checked, what it must show). `crumb`: the trail's
+#: last item names the element AND the address restates the element (the page adopted it — a
+#: fallback screen would show a trail too). `css`: the element's own box wears the selection.
+#: `node`: the ONE selected box on the diagram is this element's — read the way `idOf` reads a box,
+#: since a flowchart box carries `cy-<id>` and a class-diagram box (an entity) only its mermaid id.
+_LINK_CASES: list[tuple[str, bool, str, str]] = [
+    ("CAP1", False, "crumb", "Organizations & teams"),
+    ("UC1", False, "crumb", "Sign up and create an organization"),
+    ("R1", False, "crumb", "Org creator"),
+    ("S1", False, "crumb", "App bootstrap & runtime wiring"),
+    ("C1", False, "crumb", "App factory / wiring spine"),
+    ("D1", False, "crumb", "MongoDB"),
+    ("SD1", False, "crumb", "Tenancy & access policy"),
+    ("E1", False, "crumb", "Organization"),
+    ("I1", False, "crumb", "The dashboard"),
+    ("SF1", False, "crumb", "Sign in with Google"),
+    ("BLK1", False, "crumb", "Who may call which tool"),
+    ("BR1", False, "crumb", "No role, no access"),
+    ("HP12", False, "css", ".flow-step[data-step='HP12'].ibox-picked"),
+    ("EP1", False, "css", "tr.pickbox[data-ep='EP1'].ibox-picked"),
+    ("CAP1", True, "css", ".story-card.story-selected[data-sfeat='CAP1']"),
+    ("R1", True, "css", ".story-card.story-selected[data-sactor='R1']"),
+    ("C1", True, "node", "C1"),
+    ("S1", True, "node", "S1"),
+    ("S13", True, "node", "S13"),
+    ("SD1", True, "node", "SD1"),
+    ("E1", True, "node", "E1"),
+    ("D1", True, "node", "D1"),
+    ("D14", True, "node", "D14"),
+    ("I1", True, "css", ".ifd-box.ifd-picked[data-iface='I1']"),
+]
+
+
+#: The ids of the selected boxes on the diagram, read the way viewer.js's `idOf` reads a box.
+_SELECTED_NODE_IDS = """[...document.querySelectorAll('#diagram g.node.is-selected')].map((el) => {
+    const cls = [...el.classList].find((c) => c.startsWith('cy-'));
+    if (cls) return cls.slice(3);
+    if (el.getAttribute('data-id')) return el.getAttribute('data-id');
+    const m = (el.id || '').match(/(?:^|-)((?:UC|HP|SD|C|D|E|I|S)\\d+)(?:-|$)/);
+    return m ? m[1] : null; })"""
+
+
+@pytest.mark.parametrize("eid,context,how,want", _LINK_CASES,
+                         ids=[f"{e}{'-context' if c else ''}" for e, c, _h, _w in _LINK_CASES])
+def test_a_link_from_coyodex_url_lands_on_the_element_it_names(eid: str, context: bool, how: str,
+                                                              want: str) -> None:
+    from coyodex.viewer.url import link_for
+    link = link_for(_every_kind_model(), eid, context)
+    assert link is not None, eid
+    with _served_map(_every_kind()) as url, _page(url + "#" + link.fragment) as page:
+        _settle(page)
+        if how == "css":
+            page.wait_for_selector(want, state="attached", timeout=8000)
+            assert page.evaluate(f"() => document.querySelectorAll({want!r}).length") == 1, want
+        elif how == "node":
+            page.wait_for_function(_SELECTED_NODE_IDS + ".length > 0", timeout=8000)
+            assert page.evaluate(_SELECTED_NODE_IDS) == [want], page.evaluate(_SELECTED_NODE_IDS)
+        else:
+            crumb = _crumb(page)
+            assert want in crumb, f"{eid}: the trail does not name it: {crumb!r}"
+            assert "Not in this map" not in crumb, crumb
+            # The page RESTATED the element in the address — the pair that names it survived the
+            # render, so this is that element's screen and not a fallback that happens to mention it.
+            key, value = [p for p in link.fragment.split("&") if not p.startswith("v=")][0].split("=", 1)
+            assert f"{key}={value}" in page.evaluate("() => location.hash"), page.evaluate(
+                "() => location.hash")
+        assert not page.js_errors, page.js_errors
+
+
+def test_an_entry_point_link_rings_its_row_and_keeps_it_in_the_address() -> None:
+    """The System tab could open the table of an entry point's kind and point at nothing. Now the
+    row is a picked box like a step on the walk: lit on arrival, scrolled into view, and restated in
+    the address so the copied link and a reload come back to it."""
+    link_fragment = None
+    from coyodex.viewer.url import link_for
+    link = link_for(_every_kind_model(), "EP1")
+    assert link is not None
+    link_fragment = link.fragment
+    with _served_map(_every_kind()) as url, _page(url + "#" + link_fragment) as page:
+        _settle(page)
+        page.wait_for_selector("tr.pickbox[data-ep='EP1'].ibox-picked", state="attached", timeout=8000)
+        seen = page.evaluate("""() => {
+            const row = document.querySelector("tr.pickbox[data-ep='EP1']");
+            const r = row.getBoundingClientRect();
+            const bar = getComputedStyle(row.querySelector('td')).boxShadow;
+            return { picked: row.classList.contains('ibox-picked'),
+                     onScreen: r.top >= 0 && r.bottom <= window.innerHeight,
+                     bar: bar !== 'none', hash: location.hash,
+                     others: document.querySelectorAll('tr.pickbox.ibox-picked').length };
+        }""")
+        assert seen["picked"] and seen["onScreen"] and seen["bar"], seen
+        assert seen["others"] == 1, seen
+        assert "sel=ep%3AEP1" in seen["hash"], seen
+        page.reload()
+        page.wait_for_selector("tr.pickbox[data-ep='EP1'].ibox-picked", state="attached", timeout=8000)
+        assert not page.js_errors, page.js_errors

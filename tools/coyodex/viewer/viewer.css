@@ -3178,6 +3178,12 @@ body.insp-on { cursor: crosshair; }
 .pickbox:hover { box-shadow: inset 0 0 0 1.5px #4f46e5; }
 .pickbox.ibox-picked, .pickbox.ibox-picked:hover {
   box-shadow: inset 0 0 0 2px #4f46e5, 0 3px 14px rgba(79, 70, 229, .28); }
+/* A ROW IN A TABLE takes the same two states, on its cells: a table row cannot wear a box-shadow
+   (Chromium paints none on a `tr`), so the ring becomes a bar at the row's left edge and a wash
+   across it. Today the entry-point table alone, where a link can name one row (`sel=ep:EPn`). */
+tr.pickbox:hover > td { background: rgba(79, 70, 229, .05); }
+tr.pickbox.ibox-picked > td, tr.pickbox.ibox-picked:hover > td { background: rgba(79, 70, 229, .09); }
+tr.pickbox.ibox-picked > td:first-child { box-shadow: inset 3px 0 0 #4f46e5; }
 
 /* The IDENTITY edge: the fill says WHAT KIND, this says WHICH ONE. Drawn only where a thing has a
    colour of its own, which today means a feature.

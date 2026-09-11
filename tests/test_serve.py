@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import shutil
 import subprocess
 import tempfile
@@ -23,6 +24,7 @@ from pathlib import Path
 
 from coyodex.viewer.filetree import FileTreeNode
 from coyodex.viewer.recents import RecentsStore, register_project
+from coyodex.viewer.running import running_servers
 from coyodex.viewer.serve import (
     Handler,
     Project,
@@ -43,6 +45,7 @@ from coyodex.viewer.serve import (
     project_tree,
     project_view,
     with_dev_reload,
+    serve,
 )
 
 _FIXTURE_MAP = Path(__file__).parent / "fixtures" / "mcpolis-project-map.json"
@@ -495,3 +498,29 @@ if __name__ == "__main__":
         fn()
         print(f"ok  {fn.__name__}")
     print(f"\n{len(fns)} passed")
+
+
+def test_serve_records_its_bound_port_while_it_runs_and_forgets_it_after() -> None:
+    """`coyodex url` finds a server through this record and nothing else, so the record must say
+    the port the OS actually gave (port 0 asks for any) and must be gone once the server is."""
+    with tempfile.TemporaryDirectory() as td:
+        running = Path(td) / "running.json"
+        got: list[ThreadingHTTPServer] = []
+        ready = threading.Event()
+
+        def on_start(h: ThreadingHTTPServer) -> None:
+            got.append(h)
+            ready.set()
+
+        t = threading.Thread(target=serve, args=([],),
+                             kwargs=dict(port=0, store=RecentsStore(Path(td) / "recents.json"),
+                                         running_path=running, on_start=on_start), daemon=True)
+        t.start()
+        assert ready.wait(5), "the server never reported itself started"
+        port = got[0].server_address[1]
+        assert port != 0
+        assert [(r.port, r.pid) for r in running_servers(running)] == [(port, os.getpid())]
+        got[0].shutdown()
+        t.join(5)
+        assert not t.is_alive()
+        assert running_servers(running) == []

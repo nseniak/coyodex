@@ -7,6 +7,8 @@ The interactive viewer is served, not baked into a file. For each project this s
     ``/static/``) — identical for every map;
   * the map's own data at ``/coyodex/<project>/api/view`` — the graph + every pre-rendered diagram, flow,
     and config flag (``gen_viewer.build_view_bundle``), which the frontend fetches and renders;
+  * its own address, as a path: ``/coyodex/<project>/`` (``MAP_ROUTE``, the one definition), which the
+    landing page's cards and ``coyodex url`` read from here rather than spell themselves;
   * the file browser + code viewer, both read from git AT THE MAP'S COMMIT (``/api/tree`` /
     ``/api/src``) by default, so what you see always matches the map. ONE scoped exception:
     ``/api/src?at=<sha>|WORKTREE`` serves a file at another commit or from the working tree — the
@@ -16,7 +18,8 @@ The interactive viewer is served, not baked into a file. For each project this s
 The server does NOT scan the disk. You pick a project folder (one holding ``.coyodex/project-map.json``)
 through the landing page's built-in folder browser; the choice is remembered in a small recents file
 (``~/.coyodex/serve-recents.json``). On the next start the recents are shown, each openable or
-removable. Files come from ``git ls-tree`` / ``git show <commit>:<path>``, so the view is a frozen
+removable. While it runs, the server also records its port and process id beside that file
+(``serve-running.json``, see ``running.py``), which is how ``coyodex url`` finds it. Files come from ``git ls-tree`` / ``git show <commit>:<path>``, so the view is a frozen
 snapshot of the mapped commit and local edits never leak in.
 
 Stdlib only (``http.server`` + ``subprocess``) — no third-party import, so this stays inside the
@@ -25,6 +28,7 @@ render dependency firewall (see internal/docs/design-notes.md). ``coyodex serve`
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -34,6 +38,7 @@ import webbrowser
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from coyodex.impact_git import WORKTREE as IMPACT_WORKTREE
@@ -45,6 +50,7 @@ from coyodex.viewer.diffmap import DiffRow, parse_unified_diff
 from coyodex.viewer.filetree import FileTreeNode, build_tree, node_path_index, resolved_path_index
 from coyodex.viewer.gen_viewer import ViewBundle, build_view_bundle, repo_state
 from coyodex.viewer.recents import RecentsStore
+from coyodex.viewer.running import RUNNING_PATH, forget_running, note_running
 from coyodex.views import model_to_graph
 
 MAP_JSON = "project-map.json"
@@ -881,12 +887,18 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool = False,
-          store: RecentsStore | None = None, dev: bool = False) -> int:
+          store: RecentsStore | None = None, dev: bool = False,
+          running_path: Path = RUNNING_PATH,
+          on_start: Callable[[ThreadingHTTPServer], None] | None = None) -> int:
     """Serve the recents (plus any folders passed on the command line, added + validated) until
     interrupted. No disk scan — the served set is exactly the recents list.
 
     ``dev`` is for someone working ON the viewer: it adds live reload (see dev_stamp). It defaults
-    off, so a person reading a map never gets a page that reloads under them."""
+    off, so a person reading a map never gets a page that reloads under them.
+
+    ``running_path`` is where this server's port and pid are recorded for the life of the process
+    (``running.py``); ``on_start`` is handed the bound server once, before it starts answering —
+    a test's way to stop a server it started, since nothing else here can reach it."""
     store = store or RecentsStore()
     for folder in add_folders:
         if _has_coyodex(folder):  # a .coyodex/ dir is enough; an unbuilt map just shows as "No valid map yet"
@@ -897,6 +909,8 @@ def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool
     Handler.projects = build_projects(store.list())
     Handler.dev = dev
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    port = httpd.server_address[1]  # the BOUND port: `--port 0` asks the OS, and the record must say what it gave
+    note_running(port, os.getpid(), running_path)
     url = f"http://127.0.0.1:{port}/"
     names = ", ".join(sorted(Handler.projects)) or "(none yet — add a folder from the landing page)"
     print(f"coyodex serve: {len(Handler.projects)} project(s): {names}")
@@ -907,11 +921,14 @@ def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool
               "puts the restarted server's answer on screen.")
     if open_browser:
         webbrowser.open(url)
+    if on_start is not None:
+        on_start(httpd)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\ncoyodex serve: stopped")
     finally:
+        forget_running(os.getpid(), running_path)
         httpd.server_close()
     return 0
 
@@ -921,7 +938,8 @@ _USAGE = """usage: coyodex serve [FOLDER ...] [--port N] [--open] [--dev]
 Serve coyodex maps over a local HTTP server so the viewer's file browser + code viewer light up
 (files read from git at each map's commit). The server does NOT scan the disk: it serves the folders
 you have opened before (remembered in ~/.coyodex/serve-recents.json). Open http://127.0.0.1:PORT/ to
-add a project by browsing to its folder, or to open / remove a recent one.
+add a project by browsing to its folder, or to open / remove a recent one. While it runs, its port is
+recorded in ~/.coyodex/serve-running.json, which is how `coyodex url <ID>` finds it.
 
   FOLDER      a project folder (with .coyodex/project-map.json) to add + serve now (repeatable)
   --port N    port to listen on (default 8765)
