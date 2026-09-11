@@ -129,9 +129,9 @@ output, a fixture tree.
 
 ## Status
 
-**Alpha, v0.1.0. Experimental and incomplete.** Expect breaking changes, including to the on-disk map
-format, so a newer version may not read an older map. Good for evaluating and giving feedback; not yet
-something to depend on.
+**Alpha. Experimental and incomplete.** Expect breaking changes, including to the on-disk map format,
+so a newer version may not read an older map. Good for evaluating and giving feedback; not yet
+something to depend on. The version number lives in the [`VERSION`](VERSION) file at the repo root.
 
 **What works today**
 
