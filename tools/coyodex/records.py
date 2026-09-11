@@ -70,10 +70,10 @@ ANY_ID_KEY = r"[A-Z]+\d+"
 # shared one would quietly let every other family adjudicate a sub-domain it has no check for.
 OWNER_KEY = r"(?:SD|E)\d+"
 
-#: The 'Decision area exceptions' vocabulary: a decision AREA (`BLKn`) and nothing else — `governs`
+#: The 'Decision area exceptions' vocabulary: a decision AREA (`BLKn`) and nothing else — `specified_under`
 #: sits on no other element, so widening this to the shared `ID_KEY` would let the family adjudicate
 #: ids it has no check for. Same reasoning as `OWNER_KEY` two lines up.
-GOVERNS_KEY = r"BLK\d+"
+SPECIFIED_UNDER_KEY = r"BLK\d+"
 
 #: The 'Balance exceptions' vocabulary: `ID_KEY` plus the three ids the granularity family actually
 #: adjudicates. `UCn`/`HPn` come from `ID_KEY` (the flow-length band and the fused-goal name smell);
@@ -160,8 +160,8 @@ HEADINGS: tuple[HeadingSpec, ...] = (
     # The DECISION-AREA twin of the line above, and a separate heading on purpose: silencing "this
     # area governs nothing decided" answers a different question from "this data belongs to nobody",
     # and one heading for both would hide the second under the first. Keyed `BLKn` only — the family
-    # adjudicates an AREA's answer, and nothing else carries `governs`.
-    HeadingSpec("Decision area exceptions", True, GOVERNS_KEY),
+    # adjudicates an AREA's answer, and nothing else carries `specified_under`.
+    HeadingSpec("Decision area exceptions", True, SPECIFIED_UNDER_KEY),
     # Keyed by `ID_KEY`, which carries both shapes this family adjudicates: an `In` (this surface's
     # facing / evidence / reach is deliberately as it stands) and an `EPn` (this way in deliberately
     # belongs to no surface). One heading, because an operator deciding "that is fine" is making the

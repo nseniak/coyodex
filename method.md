@@ -1231,21 +1231,31 @@ capability groups use cases — an area a product person would argue about. Rule
 the trace, one agent per block (see *After the trace*), because sweeping a rule's enforcement sites
 needs the flows.
 
-**Each block names its `governs`** — the feature(s) its rules constrain. Written ON THE BLOCK at
-synthesis, like a sub-domain's `owners` and for the same reason: the areas are authored in the same
-pass that mints the features, so the answer never has to travel through `reconcile` the way a rule's
-`block` does. Ask *which feature(s) do these decisions constrain?* One clear answer →
-`"governs": ["CAPn"]`. Several genuine ones → list them all. No answer → leave the field out and
-record `BLKn: <why>` under a **"Decision area exceptions"** extras heading; an advisory asks either
-way. `[]` is a shape error, not an answer.
+**Each block names its `specified_under`** — the feature(s) a person writing the product's spec
+would put these rules under. Written ON THE BLOCK at synthesis, like a sub-domain's `owners` and for
+the same reason: the areas are authored in the same pass that mints the features, so the answer never
+has to travel through `reconcile` the way a rule's `block` does. Ask *under which feature would these
+rules be written?* One clear answer → `"specified_under": ["CAPn"]`. Several genuine ones → list them
+all. No answer → leave the field out and record `BLKn: <why>` under a **"Decision area exceptions"**
+extras heading; an advisory asks either way. `[]` is a shape error, not an answer.
 
-**IT ASKS WHAT THE DECISION DECIDES, NOT WHERE IT IS ENFORCED.** The two readings give different
-answers on a third of a real map's areas, so the question has to be settled in one place, and this is
-it. mcpolis's "Who may call which tool" governs **Access control** — the feature whose whole job is
-deciding which people may reach which tools — even though every one of its rules is enforced inside
-the gateway's code. Where a rule is enforced is already answered, per rule, by its own call sites;
-asking `governs` the same question again would waste the one field that can say something a
-derivation cannot. Rules is a PRODUCT tab, and a decision belongs to the feature it constrains.
+**TWO STANDPOINTS, AND THIS FIELD IS THE FIRST ONE.** They give different answers on most areas, so
+the question has to be settled in one place, and this is it:
+
+    SPEC         under which feature would these rules be WRITTEN
+    ENFORCEMENT  in which feature's code are they APPLIED
+
+mcpolis's "Who may call which tool" is **specified under Access control** — the feature whose whole
+job is deciding who may reach which tools — and **enforced** inside the gateway. Its "Plan caps" is
+applied across six features (teammates, servers, roles, machine sizes, argument checks, history) and
+specified under a plans feature that product has not shipped, so the field is absent there and the
+absence is recorded.
+
+**THE ENFORCEMENT ANSWER IS ALREADY DERIVABLE, and that is what settles it.** A rule carries its own
+call sites; sites resolve to components; steps join to use cases and so to features. Spending the one
+authored field on that would buy a worse copy of something the map already computes. Nothing in the
+code says where a rule would be WRITTEN IN A SPEC — that judgement is the thing only a person can
+make, and it is the reason this field is authored rather than derived.
 
 AUTHORED, and this one was measured before it was written. Every derivation was tried on three live
 maps and every one failed: the feature a rule's steps land on is a plurality, not a home (52% and
@@ -1256,7 +1266,7 @@ path ties four areas at one station. The viewer GROUPS the Rules page by this fi
 features are already ordered by the story column, the groups arrive in the product's own order with
 no second field to author.
 
-`validate` blocks `governs` on a subsystem, a capability and a sub-domain (one dataclass, four
+`validate` blocks `specified_under` on a subsystem, a capability and a sub-domain (one dataclass, four
 forests), blocks an id that names no capability, a repeat, and an empty list; and it cross-examines
 the answer against the features the area's rules actually reach — reporting a governed feature no
 rule of the area reaches, never a disagreement about WHICH feature leads, since that disagreement is

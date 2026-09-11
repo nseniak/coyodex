@@ -198,9 +198,10 @@ class Group:
                                # a shape error, not "none": say who, or leave the field out.
                                # `validate` blocks it on the other forests, and cross-examines the
                                # list against the derived touches (grounding / split / dominance).
-    governs: list[str] | None = None
-                               # BLOCK-ONLY: which feature(s) this decision area GOVERNS — the ones
-                               # its rules constrain. AUTHORED, and the reason is `owners` one field
+    specified_under: list[str] | None = None
+                               # BLOCK-ONLY: the feature(s) this decision area would be SPECIFIED
+                               # UNDER — where a person writing the product's spec would put these
+                               # rules. AUTHORED, and the reason is `owners` one field
                                # up, one forest over: every derivation was measured on three live
                                # maps and every one failed. The feature a rule's steps land on is a
                                # plurality, not a home (52% and 61% at the median; 8 of 32 areas win
@@ -209,12 +210,22 @@ class Group:
                                # groups of nine and two; components fan out to 100+ per map; and the
                                # happy path ties four areas at one station.
                                #
-                               # IT ASKS WHAT THE DECISION DECIDES, NOT WHERE IT IS ENFORCED. The
-                               # two readings differ on a third of a real map's areas: mcpolis's
-                               # "Who may call which tool" governs Access control, whose whole job
-                               # is deciding who may reach which tools, though every one of its
-                               # rules is enforced inside the gateway's code. Where a rule is
-                               # enforced is already answered by its own call sites.
+                               # TWO STANDPOINTS, AND THIS FIELD IS THE FIRST ONE:
+                               #   SPEC        under which feature would these rules be WRITTEN
+                               #   ENFORCEMENT in which feature's code are they APPLIED
+                               # They differ on most areas. mcpolis's "Who may call which tool" is
+                               # specified under Access control, whose whole job is deciding who may
+                               # reach which tools, and enforced inside the gateway. Its "Plan caps"
+                               # is applied in six features — teammates, servers, roles, machine
+                               # sizes, argument checks, history — and specified under a plans
+                               # feature that product has not shipped, so the field is absent there.
+                               #
+                               # THE ENFORCEMENT ANSWER IS ALREADY DERIVABLE, which is what settles
+                               # it: a rule carries its own call sites, sites resolve to components,
+                               # and steps join to use cases and so to features. Spending the one
+                               # authored field on that would buy a worse copy of what the map has.
+                               # Nothing in the code says where a rule would be WRITTEN IN A SPEC;
+                               # that judgement is the thing only a person can make.
                                #
                                # NOT `owners`, which is deliberately about DATA: an owner is the
                                # feature that creates a record and runs its lifecycle, and a decision

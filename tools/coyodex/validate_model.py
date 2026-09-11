@@ -4787,11 +4787,11 @@ def _check_owners(m: ProjectModel) -> list[str]:
 #: reader silencing "this area governs nothing decided" is answering a different question from one
 #: silencing "this data belongs to nobody", and one heading for two would hide the second under the
 #: first.
-GOVERNS_EXCEPTIONS_HEADING = "Decision area exceptions"
+DECISION_AREA_EXCEPTIONS_HEADING = "Decision area exceptions"
 
 
-def _check_governs(m: ProjectModel) -> list[str]:
-    """`governs` — which feature(s) a DECISION AREA constrains — is a BLOCK field.
+def _check_specified_under(m: ProjectModel) -> list[str]:
+    """`specified_under` — which feature(s) a DECISION AREA constrains — is a BLOCK field.
 
     Policed exactly like `owners` one forest over, and for the same structural reason: one `Group`
     dataclass backs four forests, so nothing stops a subsystem, a capability or a sub-domain from
@@ -4801,38 +4801,38 @@ def _check_governs(m: ProjectModel) -> list[str]:
     CAPABILITY, and a bare existence scan would bless `S3` or `BLK7` and then render a wire to
     nothing.
 
-    BLOCKING: `governs` on the wrong forest; an id that names no capability; the same feature listed
+    BLOCKING: `specified_under` on the wrong forest; an id that names no capability; the same feature listed
     twice (the list says which features the area SPANS, and one cannot span itself twice); and an
     EMPTY list. Empty is a shape error rather than "it governs nothing" for the reason `owners` gives:
     `[]` and an absent field would otherwise be the same map, and the advisory that asks for a
     decision could not tell a considered answer from a field never written."""
-    problems = [f"{g.id} carries `governs` — governs is a decision-area field (it says which "
-                f"FEATURE(s) an area's rules constrain); drop it from this {kind}"
+    problems = [f"{g.id} carries `specified_under` — that is a decision-area field (it says which "
+                f"FEATURE(s) an area's rules would be written under); drop it from this {kind}"
                 for arr, kind in ((m.subsystems, "subsystem"), (m.capabilities, "capability"),
                                   (m.subdomains, "sub-domain"))
-                for g in arr if g.governs is not None]
+                for g in arr if g.specified_under is not None]
     cap_ids = {c.id for c in m.capabilities}
     for g in m.blocks:
-        if g.governs is None:
+        if g.specified_under is None:
             continue
-        if not g.governs:
-            problems.append(f"{g.id} has an empty `governs` list — name the feature(s) this "
-                            "decision area's rules constrain, or leave the field out to say the "
+        if not g.specified_under:
+            problems.append(f"{g.id} has an empty `specified_under` list — name the feature(s) these "
+                            "rules would be written under, or leave the field out to say the "
                             "decision has not been made")
         seen: set[str] = set()
-        for o in g.governs:
+        for o in g.specified_under:
             if o not in cap_ids:
-                problems.append(f"{g.id} lists governed '{o}', which is not a defined capability — "
-                                "an area governs FEATURES")
+                problems.append(f"{g.id} lists '{o}', which is not a defined capability — an area is "
+                                "specified under FEATURES")
             elif o in seen:
-                problems.append(f"{g.id} lists governed '{o}' twice — the list says which features "
-                                "the area spans, so each one appears once")
+                problems.append(f"{g.id} lists '{o}' twice — the list says which features the area "
+                                "spans, so each one appears once")
             seen.add(o)
     return problems
 
 
-def _governs_warnings(m: ProjectModel, extents: Extents | None = None) -> list[str]:
-    """ADVISORY: cross-examine the AUTHORED `governs` against the features the area's rules REACH.
+def _specified_under_warnings(m: ProjectModel, extents: Extents | None = None) -> list[str]:
+    """ADVISORY: cross-examine the AUTHORED `specified_under` against the features the area's rules REACH.
 
     The two are different questions, exactly as `owners` and the derived touches are: what an area
     is ABOUT versus which walks happen to run through the code enforcing it. They may disagree, and
@@ -4852,7 +4852,7 @@ def _governs_warnings(m: ProjectModel, extents: Extents | None = None) -> list[s
     Escape for both: '{id}: <why>' under a 'Decision area exceptions' extras heading."""
     if not m.blocks:
         return []
-    recorded = records.recorded_keys(m, GOVERNS_EXCEPTIONS_HEADING)
+    recorded = records.recorded_keys(m, DECISION_AREA_EXCEPTIONS_HEADING)
     names = {c.id: c.name for c in m.capabilities}
     cap_of_uc = {u.id: u.capability for u in m.use_cases if u.capability}
     anchored = anchored_flow_steps(m)
@@ -4863,27 +4863,28 @@ def _governs_warnings(m: ProjectModel, extents: Extents | None = None) -> list[s
         rules = [r for r in m.rules if r.block == g.id]
         if not rules:
             continue
-        if g.governs is None:
+        if g.specified_under is None:
             warnings.append(
-                f"{g.id} ({g.name}) holds {len(rules)} rule(s) and has no `governs` — decide which "
-                "feature(s) this area's rules constrain, list several if it genuinely spans them, "
-                f"or record '{g.id}: <why>' under a '{GOVERNS_EXCEPTIONS_HEADING}' extras heading")
+                f"{g.id} ({g.name}) holds {len(rules)} rule(s) and has no `specified_under` — decide "
+                "which feature(s) these rules would be WRITTEN under (not where they are enforced; "
+                "that is already derivable), list several if it genuinely spans them, or record "
+                f"'{g.id}: <why>' under a '{DECISION_AREA_EXCEPTIONS_HEADING}' extras heading")
             continue
-        if not g.governs:
+        if not g.specified_under:
             continue          # `[]` already has a blocking error; a second, contradicting nudge is worse
         reached = {cap_of_uc.get(l.uc) for r in rules for l in rule_steps(m, r, extents, anchored)}
         reached.discard(None)
-        blind = [o for o in g.governs if o not in reached]
+        blind = [o for o in g.specified_under if o not in reached]
         # EVERY governed feature unreached, on an area no walk reaches at all, is not evidence
         # against the answer — it is the rule layer's known 60% join, reported elsewhere. Only a
         # PARTIAL blindness says the authored list and the walks actually disagree.
         if blind and reached:
             warnings.append(
-                f"{g.id} ({g.name}) governs a feature with no evidence — no rule of this area "
+                f"{g.id} ({g.name}) names a feature with no evidence — no rule of this area "
                 f"reaches a step of {', '.join(f'{o} ({names.get(o, o)})' for o in blind)}, while "
                 "other rules of it do reach a feature. Either the answer is wrong, or the walk that "
                 f"would show it is not written; fix one, or record '{g.id}: <why>' under a "
-                f"'{GOVERNS_EXCEPTIONS_HEADING}' extras heading")
+                f"'{DECISION_AREA_EXCEPTIONS_HEADING}' extras heading")
     return warnings
 
 
@@ -6520,12 +6521,12 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_stake_coverage_warnings(m))
     problems.extend(_check_owners(m))
     warnings.extend(_owner_warnings(m))
-    problems.extend(_check_governs(m))
+    problems.extend(_check_specified_under(m))
     # The same symbol table the rule checks below load, and for the same reason: without it a rule
     # reaches only the steps anchored at its exact line, so an area would look blind to features its
     # rules do govern. Loaded once here and handed to both.
     _governs_extents = load_map_extents(model_path) if model_path is not None else None
-    warnings.extend(_governs_warnings(m, _governs_extents))
+    warnings.extend(_specified_under_warnings(m, _governs_extents))
     problems.extend(_check_role_audience(m))
     problems.extend(_check_role_relations(m))
     problems.extend(check_role_relation_shape(m))

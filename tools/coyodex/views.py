@@ -1038,11 +1038,11 @@ def _build_rules_view(m: ProjectModel, extents: Extents | None) -> dict[str, obj
             "unverified": any(not s["declared"] and not s["components"] for s in sites),
         })
     return {
-        # `governs` rides along so the Rules page can GROUP by it. Ids, not names: the viewer shows
+        # `specified_under` rides along so the Rules page can GROUP by it. Ids, not names: the viewer shows
         # names everywhere and looks them up itself, and a name shipped here would be a second copy
         # to keep in step with the feature's own.
         "blocks": [{"id": b.id, "name": b.name, "purpose": b.purpose, "parent": b.parent or "",
-                    "governs": list(b.governs or [])}
+                    "specified_under": list(b.specified_under or [])}
                    for b in m.blocks],
         "rules": out_rules,
         "byComponent": by_component,
