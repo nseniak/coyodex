@@ -3396,7 +3396,14 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     # …and the NAME on that line is a door: the feature's own list of use cases, or the actor's. It earns
     # the click by the rule every pill is held to — it goes where neither the card's own click nor the
     # page already open goes.
-    assert 'data-gofeat="' in foot and 'data-goactor="' in ucs
+    # The FEATURE pill has a builder of its own, because two card foots name a feature: the use case's
+    # here, and the Rules board's "also under". They were one copied string, and a door worded two ways
+    # is a door that starts behaving two ways.
+    pill = js[js.index("function featureDoorPillHtml(fid) {"):
+              js.index("\n}", js.index("function featureDoorPillHtml(fid) {"))]
+    assert 'data-gofeat="' in pill, "the feature pill is the door"
+    assert "featureDoorPillHtml(cap.id)" in foot, "the In feature line uses that one builder"
+    assert 'data-goactor="' in ucs
     assert "ecard-pill-link" in ucs and "ecard-pill-link" in css
     binder = js[js.index("function bindElementCards(root, onDrill) {"):
                 js.index("\n}", js.index("function bindElementCards(root, onDrill) {"))]
@@ -3507,16 +3514,23 @@ def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
     DROPPED on that home view, which left the feature cards as the one card shape in the viewer with
     no identity line, on the very screen a reader meets first.
 
-    Both jobs are separable. The WORD is the card's identity and belongs on every card everywhere: a
-    card without it reads as a different kind of object than the cards beside it. The ACTION is a
-    control only where it goes somewhere the CARD does not, and it fails that two ways: structurally,
-    for four kinds whose pill and whose drill open the same page (a decision area's card was found
-    carrying one), and positionally, when the card already sits on the page the pill travels to. Both
-    render the word as plain text: no hover, no pointer, no keyboard stop."""
+    Both jobs are separable. The WORD is the card's identity and belongs on every card in a list that
+    MIXES kinds: without it a card reads as a different kind of object than the cards beside it. The
+    ACTION is a control only where it goes somewhere the CARD does not, and it fails that two ways:
+    structurally, for four kinds whose pill and whose drill open the same page (a decision area's card
+    was found carrying one), and positionally, when the card already sits on the page the pill travels
+    to. Both render the word as plain text: no hover, no pointer, no keyboard stop.
+
+    ONE LIST DROPS THE WORD ALTOGETHER, and it is the case the rule above does not cover: the Rules
+    board, where every card is a decision area, each wears the area's own mark, and the page says so
+    in its first line. There `DECISION AREA` on all of them is the heading printed once per card, and
+    `noType` is what the caller says to drop it. Pinned to ONE caller, because the argument for it is
+    "every card here is the same kind" and a second list claiming that is a design question, not an
+    edit."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = js[js.index("function elementCardHtml(id, opts) {"):
               js.index("\nfunction ", js.index("function elementCardHtml(id, opts) {") + 10)]
-    assert "const typeHtml = (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))" in card
+    assert "const typeHtml = o.noType ? '' : (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))" in card
     assert "wordHtml: typeHtml," in card, "the card's own pill replaces the box's default word"
     # The four are exactly the kinds whose `selectTargetFor` and `drillInto` answer the same page.
     assert "const TYPE_PILL_REPEATS_DRILL = new Set(['usecase', 'block', 'rule', 'process']);" in js
@@ -3529,7 +3543,10 @@ def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
     ucs = js[js.index("function renderUseCases(sel) {"):
              js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
     assert "return { homeType: !page, extra:" in ucs
-    assert "noType" not in js, "the word never goes now; only its action does"
+    assert js.count("o.noType") == 1 and js.count("noType: true") == 1, \
+        "one switch, one caller: the Rules board, where every card is a decision area"
+    assert "noType: true" in js[js.index("function ruleAreaCardHtml(g, others) {"):
+                                js.index("\n}", js.index("function ruleAreaCardHtml(g, others) {"))]
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert ".ecard-type-plain { cursor: default; }" in css
 
@@ -5636,9 +5653,9 @@ def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> 
     assert "itemGlyphSvg(sub ? 'subflow' : 'usecase')" in head, "the element's own glyph on the name row"
     assert "itemSectionHeadHtml(" in head, "the section head, from the one builder"
     assert "(FLOWS_NARR[id] || []).length" in head, "the count is the walk's own steps"
-    sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph) {"):
-             js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph) {"))]
-    assert "itemSectionHeadHtml(title, count, note, glyph)" in sec, "…which the framed section uses too"
+    sec = js[js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph, titleHtml) {"):
+             js.index("\n}", js.index("function itemSectionHtml(secs, key, title, count, note, body, glyph, titleHtml) {"))]
+    assert "itemSectionHeadHtml(title, count, note, glyph, titleHtml)" in sec, "…which the framed section uses too"
     sync = js[js.index("function syncPageHero(s, chain, tv) {"):
               js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "const walk = isFlowState(s);" in sync and "walk ? walkHeadHtml(s, chain)" in sync

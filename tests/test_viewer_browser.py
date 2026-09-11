@@ -3574,3 +3574,115 @@ def test_a_rule_wears_a_scale_and_its_area_a_scroll() -> None:
             return el ? [...el.querySelectorAll('path')].map((q) => q.getAttribute('d')).join('|') : ''; }""")
         assert d, "a rule's own page leads with no mark"
         assert not page.js_errors, page.js_errors
+
+
+def _with_specified_rules(m: Any) -> None:
+    """Four decision areas, three of them SPECIFIED UNDER a feature — the shape the Rules board cuts
+    its sections by. One area names TWO features (drawn under both), one names none (the trailing
+    section). The features chosen straddle the fixture's story column: `Audit & oversight` is CAP6 and
+    sits BEFORE `Secrets & variables`, CAP5, so map order and story order disagree and the test can
+    tell which one the board used."""
+    _with_rules(m)
+    base = m["blocks"][0]
+
+    def area(bid: str, name: str, under: list[str]) -> dict:
+        return dict(base, id=bid, name=name, purpose=f"What {name[0].lower()}{name[1:]} settles.",
+                    specified_under=list(under) or None)
+
+    m["blocks"] = [
+        area("BLK1", "Who may call which tool", ["CAP3"]),
+        area("BLK2", "What gets recorded", ["CAP6"]),
+        area("BLK3", "Protecting stored secrets", ["CAP5", "CAP2"]),
+        area("BLK4", "Plan caps", []),
+    ]
+
+
+#: The Rules board as the reader sees it: every feature card in page order with its door, its mark
+#: and the area cards inside it. Shared by the grouped test and the ungrouped one, so "no cards" is
+#: read by the same probe that reads the cards rather than by a second one that could drift.
+_RULES_BOARD_JS = """() => {
+  const wrap = document.querySelector('#diagram');
+  const secs = [...wrap.querySelectorAll('.item-sec[id^=\\"itemsec-feat-\\"]')].map((sec) => {
+    const head = sec.querySelector('.item-sec-title');
+    const door = head.querySelector('.item-sec-door');
+    return {
+      title: (door || head).textContent.trim(),
+      fid: door ? door.getAttribute('data-gofeat') : '',
+      mark: !!head.querySelector('svg'),
+      counts: head.querySelectorAll('.item-sec-n').length,
+      areas: [...sec.querySelectorAll('.item-sec-body .ecard')].map((c) => ({
+        name: (c.querySelector('.ibox-name') || {}).textContent || '',
+        also: [...c.querySelectorAll('.ecard-extra [data-gofeat]')]
+                .map((b) => b.getAttribute('data-gofeat')),
+      })),
+    };
+  });
+  return { secs, grids: wrap.querySelectorAll('.ecard-grid').length,
+           cards: wrap.querySelectorAll('.ecard').length,
+           typePills: wrap.querySelectorAll('.ecard .ecard-type').length };
+}"""
+
+
+def test_the_rules_board_cuts_its_areas_by_the_feature_they_are_specified_under() -> None:
+    """Eleven decision areas in one grid is a bulk list: nothing says which to read first, and nothing
+    gives two neighbours a shared context. The board gives each feature a CARD of its own, holding the
+    areas specified under it, in the order the Features page already reads.
+
+    Six things are pinned, and each is a way the cut could go wrong:
+      * the feature cards follow the STORY COLUMN, not the map's own order — CAP6 is declared after
+        CAP5 and must be drawn before it;
+      * an area under two features is drawn under BOTH, and each copy names the OTHER feature, so
+        neither copy depends on which one the reader met first;
+      * an area under no feature lands in one trailing card rather than vanishing;
+      * every feature card's name is a DOOR to that feature's page, and wears the feature's own mark;
+      * no card counts its areas — the cards under the name are the count;
+      * no area card says `decision area` — every card on this page is one."""
+    with _served_map(_with_specified_rules) as url, _page(url + "#v=rules") as page:
+        _settle(page)
+        board = page.evaluate(_RULES_BOARD_JS)
+        assert [s["title"] for s in board["secs"]] == [
+            "Upstream MCPs", "Access control", "Audit & oversight", "Secrets & variables",
+            "Not specified under any feature"], f"wrong cut or wrong order: {board['secs']}"
+        assert [s["fid"] for s in board["secs"]] == ["CAP2", "CAP3", "CAP6", "CAP5", ""], \
+            f"every feature card is a door, the trailing one is not: {board['secs']}"
+        assert [s["mark"] for s in board["secs"]] == [True, True, True, True, False], \
+            f"a feature card wears the feature's mark, the trailing one names none: {board['secs']}"
+        assert [s["counts"] for s in board["secs"]] == [0, 0, 0, 0, 0], \
+            f"the cards under the name are the count: {board['secs']}"
+        by = {s["title"]: s for s in board["secs"]}
+        # The shared area, drawn twice, each copy pointing at the other feature.
+        assert by["Upstream MCPs"]["areas"] == [
+            {"name": "Protecting stored secrets", "also": ["CAP5"]}], by["Upstream MCPs"]
+        assert by["Secrets & variables"]["areas"] == [
+            {"name": "Protecting stored secrets", "also": ["CAP2"]}], by["Secrets & variables"]
+        # An area under ONE feature names no other place, and the featureless one still gets a card.
+        assert by["Access control"]["areas"] == [
+            {"name": "Who may call which tool", "also": []}], by["Access control"]
+        assert [a["name"] for a in by["Not specified under any feature"]["areas"]] == ["Plan caps"]
+        assert board["cards"] == 5, f"four areas, one of them twice: {board}"
+        assert board["typePills"] == 0, "every card here is a decision area; saying so 5 times is noise"
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_feature_card_head_is_a_door_to_the_feature_it_names() -> None:
+    """The card names a feature, and that feature has a page. A heading that reads like a link and goes
+    nowhere teaches a reader to stop trying the ones that work."""
+    with _served_map(_with_specified_rules) as url, _page(url + "#v=rules") as page:
+        _settle(page)
+        page.click("#diagram .item-sec-title .item-sec-door[data-gofeat='CAP6']")
+        _settle(page)
+        assert "v=capability" in page.url and "cap=CAP6" in page.url, page.url
+        assert not page.js_errors, page.js_errors
+
+
+def test_a_map_that_names_no_feature_keeps_one_flat_grid_of_areas() -> None:
+    """Two of the three live maps answer `specified_under` nowhere. There the board has no cut to
+    make, and ONE card headed "not specified under any feature" holding every area would read as
+    an accusation about the map rather than as a grouping. So the page falls back to the plain grid
+    it drew before the cut existed."""
+    with _served_map(_with_rules) as url, _page(url + "#v=rules") as page:
+        _settle(page)
+        board = page.evaluate(_RULES_BOARD_JS)
+        assert board["secs"] == [], f"nothing to cut by, so no feature cards: {board}"
+        assert board["grids"] == 1 and board["cards"] == 1, f"one grid, every area in it: {board}"
+        assert not page.js_errors, page.js_errors

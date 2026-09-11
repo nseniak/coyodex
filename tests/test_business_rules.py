@@ -1974,7 +1974,7 @@ def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
     assert "const g = ruleBlockGroups().find((x) => x.id === s.blk);" in VIEWER_JS  # …and one area
     assert "return s.blk ? [{ kind: 'rules' }, { kind: 'rules', blk: s.blk }] : [{ kind: 'rules' }];" \
         in VIEWER_JS  # the trail: the tab, then the decision area it drilled into
-    assert "rules: 'What does this product DECIDE" in VIEWER_JS         # the view's question
+    assert "rules: 'Which rules does this product apply?'," in VIEWER_JS         # the view's question
     assert "if (s.kind === 'rules') {\n    renderRules(s);" in VIEWER_JS   # render
     assert "b.dataset.view === 'rules' && !HAS_RULES" in VIEWER_JS      # the tab gate
 

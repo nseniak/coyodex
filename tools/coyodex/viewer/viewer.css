@@ -654,6 +654,14 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .ecard-pill-link { font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase;
                    letter-spacing: .04em; cursor: pointer; border: 0; line-height: inherit; }
 .ecard-pill-link:hover { text-decoration: underline; filter: brightness(.96); }
+/* The feature's mark inside that pill. Small enough to ride a 10px line, and `inline-flex` so the mark
+   and the name sit on one baseline instead of the mark pushing the name down by its own height. */
+.ecard-pill-link { display: inline-flex; align-items: center; gap: 4px; }
+/* Sized for EVERY host, then again for the two that pin `.story-glyph` by id — the info pane draws this
+   same card, and an unsized svg there would take its own intrinsic box and swallow the line. */
+.ecard-pill-link .story-glyph { width: 12px; height: 12px; flex: 0 0 auto; }
+#diagram .ecard-pill-link .story-glyph, #pagehero .ecard-pill-link .story-glyph,
+#diaghead .ecard-pill-link .story-glyph { width: 12px; height: 12px; flex: 0 0 auto; }
 .ecard-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px;
              color: #9ca3af; margin-right: 4px; }
 /* A SECTION of a grouped card list. NOT a card: a heading, and under it the ordinary card list, at the
@@ -848,6 +856,12 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .card-group-head { margin: 20px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .04em;
                    text-transform: uppercase; color: #6b7280; }
 .card-group-head:first-of-type { margin-top: 8px; }
+/* A SECTION HEAD THAT NAMES ANOTHER ELEMENT is a door to it — the Rules board's sections are features,
+   and a feature has a page of its own. Inherits the head's own type, so the door reads as the heading
+   rather than as a control parked beside it; a head naming no element stays plain text. */
+.item-sec-door { font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+                 background: none; border: 0; padding: 0; cursor: pointer; }
+.item-sec-door:hover { color: #4f46e5; text-decoration: underline; }
 /* WHAT CROSSES — the walk steps drawn at this surface, and the whole answer now that
    `interfaces[].carries[]` and its `.if-table` are gone. Cut into one block per story, because a
    step means little without the story it sits in: mcpolis's dashboard draws 89 steps from 20

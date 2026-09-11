@@ -1340,7 +1340,10 @@ function elementCardHtml(id, opts) {
   // `interface` — while every picture that draws one says which KIND of door it is. The card said
   // `interface` where the map beside it said `website`, about the same thing, one click apart.
   const word = (spec && itemWord(spec)) || c.type;
-  const typeHtml = (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))
+  // `noType` drops the word entirely, for a list where EVERY card is the same kind and the page has
+  // already said which — the Rules board. It is not `homeType`, which keeps the word and only takes
+  // the click away.
+  const typeHtml = o.noType ? '' : (o.homeType || TYPE_PILL_REPEATS_DRILL.has(c.kind))
     ? `<span class="ecard-type ecard-type-plain">${esc(word)}</span>`
     : `<button type="button" class="ecard-type" data-ctx="${esc(id)}" `
       + `title="Show this ${esc(c.type)} in context">${esc(word)}</button>`;
@@ -3182,12 +3185,24 @@ function showUseCaseSummary(uc) {
 }
 // The `In feature …` line, wherever a use-case card is drawn away from a feature's own page. One builder,
 // so the line reads the same in a grid and in the card floating over a diagram.
+// ONE feature pill, as a door to that feature's page. Two card foots name a feature — the use case's
+// below, and a decision area's "also under" — and they were one copied string; `data-gofeat` is what
+// `bindElementCards` already listens for, so a caller gets the door by using this builder.
+//
+// THE MARK RIDES THE NAME, the same three sparkles a feature wears on its card, on its page hero and
+// on the journey rail's zone label: one drawing for "feature", wherever a feature is named. Without it
+// the pill was a grey word in a row of grey words, and on the Rules board that word sat under a
+// heading that DID wear the mark, so the same thing was drawn two ways one line apart.
+function featureDoorPillHtml(fid) {
+  return `<button type="button" data-card-own class="ecard-pill ecard-pill-link" `
+    + `data-gofeat="${esc(fid)}" title="Everything this feature can do">`
+    + `${storyFeatureGlyphSvg()}<span>${esc(featureName(fid))}</span></button>`;
+}
 function useCaseFeatureFootHtml(uc) {
   const cap = CAP_OF_UC[uc];
   if (!cap) return '';
   return `<p class="ecard-extra"><span class="ecard-lbl">In feature</span> `
-    + `<button type="button" data-card-own class="ecard-pill ecard-pill-link" `
-    + `data-gofeat="${esc(cap.id)}" title="Everything this feature can do">${esc(cap.name)}</button></p>`;
+    + featureDoorPillHtml(cap.id) + '</p>';
 }
 // The use-case flow view's default panel. Reached by drilling a use case (from the Use Cases list or a
 // Happy Path step). The sequence diagram IS the flow; the panel shows the same outside summary as a
@@ -3848,7 +3863,14 @@ const VIEW_Q = {
   system: 'The operational facts no diagram holds: how to run it, watch it, secure it, configure it.',
   glossary: 'What do this project’s words mean?',
   tests: 'What is covered by tests, and what is not?',
-  rules: 'What does this product DECIDE, and where is each decision enforced?',
+  // ONE CLAUSE, and it used to be two: "…and where is each decision enforced?". The board never
+  // answered that half — only a single rule's own page does, under "Where it is enforced" — and once
+  // the areas were cut by the feature they are SPECIFIED UNDER, the promise pointed at the other
+  // standpoint from the one the page had just grouped by. A second clause naming the grouping was
+  // tried instead and dropped too: the cut is a card per feature with the areas inside it, which is
+  // the whole sentence, drawn. This one stays true on a map that fills the field and on one that
+  // does not, so the question is fixed for the view the way every question but Features' is.
+  rules: 'Which rules does this product apply?',
   interfaces: 'Where does this product meet the outside world?',
 };
 // The hexagon outline as polygon points for a box — ONE definition for the sequence-diagram
@@ -11062,19 +11084,22 @@ function bindProductLead() {
 // attached to the drawing's own frame — see walkHeadHtml). A section's body is whatever the page
 // holds there: a board, a card list, chip groups. The strip is outside a board, which is the thing
 // that scrolls sideways, so the strip stays put while the board scrolls under it.
-function itemSectionHtml(secs, key, title, count, note, body, glyph) {
+function itemSectionHtml(secs, key, title, count, note, body, glyph, titleHtml) {
   const id = 'itemsec-' + key;
   secs.push({ id, title, count });
   return `<section class="item-sec" id="${id}"><div class="item-sec-frame">`
-    + `<div class="item-sec-strip">${itemSectionHeadHtml(title, count, note, glyph)}</div>`
+    + `<div class="item-sec-strip">${itemSectionHeadHtml(title, count, note, glyph, titleHtml)}</div>`
     + `<div class="item-sec-body">${body}</div></div></section>`;
 }
 // The head alone — the title, its count and its sentence — for a section whose frame is not the
 // `item-sec-frame` this builder draws. A walk's page has one: its board is the pan/zoom drawing, and
 // the frame around that is #diagwrap, so the head is written above it and the frame stays where every
 // drawing's frame is. One builder for the words, whichever frame sits under them.
-function itemSectionHeadHtml(title, count, note, glyph) {
-  return `<h2 class="item-sec-title">${glyph || ''}${esc(title)}`
+// `titleHtml` is the title as MARKUP, for the one case where the head names another element and is a
+// door to it — the Rules board, whose every section is a feature with a page of its own. The plain
+// `title` is still what the chip bar and the strip index carry, so a door cannot rename a section.
+function itemSectionHeadHtml(title, count, note, glyph, titleHtml) {
+  return `<h2 class="item-sec-title">${glyph || ''}${titleHtml || esc(title)}`
     + (count === '' || count == null ? '' : `<span class="item-sec-n">${esc(String(count))}</span>`)
     + '</h2>'
     + (note ? `<p class="item-sec-note">${esc(note)}</p>` : '');
@@ -11743,6 +11768,9 @@ function ruleBlockGroups() {
   const emit = (b, depth) => groups.push({
     id: b.id, name: b.name, purpose: b.purpose, depth,
     parentName: names.get(b.parent || '') || '',
+    // The feature(s) this area is SPECIFIED UNDER — what the level-1 board cuts its sections by.
+    // Ids, because a name is what the section HEAD prints and the id is what its door travels on.
+    specifiedUnder: (b.specified_under || []).slice(),
     rules: byBlock.get(b.id) || [] });
   const walk = (parent, depth) => {
     for (const b of kids.get(parent) || []) {
@@ -11765,6 +11793,77 @@ function ruleBlockGroups() {
                   parentName: '', rules: byBlock.get('none') });
   }
   return groups;
+}
+// LEVEL 1'S SECTIONS: the areas cut by the feature each one is SPECIFIED UNDER, in the order the
+// Features page already reads — the happy path first, then whatever it never reaches. Eleven area
+// cards in one grid is a bulk list: nothing says which to read first, and nothing gives two
+// neighbours a shared context. The feature gives both, and it is the order the reader already walked.
+//
+// AN AREA SPECIFIED UNDER TWO FEATURES IS DRAWN UNDER BOTH, and each copy names the other places in
+// its foot. Drawing it once, under the first feature, would make the second feature's section lie
+// about what it decides — and which of the two counted as "first" would be an artifact of the column
+// rather than a fact about the map.
+//
+// Returns null when NO area names a feature, which is two of the three live maps today: there the
+// board has no cut to make, and one section headed "not specified" over the whole list reads as an
+// accusation rather than a grouping. The caller falls back to the plain grid.
+function ruleBoardSections(groups) {
+  const perFeature = new Map();
+  const loose = [];
+  for (const g of groups) {
+    // A named feature the map no longer holds is not a section a reader can be shown: the head would
+    // print `Not in this map` and its door would travel nowhere.
+    const fids = (g.specifiedUnder || []).filter((f) => featureName(f) !== UNKNOWN_NAME);
+    if (!fids.length) { loose.push({ g, others: [] }); continue; }
+    for (const f of fids) {
+      perFeature.set(f, (perFeature.get(f) || [])
+        .concat([{ g, others: fids.filter((o) => o !== f) }]));
+    }
+  }
+  if (!perFeature.size) return null;
+  const rank = new Map(((FEATURES.story || {}).column || []).map((f, i) => [f, i]));
+  const secs = [...perFeature.keys()]
+    .sort(byHappyPath((f) => (rank.has(f) ? rank.get(f) : null), featureName))
+    .map((f) => ({ fid: f, title: featureName(f), members: perFeature.get(f) }));
+  if (loose.length) {
+    secs.push({ fid: '', title: 'Not specified under any feature', members: loose });
+  }
+  return secs;
+}
+// One decision area's card, wherever level 1 draws it — grouped under a feature or in the flat grid.
+// `others` are the feature's co-owners of this same area, named in the foot so both copies of a
+// shared area carry the same fact and neither depends on which one the reader met first.
+function ruleAreaCardHtml(g, others) {
+  const n = g.rules.length;
+  const noun = `${n} rule${n === 1 ? '' : 's'}`;
+  if (!GRAPH.nodes[g.id]) {
+    return plainCardHtml({ key: g.id, name: g.name, desc: g.purpose, count: noun });
+  }
+  const parent = g.parentName ? `<span class="ecard-pill">in ${esc(g.parentName)}</span>` : '';
+  const foot = (others || []).length
+    ? `<p class="ecard-extra"><span class="ecard-lbl">Also under</span> `
+      + others.map(featureDoorPillHtml).join(' ') + '</p>'
+    : '';
+  // NO TYPE WORD. Every card on this page is a decision area, each wears the area's own mark, and the
+  // page says so in its first line — so `DECISION AREA` on all thirteen of them is the heading printed
+  // thirteen times. `noType` is the card's own switch for that, not a stylesheet reaching in.
+  return elementCardHtml(g.id, { desc: g.purpose, foot, noType: true,
+                                 extra: parent + `<span class="ecard-pill">${noun}</span>` });
+}
+// ONE CARD PER FEATURE, holding its areas — the same framed section every item page draws, under the
+// feature's own mark. A bare heading over a grid was tried first and put the cut and the cards on one
+// flat sheet, so where one feature ended and the next began was a gap in the whitespace. The feature's
+// name is a door to its page; the trailing section names no feature, so it stays plain text.
+function ruleBoardSectionHtml(sec) {
+  const door = sec.fid
+    ? `<button type="button" class="item-sec-door" data-gofeat="${esc(sec.fid)}"`
+      + ` title="Everything this feature can do">${esc(sec.title)}</button>`
+    : '';
+  // No count. The cards under the head ARE the count, and at two or three of them a number beside the
+  // name is the reader being told what they can already see.
+  return itemSectionHtml([], 'feat-' + (sec.fid || 'none'), sec.title, '', '',
+    cardGridHtml(sec.members.map((m) => ruleAreaCardHtml(m.g, m.others)).join('')),
+    sec.fid ? storyFeatureGlyphSvg() : '', door);
 }
 // One decision area's card id — the same string on both levels, so a cross-link that names an area
 // and the section it scrolls to cannot drift apart.
@@ -12884,17 +12983,22 @@ function renderRules(s) {
   // rules the page exists to show started below the fold. `s.blk` picks the area; no `blk` is the cards.
   if (!s || !s.blk) {
     // A decision area IS a map element, so its card is the shared element card — with its rule count
-    // and, for a nested area, the parent it sits under.
-    const cards = groups.map((g) => {
-      const parent = g.parentName ? `<span class="ecard-pill">in ${esc(g.parentName)}</span>` : '';
-      const count = `<span class="ecard-pill">${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}</span>`;
-      return GRAPH.nodes[g.id]
-        ? elementCardHtml(g.id, { extra: parent + count, desc: g.purpose })
-        : plainCardHtml({ key: g.id, name: g.name, desc: g.purpose,
-                          count: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}` });
-    }).join('');
+    // and, for a nested area, the parent it sits under. CUT INTO SECTIONS by the feature each area is
+    // specified under, when the map answers that; one flat grid when it does not.
+    const secs = ruleBoardSections(groups);
+    // WRAPPED, and the wrapper is load-bearing. The landing head goes into the first block's strip
+    // when that block is already a framed section, and the first block here IS one — so the page's
+    // own title landed in the strip of the first FEATURE card and took its name off the screen. The
+    // wrapper makes the board one loose block, which is the case that gets a frame of its own.
+    const body = secs
+      ? '<div class="rules-board">' + secs.map(ruleBoardSectionHtml).join('') + '</div>'
+      : cardGridHtml(groups.map((g) => ruleAreaCardHtml(g, [])).join(''));
+    // NO LINE EXPLAINING THE CUT. One was written and dropped: a card per feature holding its areas
+    // says what the grouping is, and a sentence repeating it is the picture put into words directly
+    // above the picture. The word for the relation still appears where it carries information — the
+    // `Also under` foot on an area two features share.
     diagram.innerHTML = '<div class="usecases-wrap">' + viewHeadHtml('Rules')
-      + (cardGridHtml(cards) || '<p class="empty">No business rules recorded.</p>') + '</div>';
+      + (body || '<p class="empty">No business rules recorded.</p>') + '</div>';
     bindElementCards(diagram, (id) => go({ kind: 'rules', blk: id }));
     bindPlainCards(diagram, (key) => go({ kind: 'rules', blk: key }));
     return;
