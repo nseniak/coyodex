@@ -585,15 +585,22 @@ body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 /* A page's own description, when it has one — a System collection's blurb. Not a question: the view's
    question lives in the navigation block, on its own line under the tabs. */
 .view-desc { margin: 4px 0 0; font-size: 13.5px; color: #6b7280; line-height: 1.5; }
-/* The product description, the Overview tab's one section. Set a touch larger than a card's prose: it is
-   the one text on the screen meant to be read rather than scanned. HELD TO A MEASURE: at full column
-   width a 1440px screen ran 137 characters a line, twice the 45-75 that body text is readable at, and
-   that width was the first reason the text read as one block (2026-09-11). It was full width while it
-   led the Features page, where a narrower measure left a gap beside it that read as a missing second
-   column; on a page of its own there is no second column to miss. 66ch of this proportional face is
-   about 75 characters of running text, the top of the readable range. */
+/* The product description, the Overview tab's first section. Set a touch larger than a card's prose: it
+   is the one text on the screen meant to be read rather than scanned. It fills its frame, and the FRAME
+   is what is held to a measure (see .overview-wrap below): at full column width a 1440px screen ran 137
+   characters a line, twice the 45-75 that body text is readable at, and that width was the first reason
+   the text read as one block (2026-09-11). */
 .view-lead { margin: 0 0 18px; }
-.view-lead-body { font-size: 14.5px; line-height: 1.6; color: #374151; max-width: 66ch; }
+.view-lead-body { font-size: 14.5px; line-height: 1.6; color: #374151; }
+/* THE OVERVIEW IS ONE COLUMN of text and pills, and its frames stop where the text does. A cap on the
+   text alone left the frame running 450px past it, which read as a column missing its second half; the
+   cap sits on the section instead. 660px less the frame's 16px sides is about 75 characters of the
+   14.5px face, the top of the readable range. The digest's pills wrap inside the same column. */
+.overview-wrap > .item-sec { max-width: 660px; }
+.ov-pills { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.ov-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; margin: 0 0 10px; }
+.ov-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; }
+.ov-line { margin: 10px 0 0; font-size: 13.5px; line-height: 1.5; color: #374151; }
 /* A text with blank lines is drawn as paragraphs (proseBlocksHtml); the last one carries no gap below. */
 .prose-para { margin: 0 0 10px; }
 .prose-para:last-child { margin-bottom: 0; }

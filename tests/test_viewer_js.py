@@ -3454,7 +3454,7 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     # leads with its diagram.
     assert "productLeadHtml" not in over, "the description left the Features landing"
     tab = js[js.index("function renderOverviewTab() {"): js.index("\n}", js.index("function renderOverviewTab() {"))]
-    assert "productLeadHtml([])" in tab
+    assert "productLeadHtml(secs)" in tab
     html = (VIEWER_DIR / "viewer.html").read_text()
     assert html.index('data-view="overview" data-group="product"') < html.index('data-view="usecases" data-group="product"'), \
         "first tab under Product"

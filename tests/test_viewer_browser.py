@@ -3864,8 +3864,9 @@ def test_the_overview_draws_the_goal_as_its_paragraphs_at_a_readable_width() -> 
             assert held["width"] < 700 and held["chars"] / held["lines"] <= 80, held
             assert page.js_errors == []
         css = _VIEWER_CSS.read_text(encoding="utf-8")
-        assert css.count("max-width: 66ch;") == 1, "the overview's width cap moved — update this test"
-        with _page(base + "#v=overview", stylesheet=css.replace("max-width: 66ch;", "")) as page:
+        cap = ".overview-wrap > .item-sec { max-width: 660px; }"
+        assert css.count(cap) == 1, "the overview column's cap moved — update this test"
+        with _page(base + "#v=overview", stylesheet=css.replace(cap, "")) as page:
             page.set_viewport_size({"width": 1440, "height": 900})
             _settle(page)
             loose = page.evaluate(_MEASURE)
@@ -3894,4 +3895,42 @@ def test_a_detail_row_holding_blank_lines_draws_paragraphs_too() -> None:
         got = page.evaluate("() => Array.from(document.querySelectorAll('dd p.prose-para'))"
                             ".map((p) => p.textContent.trim())")
         assert got == ["First note, on its own.", "Second note, on its own."]
+        assert page.js_errors == []
+
+
+def test_the_overview_digest_names_the_people_features_and_interfaces_as_pills() -> None:
+    """Under the description, the map's own vocabulary: every actor, every feature and every interface
+    as an item pill that opens its page, plus one line for the successful run. Counted against the
+    map the page was built from, so a kind the digest silently dropped would show as a short row."""
+    m = json.loads(_FIXTURE_MAP.read_text())
+    _two_sided_interfaces()(m)          # the fixture holds no interfaces of its own
+    n_actors = len(m["roles"])
+    caps_with_ucs = {uc["capability"] for uc in m["use_cases"] if uc.get("capability")}
+    n_features = len([c for c in m["capabilities"] if c["id"] in caps_with_ucs])
+    n_ifaces = len([i for i in m["interfaces"] if i.get("side") in ("ours", "theirs")])
+    assert n_actors and n_features and n_ifaces == 2
+    with _served_map(_two_sided_interfaces()) as base, _page(base + "#v=overview") as page:
+        _settle(page)
+        titles = page.evaluate("() => Array.from(document.querySelectorAll('.overview-wrap .item-sec-title'))"
+                               ".map((h) => h.childNodes[0] ? h.textContent.trim().split(/\\d/)[0].trim() : '')")
+        assert titles[1:] == ["Who it is for", "What it does", "Where it meets the world", "The successful run"], titles
+        counts = page.evaluate("() => Array.from(document.querySelectorAll('.overview-wrap .item-sec'))"
+                               ".map((s) => s.querySelectorAll('.item-pill').length)")
+        assert counts[1:4] == [n_actors, n_features, n_ifaces], (counts, n_actors, n_features, n_ifaces)
+        run = page.evaluate("() => document.querySelector('#itemsec-ov-run .ov-line').textContent")
+        assert run.startswith(f"{len(m['happy_path'])} steps through "), run
+        # every pill is a door: the first feature pill opens that feature's own page
+        name = page.evaluate("() => document.querySelector('#itemsec-ov-features .item-pill span').textContent")
+        page.click("#itemsec-ov-features .item-pill")
+        _settle(page)
+        assert name in _crumb(page), (name, _crumb(page))
+        assert page.js_errors == []
+
+
+def test_the_overview_digest_doors_open_their_views() -> None:
+    with _served() as base, _page(base + "#v=overview") as page:
+        _settle(page)
+        page.click("#itemsec-ov-run .ov-door")
+        _settle(page)
+        assert "Happy Path" in _crumb(page), _crumb(page)
         assert page.js_errors == []
