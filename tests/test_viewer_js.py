@@ -3116,7 +3116,13 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     bind = js[js.index("function bindFeaturePage(root) {"):
               js.index("\nfunction ", js.index("function bindFeaturePage(root) {") + 10)]
-    assert "selectFromTree(b.getAttribute('data-id'))" in bind
+    # The element names on this page are ITEM PILLS, and `drillInto` is the same kind of single answer
+    # on the other side of the click: it switches on the element's own kind, so no caller names a tab.
+    assert "bindItemPills(root);" in bind
+    pills = js[js.index("function bindItemPills(root) {"):
+               js.index("\n}", js.index("function bindItemPills(root) {"))]
+    assert "drillInto(b.getAttribute('data-item'));" in pills, "one destination, resolved by kind"
+    assert "kind: '" not in pills, "and no tab named at the call site"
     assert "kind: 'container'" not in bind and "kind: 'domain'" not in bind
     # The role links on this page are the RAIL's zone names now, wired by the binder both boards share
     # rather than by a second handler of this page's own.
@@ -3404,25 +3410,27 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     # It ACTS only where the feature is nowhere else on screen, which is the same rule every pill is
     # held to. Here it is the only way to the feature, so it is a door. On the Rules board that feature
     # has a card of its own a few lines away, so the pill there is plain and the board asks for it.
-    pill = js[js.index("function featurePillHtml(fid, plain) {"):
-              js.index("\n}", js.index("function featurePillHtml(fid, plain) {"))]
-    assert 'data-gofeat="' in pill and "plain" in pill, "one builder, a door and a plain form"
+    pill = js[js.index("function itemPillHtml(id, opts) {"):
+              js.index("\n}", js.index("function itemPillHtml(id, opts) {"))]
+    assert 'data-item="' in pill and "o.plain" in pill, "one builder, a door and a plain form"
     assert "featurePillHtml(cap.id)" in foot, "the In feature line is the door form"
     board = js[js.index("function ruleAreaCardHtml(g, others) {"):
                js.index("\n}", js.index("function ruleAreaCardHtml(g, others) {"))]
     assert "featurePillHtml(f, true)" in board, "…and the Rules board's Also under is the plain form"
-    assert 'data-goactor="' in ucs
-    assert "ecard-pill-link" in ucs and "ecard-pill-link" in css
+    # BOTH FEET DRAW THE SAME PILL. The actor's is `itemPillHtml` too, so "who drives it" and "which
+    # feature it is in" are one component wearing two different kinds' colours, not two components.
+    assert "itemPillHtml(actorPage, {" in ucs
     binder = js[js.index("function bindElementCards(root, onDrill) {"):
                 js.index("\n}", js.index("function bindElementCards(root, onDrill) {"))]
-    assert "data-gofeat" in binder and "data-goactor" in binder, \
-        "bound where every card is bound, not per screen"
-    assert binder.count("ev.stopPropagation();") >= 3, "a click on the door is not the card's drill"
+    assert "bindItemPills(root);" in binder, "bound where every card is bound, not per screen"
+    assert "data-gofeat" in binder, "…and the section-head door stays bound here too"
+    assert binder.count("ev.stopPropagation();") >= 2, "a click on the door is not the card's drill"
     # An ACTOR name is a door only when it names ONE actor. A use case driven by a pair reads "Team member
     # and Organization admin" and one the map never declared reads "Other"; neither is a page, and a pill
-    # that looks live and goes nowhere teaches a reader to distrust the ones that work.
+    # that looks live and goes nowhere teaches a reader to distrust the ones that work. `plain` is how
+    # the shared pill says that, and it is the same word the Rules board uses for its own reason.
     assert "const actorPage = actorNodeId(actorText);" in ucs
-    assert "actorPage" in ucs and "<span class=\"ecard-pill ecard-pill-${esc(roleKindOf(n))}\">" in ucs
+    assert "plain: !actorPage" in ucs
 
 def test_one_card_design_reaches_the_card_that_floats_over_a_diagram() -> None:
     """The spec asks for one card design in every place an element appears, and for a card's actions to be
@@ -3684,7 +3692,8 @@ def test_a_component_says_how_many_features_it_serves() -> None:
     used = js[js.index("function usedInHtml(id) {"):
               js.index("\nfunction ", js.index("function usedInHtml(id) {") + 10)]
     assert "featureCountHtml(id)" in used
-    assert "used-cap-name featref" in used, "a feature heading must open that feature's page"
+    assert "itemPillHtml(g.cap.id, { kind: 'capability', name: g.cap.name })" in used, \
+        "a feature heading is the shared pill, and it opens that feature's page"
     assert "selectFromTree(b.getAttribute('data-id'))" in js[js.index("function bindNodeDetailHandlers(root) {"):]
 
 
@@ -4521,7 +4530,7 @@ def test_a_record_page_says_who_owns_it_only_when_the_map_does() -> None:
     fn = js[js.index("function ownedByHtml(id) {"):js.index("\nfunction persistedInHtml(id) {")]
     assert "ENTITY_OWNERS[id]" in fn
     assert "if (!own.length) return '';" in fn, "no decision, no row"
-    assert "featref" in fn, "each owner is a door to its feature"
+    assert "own.map((c) => itemPillHtml(c))" in fn, "each owner is a door, in the shared pill"
     assert "ENTITY_OWNERS = FEATURES.entityOwners || {};" in js
     assert "${runByHtml(id)}${ownedByHtml(id)}${persistedInHtml(id)}" in js
 
@@ -5724,3 +5733,37 @@ def test_a_count_is_worded_in_one_place_and_never_at_a_call_site() -> None:
     agreement = [x for x in left if "'is' : 'are'" in x or "'it' : 'them'" in x]
     assert len(left) - len(agreement) == 0, \
         f"a call site is still wording its own plural: {[x for x in left if x not in agreement]}"
+
+
+def test_one_pill_names_one_thing_wherever_a_screen_names_it() -> None:
+    """Six shapes drew "this pill names that element" and no two agreed. A decision area on a rule's
+    page was a 12px indigo pill; the entities and components beside it a near-white one; a feature chip
+    a white one at another radius; an actor on a use-case card a 10px uppercase one; a feature on a card
+    foot a grey one. Five click handlers sent the reader to two different kinds of destination, so a
+    component named on a rule's page and the same component's card landed somewhere different.
+
+    ONE BUILDER, ONE RULE, ONE BINDER now. The kind supplies the mark and the colour from the table the
+    diagrams already paint their boxes with, so an entity's pill and an entity's box are visibly the
+    same thing. `plain` is the no-click form, for a thing already on the reader's screen and for one
+    the map no longer holds.
+
+    NOT swept in, and each for a stated reason: the Happy Path's band name is a heading over a region
+    rather than a tag inside a card; the Data page's chips carry a read/write verb, so they say more
+    than a name; a `sys-ref` sits inside a sentence, where a pill would break the line."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "function itemPillHtml(id, opts) {" in js and "function bindItemPills(root) {" in js
+    # THE FIVE OLD SHAPES ARE GONE, markup and stylesheet both.
+    for dead in ("br-blk", "br-ent", "br-comp", "featref", "ecard-pill-link"):
+        assert dead not in js, f"{dead} still draws a pill of its own"
+        assert dead not in css, f"{dead} still styles a pill of its own"
+    # …and what they left behind went with them.
+    for dead in ("function roleKindOf(n)", "data-goactor"):
+        assert dead not in js, f"{dead} has no caller left"
+    # One rule paints it, and the colour comes from the kind rather than from the call site.
+    assert ".item-pill { display: inline-flex;" in css
+    assert "var(--pill-fill, #f8fafc)" in css and "var(--pill-line, #334155)" in css
+    pill = js[js.index("function itemPillHtml(id, opts) {"):
+              js.index("\n}", js.index("function itemPillHtml(id, opts) {"))]
+    assert "itemTint(itemKind(kind))" in pill, "the colour comes from the diagrams' own table"
+    assert "itemMarkHtml(kind)" in pill, "and so does the mark"

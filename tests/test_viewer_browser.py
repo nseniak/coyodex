@@ -3612,15 +3612,15 @@ _RULES_BOARD_JS = """() => {
       counts: head.querySelectorAll('.count-pill').length,
       areas: [...sec.querySelectorAll('.item-sec-body .ecard')].map((c) => ({
         name: (c.querySelector('.ibox-name') || {}).textContent || '',
-        also: [...c.querySelectorAll('.ecard-extra [data-feat]')]
-                .map((b) => b.getAttribute('data-feat')),
+        also: [...c.querySelectorAll('.ecard-extra .item-pill')]
+                .map((b) => b.getAttribute('data-item')),
       })),
     };
   });
   return { secs, grids: wrap.querySelectorAll('.ecard-grid').length,
            cards: wrap.querySelectorAll('.ecard').length,
            typePills: wrap.querySelectorAll('.ecard .ecard-type').length,
-           footDoors: wrap.querySelectorAll('.ecard-extra [data-gofeat]').length };
+           footDoors: wrap.querySelectorAll('.ecard-extra .item-pill-door').length };
 }"""
 
 

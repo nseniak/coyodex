@@ -2167,8 +2167,11 @@ def test_a_rules_crumb_walks_back_to_its_own_decision_area() -> None:
     # Three crumbs now the tab lands on area CARDS: Rules > the area > the rule.
     assert "return [{ kind: 'rules' }, { kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }," in trail[:800]
     assert "ruleBlockGroups().some((g) => g.id === bid)" in _js_function("ruleGroupKeyFor")
-    # …and the area chip on the page itself makes the same move.
-    assert "go({ kind: 'rules', blk: b.getAttribute('data-blk') })" in _js_function("renderRule")
+    # …and the area pill on the page itself makes the same move. It is an ITEM PILL now, so the move is
+    # `drillInto`'s — the one function that answers "what happens when I click this element" — and the
+    # answer it gives for a decision area is this same crumb's destination.
+    assert "itemPillHtml(blk.id, { kind: 'block', name: blk.name })" in _js_function("renderRule")
+    assert "case 'block': return go({ kind: 'rules', blk: id });" in _js_function("drillInto")
 
 
 def test_every_cross_link_into_a_rule_lands_on_the_rules_own_page() -> None:

@@ -1486,8 +1486,19 @@ function drillInto(id) {
 // answers which view that is; `selectFromTree` does the navigating and the focusing.
 function showInContext(id) { selectFromTree(id); }
 
+// Wire every ITEM PILL under `root` — the pill that names one element, wherever a screen draws one.
+// ONE listener and ONE destination: the pill opens the thing it names, which is the same answer a card
+// gives. It used to be five listeners with two destinations, so a component chip on a rule's page and
+// a component card two clicks away landed the reader in different places.
+function bindItemPills(root) {
+  root.querySelectorAll('.item-pill-door[data-item]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation();          // the pill's action is not the card's, where it sits on one
+    drillInto(b.getAttribute('data-item'));
+  }));
+}
 // Wire every card under `root`. One binder, so the two actions cannot differ between two card lists.
 function bindElementCards(root, onDrill) {
+  bindItemPills(root);
   root.querySelectorAll('.ecard-type[data-ctx]').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();               // the pill's action is not the card's
     showInContext(b.getAttribute('data-ctx'));
@@ -1498,10 +1509,6 @@ function bindElementCards(root, onDrill) {
   root.querySelectorAll('[data-gofeat]').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();
     go({ kind: 'capability', cap: b.getAttribute('data-gofeat') });
-  }));
-  root.querySelectorAll('[data-goactor]').forEach((b) => b.addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    go({ kind: 'actor', act: b.getAttribute('data-goactor') });
   }));
   root.querySelectorAll('.ecard[data-id]').forEach((card) => {
     const open = (ev) => {
@@ -2503,8 +2510,7 @@ function usedInHtml(id) {
   // empty state above — and from either you get back to what the product does in one click.
   const html = groups.map((g) => '<div class="used-cap-group">'
     + (g.cap
-      ? '<button type="button" class="used-cap-name featref" data-id="' + esc(g.cap.id) + '">'
-        + esc(g.cap.name) + '</button>'
+      ? itemPillHtml(g.cap.id, { kind: 'capability', name: g.cap.name })
       : '<div class="used-cap-name">Other use cases</div>')
     + '<ul class="used-uc-list">' + g.ucs.map((uc) => '<li>' + link(uc) + '</li>').join('')
     + '</ul></div>').join('');
@@ -2615,16 +2621,14 @@ function applyPendingEpSelect() {
 // the busiest one, and this line has no business guessing where the map stayed silent. Absent from
 // `ENTITY_OWNERS` = nobody decided, and the row is not drawn at all.
 //
-// Each feature is a DOOR to its own page, routed through `selectFromTree` like every other
-// `featref`, so moving a feature's home view cannot break this link.
+// Each owner is a DOOR to its own page, drawn by the one pill that names an element — so moving a
+// feature's home view cannot break this link, and the pill looks the same here as anywhere else.
 function ownedByHtml(id) {
   const n = GRAPH.nodes[id];
   if (!n || n.kind !== 'entity') return '';
   const own = (ENTITY_OWNERS[id] || []).filter((c) => GRAPH.nodes[c]);
   if (!own.length) return '';
-  const doors = own.map((c) =>
-    `<button type="button" class="featref" data-id="${esc(c)}" `
-    + `title="Open the details page of ${esc(elName(c))}">${esc(elName(c))}</button>`).join(', ');
+  const doors = own.map((c) => itemPillHtml(c)).join(' ');
   // Several owners is a DELIBERATE statement that the record is shared, not an unresolved list, so
   // the row says so rather than leaving the reader to read a comma as uncertainty.
   const note = own.length > 1 ? ' <span class="dv-note">shared, deliberately</span>' : '';
@@ -2814,11 +2818,8 @@ function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
-  // The FEATURE headings on a component's "In use cases" row: each opens that feature's page. Routed
-  // through selectFromTree, which is the ONE place that answers "which view shows this id" — so the
-  // regrouping of the tabs (and anything else that moves an element's home) cannot break this link.
-  root.querySelectorAll('.featref[data-id]').forEach((b) =>
-    b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
+  // The FEATURE headings on a component's "In use cases" row are item pills, wired by `bindItemPills`.
+  bindItemPills(root);
   // Data-view rows in the panel: element chips navigate; the "See in Data view" / "View persisted
   // data" links deep-link into the Data tab focused on a store pane (and, for an entity, its row).
   root.querySelectorAll('.dv-chip[data-id]').forEach((b) =>
@@ -3211,22 +3212,46 @@ function showUseCaseSummary(uc) {
 // on the journey rail's zone label: one drawing for "feature", wherever a feature is named. Without it
 // the pill was a grey word in a row of grey words, and on the Rules board that word sat under a
 // heading that DID wear the mark, so the same thing was drawn two ways one line apart.
-// PLAIN OR A DOOR, and the difference is whether the feature is already on the reader's screen. On a
-// use-case card the feature is named nowhere else, so the pill is the only way to it and it opens that
-// feature's page. On the Rules board the feature the pill names has its own CARD a few lines up or
-// down, with the name at its head — the pill there is saying "this area is also in that one", and a
-// click that jumped the reader off the page would leave the thing it points at behind.
+// ── ONE PILL NAMING ONE THING ─────────────────────────────────────────────────────────────────────
+// Six shapes drew this and no two agreed: a decision area on a rule's page in a 12px indigo pill, the
+// entities and components beside it in a near-white one, a feature chip in a white one at a different
+// radius, an actor on a use-case card in a 10px uppercase one, a feature on a card foot in a grey one.
+// Same job every time — say WHICH thing this is, and take the reader to it.
 //
-// `data-feat` rides both, so the pill is findable whether or not it acts; `data-gofeat` is what
-// `bindElementCards` listens for, and only the door carries it.
-function featurePillHtml(fid, plain) {
-  const body = `${storyFeatureGlyphSvg()}<span>${esc(featureName(fid))}</span>`;
-  return plain
-    ? `<span class="ecard-pill ecard-pill-feat" data-feat="${esc(fid)}">${body}</span>`
-    : `<button type="button" data-card-own class="ecard-pill ecard-pill-feat ecard-pill-link" `
-      + `data-feat="${esc(fid)}" data-gofeat="${esc(fid)}" `
-      + `title="Everything this feature can do">${body}</button>`;
+// THE KIND DECIDES THE MARK AND THE COLOUR, from the same table that paints the boxes on every
+// diagram, so the pill for an entity and that entity's own box are visibly the same thing.
+//
+// `plain` draws it with no click, for where the thing it names is already on the reader's screen — the
+// Rules board's "Also under", whose feature has a card of its own a few lines away. An element the map
+// no longer holds draws that way too: a control that looks live and goes nowhere teaches a reader to
+// distrust the ones that work. ONE FUNCTION DECIDES THE CLICK, so making every pill navigable later is
+// one edit here rather than six.
+function itemMarkHtml(kind) {
+  // A feature's mark is the three sparkles, which live outside the item-box mark table; every other
+  // kind comes from it. One answer, so a pill, a card and a section head cannot draw one kind two ways.
+  if (kind === 'capability') return storyFeatureGlyphSvg();
+  return itemHasGlyph(kind) ? itemGlyphSvg(kind) : '';
 }
+function itemPillHtml(id, opts) {
+  const o = opts || {};
+  const node = GRAPH.nodes[id];
+  const kind = o.kind || (node && node.kind) || '';
+  const name = o.name || (node && node.name) || elName(id);
+  const tint = kind && kind !== 'capability' ? itemTint(itemKind(kind)) : null;
+  const style = tint ? ` style="--pill-fill:${esc(tint.fill)};--pill-line:${esc(tint.stroke)}"` : '';
+  const body = itemMarkHtml(kind) + `<span>${esc(name)}</span>`;
+  const live = !o.plain && (node || o.go);
+  return live
+    ? `<button type="button" data-card-own class="item-pill item-pill-door"${style} `
+      + `data-item="${esc(id)}" title="Open ${esc(name)}">${body}</button>`
+    : `<span class="item-pill"${style} data-item="${esc(id)}">${body}</span>`;
+}
+// The feature form, named because two card foots ask for it and neither should have to know that a
+// feature's id is what the pill is keyed on.
+function featurePillHtml(fid, plain) {
+  return itemPillHtml(fid, { kind: 'capability', name: featureName(fid), plain });
+}
+
 function useCaseFeatureFootHtml(uc) {
   const cap = CAP_OF_UC[uc];
   if (!cap) return '';
@@ -8356,15 +8381,6 @@ function actorTextOf(n) {
   return ((n.fields && n.fields.Actor) || (n.actors || []).join(', ') || 'Other').trim();
 }
 
-function roleKindOf(n) {
-  const names = (n.actors && n.actors.length ? n.actors : []).map((s) => String(s).trim().toLowerCase());
-  const kinds = new Set(names.map((nm) => ((ROLE_BY_NAME[nm] || {}).kind || '').trim().toLowerCase()));
-  const k = kinds.size === 1 ? [...kinds][0] : '';
-  // KEEP A KNOWN KIND, and fall back to `human` only for one this build does not know. It used to
-  // whitelist `human` and `service`, so an `ai-agent` came out a stick figure.
-  return (k === 'human' || isMachineActor(k)) ? k : 'human';
-}
-
 // The catalog's ACTOR axis, the twin of capabilityGroups(). Lifted out of renderUseCases when the
 // Features overview started drawing actor CARDS as well: one grouping, two readers.
 function actorGroups() {
@@ -8471,7 +8487,7 @@ function featChipGroupsHtml(ids) {
     byParent.get(p).push(id);
   }
   const chips = (list) => `<div class="feat-chips">${list.map((id) =>
-    `<button type="button" class="featref" data-id="${esc(id)}">${esc(elName(id))}</button>`
+    itemPillHtml(id)
   ).join('')}</div>`;
   // A single group, or none named, is not a grouping — draw the chips plain rather than under one
   // heading that repeats what the section heading already said.
@@ -8701,11 +8717,7 @@ function bindFeaturePage(root) {
   // The rail's own clicks, from the one binder both pages share. No actor is passed: a side stop's
   // crumb then runs through the use case's feature, which on this page is the page you are on.
   bindJourney(root, {});
-  root.querySelectorAll('.featref[data-id]').forEach((b) => {
-    const open = () => selectFromTree(b.getAttribute('data-id'));
-    b.addEventListener('click', open);
-    b.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(); });
-  });
+  bindItemPills(root);
   root.querySelectorAll('.featep').forEach((b) => b.addEventListener('click', () => {
     // Two kinds of chip share the class: a way in (opens the component at that entry point) and a
     // surface this feature reaches out to (opens that surface's page).
@@ -8753,10 +8765,8 @@ function renderUseCases(sel) {
     const actorPage = actorNodeId(actorText);
     const cross = byCapability
       ? `<p class="ecard-extra"><span class="ecard-lbl">Driven by</span> `
-        + (actorPage
-          ? `<button type="button" data-card-own class="ecard-pill ecard-pill-link ecard-pill-${esc(roleKindOf(n))}" `
-            + `data-goactor="${esc(actorText)}" title="Everything this actor can do">${esc(actorText)}</button>`
-          : `<span class="ecard-pill ecard-pill-${esc(roleKindOf(n))}">${esc(actorText)}</span>`) + `</p>`
+        + itemPillHtml(actorPage, { name: actorText, kind: (GRAPH.nodes[actorPage] || {}).kind || 'human',
+                                 plain: !actorPage }) + `</p>`
       : useCaseFeatureFootHtml(id);
     const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(id))
       ? '<span class="badge modified">changed</span>' : '';
@@ -11947,7 +11957,7 @@ function ruleSiteRow(site) {
   }
   const owners = site.components || [];
   const who = owners.length
-    ? owners.map((c) => `<button type="button" class="br-comp" data-id="${esc(c.id)}">${esc(c.name)}</button>`).join('')
+    ? owners.map((c) => itemPillHtml(c.id, { name: c.name })).join('')
     : '<span class="br-unverified">no component claims this file</span>';
   return `<li class="br-site${owners.length ? '' : ' br-bare'}">${srcCell(site.where || '')}`
     + `<span class="br-owners">${who}</span>`
@@ -13075,7 +13085,7 @@ function renderRule(s) {
   }
   const blk = (RULES_VIEW.blocks || []).find((b) => b.id === r.block);
   const area = blk
-    ? `<button type="button" class="br-blk" data-blk="${esc(blk.id)}">${esc(blk.name)}</button>`
+    ? itemPillHtml(blk.id, { kind: 'block', name: blk.name })
     : '<span class="br-nowhere">not assigned to a decision area</span>';
   // The same framed sections with a strip head every item page draws; the count keeps its noun.
   const secs = [];
@@ -13088,8 +13098,8 @@ function renderRule(s) {
   const steps = nSteps ? `<div class="br-chips">${r.steps.map(ruleStepChip).join('')}</div>`
     : '<p class="empty">No traced flow step reaches this rule.</p>';
   const ents = nEnts
-    ? '<div class="br-chips">' + r.entities.map((e) =>
-        `<button type="button" class="br-ent" data-id="${esc(e.id)}">${esc(e.name)}</button>`).join('') + '</div>'
+    ? '<div class="br-chips">' + r.entities.map((e) => itemPillHtml(e.id, { name: e.name })).join('')
+      + '</div>'
     : '<p class="empty">No entity is named by this rule.</p>';
   // THE SAME CARD every page about one element leads with: the diamond in the figure column,
   // `Business rule: <name>`, the statement as the sentence, and the area and the risk as its context.
@@ -13103,15 +13113,9 @@ function renderRule(s) {
     + sec('steps', 'Enforced at these steps', nSteps ? countLabel(nSteps, 'flow step') : '', steps)
     + sec('ents', 'Touches', nEnts ? countLabel(nEnts, 'entity') : '', ents)
     + '</div>';
-  // The area chip walks back OUT to the list, landing on the area this rule belongs to — the same
-  // move the breadcrumb makes, available where the reader is looking.
-  diagram.querySelectorAll('.br-blk').forEach((b) => b.addEventListener('click', () => {
-    go({ kind: 'rules', blk: b.getAttribute('data-blk') });
-  }));
-  // A component chip locates that component in its structural diagram; an entity chip its card.
-  diagram.querySelectorAll('.br-comp, .br-ent').forEach((el) => el.addEventListener('click', () => {
-    selectFromTree(el.getAttribute('data-id'));
-  }));
+  // The area, the components and the entities are all ITEM PILLS now, and one binder wires every one
+  // of them to the same destination: the thing the pill names.
+  bindItemPills(diagram);
   // A step chip SELECTS that step in the use case's flow — `selectFlowStep`, the same landing an
   // impact row uses, so the arrow lights up and its pane opens rather than the flow merely opening
   // at a counter position. The index was resolved when the chip was LABELLED, so the number the
@@ -16176,7 +16180,7 @@ const INSP_KIND = {
 // and `data-uc` (the use case it opens), and the thing under the cursor is the step.
 const INSP_ATTRS = ['data-step', 'data-br', 'data-blk', 'data-iface', 'data-sactor', 'data-sarea',
   'data-sfeat', 'data-entity', 'data-dep', 'data-store', 'data-sd', 'data-cap', 'data-uc', 'data-id',
-  'data-goelement', 'data-gofeat', 'data-goactor', 'data-def', 'data-ctx', 'data-target'];
+  'data-goelement', 'data-gofeat', 'data-item', 'data-def', 'data-ctx', 'data-target'];
 // Rows the map keys by a NAME rather than an id: [attribute, stored list, the field it matches].
 const INSP_BY_FIELD = [['data-unit', 'deployment', 'unit'], ['data-term', 'glossary', 'term'],
   ['data-key', 'config', 'key'], ['data-actor', 'roles', 'name']];

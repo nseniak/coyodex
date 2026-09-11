@@ -638,7 +638,6 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .ecard-type-plain:hover { border-color: #e5e7eb; background: #f9fafb; color: #6b7280; }
 .ecard-pill { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
               padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }
-.ecard-pill-human { background: #fff7ed; color: #9a3412; }
 .ecard-pill-service { background: #eef2ff; color: #3730a3; }
 /* The AUDIENCE colours on a card pill. Written with both classes because `.ecard-pill` sets a grey
    background further down the file than `.uc-aud-*` does its own, so a single-class rule lost the
@@ -651,21 +650,26 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    same kind of thing — only the pointer, the underline on hover and the focus ring say it goes somewhere.
    It earns the click by the rule every other pill is held to: it opens the feature's own list of use
    cases, which is not where the card's own click goes and not the page already open. */
-.ecard-pill-link { font: inherit; font-size: 10px; font-weight: 700; text-transform: uppercase;
-                   letter-spacing: .04em; cursor: pointer; border: 0; line-height: inherit; }
-.ecard-pill-link:hover { text-decoration: underline; filter: brightness(.96); }
 /* The feature's mark inside that pill. Small enough to ride a 10px line, and `inline-flex` so the mark
    and the name sit on one baseline instead of the mark pushing the name down by its own height. */
-/* A pill NAMING A FEATURE, whether or not it is a door: the mark rides the name, the same three
-   sparkles a feature wears on its card and its page. `inline-flex` so the mark and the name sit on one
-   baseline instead of the mark pushing the name down by its own height. On the class that says
-   FEATURE, not on the one that says door, because the board's pills name a feature and do not act. */
-.ecard-pill-feat { display: inline-flex; align-items: center; gap: 4px; }
-/* Sized for EVERY host, then again for the three that pin `.story-glyph` by id — the info pane draws
-   this same card, and an unsized svg there would take its intrinsic box and swallow the line. */
-.ecard-pill-feat .story-glyph { width: 12px; height: 12px; flex: 0 0 auto; }
-#diagram .ecard-pill-feat .story-glyph, #pagehero .ecard-pill-feat .story-glyph,
-#diaghead .ecard-pill-feat .story-glyph { width: 12px; height: 12px; flex: 0 0 auto; }
+/* ── ONE PILL NAMING ONE THING ────────────────────────────────────────────────────────────────────
+   A decision area, an entity, a component, a feature, an actor: five looks before this, at three font
+   sizes and four border colours, for one kind of fact. The KIND supplies the colour through the two
+   custom properties the builder sets, from the same table the diagrams paint their boxes with — so the
+   pill for an entity and that entity's own box are visibly one thing. A kind the table has no colour
+   for falls back to the neutral slate, which claims nothing. */
+.item-pill { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px;
+             font-weight: 600; padding: 1px 9px; border-radius: 999px; white-space: nowrap;
+             background: var(--pill-fill, #f8fafc); color: var(--pill-line, #334155);
+             border: 1px solid var(--pill-line, #e2e8f0); }
+.item-pill .ibox-gly, .item-pill .story-glyph { width: 12px; height: 12px; flex: 0 0 auto; }
+#diagram .item-pill .ibox-gly, #diagram .item-pill .story-glyph,
+#panel .item-pill .ibox-gly, #panel .item-pill .story-glyph { width: 12px; height: 12px; }
+/* …and only the DOOR form takes a pointer. A pill whose thing is already on the reader's screen is
+   the same pill with no click, and it must not look like one that acts. */
+.item-pill-door { cursor: pointer; }
+.item-pill-door:hover { filter: brightness(.95); text-decoration: underline; }
+
 .ecard-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px;
              color: #9ca3af; margin-right: 4px; }
 /* A SECTION of a grouped card list. NOT a card: a heading, and under it the ordinary card list, at the
@@ -902,9 +906,6 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 .feat-chipgroup + .feat-chipgroup { margin-top: 12px; }
 .feat-chipgroup-name { font-size: 11px; font-weight: 700; text-transform: uppercase;
                        letter-spacing: .05em; color: #6b7280; margin: 0 0 6px; }
-.featref { font: inherit; font-size: 12px; padding: 2px 9px; cursor: pointer;
-                      border: 1px solid #e5e7eb; border-radius: 9px; background: #fff; color: #374151; }
-.featref:hover { border-color: #c7d2fe; background: #eef2ff; color: #3730a3; }
 /* The code section folds. It is the lowest priority thing on a feature page, and its heading already
    states the count, which is the fact worth scanning. */
 .feat-fold > summary { cursor: pointer; color: #4338ca; font-size: 13px; }
@@ -971,12 +972,10 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 #panel .used-by-cap { margin-top: 4px; }
 #panel .used-cap-group + .used-cap-group { margin-top: 9px; }
 #panel .used-cap-name { color: #4b5563; font-size: 11px; font-weight: 700; letter-spacing: 0; }
-/* The feature heading is a LINK to that feature's page — the way back out of the code views into
-   what the product does. Styled as the heading it already was, not as a button. */
-#panel button.used-cap-name { display: block; font: inherit; font-size: 11px; font-weight: 700;
-                              color: #4b5563; text-align: left; padding: 0; border: 0;
-                              background: transparent; cursor: pointer; }
-#panel button.used-cap-name:hover { color: #3730a3; text-decoration: underline; }
+/* The feature heading is the shared ITEM PILL now — the way back out of the code views into what the
+   product does, drawn the way every other named element is drawn. It sits on its own line, because the
+   use cases it heads are listed under it. */
+#panel .used-cap-group > .item-pill { margin-bottom: 3px; }
 /* How many features this component serves, taken from the derived layer and never re-counted here. */
 #panel .used-cap-count { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #6b7280; }
 #panel .used-uc-list { list-style: none; margin: 2px 0 0; padding: 0; }
@@ -1920,10 +1919,6 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 /* A site nobody owns renders DASHED — it reaches no component, so it cannot be verified. */
 .br-site.br-bare { border-left: 2px dashed #fca5a5; padding-left: 8px; }
 .br-owners { display: inline-flex; flex-wrap: wrap; gap: 4px; }
-.br-comp, .br-ent { font: inherit; font-size: 12px; cursor: pointer; padding: 1px 7px;
-                    border: 1px solid #e2e8f0; border-radius: 999px; background: #f8fafc;
-                    color: #334155; }
-.br-comp:hover, .br-ent:hover { background: #eef2ff; border-color: #c7d2fe; }
 .br-why { color: #64748b; font-size: 12px; }
 .br-unverified { color: #b91c1c; font-size: 12px; font-style: italic; }
 .br-nowhere { color: #475569; font-size: 12px; font-style: italic; }
@@ -1940,9 +1935,6 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 /* A rule row's third line — where the decision lives. Dimmer than the statement above it: it is the
    derived answer, and the row's own decision has to stay the thing the eye lands on. */
 /* The decision area a rule belongs to, on its page — a chip that walks back out to the list. */
-.br-blk { font: inherit; font-size: 12px; cursor: pointer; padding: 1px 9px; border-radius: 999px;
-          border: 1px solid #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 600; }
-.br-blk:hover { background: #e0e7ff; }
 #panel .br-steprules { line-height: 1.6; }
 /* --- THE STORY DIAGRAM (Features view, choosing layer) -------------------------------------------
    Three fixed-width columns over one SVG of actor→feature wires. Fixed widths on purpose: the wires
