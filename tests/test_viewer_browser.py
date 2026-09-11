@@ -962,7 +962,7 @@ def test_the_picture_draws_the_people_and_the_pipe_on_both_shores() -> None:
             const out = {};
             for (const b of document.querySelectorAll('.ifd-box')) {
                 out[b.dataset.iface] = [
-                    ...[...b.querySelectorAll('.ibox-chip')].map(e => 'who:' + e.textContent),
+                    ...[...b.querySelectorAll('.item-pill')].map(e => 'who:' + e.textContent),
                     ...[...b.querySelectorAll('.ifd-prov')].map(e => 'pipe:' + e.textContent)];
             }
             return out;
@@ -1382,7 +1382,7 @@ def test_the_people_at_a_surface_are_ordered_by_the_happy_path() -> None:
         page.hover('.ifd-box[data-iface="I1"]')
         page.wait_for_timeout(250)
         got = page.evaluate("""() => ({
-            chips: [...document.querySelectorAll('.ifd-box[data-iface="I1"] .ibox-chip')]
+            chips: [...document.querySelectorAll('.ifd-box[data-iface="I1"] .item-pill')]
                      .map(e => e.textContent.trim()),
             heads: [...document.querySelectorAll('.ifd-elabel.ifd-lab-on .ifd-elabel-dir')]
                      .map(e => e.textContent)
@@ -1623,7 +1623,7 @@ def test_a_surface_card_has_one_door_and_it_is_the_name() -> None:
             doors: [...b.querySelectorAll('button, a, [role=button]')]
                      .filter(e => !e.classList.contains('gloss-link'))
                      .map(e => e.className),
-            chips: b.querySelectorAll('.ibox-chip').length,
+            chips: b.querySelectorAll('.item-pill').length,
             provs: b.querySelectorAll('.ifd-prov').length
         }))""")
         assert got, got
@@ -2273,9 +2273,8 @@ def test_a_use_case_walk_counts_its_own_steps_not_the_shared_walk_s() -> None:
     with _served_map(_with_shared_walk) as url, _page(url + "#v=usecase&uc=UC1") as page:
         _settle(page)
         seen = page.evaluate("""() => {
-            const chips = [...document.querySelectorAll('#diagram .ibox-chip')].map((c) =>
-              ({ t: c.textContent,
-                 k: ([...c.classList].find((x) => x.startsWith('ibox-k-')) || '').slice(7) }));
+            const chips = [...document.querySelectorAll('#diagram .item-pill')].map((c) =>
+              ({ t: c.textContent, k: c.getAttribute('data-kind') || '' }));
             const box = [...document.querySelectorAll('#diagram g.node')]
               .find((n) => /SF1/.test(n.id));
             return { counter: document.querySelector('.flowplay-count, .stepcount, .flow-count')?.textContent
@@ -2565,10 +2564,10 @@ def test_the_board_says_where_each_use_case_happens() -> None:
             return { stations: st.length,
                      withChips: st.filter((s) => s.querySelector('.journey-ifs')).length,
                      names: [...new Set([...document.querySelectorAll(
-                         '.journey-ifs .ibox-chip')].map((c) => c.textContent.trim()))],
+                         '.journey-ifs .item-pill')].map((c) => c.textContent.trim()))],
                      // The SHARED chip, mark and all — not a second drawing of the same idea.
                      marks: [...document.querySelectorAll(
-                         '.journey-ifs .ibox-chip .ibox-gly')].length,
+                         '.journey-ifs .item-pill .ibox-gly')].length,
                      // …and inert. The station is the door; a chip inside it would be a second one.
                      clickable: document.querySelectorAll('.journey-ifs button, .journey-ifs a').length,
                      sentence: (document.querySelector('.item-sec-note')
@@ -2598,7 +2597,7 @@ def test_a_use_case_this_actor_is_in_without_driving_gets_its_own_lane() -> None
             const parts = [...document.querySelectorAll('.journey-part')];
             return { lane: (document.querySelector('.journey-gutter-part') || {}).textContent || '',
                      parts: parts.map((p) => ({
-                         drivers: [...p.querySelectorAll('.journey-drivers .ibox-chip')]
+                         drivers: [...p.querySelectorAll('.journey-drivers .item-pill')]
                                     .map((c) => c.textContent.trim()),
                          // The driver's chip is the FIRST thing in the box's text column.
                          first: p.querySelector('.journey-sidet').firstElementChild.className,
@@ -2802,10 +2801,10 @@ def test_a_chip_draws_its_mark_in_the_same_place_on_a_board_as_on_a_card() -> No
                 return { top: Math.round((gr.top - cr.top) * 10) / 10,
                          h: Math.round(cr.height * 10) / 10 };
             }).filter(Boolean);
-            const lane = at('.journey-ifs .ibox-chip');
+            const lane = at('.journey-ifs .item-pill');
             location.hash = '#v=interfaces';
             await new Promise((r) => setTimeout(r, 800));
-            const card = at('.ifd-box .ibox-chip');
+            const card = at('.ifd-box .item-pill');
             return { laneTops: [...new Set(lane.map((x) => x.top))],
                      cardTops: [...new Set(card.map((x) => x.top))],
                      laneOne: [...new Set(lane.filter((x) => x.h < 22).map((x) => x.h))],
@@ -2835,7 +2834,7 @@ def test_a_use_case_names_the_interfaces_its_own_flow_reaches() -> None:
         seen = page.evaluate("""() => {
             const at = {};
             for (const s of document.querySelectorAll('.flow-step[data-uc]')) {
-                at[s.getAttribute('data-uc')] = [...s.querySelectorAll('.journey-ifs .ibox-chip')]
+                at[s.getAttribute('data-uc')] = [...s.querySelectorAll('.journey-ifs .item-pill')]
                     .map((c) => c.textContent.trim()).sort();
             }
             return at;
@@ -2862,7 +2861,7 @@ def test_an_actor_s_page_keeps_only_the_interfaces_that_actor_meets() -> None:
         seen = page.evaluate("""() => {
             const at = {};
             for (const s of document.querySelectorAll('.pickbox[data-uc]')) {
-                at[s.getAttribute('data-uc')] = [...s.querySelectorAll('.journey-ifs .ibox-chip')]
+                at[s.getAttribute('data-uc')] = [...s.querySelectorAll('.journey-ifs .item-pill')]
                     .map((c) => c.textContent.trim()).sort();
             }
             return at;
@@ -3689,3 +3688,4 @@ def test_a_map_that_names_no_feature_keeps_one_flat_grid_of_areas() -> None:
         assert board["secs"] == [], f"nothing to cut by, so no feature cards: {board}"
         assert board["grids"] == 1 and board["cards"] == 1, f"one grid, every area in it: {board}"
         assert not page.js_errors, page.js_errors
+

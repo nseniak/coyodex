@@ -427,7 +427,7 @@ const GLOSS_MATCHER = buildGlossMatcher(GRAPH.glossary);
 // name column), and the Glossary view itself (the one page that IS the definitions).
 const GLOSS_SKIP = 'a, button, code, pre, kbd, svg, h1, h2, h3, h4, .ibox-name, .tb-trig, '
   + '.feat-ep-plain, .glossary-wrap, .gloss-plain, .ecard-pill, .ecard-type, .dv-tag, '
-  + '.dv-kindpill, .dv-coll, .ibox-name, .ibox-pill, .ibox-count, .ibox-chip, '
+  + '.dv-kindpill, .dv-coll, .ibox-name, .ibox-pill, .ibox-count, .item-pill, '
   + '.story-pill, .story-colhead, '
   + '.story-elabel, .journey-zkind, .journey-gutter';
 // A page about one element is not decorated with a link to itself: the page's subject is the
@@ -962,22 +962,18 @@ function itemGlyphSvg(k, ikind) {
     + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     + `${d}</svg>`;
 }
-// ONE CHIP, wherever a chip is drawn: the kind's own mark, then the name, in a plain box. It lived
-// inside the item box's band and is pulled out here because the actor board draws the same chip on
-// its use cases — the glossary has ONE chip, and a second builder is how it would have become two.
-// `ikind` is the interface's own kind, and only an interface has one; every other kind ignores it.
-function itemChipHtml(c) {
-  const ck = itemKind(c.kind);
-  return `<span class="ibox-chip ibox-k-${esc(ck)} ${esc(c.cls || '')}">`
-    + `${itemGlyphSvg(ck, c.ikind || '')}${esc(c.name)}</span>`;
-}
 // ONE ROLE, as a chip's spec. `human` is the fallback for a name the map never declared as a role,
 // which is the honest default: the figure says "somebody", and the alternative is no mark at all.
 // Two callers — an interface card's far side, and the driver on an actor board's third lane — and
 // the mapping from a role to its mark lived in the first of them until the second needed it too.
 function roleChipOf(role, fallbackName) {
   const r = role || {};
-  return { name: r.name || fallbackName || r.id || '',
+  const name = r.name || fallbackName || r.id || '';
+  // THE NODE ID COMES WITH IT, because the tag this becomes is a door and a door needs somewhere to go.
+  // Without it the pill fell back to its plain form and the people on an interface card were the one
+  // set of names on that page you could not click. A role the graph never drew resolves to nothing and
+  // the pill stays plain, which is the honest answer rather than a dead control.
+  return { id: actorNodeId(name) || '', name,
            kind: String(r.kind || 'human').trim().toLowerCase(), cls: '' };
 }
 
@@ -1061,10 +1057,11 @@ function itemBoxHtml(spec, variant, opts) {
       // collapsed shared sub-use case the chips are the only thing saying the product's edge and its saved
       // data are inside, and the mark says which is which without spending a word on it. The chip
       // itself stays a plain box: see the note where the per-kind rules are injected.
-      // THE MARK IS BUILT BY `itemChipHtml`, not by whoever assembled the chips. A caller that forgot
-      // to build one shipped a chip with no mark at all — which is what a shared sub-use case's box did
-      // on the use case map, beside an interface's box whose chips had theirs. One place decides.
-      + (spec.chips || []).map(itemChipHtml).join('');
+      // THE MARK IS BUILT BY `itemPillHtml`, not by whoever assembled the list. A caller that forgot
+      // to build one shipped a tag with no mark at all — which is what a shared sub-use case's box did
+      // on the use case map, beside an interface's box whose tags had theirs. One place decides.
+      + (spec.chips || []).map((c) => itemPillHtml(c.id || '', {
+          kind: c.kind, name: c.name, ikind: c.ikind, inBox: true, cls: c.cls })).join('');
     if (bits) out.push(`<span class="ibox-band">${bits}</span>`);
   }
   // The THING's own last line before the CALLER's: a provider belongs to the door wherever it is
@@ -1380,6 +1377,7 @@ function elementCardHtml(id, opts) {
 // NOUN A CALLER PASSES IS ALWAYS SINGULAR: making the plural is this function's whole job.
 const COUNT_PLURALS = {
   entity: 'entities', 'stored entity': 'stored entities', dependency: 'dependencies',
+  process: 'processes',
 };
 function countNoun(n, noun) {
   return n === 1 ? noun : (COUNT_PLURALS[noun] || noun + 's');
@@ -1418,6 +1416,20 @@ function bindPlainCards(root, onOpen) {
 }
 
 // A CARD LIST: element cards stacked vertically. `per` lets a caller add its own per-card extras.
+// THE REASON A RULE EXISTS, as the card's labelled foot line. The map calls this field the rule's
+// risk and defines it as what is at stake if the decision is wrong or absent — which every one of the
+// 88 sentences on the live map says as "the bad thing that happens without this". So the label asks
+// for a reason, and the sentence answers it without anyone rewriting 88 of them.
+//
+// IT WAS `If it is wrong`, on the rule's page and nowhere else. That label's `it` had no owner on
+// screen: a reader could take it as "if this sentence describes the code wrongly", which is a fact
+// about the MAP rather than about the product. `Why this rule` names its subject and has no pronoun.
+function ruleWhyFootHtml(id) {
+  const r = ruleById(id);
+  return r && r.risk
+    ? `<p class="ecard-extra"><span class="ecard-lbl">Why this rule</span> ${mdInline(r.risk)}</p>`
+    : '';
+}
 function elementCardListHtml(ids, per) {
   if (!ids || !ids.length) return '';
   return `<div class="ecard-list">${ids.map((id) =>
@@ -1505,11 +1517,18 @@ function itemPillTarget(id) {
   return n && (n.kind === 'entity' || n.kind === 'component') ? showInContext : drillInto;
 }
 function bindItemPills(root) {
-  root.querySelectorAll('.item-pill-door[data-item]').forEach((b) => b.addEventListener('click', (ev) => {
-    ev.stopPropagation();          // the pill's action is not the card's, where it sits on one
-    const id = b.getAttribute('data-item');
-    itemPillTarget(id)(id);
-  }));
+  root.querySelectorAll('.item-pill-door[data-item]').forEach((b) => {
+    // BOUND ONCE PER PILL, whoever asks. The page binder runs after every render and a screen may also
+    // bind its own root; without this flag a pill on both paths would carry two listeners and one click
+    // would navigate twice.
+    if (b.dataset.pillBound) return;
+    b.dataset.pillBound = '1';
+    b.addEventListener('click', (ev) => {
+      ev.stopPropagation();        // the pill's action is not the card's, where it sits on one
+      const id = b.getAttribute('data-item');
+      itemPillTarget(id)(id);
+    });
+  });
 }
 // Wire every card under `root`. One binder, so the two actions cannot differ between two card lists.
 function bindElementCards(root, onDrill) {
@@ -3253,14 +3272,28 @@ function itemPillHtml(id, opts) {
   const node = GRAPH.nodes[id];
   const kind = o.kind || (node && node.kind) || '';
   const name = o.name || (node && node.name) || elName(id);
-  const tint = kind && kind !== 'capability' ? itemTint(itemKind(kind)) : null;
-  const style = tint ? ` style="--pill-fill:${esc(tint.fill)};--pill-line:${esc(tint.stroke)}"` : '';
+  // THE MARK IS THE ONLY COLOURED THING ON IT. The box was painted in the kind's own fill and ink for a
+  // while, which put a saturated block behind every name: eight amber tags down one Happy Path station
+  // read as a warning, not as a list of doors. The mark already says the kind, in that kind's colour,
+  // taken from the same table the diagrams paint with — and it says it in a shape the reader can tell
+  // apart at 11px, which a wash cannot. The box stays quiet so the NAME is what carries.
+  const extra = o.cls ? ` ${esc(o.cls)}` : '';
+  const style = '';
   const body = itemMarkHtml(kind, o.ikind) + `<span>${esc(name)}</span>`;
-  const live = !o.plain && (node || o.go);
-  return live
-    ? `<button type="button" data-card-own class="item-pill item-pill-door"${style} `
-      + `data-item="${esc(id)}" title="Open ${esc(name)}">${body}</button>`
-    : `<span class="item-pill"${style} data-item="${esc(id)}">${body}</span>`;
+  const live = !o.plain && node;
+  // `data-kind` says WHICH kind in words. The mark says it in a picture, which is right for a reader
+  // and unreadable to anything else — the old tag carried the kind as a class and a probe could see it.
+  const kd = kind ? ` data-kind="${esc(kind)}"` : '';
+  if (!live) return `<span class="item-pill${extra}"${style}${kd} data-item="${esc(id)}">${body}</span>`;
+  // INSIDE A BOX that is itself a button — a Happy Path station, a collapsed shared sub-flow — the pill
+  // cannot BE a button: a button inside a button is invalid, and a second keyboard stop inside one box
+  // is not what a reader wants there either. A span with the same class takes the same listener, and
+  // its `stopPropagation` is what keeps the click from also opening the box around it. The cost is
+  // honest: those pills are reachable by mouse, not by tab, and the box itself still is.
+  const tag = o.inBox ? 'span' : 'button';
+  const attrs = o.inBox ? '' : ' type="button" data-card-own';
+  return `<${tag}${attrs} class="item-pill item-pill-door${extra}"${style}${kd} `
+    + `data-item="${esc(id)}" title="Open ${esc(name)}">${body}</${tag}>`;
 }
 // The feature form, named because two card foots ask for it and neither should have to know that a
 // feature's id is what the pill is keyed on.
@@ -7099,11 +7132,14 @@ const LANDING_COUNT = {
   usecases: () => [(FEATURES.features || []).length, 'feature'],
   hp: () => [(GRAPH.happy_path || []).length, 'step'],
   interfaces: () => [ifaceList().length, 'interface'],
-  rules: () => [((RULES_VIEW || {}).rules || []).length, 'rule'],
-  domain: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'entity').length, 'entity', 'entities'],
+  // THE AREAS FIRST. They are what the board draws and what a reader chooses between; the rules are
+  // what is inside them, and a page that says only "88 rules" never says how many things to read.
+  rules: () => [[((RULES_VIEW || {}).blocks || []).length, 'decision area'],
+                [((RULES_VIEW || {}).rules || []).length, 'rule']],
+  domain: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'entity').length, 'entity'],
   container: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'subsystem').length, 'subsystem'],
-  context: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'dep').length, 'dependency', 'dependencies'],
-  deployment: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'process').length, 'process', 'processes'],
+  context: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'dep').length, 'dependency'],
+  deployment: () => [Object.values(GRAPH.nodes).filter((n) => n.kind === 'process').length, 'process'],
   glossary: () => [(GRAPH.glossary || []).length, 'term'],
 };
 // A VIEW'S LANDING SCREEN WEARS ITS NAME AND ITS QUESTION AS THE HEAD OF ITS FIRST BLOCK — the same
@@ -7116,8 +7152,11 @@ function landingHeadHtml(view) {
   const q = viewQuestion(view);
   const name = VIEW_LABEL[view] || view;
   if (!q && !name) return '';
-  const count = LANDING_COUNT[view] ? LANDING_COUNT[view]() : null;
-  const n = count && count[0] ? `${count[0]} ${count[0] === 1 ? count[1] : (count[2] || count[1] + 's')}` : '';
+  // A VIEW MAY MEASURE ITSELF IN MORE THAN ONE UNIT. `LANDING_COUNT` answers with one `[n, noun]` pair
+  // or a list of them, and an entry counting nothing is dropped rather than drawn as a zero.
+  const answer = LANDING_COUNT[view] ? LANDING_COUNT[view]() : null;
+  const pairs = !answer ? [] : (Array.isArray(answer[0]) ? answer : [answer]);
+  const n = pairs.filter((c) => c[0]).map((c) => countLabel(c[0], c[1]));
   // `landing-head`: the title takes the size an item page's name has, since this is the page's title.
   return `<div class="landing-head">${itemSectionHeadHtml(name, n, q)}</div>`;
 }
@@ -8588,9 +8627,12 @@ function featRulesHtml(ids) {
   if (!ids.length) return notes + featEmpty('No rule this map records is enforced on this feature.');
   // The same grouped card list the Actors view uses: sections cut by decision area, each a macro card
   // holding its rules. Hand-rolled here first, which is exactly the drift the shared component ends.
+  // THE SAME RULE CARD the decision area's own page draws: its reason under its sentence, and no type
+  // word, because every card under "What it decides" is a rule and the section says so.
   return notes + elementCardGroupsHtml(rulesByBlock(ids).map((g) => ({
     title: g.name, ids: g.rules.map((r) => r.id),
     count: countLabel(g.rules.length, 'rule'),
+    per: (id) => ({ noType: true, foot: ruleWhyFootHtml(id) }),
   })));
 }
 
@@ -9367,7 +9409,8 @@ function journeyMarksHtml(ucId) {
 function journeyIfsHtml(list) {
   if (!list || !list.length) return '';
   return '<span class="journey-ifs">'
-    + list.map((i) => itemChipHtml({ name: i.name, kind: 'interface', ikind: i.kind })).join('')
+    + list.map((i) => itemPillHtml(i.id, { kind: 'interface', name: i.name, ikind: i.kind,
+                                           inBox: true })).join('')
     + '</span>';
 }
 // WHERE ONE USE CASE HAPPENS: every interface its own steps reach, its shared sub-flows included.
@@ -9502,7 +9545,10 @@ function journeyDriversHtml(uc) {
     .map((s) => String(s || '').trim()).filter(Boolean);
   if (!names.length) return '';
   return '<span class="journey-drivers">'
-    + names.map((nm) => itemChipHtml(roleChipOf(ROLE_BY_NAME[nm.toLowerCase()], nm))).join('')
+    + names.map((nm) => {
+        const c = roleChipOf(ROLE_BY_NAME[nm.toLowerCase()], nm);
+        return itemPillHtml(c.id, { kind: c.kind, name: c.name, inBox: true });
+      }).join('')
     + '</span>';
 }
 
@@ -9545,6 +9591,10 @@ function flowStepBoxHtml(st, o) {
 // homes, and passing the actor is what keeps the crumb running through this page.
 function bindStepDoors(root, o) {
   const opts = o || {};
+  // THE PILLS INSIDE A BOX GO FIRST. A station carries the interfaces its use case reaches, and each of
+  // those now opens the door it names; the station's own click, bound below, opens the use case. The
+  // pill's listener stops the event, so one box answers two questions without ever answering both.
+  bindItemPills(root);
   // EVERY PICKABLE BOX, not just a step: a side stop and a takes-part box open the same use case by
   // the same click and are remembered the same way. The rails bound their stops separately, which is
   // why a stop could be clicked and never came back lit.
@@ -10465,8 +10515,13 @@ function sparklePath(cx, cy, r) {
 //
 // It takes the PERSON's tint, not one of its own. A feature is what a person gets to do, so the two
 // columns of this page are one warm colour and the cool ones stay with the machine.
+// A FEATURE'S OWN COLOUR, not a borrowed one. This read `ELEMENT_TINT.human` — the ACTOR colour — so
+// every sparkle on the viewer was drawn in the orange that means "a person", while the map's own table
+// has given a feature its own blue all along. It went unnoticed while the mark only appeared on the
+// Features page, where the cards carry a rotating wash and nothing orange sits beside them; it showed
+// the moment a feature and an actor could be named as two tags one line apart.
 function storyFeatureGlyphSvg() {
-  const t = ELEMENT_TINT.human || {};
+  const t = ELEMENT_TINT.feature || {};
   const stroke = t.stroke || '#6b7280', fill = t.fill || '#fff';
   return '<svg class="story-glyph" viewBox="0 0 20 20" aria-hidden="true">'
     + `<path d="${sparklePath(8, 11.7, 7.1)}" fill="${fill}" stroke="${stroke}" `
@@ -11138,7 +11193,8 @@ function bindProductLead() {
 // that scrolls sideways, so the strip stays put while the board scrolls under it.
 function itemSectionHtml(secs, key, title, count, note, body, glyph, titleHtml) {
   const id = 'itemsec-' + key;
-  secs.push({ id, title, count });
+  // The strip index carries ONE string, whatever the head draws.
+  secs.push({ id, title, count: Array.isArray(count) ? count.join(' · ') : count });
   return `<section class="item-sec" id="${id}"><div class="item-sec-frame">`
     + `<div class="item-sec-strip">${itemSectionHeadHtml(title, count, note, glyph, titleHtml)}</div>`
     + `<div class="item-sec-body">${body}</div></div></section>`;
@@ -11151,8 +11207,11 @@ function itemSectionHtml(secs, key, title, count, note, body, glyph, titleHtml) 
 // door to it — the Rules board, whose every section is a feature with a page of its own. The plain
 // `title` is still what the chip bar and the strip index carry, so a door cannot rename a section.
 function itemSectionHeadHtml(title, count, note, glyph, titleHtml) {
+  // A LIST OF COUNTS, for a head that measures its page in more than one unit: the Rules board holds
+  // decision areas AND the rules inside them, and one number could only ever answer half of that.
+  const counts = (Array.isArray(count) ? count : [count]).filter((c) => c !== '' && c != null);
   return `<h2 class="item-sec-title">${glyph || ''}${titleHtml || esc(title)}`
-    + (count === '' || count == null ? '' : countPillOf(String(count)))
+    + counts.map((c) => countPillOf(String(c))).join('')
     + '</h2>'
     + (note ? `<p class="item-sec-note">${esc(note)}</p>` : '');
 }
@@ -12413,6 +12472,9 @@ function stepDirWord(dir) {
   return CROSSING_DIR_VERB[dir] || dir;
 }
 function bindIfaceDiagram(root) {
+  // THE PEOPLE ON EACH DOOR'S BOX are item pills, and each opens that person's own page. Bound before
+  // the stage check, because the pills are on the boxes whether or not the wires drew.
+  bindItemPills(root);
   const stage = root.querySelector('#ifdstage');
   if (!stage) return;
   const svg = stage.querySelector('svg.ifd-wires');
@@ -12880,6 +12942,11 @@ function bindSurfacePick(stage, paths, labels) {
     pendingStoryPin = null;
     const box = stage.querySelector(`.ifd-box[data-iface="${CSS.escape(p.id)}"]`);
     if (box) { pinned = p.id; box.classList.add('ifd-picked', 'ibox-picked');
+               // CENTRED, like the Features page already does with its own pinned card. Arriving at an
+               // address that names a box and landing with that box off the bottom of the window is the
+               // reader being shown the wrong thing: on a board this tall the pinned box sat at 849px
+               // of a 900px window, with only its top edge on screen.
+               box.scrollIntoView({ block: 'center' });
                show(p.id); storyPinNow = p; }
   }
   stage.querySelectorAll('.ifd-box .ibox-name').forEach((b) => {
@@ -13072,24 +13139,38 @@ function renderRules(s) {
     diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">This decision area is not in the map.</p></div>';
     return;
   }
-  // Nothing rides beside the type pill. Where a rule is ENFORCED was a third line on the old row, and
-  // the rule's own page carries it in full; how well coyodex ANALYSED the rule is a fact about the map,
-  // and lives with the others under System › About this map.
+  // WHICH FEATURE THIS AREA IS SPECIFIED UNDER, said here too. The board's whole organisation is that
+  // answer, and the area's own page used to drop it — so a reader who arrived by a link, or who drilled
+  // in and then forgot which card they came from, had no way back to the feature at all. The pill is
+  // the same door the board's own `Also under` line draws.
+  const under = (g.specifiedUnder || []).filter((f) => featureName(f) !== UNKNOWN_NAME);
+  const home = under.length
+    ? `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Specified under:</span> `
+      + under.map((f) => featurePillHtml(f)).join(' ') + '</span>'
+    : '';
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({
       glyph: itemGlyphSvg('block'),
       name: g.name,
       type: elementLabel('block'),
       pills: elementSidePillsHtml(g.id)
-        + (g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : ''),
+        + (g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : '')
+        // THE COUNT IS A PILL, the same badge every other count on this viewer wears. It was plain text
+        // on the one line under the sentence, which is where the page states its CONTEXT, and a number
+        // is not context.
+        + countPillHtml(g.rules.length, 'rule'),
       desc: g.purpose ? mdInline(g.purpose) : '',
       noDesc: 'No description recorded for this decision area.',
-      meta: countLabel(g.rules.length, 'rule'),
+      meta: home,
     })
     // The rules as the page's one section, framed and headed like every item page's, under the mark of
-    // what it HOLDS — a single diamond, where the hero above it wears the doubled one.
-    + itemSectionHtml([], 'rules', 'Rules', g.rules.length, '',
-        g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id))
+    // what it HOLDS — a single diamond, where the hero above it wears the doubled one. THE COUNT KEEPS
+    // ITS NOUN: the head said a bare `8`, which is the one count on this viewer that did not say what
+    // it counted. NO TYPE WORD on the cards, for the reason the board has none — every card in this
+    // section is a rule, and the section it sits in is called Rules.
+    + itemSectionHtml([], 'rules', 'Rules', countLabel(g.rules.length, 'rule'), '',
+        g.rules.length ? elementCardListHtml(g.rules.map((r) => r.id),
+                                             (id) => ({ noType: true, foot: ruleWhyFootHtml(id) }))
                        : '<p class="empty">No rules assigned to this area yet.</p>',
         itemGlyphSvg('rule'))
     + '</div>';
@@ -13129,7 +13210,7 @@ function renderRule(s) {
   // `Business rule: <name>`, the statement as the sentence, and the area and the risk as its context.
   const context = `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Decision area:</span> ${area}`
     + (blk && blk.purpose ? ` ${mdInline(blk.purpose)}` : '') + '</span>'
-    + (r.risk ? `<span class="page-hero-meta-line"><span class="uc-wants-lbl">If it is wrong:</span> ${mdInline(r.risk)}</span>` : '');
+    + (r.risk ? `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Why this rule:</span> ${mdInline(r.risk)}</span>` : '');
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({ glyph: itemGlyphSvg('rule'), name: ruleCrumbTitle(s.br), type: elementLabel('rule'),
                      desc: ruleStatementLine(r) ? mdInline(r.statement) : '', noDesc: false, meta: context })
@@ -13214,6 +13295,13 @@ async function render(sArg, transient) {
     try { renderChrome(s); } catch (_) { /* the chrome is the last thing that can fail; leave the rest */ }
   } finally {
     renderingTransient = wasTransient;
+    // EVERY ITEM PILL ON THE PAGE, BOUND ONCE, HERE. It was bound per screen, and twice a screen that
+    // drew pills never called the binder — the interfaces on a Happy Path station, then the people on a
+    // door's card — so a tag that looked exactly like a door did nothing. `renderView` has a dozen early
+    // returns and each was a chance to forget; this runs after all of them. `bindItemPills` is safe to
+    // call twice on one element: a screen that already bound its own is a second listener on a click
+    // that stops propagating, and the second one moves nowhere new.
+    try { bindItemPills(diagram); } catch (_) { /* the pills are the last thing that can fail */ }
   }
 }
 // `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely

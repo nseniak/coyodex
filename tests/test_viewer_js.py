@@ -3564,10 +3564,17 @@ def test_every_card_says_what_it_is_and_only_the_dead_click_goes() -> None:
     ucs = js[js.index("function renderUseCases(sel) {"):
              js.index("\nfunction ", js.index("function renderUseCases(sel) {") + 10)]
     assert "return { homeType: !page, extra:" in ucs
-    assert js.count("o.noType") == 1 and js.count("noType: true") == 1, \
-        "one switch, one caller: the Rules board, where every card is a decision area"
+    # ONE SWITCH, and every caller of it is a list whose cards are all one kind with the page saying
+    # which: the Rules board (every card a decision area) and one area's own page (every card a rule,
+    # in a section called Rules). A third list claiming it is a design question, not an edit.
+    assert js.count("o.noType") == 1 and js.count("noType: true") == 3, \
+        "the switch has one definition and only same-kind lists may ask for it"
     assert "noType: true" in js[js.index("function ruleAreaCardHtml(g, others) {"):
                                 js.index("\n}", js.index("function ruleAreaCardHtml(g, others) {"))]
+    area = js[js.index("function renderRules(s) {"):
+              js.index("\nfunction ", js.index("function renderRules(s) {") + 10)]
+    assert "noType: true, foot: ruleWhyFootHtml(id)" in area, \
+        "the area page's rule cards drop the word and carry the reason"
     css = (VIEWER_DIR / "viewer.css").read_text()
     assert ".ecard-type-plain { cursor: default; }" in css
 
@@ -4200,12 +4207,13 @@ def test_a_name_wears_its_kind_as_one_small_mark_and_never_as_a_block() -> None:
     reader carrying the kind over from the card."""
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
     css = (VIEWER_DIR / "viewer.css").read_text(encoding="utf-8")
-    # No per-kind rule for the chip: the injected sheet styles the tinted box, the kind pill and the
-    # identity edge, and stops there.
-    assert ".ibox-chip.ibox-k-" not in css and "`.ibox-chip.ibox-k-" not in js
+    # No per-kind rule for the in-a-box pill: the injected sheet styles the tinted box, the kind pill
+    # and the identity edge, and stops there. The pill takes its kind's colour from its own two custom
+    # properties, set by the builder, so no page-wide rule has to know the kinds at all.
+    assert ".item-pill.ibox-k-" not in css and "`.item-pill.ibox-k-" not in js
     assert "`.ibox-k-${k} .ibox-pill{background:${t.fill};color:${t.stroke}}`" in js, \
         "the KIND pill keeps its colour — that is the one tag whose job IS the kind"
-    # The glyph colours itself with an attribute, not `currentColor`, so a neutral chip keeps its mark.
+    # The glyph colours itself with an attribute, not `currentColor`, so a neutral pill keeps its mark.
     gly = js[js.index("function itemGlyphSvg(k, ikind) {"):]
     assert 'stroke="${esc(t.stroke)}"' in gly[:gly.index("\nfunction ")]
     # …and the person heading the interface box takes that same builder.
@@ -4213,9 +4221,9 @@ def test_a_name_wears_its_kind_as_one_small_mark_and_never_as_a_block() -> None:
     # …and that name is a DOOR to the person's own page, the same treatment the use cases beside it have.
     assert 'class="ifd-elabel-who"' in js and "go({ kind: 'actor', act: who })" in js
     assert ".ifd-elabel-who:hover { text-decoration: underline;" in css
-    # ONE size for the small mark, stated once for both places it appears.
-    assert ("#diagram .ibox-chip .ibox-gly, #diagram .ifd-elabel-dir .ibox-gly "
-            "{ width: 11px; height: 11px; }") in css
+    # ONE size for the small mark, stated once for every place it appears.
+    assert ("#diagram .ibox-band .item-pill .ibox-gly, #diagram .journey-ifs .item-pill .ibox-gly,\n"
+            "#diagram .ifd-elabel-dir .ibox-gly { width: 11px; height: 11px; }") in css
 
 
 def test_a_picture_with_a_natural_width_is_framed_at_that_width() -> None:
@@ -4640,7 +4648,7 @@ def test_story_chrome_never_term_links_but_card_prose_does() -> None:
     sentences (purpose, wants) stay linkable like every other card's."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     skip = js[js.index("const GLOSS_SKIP ="): js.index(";", js.index("const GLOSS_SKIP ="))]
-    for cls in (".ibox-name", ".ibox-pill", ".ibox-count", ".ibox-chip",
+    for cls in (".ibox-name", ".ibox-pill", ".ibox-count", ".item-pill",
                 ".story-pill", ".story-colhead", ".story-elabel"):
         assert cls in skip, f"{cls} must not term-link"
     assert ".story-desc" not in skip, "card prose participates in term-linking"
@@ -5601,40 +5609,45 @@ def test_the_interfaces_picture_scrolls_in_the_same_board_the_other_two_do() -> 
     assert ".hfade-wrap:has(> .ifd-wrap) { margin: 0 -1px; }" in css
 
 
-def test_a_chip_is_one_component_that_no_page_restyles() -> None:
-    """A chip is built by ONE function (`itemChipHtml`) and looked at in three places: a shared
-    sub-use case's box, a surface card's far side, and now every use case on a board. It stopped
-    being one component the moment a lane wrote `.journey-ifs .ibox-chip { align-items: flex-start }`
-    for itself — a rule that put the chip's mark 1.7px above where the same chip drew it on a card,
-    which a reader noticed before any test did.
+def test_the_in_a_box_pill_is_one_component_that_no_page_restyles() -> None:
+    """The tag naming one thing INSIDE a box — a shared sub-flow's dashed box, a door card's far side,
+    a station on any board — is the SAME pill every other screen draws, at the size a dense board can
+    carry. It used to be a second component called a chip, and the two drifted into looking alike while
+    behaving differently: one opened what it named, the other was inert and the box around it opened.
+    A reader could not tell which they were pointing at, and the hand cursor pointed the wrong way.
 
-    So the STYLESHEET is what this pins, not the builder: the builder was already shared, and sharing
-    it bought nothing while a page could re-style what came out. Every selector naming the chip has to
-    be the component's own. A new page-scoped one fails here rather than on somebody's eye."""
+    It stopped being one component once before, the moment a lane wrote a rule of its own for it and
+    put the mark 1.7px above where the same tag drew it on a card. So the STYLESHEET is what this pins:
+    sharing a builder buys nothing while a page can re-style what comes out. Every selector naming the
+    in-a-box pill has to be the component's own, and a new page-scoped one fails here rather than on
+    somebody's eye."""
     css = (VIEWER_DIR / "viewer.css").read_text()
-    js = (VIEWER_DIR / "viewer.js").read_text()
     sels = [" ".join(m.group(2).split()).split("*/")[-1].strip()
-            for m in re.finditer(r"(^|\})\s*([^{}@]*ibox-chip[^{}]*)\{", css, re.M)]
+            for m in re.finditer(r"(^|\})\s*([^{}@]*\.item-pill[^{}]*)\{", css, re.M)]
     assert sorted(sels) == sorted([
-        ".ibox-chip",                                   # the box itself
-        ".ibox-chip .ibox-gly",                         # …and its mark
-        "#diagram .ibox-chip .ibox-gly, #diagram .ifd-elabel-dir .ibox-gly",   # one size on a diagram
-        ".ibox-chip-me",                                # the reader's own actor, on their page
+        ".item-pill",                                     # the tag itself
+        ".item-pill .ibox-gly, .item-pill .story-glyph",  # …and its mark
+        ".item-pill-door",                                # the form that acts
+        ".item-pill-door:hover",                          # …and the only thing hover changes
+        "#diagram .item-pill .ibox-gly, #diagram .item-pill .story-glyph, "
+        "#panel .item-pill .ibox-gly, #panel .item-pill .story-glyph",   # one size on a diagram
+        ".ibox-band .item-pill, .journey-ifs .item-pill",                # …and one inside a box
+        ".ibox-band .item-pill .ibox-gly, .ibox-band .item-pill .story-glyph, "
+        ".journey-ifs .item-pill .ibox-gly",
+        "#diagram .ibox-band .item-pill .ibox-gly, #diagram .journey-ifs .item-pill .ibox-gly, "
+        "#diagram .ifd-elabel-dir .ibox-gly",
+        "#panel .used-cap-group > .item-pill",            # the one line it takes on a component's pane
     ]), sels
-    # THE MARK IS ALIGNED ON THE COMPONENT, so a chip whose name wraps inside a narrow box keeps it on
-    # the first line without the box saying anything. `center` cannot: it floats the mark to the
-    # middle of a two-line tag, which is what the lane's own rule was working around.
-    chip = css[css.index(".ibox-chip {"):css.index("}", css.index(".ibox-chip {"))]
-    assert "align-items: flex-start" in chip and "line-height: 14px" in chip
-    assert "max-width: 100%" in chip, "a chip fits its container wherever it is drawn"
-    mark = css[css.index(".ibox-chip .ibox-gly {"):
-               css.index("}", css.index(".ibox-chip .ibox-gly {"))]
-    # 14px of line box less an 11px mark, halved: the one-line chip is unmoved by the change.
-    assert "margin-top: 1.5px" in mark, mark
-    # …and ONE builder still, which is the half that was already true.
-    assert js.count("function itemChipHtml(") == 1
-    assert js.count('class="ibox-chip') == 1, "one place writes a chip's markup"
-
+    # THE NAME WRAPS AND THE MARK CENTRES ON THE WHOLE TAG, stated on the component so no box has to say
+    # it. Inside a box the tag is clamped to the box's width, and without wrapping the name ran straight
+    # out through the border — measured at 161px of name in a 120px tag. The mark sat on the first line
+    # for a while and read as a bullet beside a paragraph; centred, a two-line tag stays one object, and
+    # it is what the tag outside a box already does.
+    box = css[css.index(".ibox-band .item-pill, .journey-ifs .item-pill {"):]
+    box = box[:box.index("}")]
+    assert "align-items: center" in box and "line-height: 12px" in box
+    assert "white-space: normal" in box and "overflow-wrap: anywhere" in box, "the name wraps in a box"
+    assert "max-width: 100%" in box, "a tag fits its container wherever it is drawn"
 
 def test_a_drawn_element_s_page_heads_its_drawing_with_the_same_strip_a_walk_s_board_wears() -> None:
     """A subsystem's, a subdomain's and a process's page keep their hero in the fixed block; the drawing
@@ -5765,10 +5778,37 @@ def test_one_pill_names_one_thing_wherever_a_screen_names_it() -> None:
     # …and what they left behind went with them.
     for dead in ("function roleKindOf(n)", "data-goactor"):
         assert dead not in js, f"{dead} has no caller left"
-    # One rule paints it, and the colour comes from the kind rather than from the call site.
+    # ONE RULE PAINTS IT, and it paints a quiet box: the kind is said by the MARK, in that kind's own
+    # colour from the diagrams' own table. The box carried that colour for a while and it was too much —
+    # a row of tags each behind a saturated wash reads as a warning rather than as a list.
     assert ".item-pill { display: inline-flex;" in css
-    assert "var(--pill-fill, #f8fafc)" in css and "var(--pill-line, #334155)" in css
+    assert "background: #fbfbfe; color: #374151; border: 1px solid #dfe2ec; }" in css
+    assert "--pill-fill" not in css and "--pill-line" not in css, "no per-kind wash on the box"
     pill = js[js.index("function itemPillHtml(id, opts) {"):
               js.index("\n}", js.index("function itemPillHtml(id, opts) {"))]
-    assert "itemTint(itemKind(kind))" in pill, "the colour comes from the diagrams' own table"
-    assert "itemMarkHtml(kind, o.ikind)" in pill, "and so does the mark"
+    assert "itemMarkHtml(kind, o.ikind)" in pill, "the mark is where the kind is said"
+    gly = js[js.index("function itemGlyphSvg(k, ikind) {"):
+             js.index("\n}", js.index("function itemGlyphSvg(k, ikind) {"))]
+    assert "itemTint(k)" in gly, "…and its colour comes from the diagrams' own table"
+
+
+def test_every_pin_an_address_carries_puts_its_target_on_the_screen() -> None:
+    """A shareable link can name a box, and the whole point of sending one is that the person opening it
+    sees the thing you meant. There are TWO places that take such a pin — the Features board and the
+    Interfaces board, which share the `sel` field and split it by key — and only one of them scrolled to
+    what it pinned. The other landed at the top of a board 1270px tall: measured on a 900px window, the
+    pinned box sat at 849px with only its top edge showing, and everything saying it was pinned (its
+    border, its lit wire, the label counting the use cases that reach it) was below the fold.
+
+    Pinned on the SOURCE, not in a browser, because the committed fixture map records no interfaces at
+    all — that board cannot be rendered from it, which is also why nothing caught this."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    # The Features board's own pin, which had it all along.
+    apply_ = js[js.index("  storyPinApply = (p) => {"):]
+    apply_ = apply_[:apply_.index("\n  };")]
+    assert "card.scrollIntoView({ block: 'center' });" in apply_
+    # …and the Interfaces board's, which did not.
+    iface = js[js.index("  if (pendingStoryPin && pendingStoryPin.key === IFACE_PIN_KEY) {"):]
+    iface = iface[:iface.index("\n  }")]
+    assert "box.scrollIntoView({ block: 'center' });" in iface, \
+        "a pinned box the reader cannot see is the address not being honoured"

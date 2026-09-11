@@ -653,15 +653,17 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 /* The feature's mark inside that pill. Small enough to ride a 10px line, and `inline-flex` so the mark
    and the name sit on one baseline instead of the mark pushing the name down by its own height. */
 /* ── ONE PILL NAMING ONE THING ────────────────────────────────────────────────────────────────────
-   A decision area, an entity, a component, a feature, an actor: five looks before this, at three font
-   sizes and four border colours, for one kind of fact. The KIND supplies the colour through the two
-   custom properties the builder sets, from the same table the diagrams paint their boxes with — so the
-   pill for an entity and that entity's own box are visibly one thing. A kind the table has no colour
-   for falls back to the neutral slate, which claims nothing. */
+   A decision area, an entity, a component, a feature, an actor, a door: six looks before this, at three
+   font sizes and four border colours, for one kind of fact. ONE quiet box now, and the kind is said by
+   the MARK it wears — in that kind's own colour, from the same table the diagrams paint their boxes
+   with. The box itself was painted that colour for a while and it was too much: a row of tags each
+   carrying a saturated wash reads as a warning rather than as a list. */
+/* ONE WEIGHT, and it is below a card's title. At 600 it sat a hair under the 650 of the name beside it
+   at nearly the same size, so the tag competed with the thing the reader is choosing between. A tag
+   reads a touch firmer than the sentence under it and no more. */
 .item-pill { display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px;
-             font-weight: 600; padding: 1px 9px; border-radius: 999px; white-space: nowrap;
-             background: var(--pill-fill, #f8fafc); color: var(--pill-line, #334155);
-             border: 1px solid var(--pill-line, #e2e8f0); }
+             font-weight: 500; padding: 1px 9px; border-radius: 999px; white-space: nowrap;
+             background: #fbfbfe; color: #374151; border: 1px solid #dfe2ec; }
 .item-pill .ibox-gly, .item-pill .story-glyph { width: 12px; height: 12px; flex: 0 0 auto; }
 #diagram .item-pill .ibox-gly, #diagram .item-pill .story-glyph,
 #panel .item-pill .ibox-gly, #panel .item-pill .story-glyph { width: 12px; height: 12px; }
@@ -2742,7 +2744,8 @@ svg.ifd-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 #diagram .ifd-glyph { width: 15px; height: 15px; flex: 0 0 auto; display: block; }
 /* THE SMALL MARK, at ONE size wherever a name is tagged with its kind: on a chip, and on the person
    heading the interface box. Two numbers here would drift the moment one of them was tuned. */
-#diagram .ibox-chip .ibox-gly, #diagram .ifd-elabel-dir .ibox-gly { width: 11px; height: 11px; }
+#diagram .ibox-band .item-pill .ibox-gly, #diagram .journey-ifs .item-pill .ibox-gly,
+#diagram .ifd-elabel-dir .ibox-gly { width: 11px; height: 11px; }
 #diagram .ifd-prov .ibox-gly { width: 14px; height: 14px; }
 /* WHO STANDS HERE, inside the box. This was a column of its own with a wire to every surface: 13
    wires and 240px of width to say what these chips say. A chip carries no sentence and cannot be
@@ -3139,13 +3142,25 @@ body.insp-on { cursor: crosshair; }
    stated at the 14px the chip already stood at, and 14 less the 11px mark, halved, is the 1.5px below.
    `max-width` is here for the same reason the alignment is: a chip fits its container wherever it is
    drawn, and a lane setting that for itself is what made this component two components. */
-.ibox-chip { display: inline-flex; align-items: flex-start; gap: 4px; padding: 1px 7px;
-             border-radius: 9px; font-size: 10px; line-height: 14px; border: 1px solid #dfe2ec;
-             background: #fbfbfe; color: #4b5563; max-width: 100%; min-width: 0;
-             text-align: left; }
-.ibox-chip .ibox-gly { width: 11px; height: 11px; margin-top: 1.5px; }
-/* ONE CHIP MAY BE MARKED — the reader's own actor, on that actor's page, where every card is
-   there BECAUSE they stand at it and the other people are context worth keeping. */
+/* INSIDE A BOX the pill runs smaller. It is the same component — same shape, same kind colour, same
+   click — at the size a dense board can carry: a Happy Path station stacks three or four of these under
+   a title, and a collapsed sub-flow wears every door and record inside it. */
+.ibox-band .item-pill, .journey-ifs .item-pill {
+  font-size: 10px; line-height: 12px; padding: 1px 6px;
+  max-width: 100%; min-width: 0; text-align: left;
+  /* THE NAME WRAPS HERE. Outside a box a pill sits on a line of its own and never has to; inside one it
+     is clamped to the box's width, and `nowrap` then ran the text straight out through the border —
+     measured at 161px of name in a 120px tag. `anywhere` is for the name with no space in it, which no
+     amount of width would have saved. */
+  white-space: normal; overflow-wrap: anywhere;
+  /* THE MARK IS CENTRED ON THE WHOLE TAG, one line or two. It used to sit on the first line, which read
+     as a bullet beside a paragraph rather than as one tag's own mark; centred, a two-line tag stays one
+     object. `center` is what the pill outside a box already uses, so the two agree. */
+  align-items: center; }
+.ibox-band .item-pill .ibox-gly, .ibox-band .item-pill .story-glyph,
+.journey-ifs .item-pill .ibox-gly { width: 11px; height: 11px; }
+/* ONE MAY BE MARKED — the reader's own actor, on that actor's page, where every card is there BECAUSE
+   they stand at it and the other people are context worth keeping. */
 .ibox-chip-me { outline: 2px solid #4f46e5; outline-offset: 1px; }
 
 /* ── WHICH BOX AM I ON, AND WHICH ONE DID I CHOOSE ───────────────────────────────────────────────

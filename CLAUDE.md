@@ -129,10 +129,16 @@ the code's names.
   removal is a stated reason on one screen.
   Why the rule exists: on the Features page the actors are a whole column joined
   by wires, so naming them again on the feature card says it twice.
-- **chip** — a small named tag on the dashed box of a shared sub-flow, one per
-  person, door or record inside it. It is what stops collapsing the flow from
-  burying the product's edge and its saved data. Never clickable: the box is
-  what you open. Not a *type pill*, which says what KIND a thing is.
+- **item pill** — a small tag naming one particular thing, anywhere on any
+  screen: a feature, an actor, a record, a component, a door, a decision area.
+  It wears that kind's own mark and colour, and clicking it opens the thing it
+  names. Not a *type pill*, which says what KIND a thing is rather than which
+  one. Replaces **chip**, which was the same tag drawn a second way and never
+  clickable: the two had drifted into looking alike while behaving differently,
+  so a reader could not tell which one they were pointing at.
+  On the dashed box of a shared sub-flow the pills are still what stops
+  collapsing the flow from burying the product's edge and its saved data, and
+  there they are one per person, door or record inside it.
 - **way in** — one address, command or tool an interface is made of. An
   interface groups many; coyodex's own command line is 32 ways in.
 - **named / run / loose** — the three ways a way in can be covered by the use
