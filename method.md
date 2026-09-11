@@ -3205,7 +3205,7 @@ paths. **Then give the reader the URL to open the interactive map in a browser t
 coyodex map server** — that is where the diagram, file browser, and code viewer light up (data + source
 served from git at the map's commit). Rendering just registered this project with the server, so it shows up there as a
 card. Tell the reader: if the server isn't already running, start it once from the coyodex clone —
-`make start` (or `.venv/bin/coyodex serve`) — then open `http://127.0.0.1:8765/p/<repo-folder-name>/`
+`make start` (or `.venv/bin/coyodex serve`) — then open `http://127.0.0.1:8765/coyodex/<repo-folder-name>/`
 (the `<repo-folder-name>` is the mapped repo's folder name), or the landing page
 `http://127.0.0.1:8765/` and click this project. (Paths like `.venv/bin/coyodex` are relative to the
 coyodex clone, like the validator above.)

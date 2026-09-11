@@ -5,7 +5,7 @@ The interactive viewer is served, not baked into a file. For each project this s
 
   * a generic shell (``viewer.html``) + shared frontend assets (``viewer.js`` / ``viewer.css`` from
     ``/static/``) — identical for every map;
-  * the map's own data at ``/p/<project>/api/view`` — the graph + every pre-rendered diagram, flow,
+  * the map's own data at ``/coyodex/<project>/api/view`` — the graph + every pre-rendered diagram, flow,
     and config flag (``gen_viewer.build_view_bundle``), which the frontend fetches and renders;
   * the file browser + code viewer, both read from git AT THE MAP'S COMMIT (``/api/tree`` /
     ``/api/src``) by default, so what you see always matches the map. ONE scoped exception:
@@ -34,7 +34,7 @@ import webbrowser
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from coyodex.impact_git import WORKTREE as IMPACT_WORKTREE
 from coyodex.impact_git import PREINDEX_JSON, compute_impact, load_map_extents
@@ -52,9 +52,21 @@ CHANGE_REPORT = "change-report.md"  # optional change-impact overlay, alongside 
 # `PREINDEX_JSON` is re-exported from impact_git — one home for the filename, since the extents
 # reader there resolves the same file.
 _DEFAULT_PORT = 8765
+# The first segment of every map address: ``/coyodex/<slug>/…``. The tool's own name, so a link
+# pasted anywhere says what produced it — the port cannot, since a real session rarely runs on the
+# default one. THE ONE DEFINITION: the router, the landing page's cards and `coyodex url` all read
+# it from here. The old ``/p/`` prefix answers 404 like any unknown path (a clean break, decided).
+MAP_ROUTE = "coyodex"
+
+
+def map_url(slug: str) -> str:
+    """A project's map address, as a path: ``/coyodex/<slug>/``. No host or port — those belong to
+    whichever server is running, and only it knows them."""
+    return f"/{MAP_ROUTE}/{quote(slug, safe='')}/"
+
 
 # The generic frontend assets (shell + viewer.js/css) live next to this module and are served as-is,
-# shared by every project — the per-project data arrives separately via /p/<slug>/api/view.
+# shared by every project — the per-project data arrives separately via /coyodex/<slug>/api/view.
 _FRONTEND_DIR = Path(__file__).resolve().parent
 _STATIC_FILES = {  # exact-name whitelist (no path traversal possible) -> content type
     "viewer.js": "text/javascript; charset=utf-8",
@@ -248,7 +260,7 @@ def with_dev_reload(html: str) -> str:
 def ensure_fresh(proj: Project) -> None:
     """Drop a project's cached artifacts when its map file changed on disk (mtime_ns mismatch), and
     re-read the header fields (commit/title/goal — an Accept bumps the pin, and ``tree`` reads git AT
-    that pin). Called on every /p/<slug>/ request, so a map edited while the server runs is picked up
+    that pin). Called on every /coyodex/<slug>/ request, so a map edited while the server runs is picked up
     on the next refresh. Failure modes stay serve-friendly: an unstat-able file keeps the cached copy;
     a map that no longer loads (e.g. caught mid-write) keeps the cached copy AND leaves ``map_mtime``
     stale, so the very next request retries the reload."""
@@ -499,7 +511,7 @@ def project_view(proj: Project) -> ViewBundle:
     and config flag the generic frontend needs (see gen_viewer.build_view_bundle). Computed from the
     committed model, source-links anchored on the map's `.coyodex/` folder, with the optional
     `change-report.md` overlay applied when present. Cached on the Project after the first request.
-    The frontend fetches this at boot from /p/<slug>/api/view and renders it."""
+    The frontend fetches this at boot from /coyodex/<slug>/api/view and renders it."""
     if proj.view is not None:
         return proj.view
     # The pre-index symbol table, so a rule enforced inside the function a flow step names shows as
@@ -523,7 +535,7 @@ def project_symbols(proj: Project) -> list[dict[str, object]]:
     flat list of ``{name, file, line, kind}`` — one entry per definition site. The pre-index is generated
     at the map's commit, so its file:line anchors match what the code viewer serves from git. Missing or
     unreadable pre-index -> an empty list (the viewer then just has no code-symbol results). Cached on the
-    Project after the first request; the frontend fetches it lazily from /p/<slug>/api/symbols."""
+    Project after the first request; the frontend fetches it lazily from /coyodex/<slug>/api/symbols."""
     if proj.symbols is not None:
         return proj.symbols
     out: list[dict[str, object]] = []
@@ -610,6 +622,8 @@ def _recents_payload(store: RecentsStore, projects: dict[str, Project]) -> list[
             "title": proj.title if proj else Path(folder).name,
             "goal": proj.goal if proj else "",
             "slug": slug,
+            # The map's own address, composed HERE so the landing page never spells the prefix itself.
+            "url": map_url(slug) if slug else "",
             "ok": proj is not None,
             "commit": proj.commit if proj else "",
             "rendered": proj is not None,   # a valid map is openable; the viewer is served, not baked
@@ -642,7 +656,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._root_api(parts[1:], query)
         if parts[0] == "static" and len(parts) == 2:  # shared generic frontend (viewer.js/css)
             return self._static(parts[1])
-        if parts[0] == "p" and len(parts) >= 2:  # /p/<slug>/...  -> a project's map + its API
+        if parts[0] == MAP_ROUTE and len(parts) >= 2:  # /coyodex/<slug>/...  -> a project's map + its API
             proj = self.projects.get(parts[1])
             if proj is None:
                 return self._send(404, "text/plain; charset=utf-8", b"unknown project")
@@ -1067,7 +1081,7 @@ async function loadRecents(){
     c.innerHTML='<span class="grip" title="Drag to reorder">⠿</span><span class="title'+(it.ok&&it.rendered?'':' dead')+'">'+esc(it.title)+'</span>'+goal
       +'<div class="cmeta">'+meta+'</div><button class="x" title="Remove from list">✕</button>';
     if(!it.ok)c.classList.add('disabled');                                                                 // .coyodex present but no valid map -> dimmed, not clickable
-    if(it.ok&&it.rendered){c.classList.add('clickable');c.onclick=()=>{if(dragging){dragging=false;return;}location.href='/p/'+encodeURIComponent(it.slug)+'/';};}  // whole card opens the map (unless we just dragged)
+    if(it.ok&&it.rendered){c.classList.add('clickable');c.onclick=()=>{if(dragging){dragging=false;return;}location.href=it.url;};}  // whole card opens the map (unless we just dragged)
     // Drag to reorder. mousedown resets the flag so a plain click still opens; a drag sets it so the
     // click that may follow the drop is swallowed. Order is persisted on drop.
     c.addEventListener('mousedown',()=>{dragging=false;});

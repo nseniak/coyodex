@@ -2848,7 +2848,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell",
+      "trigger": "a reader opens a project's map URL `/coyodex/<project>/` and the server returns the generic viewer shell",
       "source": "tools/coyodex/viewer/serve.py:605",
       "component": "C24",
       "activation": "external",
@@ -2859,7 +2859,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes",
+      "trigger": "the browser app probes `GET /coyodex/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes",
       "source": "tools/coyodex/viewer/serve.py:609",
       "component": "C24",
       "activation": "external",
@@ -2870,7 +2870,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the browser requests a project's whole view bundle — the graph plus every pre-rendered diagram — at `GET /p/<project>/api/view`",
+      "trigger": "the browser requests a project's whole view bundle — the graph plus every pre-rendered diagram — at `GET /coyodex/<project>/api/view`",
       "source": "tools/coyodex/viewer/serve.py:611",
       "component": "C24",
       "activation": "external",
@@ -2881,7 +2881,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the file browser requests `GET /p/<project>/api/tree` for the repo's file tree at the map's commit, overlaid with map coverage",
+      "trigger": "the file browser requests `GET /coyodex/<project>/api/tree` for the repo's file tree at the map's commit, overlaid with map coverage",
       "source": "tools/coyodex/viewer/serve.py:620",
       "component": "C24",
       "activation": "external",
@@ -2892,7 +2892,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the search box lazily requests `GET /p/<project>/api/symbols` for the code symbols taken from the pre-index",
+      "trigger": "the search box lazily requests `GET /coyodex/<project>/api/symbols` for the code symbols taken from the pre-index",
       "source": "tools/coyodex/viewer/serve.py:625",
       "component": "C24",
       "activation": "external",
@@ -2903,7 +2903,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the code viewer requests one file's text at `GET /p/<project>/api/src?path=&at=` — from git at the map's commit by default, or from the working tree",
+      "trigger": "the code viewer requests one file's text at `GET /coyodex/<project>/api/src?path=&at=` — from git at the map's commit by default, or from the working tree",
       "source": "tools/coyodex/viewer/serve.py:629",
       "component": "C24",
       "activation": "external",
@@ -2914,7 +2914,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the impact explorer requests `GET /p/<project>/api/impact?base=&target=&…` to project a code diff onto the map",
+      "trigger": "the impact explorer requests `GET /coyodex/<project>/api/impact?base=&target=&…` to project a code diff onto the map",
       "source": "tools/coyodex/viewer/serve.py:655",
       "component": "C24",
       "activation": "external",
@@ -2925,7 +2925,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the impact picker requests `GET /p/<project>/api/impactcommits` for the commits around the map's pin",
+      "trigger": "the impact picker requests `GET /coyodex/<project>/api/impactcommits` for the commits around the map's pin",
       "source": "tools/coyodex/viewer/serve.py:666",
       "component": "C24",
       "activation": "external",
@@ -2936,7 +2936,7 @@
     {
       "id": "",
       "kind": "http-route",
-      "trigger": "the impact code view requests `GET /p/<project>/api/impactsrcdiff?path=&base=&target=` for one file's inline diff across any two refs",
+      "trigger": "the impact code view requests `GET /coyodex/<project>/api/impactsrcdiff?path=&base=&target=` for one file's inline diff across any two refs",
       "source": "tools/coyodex/viewer/serve.py:669",
       "component": "C24",
       "activation": "external",
@@ -3002,7 +3002,7 @@
     {
       "id": "",
       "kind": "middleware",
-      "trigger": "every request under `/p/<project>/` first re-checks the map file's timestamp and drops the cached diagrams when the map changed on disk",
+      "trigger": "every request under `/coyodex/<project>/` first re-checks the map file's timestamp and drops the cached diagrams when the map changed on disk",
       "source": "tools/coyodex/viewer/serve.py:527",
       "component": "C24",
       "activation": "external",
@@ -10897,14 +10897,14 @@
     {
       "unit": "Map server",
       "runs_on": "The same developer machine, as a long-lived foreground process (`coyodex serve`, usually via `make start`), stdlib http.server with a thread per request.",
-      "exposed_as": "HTTP on 127.0.0.1 at the chosen port: a landing page, a shared frontend asset route, and a per-project API (view, tree, symbols, src, impact) under /p/<slug>/.",
+      "exposed_as": "HTTP on 127.0.0.1 at the chosen port: a landing page, a shared frontend asset route, and a per-project API (view, tree, symbols, src, impact) under /coyodex/<slug>/.",
       "config_source": "The `--port` and `--open` flags plus any folders passed on the command line; the served project set comes from `~/.coyodex/serve-recents.json`, re-read on every recents request so a freshly built map appears without a restart.",
       "variants": []
     },
     {
       "unit": "Browser viewer page",
       "runs_on": "The user's web browser, loading the shared frontend from the local server and two libraries from public CDNs.",
-      "exposed_as": "http://127.0.0.1:<port>/ for the landing page and /p/<slug>/ for a map; opened automatically when the server is started with --open.",
+      "exposed_as": "http://127.0.0.1:<port>/ for the landing page and /coyodex/<slug>/ for a map; opened automatically when the server is started with --open.",
       "config_source": "The per-map view bundle fetched from the server at boot, overlaid with the user's own settings from browser localStorage (editor target, source root, GitHub URL, panel sizes).",
       "variants": []
     },
@@ -12016,7 +12016,7 @@
     },
     {
       "heading": "Entry-point coverage",
-      "body": "Attribution convention: every row is anchored on the line that REGISTERS or DISPATCHES the entry point, and belongs to the component that owns that line. So each `coyodex <cmd>` row sits on its `if cmd == …` line in the CLI dispatcher (C30), not on the implementing module's `main`; the only exceptions are the second-level `coyodex fix <verb>` rows (the verb table lives in the fix module, C8) and the two module-only commands that no dispatcher exposes.\n\n- cli: complete — read the CLI dispatcher's dispatch chain top to bottom (12 `coyodex` subcommands), the fix module's verb table (3 verbs), the eval dispatcher's chain (8 `coyodex-eval` subcommands), `[project.scripts]` in `pyproject.toml` (2 console commands), the backup script's argparse subparsers (2), and then a repo-wide grep for `__main__` blocks to catch modules with a runnable `main` that the dispatchers do NOT expose — exactly two: the schema printer and the view-bundle debug dump. Not counted as rows: the global `--version` / `--help` flags, and the `Makefile` targets (`make dev` / `install` / `start`), which are build wrappers around these same commands and have no owning component.\n- agent-skill: complete — a project-specific kind for the two agent-invoked skill manifests (`/coyodex`, `/coyodex-eval`); a coding agent, not a human shell, is the caller. Found by listing every `SKILL.md` in the repo (there are exactly two). The eval manifest is filed under the eval runner (C45) because no canonical component lists `eval/SKILL.md`.\n- http-route: complete — walked the request handler's path dispatch in the map server end to end: the GET router (root → landing page; `/api/*` → recents + folder browser; `/static/<name>` → whitelisted assets; `/p/<slug>/…` → the shell and the per-project API branch, whose 8 endpoints are matched one by one), plus the POST router's 3-name whitelist. 16 routes. Any other verb falls through to the base handler's 501.\n- middleware: complete — the three per-request hooks that run before any route body: the loopback-Host guard on GET, the CSRF-header guard on POST, and the map-staleness refresh on every project request.\n- ui-route: sampled — the browser app is a 6900-line single file and was not read in full. Enumerated by grepping it for navigation and listener registrations (`location.`, `history.`, `addEventListener`, `data-view`) plus the button set in `viewer.html`. The app has NO hash routes and NO query-parameter deep links: one URL per project, and all navigation is in-page. The 6 rows cover the landing-page card click, the 10-way view tab bar (one row on the loop that binds every tab), search, the impact explorer, the file/code pane switch, and the title link home. Not recorded: the in-diagram drill gestures, breadcrumbs, back/forward history, the settings and help modals, and the keyboard shortcuts — all reached from inside an already-open view.\n- startup-hook: complete — Pass-2 sweep for self-activation across the whole repo: grepped Python for `threading`, `Thread(`, `atexit`, `signal.`, `webbrowser`, `while True`, `cron`/`schedul`, and the browser app for `setInterval`, `setTimeout`, `EventSource`, and the observer APIs. Findings, asserted either way: the map server is the only long-running service, and it self-starts exactly three things — the accept loop (continuous), the thread-per-connection worker spawned by the threading HTTP server (folded into the accept-loop row; its trigger is an inbound request, not a schedule), and the optional `--open` browser launch. The browser app self-runs two boot steps (the view-bundle fetch that gates the whole module, and the one-shot server probe) and the landing page one. There are NO timers, NO polling loops, NO file watchers, NO signal handlers and NO `atexit` hooks anywhere in the repo: the only `signal`-shaped code is the audit vocabulary's word list, the server stops on a caught `KeyboardInterrupt` rather than an installed handler, freshness is checked per request rather than on a timer, the two `while True` loops outside the server are tree walks, and every `setTimeout` in the browser app is a UI animation or flash. `threading` is used only for a lock guarding the recents state.\n- Kinds with nothing to record: `webhook`, `mcp-tool`, `job`, `poller`, `event-consumer`, `signal-handler` — no instance of any of them exists in this repo.\n- Deliberately out of scope: `internal/` is git-ignored, so its scripts are not part of the committed repo the map is pinned to; the archive helper that lives there is therefore not recorded as an entry point."
+      "body": "Attribution convention: every row is anchored on the line that REGISTERS or DISPATCHES the entry point, and belongs to the component that owns that line. So each `coyodex <cmd>` row sits on its `if cmd == …` line in the CLI dispatcher (C30), not on the implementing module's `main`; the only exceptions are the second-level `coyodex fix <verb>` rows (the verb table lives in the fix module, C8) and the two module-only commands that no dispatcher exposes.\n\n- cli: complete — read the CLI dispatcher's dispatch chain top to bottom (12 `coyodex` subcommands), the fix module's verb table (3 verbs), the eval dispatcher's chain (8 `coyodex-eval` subcommands), `[project.scripts]` in `pyproject.toml` (2 console commands), the backup script's argparse subparsers (2), and then a repo-wide grep for `__main__` blocks to catch modules with a runnable `main` that the dispatchers do NOT expose — exactly two: the schema printer and the view-bundle debug dump. Not counted as rows: the global `--version` / `--help` flags, and the `Makefile` targets (`make dev` / `install` / `start`), which are build wrappers around these same commands and have no owning component.\n- agent-skill: complete — a project-specific kind for the two agent-invoked skill manifests (`/coyodex`, `/coyodex-eval`); a coding agent, not a human shell, is the caller. Found by listing every `SKILL.md` in the repo (there are exactly two). The eval manifest is filed under the eval runner (C45) because no canonical component lists `eval/SKILL.md`.\n- http-route: complete — walked the request handler's path dispatch in the map server end to end: the GET router (root → landing page; `/api/*` → recents + folder browser; `/static/<name>` → whitelisted assets; `/coyodex/<slug>/…` → the shell and the per-project API branch, whose 8 endpoints are matched one by one), plus the POST router's 3-name whitelist. 16 routes. Any other verb falls through to the base handler's 501.\n- middleware: complete — the three per-request hooks that run before any route body: the loopback-Host guard on GET, the CSRF-header guard on POST, and the map-staleness refresh on every project request.\n- ui-route: sampled — the browser app is a 6900-line single file and was not read in full. Enumerated by grepping it for navigation and listener registrations (`location.`, `history.`, `addEventListener`, `data-view`) plus the button set in `viewer.html`. The app has NO hash routes and NO query-parameter deep links: one URL per project, and all navigation is in-page. The 6 rows cover the landing-page card click, the 10-way view tab bar (one row on the loop that binds every tab), search, the impact explorer, the file/code pane switch, and the title link home. Not recorded: the in-diagram drill gestures, breadcrumbs, back/forward history, the settings and help modals, and the keyboard shortcuts — all reached from inside an already-open view.\n- startup-hook: complete — Pass-2 sweep for self-activation across the whole repo: grepped Python for `threading`, `Thread(`, `atexit`, `signal.`, `webbrowser`, `while True`, `cron`/`schedul`, and the browser app for `setInterval`, `setTimeout`, `EventSource`, and the observer APIs. Findings, asserted either way: the map server is the only long-running service, and it self-starts exactly three things — the accept loop (continuous), the thread-per-connection worker spawned by the threading HTTP server (folded into the accept-loop row; its trigger is an inbound request, not a schedule), and the optional `--open` browser launch. The browser app self-runs two boot steps (the view-bundle fetch that gates the whole module, and the one-shot server probe) and the landing page one. There are NO timers, NO polling loops, NO file watchers, NO signal handlers and NO `atexit` hooks anywhere in the repo: the only `signal`-shaped code is the audit vocabulary's word list, the server stops on a caught `KeyboardInterrupt` rather than an installed handler, freshness is checked per request rather than on a timer, the two `while True` loops outside the server are tree walks, and every `setTimeout` in the browser app is a UI animation or flash. `threading` is used only for a lock guarding the recents state.\n- Kinds with nothing to record: `webhook`, `mcp-tool`, `job`, `poller`, `event-consumer`, `signal-handler` — no instance of any of them exists in this repo.\n- Deliberately out of scope: `internal/` is git-ignored, so its scripts are not part of the committed repo the map is pinned to; the archive helper that lives there is therefore not recorded as an entry point."
     },
     {
       "heading": "Viewer UI surfaces",

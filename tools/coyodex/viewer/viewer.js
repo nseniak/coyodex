@@ -2,7 +2,7 @@
 
 // Generic frontend: this file ships identical for every map. All per-project data — the graph plus every
 // pre-rendered diagram source, use-case flow, colour table, and source-link config — is fetched at boot
-// from the coyodex server (/p/<slug>/api/view) and assigned into the module vars below by applyBundle().
+// from the coyodex server (/coyodex/<slug>/api/view) and assigned into the module vars below by applyBundle().
 // These were `const … = __PLACEHOLDER__` back when the data was baked into a standalone HTML file; that
 // portable file:// mode was retired when the data moved server-side, so there is nothing to open offline.
 let GRAPH;
@@ -95,7 +95,7 @@ let REPO_ROOT_DEFAULT;  // absolute repo root for 'open in editor' links (overri
 let GH_REPO_DEFAULT;    // GitHub repo URL (overridable in Settings) or null
 let GH_COMMIT;          // the map's commit SHA — blob links are pinned to it
 const FILE_TREE = null;  // the file tree is fetched live (api/tree), never embedded — kept for the shared build path
-// The map's own API base ('…/p/<slug>/api/'). null only under file://, which has no server to talk to.
+// The map's own API base ('…/coyodex/<slug>/api/'). null only under file://, which has no server to talk to.
 const API_BASE = /^https?:$/.test(location.protocol) ? new URL('./api/', location.href).href : null;
 
 // Assign one /api/view bundle into the module vars above. Field names are the bundle's (camelCase);
@@ -4868,7 +4868,7 @@ function stateKey(s) {
 // --- the URL says which screen you are on ---------------------------------------
 // The part of the URL after `#` carries the screen: its kind, every field `stateKey` distinguishes
 // screens by, and the selection. The FRAGMENT is used rather than a path because a fragment never
-// reaches the server — serve.py's /p/<slug>/ routes are untouched by any of this. STATE_FIELDS is read
+// reaches the server — serve.py's /coyodex/<slug>/ routes are untouched by any of this. STATE_FIELDS is read
 // here too, so a field added there rides along with no second list to keep in step.
 //
 // Only over http(s). A map opened as a plain file gets no URL sync at all, because pushState on a
@@ -14100,7 +14100,7 @@ function buildFileTree() {
 // The map is always served by `coyodex serve` (the view data is fetched from it at boot), so the file
 // browser and code viewer are always available: they read files from the server, which serves them
 // from git at the map's commit. A /api/health probe confirms the API is reachable before we reveal the
-// panes. API_BASE is the map's own directory + "api/" (the page is served at /p/<slug>/); it is declared
+// panes. API_BASE is the map's own directory + "api/" (the page is served at /coyodex/<slug>/); it is declared
 // at the top of the module.
 let SERVED = false;
 // API_BASE is declared at the top of the module (the view bundle is fetched from it at boot).

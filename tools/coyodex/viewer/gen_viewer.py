@@ -4,7 +4,7 @@
 Reads a graph.json (from build_graph.py) and (optionally) a change-impact report and produces a
 `ViewBundle` (via `build_view_bundle`): the graph, every altitude's Mermaid source, the use-case
 flows, colours, and source-link config. `coyodex serve` calls this per request and serves the bundle
-as JSON at /p/<slug>/api/view; the generic frontend (viewer.html + viewer.js/css, served from the
+as JSON at /coyodex/<slug>/api/view; the generic frontend (viewer.html + viewer.js/css, served from the
 same folder) fetches it and renders. Mermaid + svg-pan-zoom load from a pinned CDN with SRI.
 The viewer offers these altitudes — Context (C4; external SYSTEMS drawn by name, while in-process
 framework/library deps fold into one ⌘-clickable "Libraries" box that drills to the full list) →
@@ -3262,7 +3262,7 @@ def gen_channel_mermaids(graph: GraphDict) -> dict[str, str]:
 class ViewBundle(TypedDict):
     """All the per-project view data the frontend needs — the graph plus every pre-rendered diagram
     source, edge-crossing list, flow, colour table, and config flag. Built from the model by
-    `build_view_bundle` and served as JSON by `coyodex serve` at /p/<slug>/api/view; the frontend
+    `build_view_bundle` and served as JSON by `coyodex serve` at /coyodex/<slug>/api/view; the frontend
     fetches it and renders.
 
     Keys are the viewer's own vocabulary (camelCase); the frontend maps them onto its runtime state
@@ -3337,7 +3337,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path,
                       model: ProjectModel | None = None,
                       extents: Extents | None = None) -> ViewBundle:
     """Compute every derived view artifact for one map — the pure-data core that `coyodex serve`
-    exposes at /p/<slug>/api/view for the frontend to fetch and render.
+    exposes at /coyodex/<slug>/api/view for the frontend to fetch and render.
 
     `model` and `extents` feed the feature-led derivation, which needs the model itself rather
     than the graph projected from it. A caller holding both passes them (the server does);

@@ -4894,7 +4894,7 @@ def test_a_refused_push_keeps_the_url_and_the_screen_agreeing() -> None:
     assert "try { window.history.replaceState(stamp, '', h); } catch (_e) { return; }" in push
     assert push.index("catch (_)") < push.index("urlStarted = true;")
     """The screen rides in the part of the URL after `#`, which a browser never sends to the server. So
-    serve.py keeps its `/p/<slug>/` routes and needs no change to make a link shareable."""
+    serve.py keeps its `/coyodex/<slug>/` routes and needs no change to make a link shareable."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "'#' + urlFromState(history[hi], false)" in js
     assert "'#' + urlFromState(history[hi], true)" in js

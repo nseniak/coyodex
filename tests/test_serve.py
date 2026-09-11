@@ -403,11 +403,14 @@ def test_http_static_and_view_routes() -> None:
             assert code == 200 and "text/css" in ctype
             assert _http_get(port, "/static/nope.js")[0] == 404       # off-whitelist name rejected
             assert _http_get(port, "/static/../serve.py")[0] == 404   # not a 2-segment /static/<name>
-            code, ctype, body = _http_get(port, f"/p/{slug}/api/view")
+            code, ctype, body = _http_get(port, f"/coyodex/{slug}/api/view")
             assert code == 200 and "application/json" in ctype
             data = json.loads(body)
             assert data["graph"]["nodes"] and data["mermaidContext"] and data["hasDiff"] is False
-            assert _http_get(port, "/p/ghost/api/view")[0] == 404     # unknown project
+            assert _http_get(port, "/coyodex/ghost/api/view")[0] == 404     # unknown project
+            # A CLEAN BREAK, decided: the old prefix is not redirected, it is an unknown path.
+            assert _http_get(port, f"/p/{slug}/")[0] == 404
+            assert _http_get(port, f"/p/{slug}/api/view")[0] == 404
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -427,10 +430,10 @@ def test_live_reload_is_off_unless_dev_is_asked_for() -> None:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
             port = httpd.server_address[1]
-            code, ctype, body = _http_get(port, f"/p/{slug}/")
+            code, ctype, body = _http_get(port, f"/coyodex/{slug}/")
             assert code == 200 and "text/html" in ctype
             assert b"api/dev-reload" not in body
-            assert _http_get(port, f"/p/{slug}/api/dev-reload")[0] == 404
+            assert _http_get(port, f"/coyodex/{slug}/api/dev-reload")[0] == 404
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -451,14 +454,14 @@ def test_dev_serves_the_shell_with_live_reload_and_a_stamp() -> None:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
             port = httpd.server_address[1]
-            code, ctype, body = _http_get(port, f"/p/{slug}/")
+            code, ctype, body = _http_get(port, f"/coyodex/{slug}/")
             assert code == 200 and "text/html" in ctype
             assert b"api/dev-reload" in body and b"location.reload()" in body
             assert body.index(b"api/dev-reload") > body.index(b"<body")  # inside the document
             # A stale process is about to be killed; reloading from it loads assets from a port
             # that dies mid-request and leaves a blank page nothing will fix.
             assert b"!d.stale" in body, "the page never reloads from a process owed a restart"
-            code, ctype, body = _http_get(port, f"/p/{slug}/api/dev-reload")
+            code, ctype, body = _http_get(port, f"/coyodex/{slug}/api/dev-reload")
             assert code == 200 and "application/json" in ctype
             answer = json.loads(body)
             stamp = answer["stamp"]

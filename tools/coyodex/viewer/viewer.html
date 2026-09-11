@@ -8,7 +8,7 @@
      stops the browser's default /favicon.ico request 404ing. -->
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
 <!-- The generic frontend: shipped once by `coyodex serve`, shared by every project. Its CSS + JS are
-     served from /static/; the per-project data arrives at runtime from /p/<slug>/api/view. -->
+     served from /static/; the per-project data arrives at runtime from /coyodex/<slug>/api/view. -->
 <link rel="stylesheet" href="/static/viewer.css">
 <!-- CDN libs pinned to exact versions + Subresource-Integrity (browser rejects a tampered file).
      Mermaid uses its self-contained UMD bundle (exposes window.mermaid) so SRI covers the whole

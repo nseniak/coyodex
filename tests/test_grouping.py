@@ -3983,8 +3983,11 @@ def test_bundle_meta_carries_built_and_pin_and_tests() -> None:
     # The pin reads `commit <sha> <when>` — no "from" between them. `when` is the commit's real
     # date+time when git can resolve the sha, else the stored date (this fake sha resolves nowhere).
     assert "<code>abc1234</code> 2026-01-01" in b["meta"]
-    # The `format` literal is the same on every map, so it is not in the header.
-    assert "coyodex-map" not in b["meta"]
+    # The `format` literal is the same on every map, so it is not in the header. The header DOES
+    # name the repo folder, and a worktree named `coyodex-map-…` carries the literal by accident:
+    # checked with that name blanked, so the assertion is about the format field and nothing else.
+    repo_name = Path(VIEWER_DIR).resolve().parents[2].name
+    assert "coyodex-map" not in b["meta"].replace(repo_name, "")
     assert b["graph"]["tests"][0]["targets"][0] == {"id": "UC1", "name": "Login", "node": "UC1"}
 
 

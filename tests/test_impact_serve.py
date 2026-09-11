@@ -93,15 +93,15 @@ def test_src_at_worktree_and_sha_frames() -> None:
         (root / "svc/guild.py").write_text("worktree-version\n", encoding="utf-8")
         httpd, slug, port = make_server(root)
         try:
-            st, body = get(port, f"/p/{slug}/api/src?path=svc/guild.py")
+            st, body = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py")
             assert st == 200 and b"return 1" in body                        # default: the pin
-            st, body = get(port, f"/p/{slug}/api/src?path=svc/guild.py&at={v2}")
+            st, body = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py&at={v2}")
             assert st == 200 and b"return 2" in body                        # another commit
-            st, body = get(port, f"/p/{slug}/api/src?path=svc/guild.py&at=WORKTREE")
+            st, body = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py&at=WORKTREE")
             assert st == 200 and body == b"worktree-version\n"              # the dirty tree
-            st, _ = get(port, f"/p/{slug}/api/src?path=.env&at=WORKTREE")
+            st, _ = get(port, f"/coyodex/{slug}/api/src?path=.env&at=WORKTREE")
             assert st == 404                                                # guard holds over HTTP
-            st, _ = get(port, f"/p/{slug}/api/src?path=svc/guild.py&at=--flag")
+            st, _ = get(port, f"/coyodex/{slug}/api/src?path=svc/guild.py&at=--flag")
             assert st == 400                                                # never reaches git argv
         finally:
             httpd.shutdown()
@@ -149,9 +149,9 @@ def test_impact_file_diff_arbitrary_range() -> None:
         assert any("return 10" in t for t in texts) and any("return 20" in t for t in texts)
         httpd, slug, port = make_server(root)
         try:
-            st, body = get(port, f"/p/{slug}/api/impactsrcdiff?path=svc/guild.py&base={b1}&target={b2}")
+            st, body = get(port, f"/coyodex/{slug}/api/impactsrcdiff?path=svc/guild.py&base={b1}&target={b2}")
             assert st == 200 and json.loads(body)["path"] == "svc/guild.py"
-            st, _ = get(port, f"/p/{slug}/api/impactsrcdiff?path=../x&base={b1}&target={b2}")
+            st, _ = get(port, f"/coyodex/{slug}/api/impactsrcdiff?path=../x&base={b1}&target={b2}")
             assert st == 400
         finally:
             httpd.shutdown()

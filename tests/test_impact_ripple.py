@@ -261,7 +261,7 @@ def test_api_impact_endpoint_end_to_end() -> None:
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
             conn = http.client.HTTPConnection("127.0.0.1", httpd.server_address[1], timeout=10)
-            conn.request("GET", f"/p/{slug}/api/impact?target=WORKTREE")
+            conn.request("GET", f"/coyodex/{slug}/api/impact?target=WORKTREE")
             resp = conn.getresponse()
             assert resp.status == 200
             payload = json.loads(resp.read())
@@ -271,7 +271,7 @@ def test_api_impact_endpoint_end_to_end() -> None:
             assert "step:UC1:2" in payload["byType"]["flow_steps"]
             assert payload["spec"]["target"] == "WORKTREE"
             # bad ref → 400, not a 500/crash
-            conn.request("GET", f"/p/{slug}/api/impact?base=--upload-pack=x")
+            conn.request("GET", f"/coyodex/{slug}/api/impact?base=--upload-pack=x")
             assert conn.getresponse().status == 400
         finally:
             httpd.shutdown()

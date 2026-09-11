@@ -60,7 +60,7 @@ def _served_map(mutate: Any) -> Iterator[str]:
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
-            yield f"http://127.0.0.1:{httpd.server_address[1]}/p/{slug}/"
+            yield f"http://127.0.0.1:{httpd.server_address[1]}/coyodex/{slug}/"
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -78,7 +78,7 @@ def _served() -> Iterator[str]:
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         try:
-            yield f"http://127.0.0.1:{httpd.server_address[1]}/p/{slug}/"
+            yield f"http://127.0.0.1:{httpd.server_address[1]}/coyodex/{slug}/"
         finally:
             httpd.shutdown()
             httpd.server_close()

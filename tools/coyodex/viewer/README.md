@@ -15,7 +15,7 @@ frontend fetches that data and renders it.
 GraphDict
    │  gen_viewer.build_view_bundle   graph → the view bundle (every diagram source, flow, config)
    ▼
-GET /p/<slug>/api/view           served as JSON by `coyodex serve`
+GET /coyodex/<slug>/api/view     served as JSON by `coyodex serve`
    │  viewer.js (fetched by the generic shell viewer.html, from /static/)
    ▼
 the rendered map                 render · pan/zoom · click→panel · diff overlay
@@ -49,7 +49,7 @@ make dev-start                   # serves this repo's own map, with live reload
 
 An edit reaches the screen with nothing pressed. Two halves, and both are needed:
 
-- **`--dev` gives the map page a live reload.** It polls `/p/<slug>/api/dev-reload` once a second
+- **`--dev` gives the map page a live reload.** It polls `/coyodex/<slug>/api/dev-reload` once a second
   for a stamp (the newest mtime across `viewer.html` / `viewer.js` / `viewer.css` **and** this
   tool's Python) and reloads when it moves. `viewer.js` / `viewer.css` / `viewer.html` are read from
   disk per request and sent `no-store`, so an edit to any of them is live at once. Off without the
@@ -70,7 +70,7 @@ and lands on a dead port: a blank page, and nothing left polling to fix it.
 `PORT` works the same as for `make start`: `make dev-start PORT=8792`.
 
 For each map the server provides: the generic shell + `/static/` assets; the map's data at
-`/p/<slug>/api/view`; and a live file browser + syntax-highlighted code viewer, both reading files
+`/coyodex/<slug>/api/view`; and a live file browser + syntax-highlighted code viewer, both reading files
 from git **at the map's commit** (`git ls-tree` / `git show`), so what you see always matches the map
 and edits on disk never leak in.
 
