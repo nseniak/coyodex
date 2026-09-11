@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator
 
+from coyodex import records
 from coyodex.model import ProjectModel
 from coyodex.reporting import clip, shown
 
@@ -236,7 +237,9 @@ def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tup
 
     Reader-facing means: a person reads this sentence in the viewer. Titles, ids, anchors, code
     links and closed-vocabulary cells are excluded — they are labels or machine values, and a word
-    limit on a label is meaningless."""
+    limit on a label is meaningless. So is the key of a recorded line: a section under a registered
+    extras heading is walked one line at a time and only the line's why (`records.why_of`), because
+    a `path:line` key is a file path by design and a template's `complete —` is not an em dash."""
     for component in model.components:
         yield f"{component.id} purpose", component.purpose
     for group in (*model.capabilities, *model.subsystems, *model.subdomains, *model.blocks):
@@ -254,6 +257,15 @@ def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tup
         yield f"{step.id} why", step.why or ""
     for row in model.glossary:
         yield f"glossary '{row.term}'", row.meaning
+    # Two more on the narrow surface since 2026-09-11, when a sweep of the schema against this walk
+    # found seven string fields it never yielded. A stake is the label on an actor→feature arrow of
+    # the Features page — the most-seen product sentence there is, and at most fifteen per live
+    # map; the tests note is one field, the honesty line that leads the Tests tab. Together they
+    # moved no live map's batch count (10, 9 and 13 batches at a cap of 40, before and after).
+    for cap in model.capabilities:
+        for stake in cap.stakes:
+            yield f"{cap.id} stake for {stake.actor}", stake.stake
+    yield "tests note", model.tests_note
     if not wide:
         # The BATCH surface stays narrow. Both consumers read this one function, and they do not
         # cost the same: the deterministic long-sentence gate is free, while every batch is
@@ -286,6 +298,34 @@ def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tup
             yield f"{sf.id} step {step.n} note", step.note
     for iface in model.interfaces:
         yield f"{iface.id} what", iface.what
+    # THREE MORE FROM THE 2026-09-11 SCHEMA SWEEP, each drawn by the viewer as text a reader meets:
+    # a test row's gap is the "Gap / risk" column of the Tests tab, a store note is the sentence
+    # beside a record's storage on the Storage tab and in its info pane, and an extras section is a
+    # card on the System tab — the notes about the code first, the map's own build record folded
+    # below them. Wide only: the three live maps hold up to 54 gaps, 53 store notes and 57 recorded
+    # lines each, which is a batch or two of fan-out apiece for drill-down text. Running the
+    # counters over the five new fields found 65 long sentences the gate had never seen, 44 of them
+    # in the extras. Two string fields the sweep turned up are NOT here because the viewer never
+    # draws them: a dependency's `alternative` reaches only the committed markdown table, and its
+    # `not_an_interface` is read by `validate` alone.
+    #
+    # A section under a heading the registry knows is walked ONE RECORDED LINE AT A TIME, and only
+    # the line's why: the record grammar owns the split, so a `path:line` key is never counted as a
+    # code name and a template's own `complete —` never as an em dash — scanning whole bodies did
+    # both on every live map. A section under an unknown heading is freeform notes and is walked
+    # whole, so a paragraph wrapped over several lines is read as sentences, not as fragments.
+    for row in model.tests:
+        yield f"tests row {shown(row.targets, 3)} gap", row.gap
+    for entity in model.entities:
+        if entity.store is not None:
+            yield f"{entity.id} store notes", entity.store.notes
+    for section in model.extras:
+        if records.spec_of(section.heading) is None:
+            yield f"note '{section.heading}'", section.body
+            continue
+        kind = "record" if records.is_maintenance(section.heading) else "note"
+        for n, line in enumerate(records.body_lines(section.body), 1):
+            yield f"{kind} '{section.heading}' line {n}", records.why_of(section.heading, line)
 
 
 # ── the half a counter cannot judge ───────────────────────────────────────────────────────────────

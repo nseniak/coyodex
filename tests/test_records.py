@@ -287,3 +287,36 @@ def test_every_heading_an_advisory_names_is_one_the_tools_read():
                 unknown.append(f"{path.name}:{text[: hit.start()].count(chr(10)) + 1} names "
                                f"{name or hit.group('const')!r}")
     assert not unknown, unknown
+
+
+# --- the prose of a line ----------------------------------------------------------------------
+# `why_of` serves the readability walk, which must count the writing and never the grammar.
+
+def test_the_why_of_an_id_record_follows_its_keys_and_separator():
+    assert records.why_of("Unclaimed surfaces", "- **C1**, C2 — an operator's own tool") == "an operator's own tool"
+    assert records.why_of("Audit exceptions", "read-never-created HP4: nothing stores them") == "nothing stores them"
+
+
+def test_a_free_text_key_ends_at_the_first_colon_followed_by_a_space():
+    """A `path:line` key holds a colon of its own, and a quoted claim may hold one too."""
+    assert records.why_of("Sweep debt", "tools/x.py:12: Plumbing, not a decision.") == "Plumbing, not a decision."
+    assert records.why_of("Bucket vocabulary", "MCP protocol: the product's whole subject.") == "the product's whole subject."
+    assert records.why_of("Drift exceptions", "`C3 lifecycle: created by C9`: the claim moved.") == "the claim moved."
+
+
+def test_a_template_value_word_is_grammar_not_prose():
+    assert records.why_of("Entry-point coverage", "cli: complete — walked every command.") == "walked every command."
+    assert records.why_of("Entry-point coverage", "- http-route: partial - the eight that decide.") == "the eight that decide."
+    assert records.why_of("Entry-point coverage", "cli: complete") == ""
+    assert records.why_of("Balance exceptions", "security-granularity: family — one rule per family.") == "one rule per family."
+    # a why that merely starts with such a word keeps it
+    assert records.why_of("Entry-point coverage", "cli naming: completely covered by the stories.") == "completely covered by the stories."
+
+
+def test_a_line_with_no_key_and_a_line_under_an_unknown_heading_are_returned_whole():
+    assert records.why_of("Unclaimed surfaces", "  - A second sentence of the record above.") == "A second sentence of the record above."
+    assert records.why_of("Notes for the next build", "cli: something a person wrote.") == "cli: something a person wrote."
+
+
+def test_body_lines_drop_bullets_and_blank_lines():
+    assert records.body_lines("- C1: a\n\n  * C2: b\n") == ["C1: a", "C2: b"]

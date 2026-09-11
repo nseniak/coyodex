@@ -115,11 +115,15 @@ class HeadingSpec:
     one line, and on the seven families that cannot read a bare list, following that instruction
     destroyed the record silently — the tool causing the exact failure this module exists to prevent.
     `lead` is what precedes the list (only the audit family has one: its check name).
+    `value` is the VALUE WORD a family's template puts between the key and the why, as a regex
+    alternation — `<kind>: complete — <how>` under "Entry-point coverage", `security-granularity:
+    family — <why>` under "Balance exceptions". It is grammar, like the key: `why_of` drops it so the
+    readability walk counts the writing and not the template.
     """
 
     def __init__(self, heading: str, maintenance: bool, key: str | None = None,
                  seps: str = SEP_ID, lead: str = "", strict_multi: str = "",
-                 merged_form: str = "") -> None:
+                 merged_form: str = "", value: str = "") -> None:
         self.heading = heading
         self.maintenance = maintenance
         self.key = key
@@ -127,12 +131,13 @@ class HeadingSpec:
         self.lead = lead
         self.strict_multi = strict_multi
         self.merged_form = merged_form or "<id>, <id>, <id>: <why>"
+        self.value = value
 
 
 HEADINGS: tuple[HeadingSpec, ...] = (
     # Ids ride an anywhere-in-body scan here, so a list reads; the three LITERAL escapes
     # (`granularity`, `cadence`, `store`) are line-leading words and never merge.
-    HeadingSpec("Balance exceptions", True, BALANCE_KEY),
+    HeadingSpec("Balance exceptions", True, BALANCE_KEY, value=r"family|endpoint-and-condition"),
     HeadingSpec("Audit exceptions", True, ANY_ID_KEY, r"(?:\s*[:—-])", lead=AUDIT_LEAD,
                 merged_form="<check-name> <id>, <id>: <why>"),
     HeadingSpec("Drift exceptions", True),          # key = a whole quoted claim
@@ -176,7 +181,8 @@ HEADINGS: tuple[HeadingSpec, ...] = (
                 merged_form="<path>, <path>: <why>"),
     HeadingSpec("Sweep debt", True),                # key = a `path:line` anchor (free text)
     # Notes: machine-read too, but what they SAY is about the code, not about the map's own checks.
-    HeadingSpec("Entry-point coverage", False),     # key = a kind + a contract word
+    HeadingSpec("Entry-point coverage", False,      # key = a kind + a contract word
+                value=r"complete|sampled|partial"),
     HeadingSpec("Coverage exceptions", False, DIR_KEY, SEP, strict_multi=DIR_KEY_STRICT,
                 merged_form="<dir>/, <dir>/: <why>"),
     HeadingSpec("Bucket vocabulary", False),        # key = a bucket name (free text)
@@ -211,7 +217,8 @@ def _line_re(key: str, seps: str, lead: str = "") -> re.Pattern[str]:
     The why is required (a non-space after the separator): a key alone is a dismissal, not a record —
     the rule every escape family already states, now enforced in the one place they share."""
     tok = r"\**(?:" + key + r")\**"
-    return re.compile(_LEAD + lead + r"(?P<keys>" + tok + r"(?:\s*,\s*" + tok + r")*)" + seps + r"\s*\S")
+    return re.compile(_LEAD + lead + r"(?P<keys>" + tok + r"(?:\s*,\s*" + tok + r")*)" + seps
+                      + r"\s*(?P<why>\S.*)")
 
 
 #: A line that OPENS like a record — a lead-in and something that starts like this family's key —
@@ -228,11 +235,52 @@ def extras_bodies(m: ProjectModel, heading: str) -> list[str]:
     return [x.body for x in m.extras if x.heading.strip().lower() == want]
 
 
+def body_lines(body: str) -> list[str]:
+    """The non-empty lines of one section body, stripped of list bullets — the line every reader
+    here works on, and the unit the readability walk scans a section in."""
+    return [ln.strip().lstrip("-*").strip() for ln in body.splitlines() if ln.strip()]
+
+
 def lines(m: ProjectModel, heading: str) -> list[str]:
     """The non-empty recorded lines under a heading, stripped of list bullets."""
-    return [ln.strip().lstrip("-*").strip()
-            for body in extras_bodies(m, heading)
-            for ln in body.splitlines() if ln.strip()]
+    return [ln for body in extras_bodies(m, heading) for ln in body_lines(body)]
+
+
+#: A registered family with no key grammar still writes `<key>: <why>` — a bucket name, a
+#: `path:line`, a whole quoted claim. Its why starts after the first colon that is followed by
+#: whitespace, so a `path:line` key keeps its own colon; a backticked key is stepped over whole,
+#: because a quoted claim may hold a colon of its own.
+_GENERIC_WHY = re.compile(r"^(?:`[^`]*`|[^`:]|:(?!\s))+:\s+(?P<why>\S.*)$")
+#: What may follow a family's value word: a separator and the why, or the end of the line.
+_VALUE_TAIL = r"(?:\s*[:(—–]|\s+-(?=\s)|\s*$)\s*"
+
+
+def why_of(heading: str, line: str) -> str:
+    """The PROSE of one recorded line: what follows its key — and, under a heading whose template
+    puts a value word between the key and the why, what follows that word too.
+
+    For the readability counters, which must count the writing and never the grammar: a `path:line`
+    key is a file path by design, and the em dash after `complete` is the template's own separator,
+    so scanning whole lines flagged every well-formed record on the live maps (22 template dashes
+    and 20 path keys across three maps) — the noisy check nobody leaves switched on. A line under a
+    heading the registry does not know is returned whole, bullets aside: that is a note somebody
+    wrote by hand, with no key to strip. Under a known heading a line that is no record of its
+    family still splits at a `key: ` shape when it has one, and is otherwise returned whole."""
+    text = line.strip().lstrip("-*").strip()
+    spec = spec_of(heading)
+    if spec is None:
+        return text
+    why = ""
+    if spec.key is not None:
+        hit = _line_re(spec.key, spec.seps, spec.lead).match(text)
+        if hit:
+            why = hit.group("why")
+    if not why:
+        generic = _GENERIC_WHY.match(text)
+        why = generic.group("why") if generic else text
+    if spec.value:
+        why = re.sub(r"^(?:%s)%s" % (spec.value, _VALUE_TAIL), "", why, flags=re.IGNORECASE)
+    return why.strip()
 
 
 def keys_on_line(line: str, key: str = ID_KEY, seps: str = SEP_ID, lead: str = "",

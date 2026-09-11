@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from coyodex import prose
 from coyodex.model import (
-    BusinessRule, Component, Dep, GlossaryRow, Group, HappyStep, ProjectModel, Role, UseCase,
+    BusinessRule, Component, Dep, Entity, ExtraSection, GlossaryRow, Group, HappyStep, ProjectModel,
+    Role, Stake, Store, UseCase,
 )
+from coyodex.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
 
 
 def make_sentence(words: int) -> str:
@@ -29,8 +31,19 @@ def make_model() -> ProjectModel:
                            trigger_outcome="A shopper submits a basket and gets an order.")]
     m.happy_path = [HappyStep(id="HP1", uc="UC1", why="nothing precedes it")]
     m.components = [Component(id="C1", name="Checkout", purpose="Takes a basket and books an order.")]
-    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="Everything a shopper buys with.")]
-    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", used_for="Stores every order.")]
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="Everything a shopper buys with.",
+                            stakes=[Stake(actor="R1", stake="picks a basket and pays for it")])]
+    # `alternative` and `not_an_interface` are NOT walked: the viewer's dependency card draws
+    # neither (see test_the_two_dependency_fields_the_viewer_never_draws_are_not_walked).
+    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", used_for="Stores every order.",
+                  alternative="A file on disk, when Postgres is down.",
+                  not_an_interface="Only the product reads what it writes here.")]
+    m.entities = [Entity(id="E1", name="Order", meaning="What a shopper has paid for.",
+                         store=Store(dep="D1", container="orders", notes="Kept for seven years."))]
+    m.tests_note = "Every row comes from reading the suites, not from running them."
+    m.tests = [GapRow(targets=["C1"], tested="partial", gap="Nothing checks a refused card.")]
+    m.extras = [ExtraSection(heading="Unclaimed surfaces",
+                             body="- C1: The health probe is a tool for the operator.")]
     m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation",
                             statement="Only the owner of an order may cancel it.",
                             risk="A stranger could cancel another shopper's order.")]
@@ -190,8 +203,21 @@ def test_each_kind_gets_its_own_line_and_an_absent_kind_gets_none() -> None:
 
 def test_every_reader_facing_field_is_walked() -> None:
     labels = {where for where, _text in prose.iter_prose_fields(make_model())}
-    assert labels == {"C1 purpose", "CAP1 purpose", "UC1 trigger/outcome", "BR1 statement",
-                      "BR1 risk", "D1 used for", "R1 wants", "HP1 why", "glossary 'basket'"}
+    assert labels == {"C1 purpose", "CAP1 purpose", "CAP1 stake for R1", "UC1 trigger/outcome",
+                      "BR1 statement", "BR1 risk", "D1 used for", "R1 wants", "HP1 why",
+                      "glossary 'basket'", "E1 meaning", "E1 store notes", "tests note",
+                      "tests row C1 gap", "record 'Unclaimed surfaces' line 1"}
+
+
+def test_a_stake_and_the_tests_note_ride_the_narrow_surface_and_the_rest_do_not() -> None:
+    """The narrow surface is what the reading fan-out is billed for. A stake is the label on a
+    Features-page arrow and there are at most fifteen per live map; the tests note is one field.
+    Neither moved a live map's batch count. A test gap, a store note and a recorded line are
+    drill-down text, up to 54, 53 and 57 of them per map: wide only."""
+    narrow = {where for where, _text in prose.iter_prose_fields(make_model(), wide=False)}
+    assert {"CAP1 stake for R1", "tests note"} <= narrow
+    assert not narrow & {"tests row C1 gap", "E1 store notes", "E1 meaning",
+                         "record 'Unclaimed surfaces' line 1"}
 
 
 def test_a_plainly_written_map_produces_no_findings() -> None:
@@ -299,3 +325,101 @@ def test_the_long_sentence_gate_now_sees_a_step_phrase():
         FlowStep(n=1, src="R1", dst="C1", phrase=long_phrase)])]
     warnings = validate_model(m)[1]
     assert any("long sentence" in w for w in warnings), warnings
+
+
+# --- the five fields the 2026-09-11 schema sweep found ----------------------------------------
+# A sweep of the schema against the walk turned up seven string fields it never yielded. Five are
+# drawn by the viewer as text a reader meets and are walked now; two are not drawn and are not. On
+# the three live maps the seven held 355 non-empty fields with 65 long sentences, 8 em dashes and
+# 5 code names, and the walk had never seen one of them.
+
+def test_a_stake_is_reader_facing():
+    """The Features page labels each actor→feature arrow with it."""
+    m = ProjectModel(title="D", goal="g")
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="p",
+                            stakes=[Stake(actor="R1", stake="picks a basket and pays for it")])]
+    assert _walked(m)["CAP1 stake for R1"] == "picks a basket and pays for it"
+
+
+def test_the_tests_note_and_a_test_rows_gap_are_reader_facing():
+    """The note leads the Tests tab; the gap is its 'Gap / risk' column. A row is named by its
+    targets through the shared truncation helper, so a wide row cannot flood the report."""
+    m = ProjectModel(title="D", goal="g")
+    m.tests_note = "The suites were read, not run."
+    m.tests = [GapRow(targets=["C1", "C2"], gap="Nothing checks a refused card."),
+               GapRow(targets=["C3", "C4", "C5", "C6"], gap="Nothing checks a lost parcel.")]
+    walked = _walked(m)
+    assert walked["tests note"] == "The suites were read, not run."
+    assert walked["tests row C1, C2 gap"] == "Nothing checks a refused card."
+    wide_row = [w for w in walked if w.startswith("tests row C3")]
+    assert wide_row == ["tests row C3, C4, C5, +1 more gap"], wide_row
+
+
+def test_an_entity_store_note_is_reader_facing_and_an_unstored_entity_has_none():
+    """The note is the sentence beside a record's storage, on the Storage tab and in its info pane."""
+    m = ProjectModel(title="D", goal="g")
+    m.entities = [Entity(id="E1", name="Session", meaning="m",
+                         store=Store(dep="D1", container="sessions", notes="Expires after a day.")),
+                  Entity(id="E2", name="Quote", meaning="m")]
+    walked = _walked(m)
+    assert walked["E1 store notes"] == "Expires after a day."
+    assert "E2 store notes" not in walked
+
+
+def test_a_recorded_section_is_walked_one_line_at_a_time_and_only_its_why():
+    """A recorded line is `<key>: <why>`, and the key is grammar: a Sweep-debt key is a file path by
+    design, and the `complete —` of an Entry-point coverage line is the template's own separator.
+    Scanning whole bodies flagged both on every live map."""
+    m = ProjectModel(title="D", goal="g")
+    m.extras = [
+        ExtraSection(heading="Sweep debt",
+                     body="- tools/x.py:12: Hands the answer back. Plumbing, not a decision.\n"
+                          "- tools/y.py:40: Loads a screen."),
+        ExtraSection(heading="Entry-point coverage",
+                     body="cli: complete — walked every command.\n"
+                          "http-route: partial - the eight routes that decide."),
+    ]
+    walked = _walked(m)
+    assert walked["record 'Sweep debt' line 1"] == "Hands the answer back. Plumbing, not a decision."
+    assert walked["record 'Sweep debt' line 2"] == "Loads a screen."
+    assert walked["note 'Entry-point coverage' line 1"] == "walked every command."
+    assert walked["note 'Entry-point coverage' line 2"] == "the eight routes that decide."
+    assert prose.scan(prose.iter_prose_fields(m)) == []   # no file path and no em dash was written
+
+
+def test_a_freeform_note_under_an_unknown_heading_is_walked_whole():
+    """A heading the registry does not know is a note somebody wrote by hand. Its body is one field,
+    so a paragraph wrapped over three lines is read as sentences: line by line, the second line
+    would open with a bare "It"."""
+    m = ProjectModel(title="D", goal="g")
+    m.extras = [ExtraSection(heading="How the nightly job runs",
+                             body="The job starts at three.\nIt reads every order\nand writes one file.")]
+    walked = _walked(m)
+    assert walked["note 'How the nightly job runs'"] == m.extras[0].body
+    assert not [w for w in walked if "line" in w], walked
+    assert prose.scan(prose.iter_prose_fields(m)) == []
+
+
+def test_the_two_dependency_fields_the_viewer_never_draws_are_not_walked():
+    """`alternative` and `not_an_interface` are strings a person could read, and the sweep asked. The
+    viewer's dependency card draws neither: `alternative` reaches only the committed markdown's
+    dependency table, and `not_an_interface` is read by `validate` alone. Reader-facing means drawn,
+    so they stay out — and this test is where that decision is written down."""
+    m = ProjectModel(title="D", goal="g")
+    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", used_for="Stores every order.",
+                  alternative="A file on disk, when Postgres is down.",
+                  not_an_interface="Only the product reads what it writes here.")]
+    assert [text for text in _walked(m).values() if text] == ["Stores every order."]
+
+
+def test_the_long_sentence_gate_now_sees_a_recorded_line_and_not_its_key():
+    """The gate reads the same walk. A long why under 'Sweep debt' is a finding; its path key is not
+    a code name, and a coverage line's template dash is not an em dash."""
+    from coyodex.validate_model import validate_model
+    m = ProjectModel(title="D", goal="g")
+    long_why = "hands the answer back to the caller " + "and then " * 8 + "stops"
+    m.extras = [ExtraSection(heading="Sweep debt", body=f"- tools/x.py:12: {long_why}"),
+                ExtraSection(heading="Entry-point coverage", body="cli: complete — walked every command.")]
+    warnings = validate_model(m)[1]
+    assert any("long sentence" in w and "record 'Sweep debt' line 1" in w for w in warnings), warnings
+    assert not any("code name" in w or "em dash" in w for w in warnings), warnings
