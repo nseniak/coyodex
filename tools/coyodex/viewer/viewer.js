@@ -1579,6 +1579,9 @@ const USES_BY_NODE = {};
 // When a click navigates to another view to reveal a node (the file browser, a flow element link, the
 // change-impact summary), the node id to select is stashed here and applied once that view has rendered.
 let pendingSelect = null;
+//: …and whether the selection it names asked for the file tree's zoom-to-text-size move. Separate from
+//: `pendingSelect` because every route sets that and only one route wants the zoom.
+let pendingMatchText = false;
 // An entry point to highlight once its component's detail pane renders — set by selectEntryPoint (a
 // search hit / a System-tab component link), consumed in bindNodeDetailHandlers so the selection survives
 // the (possibly async) navigation's final pane render instead of being wiped by it.
@@ -13481,9 +13484,10 @@ async function renderView(sArg, transient, seq) {
   let pendingCenterId = null;
   if (!transient && pendingSelect) {
     const id = pendingSelect; pendingSelect = null;
+    const wantsZoom = pendingMatchText; pendingMatchText = false;
     const el = mainScene.nodeEls[id];
     if (el) selectNode(mainScene, el, id); else showNodeDetailSynced(id);
-    if (el) pendingMatchTextId = id;
+    if (el && wantsZoom) pendingMatchTextId = id;
   } else if (!transient) {
     // A history revisit replays the whole captured selection; a focus-drill replays the single key it
     // asked for. Either way it is `restoreSelection`'s business, and the CAMERA's is separate.
@@ -13720,7 +13724,7 @@ function onRowClick(key) {
     toggleDir(key);
     // e.node set -> this exact path collided in node_path_index (filetree.py): e.others carries the
     // rest — selectFromTreeAnchors selects the primary, the others are tagged in the code viewer.
-    if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others]); }
+    if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others], true); }
     return;
   }
   // A file row: the reader wants its source in the code viewer, so end any folder peek and show it. If we
@@ -13750,7 +13754,7 @@ function onRowClick(key) {
     loadCode(e.path, an ? an.line : null);
     suppressTreeScroll = true;
     highlightTreePath(key);  // light up THIS row now, so a stale owned-file highlight doesn't linger on it
-    selectFromTreeAnchors([e.node, ...e.others]);  // this exact file collided — e.others carries the rest
+    selectFromTreeAnchors([e.node, ...e.others], true);  // this exact file collided — e.others carries the rest
   } else if (e.node) {
     // An OWNED file (belongs to a component but isn't its anchor): show THIS file, and select its owner
     // (definition-first, already resolved into e.node). The syncCodeView/syncTreeToNode "belongs" guards
@@ -13762,7 +13766,7 @@ function onRowClick(key) {
     loadCode(e.path, null);
     suppressTreeScroll = true;
     highlightTreePath(key);
-    selectFromTree(e.node);
+    selectFromTree(e.node, true);
   } else {
     // A file that is not itself a node: show its OWN source (no line) and highlight its row. If it sits
     // under a mapped folder, also select that container for graph context — but PIN this file so the
@@ -13775,7 +13779,7 @@ function onRowClick(key) {
     loadCode(e.path, null);
     suppressTreeScroll = true;
     highlightTreePath(key);
-    if (e.sel) { cvPinned = e.path; selectFromTree(e.sel); }
+    if (e.sel) { cvPinned = e.path; selectFromTree(e.sel, true); }
   }
   // Record the browser->file step. If the select above navigated the diagram, go() already pushed the new
   // point (and stashed {browse:true} on the one we left) — just tag its pane as this file. Otherwise no
@@ -13906,7 +13910,14 @@ function flashCard(id) {
   card.classList.add('ecard-flash');
   setTimeout(() => card.classList.remove('ecard-flash'), 1400);
 }
-function selectFromTree(nodeId) {
+// `fromTree` says the ask came from the FILE TREE or the code viewer, and it gates ONE thing: the
+// zoom that matches the box's label to the sidebar's text size. That move exists because a tree row
+// has no modifier key to gate it on, unlike a canvas click — it is the tree's gesture, not everyone's.
+// Every other caller (an item pill, a type pill, a search hit, a prose reference) asks to be SHOWN the
+// box, and being shown it means landing exactly where the box's own address lands. Measured before this
+// gate: a pill arrived at 0.88 zoom where its own address arrives at 0.67, so the same destination
+// played a zoom on one route and not the other.
+function selectFromTree(nodeId, fromTree) {
   const t = selectTargetFor(nodeId);
   if (!t) { suppressTreeScroll = false; suppressBrowse = false; return; }  // no selection follows — don't leave the one-shots stuck
   // A card list has nothing to select: the element IS a card on the page, so the move is to go there
@@ -13945,9 +13956,10 @@ function selectFromTree(nodeId) {
     if (el) selectNode(mainScene, el, t.selectId); else showNodeDetailSynced(t.selectId);
     // A node NEWLY reached via the file tree gets the zoom-to-match-sidebar-text-size move — there's
     // no modifier key on a tree row to gate it on, unlike a canvas click (see selectNodeFromCanvas).
-    if (el && !alreadySelected) matchTextSize(el);
+    if (el && !alreadySelected && fromTree) matchTextSize(el);
   } else {                                                // navigate, then render() consumes pendingSelect
     pendingSelect = t.selectId;
+    pendingMatchText = !!fromTree;
     go(t.state);
   }
 }
@@ -13956,8 +13968,8 @@ function selectFromTree(nodeId) {
 // Its file-mates aren't stacked in the panel anymore; the code viewer tags each on its own source line
 // (paintCodeTags), so they stay discoverable there. Selecting highlights this row via syncTreeToNode,
 // same as any other selection (the primary's own anchor IS this path).
-function selectFromTreeAnchors(allIds) {
-  if (allIds.length) selectFromTree(allIds[0]);
+function selectFromTreeAnchors(allIds, fromTree) {
+  if (allIds.length) selectFromTree(allIds[0], fromTree);
 }
 
 // A source ref (a node's `file`/`line`, an edge's `where`) -> the tree path it resolves to, or null when
@@ -14554,7 +14566,7 @@ function codeItemsForPath(path) {
     const n = GRAPH.nodes[id];
     if (!n || !n.line) continue;
     items.push({ line: n.line, kind: 'element', name: n.name, label: nodeTypeLabel(n),
-      select: () => { suppressCodeScroll = true; selectFromTree(id); } });
+      select: () => { suppressCodeScroll = true; selectFromTree(id, true); } });
   }
   // One use-case tag per LINE, not per step: a single line (one edge) is often walked by several use
   // cases — four identical "use case" pills would just eat the width. Collapse them: the pill's hover

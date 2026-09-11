@@ -2292,7 +2292,7 @@ def test_a_search_hit_on_a_block_or_a_rule_lands_on_the_business_logic_tab() -> 
     """Every graph node is indexed by the search, so a kind with no `selectTargetFor` case falls
     through to the default and dead-ends on Dependencies, showing nothing."""
     target = VIEWER_JS[VIEWER_JS.index("function selectTargetFor(id)"):
-                       VIEWER_JS.index("function selectFromTree(nodeId)")]
+                       VIEWER_JS.index("function selectFromTree(nodeId, fromTree)")]
     assert "case 'block':" in target and "kind: 'rules', blk: id" in target
     assert "case 'rule':" in target and "kind: 'rule', br: id" in target
 

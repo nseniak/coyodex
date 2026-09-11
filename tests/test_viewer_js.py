@@ -5812,3 +5812,33 @@ def test_every_pin_an_address_carries_puts_its_target_on_the_screen() -> None:
     iface = iface[:iface.index("\n  }")]
     assert "box.scrollIntoView({ block: 'center' });" in iface, \
         "a pinned box the reader cannot see is the address not being honoured"
+
+
+def test_only_the_file_tree_asks_for_the_zoom_that_matches_the_sidebar_text() -> None:
+    """Selecting a box can carry a camera move: zoom until the box's own label reads at the size of the
+    sidebar's text. It exists because a tree row has no modifier key to gate it on, unlike a click on
+    the canvas — so it is the FILE TREE's gesture, and the code viewer's beside it.
+
+    `selectFromTree` is what every other route also calls: an item pill, a type pill, a search hit, a
+    reference in prose. All of them mean "show me that box", and being shown it means landing where the
+    box's own address lands. They inherited the zoom instead, so one destination played a move on one
+    route and not on the other: measured on mcpolis, a pill reached `domsub SD4` at 0.67 zoom by its
+    address and at 0.88 by the pill.
+
+    The flag says WHICH gesture asked, and it is off by default — a new caller gets the plain landing
+    rather than a move it never asked for."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function selectFromTree(nodeId, fromTree) {" in js
+    body = js[js.index("function selectFromTree(nodeId, fromTree) {"):
+              js.index("\nfunction selectFromTreeAnchors")]
+    assert "if (el && !alreadySelected && fromTree) matchTextSize(el);" in body
+    assert "pendingMatchText = !!fromTree;" in body, "…and the navigating route carries the same answer"
+    # The render honours it, and clears it whether or not it fired.
+    assert "const wantsZoom = pendingMatchText; pendingMatchText = false;" in js
+    assert "if (el && wantsZoom) pendingMatchTextId = id;" in js
+    # EXACTLY the tree and the code viewer ask for it. Every other caller passes nothing.
+    assert js.count("selectFromTree(e.node, true)") == 1
+    assert js.count("selectFromTreeAnchors([e.node, ...e.others], true)") == 2
+    assert js.count("selectFromTree(e.sel, true)") == 1
+    assert js.count("selectFromTree(id, true)") == 1
+    assert "showInContext(id) { selectFromTree(id); }" in js, "showing is not the tree's gesture"
