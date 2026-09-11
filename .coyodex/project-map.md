@@ -15,7 +15,11 @@
 
 ## T0 — Goal (the anchor)
 
-coyodex maps a codebase you have lost track of. A coding agent can write more code than anyone follows. The code runs fine until the day somebody needs to understand it. coyodex reads the project and writes a map. The map says what the product does, who it is for, and what it is made of. Every box on it carries a plain sentence and a link into the code. A person browses the map in a drillable viewer, and opens code only where they need it. The map is stored beside the code and pinned to one commit, so a later change can be measured against it.
+coyodex maps a codebase its owner no longer holds in their head. A coding agent can write more code than anyone follows. The code runs fine until the day somebody needs to understand it.
+
+coyodex reads the project and writes a map. The map says what the product does, who it is for, and what it is made of. Every box on it carries a plain sentence and a link into the code.
+
+A person browses the map in a drillable viewer, and opens code only where they need it. The map is stored beside the code and pinned to one commit. A later change can be measured against that pin.
 
 ---
 

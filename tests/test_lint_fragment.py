@@ -869,3 +869,13 @@ def test_a_small_fragment_is_not_second_guessed():
     """Three components read from one file honestly are all `verified`; below the floor, "every row
     says the same thing" says nothing."""
     assert not [h for h in _labels(["verified"] * 3) if "confidence" in h]
+
+
+def test_a_header_fragment_with_a_one_block_goal_gets_the_goal_shape_warning() -> None:
+    """The prose advisories reach the fragment lint through the same function `validate` uses, so the
+    lead's header fragment is told about a one-paragraph goal before the map is assembled."""
+    m = make_fragment({"title": "Demo", "goal": "One block. Two sentences here."})
+    lines = [w for w in lint_fragment.lint_fragment_warnings(m) if "goal shape" in w]
+    assert len(lines) == 1 and "one paragraph of 2 sentences" in lines[0]
+    ok = make_fragment({"title": "Demo", "goal": "One block.\n\nA second one."})
+    assert not [w for w in lint_fragment.lint_fragment_warnings(ok) if "goal" in w]

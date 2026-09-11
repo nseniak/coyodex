@@ -257,6 +257,18 @@ const esc = (s) => (s || '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&g
 const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'))
   .replace(/`([^`]+)`/g, '<code>$1</code>')
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+// Reader-facing text with a BLANK LINE in it is paragraphs. The product overview is written as two to
+// four of them (method.md, "T0 Goal"), and any other field an author breaks the same way reads the
+// same. `render` turns one paragraph into inline markup (mdInline, or mdRefs where ids may appear),
+// so a single newline stays a wrap and a text with no blank line renders exactly as before. One helper,
+// because the overview and the detail rows both drew a run of text and both silently lost the breaks:
+// HTML collapses a newline to a space, so a three-paragraph goal came out as one block.
+const _PARAGRAPH_BREAK = /\n[ \t\r]*\n/;   // a blank line, CRLF included — the same split as prose.py
+function proseBlocksHtml(text, render) {
+  const paras = String(text || '').split(_PARAGRAPH_BREAK).map((p) => p.trim()).filter(Boolean);
+  if (paras.length < 2) return render(String(text || ''));
+  return paras.map((p) => `<p class="prose-para">${render(p)}</p>`).join('');
+}
 
 // Authored prose is the ONE place the viewer would otherwise print a raw element id: a recorded line
 // is keyed by id ("C101, C148: an operator surface …"), and on the live maps 60-78% of those lines
@@ -1376,7 +1388,7 @@ function elementCardHtml(id, opts) {
 // NOUN A CALLER PASSES IS ALWAYS SINGULAR: making the plural is this function's whole job.
 const COUNT_PLURALS = {
   entity: 'entities', 'stored entity': 'stored entities', dependency: 'dependencies',
-  process: 'processes',
+  process: 'processes', person: 'people', software: 'software',
 };
 function countNoun(n, noun) {
   return n === 1 ? noun : (COUNT_PLURALS[noun] || noun + 's');
@@ -2803,7 +2815,7 @@ function nodeDetailBodyHtml(id, noExplain) {
     .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>` + (lifecycle(k)
       ? `<ul class="st-list">${n.states_lines.map((t) => `<li>${mdInline(t)}</li>`).join('')}</ul>`
-      : (bareAnchor(v) ? srcCell(bareAnchor(v)) : mdInline(v))) + '</dd>').join('');
+      : (bareAnchor(v) ? srcCell(bareAnchor(v)) : proseBlocksHtml(v, mdInline))) + '</dd>').join('');
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
   return explain
@@ -8942,12 +8954,89 @@ function productLeadHtml(secs) {
   const overview = ((n.fields || {}).Overview || '').trim();
   if (!overview) return '';
   return itemSectionHtml(secs || [], 'overview', 'Product overview', '', '',
-    `<div class="view-lead"><div class="view-lead-body">${mdRefs(overview, GRAPH.nodes)}</div></div>`);
+    `<div class="view-lead"><div class="view-lead-body">`
+    + proseBlocksHtml(overview, (p) => mdRefs(p, GRAPH.nodes)) + '</div></div>');
+}
+// THE OVERVIEW DIGEST, under the description: the map's own vocabulary as item pills — the people,
+// the features, the interfaces — and one line for the successful run. Names and counts only, never
+// the sentences: those belong to the pictures (the Features board draws every actor and feature
+// with its sentence), and a reader who has met the names here reads those pictures faster. Every
+// pill opens the thing it names. DERIVED from the map, never authored, so it cannot drift from the
+// elements it lists; a kind the map holds none of draws no section.
+function overviewDigestHtml(secs) {
+  const nodes = Object.values(GRAPH.nodes || {});
+  const pills = (html) => `<div class="ov-pills">${html}</div>`;
+  let out = '';
+  // Who it is for: the people first, then the software that acts on its own.
+  const actors = nodes.filter((n) => elementLabel(n.kind) === 'actor');
+  const people = actors.filter((n) => n.kind === 'human');
+  const software = actors.filter((n) => n.kind !== 'human');
+  if (actors.length) {
+    const counts = [];
+    if (people.length) counts.push(countLabel(people.length, 'person'));
+    if (software.length) counts.push(countLabel(software.length, 'software'));
+    out += itemSectionHtml(secs, 'ov-actors', 'Who it is for', counts, '',
+      pills(people.concat(software).map((n) => itemPillHtml(n.id)).join('')));
+  }
+  // What it does: the features, and how much they hold between them.
+  const groups = capabilityGroups();
+  const feats = groups.filter((g) => g.cap);
+  if (feats.length) {
+    const ucs = groups.reduce((n, g) => n + g.ucs.length, 0);
+    const loose = groups.find((g) => !g.cap);
+    out += itemSectionHtml(secs, 'ov-features', 'What it does',
+      [countLabel(feats.length, 'feature'), countLabel(ucs, 'use case')],
+      loose ? `${countLabel(loose.ucs.length, 'use case')} belong to no feature.` : '',
+      pills(feats.map((g) => featurePillHtml(g.cap.id)).join('')));
+  }
+  // Where it meets the world: ours and theirs, the same split the Interfaces view draws.
+  const ifaces = ifaceList();
+  const bySide = (side) => ifaces.filter((i) => i.side === side);
+  if (bySide('ours').length || bySide('theirs').length) {
+    const row = (side, label) => {
+      const list = bySide(side);
+      if (!list.length) return '';
+      return `<div class="ov-row"><span class="ov-lbl">${label}</span>` + pills(list.map((i) =>
+        itemPillHtml(i.id, { kind: 'interface', name: i.name, ikind: i.kind })).join('')) + '</div>';
+    };
+    out += itemSectionHtml(secs, 'ov-interfaces', 'Where it meets the world',
+      [`${bySide('ours').length} we define`, `${bySide('theirs').length} we use`], '',
+      row('ours', 'We define') + row('theirs', 'We use') + overviewDoorHtml('interfaces', 'Open the Interfaces view'));
+  }
+  // The successful run: how long it is, and how much of the product it crosses. "of N" only when
+  // something is left out, the Happy Path view's own rule for this count.
+  const hp = GRAPH.happy_path || [];
+  if (hp.length) {
+    const touched = new Set();
+    for (const st of hp) { const uc = st.uc && GRAPH.nodes[st.uc]; if (uc && uc.parent) touched.add(uc.parent); }
+    const reach = touched.size < feats.length
+      ? `${touched.size} of ${countLabel(feats.length, 'feature')}` : countLabel(touched.size, 'feature');
+    out += itemSectionHtml(secs, 'ov-run', 'The successful run', countLabel(hp.length, 'step'), '',
+      `<p class="ov-line">${countLabel(hp.length, 'step')} through ${reach}.</p>`
+      + overviewDoorHtml('hp', 'Open the Happy Path view'));
+  }
+  return out;
+}
+// A door to a whole view, for the two sections whose picture is a tab of its own. The same quiet
+// text-button an element reference uses, so the page has one look for "this opens something".
+function overviewDoorHtml(tab, label) {
+  return `<p class="ov-line"><button type="button" class="sys-ref ov-door" data-tab="${esc(tab)}">${esc(label)} →</button></p>`;
+}
+function bindOverviewDoors(root) {
+  root.querySelectorAll('.ov-door[data-tab]').forEach((b) => {
+    if (b.dataset.doorBound) return;
+    b.dataset.doorBound = '1';
+    b.addEventListener('click', () => goTab(b.getAttribute('data-tab')));
+  });
 }
 function renderOverviewTab() {
-  diagram.innerHTML = '<div class="usecases-wrap">'
-    + (productLeadHtml([]) || '<p class="empty">This map records no product description.</p>') + '</div>';
+  const secs = [];
+  diagram.innerHTML = '<div class="usecases-wrap overview-wrap">'
+    + (productLeadHtml(secs) || '<p class="empty">This map records no product description.</p>')
+    + overviewDigestHtml(secs) + '</div>';
   bindProductLead();
+  bindItemPills(diagram);
+  bindOverviewDoors(diagram);
 }
 
 // ── The ACTOR PAGE: one actor's journey line ─────────────────────────────────────────────────────

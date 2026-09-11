@@ -50,7 +50,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 ```
 { "format": "coyodex-map",
   "title":  "<project display name>",
-  "goal":   "<T0 prose — the problem the project solves and for whom>",
+  "goal":   "<T0 prose — two to four short paragraphs, \n\n between them: what it is, what it does and for whom, why anyone wants it>",
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
   "roles":       [ { "id": "Rn", "name", "kind": "human|service|ai-agent", "audience": "user|internal",

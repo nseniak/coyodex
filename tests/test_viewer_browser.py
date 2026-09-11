@@ -3809,3 +3809,128 @@ def test_an_entry_point_link_rings_its_row_and_keeps_it_in_the_address() -> None
         page.reload()
         page.wait_for_selector("tr.pickbox[data-ep='EP1'].ibox-picked", state="attached", timeout=8000)
         assert not page.js_errors, page.js_errors
+
+
+# ── the Overview tab: the goal as paragraphs, held to a readable width ──────────────────────────
+
+_VIEWER_CSS = Path(__file__).resolve().parent.parent / "tools" / "coyodex" / "viewer" / "viewer.css"
+
+
+def _three_long_paragraphs(m: dict) -> None:
+    """About 65 words a paragraph: long enough that the full column breaks 80 characters a line."""
+    m["goal"] = (
+        "Alpha puts a team's tool servers behind one address, so every person on the team reaches the "
+        "same servers through one place instead of wiring each server into each of their own clients by "
+        "hand, with credentials copied around between machines and no record kept of what was called by "
+        "whom and when.\n\n"
+        "An admin mounts each server once, either a remote one reached at a web address or a command "
+        "style one that Alpha runs for the team inside an isolated sandbox, and then writes roles that "
+        "decide which servers, which tools and which tool arguments each person on the team may use "
+        "from their own client.\n\n"
+        "A teammate points one AI client at the team's single address, signs in with the team account, "
+        "and sees exactly the tools their role allows, while software with no browser presents a "
+        "revocable token instead and gets the same treatment, and every call and every connection is "
+        "recorded for the admin to read later.")
+
+
+_MEASURE = """() => {
+  const el = document.querySelector('.view-lead-body');
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const tops = new Set(); let chars = 0; let node;
+  while ((node = walker.nextNode())) {        // TEXT rects only: a <p>'s own box would count as a line
+    if (!node.textContent.trim()) continue;
+    chars += node.textContent.length;
+    const r = document.createRange(); r.selectNodeContents(node);
+    for (const x of r.getClientRects()) tops.add(Math.round(x.top));
+  }
+  return { width: el.getBoundingClientRect().width, lines: tops.size, chars,
+           paragraphs: el.querySelectorAll('p').length };
+}"""
+
+
+def test_the_overview_draws_the_goal_as_its_paragraphs_at_a_readable_width() -> None:
+    """A goal written as three paragraphs (method.md, T0 Goal) used to render as ONE block: HTML
+    collapses the blank lines. And at full column width a 1440px screen ran 137 characters a line,
+    twice what body text is readable at, which was the first reason the text read as a block.
+
+    The second half proves the first: the same page served with the width cap stripped from the
+    stylesheet must break 80 characters a line, or the assertion above would pass for any CSS."""
+    with _served_map(_three_long_paragraphs) as base:
+        with _page(base + "#v=overview") as page:
+            page.set_viewport_size({"width": 1440, "height": 900})
+            _settle(page)
+            held = page.evaluate(_MEASURE)
+            assert held["paragraphs"] == 3, held
+            assert held["width"] < 700 and held["chars"] / held["lines"] <= 80, held
+            assert page.js_errors == []
+        css = _VIEWER_CSS.read_text(encoding="utf-8")
+        cap = ".overview-wrap > .item-sec { max-width: 660px; }"
+        assert css.count(cap) == 1, "the overview column's cap moved — update this test"
+        with _page(base + "#v=overview", stylesheet=css.replace(cap, "")) as page:
+            page.set_viewport_size({"width": 1440, "height": 900})
+            _settle(page)
+            loose = page.evaluate(_MEASURE)
+            assert loose["width"] > 900 and loose["chars"] / loose["lines"] > 80, loose
+
+
+def test_a_goal_with_no_blank_line_still_draws_as_one_run_of_text() -> None:
+    assert "\n\n" not in json.loads(_FIXTURE_MAP.read_text())["goal"], "the fixture goal grew paragraphs"
+    with _served() as base, _page(base + "#v=overview") as page:
+        _settle(page)
+        assert page.evaluate("() => document.querySelectorAll('.view-lead-body p').length") == 0
+        assert page.evaluate("() => document.querySelector('.view-lead-body').textContent.length") > 100
+        assert page.js_errors == []
+
+
+def _component_with_two_paragraph_notes(m: dict) -> None:
+    m["components"][0]["extra"] = {"Notes": "First note, on its own.\n\nSecond note, on its own."}
+
+
+def test_a_detail_row_holding_blank_lines_draws_paragraphs_too() -> None:
+    """The same helper serves the element page's rows, so a field an author breaks into paragraphs
+    reads as paragraphs there as well — checked on screen, not in the source."""
+    with _served_map(_component_with_two_paragraph_notes) as base, \
+            _page(base + "#v=element&id=C1") as page:
+        _settle(page)
+        got = page.evaluate("() => Array.from(document.querySelectorAll('dd p.prose-para'))"
+                            ".map((p) => p.textContent.trim())")
+        assert got == ["First note, on its own.", "Second note, on its own."]
+        assert page.js_errors == []
+
+
+def test_the_overview_digest_names_the_people_features_and_interfaces_as_pills() -> None:
+    """Under the description, the map's own vocabulary: every actor, every feature and every interface
+    as an item pill that opens its page, plus one line for the successful run. Counted against the
+    map the page was built from, so a kind the digest silently dropped would show as a short row."""
+    m = json.loads(_FIXTURE_MAP.read_text())
+    _two_sided_interfaces()(m)          # the fixture holds no interfaces of its own
+    n_actors = len(m["roles"])
+    caps_with_ucs = {uc["capability"] for uc in m["use_cases"] if uc.get("capability")}
+    n_features = len([c for c in m["capabilities"] if c["id"] in caps_with_ucs])
+    n_ifaces = len([i for i in m["interfaces"] if i.get("side") in ("ours", "theirs")])
+    assert n_actors and n_features and n_ifaces == 2
+    with _served_map(_two_sided_interfaces()) as base, _page(base + "#v=overview") as page:
+        _settle(page)
+        titles = page.evaluate("() => Array.from(document.querySelectorAll('.overview-wrap .item-sec-title'))"
+                               ".map((h) => h.childNodes[0] ? h.textContent.trim().split(/\\d/)[0].trim() : '')")
+        assert titles[1:] == ["Who it is for", "What it does", "Where it meets the world", "The successful run"], titles
+        counts = page.evaluate("() => Array.from(document.querySelectorAll('.overview-wrap .item-sec'))"
+                               ".map((s) => s.querySelectorAll('.item-pill').length)")
+        assert counts[1:4] == [n_actors, n_features, n_ifaces], (counts, n_actors, n_features, n_ifaces)
+        run = page.evaluate("() => document.querySelector('#itemsec-ov-run .ov-line').textContent")
+        assert run.startswith(f"{len(m['happy_path'])} steps through "), run
+        # every pill is a door: the first feature pill opens that feature's own page
+        name = page.evaluate("() => document.querySelector('#itemsec-ov-features .item-pill span').textContent")
+        page.click("#itemsec-ov-features .item-pill")
+        _settle(page)
+        assert name in _crumb(page), (name, _crumb(page))
+        assert page.js_errors == []
+
+
+def test_the_overview_digest_doors_open_their_views() -> None:
+    with _served() as base, _page(base + "#v=overview") as page:
+        _settle(page)
+        page.click("#itemsec-ov-run .ov-door")
+        _settle(page)
+        assert "Happy Path" in _crumb(page), _crumb(page)
+        assert page.js_errors == []

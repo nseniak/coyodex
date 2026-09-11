@@ -438,8 +438,7 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # it alone, which is the test for belonging in a lint. Advisory here for the same reason it is
     # advisory in `validate`: a long sentence is not a wrong map. The glossary comes from the
     # fragment when it has one, which is the same allowance `prose.scan` makes at validate time.
-    prose_lines = prose.summarize(prose.scan(prose.iter_prose_fields(m),
-                                             terms=[g.term for g in m.glossary]))
+    prose_lines = prose.advisory_lines(m)
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
             + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m)
             + walk_jumps(m)
