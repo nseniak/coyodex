@@ -557,7 +557,7 @@ def test_the_walk_counts_the_features_it_touches_out_of_all_there_are() -> None:
         # "N steps through M of K features" line went — the head says the steps and the board the
         # features, and a line between the two was a box in a box.
         got = page.evaluate("""() => ({
-            count: document.querySelector('.landing-head .item-sec-n').textContent.trim(),
+            count: document.querySelector('.landing-head .count-pill').textContent.trim(),
             ownLine: !!document.querySelector('.item-sec-body > .block-lbl') })""")
         assert got["count"] == "14 steps" and not got["ownLine"], got
         assert not page.js_errors, page.js_errors
@@ -1232,7 +1232,7 @@ def test_an_item_pages_sections_each_say_what_they_are_and_what_is_in_them() -> 
                      .map((n) => n.textContent).join('').trim(),
             strip: !!s.querySelector('.item-sec-frame > .item-sec-strip .item-sec-title'),
             mark: !!s.querySelector('.item-sec-title .ibox-gly'),
-            count: s.querySelector('.item-sec-n').textContent,
+            count: s.querySelector('.count-pill').textContent,
             note: s.querySelector('.item-sec-note').textContent.slice(0, 24)
         }))""")
         # ONE section. The Interfaces block under it went, and with it the chip strip that only
@@ -2922,7 +2922,7 @@ def test_a_use_case_page_is_the_same_page_as_an_actor_s_a_named_hero_over_a_fram
                 sentence: q('#diaghead .page-hero-purpose').textContent.length,
                 title: [...q('#diaghead .item-sec-title').childNodes].filter((n) => n.nodeType === 3)
                          .map((n) => n.textContent).join('').trim(),
-                count: q('#diaghead .item-sec-n').textContent,
+                count: q('#diaghead .count-pill').textContent,
                 note: q('#diaghead .item-sec-note').textContent.length,
                 player: q('#flowcount').textContent,
                 headAboveFrame: q('#diaghead').getBoundingClientRect().bottom <= wrap.getBoundingClientRect().top,
@@ -2973,7 +2973,7 @@ def test_a_shared_sub_use_case_s_page_draws_the_same_head_from_its_own_words() -
                 foot: !!q('#diaghead .ecard-extra'),
                 title: [...q('#diaghead .item-sec-title').childNodes].filter((n) => n.nodeType === 3)
                          .map((n) => n.textContent).join('').trim(),
-                count: q('#diaghead .item-sec-n').textContent,
+                count: q('#diaghead .count-pill').textContent,
                 player: q('#flowcount').textContent,
             };
         }""")
@@ -3090,7 +3090,7 @@ def test_a_page_about_a_pair_names_the_pair_and_heads_its_drawing() -> None:
                     path: (q('.page-path') || {}).textContent || '',
                     title: strip ? [...strip.querySelectorAll('.item-sec-title')[0].childNodes]
                              .filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : '',
-                    count: strip ? (strip.querySelector('.item-sec-n') || {}).textContent || '' : '',
+                    count: strip ? (strip.querySelector('.count-pill') || {}).textContent || '' : '',
                     note: strip ? ((strip.querySelector('.item-sec-note') || {}).textContent || '').length : 0,
                     h1: (q('#crumb h1') || {}).textContent || '',
                     drawn: !!q('#diagram svg'),
@@ -3123,7 +3123,7 @@ def test_the_pair_page_counts_the_whole_pair_however_the_reader_arrived() -> Non
         _settle(page)
         seen = page.evaluate("""async () => {
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-            const strip = () => (document.querySelector('#diaghead .item-sec-n') || {}).textContent || '';
+            const strip = () => (document.querySelector('#diaghead .count-pill') || {}).textContent || '';
             const card = () => (document.querySelector('#panel .xcount') || {}).textContent || '';
             const out = {};
             // The pair's own page: the number every route to it must show.
@@ -3171,7 +3171,7 @@ _FOLD_HEAD_JS = """() => {
         h1: (q('#crumb h1') || {}).textContent || '',
         title: strip ? [...strip.querySelector('.item-sec-title').childNodes]
                  .filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : '',
-        count: strip ? (strip.querySelector('.item-sec-n') || {}).textContent || '' : '',
+        count: strip ? (strip.querySelector('.count-pill') || {}).textContent || '' : '',
         note: strip ? (strip.querySelector('.item-sec-note') || {}).textContent || '' : '',
         drawn: !!q('#diagram svg'),
     };
@@ -3609,17 +3609,18 @@ _RULES_BOARD_JS = """() => {
       title: (door || head).textContent.trim(),
       fid: door ? door.getAttribute('data-gofeat') : '',
       mark: !!head.querySelector('svg'),
-      counts: head.querySelectorAll('.item-sec-n').length,
+      counts: head.querySelectorAll('.count-pill').length,
       areas: [...sec.querySelectorAll('.item-sec-body .ecard')].map((c) => ({
         name: (c.querySelector('.ibox-name') || {}).textContent || '',
-        also: [...c.querySelectorAll('.ecard-extra [data-gofeat]')]
-                .map((b) => b.getAttribute('data-gofeat')),
+        also: [...c.querySelectorAll('.ecard-extra [data-feat]')]
+                .map((b) => b.getAttribute('data-feat')),
       })),
     };
   });
   return { secs, grids: wrap.querySelectorAll('.ecard-grid').length,
            cards: wrap.querySelectorAll('.ecard').length,
-           typePills: wrap.querySelectorAll('.ecard .ecard-type').length };
+           typePills: wrap.querySelectorAll('.ecard .ecard-type').length,
+           footDoors: wrap.querySelectorAll('.ecard-extra [data-gofeat]').length };
 }"""
 
 
@@ -3661,6 +3662,9 @@ def test_the_rules_board_cuts_its_areas_by_the_feature_they_are_specified_under(
         assert [a["name"] for a in by["Not specified under any feature"]["areas"]] == ["Plan caps"]
         assert board["cards"] == 5, f"four areas, one of them twice: {board}"
         assert board["typePills"] == 0, "every card here is a decision area; saying so 5 times is noise"
+        # The feature an `Also under` pill names has its own CARD on this page, so the pill says where
+        # the area also sits and does not carry the reader off the page to find it.
+        assert board["footDoors"] == 0, "the Also under pills name a feature, they do not open it"
         assert not page.js_errors, page.js_errors
 
 

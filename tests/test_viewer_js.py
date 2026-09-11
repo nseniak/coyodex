@@ -1236,7 +1236,7 @@ def test_a_page_that_draws_its_own_contents_does_not_also_list_them_in_a_card() 
               js.index("\n}", js.index("function foldBoardHeadHtml(s) {"))]
     assert "itemSectionHeadHtml('What is folded here'" in head, "the one section-head builder"
     assert "FOLD_NARRATIVE[s.kind](s)" in head, "the sentence is the strip's note"
-    assert "'dependency' : 'dependencies'" in head, "counted in the Dependencies tab's own noun"
+    assert "countLabel(n, 'dependency')" in head, "counted in the Dependencies tab's own noun"
     hero = js[js.index("function syncPageHero(s, chain, tv) {"):
               js.index("\n}", js.index("function syncPageHero(s, chain, tv) {"))]
     assert "FOLD_NARRATIVE[s && s.kind]" in hero
@@ -3148,8 +3148,9 @@ def test_a_grouped_card_list_is_one_component_used_by_its_screens() -> None:
               js.index("\nfunction ", js.index("function elementCardGroupsHtml(groups) {") + 10)]
     assert "csec" in body and "body(g.ids, g.per)" in body
     # A count and a description are OFFERED, not automatic. The callers that DO pass a count give it
-    # a noun ("8 rules"), which is information.
-    assert "(g.count ? `<span class=\"csec-count\">${esc(g.count)}</span>` : '')" in body
+    # a noun ("8 rules"), which is information — and the count goes in the SHARED count pill, so a
+    # group's count over a card list and the same count on a card are one badge, not two.
+    assert "(g.count ? countPillOf(g.count) : '')" in body
     assert "mcard" not in js and "mcard" not in css, "the boxed section is gone, not shadowed"
     sec = css[css.index(".csec-head {"): css.index("}", css.index(".csec-head {"))]
     assert "border-bottom" in sec
@@ -3397,12 +3398,19 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     # the click by the rule every pill is held to — it goes where neither the card's own click nor the
     # page already open goes.
     # The FEATURE pill has a builder of its own, because two card foots name a feature: the use case's
-    # here, and the Rules board's "also under". They were one copied string, and a door worded two ways
-    # is a door that starts behaving two ways.
-    pill = js[js.index("function featureDoorPillHtml(fid) {"):
-              js.index("\n}", js.index("function featureDoorPillHtml(fid) {"))]
-    assert 'data-gofeat="' in pill, "the feature pill is the door"
-    assert "featureDoorPillHtml(cap.id)" in foot, "the In feature line uses that one builder"
+    # here, and the Rules board's "also under". They were one copied string, and a pill worded two ways
+    # is a pill that starts behaving two ways.
+    #
+    # It ACTS only where the feature is nowhere else on screen, which is the same rule every pill is
+    # held to. Here it is the only way to the feature, so it is a door. On the Rules board that feature
+    # has a card of its own a few lines away, so the pill there is plain and the board asks for it.
+    pill = js[js.index("function featurePillHtml(fid, plain) {"):
+              js.index("\n}", js.index("function featurePillHtml(fid, plain) {"))]
+    assert 'data-gofeat="' in pill and "plain" in pill, "one builder, a door and a plain form"
+    assert "featurePillHtml(cap.id)" in foot, "the In feature line is the door form"
+    board = js[js.index("function ruleAreaCardHtml(g, others) {"):
+               js.index("\n}", js.index("function ruleAreaCardHtml(g, others) {"))]
+    assert "featurePillHtml(f, true)" in board, "…and the Rules board's Also under is the plain form"
     assert 'data-goactor="' in ucs
     assert "ecard-pill-link" in ucs and "ecard-pill-link" in css
     binder = js[js.index("function bindElementCards(root, onDrill) {"):
@@ -4552,7 +4560,7 @@ def test_no_count_under_a_story_card_is_a_door() -> None:
         # NO control at all now: the item box draws the one door, on the name, so a count cannot
         # become a control on one card and a label on the next.
         assert "<button" not in src, f"{fn}: the card writes no control of its own"
-        assert "use case${" in src, f"{fn}: the card still states its count"
+        assert "countLabel(n, 'use case')" in src, f"{fn}: the card still states its count"
     assert '<span class="ibox-count">' in js and ".ibox-count:hover" not in css, \
         "a count is a plain label and offers no hover affordance"
 
@@ -4674,7 +4682,7 @@ def test_a_feature_card_counts_its_joined_rules_and_hides_a_zero() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     card = _story_fn(js, "storyFeatureCardHtml")
     assert "const nr = (f.rules || []).length;" in card
-    assert "nr ? " in card and "rule${nr === 1 ? '' : 's'}" in card
+    assert "nr ? " in card and "countLabel(nr, 'rule')" in card
     assert "story-rulespill" not in js
     assert "story-rulespill" not in (VIEWER_DIR / "viewer.css").read_text()
     assert "<button" not in card.split("band:")[1], "no count pill is a button"
@@ -5667,3 +5675,52 @@ def test_a_walk_s_head_is_page_text_built_from_the_actor_page_s_own_pieces() -> 
     assert "#diaghead .item-sec-strip-stage { border: 1px solid #cbd5e1; border-bottom: 1px solid #e2e8f0;" in css
     assert "return hero + stageStripHtml(" in head, "the same strip every section wears"
     assert "#diaghead { flex: 0 0 auto; padding: 0 20px; }" in css, "the actor page's left edge"
+
+
+def test_one_count_pill_is_the_badge_every_count_wears() -> None:
+    """A count wore four different badges. The Features page put it in a pale green pill, the Rules
+    cards in a grey one, a framed section's head in a grey-blue one two pixels larger, and a card
+    group in plain grey text with no pill at all — so the same fact looked like four different kinds
+    of fact depending on which screen you were on.
+
+    One builder emits it now and one rule styles it. `countPillHtml` takes the number and the singular
+    noun; `countPillOf` takes a count someone else already worded, for the heads that are handed a
+    string. Nothing else may draw a count badge of its own."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "function countPillHtml(n, noun) { return countPillOf(countLabel(n, noun)); }" in js
+    assert 'function countPillOf(text) { return `<span class="count-pill">${esc(text)}</span>`; }' in js
+    # THE FOUR OLD BADGES ARE GONE from the markup. `.ibox-count` and `.story-pill` survive as class
+    # names on the shared rule, because a box's band and a story card put the pill there themselves.
+    for dead in ('class="csec-count"', 'class="item-sec-n"'):
+        assert dead not in js, f"{dead} still draws a count of its own"
+    # …and one rule paints it, with the band and the story card sharing that rule rather than copying it.
+    assert ".count-pill, .ibox-count, .story-pill {" in css
+    assert css.count("background: #eef7f0; color: #166534;") == 1, "one count colour, in one place"
+
+
+def test_a_count_is_worded_in_one_place_and_never_at_a_call_site() -> None:
+    """`${n} rule${n === 1 ? '' : 's'}` was written out 37 times in this file. Three of those counted
+    the same thing on two different screens, and each irregular one — `entity`, `dependency` — had to
+    remember its own spelling where it was used, so a fourth screen counting entities would have had
+    to know that too.
+
+    One function words a count now, and the noun a caller passes is always SINGULAR: making the plural
+    is the function's whole job, and the irregular ones live in one table beside it. `countNoun` is the
+    same answer without the number, for the two places that set the number apart in its own bold.
+
+    What is NOT counted here is verb agreement — `is`/`are`, `it`/`them`. Those are sentences the
+    count appears in, not the count, and three of them stay at their call site on purpose."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function countLabel(n, noun)" in js and "function countNoun(n, noun)" in js
+    assert "function countPillHtml(n, noun)" in js, "and the pill a count rides in"
+    # The irregular plurals are a table, not a call site's problem.
+    assert "const COUNT_PLURALS = {" in js
+    for irregular in ("entities", "dependencies"):
+        assert irregular in js[js.index("const COUNT_PLURALS = {"):js.index("function countNoun")], \
+            f"{irregular} belongs in the table"
+    # NO CALL SITE MAKES ITS OWN PLURAL. The three survivors are verb agreement, matched out by name.
+    left = [m.group(0) for m in re.finditer(r"=== 1 \? '(?:|y|[a-z]+)' : '(?:s|ies|[a-z]+)'", js)]
+    agreement = [x for x in left if "'is' : 'are'" in x or "'it' : 'them'" in x]
+    assert len(left) - len(agreement) == 0, \
+        f"a call site is still wording its own plural: {[x for x in left if x not in agreement]}"

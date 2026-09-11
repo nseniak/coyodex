@@ -1101,7 +1101,7 @@ function ifaceSpecFacts(spec, id) {
   // separate them read as sixteen equal things, and they are not. NONE SHOWS NOTHING: a pill reading
   // "no use case" is a label for an absence, and the box is already drawn quiet for it.
   const n = (i.useCases || []).length;
-  spec.band = n ? [`${n} use case${n === 1 ? '' : 's'}`] : [];
+  spec.band = n ? [countLabel(n, 'use case')] : [];
   // THE PEOPLE ON THE FAR SIDE, in the order the story brings them — the same rule the doors
   // themselves are sorted by, not alphabetically and not by how busy each one is.
   spec.chips = ifaceActorRows(i).map(({ role: rid }) => roleChipOf(ROLE_BY_ID[rid], rid));
@@ -1373,6 +1373,25 @@ function elementCardHtml(id, opts) {
   });
 }
 
+// ── A COUNT, AND THE PILL THAT CARRIES ONE ────────────────────────────────────────────────────────
+// countLabel(n, 'rule') was written out 37 times across this file. Three of those counted
+// the same thing on two different screens, every irregular plural had to remember its own spelling at
+// the call site, and "0 rules" versus "no rules" was decided 37 times over. One function now, and the
+// NOUN A CALLER PASSES IS ALWAYS SINGULAR: making the plural is this function's whole job.
+const COUNT_PLURALS = {
+  entity: 'entities', 'stored entity': 'stored entities', dependency: 'dependencies',
+};
+function countNoun(n, noun) {
+  return n === 1 ? noun : (COUNT_PLURALS[noun] || noun + 's');
+}
+function countLabel(n, noun) { return `${n} ${countNoun(n, noun)}`; }
+// …and the pill it rides in, so a count looks the same on every card that carries one. `ecard-pill` is
+// the shape; a count pill is never a control, because a number is not a place you can go.
+function countPillHtml(n, noun) { return countPillOf(countLabel(n, noun)); }
+// …and the same pill around a count someone else worded — a section head's, a card group's, a band's.
+// Every count on this viewer goes through one of these two, so there is one badge for one kind of fact.
+function countPillOf(text) { return `<span class="count-pill">${esc(text)}</span>`; }
+
 // A card for something that is NOT a map element: a System collection, a kind of way in, the use cases
 // belonging to no feature. Same shape and same look as the element card, because a reader should not
 // have to learn two card designs — but no type pill and no element actions, because it has neither.
@@ -1385,7 +1404,7 @@ function plainCardHtml(o) {
                      'card', {
     nameLink: false,
     glyph: !o.k ? false : undefined,
-    wordHtml: (o.pill || '') + (o.count ? `<span class="ecard-pill">${esc(o.count)}</span>` : ''),
+    wordHtml: (o.pill || '') + (o.count ? countPillOf(o.count) : ''),
     cls: 'ecard',
     attrs: ` data-key="${esc(o.key)}" tabindex="0"`,
   });
@@ -1439,7 +1458,7 @@ function elementCardGroupsHtml(groups) {
   // usually the wrong heading. Callers that have something to add still pass `count` / `desc`.
   return `<div class="csec-list">${live.map((g) => '<section class="csec">'
     + `<div class="csec-head"><h3 class="csec-title">${esc(g.title)}</h3>`
-    + (g.count ? `<span class="csec-count">${esc(g.count)}</span>` : '') + '</div>'
+    + (g.count ? countPillOf(g.count) : '') + '</div>'
     + (g.desc ? `<p class="csec-desc">${esc(g.desc)}</p>` : '')
     + body(g.ids, g.per) + '</section>').join('')}</div>`;
 }
@@ -2503,8 +2522,7 @@ function featureCountHtml(id) {
   if (!n || n.kind !== 'component' || !HAS_CAPABILITIES) return '';
   const fids = COMP_FEATURES[id] || [];
   if (!fids.length) return '';
-  return '<p class="used-cap-count">Serves ' + fids.length + ' feature'
-    + (fids.length === 1 ? '' : 's') + '</p>';
+  return '<p class="used-cap-count">Serves ' + countLabel(fids.length, 'feature') + '</p>';
 }
 // "How it decides" — the T7 rules this component enforces, on its info pane. Modelled on
 // `usedInHtml`: grouped, with an explicit empty state so "this component decides nothing" reads
@@ -3021,7 +3039,7 @@ function arrowRow(srcName, dstName, whyHtml, sel, extra) {
 const ARROW_CARD_ROWS = 3;
 function arrowCardHtml(o) {
   const rows = o.rows || [];
-  const noun = (n) => n + ' ' + o.noun + (n === 1 ? '' : 's');
+  const noun = (n) => countLabel(n, o.noun);
   const full = !o.drill;
   const shown = full ? rows : rows.slice(0, ARROW_CARD_ROWS);
   const rest = rows.length - shown.length;
@@ -3193,16 +3211,27 @@ function showUseCaseSummary(uc) {
 // on the journey rail's zone label: one drawing for "feature", wherever a feature is named. Without it
 // the pill was a grey word in a row of grey words, and on the Rules board that word sat under a
 // heading that DID wear the mark, so the same thing was drawn two ways one line apart.
-function featureDoorPillHtml(fid) {
-  return `<button type="button" data-card-own class="ecard-pill ecard-pill-link" `
-    + `data-gofeat="${esc(fid)}" title="Everything this feature can do">`
-    + `${storyFeatureGlyphSvg()}<span>${esc(featureName(fid))}</span></button>`;
+// PLAIN OR A DOOR, and the difference is whether the feature is already on the reader's screen. On a
+// use-case card the feature is named nowhere else, so the pill is the only way to it and it opens that
+// feature's page. On the Rules board the feature the pill names has its own CARD a few lines up or
+// down, with the name at its head — the pill there is saying "this area is also in that one", and a
+// click that jumped the reader off the page would leave the thing it points at behind.
+//
+// `data-feat` rides both, so the pill is findable whether or not it acts; `data-gofeat` is what
+// `bindElementCards` listens for, and only the door carries it.
+function featurePillHtml(fid, plain) {
+  const body = `${storyFeatureGlyphSvg()}<span>${esc(featureName(fid))}</span>`;
+  return plain
+    ? `<span class="ecard-pill ecard-pill-feat" data-feat="${esc(fid)}">${body}</span>`
+    : `<button type="button" data-card-own class="ecard-pill ecard-pill-feat ecard-pill-link" `
+      + `data-feat="${esc(fid)}" data-gofeat="${esc(fid)}" `
+      + `title="Everything this feature can do">${body}</button>`;
 }
 function useCaseFeatureFootHtml(uc) {
   const cap = CAP_OF_UC[uc];
   if (!cap) return '';
   return `<p class="ecard-extra"><span class="ecard-lbl">In feature</span> `
-    + featureDoorPillHtml(cap.id) + '</p>';
+    + featurePillHtml(cap.id) + '</p>';
 }
 // The use-case flow view's default panel. Reached by drilling a use case (from the Use Cases list or a
 // Happy Path step). The sequence diagram IS the flow; the panel shows the same outside summary as a
@@ -4021,9 +4050,9 @@ function showDiffSummary() {
     const short = (r) => (r === DIFF_WORKTREE ? 'working tree' : (r || '').slice(0, 8));
     const files = (LIVE_DIFF.counts && LIVE_DIFF.counts.files) || (LIVE_DIFF.changes || []).length;
     html += '<p class="muted" style="margin:0 0 8px">' + esc(short(LIVE_DIFF.base)) + ' → '
-      + esc(short(LIVE_DIFF.target)) + ' · ' + files + ' file' + (files === 1 ? '' : 's') + ' changed</p>';
+      + esc(short(LIVE_DIFF.target)) + ' · ' + countLabel(files, 'file') + ' changed</p>';
   }
-  html += '<div class="badges"><span class="badge kind">' + total + ' change' + (total === 1 ? '' : 's') + '</span></div>';
+  html += '<div class="badges"><span class="badge kind">' + countLabel(total, 'change') + '</span></div>';
   for (const st of order) {
     const ids = groups[st];
     if (!ids.length) continue;
@@ -4296,8 +4325,8 @@ function dataDrillLabel(id) {
   const st = dataStoreOf(id);
   if (!st) return '';
   const nrows = st.rows.length; const nch = st.channels.length;
-  return nrows ? `${nrows} collection${nrows === 1 ? '' : 's'}`
-    : (nch ? `${nch} channel${nch === 1 ? '' : 's'}` : 'no modelled data');
+  return nrows ? countLabel(nrows, 'collection')
+    : (nch ? countLabel(nch, 'channel') : 'no modelled data');
 }
 function markDataDrill() {
   for (const id in mainScene.nodeEls) {
@@ -5434,7 +5463,7 @@ function markDeploymentEdge(scene, p, label, a, b) {
 function actionTipDepEdge(a, b) {
   const r = deploymentEdgeRows(a, b);
   const n = r.rows.length;
-  return '<div class="tt">Open ' + esc(n + ' ' + r.noun + (n === 1 ? '' : 's')) + '</div>';
+  return '<div class="tt">Open ' + esc(countLabel(n, r.noun)) + '</div>';
 }
 function actionTipChannels(chans) {
   const nm = channelDrillBroker(chans);
@@ -5490,7 +5519,7 @@ function showDeploymentInfraEdge(a, b, full) {
 // its card was the only one that had to show up to 25 rows because there was no page to send them to.
 function renderDeploymentEdgePage(s) {
   const r = deploymentEdgeRows(s.a, s.b);
-  const count = r.rows.length + ' ' + r.noun + (r.rows.length === 1 ? '' : 's');
+  const count = countLabel(r.rows.length, r.noun);
   // THE PAIR IS THE PAGE'S TITLE, and this hero is where a reader reads it. It used to be left to the
   // breadcrumb \u2014 but that row is collapsed now (it holds the page's h1 for a screen reader and is never
   // drawn), so the page opened on a pill and a count with nothing on it naming the two ends the arrow
@@ -6793,7 +6822,7 @@ const FOLD_COUNT = {
 function foldBoardHeadHtml(s) {
   if (!FOLD_NARRATIVE[s && s.kind]) return '';
   const n = FOLD_COUNT[s.kind](s);
-  return itemSectionHeadHtml('What is folded here', `${n} ${n === 1 ? 'dependency' : 'dependencies'}`,
+  return itemSectionHeadHtml('What is folded here', countLabel(n, 'dependency'),
                              FOLD_NARRATIVE[s.kind](s));
 }
 // WHAT the hero says: the pills, the one sentence, and one line of context. NOT the name — the
@@ -6891,7 +6920,7 @@ function walkHeadHtml(s, chain) {
   // stylesheet joins the two (`.item-sec-strip-stage`) — one framed section, in two hosts.
   return hero + stageStripHtml(
     itemSectionHeadHtml(sub ? 'Shared sub-use case flow' : 'Use case flow',
-        `${steps} step${steps === 1 ? '' : 's'}`,
+        countLabel(steps, 'step'),
         `Who or what acts at each step of this ${what}, on what, in the order the steps run.`,
         itemGlyphSvg(sub ? 'subflow' : 'usecase')));
 }
@@ -8510,7 +8539,7 @@ function featRuleNotes() {
   const out = [];
   const un = FEAT_COVERAGE.rulesUnjoined || 0;
   if (un > 0) {
-    out.push(`${un} other rule${un === 1 ? '' : 's'} in this map ${un === 1 ? 'is' : 'are'} enforced `
+    out.push(`${countLabel(un, 'other rule')} in this map ${un === 1 ? 'is' : 'are'} enforced `
       + 'where no use-case walk passes, so no feature could claim '
       + (un === 1 ? 'it' : 'them') + '.');
   }
@@ -8529,7 +8558,7 @@ function featRulesHtml(ids) {
   // holding its rules. Hand-rolled here first, which is exactly the drift the shared component ends.
   return notes + elementCardGroupsHtml(rulesByBlock(ids).map((g) => ({
     title: g.name, ids: g.rules.map((r) => r.id),
-    count: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
+    count: countLabel(g.rules.length, 'rule'),
   })));
 }
 
@@ -8771,7 +8800,7 @@ function renderUseCases(sel) {
   const sections = shown.map((g, gi) => {
     const ids = g.ucs.map((n) => n.id);
     const secId = 'ucsec-' + gi;
-    const count = `${ids.length} use case${ids.length === 1 ? '' : 's'}`;
+    const count = countLabel(ids.length, 'use case');
     if (solo) return elementCardGridHtml(ids, per);
     if (byCapability) {
       // The board is placed by the assembler below, outside any section, so this group emits nothing.
@@ -8843,7 +8872,7 @@ function coverageLineHtml() {
   const un = (FEAT_COVERAGE.componentsUnreached || []).length;
   const pct = Math.round(100 * (total - un) / total);
   const tail = un
-    ? ` ${un} component${un === 1 ? '' : 's'} ${un === 1 ? 'is' : 'are'} reached by no feature and no rule.`
+    ? ` ${countLabel(un, 'component')} ${un === 1 ? 'is' : 'are'} reached by no feature and no rule.`
     : ' Every component is reached by a feature or a rule.';
   return `<p class="cov-line">This map reaches <b>${pct}%</b> of the code from a feature or a rule.`
     + `${tail}</p>`;
@@ -8913,7 +8942,7 @@ function unreachedHtml() {
   for (const cid of ids) (by[unreachedClassOf(cid)] ||= []).push(cid);
   const groups = elementCardGroupsHtml(UNREACHED_GROUPS.map(([key, title, blurb]) => ({
     title, desc: blurb, ids: by[key] || [],
-    count: `${(by[key] || []).length} component${(by[key] || []).length === 1 ? '' : 's'}`,
+    count: countLabel((by[key] || []).length, 'component'),
   })));
   // What the RULE join could not reach, said here rather than on a feature's page: a page listing eight
   // rules is not the place to explain coyodex's join, but the number still has to be somewhere.
@@ -10458,8 +10487,8 @@ function storyFeatureCardHtml(id) {
                        // The rule count joins the use-case count in the same band, and zero draws
                        // nothing: on the join's floor "0 rules" would read as "decides nothing" when
                        // it can only mean "nothing joined".
-                       band: [`${n} use case${n === 1 ? '' : 's'}`]
-                         .concat(nr ? [`${nr} rule${nr === 1 ? '' : 's'}`] : []),
+                       band: [countLabel(n, 'use case')]
+                         .concat(nr ? [countLabel(nr, 'rule')] : []),
                        chips: [] },
                      'full',
                      { tinted: true, extra: aud, fill: featureTint(id),
@@ -10482,7 +10511,7 @@ function storyActorCardHtml(rid) {
   // collected under it.
   const spec = itemSpecRole(r.name || rid);
   spec.what = wants;
-  spec.band = [`${n} use case${n === 1 ? '' : 's'}`];
+  spec.band = [countLabel(n, 'use case')];
   // WHITE, NOT THE PERSON'S ORANGE. Painting every box its kind's colour was one rule too many for
   // this picture: the column headings already say what each column is, and the fills then competed
   // with the one colour that carries information here — the feature's own. The kind still says
@@ -10542,7 +10571,7 @@ function storyAreaCardHtml(a) {
     : '';
   return itemBoxHtml({ id: a.id, k: 'subdomain', name: a.name || a.id, word: 'data area',
                        what: a.purpose || '', pills: [], facts: [],
-                       band: [`${n} stored entit${n === 1 ? 'y' : 'ies'}`], chips: [] },
+                       band: [countLabel(n, 'stored entity')], chips: [] },
                      'full',
                      // WHITE, for the reason the cast card gives: the column heading says what this
                      // column is, so a fill here only competes with the feature's own colour.
@@ -10813,8 +10842,7 @@ function bindStoryDiagram(root) {
       if (!from || t.feature === sole) continue;
       const lab = wire(from, to, { sfeat: t.feature, sarea: a.id }, 'story-ref', 'sfeat', 'sarea');
       fillAreaTouchLabel(lab, t);
-      lab.title = featureName(t.feature) + ' reaches ' + t.touches + ' time'
-        + (t.touches === 1 ? '' : 's');
+      lab.title = featureName(t.feature) + ' reaches ' + countLabel(t.touches, 'time');
       // A click anywhere else on the pill is not a door, but it is not empty background either:
       // it must not clear the pin the reader set.
       lab.addEventListener('click', (ev) => ev.stopPropagation());
@@ -11012,14 +11040,14 @@ function renderOverview() {
     const changed = (mode === 'diff' && hasDiff() && g && g.ucs.some((x) => usecaseDiffState(x.id)))
       ? '<span class="badge modified">changed</span>' : '';
     return { homeType: true,
-             extra: `<span class="ecard-pill">${n} use case${n === 1 ? '' : 's'}</span>${changed}` };
+             extra: `${countPillHtml(n, 'use case')}${changed}` };
   };
   const ids = groups.filter((g) => g.cap).map((g) => g.cap.id);
   const loose = groups.find((g) => !g.cap);
   // Use cases belonging to no feature are a real card, not a silent omission — but they are not an
   // element, so they get the card's SHAPE without its element actions.
   const looseCard = loose ? plainCardHtml({ key: '-', name: 'Not assigned to a feature',
-    count: `${loose.ucs.length} use case${loose.ucs.length === 1 ? '' : 's'}` }) : '';
+    count: countLabel(loose.ucs.length, 'use case') }) : '';
   const grid = cardGridHtml(ids.map((id) => elementCardHtml(id, per(id))).join('') + looseCard)
     || '<p class="empty">No features recorded.</p>';
   const secs = [];
@@ -11100,7 +11128,7 @@ function itemSectionHtml(secs, key, title, count, note, body, glyph, titleHtml) 
 // `title` is still what the chip bar and the strip index carry, so a door cannot rename a section.
 function itemSectionHeadHtml(title, count, note, glyph, titleHtml) {
   return `<h2 class="item-sec-title">${glyph || ''}${titleHtml || esc(title)}`
-    + (count === '' || count == null ? '' : `<span class="item-sec-n">${esc(String(count))}</span>`)
+    + (count === '' || count == null ? '' : countPillOf(String(count)))
     + '</h2>'
     + (note ? `<p class="item-sec-note">${esc(note)}</p>` : '');
 }
@@ -11228,7 +11256,7 @@ function systemSections() {
   // both say how far the MAP got, which is not something a product view should ever claim to answer.
   if (ruleAnalysisGapCount()) {
     sec('map', 'Rule analysis gaps', ruleAnalysisGapsHtml(),
-        `${ruleAnalysisGapCount()} rule${ruleAnalysisGapCount() === 1 ? '' : 's'}`,
+        countLabel(ruleAnalysisGapCount(), 'rule'),
         'Rules whose code was never swept, and rules enforced where no component claims the line.');
   }
   // Functional coverage — how much of the code the feature layer reaches, and what it misses. A fact
@@ -11404,7 +11432,7 @@ function renderSystemSection(sysId, epk) {
   // one kind's table. Every other collection is a single page.
   if (found.kinds && !epk) {
     const cards = found.kinds.map((k) => plainCardHtml({ key: k.key, name: k.key, pill: k.tag,
-      count: `${k.count} way${k.count === 1 ? '' : 's'} in` })).join('');
+      count: `${countLabel(k.count, 'way')} in` })).join('');
     diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
       + viewHeadHtml(found.title, found.blurb)
       + cardGridHtml(cards) + '</div>';
@@ -11412,7 +11440,7 @@ function renderSystemSection(sysId, epk) {
     return;
   }
   const one = found.kinds ? found.kinds.find((k) => k.key === epk) : null;
-  const count = one ? `${one.count} entry point${one.count === 1 ? '' : 's'}` : found.count;
+  const count = one ? countLabel(one.count, 'entry point') : found.count;
   const body = one ? one.html : found.html;
   diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
     + pageHeroHtml({
@@ -11533,12 +11561,12 @@ function renderData(s) {
     const roleTag = (st.roles || []).length ? `<span class="dv-roles">${(st.roles).map(esc).join(' · ')}</span>` : '';
     let body = `<div class="dv-panehead"><h2>${esc(st.name)}</h2>`
       + `<span class="dv-kindpill">${esc(st.kind || 'store')}</span>${roleTag}`
-      + `<span class="dv-stat"><b>${st.rows.length}</b> ${st.rows.length === 1 ? 'collection' : 'collections'}</span>`
-      + (st.channels.length ? `<span class="dv-stat"><b>${st.channels.length}</b> ${st.channels.length === 1 ? 'channel' : 'channels'}</span>` : '')
+      + `<span class="dv-stat"><b>${st.rows.length}</b> ${countNoun(st.rows.length, 'collection')}</span>`
+      + (st.channels.length ? `<span class="dv-stat"><b>${st.channels.length}</b> ${countNoun(st.channels.length, 'channel')}</span>` : '')
       + (st.where ? `<span class="dv-stat">${srcCell(st.where)}</span>` : '') + '</div>';
     if (gaps && gaps.length) {
       body += `<div class="dv-coverage"><span aria-hidden="true">&#9888;</span> <span><b>`
-        + `${gaps.length} write${gaps.length === 1 ? '' : 's'} into ${esc(st.name)} not explained by any entity:</b> `
+        + `${countLabel(gaps.length, 'write')} into ${esc(st.name)} not explained by any entity:</b> `
         + gaps.map((p) => dvChip(p.component, nodeName(p.component), 'dv-write', p.verb)).join(' ')
         + ` — a real container may be missing from the domain model.</span></div>`;
     }
@@ -11615,7 +11643,7 @@ function renderData(s) {
     const total = groups.reduce((n, g) => n + g.entities.length, 0);
     panes.push(`<div class="dv-pane" id="${npPaneId(sec.key)}" role="region" aria-label="${esc(sec.label)}">`
       + `<div class="dv-panehead"><h2>${esc(sec.label)}</h2>`
-      + `<span class="dv-stat"><b>${total}</b> ${total === 1 ? 'entity' : 'entities'}</span></div>`
+      + `<span class="dv-stat"><b>${total}</b> ${countNoun(total, 'entity')}</span></div>`
       + `<p class="dv-derived">${SECTION_BLURB[sec.key] || ''}</p>`
       + `<div class="dv-grouplist">${groups.map(npGroupHtml).join('')}</div></div>`);
     npRailBySection[sec.key] = { label: sec.label, buttons: groups.map((grp) =>
@@ -11835,20 +11863,19 @@ function ruleBoardSections(groups) {
 // shared area carry the same fact and neither depends on which one the reader met first.
 function ruleAreaCardHtml(g, others) {
   const n = g.rules.length;
-  const noun = `${n} rule${n === 1 ? '' : 's'}`;
   if (!GRAPH.nodes[g.id]) {
-    return plainCardHtml({ key: g.id, name: g.name, desc: g.purpose, count: noun });
+    return plainCardHtml({ key: g.id, name: g.name, desc: g.purpose, count: countLabel(n, 'rule') });
   }
   const parent = g.parentName ? `<span class="ecard-pill">in ${esc(g.parentName)}</span>` : '';
   const foot = (others || []).length
     ? `<p class="ecard-extra"><span class="ecard-lbl">Also under</span> `
-      + others.map(featureDoorPillHtml).join(' ') + '</p>'
+      + others.map((f) => featurePillHtml(f, true)).join(' ') + '</p>'
     : '';
   // NO TYPE WORD. Every card on this page is a decision area, each wears the area's own mark, and the
   // page says so in its first line — so `DECISION AREA` on all thirteen of them is the heading printed
   // thirteen times. `noType` is the card's own switch for that, not a stylesheet reaching in.
   return elementCardHtml(g.id, { desc: g.purpose, foot, noType: true,
-                                 extra: parent + `<span class="ecard-pill">${noun}</span>` });
+                                 extra: parent + countPillHtml(n, 'rule') });
 }
 // ONE CARD PER FEATURE, holding its areas — the same framed section every item page draws, under the
 // feature's own mark. A bare heading over a grid was tried first and put the cut and the cards on one
@@ -12469,14 +12496,14 @@ function bindIfaceDiagram(root) {
     if (rows.length) {
       for (const r of rows) {
         const nm = (ROLE_BY_ID[r.role] || {}).name || r.role;
-        sec(`· ${r.ucs.length} use case${r.ucs.length === 1 ? '' : 's'}`, r.ucs, UC_CAP,
+        sec(`· ${countLabel(r.ucs.length, 'use case')}`, r.ucs, UC_CAP,
             itemGlyphSvg(itemSpecRole(nm).k), nm);
       }
     } else {
       // NOBODY AT THE FAR SIDE is a normal answer, not a gap — 5 of MCP Hero's 16 are reached by the
       // product itself. The heading says so by naming no one, and a sentence explaining it was one
       // more line to read on every hover for something the section already states.
-      sec(`reached in ${ucs.length} use case${ucs.length === 1 ? '' : 's'}`, ucs, UC_CAP + 1);
+      sec(`reached in ${countLabel(ucs.length, 'use case')}`, ucs, UC_CAP + 1);
     }
     lab.style.top = y + 'px';
     // Not a door, but not empty background either: a click on it must not clear the pin.
@@ -13023,7 +13050,7 @@ function renderRules(s) {
         + (g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : ''),
       desc: g.purpose ? mdInline(g.purpose) : '',
       noDesc: 'No description recorded for this decision area.',
-      meta: `${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}`,
+      meta: countLabel(g.rules.length, 'rule'),
     })
     // The rules as the page's one section, framed and headed like every item page's, under the mark of
     // what it HOLDS — a single diamond, where the hero above it wears the doubled one.
@@ -13072,9 +13099,9 @@ function renderRule(s) {
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({ glyph: itemGlyphSvg('rule'), name: ruleCrumbTitle(s.br), type: elementLabel('rule'),
                      desc: ruleStatementLine(r) ? mdInline(r.statement) : '', noDesc: false, meta: context })
-    + sec('sites', 'Where it is enforced', nSites ? `${nSites} call site${nSites === 1 ? '' : 's'}` : '', sites)
-    + sec('steps', 'Enforced at these steps', nSteps ? `${nSteps} flow step${nSteps === 1 ? '' : 's'}` : '', steps)
-    + sec('ents', 'Touches', nEnts ? `${nEnts} entit${nEnts === 1 ? 'y' : 'ies'}` : '', ents)
+    + sec('sites', 'Where it is enforced', nSites ? countLabel(nSites, 'call site') : '', sites)
+    + sec('steps', 'Enforced at these steps', nSteps ? countLabel(nSteps, 'flow step') : '', steps)
+    + sec('ents', 'Touches', nEnts ? countLabel(nEnts, 'entity') : '', ents)
     + '</div>';
   // The area chip walks back OUT to the list, landing on the area this rule belongs to — the same
   // move the breadcrumb makes, available where the reader is looking.
@@ -13876,7 +13903,7 @@ function applySelToRow(rec) {
     const badge = document.createElement('span');
     badge.className = 'tselcount';
     badge.textContent = c;
-    badge.title = c + ' file' + (c === 1 ? '' : 's') + ' of the selected element, here';
+    badge.title = countLabel(c, 'file') + ' of the selected element, here';
     row.querySelector('.tname').insertAdjacentElement('afterend', badge);
   } else if (entry.node && entry.node !== treeSelId) {
     // A kept file whose primary owner is a DIFFERENT element than the selection shows that owner's pill —
@@ -15589,7 +15616,7 @@ function sbRender(scored, raw, total) {
   sbActive = scored.length ? 0 : -1;
   if (!raw) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">Type to search elements, files, symbols, glossary terms and fields. <kbd>@</kbd> jumps to a symbol in the open file. <kbd>↑</kbd><kbd>↓</kbd> to move, <kbd>↵</kbd> to jump.</div>'; return; }
   if (!scored.length) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">No matches for “' + esc(raw) + '”.</div>'; return; }
-  sbMeta.textContent = (total > scored.length ? scored.length + ' of ' + total : String(total)) + ' result' + (total === 1 ? '' : 's');
+  sbMeta.textContent = (total > scored.length ? scored.length + ' of ' + total : String(total)) + ' ' + countNoun(total, 'result');
   const frag = document.createDocumentFragment();
   let lastGroup = null;
   scored.forEach((r, i) => {
@@ -15932,8 +15959,7 @@ function showImpactSummary() {
   const c = IMPACT.counts || {};
   let html = '<h2>Impact</h2>'
     + '<p class="muted" style="margin:0 0 8px">' + esc(short(IMPACT.spec.base)) + ' → '
-    + esc(short(IMPACT.spec.target)) + ' · ' + (IMPACT.files || []).length + ' file'
-    + ((IMPACT.files || []).length === 1 ? '' : 's') + ' changed</p>'
+    + esc(short(IMPACT.spec.target)) + ' · ' + countLabel((IMPACT.files || []).length, 'file') + ' changed</p>'
     + '<div class="badges"><span class="badge kind">' + (c.direct || 0) + ' direct</span>'
     + '<span class="badge kind">' + (c.ripple || 0) + ' rippled</span></div>';
   for (const w of (IMPACT.warnings || []))
