@@ -136,7 +136,9 @@ def test_a_use_case_with_no_feature_is_reported_rather_than_dropped():
 
 def test_a_rule_enforced_in_the_same_function_as_a_step_joins_to_that_feature():
     ix = index_of(make_map())
-    assert feature(ix).rules == ["BR1"]
+    # THE JOIN, not the feature's own list. `FeatureFacts.rules` answers a different question now — the
+    # rules in the decision areas SPECIFIED UNDER the feature, which is authored — and this join is what
+    # still feeds the coverage line and `rule_features`.
     assert ix.rule_features == {"BR1": ["CAP1"]}
     assert ix.coverage.rules_joined == 1 and ix.coverage.rules_unjoined == 0
 
@@ -162,7 +164,7 @@ def test_an_unjoined_rule_is_counted_so_a_feature_page_cannot_imply_it_has_them_
         {"id": "BR2", "name": "Out", "statement": "A refund needs a reason.", "block": "BLK1",
          "sites": [{"where": "src/a.py:34", "why": "elsewhere"}]}])
     ix = index_of(doc)
-    assert feature(ix).rules == ["BR1"]
+    assert ix.rule_features == {"BR1": ["CAP1"]}
     assert (ix.coverage.rules_joined, ix.coverage.rules_unjoined) == (1, 1)
 
 
@@ -182,7 +184,7 @@ def test_an_exact_line_match_still_links_without_the_preindex():
                            "statement": "A payment needs a card.", "block": "BLK1",
                            "sites": [{"where": "src/a.py:12", "why": "on the step's own line"}]}])
     ix = index_of(doc, extents=None)
-    assert feature(ix).rules == ["BR1"] and ix.rule_join_uses_extents is False
+    assert ix.rule_features == {"BR1": ["CAP1"]} and ix.rule_join_uses_extents is False
 
 
 def test_a_map_with_no_features_cannot_join_and_reports_no_gap():

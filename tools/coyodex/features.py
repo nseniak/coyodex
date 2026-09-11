@@ -9,6 +9,12 @@ DERIVED, NEVER AUTHORED, for the same reason a rule's components and sweep state
 authored "this feature touches these entities" is unfalsifiable, and a hand-assigned list rendered
 as derived was the rules prototype's most damaging failure — it looked correct on every screen.
 
+ONE EXCEPTION, and it is named where it is built: `FeatureFacts.rules`. A feature's rules are the ones
+in the decision areas SPECIFIED UNDER it, which is authored. The derived answer to a NEARBY question —
+which rules the feature's own flows run into — is still computed below and still feeds the coverage
+line; it simply is not what the feature page calls "What it decides". Two true numbers under one word
+is what this change ends: on mcpolis one feature's join said 12 and its areas hold 16.
+
 THE RULE JOIN IS REUSED, NOT REINVENTED. `validate_model.rule_steps` already answers "which
 use-case steps does this rule\'s sites reach", with the exact-line and same-function strengths the
 Rules view renders. This module walks from those steps to the use case to its feature. A second
@@ -72,7 +78,7 @@ class FeatureFacts:
     roles: list[str] = field(default_factory=list)           # who drives its use cases
     use_cases: list[str] = field(default_factory=list)
     entry_points: list[str] = field(default_factory=list)    # how you reach it
-    rules: list[str] = field(default_factory=list)           # what it decides (function join)
+    rules: list[str] = field(default_factory=list)           # what it decides (specified_under)
     entities: list[str] = field(default_factory=list)        # what it knows about
     components: list[str] = field(default_factory=list)      # what implements it
     areas: list[str] = field(default_factory=list)           # the data areas its walks reach — a
@@ -575,6 +581,29 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
         for i in m.interfaces
     ]
 
+    # WHICH RULES A FEATURE DECIDES: the ones in the decision areas SPECIFIED UNDER it. Authored, and
+    # deliberately so — see the note at the top of this module for what is derived here and why this one
+    # is the exception.
+    #
+    # It was the STEP JOIN: the rules whose call sites land in the same function as a step of one of this
+    # feature's flows. That is a true fact, but it is a different fact, and the two screens then printed
+    # two numbers under one word. Measured on mcpolis for `Organizations and teammates`: the join said 12
+    # rules, its two areas hold 16, and only 9 are in both — 3 reached only through its flows, 7 sitting
+    # in its areas with no flow of its own reaching them.
+    #
+    # THE AUTHORED ONE IS WHAT THE HEADING PROMISES. The section is called "What it decides", which is a
+    # question about the product's spec, not about which lines its code happens to run past.
+    rules_by_block: dict[str, list[str]] = {}
+    for r in m.rules:
+        # A rule whose `block` the map never set belongs to no area, so it reaches no feature this way.
+        if r.block:
+            rules_by_block.setdefault(r.block, []).append(r.id)
+    feat_rules: dict[str, set[str]] = {c.id: set() for c in m.capabilities}
+    for b in m.blocks:
+        for cap in (b.specified_under or []):
+            if cap in feat_rules:
+                feat_rules[cap].update(rules_by_block.get(b.id, ()))
+
     audience = capability_audience(m)
     story = build_story(m)
     areas = build_areas(m, story.column)
@@ -589,7 +618,7 @@ def build_index(m: ProjectModel, extents: Extents | None = None) -> FeatureIndex
             roles=sorted_ids(feat_roles[c.id]),
             use_cases=sorted_ids(feat_ucs[c.id]),
             entry_points=sorted_ids(feat_eps[c.id]),
-            rules=sorted_ids({rid for rid, hits in rule_feats.items() if c.id in hits}),
+            rules=sorted_ids(feat_rules[c.id]),
             entities=sorted_ids(feat_ents[c.id]),
             components=sorted_ids(feat_comps[c.id]),
             areas=feat_areas.get(c.id, []),

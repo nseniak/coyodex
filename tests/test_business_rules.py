@@ -1847,7 +1847,7 @@ def _js_function(name: str) -> str:
     return _js_code(VIEWER_JS[start:VIEWER_JS.index("\nfunction ", start + 10)])
 
 
-RULE_RENDERERS = ("renderRules", "renderRule", "ruleAnalysisGapsHtml", "ruleSiteRow", "ruleStepChip",
+RULE_RENDERERS = ("renderRules", "renderRule", "ruleAnalysisGapsHtml", "ruleSiteRow",
                   "ruleBlockGroups", "decidesHtml", "stepRulesHtml")
 
 
@@ -1873,7 +1873,6 @@ def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
     assert "site.components" not in _js_function("renderRules")
     assert "site.components" in _js_function("ruleSiteRow")     # the page's per-site owners
     assert "r.swept" in _js_function("ruleAnalysisGapsHtml")    # the sweep gap, now a System collection
-    assert "l.strength" in _js_function("ruleStepChip")
 
 
 def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
@@ -1898,26 +1897,6 @@ def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
     assert "overflow: auto" in wrap[:wrap.index("}")]
 
 
-def test_a_step_chip_is_numbered_by_POSITION_the_way_the_diagram_is() -> None:
-    """The chip said "step 6" and landed on "Step 18 / 24". `(container, n)` is still a step's
-    IDENTITY, and the chip must show the POSITION every other surface counts to — the arrow badge, the
-    sequence list, the step counter.
-
-    The container is the walk that AUTHORED the step: the use case for its own, a shared sub-use case for the
-    steps inside one. Each has its own screen and its own numbering now, so the position is counted
-    THERE and the chip opens THERE. (It used to hunt the step inside the host's spliced-in run, which
-    is why the lookup once matched on the (sf, n) pair.) ONE lookup labels the chip AND acts on it, so
-    the number a reader clicks and the step they land on cannot disagree."""
-    body = _js_function("ruleStepChip")
-    assert "flowStepIndex(l.uc, l.container, l.n)" in body
-    assert "step ${i + 1}" in body
-    assert "data-i=" in body and "data-n=" not in body     # the click reads the resolved index
-    assert 'data-uc="${esc(l.container || l.uc)}"' in body  # …and opens the walk that authored it
-    lookup = _js_function("flowStepIndex")
-    assert "const walk = container || uc;" in lookup        # identity is (container, n), not (uc, n)
-    assert "(FLOWS_NARR[walk] || []).findIndex((st) => st.n === n)" in lookup
-
-
 def test_the_two_views_number_steps_differently_on_purpose() -> None:
     """The markdown does NOT expand sub-flows — T6 renders the reference step inline and T6b lists
     the sub-flow under its own numbering — so the authored `n` is the number ITS reader can look
@@ -1927,29 +1906,6 @@ def test_the_two_views_number_steps_differently_on_purpose() -> None:
         FlowStep(n=7, src="C1", dst="E1", phrase="checks", where="src/guard.py:3")])]
     m.flows[0].steps = [FlowStep(n=1, src="C1", dst="C1", phrase="runs it", subflow="SF1")]
     assert "→ SF1 step 7" in t7_section(m)                  # the AUTHORED n, matching T6b
-
-
-def test_an_enforced_at_pill_selects_and_frames_the_step_in_the_flow() -> None:
-    """`selectFlowStep(uc, i, frame)` — the same landing an impact row uses, so the arrow lights up
-    and its pane opens; restoring a flow SNAPSHOT only moved the counter. `frame` adds the
-    shift-click camera move: a jump from a rule lands on a whole flow, and the one arrow it meant is
-    a thin line somewhere in it."""
-    body = _js_function("renderRule")
-    assert "selectFlowStep(uc, i, true)" in body
-    assert "flow: cur >= 0" not in body
-    step = _js_function("selectFlowStep")
-    # IN PLACE it frames, because the reader is already looking at the diagram and the camera should
-    # move to the step they asked for. NAVIGATING it just goes: the page it lands on opens at its own
-    # fit with the step selected, which is the same screen a reload of that address gives.
-    #
-    # A framing move on arrival was tried and reverted. It fired on the routes that navigate in place and
-    # silently did nothing on a cold load — the player's arrows are not built when the render reaches
-    # that line — so one address had two looks: 1.77 zoom on the arrow by a click, 0.67 and the whole
-    # picture by a reload of the very same link.
-    assert "if (frame) frameFlowStep(i);" in step
-    assert "pendingFrameStep" not in VIEWER_JS and "stepFrame" not in VIEWER_JS
-    nav = step[step.index("} else {"):]
-    assert "frameFlowStep" not in nav, "the navigating route aims no camera"
 
 
 def test_the_readme_lists_the_business_rules_tab_in_tab_order() -> None:
@@ -2177,10 +2133,10 @@ def test_a_rules_crumb_walks_back_to_its_own_decision_area() -> None:
     # Three crumbs now the tab lands on area CARDS: Rules > the area > the rule.
     assert "return [{ kind: 'rules' }, { kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }," in trail[:800]
     assert "ruleBlockGroups().some((g) => g.id === bid)" in _js_function("ruleGroupKeyFor")
-    # …and the area pill on the page itself makes the same move. It is an ITEM PILL now, so the move is
-    # `drillInto`'s — the one function that answers "what happens when I click this element" — and the
-    # answer it gives for a decision area is this same crumb's destination.
-    assert "itemPillHtml(blk.id, { kind: 'block', name: blk.name })" in _js_function("renderRule")
+    # THE CRUMB IS THE ONLY PLACE THE AREA IS NAMED. The hero carried it too — the same name twenty
+    # pixels below the crumb the reader had just clicked, with the area's own sentence after it — so the
+    # page said where it lives twice and neither copy said anything the other did not.
+    assert "Decision area:" not in _js_function("renderRule")
     assert "case 'block': return go({ kind: 'rules', blk: id });" in _js_function("drillInto")
 
 
@@ -2277,17 +2233,6 @@ def test_the_transport_takes_the_symbol_table_and_the_markdown_view_does_not() -
     with_ext = cast(dict, model_to_graph(m, ext)["rules_view"])
     assert [(s["uc"], s["n"], s["strength"]) for s in with_ext["rules"][0]["steps"]] \
         == [("UC1", 2, "symbol")]
-
-
-def test_the_step_chip_carries_the_containers_name_never_its_id() -> None:
-    """The viewer shows element NAMES. A sub-flow's `SFn` on screen is an internal id."""
-    m = make_checkable_model()
-    m.subflows = [SubFlow(id="SF1", name="Owner check", steps=[
-        FlowStep(n=2, src="C1", dst="E1", phrase="checks", where="src/guard.py:3")])]
-    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="C1", phrase="runs it", subflow="SF1")]
-    step = rules_view_of(m)["rules"][0]["steps"][0]
-    assert step["container"] == "SF1" and step["containerName"] == "Owner check"
-    assert "esc(l.containerName || l.container)" in VIEWER_JS
 
 
 def test_a_block_is_never_a_files_primary_in_the_browser() -> None:
@@ -2514,3 +2459,33 @@ if __name__ == "__main__":
                 failures += 1
                 print(f"FAIL {name}: {e}")
     raise SystemExit(1 if failures else 0)
+
+
+def test_a_rules_page_does_not_claim_which_steps_it_is_enforced_at() -> None:
+    """The page listed the moments in the product's stories where a rule bites, matched by putting the
+    rule's line of code against each step's — the same line, or the same function. It made a claim it
+    could not support, in BOTH of its states, and the reader could see neither.
+
+    EMPTY on 25 of 88 rules on one live map, and 21 of those 25 sit in components the stories walk
+    straight through. It read as "no story reaches this rule" and meant "I could not match a line".
+
+    PARTIAL on 60 of the other 63: the median rule listed 5 steps while 20 sat in the very same FILE as
+    one of its own call sites. A floor with no stated ceiling, and nothing on screen saying so.
+
+    The evidence is not lost. It still reaches the reader from the other side, where the claim is narrow
+    enough to stand: a step's own card names the rules enforced in the code that step runs."""
+    page = _js_function("renderRule")
+    assert "Enforced at these steps" not in page and "r.steps" not in page
+    assert "ruleStepChip" not in VIEWER_JS, "the chip and its style went with the section"
+    assert ".br-step {" not in (VIEWER / "viewer.css").read_text(encoding="utf-8")
+    # …and the other direction is untouched: a step still names the rules it decides.
+    assert "itemPillHtml(r.id, { kind: 'rule', name: ruleTitle(r) })" in _js_function("stepRulesHtml")
+
+
+def test_a_rules_page_names_the_data_it_touches_only_when_there_is_some() -> None:
+    """`Touches` said neither what it held nor, when empty, anything worth reading. A rule naming no
+    record is ordinary — most rules are about who may act, not about what is stored — so the box is
+    gone in that case rather than standing there saying nothing."""
+    page = _js_function("renderRule")
+    assert "'Data it touches'" in page
+    assert "(nEnts ? sec('ents', 'Data it touches', countLabel(nEnts, 'entity'), ents) : '')" in page

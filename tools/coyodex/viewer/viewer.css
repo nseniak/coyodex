@@ -1933,11 +1933,6 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .br-nowhere { color: #475569; font-size: 12px; font-style: italic; }
 /* A rule page's chip rows (the flow steps it is enforced at, the entities it speaks about). */
 .br-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
-.br-step { font: inherit; font-size: 12px; cursor: pointer; padding: 1px 7px; border-radius: 4px;
-           border: 1px solid #dbeafe; background: #eff6ff; color: #1e40af; }
-/* "inside the same function as this step" is a WEAKER claim than "this step" — drawn weaker. */
-.br-step.br-near { border-style: dashed; background: #f8fafc; color: #475569; }
-.br-step:hover { background: #dbeafe; }
 /* A rule page's decision — the full sentence, under the title heading. Reads as the lead line of the
    page, not as a caption: it IS the rule, the title is only how a reader finds it again. */
 .br-statement { margin: -2px 0 10px; font-size: 14px; line-height: 1.5; color: #1f2937; }
@@ -3082,12 +3077,15 @@ body.insp-on { cursor: crosshair; }
    sitting at the left of an empty box (measured on the Data pictures: "Organizations" 77px wide in a
    200px box). It fits its text, like a `tight` box. */
 .ibox-compact { min-width: 0; text-align: center; }
-/* AND EVERYTHING IN IT IS CENTRED. The box is as wide as its wider row — the name with its glyph,
-   or the band under it — so the narrower row would otherwise sit at the left, and a name over a
-   wider band read as pushed right. Both rows centre on the box's own middle. */
+/* THE NAME IS CENTRED, THE BAND IS NOT. The box is as wide as its wider row — the name with its mark,
+   or the band under it — and the name centres on the box's own middle, which is what a box's title does
+   everywhere it is drawn.
+   The COUNT does not: a count sits at the left of its row on a card, in a section head and over a card
+   group, and a container on a diagram was the one place it floated in the middle. One fact, one place
+   to look for it, whatever is drawing it. */
 .ibox-compact .ibox-head { justify-content: center; }
 .ibox-compact .ibox-title { flex: 0 1 auto; justify-content: center; }
-.ibox-compact .ibox-band { justify-content: center; }
+.ibox-compact .ibox-band { justify-content: flex-start; }
 .ibox-full { width: 320px; }
 /* The PERSON on a map, at the size the stick figure has always been drawn there.
    IT IS STILL A BOX. It carried `border: 0`, and a box with no border has nothing for the hover and
@@ -3137,7 +3135,12 @@ body.insp-on { cursor: crosshair; }
 .ibox-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px;
             color: #9ca3af; }
 /* NO RULE ABOVE IT. The gap is already the separator; a hairline as well said the same thing twice. */
-.ibox-band { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+/* THE BAND STARTS AT THE LEFT, wherever it is drawn. A box on a diagram centres its text, and the band
+   inherited that — so a container's count floated in the middle of its box while the same count on a
+   card, in a section head and over a card group sat hard left. One count, one look, one place to find
+   it. The NAME above it keeps the box's own centring: that is the box's title, not a fact about it. */
+.ibox-band { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; align-items: center;
+             justify-content: flex-start; text-align: left; }
 /* NOTHING HERE ABOUT ITS COLOUR OR ITS SIZE. This line used to set both, and being later in the file
    it beat the measured green above while leaving that green's FILL and BORDER standing — so every
    count in the product was a green pill with grey text, which nobody chose. One count, one look. */

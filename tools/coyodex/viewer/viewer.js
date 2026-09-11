@@ -12050,30 +12050,17 @@ function ruleSiteRow(site) {
   const who = owners.length
     ? owners.map((c) => itemPillHtml(c.id, { name: c.name })).join('')
     : '<span class="br-unverified">no component claims this file</span>';
-  return `<li class="br-site${owners.length ? '' : ' br-bare'}">${srcCell(site.where || '')}`
-    + `<span class="br-owners">${who}</span>`
+  // THE COMPONENT FIRST, then the line. The row answers "which part of the product enforces this, and
+  // where in its code" — and the part is the half a reader is choosing between when a rule has five
+  // sites. The line came first and put five file names in the scanning column, with the names that
+  // differ pushed right by however long each path happened to be.
+  return `<li class="br-site${owners.length ? '' : ' br-bare'}">`
+    + `<span class="br-owners">${who}</span>${srcCell(site.where || '')}`
     + (site.why ? ` <span class="br-why">${esc(site.why)}</span>` : '') + '</li>';
 }
 // A step link says WHICH step and HOW STRONGLY: the exact line, or the same enclosing function.
 // The distinction is the honest half — "inside the same function as this step" is a weaker claim
 // than "this step", and collapsing them would be the readout pretending to be a proof.
-function ruleStepChip(l) {
-  // The sub-flow's NAME, never its id: the viewer speaks the reader's language.
-  const via = l.container === l.uc ? '' : ' · ' + esc(l.containerName || l.container);
-  const exact = l.strength === 'exact';
-  // THE NUMBER ON SCREEN IS THE POSITION IN THE FLOW, not the authored `n`. `(container, n)` is a
-  // step's IDENTITY — unique per container, which is why the payload carries it — but a sub-flow's
-  // steps are spliced into every referencing flow keeping their OWN numbering, so one flow's
-  // narrative runs 1..24 over authored ns like [1,2,3,1,2,3,4,…]. Every other surface (the arrow
-  // badge, the sequence list, the step counter) counts positions, so a chip saying "step 6" that
-  // landed on "Step 18 / 24" was promising a number the diagram never shows.
-  const i = flowStepIndex(l.uc, l.container, l.n);
-  const where = i >= 0 ? ` step ${i + 1}` : '';
-  return `<button type="button" class="br-step${exact ? '' : ' br-near'}" data-uc="${esc(l.container || l.uc)}" `
-    + `data-i="${esc(String(i))}" `
-    + `title="${exact ? 'this exact step' : 'inside the same function as this step'}">`
-    + `${esc(l.ucName)}${where}${via}</button>`;
-}
 // Level 1 — the decision areas, each listing its rules. A row carries only what it takes to CHOOSE:
 // the decision, its state chips, and where it lives; the anchors are one click away.
 // ── Interfaces — the product's outside edge ──────────────────────────────────────────────────────
@@ -13197,48 +13184,48 @@ function renderRule(s) {
     return;
   }
   const blk = (RULES_VIEW.blocks || []).find((b) => b.id === r.block);
-  const area = blk
-    ? itemPillHtml(blk.id, { kind: 'block', name: blk.name })
-    : '<span class="br-nowhere">not assigned to a decision area</span>';
+  // NO `ENFORCED AT THESE STEPS`. It listed the moments in the product's stories where this rule bites,
+  // matched by putting the rule's line of code against each step's — the same line, or the same
+  // function. It made a claim it cannot support, in BOTH of its states, and the reader could see
+  // neither:
+  //   EMPTY on 25 of 88 rules on one live map, of which 21 sit in components the stories walk straight
+  //     through. It read as "no story reaches this rule" and meant "I could not match a line".
+  //   PARTIAL on 60 of the other 63. Median: 5 steps listed while 20 sit in the very same FILE as one of
+  //     the rule's own call sites. A floor with no stated ceiling, and nothing on screen saying so.
+  // The evidence still reaches the reader from the other side, where the claim is narrow enough to
+  // stand: a step's own card names the rules enforced in the code that step runs.
+  //
   // The same framed sections with a strip head every item page draws; the count keeps its noun.
   const secs = [];
   const sec = (key, title, count, body) => itemSectionHtml(secs, key, title, count, '', body);
   const nSites = (r.sites || []).length;
-  const nSteps = (r.steps || []).length;
   const nEnts = (r.entities || []).length;
   const sites = nSites ? `<ul class="br-sites">${r.sites.map(ruleSiteRow).join('')}</ul>`
     : '<p class="empty">No call site is recorded for this rule.</p>';
-  const steps = nSteps ? `<div class="br-chips">${r.steps.map(ruleStepChip).join('')}</div>`
-    : '<p class="empty">No traced flow step reaches this rule.</p>';
+  // DROPPED WHEN EMPTY. A rule naming no record is ordinary: most rules are about who may act, not
+  // about what is stored, so an empty box here says nothing a reader needs.
   const ents = nEnts
     ? '<div class="br-chips">' + r.entities.map((e) => itemPillHtml(e.id, { name: e.name })).join('')
       + '</div>'
-    : '<p class="empty">No entity is named by this rule.</p>';
-  // THE SAME CARD every page about one element leads with: the diamond in the figure column,
-  // `Business rule: <name>`, the statement as the sentence, and the area and the risk as its context.
-  const context = `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Decision area:</span> ${area}`
-    + (blk && blk.purpose ? ` ${mdInline(blk.purpose)}` : '') + '</span>'
-    + (r.risk ? `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Why this rule:</span> ${mdInline(r.risk)}</span>` : '');
+    : '';
+  // THE SAME CARD every page about one element leads with: the mark in the figure column, `Rule:
+  // <name>`, the statement as the sentence, and the reason as its context.
+  //
+  // NOT THE DECISION AREA. The trail above already reads `Rules › <the area> ›` — the reader arrived
+  // through it, and it is the crumb they click to go back — so the hero printed the same name a second
+  // time twenty pixels below it, with the area's own sentence after it.
+  const context = r.risk
+    ? `<span class="page-hero-meta-line"><span class="uc-wants-lbl">Why this rule:</span> ${mdInline(r.risk)}</span>`
+    : '';
   diagram.innerHTML = '<div class="usecases-wrap">'
     + pageHeroHtml({ glyph: itemGlyphSvg('rule'), name: ruleCrumbTitle(s.br), type: elementLabel('rule'),
                      desc: ruleStatementLine(r) ? mdInline(r.statement) : '', noDesc: false, meta: context })
     + sec('sites', 'Where it is enforced', nSites ? countLabel(nSites, 'call site') : '', sites)
-    + sec('steps', 'Enforced at these steps', nSteps ? countLabel(nSteps, 'flow step') : '', steps)
-    + sec('ents', 'Touches', nEnts ? countLabel(nEnts, 'entity') : '', ents)
+    + (nEnts ? sec('ents', 'Data it touches', countLabel(nEnts, 'entity'), ents) : '')
     + '</div>';
   // The area, the components and the entities are all ITEM PILLS now, and one binder wires every one
   // of them to the same destination: the thing the pill names.
   bindItemPills(diagram);
-  // A step chip SELECTS that step in the use case's flow — `selectFlowStep`, the same landing an
-  // impact row uses, so the arrow lights up and its pane opens rather than the flow merely opening
-  // at a counter position. The index was resolved when the chip was LABELLED, so the number the
-  // reader clicked and the step they land on cannot disagree.
-  diagram.querySelectorAll('.br-step').forEach((el) => el.addEventListener('click', () => {
-    const uc = el.getAttribute('data-uc');
-    const i = Number(el.getAttribute('data-i'));
-    if (i >= 0) selectFlowStep(uc, i, true);   // select AND frame — see selectFlowStep
-    else go({ kind: 'usecase', uc });   // step missing from the narrative — open its flow
-  }));
 }
 // Put a just-rendered text view back where it was left: this history point's own offset first (so
 // back/forward lands exactly), else the last offset for this view (so a tab switch does too).
