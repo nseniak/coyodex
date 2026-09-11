@@ -1,8 +1,10 @@
 # Contributing to coyodex
 
-Thanks for taking a look. coyodex is **alpha (v0.1.0)** — experimental, early,
-and moving fast. That means feedback is worth a lot right now, and the bar to
-contribute is low: a clear bug report or a sharp idea is a real contribution.
+Thanks for taking a look. coyodex is **alpha** — experimental, early, and moving
+fast. That means feedback is worth a lot right now, and the bar to contribute is
+low: a clear bug report or a sharp idea is a real contribution. The version
+number lives in one place, the [`VERSION`](VERSION) file at the repo root;
+`pyproject.toml` reads it from there, and the docs deliberately do not repeat it.
 
 By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
