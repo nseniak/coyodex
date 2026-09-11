@@ -282,6 +282,21 @@ def test_storyless_ways_in_warn_once_per_interface_and_honour_the_records():
     assert not storyless_warnings(m)
 
 
+def test_validate_json_carries_the_coverage_counts_as_numbers():
+    m = make_storyless_model()
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "project-map.json"
+        p.write_text(to_canonical_json(m), encoding="utf-8")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            validate_model_mod.main(["--json", str(p)])
+    d = json.loads(buf.getvalue())
+    c = d["completeness"]
+    assert c["entry_points_external"] == 7 and c["entry_points_named_by_use_case"] == 1
+    assert c["entry_points_run_by_a_step"] == 1 and c["entry_points_storyless"] == 4
+    assert "1 named by a use case" in d["entry_point_coverage"]
+
+
 def test_emit_unclaimed_prints_the_storyless_ways_in_per_interface():
     m = make_storyless_model()
     with tempfile.TemporaryDirectory() as td:

@@ -2341,13 +2341,11 @@ def test_the_first_walk_opens_the_code_column_and_then_leaves_it_alone() -> None
         assert not page.js_errors, page.js_errors
 
 
-def test_a_selected_box_gets_a_card_with_a_line_to_it_not_a_drawer() -> None:
-    """Every other screen puts what it is describing beside what you clicked. The map put it in a band
-    across the bottom, because the drawer held the default from when the card was the newer shape. The
-    card is the default now, and it draws a leader line to the box it describes."""
+def test_a_selected_box_gets_a_card_with_a_line_to_it() -> None:
+    """Every other screen puts what it is describing beside what you clicked, and the map does too: a
+    card by the box, with a leader line to it."""
     with _served() as url, _page(url + "#v=usecase&uc=UC1") as page:
         _settle(page)
-        assert not page.evaluate("() => document.body.classList.contains('card-drawer')")
         page.evaluate("""() => {
             const n = [...document.querySelectorAll('#diagram g.node')][1];
             n.dispatchEvent(new MouseEvent('click', { bubbles: true }));

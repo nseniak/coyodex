@@ -444,8 +444,7 @@ function glossSubjectKey() {
 // subject. `seenByScope` is shared across one observer BATCH (a panel card written as several
 // sibling fragments is several added nodes but ONE card — a per-call set linked "sandbox" once per
 // fragment), and a scope's set starts from the gloss links it already holds, so re-inserting HTML
-// that was linked once (the drawer's hide animation restores captured innerHTML) cannot link the
-// next occurrence on top of the first.
+// that was linked once cannot link the next occurrence on top of the first.
 function autolinkTerms(root, seenByScope, scopeFallback) {
   if (!root || !root.isConnected || root.closest(GLOSS_SKIP)) return;
   const subject = glossSubjectKey();
@@ -3377,8 +3376,8 @@ const FLOW_PAD = 36;
 // its messages at ~4px, and a step player that pans an unreadable label into view shows nothing.
 const FLOW_READABLE = 0.8;
 // What the reader can actually SEE of the diagram: the diagram's box minus the overlays that float
-// over its edges — the flow controls card (top-left) and the info pane when it is
-// the bottom drawer. They all live INSIDE the diagram's rect, so "pan the step into the diagram"
+// over its edges — the flow controls card (top-left) and the selection card. They both live INSIDE
+// the diagram's rect, so "pan the step into the diagram"
 // could park it exactly under one of them and call it visible. Each overlay only shrinks the rect
 // when it really overlaps (a hidden card and a side-by-side pane cost nothing), and never past the
 // midline, so a degenerate window can't shrink the target area to nothing.
@@ -3483,7 +3482,7 @@ function easeCameraMove() {
   if (!vp) return;
   vp.classList.add('pan-anim');
   // A TIMER, never `transitionend`: with motion turned off the stylesheet runs no transition and that
-  // event never fires — the same lesson the drawer's own slide already carries. And `onPan` cannot
+  // event never fires. And `onPan` cannot
   // serve either: the library sets the transform ONCE and the stylesheet animates it, so onPan has
   // already fired while the drawing is still travelling. 420 clears the 300ms transition with room.
   setTimeout(() => {
@@ -6810,13 +6809,6 @@ function viewHeadHtml(_title, desc) {
 // having to find empty canvas to click.
 function paneSync() {
   const has = !!PANEL_HOST.innerHTML.trim();
-  if (drawerMode) {
-    hideCallout();   // this shape draws no line, in either direction — see placeCard
-    if (!has) { drawerHide(); return; }
-    stampPanelBar();
-    drawerShow();
-    return;
-  }
   PANEL_HOST.hidden = !has;
   // NO CARD, NO LINE. This return is the path taken by every deselect — clicking empty canvas, the card's
   // own ×, selecting only a synthetic arrow (which has no card to show) — and it used to skip the callout
@@ -6827,9 +6819,7 @@ function paneSync() {
   stampPanelBar();
   placeCard();   // …placed, moved out of its element's way, and joined to it
 }
-// The bar carries the × in BOTH shapes — putting the panel away without hunting for a piece of empty
-// canvas is worth as much in a drawer as it is on a card. Only the grip is shape-specific, and the CSS
-// takes it away where there is nothing to drag.
+// The bar carries the ×, so the panel can be put away without hunting for a piece of empty canvas.
 function stampPanelBar() {
   if (PANEL_HOST.querySelector('#panelbar')) return;
   PANEL_HOST.insertAdjacentHTML('afterbegin',
@@ -7657,7 +7647,6 @@ function hideCallout() {
 }
 function syncCallout() {
   if (!callout) return;
-  if (drawerMode) { hideCallout(); return; }   // this shape draws no line — see placeCard
   const wrap = document.getElementById('diagwrap');
   const el = soleSelectedEl();
   if (!wrap || !el || PANEL_HOST.hidden) { hideCallout(); return; }
@@ -7687,82 +7676,6 @@ function syncCallout() {
   callout.innerHTML = `<line class="co-case" ${seg}></line><line class="co-line" ${seg}></line>`
     + `<circle class="co-dot" cx="${b.x - ox}" cy="${b.y - oy}" r="3.5"></circle>`;
   callout.removeAttribute('hidden');
-}
-// ── CARD OR DRAWER ────────────────────────────────────────────────────────────────────────────────
-// The same panel in two shapes: floating over the drawing, or a band that slides up from the bottom
-// edge. ONE element, so no builder of a card, a list or a stack knows which shape is on screen — the
-// difference is a class on the body and what this file skips while it is set.
-//
-// What the drawer does NOT do: it has one place, so there is nothing to drag, nothing to resize, no
-// remembered box and nothing to step aside from. The line to the selected element stays, and matters
-// more here than it did for the card, since the drawer sits at the far edge from most of the drawing.
-let drawerMode = false;
-function setDrawerMode(on, chose) {
-  drawerMode = !!on;
-  // Written only from `chose`, never from the boot default — see LS.panel. A default that writes
-  // itself down is a default nobody can ever change.
-  if (chose) lsSet(LS.panel, drawerMode ? 'drawer' : 'card');
-  document.body.classList.toggle('card-drawer', drawerMode);
-  // Switching shape drops whatever the OTHER shape had written on the element: the card's remembered
-  // box is inline left/top/width/height, and the drawer's is a class. Neither may leak into the other.
-  const st = PANEL_HOST.style;
-  st.left = st.top = st.right = st.width = st.height = '';
-  PANEL_HOST.classList.remove('drawer-up');
-  applyDrawerMax();
-  if (drawerTimer) { clearTimeout(drawerTimer); drawerTimer = 0; }
-  if (!PANEL_HOST.hidden) paneSync();   // re-place whatever is on screen into the new shape
-  else syncCallout();
-}
-// HOW TALL THE DRAWER MAY GET — a MAXIMUM the reader sets by dragging its bar, never a height. A drawer
-// holding one card stays 108px tall whatever the ceiling says; only content taller than the ceiling
-// reaches it, and then the drawer scrolls inside itself.
-//
-// That is the difference from the card's corner grip, which sets a SIZE. A size here would mean a drawer
-// showing one line of prose in a 400px band, which is the empty-pane problem the floating card was built
-// to end.
-//
-// Stored in pixels and clamped on every apply rather than on save, the same rule applyPanelBox follows:
-// the window it was dragged in is not the window it comes back to.
-function drawerMax() {
-  const n = parseInt(lsGet(LS.drawerMax) || '', 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-function applyDrawerMax() {
-  const wrap = document.getElementById('diagwrap');
-  const px = drawerMax();
-  if (!wrap || !drawerMode || !px) { document.body.style.removeProperty('--drawer-max'); return; }
-  const h = wrap.getBoundingClientRect().height;
-  document.body.style.setProperty('--drawer-max', Math.max(90, Math.min(px, h - 24)) + 'px');
-}
-// SLIDING OUT NEEDS ITS CONTENT. Every caller empties the panel before paneSync decides to hide it, so a
-// drawer sliding away would be a blank white band. The last thing it showed is put back for the length of
-// the slide — inert, and replaced the moment anything is selected again.
-let drawerHtml = '';
-let drawerTimer = 0;
-const DRAWER_MS = 260;
-function drawerShow() {
-  drawerHtml = PANEL_HOST.innerHTML;
-  if (drawerTimer) { clearTimeout(drawerTimer); drawerTimer = 0; }
-  PANEL_HOST.hidden = false;
-  // Two frames before the class, or the browser has no "before" to animate from: the element has only
-  // just stopped being display:none, so its first computed transform is also its last.
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    PANEL_HOST.classList.add('drawer-up');
-  }));
-}
-function drawerHide() {
-  if (!PANEL_HOST.classList.contains('drawer-up')) { PANEL_HOST.hidden = true; return; }
-  if (!PANEL_HOST.innerHTML.trim()) PANEL_HOST.innerHTML = drawerHtml;
-  PANEL_HOST.classList.remove('drawer-up');
-  if (drawerTimer) clearTimeout(drawerTimer);
-  // A timer, not `transitionend`: the event never fires when the motion is off (reduced motion, a
-  // background tab), and the panel would stay on screen for good.
-  drawerTimer = setTimeout(() => {
-    drawerTimer = 0;
-    if (PANEL_HOST.classList.contains('drawer-up')) return;   // something was selected again mid-slide
-    PANEL_HOST.hidden = true;
-    PANEL_HOST.innerHTML = '';
-  }, DRAWER_MS + 40);
 }
 // MEASURE AFTER THE PAINT, NOT BEFORE IT.
 //
@@ -7794,19 +7707,6 @@ function scheduleCallout(alsoDodge) {
 // Synchronously first, so the card never flickers through a wrong position — then again after the next
 // paint, because a refit or a camera move scheduled alongside this has not landed yet.
 function placeCard() {
-  // A DRAWER HAS ONE PLACE. No remembered box to apply, and nothing to step aside from — it is already
-  // at the edge, and moving it is the one thing this shape cannot do.
-  //
-  // AND NO LINE. The card floats over the drawing and can be anywhere, so a line saying which box it
-  // describes earns its ink. The drawer is an edge band that barely touches the drawing — so the line
-  // would be the ONLY thing the panel puts ON it, and without it this shape leaves the map completely
-  // clear. What the line said is still said twice: the drawer's own title names the element, and that
-  // element is the only bright thing left once the rest dims.
-  //
-  // Not a length argument: measured over nine selections the line is SHORTER in this shape than in the
-  // card (275px against 338px in the middle, 568 against 832 at worst), because the drawer runs the full
-  // width and its edge sits directly below whatever was clicked.
-  if (drawerMode) { hideCallout(); applyDrawerMax(); return; }
   placeCardNear(soleSelectedEl());
   syncCallout();
   scheduleCallout(true);
@@ -11011,8 +10911,8 @@ function bindStoryDiagram(root) {
   const restore = () => { if (selected) show(selected.key, selected.id); else clearWires(); };
   const scheduleHide = () => { clearTimeout(hideTimer); hideTimer = setTimeout(restore, 180); };
   // A pin stays ON THIS PAGE: it lights the card's wires and labels and nothing else. It used to
-  // also fill the selection drawer, and the drawer only ever repeated the card the reader had just
-  // clicked — the one thing it added, the door to an actor's own page, is the card's NAME now.
+  // also fill the selection panel, which only ever repeated the card the reader had just clicked —
+  // the one thing it added, the door to an actor's own page, is the card's NAME now.
   // `storyPinNow` mirrors `selected` outside this closure, because what is pinned is part of WHERE YOU
   // ARE: the URL restates it and back/forward restores it, the same as a selected box on a diagram.
   // refreshUrl is replaceState only, so pinning a card never grows the browser's Back button.
@@ -11462,8 +11362,19 @@ function systemSections() {
            (C.capabilities || 0) - (C.capabilities_untraced || 0), C.capabilities || 0,
            (C.capabilities_untraced || 0) ? 'a whole feature was never walked' : 'all reached',
            (C.capabilities_untraced || 0) ? 'warn' : 'ok') : '',
+      // The four coverage states of a way in, as validate splits them: named, run, loose,
+      // unclaimed. The one tile this used to show ("unclaimed") read 2 of 97 on a map with 64
+      // storyless ways in, because a way in counts as unclaimed only when NO walk touches its
+      // component — and one walk through a component covers every way in it owns.
+      tile('Ways in named by a use case', C.entry_points_named_by_use_case || 0,
+           C.entry_points_external || 0,
+           `${C.entry_points_run_by_a_step || 0} more run by a flow step · `
+           + `${C.entry_points_covered_by_component_only || 0} covered only through their component`, ''),
+      tile('Storyless ways in', C.entry_points_storyless || 0, C.entry_points_external || 0,
+           'no use case names them and no flow step runs them',
+           (C.entry_points_storyless || 0) ? 'warn' : 'ok'),
       tile('External surfaces unclaimed', C.entry_points_unclaimed_external || 0,
-           C.entry_points_external || 0, 'no use case reaches them',
+           C.entry_points_external || 0, 'no walk touches their component',
            (C.entry_points_unclaimed_external || 0) ? 'warn' : 'ok'),
       tile('Self-started unclaimed', C.entry_points_unclaimed_self || 0, 0,
            'crons / workers / boot hooks — often a record, not a use case',
@@ -14996,22 +14907,7 @@ PANEL_HOST.addEventListener('click', (ev) => {
 // a reader who wants to copy a call site should be able to. Pointer events (not mouse) so a trackpad and
 // a touchscreen behave the same, and the capture keeps the drag alive when the cursor leaves the card.
 let panelDrag = null;
-// DRAGGING THE BAR IN A DRAWER sets the ceiling. Up is taller. The card's own drag moves it instead —
-// two shapes, one grip, and each drags the thing its shape can change.
-let drawerSizing = null;
 PANEL_HOST.addEventListener('pointerdown', (ev) => {
-  if (drawerMode) {
-    const bar = ev.target && ev.target.closest && ev.target.closest('#panelbar');
-    if (!bar || ev.target.closest('#panelclose')) return;
-    const wrap = document.getElementById('diagwrap');
-    if (!wrap) return;
-    drawerSizing = { y: ev.clientY, h: PANEL_HOST.getBoundingClientRect().height,
-                     max: wrap.getBoundingClientRect().height - 24 };
-    bar.setPointerCapture(ev.pointerId);
-    document.body.classList.add('drawer-sizing');
-    ev.preventDefault();
-    return;
-  }
   const bar = ev.target && ev.target.closest && ev.target.closest('#panelbar');
   if (!bar || (ev.target.closest && ev.target.closest('button'))) return;
   const wrap = document.getElementById('diagwrap');
@@ -15023,13 +14919,6 @@ PANEL_HOST.addEventListener('pointerdown', (ev) => {
   ev.preventDefault();
 });
 PANEL_HOST.addEventListener('pointermove', (ev) => {
-  if (drawerSizing) {
-    // Dragging UP raises the ceiling, so the delta is inverted. Clamped to the drawing area, and never
-    // below 90px — a ceiling under that would cut into the bar carrying the × that puts the drawer away.
-    const px = Math.max(90, Math.min(drawerSizing.h + (drawerSizing.y - ev.clientY), drawerSizing.max));
-    document.body.style.setProperty('--drawer-max', Math.round(px) + 'px');
-    return;
-  }
   if (!panelDrag) return;
   const d = panelDrag;
   // Clamped so the whole card stays inside the drawing area — a bar dragged past the edge is a card
@@ -15050,17 +14939,7 @@ PANEL_HOST.addEventListener('pointermove', (ev) => {
 // that is not where the reader put it. Measured: six taps on the bar, each after selecting a covered box,
 // walked the stored position from top 60 to top 275 and left 300 to left 394. Exactly the accumulation
 // dodgeCard's own comment forbids, arriving through the one path that does save.
-const endDrawerSizing = () => {
-  if (!drawerSizing) return;
-  drawerSizing = null;
-  document.body.classList.remove('drawer-sizing');
-  // What the drag WROTE, read back — the same shape the card's resize uses, and for the same reason: a
-  // clamp against a narrow window must never be saved as the reader's own choice.
-  const v = parseInt(document.body.style.getPropertyValue('--drawer-max') || '', 10);
-  if (Number.isFinite(v) && v > 0) lsSet(LS.drawerMax, String(v));
-};
 const endPanelDrag = () => {
-  endDrawerSizing();
   if (!panelDrag) return;
   const moved = panelDrag.moved;
   panelDrag = null;
@@ -15075,7 +14954,6 @@ PANEL_HOST.addEventListener('pointercancel', endPanelDrag);
 // Double-click the bar to put the card back in its corner at its natural size. A floating thing needs a
 // way home, or one bad drag on a small window loses it for good.
 PANEL_HOST.addEventListener('dblclick', (ev) => {
-  if (drawerMode) return;   // it never left its corner
   if (!ev.target || !ev.target.closest || !ev.target.closest('#panelbar')) return;
   lastCardPlace = null;
   placeCard();
@@ -15098,7 +14976,7 @@ PANEL_HOST.addEventListener('dblclick', (ev) => {
 // this the card stayed where it was while the box it points at slid away, and the line ended in empty
 // space or ran off the layer.
 document.addEventListener('scroll', () => {
-  if (PANEL_HOST.hidden || drawerMode) return;
+  if (PANEL_HOST.hidden) return;
   syncCallout();
 }, { capture: true, passive: true });
 
@@ -15124,7 +15002,7 @@ PANEL_HOST.addEventListener('click', (ev) => {
   // Escape is the gesture that clears the selection, and it still does. Two gestures, two meanings:
   // × hides what the selection SAYS, Escape ends the selection itself.
   PANEL_HOST.innerHTML = '';
-  paneSync();   // paneSync is what takes the card, or the drawer, away
+  paneSync();   // paneSync is what takes the card away
 });
 // While ⌥ (Option / Alt) is held, flag the body so drillable subsystems/arrows show the drill-in cursor
 // (see .drill in the CSS) and the hover tip previews the drill/open action. (⌘/⌃ is now the multi-select
@@ -15136,7 +15014,6 @@ document.addEventListener('keyup', (e) => { if (e.key === 'Alt') setDrillMod(fal
 window.addEventListener('blur', () => setDrillMod(false));
 window.addEventListener('resize', refitStage);  // keep the diagram fitted when the window itself resizes
 window.addEventListener('resize', placeCard);  // …and keep the floating card inside the smaller box
-window.addEventListener('resize', applyDrawerMax);  // …and the drawer's ceiling inside the shorter one
 window.addEventListener('resize', updateAllPillFades);  // and re-evaluate the pill-box edge fades
 
 // --- open source in an external editor / on GitHub -------------------------------
@@ -15168,15 +15045,9 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', leftW: 'coyodex.leftW', codeOpen: 'coyodex.codeOpen', drawer: 'coyodex.drawer', drawerMax: 'coyodex.drawerMax', 
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', leftW: 'coyodex.leftW', codeOpen: 'coyodex.codeOpen',
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW',
-  flowCode: 'coyodex.flowCode',
-  // A NEW KEY, because the old one cannot be read. `coyodex.drawer` was WRITTEN AT EVERY BOOT with
-  // whatever the default then was, so every reader who ever opened the viewer has '1' stored whether
-  // they chose the drawer or never opened Settings. Flipping the default left all of them on the
-  // drawer — the change reached a brand-new browser and nobody else. This key is written ONLY when a
-  // reader picks a shape, so unset really does mean unset.
-  panel: 'coyodex.panelShape' };
+  flowCode: 'coyodex.flowCode' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
 // A single global key let a root saved while viewing one repo's map open files from the WRONG repo in
@@ -15313,9 +15184,6 @@ const setGhRepo = document.getElementById('setGhRepo');
 const setGhRow = document.getElementById('setGhRow');
 const setHelp = document.getElementById('setHelp');
 const setGhHelp = document.getElementById('setGhHelp');
-const setPanel = document.getElementById('setPanel');   // which shape the selected element is shown in
-const setPanelRow = document.getElementById('setPanelRow');
-const setPanelHelp = document.getElementById('setPanelHelp');
 const setCancel = document.getElementById('setCancel');
 const setSave = document.getElementById('setSave');
 const modalErr = document.getElementById('modalErr');
@@ -15338,7 +15206,6 @@ const syncRows = () => {
   setHelp.hidden = !needsRoot(id);  // the {abspath}/{path}… blurb is editor-only
 };
 function openSettings(firstUse) {
-  if (setPanel) setPanel.value = drawerMode ? 'drawer' : 'card';
   setEditor.value = openTargetId();
   setCustom.value = customUri();
   setRoot.value = srcRoot();
@@ -15346,11 +15213,9 @@ function openSettings(firstUse) {
   syncRows();
   modalErr.hidden = true;
   const ref = (firstUse && pendingSrc) ? cleanPath(pendingSrc.file, pendingSrc.line) + (pendingSrc.line ? ':' + pendingSrc.line : '') : '';
-  // FIRST USE is about one thing — the source link the reader just clicked — so the dialog narrows to it
-  // and the panel-shape row stands down. Opened from the ⚙ it is the whole of Settings.
+  // FIRST USE is about one thing — the source link the reader just clicked — so the dialog narrows to it.
+  // Opened from the ⚙ it is the whole of Settings.
   modalTitle.textContent = firstUse ? 'How should source links open?' : 'Settings';
-  if (setPanelRow) setPanelRow.hidden = !!firstUse;
-  if (setPanelHelp) setPanelHelp.hidden = !!firstUse;
   modalIntro.hidden = !firstUse;
   modalIntro.textContent = firstUse
     ? 'First time — choose how to open ' + ref + ' (your editor, or GitHub), then Save. Change it anytime with the ⚙ button.' : '';
@@ -15374,9 +15239,6 @@ function saveSettings() {
   }
   lsSet(LS.editor, id); lsSet(LS.custom, custom); lsSet(LS.root, setRoot.value.trim());
   lsSet(LS.repo, ghRepoVal); lsSet(LS.ok, '1');
-  // Applied through the same function the boot call uses, so switching here re-places whatever is on
-  // screen rather than waiting for the next selection.
-  if (setPanel && !setPanelRow.hidden) setDrawerMode(setPanel.value === 'drawer', true);  // a CHOICE
   const n = pendingSrc;
   closeSettings();
   if (n && id !== 'native') doOpenSource(n);   // first-use: continue the open the user asked for
@@ -15395,10 +15257,6 @@ const coach = document.getElementById('coach');
 const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
 document.getElementById('coachok').addEventListener('click', dismissCoach);
 document.getElementById('helpbtn').addEventListener('click', () => { coach.hidden = false; });
-// THE CARD IS THE DEFAULT, and this boot does NOT write that down: only a reader picking a shape in
-// Settings does. The drawer held the default while the card was the newer shape; it is the older one
-// now, and every other screen in the product puts what it is describing beside what you clicked.
-setDrawerMode(lsGet(LS.panel) === 'drawer', false);
 coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
 if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once

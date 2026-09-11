@@ -6990,6 +6990,8 @@ def _run(argv: list[str] | None = None) -> int:
                    # The split, not just the total: a machine reader tracking coverage over
                    # rebuilds needs to see the loose half move, which one number hides.
                    "entry_point_coverage": _entry_point_coverage_line(m) or None,
+                   # The same split as NUMBERS: a script reading this used to get a sentence.
+                   "completeness": completeness_counts(m),
                    "checked": checked or None,
                    # Structured, like `audit --json`'s `worklist`: the sweep rows a build acts on.
                    "sweep_worklist": sweep_worklist(m, load_map_extents(path)),
