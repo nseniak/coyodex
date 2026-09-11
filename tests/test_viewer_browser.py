@@ -3662,9 +3662,8 @@ def test_the_rules_board_cuts_its_areas_by_the_feature_they_are_specified_under(
         assert [a["name"] for a in by["Not specified under any feature"]["areas"]] == ["Plan caps"]
         assert board["cards"] == 5, f"four areas, one of them twice: {board}"
         assert board["typePills"] == 0, "every card here is a decision area; saying so 5 times is noise"
-        # The feature an `Also under` pill names has its own CARD on this page, so the pill says where
-        # the area also sits and does not carry the reader off the page to find it.
-        assert board["footDoors"] == 0, "the Also under pills name a feature, they do not open it"
+        # EVERY item pill acts. Both `Also under` pills open the feature they name.
+        assert board["footDoors"] == 2, f"the Also under pills are doors: {board}"
         assert not page.js_errors, page.js_errors
 
 

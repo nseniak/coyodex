@@ -1479,6 +1479,10 @@ function drillInto(id) {
     case 'block': return go({ kind: 'rules', blk: id });
     case 'rule': return go({ kind: 'rule', br: id });
     case 'process': return go({ kind: 'deploymentUnit', unit: n.unit });
+    // AN INTERFACE HAS A PAGE OF ITS OWN, under the Interfaces list, and this case was missing: it fell
+    // to the default and opened the generic details page, which for a door shows none of what makes it
+    // one — who stands on the far side, what crosses it, which features reach through it.
+    case 'interface': return go({ kind: 'interfaces', iface: id });
     default: return go({ kind: 'element', id });   // component, entity, dependency: their details page
   }
 }
@@ -1490,10 +1494,21 @@ function showInContext(id) { selectFromTree(id); }
 // ONE listener and ONE destination: the pill opens the thing it names, which is the same answer a card
 // gives. It used to be five listeners with two destinations, so a component chip on a rule's page and
 // a component card two clicks away landed the reader in different places.
+// WHERE A PILL GOES, and it is NOT the same answer for every kind. A feature, an actor and a decision
+// area each have a page of their own, so the pill opens it. An entity and a component do not: they are
+// boxes INSIDE something — a record in its sub-domain, a component in its subsystem — and the picture
+// of the neighbourhood is what makes them mean anything. For those two the pill opens the DIAGRAM that
+// holds them with the box selected, which is what a type pill has always done. `selectTargetFor`
+// answers which diagram, and falls back to the overview for one that sits in no container.
+function itemPillTarget(id) {
+  const n = GRAPH.nodes[id];
+  return n && (n.kind === 'entity' || n.kind === 'component') ? showInContext : drillInto;
+}
 function bindItemPills(root) {
   root.querySelectorAll('.item-pill-door[data-item]').forEach((b) => b.addEventListener('click', (ev) => {
     ev.stopPropagation();          // the pill's action is not the card's, where it sits on one
-    drillInto(b.getAttribute('data-item'));
+    const id = b.getAttribute('data-item');
+    itemPillTarget(id)(id);
   }));
 }
 // Wire every card under `root`. One binder, so the two actions cannot differ between two card lists.
@@ -3221,16 +3236,17 @@ function showUseCaseSummary(uc) {
 // THE KIND DECIDES THE MARK AND THE COLOUR, from the same table that paints the boxes on every
 // diagram, so the pill for an entity and that entity's own box are visibly the same thing.
 //
-// `plain` draws it with no click, for where the thing it names is already on the reader's screen — the
-// Rules board's "Also under", whose feature has a card of its own a few lines away. An element the map
-// no longer holds draws that way too: a control that looks live and goes nowhere teaches a reader to
-// distrust the ones that work. ONE FUNCTION DECIDES THE CLICK, so making every pill navigable later is
-// one edit here rather than six.
-function itemMarkHtml(kind) {
+// EVERY PILL ACTS. `plain` is left for the two cases where there is nothing to act on: an element the
+// map no longer holds, and a name that stands for more than one thing (a use case driven by a PAIR of
+// actors names no single page). A control that looks live and goes nowhere teaches a reader to distrust
+// the ones that work, and those two are the only times that is true.
+function itemMarkHtml(kind, ikind) {
   // A feature's mark is the three sparkles, which live outside the item-box mark table; every other
   // kind comes from it. One answer, so a pill, a card and a section head cannot draw one kind two ways.
+  // An INTERFACE needs a second word: one glyph serves two kinds of door, and which one it is decides
+  // the drawing — a globe for a website, a wrench for a tool.
   if (kind === 'capability') return storyFeatureGlyphSvg();
-  return itemHasGlyph(kind) ? itemGlyphSvg(kind) : '';
+  return itemHasGlyph(kind) ? itemGlyphSvg(kind, ikind) : '';
 }
 function itemPillHtml(id, opts) {
   const o = opts || {};
@@ -3239,7 +3255,7 @@ function itemPillHtml(id, opts) {
   const name = o.name || (node && node.name) || elName(id);
   const tint = kind && kind !== 'capability' ? itemTint(itemKind(kind)) : null;
   const style = tint ? ` style="--pill-fill:${esc(tint.fill)};--pill-line:${esc(tint.stroke)}"` : '';
-  const body = itemMarkHtml(kind) + `<span>${esc(name)}</span>`;
+  const body = itemMarkHtml(kind, o.ikind) + `<span>${esc(name)}</span>`;
   const live = !o.plain && (node || o.go);
   return live
     ? `<button type="button" data-card-own class="item-pill item-pill-door"${style} `
@@ -8685,7 +8701,7 @@ function featureSectionsHtml(capId) {
       (f.reachesOut || []).length
         ? '<div class="feat-eps"><div class="feat-ep-list">' + f.reachesOut.map((id) => {
             const i = ifaceById(id);
-            return i ? `<button type="button" class="featep" data-iface="${esc(id)}">${esc(i.name)}</button>` : '';
+            return i ? itemPillHtml(id, { kind: 'interface', name: i.name, ikind: i.kind }) : '';
           }).join('') + '</div></div>'
         : featEmpty('Not stated: no step of this feature\u2019s walks is drawn at an outside service.'),
       itemGlyphSvg('dep'));
@@ -8718,11 +8734,9 @@ function bindFeaturePage(root) {
   // crumb then runs through the use case's feature, which on this page is the page you are on.
   bindJourney(root, {});
   bindItemPills(root);
+  // `.featep` is ONE kind of chip now: a way in, which opens the component at that entry point. The
+  // interfaces this feature reaches out to shared the class and are item pills, wired above.
   root.querySelectorAll('.featep').forEach((b) => b.addEventListener('click', () => {
-    // Two kinds of chip share the class: a way in (opens the component at that entry point) and a
-    // surface this feature reaches out to (opens that surface's page).
-    const iface = b.getAttribute('data-iface');
-    if (iface) { go({ kind: 'interfaces', iface }); return; }
     selectEntryPoint(b.getAttribute('data-id'), parseInt(b.getAttribute('data-idx'), 10) || 0);
   }));
 }
@@ -11890,7 +11904,7 @@ function ruleAreaCardHtml(g, others) {
   const foot = `<p class="ecard-extra ecard-count">${countPillHtml(n, 'rule')}</p>`
     + ((others || []).length
       ? `<p class="ecard-extra"><span class="ecard-lbl">Also under</span> `
-        + others.map((f) => featurePillHtml(f, true)).join(' ') + '</p>'
+        + others.map((f) => featurePillHtml(f)).join(' ') + '</p>'
       : '');
   // NO TYPE WORD. Every card on this page is a decision area, each wears the area's own mark, and the
   // page says so in its first line — so `DECISION AREA` on all thirteen of them is the heading printed

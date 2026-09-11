@@ -668,7 +668,9 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
 /* …and only the DOOR form takes a pointer. A pill whose thing is already on the reader's screen is
    the same pill with no click, and it must not look like one that acts. */
 .item-pill-door { cursor: pointer; }
-.item-pill-door:hover { filter: brightness(.95); text-decoration: underline; }
+/* The hover is the UNDERLINE and nothing else. A pill already carries its kind's colour, so darkening
+   it on hover changed the one thing on it that means something. */
+.item-pill-door:hover { text-decoration: underline; }
 
 .ecard-lbl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; font-size: 10px;
              color: #9ca3af; margin-right: 4px; }

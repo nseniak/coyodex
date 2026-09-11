@@ -3121,8 +3121,13 @@ def test_every_name_on_the_feature_page_resolves_its_view_at_runtime() -> None:
     assert "bindItemPills(root);" in bind
     pills = js[js.index("function bindItemPills(root) {"):
                js.index("\n}", js.index("function bindItemPills(root) {"))]
-    assert "drillInto(b.getAttribute('data-item'));" in pills, "one destination, resolved by kind"
+    assert "itemPillTarget(id)(id);" in pills, "one destination, resolved by kind"
     assert "kind: '" not in pills, "and no tab named at the call site"
+    # …and the kind is what picks between the element's own PAGE and the diagram that DRAWS it.
+    target = js[js.index("function itemPillTarget(id) {"):
+                js.index("\n}", js.index("function itemPillTarget(id) {"))]
+    assert "n.kind === 'entity' || n.kind === 'component'" in target
+    assert "showInContext" in target and "drillInto" in target
     assert "kind: 'container'" not in bind and "kind: 'domain'" not in bind
     # The role links on this page are the RAIL's zone names now, wired by the binder both boards share
     # rather than by a second handler of this page's own.
@@ -3416,7 +3421,7 @@ def test_the_other_axis_is_a_labelled_line_and_not_a_bare_pill() -> None:
     assert "featurePillHtml(cap.id)" in foot, "the In feature line is the door form"
     board = js[js.index("function ruleAreaCardHtml(g, others) {"):
                js.index("\n}", js.index("function ruleAreaCardHtml(g, others) {"))]
-    assert "featurePillHtml(f, true)" in board, "…and the Rules board's Also under is the plain form"
+    assert "featurePillHtml(f)" in board, "…and the Rules board's Also under is a door too"
     # BOTH FEET DRAW THE SAME PILL. The actor's is `itemPillHtml` too, so "who drives it" and "which
     # feature it is in" are one component wearing two different kinds' colours, not two components.
     assert "itemPillHtml(actorPage, {" in ucs
@@ -5766,4 +5771,4 @@ def test_one_pill_names_one_thing_wherever_a_screen_names_it() -> None:
     pill = js[js.index("function itemPillHtml(id, opts) {"):
               js.index("\n}", js.index("function itemPillHtml(id, opts) {"))]
     assert "itemTint(itemKind(kind))" in pill, "the colour comes from the diagrams' own table"
-    assert "itemMarkHtml(kind)" in pill, "and so does the mark"
+    assert "itemMarkHtml(kind, o.ikind)" in pill, "and so does the mark"
