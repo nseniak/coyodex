@@ -5667,3 +5667,28 @@ def test_a_step_number_is_a_type_and_its_layout_belongs_to_what_carries_it() -> 
         "the class carries type only"
     assert ".flow-step .flow-step-num { display: block; }" in css, \
         "…and the station, which stacks it above the title, asks for that itself"
+
+
+def test_text_with_blank_lines_is_drawn_as_paragraphs_and_a_single_newline_is_a_wrap() -> None:
+    """The product overview is written as two to four paragraphs (method.md, T0 Goal). Before this
+    helper the viewer handed the whole text to one inline renderer and HTML collapsed the blank lines,
+    so a three-paragraph goal came out as one block. Runs the real function."""
+    out = _run_js("""
+      const three = 'First one.\\n\\nSecond `one`.\\n  \\nThird one.';
+      console.log(JSON.stringify([
+        proseBlocksHtml(three, mdInline),
+        proseBlocksHtml('one line.\\nsame paragraph.', mdInline),
+        proseBlocksHtml('', mdInline),
+      ]));
+    """)
+    paras, wrapped, empty = json.loads(out)
+    assert paras == ('<p class="prose-para">First one.</p><p class="prose-para">Second <code>one</code>.</p>'
+                     '<p class="prose-para">Third one.</p>')
+    assert wrapped == "one line.\nsame paragraph."      # no <p>: the text renders exactly as before
+    assert empty == ""
+
+
+def test_the_overview_and_the_detail_rows_both_draw_paragraphs_through_the_one_helper() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert "proseBlocksHtml(overview, (p) => mdRefs(p, GRAPH.nodes))" in js
+    assert "proseBlocksHtml(v, mdInline)" in js

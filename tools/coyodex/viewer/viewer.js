@@ -257,6 +257,18 @@ const esc = (s) => (s || '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&g
 const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'))
   .replace(/`([^`]+)`/g, '<code>$1</code>')
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+// Reader-facing text with a BLANK LINE in it is paragraphs. The product overview is written as two to
+// four of them (method.md, "T0 Goal"), and any other field an author breaks the same way reads the
+// same. `render` turns one paragraph into inline markup (mdInline, or mdRefs where ids may appear),
+// so a single newline stays a wrap and a text with no blank line renders exactly as before. One helper,
+// because the overview and the detail rows both drew a run of text and both silently lost the breaks:
+// HTML collapses a newline to a space, so a three-paragraph goal came out as one block.
+const _PARAGRAPH_BREAK = /\n[ \t]*\n/;
+function proseBlocksHtml(text, render) {
+  const paras = String(text || '').split(_PARAGRAPH_BREAK).map((p) => p.trim()).filter(Boolean);
+  if (paras.length < 2) return render(String(text || ''));
+  return paras.map((p) => `<p class="prose-para">${render(p)}</p>`).join('');
+}
 
 // Authored prose is the ONE place the viewer would otherwise print a raw element id: a recorded line
 // is keyed by id ("C101, C148: an operator surface …"), and on the live maps 60-78% of those lines
@@ -2803,7 +2815,7 @@ function nodeDetailBodyHtml(id, noExplain) {
     .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>` + (lifecycle(k)
       ? `<ul class="st-list">${n.states_lines.map((t) => `<li>${mdInline(t)}</li>`).join('')}</ul>`
-      : (bareAnchor(v) ? srcCell(bareAnchor(v)) : mdInline(v))) + '</dd>').join('');
+      : (bareAnchor(v) ? srcCell(bareAnchor(v)) : proseBlocksHtml(v, mdInline))) + '</dd>').join('');
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
   return explain
@@ -8942,7 +8954,8 @@ function productLeadHtml(secs) {
   const overview = ((n.fields || {}).Overview || '').trim();
   if (!overview) return '';
   return itemSectionHtml(secs || [], 'overview', 'Product overview', '', '',
-    `<div class="view-lead"><div class="view-lead-body">${mdRefs(overview, GRAPH.nodes)}</div></div>`);
+    `<div class="view-lead"><div class="view-lead-body">`
+    + proseBlocksHtml(overview, (p) => mdRefs(p, GRAPH.nodes)) + '</div></div>');
 }
 function renderOverviewTab() {
   diagram.innerHTML = '<div class="usecases-wrap">'

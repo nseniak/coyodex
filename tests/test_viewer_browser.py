@@ -3809,3 +3809,45 @@ def test_an_entry_point_link_rings_its_row_and_keeps_it_in_the_address() -> None
         page.reload()
         page.wait_for_selector("tr.pickbox[data-ep='EP1'].ibox-picked", state="attached", timeout=8000)
         assert not page.js_errors, page.js_errors
+
+
+# ── the Overview tab: the goal as paragraphs, held to a readable width ──────────────────────────
+
+def _three_paragraph_goal(m: dict) -> None:
+    m["goal"] = ("Alpha puts a team's tool servers behind one address.\n\n"
+                 "An admin mounts each server once. A teammate signs in and sees only the tools "
+                 "their role allows.\n\n"
+                 "Alpha runs self-hosted for one team, or hosted for many.")
+
+
+def test_the_overview_draws_the_goal_as_its_paragraphs_at_a_readable_width() -> None:
+    """A goal written as three paragraphs (method.md, T0 Goal) used to render as ONE block: HTML
+    collapses the blank lines. And at full column width a 1440px screen ran 137 characters a line,
+    twice what body text is readable at, which was the first reason the text read as a block."""
+    with _served_map(_three_paragraph_goal) as base, _page(base + "#v=overview") as page:
+        page.set_viewport_size({"width": 1440, "height": 900})
+        _settle(page)
+        paras = page.evaluate("() => Array.from(document.querySelectorAll('.view-lead-body p'))"
+                              ".map((p) => p.textContent.trim())")
+        assert len(paras) == 3
+        assert paras[0] == "Alpha puts a team's tool servers behind one address."
+        assert paras[2].startswith("Alpha runs self-hosted")
+        measure = page.evaluate("""() => {
+          const el = document.querySelector('.view-lead-body');
+          const r = document.createRange(); r.selectNodeContents(el);
+          const tops = new Set(Array.from(r.getClientRects()).map((x) => Math.round(x.top)));
+          return { width: el.getBoundingClientRect().width, lines: tops.size,
+                   chars: el.textContent.trim().length };
+        }""")
+        # 66ch of the viewer's face is about 75 characters of running text; the frame is over 1000px
+        assert measure["width"] < 700, measure
+        assert measure["chars"] / measure["lines"] <= 80, measure
+        assert page.js_errors == []
+
+
+def test_a_goal_with_no_blank_line_still_draws_as_one_run_of_text() -> None:
+    with _served() as base, _page(base + "#v=overview") as page:
+        _settle(page)
+        assert page.evaluate("() => document.querySelectorAll('.view-lead-body p').length") == 0
+        assert page.evaluate("() => document.querySelector('.view-lead-body').textContent.length") > 100
+        assert page.js_errors == []

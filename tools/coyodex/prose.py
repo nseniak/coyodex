@@ -27,8 +27,31 @@ from coyodex.reporting import clip, shown
 SENTENCE_WORD_LIMIT = 20   # one idea per sentence; longer is a split, not a style opinion
 EXAMPLES_PER_KIND = 3      # how many offending fields a summary line names before it counts the rest
 
+# The goal is the one field a reader meets as a TEXT rather than a box, and the method gives it a
+# shape (method.md, "T0 Goal"): two to four short paragraphs, a blank line between them, one to
+# three sentences each, under 180 words in all. Counted here for the reason sentence length is: a
+# paragraph count is a shape, and a limit the tool never counts is a wish. The 2026-09-11 live maps
+# were one paragraph of 108 to 167 words each, and 7 of their 22 sentences were over the limit —
+# the goal was the one reader-facing field `iter_prose_fields` did not walk.
+GOAL_PARAGRAPHS = (2, 4)        # fewest and most paragraphs
+GOAL_PARAGRAPH_SENTENCES = 3    # most sentences in one paragraph
+GOAL_WORD_LIMIT = 180           # most words in all, over every paragraph
+
+# The goal DESCRIBES, it does not sell (method.md, "T0 Goal"): the need is welcome, a pitch is
+# not. Most of that is a judgement and stays in the method prompt; this is the countable sliver —
+# words that almost never belong in a plain description of what a product does. Deliberately short
+# and whole-word, for the same reason `_CODE_PATTERNS` is narrow: a noisy check is one nobody
+# leaves switched on.
+_PITCH_WORDS = ("seamless", "seamlessly", "effortless", "effortlessly", "powerful", "robust",
+                "simply", "easily", "instantly", "cutting-edge", "state-of-the-art",
+                "best-in-class", "world-class", "revolutionary", "game-changing", "blazing",
+                "lightning-fast", "unique", "leading", "trusted", "delightful", "magical",
+                "supercharge", "supercharges", "unlock", "unlocks", "empower", "empowers")
+_PITCH = re.compile(r"\b(?:%s)\b" % "|".join(re.escape(w) for w in _PITCH_WORDS), re.IGNORECASE)
+
 _BACKTICKED = re.compile(r"`[^`]*`")
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_PARAGRAPH_SPLIT = re.compile(r"\n[ \t]*\n")   # a blank line; a single newline is a wrap
 _EM_DASH = "—"
 
 # A token that is CODE rather than product language. Deliberately narrow — a shape nobody writes by
@@ -76,6 +99,12 @@ def sentences(text: str) -> list[str]:
 
 def word_count(sentence: str) -> int:
     return len(sentence.split())
+
+
+def paragraphs(text: str) -> list[str]:
+    """Split on blank lines. The viewer draws the same split, so what this counts is what a reader
+    sees as a paragraph."""
+    return [p.strip() for p in _PARAGRAPH_SPLIT.split(text.strip()) if p.strip()]
 
 
 def long_sentences(text: str, limit: int = SENTENCE_WORD_LIMIT) -> list[str]:
@@ -187,6 +216,53 @@ def field_findings(where: str, text: str, limit: int = SENTENCE_WORD_LIMIT,
     return found
 
 
+def goal_shape_findings(goal: str) -> list[Finding]:
+    """The goal's SHAPE, which no per-sentence check can see: how many paragraphs, how many
+    sentences each, how many words in all. One finding kind, so the summary stays one line; each
+    detail names the number that broke the rule. An empty goal is a completeness problem elsewhere,
+    not a shape."""
+    body = strip_literals(goal or "").strip()
+    if not body:
+        return []
+    found: list[Finding] = []
+    paras = paragraphs(body)
+    low, high = GOAL_PARAGRAPHS
+    if len(paras) < low:
+        found.append(Finding("goal shape", "goal",
+                             f"one paragraph of {len(sentences(body))} sentences; the rule is {low} to "
+                             f"{high} paragraphs"))
+        return found   # one block IS the finding; counting its sentences too would say it twice
+    if len(paras) > high:
+        found.append(Finding("goal shape", "goal",
+                             f"{len(paras)} paragraphs; the rule is {low} to {high}"))
+    for n, para in enumerate(paras, 1):
+        count = len(sentences(para))
+        if count > GOAL_PARAGRAPH_SENTENCES:
+            found.append(Finding("goal shape", "goal",
+                                 f"paragraph {n} has {count} sentences; the rule is 1 to "
+                                 f"{GOAL_PARAGRAPH_SENTENCES}"))
+    words = word_count(body)
+    if words >= GOAL_WORD_LIMIT:   # "under 180", as the method says it
+        found.append(Finding("goal shape", "goal",
+                             f"{words} words in all; the rule is under {GOAL_WORD_LIMIT}"))
+    return found
+
+
+def pitch_words(text: str) -> list[str]:
+    """The marketing words a text uses, in order, as written. Whole words only: "simplicity" is
+    not "simply", and a backticked literal is a quotation."""
+    return [m.group(0) for m in _PITCH.finditer(strip_literals(text))]
+
+
+def goal_pitch_findings(goal: str) -> list[Finding]:
+    """One finding when the goal reaches for the words of a pitch. The judgement half — a claim the
+    map cannot back, a promise about outcomes — stays with the method prompt and the audit."""
+    words = pitch_words(goal or "")
+    if not words:
+        return []
+    return [Finding("pitch word", "goal", f"says {shown(words, 3)}")]
+
+
 def scan(fields: Iterable[tuple[str, str]], limit: int = SENTENCE_WORD_LIMIT,
          terms: Iterable[str] = ()) -> list[Finding]:
     """Run every field through `field_findings`, preserving order."""
@@ -206,6 +282,12 @@ _REMEDY = {
     "bare pointer": "name the thing — a box is read alone, with no paragraph before it",
     "unresolved reference": "name the alternatives in the same box — \"either kind\" must say "
                             "which kinds, with the names or the glossary words",
+    # The counts in words, as the method says them; test_prose pins them to GOAL_PARAGRAPHS and
+    # GOAL_PARAGRAPH_SENTENCES so the two cannot drift apart.
+    "goal shape": f"two to four short paragraphs, a blank line between them, one to three "
+                  f"sentences each, under {GOAL_WORD_LIMIT} words in all",
+    "pitch word": "the goal describes, it does not sell — say what the product does and for whom, "
+                  "in plain words, and drop the word",
 }
 
 
@@ -231,12 +313,27 @@ def summarize(findings: Iterable[Finding], examples: int = EXAMPLES_PER_KIND) ->
     return lines
 
 
+def advisory_lines(model: ProjectModel) -> list[str]:
+    """The readability report for one map, as the advisory lines `validate` and `lint-fragment`
+    print: every prose field through `field_findings`, then the goal's shape. ONE function for both
+    callers, so a check added here reaches the fragment lint and the assembled-map validation
+    together — they used to build the same expression by hand, and a check added to one would have
+    been missing from the other."""
+    terms = [g.term for g in model.glossary]
+    return summarize(scan(iter_prose_fields(model), terms=terms) + goal_shape_findings(model.goal)
+                     + goal_pitch_findings(model.goal))
+
+
 def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tuple[str, str]]:
     """Every reader-facing prose field in a map, as (where, text).
 
     Reader-facing means: a person reads this sentence in the viewer. Titles, ids, anchors, code
     links and closed-vocabulary cells are excluded — they are labels or machine values, and a word
     limit on a label is meaningless."""
+    # The goal first: it is the one text a reader meets before any box, and until 2026-09-11 the one
+    # reader-facing field this walk skipped (see GOAL_PARAGRAPHS). In the narrow surface too — one
+    # field costs the fan-out nothing, and it is the anchor.
+    yield "goal", model.goal
     for component in model.components:
         yield f"{component.id} purpose", component.purpose
     for group in (*model.capabilities, *model.subsystems, *model.subdomains, *model.blocks):

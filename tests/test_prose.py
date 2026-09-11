@@ -7,6 +7,8 @@ helper instead of printing two hundred.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from coyodex import prose
 from coyodex.model import (
     BusinessRule, Component, Dep, GlossaryRow, Group, HappyStep, ProjectModel, Role, UseCase,
@@ -190,8 +192,17 @@ def test_each_kind_gets_its_own_line_and_an_absent_kind_gets_none() -> None:
 
 def test_every_reader_facing_field_is_walked() -> None:
     labels = {where for where, _text in prose.iter_prose_fields(make_model())}
-    assert labels == {"C1 purpose", "CAP1 purpose", "UC1 trigger/outcome", "BR1 statement",
+    assert labels == {"goal", "C1 purpose", "CAP1 purpose", "UC1 trigger/outcome", "BR1 statement",
                       "BR1 risk", "D1 used for", "R1 wants", "HP1 why", "glossary 'basket'"}
+
+
+def test_the_goal_is_walked_first_and_on_the_narrow_surface_too() -> None:
+    """The one reader-facing field the walk skipped until 2026-09-11: on the three live maps 7 of its
+    22 sentences were over the limit and nothing had said so."""
+    m = make_model()
+    m.goal = make_sentence(30)
+    assert next(prose.iter_prose_fields(m, wide=False)) == ("goal", m.goal)
+    assert [f.where for f in prose.scan(prose.iter_prose_fields(m))] == ["goal"]
 
 
 def test_a_plainly_written_map_produces_no_findings() -> None:
@@ -299,3 +310,91 @@ def test_the_long_sentence_gate_now_sees_a_step_phrase():
         FlowStep(n=1, src="R1", dst="C1", phrase=long_phrase)])]
     warnings = validate_model(m)[1]
     assert any("long sentence" in w for w in warnings), warnings
+
+
+# --- the goal's shape ---------------------------------------------------------------------------
+
+def make_paragraph(sentences: int, words: int = 8) -> str:
+    return " ".join(make_sentence(words) for _ in range(sentences))
+
+
+def make_goal(paragraphs: int, sentences: int = 2, words: int = 8) -> str:
+    return "\n\n".join(make_paragraph(sentences, words) for _ in range(paragraphs))
+
+
+def test_a_goal_inside_the_rule_has_no_shape_finding() -> None:
+    for n in range(prose.GOAL_PARAGRAPHS[0], prose.GOAL_PARAGRAPHS[1] + 1):
+        assert prose.goal_shape_findings(make_goal(n, sentences=prose.GOAL_PARAGRAPH_SENTENCES)) == []
+
+
+def test_a_single_paragraph_is_one_finding_that_counts_its_sentences() -> None:
+    found = prose.goal_shape_findings(make_paragraph(8))
+    assert [f.kind for f in found] == ["goal shape"]
+    assert found[0].where == "goal"
+    assert found[0].detail == "one paragraph of 8 sentences; the rule is 2 to 4 paragraphs"
+
+
+def test_too_many_paragraphs_and_a_long_paragraph_are_each_named_with_their_number() -> None:
+    goal = make_goal(5) + "\n\n" + make_paragraph(4)
+    details = [f.detail for f in prose.goal_shape_findings(goal)]
+    assert details == ["6 paragraphs; the rule is 2 to 4", "paragraph 6 has 4 sentences; the rule is 1 to 3"]
+
+
+def test_the_word_total_counts_every_paragraph_and_under_means_under() -> None:
+    at_limit = make_goal(3, sentences=3, words=20)                  # 180 words in all
+    assert [f.detail for f in prose.goal_shape_findings(at_limit)] == ["180 words in all; the rule is under 180"]
+    under = at_limit.replace("word word.", "word.", 1)              # 179
+    assert prose.goal_shape_findings(under) == []
+
+
+def test_a_single_newline_is_a_wrap_not_a_paragraph_and_blank_lines_may_carry_spaces() -> None:
+    assert prose.paragraphs("one line.\nstill the same paragraph.") == ["one line.\nstill the same paragraph."]
+    assert prose.paragraphs("first.\n  \nsecond.") == ["first.", "second."]
+
+
+def test_an_empty_goal_has_no_shape_the_completeness_checks_own_that() -> None:
+    assert prose.goal_shape_findings("") == []
+
+
+def test_the_advisory_lines_carry_the_shape_and_the_sentence_findings_together() -> None:
+    m = make_model()
+    m.goal = make_sentence(30)   # one paragraph, one long sentence
+    lines = prose.advisory_lines(m)
+    assert any(line.startswith("1 prose field with a long sentence") for line in lines)
+    shape = [line for line in lines if "goal shape" in line]
+    assert len(shape) == 1 and shape[0].startswith("1 prose field with a goal shape")
+    assert "two to four short paragraphs" in shape[0]
+    assert prose.advisory_lines(make_model()) == prose.advisory_lines(make_model())
+
+
+def test_the_method_states_the_shape_the_tool_counts() -> None:
+    """The rule lives in prose and the count lives in code; this is the line that keeps them equal."""
+    text = (Path(__file__).resolve().parent.parent / "method.md").read_text(encoding="utf-8")
+    at = text.index("**T0 Goal**")
+    rule = " ".join(text[at:at + 900].split())   # one line, so a re-wrap of the rule is not a failure
+    assert "two to four short paragraphs" in rule and prose.GOAL_PARAGRAPHS == (2, 4)
+    assert "one to three sentences each" in rule and prose.GOAL_PARAGRAPH_SENTENCES == 3
+    assert f"under {prose.GOAL_WORD_LIMIT} words in all" in rule
+
+
+# --- the goal describes, it does not sell -----------------------------------------------------
+
+def test_a_marketing_word_in_the_goal_is_one_finding_naming_the_words() -> None:
+    goal = "Alpha simply works.\n\nA seamless, powerful map. Its `simply` flag is a quoted literal."
+    found = prose.goal_pitch_findings(goal)
+    assert [(f.kind, f.where) for f in found] == [("pitch word", "goal")]
+    assert found[0].detail == "says simply, seamless, powerful"
+
+
+def test_a_plain_description_and_the_need_behind_it_are_not_a_pitch() -> None:
+    goal = ("A coding agent can write more code than anyone follows. The code runs fine until the day "
+            "somebody needs to understand it.\n\ncoyodex reads the project and writes a map.")
+    assert prose.goal_pitch_findings(goal) == []
+    assert prose.pitch_words("simplicity and uniqueness are not the words") == []   # whole words only
+
+
+def test_the_pitch_finding_rides_the_advisory_lines_with_its_remedy() -> None:
+    m = make_model()
+    m.goal = "A robust demo.\n\nIt works."
+    lines = [line for line in prose.advisory_lines(m) if "pitch word" in line]
+    assert len(lines) == 1 and "describes, it does not sell" in lines[0]

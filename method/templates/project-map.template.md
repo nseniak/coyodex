@@ -16,7 +16,8 @@
 
 ## T0 — Goal (the anchor)
 
-<One short paragraph: the problem the project solves and for whom.>
+<Two to four short paragraphs, a blank line between them, one to three sentences each, under
+180 words in all: what the project is, what it does and for whom, and why anyone wants it.>
 
 ---
 
