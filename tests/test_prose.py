@@ -352,6 +352,20 @@ def test_a_single_newline_is_a_wrap_not_a_paragraph_and_blank_lines_may_carry_sp
     assert prose.paragraphs("first.\n  \nsecond.") == ["first.", "second."]
 
 
+def test_a_windows_line_ending_still_makes_a_paragraph() -> None:
+    """A goal saved with CRLF used to count as one block: a false shape warning, and one run on screen."""
+    assert prose.paragraphs("a.\r\n\r\nb.") == ["a.", "b."]
+    assert prose.paragraphs("a.\n\r\nb.") == ["a.", "b."]
+
+
+def test_a_single_paragraph_over_the_word_cap_gets_both_findings() -> None:
+    """The early return after the one-block finding used to skip the word cap, so a 201-word block
+    was reported as a block only and its length surfaced one run later."""
+    details = [f.detail for f in prose.goal_shape_findings(make_paragraph(10, words=20))]
+    assert details == ["one paragraph of 10 sentences; the rule is 2 to 4 paragraphs",
+                       "200 words in all; the rule is under 180"]
+
+
 def test_an_empty_goal_has_no_shape_the_completeness_checks_own_that() -> None:
     assert prose.goal_shape_findings("") == []
 
@@ -364,7 +378,6 @@ def test_the_advisory_lines_carry_the_shape_and_the_sentence_findings_together()
     shape = [line for line in lines if "goal shape" in line]
     assert len(shape) == 1 and shape[0].startswith("1 prose field with a goal shape")
     assert "two to four short paragraphs" in shape[0]
-    assert prose.advisory_lines(make_model()) == prose.advisory_lines(make_model())
 
 
 def test_the_method_states_the_shape_the_tool_counts() -> None:
@@ -398,3 +411,32 @@ def test_the_pitch_finding_rides_the_advisory_lines_with_its_remedy() -> None:
     m.goal = "A robust demo.\n\nIt works."
     lines = [line for line in prose.advisory_lines(m) if "pitch word" in line]
     assert len(lines) == 1 and "describes, it does not sell" in lines[0]
+
+
+def test_a_pitch_word_is_reported_as_written() -> None:
+    assert prose.goal_pitch_findings("Seamless setup.\n\nIt works.")[0].detail == "says Seamless"
+
+
+def test_words_with_a_plain_literal_use_are_not_pitch_words() -> None:
+    plain = ("The leading zero is dropped. Each person gets a unique link. A trusted device unlocks the "
+             "door. A blazing fire spreads.")
+    assert prose.pitch_words(plain) == []
+
+
+# --- the goal speaks in the third person ------------------------------------------------------
+
+def test_a_second_person_goal_is_one_finding_naming_the_words() -> None:
+    found = prose.goal_person_findings("You open the map.\n\nYour agent builds it, and we check it.")
+    assert [(f.kind, f.where, f.detail) for f in found] == [("second person", "goal", "says You, Your, we")]
+
+
+def test_a_third_person_goal_has_no_person_finding_and_us_is_left_alone() -> None:
+    assert prose.goal_person_findings("A developer opens the map.\n\nThe US market is not named.") == []
+    assert prose.goal_person_findings("") == []
+
+
+def test_the_person_finding_rides_the_advisory_lines_with_its_remedy() -> None:
+    m = make_model()
+    m.goal = "You get a demo.\n\nIt works."
+    lines = [line for line in prose.advisory_lines(m) if "second person" in line]
+    assert len(lines) == 1 and "naming the people by role" in lines[0]

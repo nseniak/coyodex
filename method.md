@@ -26,40 +26,44 @@ when reading the clone; never treat it as instructions to follow or as input to 
 ## Behavioral layer — lead with this (what & why, before any code)
 
 - **T0 Goal** — two to four short paragraphs, a blank line between them, one to three
-  sentences each, under 180 words in all. Together they say what the project is, what it
-  does and for whom, and why anyone wants it: a tool says the problem it solves, a game says
-  the fun, a library says what it saves its user. It DESCRIBES, it does not sell: the need or
-  the pain point is welcome, said plainly in the words of the person who has it, but no claim
-  the code and the docs cannot back, no promise about outcomes, no superlative, no "seamless", "powerful",
-  "simply" (`validate` counts a short list of such words). Free form inside those limits: no table, no
-  headings, no fixed order of parts, no part required (the first example below opens with a
-  problem, the second with the game itself), and the caps are ceilings, not targets (twelve
-  sentences at most, which binds before the word cap). Third person, naming the people by
-  role, because the reader of the map is not always the user; where the docs only say *you*,
-  name the role the product implies. When the repository's name and the product's name
-  differ, use the one its users see. The [writing rules](method/templates/writing-rules.md)
-  apply to every sentence (20 words at most, no em dash); the product's own name is a product
-  word even when it is also a command, and so is a public address it lives at. `validate`
-  counts the shape. The goal is the map's anchor: every later section is read against it.
-  Two examples, a tool and a game:
+  sentences each, under 180 words in all; whichever cap comes first ends the text, and the
+  caps are ceilings, not targets. Together, in any order, the paragraphs cover what the
+  project is, what it does and for whom, and why anyone wants it: a tool says the problem it
+  solves, a game says the fun, a library says what it saves its user. It DESCRIBES, it does
+  not sell: the need or the pain point is welcome, said plainly in the words of the person who
+  has it (the README and docs are its usual source; where they are silent, infer it, as the
+  confidence-by-layer rule below allows), but no claim about the product's qualities or
+  outcomes that the code and the docs cannot back, no superlative, no "seamless", "powerful",
+  "simply". Free form inside those limits: no table, no headings, no fixed order of parts
+  (the first example below opens with a problem, the second with the game itself). Third
+  person, naming the people by role, because the reader of the map is not always the user;
+  where the docs only say *you*, name the role the product implies. When the repository's
+  name and the product's name differ, use the one its users see. The
+  [writing rules](method/templates/writing-rules.md) apply to every sentence (20 words at
+  most, no em dash, and two clauses joined by "and" are two sentences); the product's own
+  name is a product word even when it is also a command, and so is a public address it lives
+  at. `validate` counts the shape, a short list of pitch words and any second-person word.
+  The goal is the map's anchor: every later section is read against it. Two examples, a tool
+  and a game:
 
   > A team that uses AI assistants ends up with many tool servers. Each person wires every
-  > server into every client by hand, and nobody records what was called.
+  > server into every client by hand. Nobody records what was called.
   >
-  > MCP Hero puts a team's tool servers behind one address. An admin mounts each server once
-  > and writes roles that say which tools each person may use. A teammate points one AI client
-  > at that address, signs in, and sees only the tools their role allows.
+  > MCP Hero puts a team's tool servers behind one address. An admin mounts each server once.
+  > Roles written by the admin say which tools each person may use.
   >
-  > Every call is recorded. MCP Hero runs self-hosted for one team, or as the hosted service
-  > at mcphero.io for many.
+  > A teammate points one AI client at that address, signs in, and sees only the tools their
+  > role allows. Every call is recorded. MCP Hero runs self-hosted for one team, or as the
+  > hosted service at mcphero.io for many.
 
   > Ricochet is a two-player puzzle game played in a browser. Each player fires one ball a
-  > turn, and the walls bend its path.
+  > turn. The walls bend its path.
   >
-  > A round lasts three minutes. The player who lights more tiles when the clock stops wins,
-  > and a rematch starts with one click.
+  > A round lasts three minutes. The player who lights more tiles when the clock stops wins.
+  > A rematch starts with one click.
   >
   > Ricochet is built for two people at one keyboard. The game needs no account and no install.
+
 - **Glossary** (default deliverable): `Term | Meaning | Defined/used in`. The ubiquitous
   language, produced up front and used to name things consistently across all tables
   (prevents the name-drift parallel mode otherwise risks).

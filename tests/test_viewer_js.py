@@ -5675,13 +5675,18 @@ def test_text_with_blank_lines_is_drawn_as_paragraphs_and_a_single_newline_is_a_
     so a three-paragraph goal came out as one block. Runs the real function."""
     out = _run_js("""
       const three = 'First one.\\n\\nSecond `one`.\\n  \\nThird one.';
+      const refs = {C54: {id: 'C54', name: 'Request Context Middleware', node: 'C54'}};
       console.log(JSON.stringify([
         proseBlocksHtml(three, mdInline),
         proseBlocksHtml('one line.\\nsame paragraph.', mdInline),
         proseBlocksHtml('', mdInline),
+        proseBlocksHtml('Alpha.\\r\\n\\r\\nBeta.', mdInline),
+        proseBlocksHtml('See C54.\\n\\nAlso C54 here.', (p) => mdRefs(p, refs)),
       ]));
     """)
-    paras, wrapped, empty = json.loads(out)
+    paras, wrapped, empty, crlf, linked = json.loads(out)
+    assert crlf == '<p class="prose-para">Alpha.</p><p class="prose-para">Beta.</p>'   # CRLF is a blank line too
+    assert linked.count('class="sys-ref"') == 2 and linked.startswith('<p class="prose-para">See <button')
     assert paras == ('<p class="prose-para">First one.</p><p class="prose-para">Second <code>one</code>.</p>'
                      '<p class="prose-para">Third one.</p>')
     assert wrapped == "one line.\nsame paragraph."      # no <p>: the text renders exactly as before

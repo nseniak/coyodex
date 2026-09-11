@@ -263,7 +263,7 @@ const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$
 // so a single newline stays a wrap and a text with no blank line renders exactly as before. One helper,
 // because the overview and the detail rows both drew a run of text and both silently lost the breaks:
 // HTML collapses a newline to a space, so a three-paragraph goal came out as one block.
-const _PARAGRAPH_BREAK = /\n[ \t]*\n/;
+const _PARAGRAPH_BREAK = /\n[ \t\r]*\n/;   // a blank line, CRLF included — the same split as prose.py
 function proseBlocksHtml(text, render) {
   const paras = String(text || '').split(_PARAGRAPH_BREAK).map((p) => p.trim()).filter(Boolean);
   if (paras.length < 2) return render(String(text || ''));

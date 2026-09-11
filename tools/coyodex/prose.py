@@ -42,16 +42,24 @@ GOAL_WORD_LIMIT = 180           # most words in all, over every paragraph
 # words that almost never belong in a plain description of what a product does. Deliberately short
 # and whole-word, for the same reason `_CODE_PATTERNS` is narrow: a noisy check is one nobody
 # leaves switched on.
-_PITCH_WORDS = ("seamless", "seamlessly", "effortless", "effortlessly", "powerful", "robust",
-                "simply", "easily", "instantly", "cutting-edge", "state-of-the-art",
-                "best-in-class", "world-class", "revolutionary", "game-changing", "blazing",
-                "lightning-fast", "unique", "leading", "trusted", "delightful", "magical",
-                "supercharge", "supercharges", "unlock", "unlocks", "empower", "empowers")
+# Only words with NO plain literal use: "leading" (to), "unique" (id), "trusted" (device), "unlock"
+# (a lock, a game level) and bare "blazing" (a fire) were in the first list and tripped on honest
+# descriptions, so they are out (review of 2026-09-11).
+_PITCH_WORDS = ("seamless", "seamlessly", "effortless", "effortlessly", "frictionless",
+                "hassle-free", "powerful", "robust", "simply", "easily", "instantly",
+                "cutting-edge", "state-of-the-art", "best-in-class", "world-class",
+                "industry-leading", "revolutionary", "game-changing", "blazing-fast", "blazingly",
+                "lightning-fast", "delightful", "magical", "supercharge", "supercharges",
+                "empower", "empowers")
 _PITCH = re.compile(r"\b(?:%s)\b" % "|".join(re.escape(w) for w in _PITCH_WORDS), re.IGNORECASE)
+# The goal is written in the third person, naming people by role (method.md, "T0 Goal"): a
+# second-person goal talks to a reader who may not be the user. "us" is left out on purpose — it
+# is also a country.
+_SECOND_PERSON = re.compile(r"\b(?:you|your|yours|we|our|ours)\b", re.IGNORECASE)
 
 _BACKTICKED = re.compile(r"`[^`]*`")
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
-_PARAGRAPH_SPLIT = re.compile(r"\n[ \t]*\n")   # a blank line; a single newline is a wrap
+_PARAGRAPH_SPLIT = re.compile(r"\n[ \t\r]*\n")   # a blank line (CRLF too); a single newline is a wrap
 _EM_DASH = "—"
 
 # A token that is CODE rather than product language. Deliberately narrow — a shape nobody writes by
@@ -227,15 +235,17 @@ def goal_shape_findings(goal: str) -> list[Finding]:
     found: list[Finding] = []
     paras = paragraphs(body)
     low, high = GOAL_PARAGRAPHS
-    if len(paras) < low:
+    one_block = len(paras) < low
+    if one_block:
         found.append(Finding("goal shape", "goal",
                              f"one paragraph of {len(sentences(body))} sentences; the rule is {low} to "
                              f"{high} paragraphs"))
-        return found   # one block IS the finding; counting its sentences too would say it twice
-    if len(paras) > high:
+    elif len(paras) > high:
         found.append(Finding("goal shape", "goal",
                              f"{len(paras)} paragraphs; the rule is {low} to {high}"))
-    for n, para in enumerate(paras, 1):
+    # One block IS the finding; counting its sentences too would say it twice. The word cap still
+    # runs: a 201-word block used to report only the block, and the length surfaced one run later.
+    for n, para in enumerate(paras if not one_block else [], 1):
         count = len(sentences(para))
         if count > GOAL_PARAGRAPH_SENTENCES:
             found.append(Finding("goal shape", "goal",
@@ -263,6 +273,18 @@ def goal_pitch_findings(goal: str) -> list[Finding]:
     return [Finding("pitch word", "goal", f"says {shown(words, 3)}")]
 
 
+def second_person_words(text: str) -> list[str]:
+    return [m.group(0) for m in _SECOND_PERSON.finditer(strip_literals(text))]
+
+
+def goal_person_findings(goal: str) -> list[Finding]:
+    """One finding when the goal talks to "you" or speaks as "we" instead of naming the roles."""
+    words = second_person_words(goal or "")
+    if not words:
+        return []
+    return [Finding("second person", "goal", f"says {shown(words, 3)}")]
+
+
 def scan(fields: Iterable[tuple[str, str]], limit: int = SENTENCE_WORD_LIMIT,
          terms: Iterable[str] = ()) -> list[Finding]:
     """Run every field through `field_findings`, preserving order."""
@@ -288,6 +310,8 @@ _REMEDY = {
                   f"sentences each, under {GOAL_WORD_LIMIT} words in all",
     "pitch word": "the goal describes, it does not sell — say what the product does and for whom, "
                   "in plain words, and drop the word",
+    "second person": "third person, naming the people by role — the reader of the map is not "
+                     "always the user",
 }
 
 
@@ -321,7 +345,7 @@ def advisory_lines(model: ProjectModel) -> list[str]:
     been missing from the other."""
     terms = [g.term for g in model.glossary]
     return summarize(scan(iter_prose_fields(model), terms=terms) + goal_shape_findings(model.goal)
-                     + goal_pitch_findings(model.goal))
+                     + goal_pitch_findings(model.goal) + goal_person_findings(model.goal))
 
 
 def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tuple[str, str]]:
