@@ -318,5 +318,36 @@ def test_a_line_with_no_key_and_a_line_under_an_unknown_heading_are_returned_who
     assert records.why_of("Notes for the next build", "cli: something a person wrote.") == "cli: something a person wrote."
 
 
+def test_a_prose_line_that_merely_holds_a_colon_keeps_every_word():
+    """The adversarial review's finding: under a keyed heading, a continuation sentence with a
+    mid-sentence colon was split there and its first clause hidden from the counters. What stands
+    before the colon must look like a key — short, no sentence punctuation, no dash."""
+    prose_line = ("The operator sees two things here: the queue depth and the last error, and neither "
+                  "is an interface because nobody outside asks for them")
+    assert records.why_of("Unclaimed surfaces", prose_line) == prose_line
+    dashed = "A note — config_loader.py reads this: the rest of the sentence"
+    assert records.why_of("Unclaimed surfaces", dashed) == dashed
+    ended = "It ends here. Then: a second sentence"
+    assert records.why_of("Bucket vocabulary", ended) == ended
+    # the longest live key is four words, and a path key's own dot is not sentence punctuation
+    assert records.why_of("Bucket vocabulary", "Testing & type checking: the two gates.") == "the two gates."
+    assert records.why_of("Sweep debt", "eval/retro/method.md:62: This IS a decision.") == "This IS a decision."
+
+
+def test_a_quoted_claim_in_any_of_the_three_quote_styles_is_one_key_token():
+    """The drift reader accepts backticks, single and double quotes around the claim, and the claim
+    may hold a colon. An apostrophe inside a word opens no quote."""
+    for q in ("`", "'", '"'):
+        line = f"anchor-drift {q}Auth surface is protected by: org_routes.py:271{q}: the anchor is right."
+        assert records.why_of("Drift exceptions", line) == "the anchor is right.", q
+    assert records.why_of("Bucket vocabulary", "Bob's bucket: what Bob's tools share.") == "what Bob's tools share."
+
+
+def test_a_value_word_followed_by_a_colon_or_a_paren_is_a_real_word():
+    assert records.why_of("Balance exceptions", "C3: Family: the plan is billed once.") == "Family: the plan is billed once."
+    assert records.why_of("Balance exceptions", "C3: family (the plan) is billed once.") == "family (the plan) is billed once."
+    assert records.why_of("Entry-point coverage", "cli: Partial (see below) is the honest word.") == "Partial (see below) is the honest word."
+
+
 def test_body_lines_drop_bullets_and_blank_lines():
     assert records.body_lines("- C1: a\n\n  * C2: b\n") == ["C1: a", "C2: b"]

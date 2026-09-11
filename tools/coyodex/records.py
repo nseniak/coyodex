@@ -248,11 +248,31 @@ def lines(m: ProjectModel, heading: str) -> list[str]:
 
 #: A registered family with no key grammar still writes `<key>: <why>` — a bucket name, a
 #: `path:line`, a whole quoted claim. Its why starts after the first colon that is followed by
-#: whitespace, so a `path:line` key keeps its own colon; a backticked key is stepped over whole,
-#: because a quoted claim may hold a colon of its own.
-_GENERIC_WHY = re.compile(r"^(?:`[^`]*`|[^`:]|:(?!\s))+:\s+(?P<why>\S.*)$")
-#: What may follow a family's value word: a separator and the why, or the end of the line.
-_VALUE_TAIL = r"(?:\s*[:(—–]|\s+-(?=\s)|\s*$)\s*"
+#: whitespace, so a `path:line` key keeps its own colon. A quoted span that opens at a word start
+#: is stepped over whole, in any of the three quote styles the drift reader accepts (see
+#: `anchor_drift._DRIFT_RECORD`), because a quoted claim may hold a colon of its own; an apostrophe
+#: inside a word opens nothing.
+_QUOTED = r"(?<!\S)(?P<q>[`\"'])(?:(?!(?P=q)).)*(?P=q)"
+_QUOTED_SPAN = re.compile(_QUOTED)
+_GENERIC_WHY = re.compile(r"^(?P<key>(?:" + _QUOTED + r"|[^`:]|:(?!\s))+):\s+(?P<why>\S.*)$")
+#: A free-text key is SHORT and carries no sentence. The longest on a live map is four words
+#: ("Testing & type checking"); a prose line that merely holds a colon — "The operator sees two
+#: things here: the queue depth and the last error" — is not a record, and splitting it there would
+#: hide the words before the colon from the counters (the adversarial review's finding).
+_GENERIC_KEY_WORDS = 5
+_NOT_A_KEY = re.compile(r"[—–]|[.!?](?:\s|$)")
+#: What may follow a family's value word: the template's dash (`complete — <how>`, or the spaced
+#: hyphen the literal-escape reader also accepts), or the end of the line. Not a colon or a paren:
+#: `C3: Family: the plan is billed once` and `partial (see below) is the honest word` open with a
+#: real word, and a tail that took `:` or `(` ate it.
+_VALUE_TAIL = r"(?:\s*[—–]|\s+-(?=\s)|\s*$)\s*"
+
+
+def _looks_like_key(key: str) -> bool:
+    """Would a writer following `<key>: <why>` have written this before the colon? Quoted spans count
+    as one token, so a whole quoted claim is still a key."""
+    bare = _QUOTED_SPAN.sub(" ", key)
+    return not _NOT_A_KEY.search(bare) and len(bare.split()) <= _GENERIC_KEY_WORDS
 
 
 def why_of(heading: str, line: str) -> str:
@@ -265,7 +285,9 @@ def why_of(heading: str, line: str) -> str:
     and 20 path keys across three maps) — the noisy check nobody leaves switched on. A line under a
     heading the registry does not know is returned whole, bullets aside: that is a note somebody
     wrote by hand, with no key to strip. Under a known heading a line that is no record of its
-    family still splits at a `key: ` shape when it has one, and is otherwise returned whole."""
+    family still splits at a `key: ` shape when what stands before the colon looks like a key
+    (`_looks_like_key`), and is otherwise returned whole — under-counting a key's few words is the
+    cheap mistake, hiding a sentence is the dear one."""
     text = line.strip().lstrip("-*").strip()
     spec = spec_of(heading)
     if spec is None:
@@ -277,7 +299,7 @@ def why_of(heading: str, line: str) -> str:
             why = hit.group("why")
     if not why:
         generic = _GENERIC_WHY.match(text)
-        why = generic.group("why") if generic else text
+        why = generic.group("why") if generic and _looks_like_key(generic.group("key")) else text
     if spec.value:
         why = re.sub(r"^(?:%s)%s" % (spec.value, _VALUE_TAIL), "", why, flags=re.IGNORECASE)
     return why.strip()

@@ -347,12 +347,19 @@ def test_the_tests_note_and_a_test_rows_gap_are_reader_facing():
     m = ProjectModel(title="D", goal="g")
     m.tests_note = "The suites were read, not run."
     m.tests = [GapRow(targets=["C1", "C2"], gap="Nothing checks a refused card."),
-               GapRow(targets=["C3", "C4", "C5", "C6"], gap="Nothing checks a lost parcel.")]
+               GapRow(targets=["C3", "C4", "C5", "C6"], gap="Nothing checks a lost parcel."),
+               # two rows on one component, told apart by their labels (four such on a live map)
+               GapRow(targets=["C7"], label="Browse", gap="Nothing opens an empty folder."),
+               GapRow(targets=["C7"], label="Serve", gap="Nothing serves a missing map."),
+               GapRow(targets=[], gap="A row with no target.")]
     walked = _walked(m)
     assert walked["tests note"] == "The suites were read, not run."
     assert walked["tests row C1, C2 gap"] == "Nothing checks a refused card."
     wide_row = [w for w in walked if w.startswith("tests row C3")]
     assert wide_row == ["tests row C3, C4, C5, +1 more gap"], wide_row
+    assert walked["tests row C7 'Browse' gap"] == "Nothing opens an empty folder."
+    assert walked["tests row C7 'Serve' gap"] == "Nothing serves a missing map."
+    assert walked["tests row no target gap"] == "A row with no target."
 
 
 def test_an_entity_store_note_is_reader_facing_and_an_unstored_entity_has_none():
@@ -387,17 +394,22 @@ def test_a_recorded_section_is_walked_one_line_at_a_time_and_only_its_why():
     assert prose.scan(prose.iter_prose_fields(m)) == []   # no file path and no em dash was written
 
 
-def test_a_freeform_note_under_an_unknown_heading_is_walked_whole():
-    """A heading the registry does not know is a note somebody wrote by hand. Its body is one field,
-    so a paragraph wrapped over three lines is read as sentences: line by line, the second line
-    would open with a bare "It"."""
+def test_a_freeform_note_under_an_unknown_heading_is_walked_one_block_at_a_time():
+    """A heading the registry does not know is a note somebody wrote by hand. A paragraph wrapped
+    over three lines is ONE field, read as sentences: line by line, the second line would open with
+    a bare "It". A list is one field per item: as one field, ten items with no full stops read as a
+    single 150-word sentence, the artifact the review found this path would bring back."""
     m = ProjectModel(title="D", goal="g")
-    m.extras = [ExtraSection(heading="How the nightly job runs",
-                             body="The job starts at three.\nIt reads every order\nand writes one file.")]
+    wrapped = "The job starts at three.\nIt reads every order\nand writes one file."
+    items = "\n".join(f"- item {n} " + " ".join(["word"] * 14) for n in range(1, 11))
+    m.extras = [ExtraSection(heading="How the nightly job runs", body=f"{wrapped}\n\n{items}")]
     walked = _walked(m)
-    assert walked["note 'How the nightly job runs'"] == m.extras[0].body
-    assert not [w for w in walked if "line" in w], walked
+    assert walked["note 'How the nightly job runs' block 1"] == wrapped
+    assert walked["note 'How the nightly job runs' block 11"].startswith("item 10 word")
+    assert len([w for w in walked if w.startswith("note '")]) == 11
     assert prose.scan(prose.iter_prose_fields(m)) == []
+    assert prose._note_blocks("1. first\n   still first\n2) second\n\nthird") == [
+        "first\nstill first", "second", "third"]
 
 
 def test_the_two_dependency_fields_the_viewer_never_draws_are_not_walked():

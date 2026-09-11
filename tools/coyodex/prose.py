@@ -61,6 +61,8 @@ _INDIRECT_REF = re.compile(
 _ENUM_JOIN = re.compile(r"\b(?:or|and)\b", re.IGNORECASE)
 _TRAILING_OR = re.compile(r"\bor\b", re.IGNORECASE)
 _SENTENCE_END = re.compile(r"[.!?]")
+# A list item's marker, at the start of a line of a freeform note: a bullet or a number.
+_LIST_ITEM = re.compile(r"^(?:[-*•]|\d+[.)])\s+")
 
 
 def strip_literals(text: str) -> str:
@@ -232,6 +234,28 @@ def summarize(findings: Iterable[Finding], examples: int = EXAMPLES_PER_KIND) ->
     return lines
 
 
+def _note_blocks(body: str) -> list[str]:
+    """A freeform note cut into the blocks a reader sees: a blank line ends one, a list item starts
+    one, and a wrapped line continues the block above. Each block is one field, so a ten-item list
+    with no full stops is ten short fields and not one 150-word "sentence" — the artifact the line
+    walk removed from the registered headings, which the adversarial review found this path would
+    have brought back — while a paragraph wrapped over three lines stays one paragraph."""
+    blocks: list[list[str]] = []
+    open_block = False
+    for raw in body.splitlines():
+        line = raw.strip()
+        if not line:
+            open_block = False
+            continue
+        item = _LIST_ITEM.match(line)
+        if item or not open_block:
+            blocks.append([line[item.end():] if item else line])
+            open_block = True
+        else:
+            blocks[-1].append(line)
+    return ["\n".join(block) for block in blocks]
+
+
 def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tuple[str, str]]:
     """Every reader-facing prose field in a map, as (where, text).
 
@@ -258,7 +282,7 @@ def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tup
     for row in model.glossary:
         yield f"glossary '{row.term}'", row.meaning
     # Two more on the narrow surface since 2026-09-11, when a sweep of the schema against this walk
-    # found seven string fields it never yielded. A stake is the label on an actor→feature arrow of
+    # handed over seven string fields it never yielded. A stake is the label on an actor→feature arrow of
     # the Features page — the most-seen product sentence there is, and at most fifteen per live
     # map; the tests note is one field, the honesty line that leads the Tests tab. Together they
     # moved no live map's batch count (10, 9 and 13 batches at a cap of 40, before and after).
@@ -304,24 +328,34 @@ def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tup
     # card on the System tab — the notes about the code first, the map's own build record folded
     # below them. Wide only: the three live maps hold up to 54 gaps, 53 store notes and 57 recorded
     # lines each, which is a batch or two of fan-out apiece for drill-down text. Running the
-    # counters over the five new fields found 65 long sentences the gate had never seen, 44 of them
-    # in the extras. Two string fields the sweep turned up are NOT here because the viewer never
-    # draws them: a dependency's `alternative` reaches only the committed markdown table, and its
-    # `not_an_interface` is read by `validate` alone.
+    # counters over the seven candidate fields, whole, found 65 long sentences the gate had never
+    # seen: 62 in the five walked here, 44 of those in the extras. Two string fields the sweep
+    # turned up are NOT here because the viewer never draws them: a dependency's `alternative`
+    # reaches only the committed markdown table, and its `not_an_interface` is read by `validate`
+    # alone. THAT SWEEP WAS NOT THE WHOLE SCHEMA. Free text the viewer draws and this walk still
+    # does not yield, found by the adversarial review of this change: an edge's `why`, a rule
+    # site's `why`, an evidence item's `why`, a non-record type's `why`, a relation's `how`, a
+    # role's `drives`. Their turn is a decision about scope and noise, not an oversight.
     #
     # A section under a heading the registry knows is walked ONE RECORDED LINE AT A TIME, and only
     # the line's why: the record grammar owns the split, so a `path:line` key is never counted as a
     # code name and a template's own `complete —` never as an em dash — scanning whole bodies did
     # both on every live map. A section under an unknown heading is freeform notes and is walked
-    # whole, so a paragraph wrapped over several lines is read as sentences, not as fragments.
+    # one BLOCK at a time (`_note_blocks`): a paragraph wrapped over several lines is read as
+    # sentences, not as fragments, and a list is one field per item.
     for row in model.tests:
-        yield f"tests row {shown(row.targets, 3)} gap", row.gap
+        # Named by its targets, and by its label when it has one: four rows on a live map assess the
+        # same one component and differ only in their labels.
+        targets = shown(row.targets, 3) or "no target"
+        label = f" '{row.label.strip()}'" if row.label.strip() else ""
+        yield f"tests row {targets}{label} gap", row.gap
     for entity in model.entities:
         if entity.store is not None:
             yield f"{entity.id} store notes", entity.store.notes
     for section in model.extras:
         if records.spec_of(section.heading) is None:
-            yield f"note '{section.heading}'", section.body
+            for n, block in enumerate(_note_blocks(section.body), 1):
+                yield f"note '{section.heading}' block {n}", block
             continue
         kind = "record" if records.is_maintenance(section.heading) else "note"
         for n, line in enumerate(records.body_lines(section.body), 1):
