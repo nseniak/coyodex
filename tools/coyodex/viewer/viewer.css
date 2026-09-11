@@ -703,6 +703,11 @@ table.glossary thead th, table.dv-table thead th { font-size: 10px; font-weight:
    in the same place on every card. */
 .ecard-grid .ecard { display: flex; flex-direction: column; }
 .ecard-grid .ecard > .ecard-extra:last-child { margin-top: auto; padding-top: 8px; }
+/* …EXCEPT A COUNT, which belongs to the sentence it sits under. On a card that carries a count and
+   nothing else, the rule above pushed the count to the bottom and left a gap under the sentence, so the
+   same fact sat tight on one card and adrift on its neighbour. The bottom slot is for the line that is
+   there on SOME cards, which a reader has to find; a count is on every card and needs no finding. */
+.ecard-grid .ecard > .ecard-extra.ecard-count:last-child { margin-top: 5px; padding-top: 0; }
 /* --- a page about ONE element: the hero, shared by the feature page and the decision-area page ------------------------------------------------
    Three levels, and the CSS is what makes them read as three. A hero that answers "what is this", the
    use cases as the page's body, and the rest of the map under section headings the pinned chip index

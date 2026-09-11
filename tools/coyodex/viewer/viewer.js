@@ -11877,15 +11877,25 @@ function ruleAreaCardHtml(g, others) {
     return plainCardHtml({ key: g.id, name: g.name, desc: g.purpose, count: countLabel(n, 'rule') });
   }
   const parent = g.parentName ? `<span class="ecard-pill">in ${esc(g.parentName)}</span>` : '';
-  const foot = (others || []).length
-    ? `<p class="ecard-extra"><span class="ecard-lbl">Also under</span> `
-      + others.map((f) => featurePillHtml(f, true)).join(' ') + '</p>'
-    : '';
+  // THE COUNT SITS UNDER THE SENTENCE, not beside the name. On the title line it competed with the name
+  // for the first thing a reader's eye lands on, and the name is what they are choosing between; under
+  // the sentence it joins the other fact about this card's context, where a reader looks once they have
+  // decided the name is interesting.
+  //
+  // THE COUNT COMES FIRST and `Also under` last. In a grid the LAST of these lines is the one pushed to
+  // the bottom of the card, so whichever goes last lands at the same height on every card in a row and
+  // the other floats with the sentence above it. `Also under` takes that slot: it is the line that is
+  // there on some cards and not others, so a reader scanning a row finds the shared areas in one place
+  // instead of hunting for them at whatever height each sentence happened to end.
+  const foot = `<p class="ecard-extra ecard-count">${countPillHtml(n, 'rule')}</p>`
+    + ((others || []).length
+      ? `<p class="ecard-extra"><span class="ecard-lbl">Also under</span> `
+        + others.map((f) => featurePillHtml(f, true)).join(' ') + '</p>'
+      : '');
   // NO TYPE WORD. Every card on this page is a decision area, each wears the area's own mark, and the
   // page says so in its first line — so `DECISION AREA` on all thirteen of them is the heading printed
   // thirteen times. `noType` is the card's own switch for that, not a stylesheet reaching in.
-  return elementCardHtml(g.id, { desc: g.purpose, foot, noType: true,
-                                 extra: parent + countPillHtml(n, 'rule') });
+  return elementCardHtml(g.id, { desc: g.purpose, foot, noType: true, extra: parent });
 }
 // ONE CARD PER FEATURE, holding its areas — the same framed section every item page draws, under the
 // feature's own mark. A bare heading over a grid was tried first and put the cut and the cards on one
