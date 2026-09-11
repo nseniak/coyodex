@@ -1938,8 +1938,18 @@ def test_an_enforced_at_pill_selects_and_frames_the_step_in_the_flow() -> None:
     assert "selectFlowStep(uc, i, true)" in body
     assert "flow: cur >= 0" not in body
     step = _js_function("selectFlowStep")
-    assert "frameFlowStep(i)" in step and "pendingFrameStep = frame" in step
-    assert "if (pendingFrameStep)" in VIEWER_JS      # the one-shot, applied after flowInit
+    # IN PLACE it frames, because the reader is already looking at the diagram and the camera should
+    # move to the step they asked for. NAVIGATING it just goes: the page it lands on opens at its own
+    # fit with the step selected, which is the same screen a reload of that address gives.
+    #
+    # A framing move on arrival was tried and reverted. It fired on the routes that navigate in place and
+    # silently did nothing on a cold load — the player's arrows are not built when the render reaches
+    # that line — so one address had two looks: 1.77 zoom on the arrow by a click, 0.67 and the whole
+    # picture by a reload of the very same link.
+    assert "if (frame) frameFlowStep(i);" in step
+    assert "pendingFrameStep" not in VIEWER_JS and "stepFrame" not in VIEWER_JS
+    nav = step[step.index("} else {"):]
+    assert "frameFlowStep" not in nav, "the navigating route aims no camera"
 
 
 def test_the_readme_lists_the_business_rules_tab_in_tab_order() -> None:
@@ -2175,11 +2185,14 @@ def test_a_rules_crumb_walks_back_to_its_own_decision_area() -> None:
 
 
 def test_every_cross_link_into_a_rule_lands_on_the_rules_own_page() -> None:
-    """"How it decides", a flow step's "Decides" rows and a search hit are three doors into one
+    """"How it decides", the rules a flow step decides and a search hit are three doors into one
     question: how is this decision enforced? Two of them used to open the tab focused on a BLOCK and
-    scroll — which, now that the answer lives one level down, would land the reader on a list."""
-    for fn in ("bindNodeDetailHandlers", "bindFlowStepInfo"):
-        assert "go({ kind: 'rule', br: a.getAttribute('data-br') })" in _js_function(fn), fn
+    scroll — which, now that the answer lives one level down, would land the reader on a list.
+
+    A STEP'S RULES ARE ITEM PILLS now, so that door is the one every pill uses: `bindItemPills`, whose
+    single destination is the thing the pill names. The pane's own list keeps its handler."""
+    assert "go({ kind: 'rule', br: a.getAttribute('data-br') })" in _js_function("bindNodeDetailHandlers")
+    assert "bindItemPills(host);" in _js_function("bindFlowStepInfo")
     # The block id those two doors read is dead payload now — a link carries only the rule.
     for fn in ("decidesHtml", "stepRulesHtml"):
         assert "data-blk" not in _js_function(fn), fn
@@ -2221,7 +2234,11 @@ def test_the_flow_step_pane_uses_a_new_class_and_keys_by_container() -> None:
     assert "if (l.container !== uc || String(l.n) !== String(st.n)) continue;" in pane
     assert "const shared = !!SUBFLOW_BY_ID[uc];" in pane
     assert "if (!shared && l.uc !== uc) continue;" in pane
-    assert 'class="brref"' in pane            # a new class name
+    # EACH RULE IS THE SHARED ITEM PILL — its own mark, its own colour, and the one click every pill
+    # has. It was a bare underlined link, the one place naming an element that did not look like the
+    # rest; and the `Decides` heading over it is gone, because a rule's mark already says what it is.
+    assert "itemPillHtml(r.id, { kind: 'rule', name: ruleTitle(r) })" in pane
+    assert "<dt>Decides</dt>" not in pane and 'class="brref"' not in pane
     # The same four the viewer-js negative contract names, matched in their RENDERED form.
     for forbidden in ('class="flowpairref"', 'class="endpoints"', "ridesref", 'class="flowref"'):
         assert forbidden not in _js_code(pane), forbidden
@@ -2312,7 +2329,12 @@ def test_one_vocabulary_serves_every_pill_and_badge() -> None:
     one place, and a new element type cannot reach the screen under its internal name in one view and
     its readable one in another."""
     assert "const ELEMENT_LABEL = {" in VIEWER_JS
-    assert "rule: 'business rule', block: 'decision area'," in VIEWER_JS
+    # `rule`, not `business rule`. The longer word was the map's internal name for the field and the
+    # reader never needed the first half: on a rule's own page the hero read `Business rule: …`, and in
+    # a list of rules every card said it again. One word, in the one table, so the hero and the pills
+    # cannot end up saying two different things about the same kind.
+    assert "rule: 'rule', block: 'decision area'," in VIEWER_JS
+    assert "'business rule'" not in VIEWER_JS, "the long form is gone from the reader's vocabulary"
     assert "KIND_LABEL" not in VIEWER_JS and "SB_KIND_LABEL" not in VIEWER_JS
     for reader in ("const type = elementLabel(n.kind);",                      # the pane pill
                    "elementLabel(n.kind));",                                  # the search badge

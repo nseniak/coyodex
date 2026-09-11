@@ -598,7 +598,7 @@ const ELEMENT_LABEL = {
   // carried the same fact twice, once in the code's words.
   human: 'actor', service: 'actor', 'ai-agent': 'actor',
   component: 'component', subsystem: 'subsystem', entity: 'entity', subdomain: 'subdomain',
-  dep: 'dependency', process: 'process', rule: 'business rule', block: 'decision area',
+  dep: 'dependency', process: 'process', rule: 'rule', block: 'decision area',
   system: 'system',
 };
 function elementLabel(kind) { return ELEMENT_LABEL[kind] || kind || ''; }
@@ -3698,22 +3698,27 @@ function stepRulesHtml(uc, st) {
     }
   }
   if (!found.length) return '';
-  const links = found.map(([r, link]) => {
-    // "this exact step" and "inside the same function as this step" are different claims; saying so
-    // is the difference between a readout and a pretended proof.
-    const near = link && link.strength !== 'exact'
-      ? ' <span class="muted">(enforced inside the same function)</span>' : '';
-    return '<a href="#" class="brref" data-br="' + esc(r.id) + '">' + esc(ruleTitle(r)) + '</a>' + near;
-  });
-  return '<dl><dt>Decides</dt><dd class="br-steprules">' + links.join('<br>') + '</dd></dl>';
+  // EACH RULE IS AN ITEM PILL, the same tag a rule wears wherever it is named: its own mark, its own
+  // colour, and a click that opens it. It was a bare underlined link, the one place on this viewer that
+  // named an element and did not look like the others.
+  //
+  // AND NO LABEL OVER THEM. `Decides` was a `<dt>` heading one row of pills, and the pills already say
+  // what they are — a rule's mark is on each of them. The word was the card's only heading, so it read
+  // as a section of a form rather than as the one extra fact a step carries.
+  // NO NOTE ABOUT HOW THE LINE WAS MATCHED. Each rule reached this step either on the step's own line
+  // or on another line inside the same function, and the card used to say so on the weaker of the two.
+  // Measured on one live map: 363 of 412 links are the weaker kind, so the note printed on nine rows in
+  // ten and stopped being information — and it inverted the signal, since the 49 STRONGER links carried
+  // no mark at all. How precisely coyodex matched a line is a fact about the MAP, and this product keeps
+  // those together under System › About this map.
+  const links = found.map(([r]) => itemPillHtml(r.id, { kind: 'rule', name: ruleTitle(r) }));
+  return '<div class="br-steprules">' + links.join('<br>') + '</div>';
 }
 function bindFlowStepInfo(host, uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) return;
-  // The "Decides" rows deep-link to the rule's own page under the Business rules tab.
-  host.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
-    ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
-  }));
+  // The rules a step decides are item pills, and one binder opens whatever a pill names.
+  bindItemPills(host);
   // The step that runs a shared sub-use case opens it, carrying the use case the reader came through so the
   // walk's trail can lead back the way they arrived.
   host.querySelectorAll('[data-gosf]').forEach((b) => b.addEventListener('click', (ev) => {
@@ -11856,7 +11861,7 @@ function ruleStatementLine(r) { return (r && (r.name || '').trim()) ? r.statemen
 function ruleCrumbTitle(id) {
   // NEVER the raw `BRn` — a rule the payload does not carry (or one with neither field) still gets a
   // crumb, and an element id on screen is the one thing the viewer does not do.
-  const t = ruleTitle(ruleById(id)) || 'Business rule';
+  const t = ruleTitle(ruleById(id)) || 'Rule';
   return t.length > 58 ? t.slice(0, 57).trimEnd() + '\u2026' : t;
 }
 // The decision areas, depth-first, each with its own rules. Blocks nest (validate supports
@@ -13550,18 +13555,18 @@ async function renderView(sArg, transient, seq) {
     // it; and not before a move that measures the screen (matchTextSize, a focus-drill centre, a framed
     // step), because svg-pan-zoom paints a zoom on the next frame and the measurement would read the
     // unclamped fit. The centre move clamps afterwards, about the box it just centred.
-    else if (!pendingMatchTextId && !pendingCenterId && !pendingFrameStep) clampFitZoom(true);
+    else if (!pendingMatchTextId && !pendingCenterId) clampFitZoom(true);
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
     else if (pendingCenterId) { applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1); clampFitZoom(false); }  // centre only, then the clamp about that centre
     updateZoomLevel();
+    // ARRIVING AT A PAGE THAT NAMES A STEP CHANGES NO CAMERA. The page opens at its own fit, the step
+    // selected on it, and that is the same screen whichever route brought the reader — its address typed
+    // in, a reload, a rule's step chip, a door's `what crosses` line. A framing move was tried here and
+    // reverted: it fired on the routes that navigate in place and silently did nothing on a cold load
+    // (the player's arrows are not built yet when the render reaches this line), so the one screen had
+    // two looks — 1.77 zoom centred on the arrow by a click, 0.67 and the whole picture by a reload.
+    // The zoom that FRAMES a step is the player's own gesture, and it stays there: see selectFlowStep.
     flowInit(s);  // a flow view: restore this history point's selected/saved step, or start fresh
-    // One-shot: a jump that asked to FRAME its step (see selectFlowStep) does it now, after
-    // flowInit has restored the selection and svgPanZoom exists.
-    if (pendingFrameStep) {
-      const m = (s.sel || '').match(/^flowstep:.*:(\d+)$/);
-      if (m) frameFlowStep(Number(m[1]));
-    }
-    pendingFrameStep = false;
   }
   // Empty-space click behaviour, mirroring the on-element gestures: a plain click deselects; a shift-click
   // is a pure camera move — with no element under it, it fits+centers the WHOLE diagram (the background
@@ -14531,16 +14536,15 @@ function selectFlowStep(uc, i, frame = false) {
     selClear(mainScene); mainScene.selectors[state.sel]();  // select this one step in place (replace)
     if (frame) frameFlowStep(i);
   } else {
-    // The arrow does not exist yet — the view has not rendered. `render` frames it once `flowInit`
-    // has restored the step, the same one-shot shape `pendingCenter` uses for a focus-drill.
-    pendingFrameStep = frame;
+    // The arrow does not exist yet — the view has not rendered. `render` frames whatever step the
+    // state names, so this route needs to ask for nothing: `frame` is only about the IN-PLACE case
+    // above, where the reader is already looking at the diagram and the camera should glide.
     go(state);
   }
 }
 // `frame` = the shift-click camera move, applied to the step's own arrow: a caller that JUMPED here
 // from somewhere else (a rule's "Enforced at" pill) lands on a whole flow, and the one arrow it meant
 // is a thin line somewhere in it. Selecting glows it; framing is what makes it findable.
-let pendingFrameStep = false;
 function frameFlowStep(i) {
   if (!flowPlay || !mainPz) return;
   const els = (flowPlay.msgEls || [])[i] || [];
@@ -16026,7 +16030,7 @@ const IMP_TYPE_LABEL = { subsystems: 'Subsystems', components: 'Components', dep
   entities: 'Entities', subdomains: 'Subdomains', use_cases: 'Use cases', capabilities: 'Capabilities',
   happy_path: 'Happy Path', flow_steps: 'Flow steps', subflows: 'Sub-flows',
   edges: 'Call sites (edges)', entry_points: 'Entry points',
-  blocks: 'Decision areas', rules: 'Business rules', rule_sites: 'Rule enforcement sites',
+  blocks: 'Decision areas', rules: 'Rules', rule_sites: 'Rule enforcement sites',
   glossary: 'Glossary', security: 'Security surfaces', run_commands: 'Run commands',
   non_entity_types: 'Other types', interfaces: 'Interfaces', other: 'Other' };
 // A flow-step synthetic id 'step:<uc>:<n>' → its parts, or null. Shared by impName / gotoImpactEid.
@@ -16294,7 +16298,7 @@ const INSP_KIND = {
   roles: 'actor', capabilities: 'feature', use_cases: 'use case', happy_path: 'happy-path step',
   subsystems: 'subsystem', components: 'component', deps: 'dependency', entry_points: 'way in',
   subdomains: 'subdomain', entities: 'record type', flows: 'flow', subflows: 'shared sub-flow',
-  rules: 'business rule', blocks: 'rule block', interfaces: 'interface', glossary: 'glossary term',
+  rules: 'rule', blocks: 'rule block', interfaces: 'interface', glossary: 'glossary term',
   tests: 'test row', deployment: 'process', config: 'setting', observability: 'signal',
   run_commands: 'command', non_entity_types: 'not a record type', extras: 'extra section',
   edges: 'arrow', messaging: 'channel', environments: 'environment', security: 'security note',

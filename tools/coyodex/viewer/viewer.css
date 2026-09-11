@@ -2467,8 +2467,15 @@ svg.story-wires marker path { fill: context-stroke; stroke: none; opacity: 1; }
 .flow-step:hover .flow-step-dot { background: #4f46e5; }
 .flow-step:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
 /* The step's place in the WHOLE walk. Both rails drop this number on purpose; this is the view
-   whose subject it is, so here it stays. */
-.flow-step-num { display: block; font-size: 10px; font-weight: 700; color: #8a90a4; }
+   whose subject it is, so here it stays.
+
+   TYPE ONLY. The same class numbers a step on TWO things: a station on a board, where the number sits
+   on its own line above the title, and a map arrow's label, where the numbers riding one pair read
+   along a line — `8, 9`. `display: block` is the STATION's requirement and belonged to the station, not
+   to the class: on the arrow it stacked the two numbers and the comma into a box measured at 4px wide,
+   so the label painted `8` and step 9 appeared nowhere on that picture. */
+.flow-step-num { font-size: 10px; font-weight: 700; color: #8a90a4; }
+.flow-step .flow-step-num { display: block; }
 .flow-step-title { display: block; font-size: 11.5px; line-height: 1.3; color: #1e2235; margin-top: 1px; }
 /* HOVER UNDERLINES THE TEXT, on every board. It was the step's alone, so a side stop lit its ring
    and said nothing about the words in it — and the words are the door. */
@@ -3254,3 +3261,16 @@ body.insp-on { cursor: crosshair; }
 .story-elabel-line { display: block; }
 .story-elabel-line + .story-elabel-line { margin-top: 2px; }
 
+/* ── THE FOCUS RING, EXCEPT ON THE BOX YOU ALREADY PICKED ──────────────────────────────────────────
+   Clicking a box focuses it and draws no ring; the next key press — Shift on its own will do it — puts
+   the browser into keyboard mode and the ring appears on top of that box's own picked border. One box,
+   marked twice, in two ways, for two reasons that are the same reason here.
+
+   THE RING STAYS EVERYWHERE ELSE, which is where it earns its keep: Tab moves focus WITHOUT picking,
+   and there the ring is the only thing saying where the keyboard is.
+
+   Last in the file and scoped by id, because it has to beat a dozen per-component `:focus-visible`
+   rules that each set their own colour and offset — same weight as a bare class selector, so position
+   alone would settle it and one more component rule below would quietly undo this. */
+#diagram .ibox-picked:focus-visible, #diagram .ibox-picked:focus-visible .ibox-name:focus-visible,
+#pagehero .ibox-picked:focus-visible, .ibox-picked:focus-visible { outline: none; }

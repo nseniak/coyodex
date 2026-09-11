@@ -5842,3 +5842,41 @@ def test_only_the_file_tree_asks_for_the_zoom_that_matches_the_sidebar_text() ->
     assert js.count("selectFromTree(e.sel, true)") == 1
     assert js.count("selectFromTree(id, true)") == 1
     assert "showInContext(id) { selectFromTree(id); }" in js, "showing is not the tree's gesture"
+
+
+def test_the_focus_ring_stays_off_the_box_the_reader_already_picked() -> None:
+    """Clicking a box focuses it and draws no ring; the next key press — Shift on its own will do it —
+    puts the browser into keyboard mode and the ring appears on top of that box's own picked border. One
+    box, marked twice, in two ways, for two reasons that are the same reason there.
+
+    THE RING STAYS EVERYWHERE ELSE. Tab moves focus WITHOUT picking, and there the ring is the only
+    thing saying where the keyboard is, so the rule turns it off for the picked box alone.
+
+    Pinned on POSITION as well as on the selector: a dozen components set their own `:focus-visible`
+    colour and offset, each at the weight of a bare class, so an override of the same weight placed
+    above them loses and one new component rule below would quietly undo it."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    rule = "#diagram .ibox-picked:focus-visible"
+    assert rule in css, "the picked box drops the ring"
+    assert css.index(rule) > css.rindex(":focus-visible { outline: 2px solid"), \
+        "the override has to sit after every component's own ring rule"
+    off = css[css.index(rule):]
+    assert "outline: none; }" in off[:off.index("\n\n") + 1 if "\n\n" in off else len(off)]
+    # …and the plain ring is still there for everything that is focused without being picked.
+    assert ":focus-visible { outline: 3px solid #818cf8; outline-offset: 2px; }" in css
+
+
+def test_a_step_number_is_a_type_and_its_layout_belongs_to_what_carries_it() -> None:
+    """One class numbers a step on TWO things, and they lay out differently. On a board's station the
+    number sits on its own line above the title. On a map arrow's label the numbers riding one pair read
+    along a line — `8, 9` — because a pair a flow crosses twice draws one arrow carrying both steps.
+
+    `display: block` was on the CLASS, so the arrow's label stacked the two numbers and the comma into a
+    box Mermaid had measured at 4px wide: it painted `8`, and step 9 appeared nowhere on that picture
+    while its card insisted the arrow carried it. The type stays shared — same size, weight and colour,
+    so a number reads as a number wherever it is — and the stacking moved to the station that wants it."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".flow-step-num { font-size: 10px; font-weight: 700; color: #8a90a4; }" in css, \
+        "the class carries type only"
+    assert ".flow-step .flow-step-num { display: block; }" in css, \
+        "…and the station, which stacks it above the title, asks for that itself"
