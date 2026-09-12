@@ -18,7 +18,7 @@ SKILLS_DIRS := $(HOME)/.claude/skills $(HOME)/.agents/skills
 
 .PHONY: install install-eval install-retro install-dev \
         uninstall uninstall-eval uninstall-retro uninstall-dev \
-        deps dev venv clean start dev-start gates
+        deps dev venv clean start dev-start gates land
 
 # Port for the local map server (the file browser + code viewer backend).
 PORT ?= 8765
@@ -59,6 +59,13 @@ gates:
 	echo ""; \
 	if [ $$t -ne 0 ] || [ $$p -ne 0 ]; then echo "GATES FAILED (pytest=$$t pyright=$$p)"; exit 1; fi; \
 	echo "GATES PASSED"
+
+# Land the worktree branch on main: merge main INTO the branch, run the gates on the result,
+# fast-forward main FROM the main checkout (ref, index and files together), and go again if main
+# moved meanwhile. Stops on a conflict for you to resolve here. Run from inside the worktree.
+# Stdlib only, so it needs no venv of its own; the gates it runs use the main checkout's.
+land:
+	python3 tools/land.py
 
 # Install the coyodex skill globally for all agents (macOS/Linux). Also builds the venv and
 # installs the CLI (via `deps`) so a one-time `make install` covers everything.

@@ -456,7 +456,9 @@ def iter_prose_fields(model: ProjectModel, *, wide: bool = True) -> Iterator[tup
     # alone. THAT SWEEP WAS NOT THE WHOLE SCHEMA. Free text the viewer draws and this walk still
     # does not yield, found by the adversarial review of this change: an edge's `why`, a rule
     # site's `why`, an evidence item's `why`, a non-record type's `why`, a relation's `how`, a
-    # role's `drives`. Their turn is a decision about scope and noise, not an oversight.
+    # role's `drives`. On 2026-09-12 Nitsan judged them not worth checking: the check is style
+    # only, blind to everything but the sentence, and those fields are drill-down text. Do not
+    # propose them again without a new reason.
     #
     # A section under a heading the registry knows is walked ONE RECORDED LINE AT A TIME, and only
     # the line's why: the record grammar owns the split, so a `path:line` key is never counted as a
