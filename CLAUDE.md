@@ -181,6 +181,13 @@ the code's names.
   through different doors are two use cases, and a gate blocks the map otherwise.
 - **change impact** — the report saying what a code change does to the map.
 - **accept** — folding a change-impact report into the baseline.
+- **readability check** — the validator's advisory count over every sentence a reader
+  meets in the viewer: over 20 words, an em dash, a code-shaped word, an opening "It"
+  or "This", a split the box never names. Style only, never accuracy: it sees the
+  sentence alone, as the reader does, and rewrites nothing. A recorded line counts by
+  its reason, never by its key. The audit's paid reading agents judge two more things,
+  an unknown word and a sentence that says nothing specific, on a smaller set of
+  fields.
 - **Coyote Effect** — the situation coyodex exists for: your agent wrote a lot
   of code, it runs, and you have lost track of what is under your feet.
 
