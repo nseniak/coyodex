@@ -3432,8 +3432,9 @@ console.log(JSON.stringify(out));
 
 def test_a_map_lands_on_what_the_product_does() -> None:
     """The map should read as WHAT THE PRODUCT DOES first, with code as the evidence you drill into. So
-    the landing view is Features, which opens with the product description and then lists everything the
-    product does. Each fallback is the next thing down the product row, and only then the machine.
+    a reader arriving from the root page lands on the Overview, the product description (2026-09-12),
+    then Features, which lists everything the product does. Each fallback is the next thing down the
+    product row, and only then the machine.
 
     The description had a tab of its own for one round. A tab is the wrong home for three sentences: the
     reader visits it once and never returns. As the lead of the landing page it cannot be missed and
@@ -3443,7 +3444,8 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     # itself, searched from the table — `{ kind: LANDING }` also appears in the URL-adopt path above.
     start = js.index("const LANDING =")
     landing = js[start: js.index("{ kind: LANDING });", start)]
-    assert "HAS_USECASES ? 'usecases'" in landing
+    assert landing.index("HAS_OVERVIEW ? 'overview'") < landing.index("HAS_USECASES ? 'usecases'"), \
+        "the description is the first thing a reader meets"
     assert "HAS_HP ? 'hp'" in landing
     assert "'actors'" not in landing, "the Actors view left the fallback chain with its tab"
     assert "(HAS_DIFF && HAS_GROUPING) ? 'container'" in landing   # a diff still opens on the overlay
@@ -3454,7 +3456,7 @@ def test_a_map_lands_on_what_the_product_does() -> None:
     # leads with its diagram.
     assert "productLeadHtml" not in over, "the description left the Features landing"
     tab = js[js.index("function renderOverviewTab() {"): js.index("\n}", js.index("function renderOverviewTab() {"))]
-    assert "productLeadHtml(secs)" in tab
+    assert "productLeadHtml([])" in tab and "overviewDigestHtml" not in js, "the tab is the description alone"
     html = (VIEWER_DIR / "viewer.html").read_text()
     assert html.index('data-view="overview" data-group="product"') < html.index('data-view="usecases" data-group="product"'), \
         "first tab under Product"

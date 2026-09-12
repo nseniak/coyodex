@@ -220,10 +220,9 @@ design principles these come from)
 - **source column** — the file browser and the code viewer, on the right. It is
   optional on every screen. The **source rail**, a strip on the right edge,
   opens it; the × in its header closes it.
-- **product overview** — the product description, the first section of the Overview tab:
-  two to four short paragraphs, in the third person, that describe and do not sell. Under
-  it the tab lists the people, the features and the interfaces as item pills, derived from
-  the map, never written by hand.
+- **product overview** — the product description, the whole of the Overview tab: two to
+  four short paragraphs, in the third person, that describe and do not sell. The tab a
+  reader lands on from the root page.
 - **shareable link** — a viewer address that names one screen, not just the map:
   which tab, how far you drilled, and what is selected. Copy it and someone else
   opens the same screen; reload and you keep your place. The browser's own Back
