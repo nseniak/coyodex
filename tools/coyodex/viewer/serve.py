@@ -18,7 +18,8 @@ The interactive viewer is served, not baked into a file. For each project this s
 The server does NOT scan the disk. You pick a project folder (one holding ``.coyodex/project-map.json``)
 through the landing page's built-in folder browser; the choice is remembered in a small recents file
 (``~/.coyodex/serve-recents.json``). On the next start the recents are shown, each openable or
-removable. While it runs, the server also records its port and process id beside that file
+removable, and one whose folder is gone from disk is dropped the moment the landing page loads.
+While it runs, the server also records its port and process id beside that file
 (``serve-running.json``, see ``running.py``), which is how ``coyodex url`` finds it. Files come from ``git ls-tree`` / ``git show <commit>:<path>``, so the view is a frozen
 snapshot of the mapped commit and local edits never leak in.
 
@@ -131,8 +132,8 @@ def _has_coyodex(folder: Path) -> bool:
 
 def load_project(folder: str) -> Project | None:
     """Build a Project from a folder holding a valid map, or None if the map is missing/unloadable.
-    A recents entry whose folder went away or broke is simply not served (but stays in the list so the
-    user can remove it)."""
+    A recents entry whose map broke is simply not served: it stays in the list, dimmed, so the user can
+    rebuild or remove it. One whose FOLDER went away is pruned by the landing page (`prune_missing`)."""
     root = Path(folder)
     map_json = root / ".coyodex" / MAP_JSON
     if not map_json.is_file():
@@ -691,9 +692,14 @@ class Handler(BaseHTTPRequestHandler):
         if rest == ["recents"]:
             # Re-read the file (a build may have registered a project since startup) and rebuild the
             # served set, so a just-built project shows up as a card AND is openable, no restart needed.
+            # The re-read is also when a remembered folder that no longer exists is dropped: the page
+            # never shows a dead card, and the file does not keep growing with them.
             with _STATE_LOCK:
-                self.store.reload()
+                gone = self.store.prune_missing()   # reloads first
                 Handler.projects = build_projects(self.store.list())
+            if gone:
+                print(f"coyodex serve: forgot {len(gone)} remembered folder(s) that no longer exist",
+                      file=sys.stderr)
             return self._json(_recents_payload(self.store, self.projects))
         if rest == ["browse"]:
             raw = (query.get("path") or [""])[0]

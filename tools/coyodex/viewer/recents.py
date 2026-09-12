@@ -21,8 +21,10 @@ _OPT_OUT_ENV = "COYODEX_NO_SERVE_REGISTER"  # set to skip auto-registration (e.g
 
 class RecentsStore:
     """The ordered (most-recent first) list of project folders the user has opened, persisted to a
-    small JSON file. No scanning — the list only grows when a folder is opened in the UI or a build
-    registers one. Mutations reload the file first so concurrent writers merge instead of clobber."""
+    small JSON file. No scanning — the list grows only when a folder is opened in the UI or a build
+    registers one, and shrinks when the user removes a card or the landing page finds a remembered
+    folder gone from disk (`prune_missing`). Mutations reload the file first so concurrent writers
+    merge instead of clobber."""
 
     def __init__(self, path: Path = RECENTS_PATH) -> None:
         self.path = path
@@ -61,7 +63,7 @@ class RecentsStore:
                 if target.samefile(f):  # same dir via a different spelling / a symlink -> drop the old entry
                     continue
             except OSError:
-                pass  # a stale entry whose folder is gone: keep it (the user can still remove it)
+                pass  # a folder that is gone: not add's call to drop — the landing page prunes those
             kept.append(f)
         self.folders = [resolved] + kept
         self.save()
@@ -73,6 +75,21 @@ class RecentsStore:
         if len(kept) != len(self.folders):
             self.folders = kept
             self.save()
+
+    def prune_missing(self) -> list[str]:
+        """Drop every entry whose folder is gone from disk, and return what was dropped. The landing
+        page calls this on each load, so a deleted worktree or a test's scratch repo does not stay
+        behind as a dead card. Reloads first like every mutation, and writes only when something
+        went — a no-op must not touch the file. A folder that still EXISTS is never pruned here, even
+        with no valid map in it: its card says "No valid map yet", and the map may be about to be
+        built."""
+        self.reload()
+        gone = [f for f in self.folders if not _exists_as_dir(f)]
+        if gone:
+            dropped = set(gone)
+            self.folders = [f for f in self.folders if f not in dropped]
+            self.save()
+        return gone
 
     def set_order(self, order: list[str]) -> None:
         """Reorder the recents to match `order` (existing paths, in the new sequence). Unknown paths are
@@ -87,6 +104,15 @@ class RecentsStore:
 
     def list(self) -> list[str]:
         return list(self.folders)
+
+
+def _exists_as_dir(folder: str) -> bool:
+    """True unless the folder is KNOWN to be gone. One that cannot be looked at (a permission error,
+    a mount that is not answering) counts as present: pruning on a doubt would drop a real project."""
+    try:
+        return Path(folder).is_dir()
+    except OSError:
+        return True
 
 
 def register_project(coyodex_dir: Path, store: RecentsStore | None = None) -> None:

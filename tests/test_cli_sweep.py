@@ -237,6 +237,15 @@ def test_the_grounding_verb_survives_a_realistic_map(verb, tmp_path):
     assert r.returncode in (0, 1), f"grounding {verb} exited {r.returncode}\n{r.stderr[-1500:]}"
 
 
+def test_the_sweep_never_registers_its_scratch_repos_with_serve() -> None:
+    """The `ship` recipe assembles into a throwaway `<tmp>/shiprepo/.coyodex`, and a finished assemble
+    registers its folder in ~/.coyodex/serve-recents.json — the landing page's cards. Every run left
+    one more dead card there (577 by 2026-09-12). The root conftest.py sets the product's own opt-out
+    for the whole run, and `cli()` hands children `os.environ`, so they inherit it. This is the guard
+    that the switch stays set."""
+    assert os.environ.get("COYODEX_NO_SERVE_REGISTER"), "conftest.py no longer sets the opt-out"
+
+
 def test_every_advertised_command_has_a_sweep_recipe():
     """THE COMPLETENESS GATE. Without it "comprehensive" decays the moment a command is added:
     the sweep keeps passing while covering less of the tool every release."""

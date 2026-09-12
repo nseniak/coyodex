@@ -179,22 +179,42 @@ def test_recents_store_add_merges_external_change() -> None:
 
 
 def test_register_project() -> None:
-    import os
+    """A finished build remembers its project — unless the opt-out switch is set. The whole test run
+    sets that switch (the root conftest.py), so this test clears it for its own body; its stores are
+    injected temp files, never the real list."""
     with tempfile.TemporaryDirectory() as td:
         repo = Path(td) / "myproj"
         (repo / ".coyodex").mkdir(parents=True)
-        store = RecentsStore(Path(td) / "recents.json")
-        register_project(repo / ".coyodex", store=store)
-        assert [Path(p).name for p in store.list()] == ["myproj"]   # registered the project root
-        register_project(repo, store=store)                          # not a .coyodex dir -> ignored
-        assert len(store.list()) == 1
-        os.environ["COYODEX_NO_SERVE_REGISTER"] = "1"                 # opt-out (e.g. the eval)
+        opt_out = os.environ.pop("COYODEX_NO_SERVE_REGISTER", None)
         try:
+            store = RecentsStore(Path(td) / "recents.json")
+            register_project(repo / ".coyodex", store=store)
+            assert [Path(p).name for p in store.list()] == ["myproj"]   # registered the project root
+            register_project(repo, store=store)                          # not a .coyodex dir -> ignored
+            assert len(store.list()) == 1
+            os.environ["COYODEX_NO_SERVE_REGISTER"] = "1"                 # opt-out (the eval, the tests)
             store2 = RecentsStore(Path(td) / "recents2.json")
             register_project(repo / ".coyodex", store=store2)
             assert store2.list() == []
         finally:
-            del os.environ["COYODEX_NO_SERVE_REGISTER"]
+            if opt_out is None:
+                os.environ.pop("COYODEX_NO_SERVE_REGISTER", None)
+            else:
+                os.environ["COYODEX_NO_SERVE_REGISTER"] = opt_out
+
+
+def test_recents_store_prune_missing_drops_only_folders_that_are_gone() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        store_path = Path(td) / "recents.json"
+        s = RecentsStore(store_path)
+        (Path(td) / "here").mkdir()
+        s.add(str(Path(td) / "here"))
+        s.add(str(Path(td) / "gone"))                      # remembered, then deleted (never made)
+        assert [Path(p).name for p in s.prune_missing()] == ["gone"]
+        assert [Path(p).name for p in s.list()] == ["here"]
+        assert [Path(p).name for p in RecentsStore(store_path).list()] == ["here"]   # persisted
+        assert s.prune_missing() == []                        # nothing gone: nothing dropped
+        assert [Path(p).name for p in s.list()] == ["here"]
 
 
 def test_recents_store_set_order() -> None:
@@ -394,7 +414,7 @@ def test_http_static_and_view_routes() -> None:
         folder = make_project_dir(Path(td), "alpha")
         projects = build_projects([str(folder)])
         slug = next(iter(projects))
-        Handler.store = RecentsStore()
+        Handler.store = RecentsStore(Path(td) / "recents.json")
         Handler.projects = projects
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -419,6 +439,35 @@ def test_http_static_and_view_routes() -> None:
             httpd.server_close()
 
 
+def test_the_landing_page_forgets_a_folder_that_is_gone() -> None:
+    """A remembered folder that no longer exists is dropped from the list when the page loads, not
+    shown as a dead card. One that exists with no valid map yet stays, dimmed, as before."""
+    with tempfile.TemporaryDirectory() as td:
+        live = make_project_dir(Path(td), "alpha")               # a valid map
+        unbuilt = Path(td) / "beta"                               # exists, no map yet
+        (unbuilt / ".coyodex").mkdir(parents=True)
+        gone = Path(td) / "gamma"                                 # never created
+        store_path = Path(td) / "recents.json"
+        store = RecentsStore(store_path)
+        for folder in (gone, unbuilt, live):                       # most recent first: alpha, beta, gamma
+            store.add(str(folder))
+        Handler.store = store
+        Handler.projects = build_projects(store.list())
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            code, ctype, body = _http_get(httpd.server_address[1], "/api/recents")
+            assert code == 200 and "application/json" in ctype
+            cards = json.loads(body)
+            assert [c["name"] for c in cards] == ["alpha", "beta"]
+            assert [c["ok"] for c in cards] == [True, False]
+            # Dropped from the FILE too, not only from this answer.
+            assert [Path(p).name for p in RecentsStore(store_path).list()] == ["alpha", "beta"]
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+
 def test_live_reload_is_off_unless_dev_is_asked_for() -> None:
     # A person reading a map must not get a page that reloads under them, nor a poll they did not
     # ask for: with no --dev the shell carries no script and the endpoint is not an endpoint.
@@ -426,7 +475,7 @@ def test_live_reload_is_off_unless_dev_is_asked_for() -> None:
         folder = make_project_dir(Path(td), "alpha")
         projects = build_projects([str(folder)])
         slug = next(iter(projects))
-        Handler.store = RecentsStore()
+        Handler.store = RecentsStore(Path(td) / "recents.json")
         Handler.projects = projects
         Handler.dev = False
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -450,7 +499,7 @@ def test_dev_serves_the_shell_with_live_reload_and_a_stamp() -> None:
         folder = make_project_dir(Path(td), "alpha")
         projects = build_projects([str(folder)])
         slug = next(iter(projects))
-        Handler.store = RecentsStore()
+        Handler.store = RecentsStore(Path(td) / "recents.json")
         Handler.projects = projects
         Handler.dev = True
         httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

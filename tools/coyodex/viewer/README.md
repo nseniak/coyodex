@@ -97,7 +97,8 @@ and edits on disk never leak in.
 The server does **not** scan the disk. Open `http://127.0.0.1:8765/` and use **+ Add a project…** to
 browse to a folder containing a `.coyodex/project-map.json`; your choices are remembered in
 `~/.coyodex/serve-recents.json` and shown as a recents list on the next start (each openable, or
-removable with the ✕). highlight.js is lazy-loaded from a pinned + SRI CDN on first use.
+removable with the ✕; one whose folder no longer exists on disk is dropped the next time the landing
+page loads). highlight.js is lazy-loaded from a pinned + SRI CDN on first use.
 
 ## Finding your way around
 
