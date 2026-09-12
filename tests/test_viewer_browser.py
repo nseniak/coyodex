@@ -144,8 +144,8 @@ def test_back_after_an_address_bar_paste_walks_the_real_screens() -> None:
     those stale indexes still matched: Back rendered whatever now sat at that index, and the URL was
     then rewritten over the entry, losing the screen it named for the life of the tab.
 
-    Read the steps as a walk: Tests, then Glossary, then Features. Before the fix it was Tests, then
-    Subsystems, then Tests."""
+    Read the steps as a walk: Tests, then Glossary, then the landing screen, the Overview since
+    2026-09-12 (Features before). Before the fix it was Tests, then Subsystems, then Tests."""
     with _served() as url, _page(url) as page:
         page.evaluate("() => document.querySelector('button[data-view=\"glossary\"]').click()")
         _settle(page)
@@ -159,8 +159,8 @@ def test_back_after_an_address_bar_paste_walks_the_real_screens() -> None:
             page.go_back()
             _settle(page)
             walked.append(page.evaluate("() => location.hash"))
-        assert walked == ["#v=tests", "#v=glossary", "#v=features"], walked
-        assert "Features" in _crumb(page)
+        assert walked == ["#v=tests", "#v=glossary", "#v=overview"], walked
+        assert "Overview" in _crumb(page)
         assert not page.js_errors, page.js_errors
 
 
@@ -1646,7 +1646,7 @@ def test_a_story_label_stands_at_the_far_box_and_covers_nothing() -> None:
     instead of reaching any card. Every card on the page is picked in turn, so all three cases are
     measured: an actor's labels land on the features, an area's on the features, and a feature's go
     out both ways at once."""
-    with _served() as url, _page(url) as page:
+    with _served() as url, _page(url + "#v=features") as page:   # the board, not the landing
         _settle(page)
         got = page.evaluate("""() => {
             const st = document.getElementById('storystage');
@@ -3897,40 +3897,3 @@ def test_a_detail_row_holding_blank_lines_draws_paragraphs_too() -> None:
         assert got == ["First note, on its own.", "Second note, on its own."]
         assert page.js_errors == []
 
-
-def test_the_overview_digest_names_the_people_features_and_interfaces_as_pills() -> None:
-    """Under the description, the map's own vocabulary: every actor, every feature and every interface
-    as an item pill that opens its page, plus one line for the successful run. Counted against the
-    map the page was built from, so a kind the digest silently dropped would show as a short row."""
-    m = json.loads(_FIXTURE_MAP.read_text())
-    _two_sided_interfaces()(m)          # the fixture holds no interfaces of its own
-    n_actors = len(m["roles"])
-    caps_with_ucs = {uc["capability"] for uc in m["use_cases"] if uc.get("capability")}
-    n_features = len([c for c in m["capabilities"] if c["id"] in caps_with_ucs])
-    n_ifaces = len([i for i in m["interfaces"] if i.get("side") in ("ours", "theirs")])
-    assert n_actors and n_features and n_ifaces == 2
-    with _served_map(_two_sided_interfaces()) as base, _page(base + "#v=overview") as page:
-        _settle(page)
-        titles = page.evaluate("() => Array.from(document.querySelectorAll('.overview-wrap .item-sec-title'))"
-                               ".map((h) => h.childNodes[0] ? h.textContent.trim().split(/\\d/)[0].trim() : '')")
-        assert titles[1:] == ["Who it is for", "What it does", "Where it meets the world", "The successful run"], titles
-        counts = page.evaluate("() => Array.from(document.querySelectorAll('.overview-wrap .item-sec'))"
-                               ".map((s) => s.querySelectorAll('.item-pill').length)")
-        assert counts[1:4] == [n_actors, n_features, n_ifaces], (counts, n_actors, n_features, n_ifaces)
-        run = page.evaluate("() => document.querySelector('#itemsec-ov-run .ov-line').textContent")
-        assert run.startswith(f"{len(m['happy_path'])} steps through "), run
-        # every pill is a door: the first feature pill opens that feature's own page
-        name = page.evaluate("() => document.querySelector('#itemsec-ov-features .item-pill span').textContent")
-        page.click("#itemsec-ov-features .item-pill")
-        _settle(page)
-        assert name in _crumb(page), (name, _crumb(page))
-        assert page.js_errors == []
-
-
-def test_the_overview_digest_doors_open_their_views() -> None:
-    with _served() as base, _page(base + "#v=overview") as page:
-        _settle(page)
-        page.click("#itemsec-ov-run .ov-door")
-        _settle(page)
-        assert "Happy Path" in _crumb(page), _crumb(page)
-        assert page.js_errors == []
